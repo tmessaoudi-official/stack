@@ -1,0 +1,12 @@
+<CORSConfiguration>
+  <CORSRule>
+    <AllowedOrigin>*</AllowedOrigin>
+    <AllowedMethod>GET</AllowedMethod>
+    <AllowedMethod>POST</AllowedMethod>
+    <AllowedMethod>PUT</AllowedMethod>
+    <AllowedMethod>HEAD</AllowedMethod>
+    <AllowedHeader>*</AllowedHeader>
+    <MaxAgeSeconds>30000</MaxAgeSeconds>
+    <ExposeHeader>x-amz-server-side-encryption</ExposeHeader>
+  </CORSRule>
+</CORSConfiguration>

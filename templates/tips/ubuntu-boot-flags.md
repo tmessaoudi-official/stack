@@ -1,0 +1,1 @@
+pci='nomsi;noaer' pcie_aspm=off

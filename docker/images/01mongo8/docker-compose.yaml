@@ -1,0 +1,34 @@
+---
+services:
+  01mongo8:
+    build:
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+        GLOBAL_STACK_SHELL_HISTORY: ${GLOBAL_STACK_SHELL_HISTORY}
+        GLOBAL_STACK_IMAGE_MONGO8_VERSION: ${GLOBAL_STACK_IMAGE_MONGO8_VERSION}
+      context: ./
+      dockerfile: ./docker/images/01mongo8/Dockerfile
+    depends_on:
+      - 00base
+    environment:
+      - MONGODB_PASSWORD=${GLOBAL_STACK_DATABASE_ROOT_PASSWORD}
+      - MONGODB_USER=root
+      - TZ=${GLOBAL_STACK_TIMEZONE}
+    networks:
+      - public
+    ports:
+      - ${GLOBAL_STACK_MONGO8_PORT_27017:-}27017
+    restart: always
+    volumes:
+      - ./docker/data/dumps/mongo/8:/opt/dumps:rw
+      - 01mongo8_data:/data/db:rw,delegated
+      - 01mongo8_configdb:/data/configdb:rw,delegated
+        # - ./var/database-history/mongosh_repl_history:/data/db/.mongodb/mongosh/mongosh_repl_history:rw,delegated
+        # - source: ./docker/logs/mongodb/8
+        #   target: /var/log/mongodb
+        #   type: bind
+volumes:
+  01mongo8_data:
+    name: ${COMPOSE_PROJECT_NAME}_${GLOBAL_STACK_VERSION}_01mongo8_data
+  01mongo8_configdb:
+    name: ${COMPOSE_PROJECT_NAME}_${GLOBAL_STACK_VERSION}_01mongo8_configdb

@@ -1,0 +1,24 @@
+# shellcheck disable=SC2148
+ARG GLOBAL_STACK_IMAGE_MONGO8_VERSION=8.0.4-noble
+
+# shellcheck disable=SC2148
+FROM mongo:${GLOBAL_STACK_IMAGE_MONGO8_VERSION}
+
+LABEL maintainer="Takieddine Messaoudi <takieddine.messaoudi.official@gmail.com>"
+
+LABEL info="local_global_stack"
+
+# @todo fix last user should not be root
+# hadolint ignore=DL3002
+USER root
+
+SHELL ["/bin/bash", "-xeEu", "-o", "pipefail", "-c"]
+
+ARG GLOBAL_STACK_SHELL_HISTORY
+COPY "${GLOBAL_STACK_SHELL_HISTORY}" /data/db/.bash_history
+
+RUN chown -R root:root /root/ \
+    && find /root/ -type f -exec chmod 600 {} \; \
+    && find /root/ -type d -exec chmod 700 {} \; \
+    && chown -R root:root /data/db/.bash_history \
+    && chmod 600 /data/db/.bash_history

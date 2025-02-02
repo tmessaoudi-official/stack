@@ -1,0 +1,12 @@
+networks:
+  public:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+      - subnet: 172.18.0.0/16
+        gateway: 172.18.0.1
+
+# Additional services can be defined in docker/images/**
+# Activate or deactivate specific images by using the COMPOSE_FILE variable 
+# in your .env or .env.local configuration files.

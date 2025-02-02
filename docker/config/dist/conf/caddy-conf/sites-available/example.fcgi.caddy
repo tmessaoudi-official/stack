@@ -1,0 +1,40 @@
+tool.local:8080 {
+    root * ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/tool
+    file_server
+    # index index.php
+
+    # Handle PHP files via FastCGI
+    php_fastcgi 03php8.4:9000
+
+    # URL rewriting for index.php
+    route {
+        try_files {path} {path}/ /index.php?{query}
+    }
+
+    # Add CORS headers
+    @corsOrigin header_regexp Origin ^http(s)?://tool\.local(:?\d*)?$
+    header @corsOrigin Access-Control-Allow-Origin {http.request.header.Origin}
+    header @corsOrigin Access-Control-Allow-Credentials true
+    header @corsOrigin Vary Origin
+
+    # Access log
+    log {
+        output file ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/caddy/logs/tool.local-http_access.log
+		format json {
+			time_format "2006-01-02T15:04:05Z07:00"
+		}
+    }
+
+    # Error Logs
+    log {
+        output file "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/caddy/logs/tool.local-http-error.log"
+        level ERROR
+		format json {
+			time_format "2006-01-02T15:04:05Z07:00"
+		}
+    }
+
+    handle_errors {
+        respond "{err.status_code} - {err.status_text} - {err.message} - {err.trace}" 500
+    }
+}

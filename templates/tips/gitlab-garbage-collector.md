@@ -1,0 +1,1 @@
+gitlab-ctl registry-garbage-collect et gitlab-ctl registry-garbage-collect -m

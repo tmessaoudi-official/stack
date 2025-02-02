@@ -1,0 +1,19 @@
+---
+services:
+  02mongoclient-mongoclient:
+    build:
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+        GLOBAL_STACK_SHELL_HISTORY: ${GLOBAL_STACK_SHELL_HISTORY}
+        GLOBAL_STACK_IMAGE_MONGOCLIENT_MONGOCLIENT_VERSION: ${GLOBAL_STACK_IMAGE_MONGOCLIENT_MONGOCLIENT_VERSION}
+      context: ./
+      dockerfile: ./docker/images/02mongoclient-mongoclient/Dockerfile
+    depends_on:
+      - 00base
+    environment:
+      - MONGO_URL=${GLOBAL_STACK_MONGOCLIENT_MONGOCLIENT_DEFAULT_MONGO_URL}
+    networks:
+      - public
+    ports:
+      - ${GLOBAL_STACK_MONGOCLIENT_MONGOCLIENT_PORT_3000:-}3000
+    restart: unless-stopped

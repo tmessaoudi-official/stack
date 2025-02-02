@@ -1,0 +1,47 @@
+
+Put this at the end of ~/.shellrc
+
+alias gksudo='pkexec env DISPLAY=$DISPLAY XAUTHORITY=$XAUTHORITY'
+alias code='/opt/tames/vscode/bin/code'
+alias android-studio='/opt/tames/android-studio/bin/studio'
+alias megit='/opt/tames/megit/megit'
+alias subl='/opt/tames/sublime_text/sublime_text'
+
+if [[ -n "${GLOBAL_STACK_DOCKER_ROOT_PATH}" && -f "${GLOBAL_STACK_DOCKER_ROOT_PATH}"/.env.local ]]; then
+  	# @todo change this if you have you stack in another folder
+	if [[ -z "${GLOBAL_STACK_DOCKER_ROOT_PATH}" ]]; then
+		GLOBAL_STACK_DOCKER_ROOT_PATH=/stack
+		export GLOBAL_STACK_DOCKER_ROOT_PATH
+	fi
+	eval $(grep -vE "^(COMPOSE_FILE|BUILDX_EXPERIMENTAL|COMPOSE_PROJECT_NAME|COMPOSE_REMOVE_ORPHANS|COMPOSE_HTTP_TIMEOUT|GLOBAL_STACK_EXPOSED_VIRTUAL_HOSTS|COMPOSE_PATH_SEPARATOR|DOCKER_BUILDKIT|COMPOSE_DOCKER_CLI_BUILD|GLOBAL_STACK_COMPOSE_CLI|GLOBAL_STACK_POSTGRES17_DBS|GLOBAL_STACK_HTTPS_LOCALHOST_IPS|GLOBAL_STACK_(.*)_COMMAND_SUFFIX)=" "${GLOBAL_STACK_DOCKER_ROOT_PATH}"/.env.local | sed 's/^/export /')
+  	eval $(grep -vE "^(COMPOSE_FILE|BUILDX_EXPERIMENTAL|COMPOSE_PROJECT_NAME|COMPOSE_REMOVE_ORPHANS|COMPOSE_HTTP_TIMEOUT|GLOBAL_STACK_EXPOSED_VIRTUAL_HOSTS|COMPOSE_PATH_SEPARATOR|DOCKER_BUILDKIT|COMPOSE_DOCKER_CLI_BUILD|GLOBAL_STACK_COMPOSE_CLI|GLOBAL_STACK_POSTGRES17_DBS|GLOBAL_STACK_HTTPS_LOCALHOST_IPS|GLOBAL_STACK_(.*)_COMMAND_SUFFIX)=" "${GLOBAL_STACK_DOCKER_ROOT_PATH}"/.env.local | sed 's/^/export /')
+  	eval $(grep -vE "^(COMPOSE_FILE|BUILDX_EXPERIMENTAL|COMPOSE_PROJECT_NAME|COMPOSE_REMOVE_ORPHANS|COMPOSE_HTTP_TIMEOUT|GLOBAL_STACK_EXPOSED_VIRTUAL_HOSTS|COMPOSE_PATH_SEPARATOR|DOCKER_BUILDKIT|COMPOSE_DOCKER_CLI_BUILD|GLOBAL_STACK_COMPOSE_CLI|GLOBAL_STACK_POSTGRES17_DBS|GLOBAL_STACK_HTTPS_LOCALHOST_IPS|GLOBAL_STACK_(.*)_COMMAND_SUFFIX)=" "${GLOBAL_STACK_DOCKER_ROOT_PATH}"/.env.local | sed 's/^/export /')
+
+    if [[ -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN}"/sdkman.installer.sh ]]; then
+        chmod a+x "${GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN}"/sdkman.installer.sh > /dev/null 2>&1
+        "${GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN}"/sdkman.installer.sh > /dev/null 2>&1
+    fi
+    if [[ -f "${SDKMAN_DIR}/bin/sdkman-init.sh" ]]; then
+        chmod a+x "${SDKMAN_DIR}/bin/sdkman-init.sh" > /dev/null 2>&1
+        source "${SDKMAN_DIR}/bin/sdkman-init.sh" > /dev/null 2>&1
+    fi
+    if [[ "" != "$(command -v pyenv)" ]]; then
+		eval "$(pyenv init -)"
+		eval "$(pyenv init --path)"
+	fi
+	if [[ "" != "$(command -v rbenv)" ]]; then
+		eval "$(rbenv init - ${GLOBAL_STACK_SHELL})"
+	fi
+	if [[ "" != "$(command -v nvm)" ]]; then
+		nvm use "${NODE_VERSION}"
+	fi
+    # tabtab source for yo package
+    # uninstall by removing these lines or running `tabtab uninstall yo`
+    # [[ -n "${NVM_DIR}" && -f ${NVM_DIR}/versions/node/${NVM_VERSION}/lib/node_modules/yo/node_modules/tabtab/.completions/yo.${GLOBAL_STACK_SHELL} ]] && . ${NVM_DIR}/versions/node/${NVM_VERSION}/lib/node_modules/yo/node_modules/tabtab/.completions/yo.${GLOBAL_STACK_SHELL}
+	if [[ "" != "$(command -v phpbrew)" ]]; then
+		phpbrew switch "${PHPBREW_PHP}"
+	fi
+	if [[ "" != "$(command -v task)" ]]; then
+		eval "$(task --completion ${GLOBAL_STACK_SHELL})"
+	fi
+fi

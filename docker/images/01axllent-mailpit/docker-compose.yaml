@@ -1,0 +1,24 @@
+---
+services:
+  01axllent-mailpit:
+    build:
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+        GLOBAL_STACK_IMAGE_AXLLENT_MAILPIT_VERSION: ${GLOBAL_STACK_IMAGE_AXLLENT_MAILPIT_VERSION}
+      context: ./
+      dockerfile: ./docker/images/01axllent-mailpit/Dockerfile
+    depends_on:
+      - 00base
+    environment:
+      - MP_DATABASE=/data/mailpit.db
+      - MP_MAX_MESSAGES=5000
+      - MP_SMTP_AUTH_ACCEPT_ANY=1
+      - MP_SMTP_AUTH_ALLOW_INSECURE=1
+    networks:
+      - public
+    ports:
+      - ${GLOBAL_STACK_AXLLENT_MAILPIT_PORT_1025:-}1025
+      - ${GLOBAL_STACK_AXLLENT_MAILPIT_PORT_8025:-}8025
+    restart: always
+    volumes:
+      - ${GLOBAL_STACK_AXLLENT_MAILPIT_MP_DATABASE}:/data:rw

@@ -1,0 +1,28 @@
+{
+    "name": "serverless-framework",
+    "version": "1.0.0",
+    "description": "Serverless framework with TypeScript, exposing Lambda, S3, SQS and SNS setup",
+    "main": "build/serverless.js",
+    "scripts": {
+      "build": "tsc",
+      "start": "serverless offline start",
+      "deploy": "serverless deploy",
+      "clean": "serverless remove"
+    },
+    "dependencies": {
+      "aws-sdk": "^2.1692.0"
+    },
+    "devDependencies": {
+      "typescript": "^5.7.3",
+      "serverless": "^4.5.2",
+      "@serverless/utils": "^6.15.0",
+      "@serverless/typescript": "^3.38.0",
+      "@types/serverless": "^3.12.26",
+      "@types/aws-lambda": "^8.10.147",
+      "@types/node": "^22.10.10",
+      "serverless-s3-local": "^0.8.5",
+      "serverless-offline-sqs": "^8.0.0",
+      "serverless-offline-sns": "^0.78.1",
+      "serverless-offline": "^14.4.0"
+    }
+  }

@@ -1,0 +1,41 @@
+#!/bin/bash
+
+set -xeE
+shopt -s extdebug
+IFS=$'\n\t'
+trap 'stackCatch ${?} ${LINENO} "${BASH_COMMAND}"' EXIT ERR PIPE SIGPIPE SIGHUP
+stackCatch() {
+  if [ "${1}" != "0" ]; then
+    # error handling goes here
+    echo "Error detected !!"
+    echo -e "\n$(date '+%d-%m-%Y %H:%M:%S'): Error - ** line: ${2} ** ** message: ${3} ** phpbrew ($([[ -n "${PHP_VERSION_AS:-}" && "" != "${PHP_VERSION_AS:-}" ]] && echo "${PHP_VERSION_AS:-}" || echo "${PHP_VERSION:-}")) ${PHPBREW_MODE:-} global-stack-phpbrew-iou.sh" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/elapsed"
+    sleep infinity
+  fi
+}
+
+# PHPBREW_LATEST_VERSION=$(curl --silent https://api.github.com/repos/phpbrew/phpbrew/releases/latest | jq .name -r | sed "s/Release //g" )
+
+set -xeE -o pipefail
+
+if [ ! -d "${PHPBREW_SRC}/.git" ]; then
+	sudo chmod -R a+rwx "${PHPBREW_SRC}"
+	sudo chown -R "${GLOBAL_STACK_DOCKER_USER_ID}":"${GLOBAL_STACK_DOCKER_GROUP_ID}" "${PHPBREW_SRC}"
+	git clone --progress --verbose --branch ${GLOBAL_STACK_PHPBREW_VERSION} https://github.com/phpbrew/phpbrew.git --depth 1 "${PHPBREW_SRC}"
+	sudo chmod a+x "${PHPBREW_SRC}"/bin/phpbrew
+  rsync -rav ${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/conf/phpbrew/source/ "${PHPBREW_SRC}"
+  cd "${PHPBREW_SRC}" && php "${COMPOSER_HOME}/bin/composer" --ignore-platform-reqs update
+  git -C "${PHPBREW_SRC}" config core.fileMode false
+fi
+
+echo -e "\n**** phpbrew init"
+phpbrew init
+
+echo -e "\n**** phpbrbew self-update"
+# phpbrew self-update
+echo -e "\n**** phpbrbew update"
+phpbrew update || true
+echo -e "\n**** phpbrbew update --old"
+phpbrew update --old || true
+
+#echo -e "\n**** phpbrew lookup-prefix debian"
+#phpbrew lookup-prefix debian

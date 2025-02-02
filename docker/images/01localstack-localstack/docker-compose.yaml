@@ -1,0 +1,56 @@
+---
+services:
+  01localstack-localstack:
+    build:
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+        GLOBAL_STACK_LOCAL_REGISTRY_ALIAS: ${GLOBAL_STACK_LOCAL_REGISTRY_ALIAS}
+        GLOBAL_STACK_LOCAL_REGISTRY_PORT_5000: ${GLOBAL_STACK_LOCAL_REGISTRY_PORT_5000}
+        GLOBAL_STACK_VERSION: ${GLOBAL_STACK_VERSION}
+        GLOBAL_STACK_LOCALSTACK_LOCALSTACK_VERSION: ${GLOBAL_STACK_LOCALSTACK_LOCALSTACK_VERSION}
+      context: ./
+      dockerfile: ./docker/images/01localstack-localstack/Dockerfile
+    depends_on:
+      - 00base
+    ports:
+      - ${GLOBAL_STACK_LOCALSTACK_LOCALSTACK_PORT_4566_WITH_ENDING_POINTS:-}4566
+      - ${GLOBAL_STACK_LOCALSTACK_LOCALSTACK_PORT_4510_4559:-}4510-4559
+      - ${GLOBAL_STACK_LOCALSTACK_LOCALSTACK_PORT_5678:-}5678
+    environment:
+      - CAROOT=${GLOBAL_STACK_CAROOT}
+      - GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES=${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}
+      - GLOBAL_STACK_DOCKER_ROOT_DIST_PATH=${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}
+      - SERVICES=${GLOBAL_STACK_LOCALSTACK_LOCALSTACK_SERVICES}
+      - GATEWAY_LISTEN=0.0.0.0
+      - DEBUG=1
+      - PERSISTENCE=1
+      - LOCALSTACK_HOST=${GLOBAL_STACK_LOCALSTACK_HOST}
+      - AWS_ENDPOINT_URL=${GLOBAL_STACK_LOCALSTACK_AWS_ENDPOINT_URL}
+      - CUSTOM_SSL_CERT_PATH=${GLOBAL_STACK_LOCALSTACK_CUSTOM_SSL_CERT_PATH}
+      - AWS_CA_BUNDLE=${GLOBAL_STACK_BASE_AWS_CA_BUNDLE}
+      - NODE_EXTRA_CA_CERTS=${GLOBAL_STACK_BASE_NODE_EXTRA_CA_CERTS}
+      - SSL_CERT_FILE=${GLOBAL_STACK_BASE_SSL_CERT_FILE}
+      - REQUESTS_CA_BUNDLE=${GLOBAL_STACK_BASE_REQUESTS_CA_BUNDLE}
+    volumes:
+      - ./projects:${GLOBAL_STACK_DOCKER_WORKDIR}:rw
+      - ./tools:${GLOBAL_STACK_DOCKER_TOOLS_PATH}:rw
+      - ./docker/config/root:${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/home/user:rw
+      - ./docker/config/dist/bin:${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/bin:rw
+      - ./docker/config/dist/conf:${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/conf:rw
+      - /var/run/docker.sock:/var/run/docker.sock
+      - 01localstack_localstack_lib_localstack:/var/lib/localstack:rw,delegated
+      - 01localstack_localstack_tmp_localstack_s3_storage:/tmp/localstack-s3-storage/:rw,delegated
+      - 01localstack_localstack_lib_docker:/var/lib/docker:rw,delegated
+    networks:
+      - public
+    extra_hosts:
+      - ${GLOBAL_STACK_LOCAL_REGISTRY_ALIAS}:${GLOBAL_STACK_HOST_GATEWAY_IP}
+      - ${GLOBAL_STACK_DOCKER_HOST_DSN}:${GLOBAL_STACK_HOST_GATEWAY_IP}
+      - ${GLOBAL_STACK_EXPOSED_VIRTUAL_HOSTS}:${GLOBAL_STACK_HOST_GATEWAY_IP}
+volumes:
+  01localstack_localstack_lib_localstack:
+    name: ${COMPOSE_PROJECT_NAME}_${GLOBAL_STACK_VERSION}_01localstack_localstack_lib_localstack
+  01localstack_localstack_tmp_localstack_s3_storage:
+    name: ${COMPOSE_PROJECT_NAME}_${GLOBAL_STACK_VERSION}_01localstack_localstack_tmp_localstack_s3_storage
+  01localstack_localstack_lib_docker:
+    name: ${COMPOSE_PROJECT_NAME}_${GLOBAL_STACK_VERSION}_01localstack_localstack_lib_docker

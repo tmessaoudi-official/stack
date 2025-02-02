@@ -1,0 +1,30 @@
+---
+services:
+  01epiclabs-docker-oracle-xe-11g:
+    build:
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+        GLOBAL_STACK_SHELL_HISTORY: ${GLOBAL_STACK_SHELL_HISTORY}
+        GLOBAL_STACK_IMAGE_EPICLABS_DOCKER_ORACLE_XE_11G_VERSION: ${GLOBAL_STACK_IMAGE_EPICLABS_DOCKER_ORACLE_XE_11G_VERSION}
+      context: ./
+      dockerfile: ./docker/images/01epiclabs-docker-oracle-xe-11g/Dockerfile
+    depends_on:
+      - 00base
+    environment:
+      - ORACLE_ALLOW_REMOTE=${GLOBAL_STACK_EPICLABS_DOCKER_ORACLE_XE_11G_ORACLE_ALLOW_REMOTE}
+      - ORACLE_PASSWORD=${GLOBAL_STACK_DATABASE_ROOT_PASSWORD}
+      - RELAX_SECURITY=${GLOBAL_STACK_EPICLABS_DOCKER_ORACLE_XE_11G_RELAX_SECURITY}
+      - TZ=${GLOBAL_STACK_TIMEZONE}
+    networks:
+      - public
+    ports:
+      - ${GLOBAL_STACK_EPICLABS_DOCKER_ORACLE_XE_11G_PORT_1521:-}1521
+      - ${GLOBAL_STACK_EPICLABS_DOCKER_ORACLE_XE_11G_PORT_8080:-}8080
+    volumes:
+      - ./docker/data/dumps/oracle/epiclabs-xe-11g:/opt/dumps:rw
+      - epiclabs_docker_oracle_xe_11g_data:/u01/app/oracle:rw,delegated
+      # - ./var/database-history/.sqlplus_history:/root/.sqlplus_history:rw,delegated
+      # when using oracle inside container use sqlplus -S system/${ORACLE_PASSWORD}@localhost:1521/XE | tee -a ~/.sqlplus_history
+volumes:
+  epiclabs_docker_oracle_xe_11g_data:
+    name: ${COMPOSE_PROJECT_NAME}_${GLOBAL_STACK_VERSION}_epiclabs_docker_oracle_xe_11g_data

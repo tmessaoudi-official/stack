@@ -1,0 +1,1 @@
+You can restart the gnome-shell by pressing Alt+F2 and then typing in either "restart" or just "r" and pressing Enter.

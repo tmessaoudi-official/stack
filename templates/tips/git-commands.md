@@ -1,0 +1,1 @@
+git status --ignored : Show ignored files

@@ -1,0 +1,14 @@
+---
+services:
+  01redis:
+    image: redis:${GLOBAL_STACK_REDIS_VERSION}
+    ports:
+      - ${GLOBAL_STACK_REDIS_PORT_6379:-}6379
+    volumes:
+      - 01redis_data:/data
+    restart: unless-stopped
+    networks:
+      - public
+volumes:
+  01redis_data:
+    name: ${COMPOSE_PROJECT_NAME}_${GLOBAL_STACK_VERSION}_01redis_data

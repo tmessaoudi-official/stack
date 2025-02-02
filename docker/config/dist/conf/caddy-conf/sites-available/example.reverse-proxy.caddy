@@ -1,0 +1,29 @@
+tool.local:8080 {
+    reverse_proxy http://tool.local:8025 {
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        # header_up X-Forwarded-For {remote}
+        # header_up X-Forwarded-Proto {scheme}
+    }
+
+    # Access log
+    log {
+        output file ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/caddy/logs/tool.local-http_access.log
+		format json {
+			time_format "2006-01-02T15:04:05Z07:00"
+		}
+    }
+
+    # Error Logs
+    log {
+        output file "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/caddy/logs/tool.local-http-error.log"
+        level ERROR
+		format json {
+			time_format "2006-01-02T15:04:05Z07:00"
+		}
+    }
+
+    handle_errors {
+        respond "{err.status_code} - {err.status_text} - {err.message} - {err.trace}" 500
+    }
+}

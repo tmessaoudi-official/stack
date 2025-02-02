@@ -1,0 +1,14 @@
+{
+  "mirrors": {
+    "local-global-stack-registry.local:32728": {
+      "endpoint": ["https://local-global-stack-registry.local:5000"]
+    }
+  },
+  "configs": {
+    "local-global-stack-registry.local:32728": {
+      "tls": {
+        "ca": "/etc/ssl/certs/local-global-stack-registry.local.crt"
+      }
+    }
+  }
+}

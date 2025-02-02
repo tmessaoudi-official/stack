@@ -1,0 +1,9 @@
+https://www.jetify.com/devbox/
+https://difftastic.wilfred.me.uk/
+https://testcontainers.com/
+https://mise.jdx.dev/getting-started.html
+https://www.warp.dev/
+https://gitbutler.com/
+https://github.com/lukeautry/tsoa
+https://docs.plasticscm.com/semanticmerge/how-to-configure/semanticmerge-configuration-guide#HowtoconfigurewithGit
+https://pypi.org/project/pyright/

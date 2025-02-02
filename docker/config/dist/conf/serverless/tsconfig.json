@@ -1,0 +1,19 @@
+{
+    "compilerOptions": {
+      "preserveConstEnums": true,
+      "strictNullChecks": true,
+      "sourceMap": true,
+      "allowJs": true,
+      "target": "ESNext",
+      "outDir": "./build",
+      "moduleResolution": "node",
+      "lib": ["ESNext"],
+      "rootDir": "./src/handlers/typescript",
+      "module": "CommonJS",
+      "strict": true,
+      "esModuleInterop": true,
+      "skipLibCheck": true,
+      "typeRoots": ["node_modules/@types"]
+    },
+    "include": ["serverless.ts", "src/handlers/typescript"],
+  }

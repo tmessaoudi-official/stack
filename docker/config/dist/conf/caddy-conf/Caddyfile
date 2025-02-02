@@ -1,0 +1,47 @@
+{
+	debug
+	auto_https off
+	# Global options
+	email takieddine.messaoudi.official@gmail.com
+	http_port 8080
+	https_port 8443
+	log {
+		output file ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/caddy/logs/caddy.log {
+			roll_size 10MB
+			roll_keep 5
+			roll_keep_for 72h
+		}
+
+		format json {
+			time_format "2006-01-02T15:04:05Z07:00"
+		}
+	}
+	pki {
+		ca development_ca {
+			name development_ca
+
+			root {
+				cert ${CAROOT}/rootCA.pem
+				key ${CAROOT}/rootCA-key.pem
+			}
+		}
+	}
+	admin 0.0.0.0:2019
+	metrics
+	servers {
+		enable_full_duplex
+		trace
+		log_credentials
+	}
+}
+
+(development_ca) {
+	tls {
+		issuer internal {
+			ca development_ca
+		}
+	}
+}
+
+# Import all virtual host configurations
+import ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/caddy/vhosts/*.caddy

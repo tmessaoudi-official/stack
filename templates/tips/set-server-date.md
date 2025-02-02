@@ -1,0 +1,1 @@
+sudo timedatectl set-time 2021-01-01

@@ -1,0 +1,52 @@
+#!/bin/bash
+
+set -xeE -o pipefail
+shopt -s extdebug
+IFS=$'\n\t'
+trap 'stackCatch ${?} ${LINENO} "${BASH_COMMAND}"' EXIT ERR PIPE SIGPIPE SIGHUP
+stackCatch() {
+  if [ "${1}" != "0" ]; then
+    # error handling goes here
+    echo "Error detected !!"
+    echo -e "\n$(date '+%d-%m-%Y %H:%M:%S'): Error - ** line: ${2} ** ** message: ${3} ** rust global-stack-rust-start.sh" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/elapsed"
+    sleep infinity
+  fi
+}
+
+SECONDS=0
+
+rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/rust"
+
+PATH="${RUSTUP_HOME}/bin:${RUSTUP_HOME}/toolchains/stable-x86_64-unknown-linux-gnu/bin/:${CARGO_HOME}/bin:${PATH}"
+export PATH
+
+echo "PATH=${RUSTUP_HOME}/bin:${RUSTUP_HOME}/toolchains/stable-x86_64-unknown-linux-gnu/bin/:${CARGO_HOME}/bin:${PATH}" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
+echo "export PATH" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
+
+sleep 1
+
+global-stack-base-wait-for.sh \
+  "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/base"
+
+if [ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/rust" ] || [ "true" = "${GLOBAL_STACK_RELOAD_RUST}" ]; then
+  rm -rf "${RUSTUP_HOME}" "${CARGO_HOME}" "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/rust" "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/rust" "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/rust-init"
+fi
+
+mkdir -p "${RUSTUP_HOME}" "${CARGO_HOME}"
+
+if [ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/rust" ] || [ "true" = "${GLOBAL_STACK_RELOAD_RUST}" ]; then
+  global-stack-rust-iou.sh
+fi
+source "${CARGO_HOME}/env"
+
+global-stack-base-init-mkcert.sh
+
+echo -e "\nWriting success"
+touch "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/rust"
+
+DURATION="${SECONDS}"
+global-stack-base-print-success.sh "${DURATION}" "rust"
+
+global-stack-base-prepare-shell.sh
+
+sleep infinity

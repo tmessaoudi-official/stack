@@ -1,0 +1,5 @@
+domail.local:port {
+    #    import development_ca
+
+	tls ${GLOBAL_STACK_SSL_PATH}/domain.local.pem ${GLOBAL_STACK_SSL_PATH}/domain.local-key.pem
+}

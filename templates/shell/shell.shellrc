@@ -1,0 +1,6 @@
+Put this at the end of /etc/shell.shellrc
+
+alias gksudo='pkexec env DISPLAY=$DISPLAY XAUTHORITY=$XAUTHORITY'
+alias code='/opt/tames/vscode/bin/code'
+alias megit='/opt/tames/megit/megit'
+alias subl='/opt/tames/sublime_text/sublime_text'
