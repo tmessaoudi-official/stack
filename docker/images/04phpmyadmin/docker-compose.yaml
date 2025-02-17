@@ -14,7 +14,7 @@ services:
     depends_on:
       - 00base
       - 02phpbrew
-      - 03php8.5
+      - 03php8-5
     extra_hosts:
       - ${GLOBAL_STACK_LOCAL_REGISTRY_ALIAS}:${GLOBAL_STACK_HOST_GATEWAY_IP}
       - ${GLOBAL_STACK_DOCKER_HOST_DSN}:${GLOBAL_STACK_HOST_GATEWAY_IP}

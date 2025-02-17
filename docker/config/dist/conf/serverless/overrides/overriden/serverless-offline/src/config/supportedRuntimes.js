@@ -57,7 +57,7 @@ export const supportedGo = new Set(["go1.x"])
 
   // @override
 // JAVA
-export const supportedJava = new Set(["java8", "java8.al2", "java11", "java17", "java123"])
+export const supportedJava = new Set(["java8", "java8.al2", "java11", "java17", "java23"])
 
 // NODE.JS
 export const supportedNodejs = new Set([

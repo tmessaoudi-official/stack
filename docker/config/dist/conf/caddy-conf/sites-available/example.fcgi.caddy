@@ -4,7 +4,7 @@ tool.local:8080 {
     # index index.php
 
     # Handle PHP files via FastCGI
-    php_fastcgi 03php8.4:9000
+    php_fastcgi 03php8-4:9000
 
     # URL rewriting for index.php
     route {

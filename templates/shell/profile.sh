@@ -119,7 +119,7 @@ if [ -f "${GLOBAL_STACK_DOCKER_ROOT_PATH}"/.env.local ]; then
 	export PYTHON_VERSION
 	PYENV_VERSION="${GLOBAL_STACK_PYTHON3_VERSION}"
 	export PYENV_VERSION
-	PHP_VERSION="8.5"
+	PHP_VERSION="next"
 	PHPBREW_PHP="${GLOBAL_STACK_PHP8_5_VERSION}"
 	export PHPBREW_PHP
 	PHPBREW_PHP_PATH="${PHPBREW_ROOT}/php/${PHPBREW_PHP}"
@@ -169,7 +169,7 @@ if [ -f "${GLOBAL_STACK_DOCKER_ROOT_PATH}"/.env.local ]; then
 		sdk offline enable
 		sdk use java ${GLOBAL_STACK_JAVA23_VERSION}
 
-		source "${GLOBAL_STACK_DOCKER_ROOT_PATH}"/docker/images/00base/dist/bin/global-stack-base-setup-packages.sh
+		source "${GLOBAL_STACK_DOCKER_ROOT_PATH}"/docker/config/dist/bin/base-bin/global-stack-base-setup-packages.sh
 		global_stack_base_setup_packages \
 			--prefix='GLOBAL_STACK_JAVA23' \
 			--command='echo -e "**** Using ${PACKAGE_NAME} ${PACKAGE_VERSION}"' \
@@ -195,7 +195,11 @@ if [ -f "${GLOBAL_STACK_DOCKER_ROOT_PATH}"/.env.local ]; then
 		nvm use "${NODE_VERSION}"
 	fi
 	if [[ "" != "$(command -v phpbrew)" ]]; then
-		phpbrew switch "${PHPBREW_PHP}"
+		if [[ "next" = "$PHPBREW_PHP" ]]; then
+			phpbrew switch php-master
+		else
+			phpbrew switch php-${PHPBREW_PHP}
+		fi
 
 		LD_LIBRARY_PATH="$(php-config --lib-dir):${LD_LIBRARY_PATH}"
 		export LD_LIBRARY_PATH

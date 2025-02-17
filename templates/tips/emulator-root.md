@@ -8,3 +8,5 @@ ANDROID_SERIAL="emulator-5554" adb remount
 
 ANDROID_SERIAL="emulator-5554" adb pull /etc/hosts
 ANDROID_SERIAL="emulator-5554" adb push hosts /etc/hosts
+
+keep an empty blank line at the end of the file /etc/hosts

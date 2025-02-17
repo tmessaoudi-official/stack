@@ -1,6 +1,6 @@
 ---
 services:
-  03php8.5:
+  03php8-5:
     build:
       args:
         BUILDKIT_INLINE_CACHE: 1
@@ -9,7 +9,7 @@ services:
         GLOBAL_STACK_VERSION: ${GLOBAL_STACK_VERSION}
         GLOBAL_STACK_PHP_VERSION: ${GLOBAL_STACK_PHP8_5_VERSION}
       context: ./
-      dockerfile: ./docker/images/03php8.5/Dockerfile
+      dockerfile: ./docker/images/03php8-5/Dockerfile
     cap_add:
       - NET_ADMIN
     depends_on:
@@ -153,7 +153,7 @@ services:
       - SSL_CERT_FILE=${GLOBAL_STACK_BASE_SSL_CERT_FILE}
       - REQUESTS_CA_BUNDLE=${GLOBAL_STACK_BASE_REQUESTS_CA_BUNDLE}
       - SERVERLESS_ACCESS_KEY=${GLOBAL_STACK_BASE_SERVERLESS_ACCESS_KEY}
-    image: ${GLOBAL_STACK_LOCAL_REGISTRY_ALIAS}:${GLOBAL_STACK_LOCAL_REGISTRY_PORT_5000}/local_global_stack_03php8.5:${GLOBAL_STACK_VERSION}
+    image: ${GLOBAL_STACK_LOCAL_REGISTRY_ALIAS}:${GLOBAL_STACK_LOCAL_REGISTRY_PORT_5000}/local_global_stack_03php8-5:${GLOBAL_STACK_VERSION}
     networks:
       - public
     ports:

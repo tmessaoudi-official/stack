@@ -132,14 +132,14 @@ build: create-paths
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="push" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03node22" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="build" GLOBAL_STACK_COMPOSE_CLI_EXEC_FLAGS="--push" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03node24" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="push" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03node24" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
-	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="build" GLOBAL_STACK_COMPOSE_CLI_EXEC_FLAGS="--push" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03php8.2" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
-	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="push" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03php8.2" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
-	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="build" GLOBAL_STACK_COMPOSE_CLI_EXEC_FLAGS="--push" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03php8.3" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
-	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="push" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03php8.3" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
-	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="build" GLOBAL_STACK_COMPOSE_CLI_EXEC_FLAGS="--push" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03php8.4" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
-	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="push" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03php8.4" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
-	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="build" GLOBAL_STACK_COMPOSE_CLI_EXEC_FLAGS="--push" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03php8.5" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
-	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="push" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03php8.5" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
+	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="build" GLOBAL_STACK_COMPOSE_CLI_EXEC_FLAGS="--push" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03php8-2" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
+	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="push" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03php8-2" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
+	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="build" GLOBAL_STACK_COMPOSE_CLI_EXEC_FLAGS="--push" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03php8-3" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
+	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="push" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03php8-3" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
+	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="build" GLOBAL_STACK_COMPOSE_CLI_EXEC_FLAGS="--push" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03php8-4" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
+	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="push" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03php8-4" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
+	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="build" GLOBAL_STACK_COMPOSE_CLI_EXEC_FLAGS="--push" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03php8-5" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
+	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="push" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03php8-5" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="build" GLOBAL_STACK_COMPOSE_CLI_EXEC_FLAGS="--push" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03python3" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="push" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03python3" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="build" GLOBAL_STACK_COMPOSE_CLI_EXEC_FLAGS="--push" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03ruby3" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
@@ -197,14 +197,14 @@ login-02rbenv:
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="exec" GLOBAL_STACK_COMPOSE_CLI_SERVICE="02rbenv" GLOBAL_STACK_COMPOSE_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 login-03ruby3:
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="exec" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03ruby3" GLOBAL_STACK_COMPOSE_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
-login-03php8.2:
-	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="exec" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03php8.2" GLOBAL_STACK_COMPOSE_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
-login-03php8.3:
-	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="exec" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03php8.3" GLOBAL_STACK_COMPOSE_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
-login-03php8.4:
-	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="exec" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03php8.4" GLOBAL_STACK_COMPOSE_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
-login-03php8.5:
-	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="exec" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03php8.5" GLOBAL_STACK_COMPOSE_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
+login-03php8-2:
+	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="exec" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03php8-2" GLOBAL_STACK_COMPOSE_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
+login-03php8-3:
+	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="exec" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03php8-3" GLOBAL_STACK_COMPOSE_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
+login-03php8-4:
+	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="exec" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03php8-4" GLOBAL_STACK_COMPOSE_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
+login-03php8-5:
+	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="exec" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03php8-5" GLOBAL_STACK_COMPOSE_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 login-00base:
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="exec" GLOBAL_STACK_COMPOSE_CLI_SERVICE="00base" GLOBAL_STACK_COMPOSE_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 login-03node18:
@@ -276,14 +276,14 @@ log-02rbenv:
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="logs" GLOBAL_STACK_COMPOSE_CLI_SERVICE="02rbenv" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 log-03ruby3:
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="logs" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03ruby3" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
-log-03php8.2:
-	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="logs" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03php8.2" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
-log-03php8.3:
-	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="logs" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03php8.3" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
-log-03php8.4:
-	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="logs" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03php8.4" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
-log-03php8.5:
-	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="logs" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03php8.5" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
+log-03php8-2:
+	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="logs" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03php8-2" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
+log-03php8-3:
+	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="logs" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03php8-3" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
+log-03php8-4:
+	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="logs" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03php8-4" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
+log-03php8-5:
+	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="logs" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03php8-5" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 log-03node18:
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="logs" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03node18" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 log-03node22:

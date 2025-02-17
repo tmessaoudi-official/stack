@@ -41,11 +41,11 @@ Taskfile.yaml
 
 /docker/config/dist/bin/local.*/*
 /docker/config/dist/bin/*.local/*
-/docker/config/dist/bin/**/*.local.sh
+/docker/config/dist/bin/**/*.local.*
 
 /docker/config/dist/conf/local.*/*
 /docker/config/dist/conf/*.local/*
-/docker/config/dist/conf/**/*.local.sh
+/docker/config/dist/conf/**/*.local.*
 
 /var
 /projects
@@ -59,7 +59,7 @@ Taskfile.yaml
 
 docker/config/dist/conf/http-common/ssl/*.pem
 
-/docker/config/dist/conf/**/*.local.conf
+/docker/config/dist/conf/**/*.local.*
 /docker/config/dist/conf/**/Caddyfile.local
 /docker/config/dist/conf/http-common/optional-conf/modsec-conf/local.*
 
@@ -78,6 +78,8 @@ docker/registry/certs
 !docker/registry/config.json
 docker/registry/config.local.json
 
-docker/config/dist/conf/localstack-init/init*/**/*.local.sh
+docker/config/dist/conf/localstack-init/init*/**/*.local.*
 
-docker/config/dist/conf/serverless/**/*.local.ts
+docker/config/dist/conf/serverless/**/*.local.*
+docker/config/dist/conf/serverless/**/local.*/
+docker/config/dist/conf/serverless/**/*.local/
