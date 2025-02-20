@@ -14,12 +14,19 @@ stackCatch() {
   fi
 }
 
-if [ ! -d "${FLUTTER_HOME}/.git" ]; then
-	sudo chmod -R a+rwx "${FLUTTER_HOME}" "${PUB_CACHE}"
-	sudo chown -R "${GLOBAL_STACK_DOCKER_USER_ID}":"${GLOBAL_STACK_DOCKER_GROUP_ID}" "${FLUTTER_HOME}" "${PUB_CACHE}"
-	git clone --progress --verbose --branch ${GLOBAL_STACK_ANDROID_FLUTTER_VERSION} https://github.com/flutter/flutter.git --depth 1 "${FLUTTER_HOME}"
-fi
+# if [ ! -d "${FLUTTER_HOME}/.git" ]; then
+# 	sudo chmod -R a+rwx "${FLUTTER_HOME}" "${PUB_CACHE}"
+# 	sudo chown -R "${GLOBAL_STACK_DOCKER_USER_ID}":"${GLOBAL_STACK_DOCKER_GROUP_ID}" "${FLUTTER_HOME}" "${PUB_CACHE}"
+# 	git clone --progress --verbose --branch ${GLOBAL_STACK_ANDROID_FLUTTER_VERSION} https://github.com/flutter/flutter.git --depth 1 "${FLUTTER_HOME}"
+# fi
 
+sudo chmod -R a+rwx "${FLUTTER_HOME}" "${PUB_CACHE}"
+sudo chown -R "${GLOBAL_STACK_DOCKER_USER_ID}":"${GLOBAL_STACK_DOCKER_GROUP_ID}" "${FLUTTER_HOME}" "${PUB_CACHE}"
+wget -O flutter_linux_${GLOBAL_STACK_ANDROID_FLUTTER_VERSION}-stable.tar.xz https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_${GLOBAL_STACK_ANDROID_FLUTTER_VERSION}-stable.tar.xz
+
+tar -xf flutter_linux_${GLOBAL_STACK_ANDROID_FLUTTER_VERSION}-stable.tar.xz --strip-components=1 -C ${FLUTTER_HOME}
+
+rm -rf flutter_linux_${GLOBAL_STACK_ANDROID_FLUTTER_VERSION}-stable.tar.xz
 # git -C "${FLUTTER_HOME}" branch --set-upstream-to=origin/stable stable
 # git -C "${FLUTTER_HOME}" config core.fileMode false
 # git -C "${FLUTTER_HOME}" fetch --progress --verbose
@@ -27,6 +34,7 @@ fi
 
 flutter config --android-sdk "${ANDROID_HOME}"
 flutter precache
+# flutter doctor --android-licenses
 flutter doctor -v
 
 echo "$(flutter --version | grep Flutter | sed 's/Flutter //' | sed 's/ .*//')" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/flutter"
