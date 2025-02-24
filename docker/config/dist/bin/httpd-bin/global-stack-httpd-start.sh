@@ -114,7 +114,7 @@ fi
 
 # Install httpd if necessary
 if [[ ! -f "${HTTPD_VERSIONS_PATH}" || "${GLOBAL_STACK_RELOAD_HTTPD}" == "true" ]]; then
-  global-stack-iou-httpd.sh \
+  global-stack-httpd-iou.sh \
     "${HTTPD_PATH}" \
     "${HTTP_COMMONS_PATH}" \
     "${HTTPD_VERSIONS_PATH}" \

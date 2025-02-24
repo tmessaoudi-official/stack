@@ -10,6 +10,8 @@ import {
   // @override
   supportedRust,
   unsupportedDockerRuntimes,
+  // @override
+  supportedProvided
 } from "../../config/index.js"
 
 export default class HandlerRunner {
@@ -52,6 +54,13 @@ export default class HandlerRunner {
       const { default: DockerRunner } = await import("./docker-runner/index.js")
 
       return new DockerRunner(this.#funOptions, this.#env, dockerOptions)
+    }
+
+	  // @override
+    if (supportedProvided.has(runtime)) {
+      const { default: ProvidedRunner } = await import("./provided-runner/index.js")
+
+      return new ProvidedRunner(this.#funOptions, this.#env)
     }
 
     if (supportedNodejs.has(runtime)) {

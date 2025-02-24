@@ -181,14 +181,23 @@ while IFS= read -r file || [[ -n "$file" ]]; do
   temp_file="${file}.tmp"
   > "${temp_file}"
 
-  while IFS= read -r line || [[ -n "${line}" ]]; do
+  first_line=true
+  while IFS= read -r line || [[ -n "${line:-}" ]]; do
       while [[ ${line} =~ \$\{global_stack_process\.customEnv\.([^ \}]+)\} ]]; do
           var_name="${BASH_REMATCH[1]}"
           var_value="${!var_name:-}"
           line="${line/\$\{global_stack_process.customEnv.$var_name\}/$var_value}"
       done
-      echo "${line}" >> "${temp_file}"
+      if [[ "${first_line}" = "true" ]]; then
+        echo -n "${line}" >> "${temp_file}"
+        first_line=false
+      else
+        echo -n "
+${line}" >> "${temp_file}"
+      fi
   done < "${file}"
+
+  echo "" >> "${temp_file}"
 
   mv "${temp_file}" "${file}"
 done < ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/tmp/finder-result.txt

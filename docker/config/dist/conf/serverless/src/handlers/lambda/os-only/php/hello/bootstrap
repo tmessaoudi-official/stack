@@ -1,0 +1,2 @@
+#!/bin/sh
+php src/handlers/lambda/os-only/php/hello/invoke.php $@

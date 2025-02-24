@@ -5,7 +5,7 @@ export const BASE_URL_PLACEHOLDER = "http://example"
 export const CUSTOM_OPTION = "serverless-offline"
 
 // @override
-export const DEFAULT_LAMBDA_RUNTIME = "nodejs24.x"
+export const DEFAULT_LAMBDA_RUNTIME = "provided.al2023"
 
 export const DEFAULT_LAMBDA_ARCHITECTURE = "arm64"
 
