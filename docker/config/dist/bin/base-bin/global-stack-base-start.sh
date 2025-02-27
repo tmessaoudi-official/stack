@@ -51,7 +51,13 @@ global-stack-base-print-success.sh "${DURATION}" "base" "create"
 
 global-stack-base-install-mise.sh
 
+sed -i '/# global-stack-setup-started/,/# global-stack-setup-finished/d' "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
+
+echo "# global-stack-setup-started" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
+
 global-stack-base-prepare-shell.sh
+
+echo "# global-stack-setup-finished" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 
 [ "${GLOBAL_STACK_DOCKER_IN_DOCKER}" = "true" ] && global-stack-base-start-docker.sh || echo -e "\n Docker In Docker will not be started"
 

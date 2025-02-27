@@ -17,7 +17,6 @@ SECONDS=0
 
 sleep 1
 
-
 global-stack-base-wait-for.sh \
   "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/php.next"
 
@@ -41,7 +40,6 @@ if [ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpmyadmin" ] || [ "${GLOB
   source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/phpbrew.shellrc" && export PATH="${PHPBREW_ROOT}/php/$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/php.next")/bin:${PATH}"
   # composer install --ignore-platform-reqs
 fi
-
 
 echo "$(global-stack-phpmyadmin-get-latest-version.sh)" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpmyadmin"
 

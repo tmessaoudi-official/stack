@@ -8,6 +8,10 @@ IFS=$'\n\t'
 PATH="${GLOBAL_STACK_DOCKER_TOOLS_PATH}/nginx/sbin/:${GLOBAL_STACK_DOCKER_TOOLS_PATH}/http/libs/modsecurity/bin/:${PATH}"
 export PATH
 
+sed -i '/# global-stack-setup-started/,/# global-stack-setup-finished/d' "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
+
+echo "# global-stack-setup-started" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
+
 echo "PATH=${GLOBAL_STACK_DOCKER_TOOLS_PATH}/nginx/sbin/:${GLOBAL_STACK_DOCKER_TOOLS_PATH}/http/libs/modsecurity/bin/:${PATH}" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 echo "export PATH" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 
@@ -154,6 +158,8 @@ DURATION=${SECONDS}
 global-stack-base-print-success.sh "${DURATION}" "nginx"
 
 global-stack-base-prepare-shell.sh
+
+echo "# global-stack-setup-finished" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 
 # Prevent the script from exiting
 sleep infinity

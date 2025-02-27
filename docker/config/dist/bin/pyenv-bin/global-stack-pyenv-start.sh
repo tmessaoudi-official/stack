@@ -18,6 +18,10 @@ SECONDS=0
 PATH="${PYENV_ROOT}/bin:${PATH}"
 export PATH
 
+sed -i '/# global-stack-setup-started/,/# global-stack-setup-finished/d' "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
+
+echo "# global-stack-setup-started" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
+
 echo "PATH=${PYENV_ROOT}/bin:${PATH}" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 echo "export PATH" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 
@@ -145,5 +149,7 @@ DURATION="${SECONDS}"
 global-stack-base-print-success.sh "${DURATION}" "pyenv (${PYTHON_VERSION:-})"
 
 global-stack-base-prepare-shell.sh
+
+echo "# global-stack-setup-finished" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 
 sleep infinity

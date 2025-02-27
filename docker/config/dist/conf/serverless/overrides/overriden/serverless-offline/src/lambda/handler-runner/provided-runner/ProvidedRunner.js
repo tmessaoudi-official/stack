@@ -1,4 +1,4 @@
-import { EOL } from "node:os"
+import { EOL, platform } from "node:os"
 import { relative } from "node:path"
 import { cwd } from "node:process"
 import { execa } from "execa"

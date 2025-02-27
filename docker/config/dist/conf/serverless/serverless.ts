@@ -136,6 +136,35 @@ const serverlessConfiguration: AWS = {
         }
       ],
     },
+    'provided-al2023-test-hello': {
+      runtime: 'provided.al2023',
+      handler: 'src/handlers/lambda/os-only/hello/bootstrap',
+      events: [
+        {
+          http: {
+            path: '/lambda/provided.al2023-test/hello',
+            method: 'get',
+          },
+        }
+      ],
+      environment: {
+        CUSTOM_LAMBDA_FUNCTION_ROOT: 'src/handlers/lambda/os-only/hello/',
+        CUSTOM_LAMBDA_FUNCTION_RUNTIME: 'php',
+        CUSTOM_LAMBDA_FUNCTION_HANDLER: 'src/handlers/lambda/os-only/hello/Hello::handler'
+      },
+    },
+    'provided-al2023-php-hello': {
+      runtime: 'provided.al2023',
+      handler: 'src/handlers/lambda/os-only/php/hello/bootstrap',
+      events: [
+        {
+          http: {
+            path: '/lambda/provided.al2023-php/hello',
+            method: 'get',
+          },
+        }
+      ],
+    },
     'php-hello': {
       runtime: 'php8.5',
       handler: 'src/handlers/lambda/php/Hello.Hello::handler',
