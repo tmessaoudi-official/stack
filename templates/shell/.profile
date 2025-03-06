@@ -1,25 +1,25 @@
 Add this at the end of the file !
 
-# set PATH so it includes user's private bin if it exists
 if [ -d "/opt/$USER/sonar-scanner-cli/bin" ] ; then
     PATH="/opt/$USER/sonar-scanner-cli/bin:$PATH"
 fi
 
-# set PATH so it includes user's private bin if it exists
 if [ -d "/opt/$USER/task" ] ; then
     PATH="/opt/$USER/task:$PATH"
 fi
 
-# set PATH so it includes user's private bin if it exists
 if [ -d "/opt/$USER/bat" ] ; then
     PATH="/opt/$USER/bat:$PATH"
 fi
 
-# set PATH so it includes user's private bin if it exists
 if [ -d "/opt/$USER/go/bin" ] ; then
-    PATH="/opt/$USER/bat:$PATH"
+    PATH="/opt/$USER/go/bin:$PATH"
 fi
 
 if [ -d "${GLOBAL_STACK_DOCKER_TOOLS_PATH}"/go/bin ]; then 
     PATH="${GLOBAL_STACK_DOCKER_TOOLS_PATH}/go/bin:${PATH}"
+fi
+
+if [ -d "${GOROOT}"/bin ]; then 
+    PATH="${GOROOT}/bin:${PATH}"
 fi

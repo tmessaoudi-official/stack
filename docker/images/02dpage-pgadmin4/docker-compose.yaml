@@ -18,6 +18,7 @@ services:
       - public
     ports:
       - ${GLOBAL_STACK_DPAGE_PGADMIN4_PORT_80:-}80
+      - ${GLOBAL_STACK_DPAGE_PGADMIN4_PORT_443:-}443
     restart: unless-stopped
     volumes:
       - ./docker/data/dumps/dpage-pgadmin4:/var/lib/pgadmin/storage/tames_local.io:rw
