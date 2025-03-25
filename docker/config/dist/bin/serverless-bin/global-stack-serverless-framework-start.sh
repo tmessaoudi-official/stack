@@ -38,7 +38,7 @@ sleep 1
 global-stack-base-wait-for.sh \
   "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/web-server" \
   "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/node.24" \
-  "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/java.23" \
+  "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/java.24" \
   "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/ruby.3" \
   "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/python.3" \
   "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/php.next" \
@@ -47,12 +47,13 @@ global-stack-base-wait-for.sh \
 [ -f ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/run/elasticmq.pid ] && sudo kill -9 $(cat ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/run/elasticmq.pid)
 [ -f ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/run/serverless-framework.pid ] && sudo kill -9 $(cat ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/run/serverless-framework.pid)
 
-"${GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN}"/sdkman.installer.sh
-source "${SDKMAN_DIR}"/bin/sdkman-init.sh
 source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/nvm.shellrc"
 source ${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/rbenv.shellrc
 source ${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/pyenv.shellrc
 source ${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/phpbrew.shellrc
+source ${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/sdkman.shellrc
+"${GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN}"/sdkman.installer.sh
+source "${SDKMAN_DIR}"/bin/sdkman-init.sh
 
 PYENV_VERSION=$(cat ${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/python.3)
 export PYENV_VERSION

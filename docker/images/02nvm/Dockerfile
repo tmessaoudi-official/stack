@@ -16,8 +16,6 @@ USER root
 
 SHELL ["/bin/bash", "-xeEu", "-o", "pipefail", "-c"]
 
-ENV PATH="${GLOBAL_STACK_DOCKER_TOOLS_PATH}/yarn/bin:${DENO_DIR}/bin:${PNPM_HOME}:${PATH}"
-
 RUN apt-get update --allow-releaseinfo-change \
     && apt-get install -y --no-install-recommends --fix-missing \
     libtinfo6 \

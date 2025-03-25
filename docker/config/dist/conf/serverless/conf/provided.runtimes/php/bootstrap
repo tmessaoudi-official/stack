@@ -1,0 +1,4 @@
+#!/bin/sh
+bootstrap_path="${PWD}"/conf/provided.runtimes/php/
+cd "${CUSTOM_LAMBDA_FUNCTION_ROOT}"
+php "${bootstrap_path}"/invoke.php $@

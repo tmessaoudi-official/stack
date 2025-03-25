@@ -38,6 +38,8 @@ export const supportedRuntimesArchitecture = {
   java17: [ARM64, X86_64],
   // @override
   java23: [ARM64, X86_64],
+  // @override
+  java24: [ARM64, X86_64],
   "go1.x": [X86_64],
   // @override
   "php8.4": [X86_64],
@@ -55,9 +57,9 @@ export const supportedRuntimesArchitecture = {
 // GO
 export const supportedGo = new Set(["go1.x"])
 
-  // @override
+// @override
 // JAVA
-export const supportedJava = new Set(["java8", "java8.al2", "java11", "java17", "java23"])
+export const supportedJava = new Set(["java8", "java8.al2", "java11", "java17", "java23", "java23"])
 
 // NODE.JS
 export const supportedNodejs = new Set([

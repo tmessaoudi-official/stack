@@ -29,6 +29,8 @@ if [ -f "${GLOBAL_STACK_DOCKER_ROOT_PATH}"/.env.local ]; then
 	export GOROOT
 	GOPATH=${GLOBAL_STACK_GOPATH}
 	export GOPATH
+	ZIGPATH=${GLOBAL_STACK_ZIGPATH}
+	export ZIGPATH
 	CAROOT=${GLOBAL_STACK_CAROOT}
 	export CAROOT
 	AWS_ENDPOINT_URL_S3=${GLOBAL_STACK_BASE_AWS_ENDPOINT_URL_S3}
@@ -158,6 +160,9 @@ if [ -f "${GLOBAL_STACK_DOCKER_ROOT_PATH}"/.env.local ]; then
 	if [ -d "${GOROOT}"/bin ]; then 
 		PATH="${GOROOT}/bin:${PATH}"
 	fi
+	if [ -d "${ZIGROOT}" ]; then 
+		PATH="${ZIGROOT}:${PATH}"
+	fi
 	export PATH
 	if [[ -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN}"/sdkman.installer.sh ]]; then
 		chmod a+x "${GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN}"/sdkman.installer.sh
@@ -169,11 +174,11 @@ if [ -f "${GLOBAL_STACK_DOCKER_ROOT_PATH}"/.env.local ]; then
 	fi
 	if [[ "" != "$(command -v sdk)" ]]; then
 		sdk offline enable
-		sdk use java ${GLOBAL_STACK_JAVA23_VERSION}
+		sdk use java ${GLOBAL_STACK_JAVA24_VERSION}
 
 		source "${GLOBAL_STACK_DOCKER_ROOT_PATH}"/docker/config/dist/bin/base-bin/global-stack-base-setup-packages.sh
 		global_stack_base_setup_packages \
-			--prefix='GLOBAL_STACK_JAVA23' \
+			--prefix='GLOBAL_STACK_JAVA24' \
 			--command='echo -e "**** Using ${PACKAGE_NAME} ${PACKAGE_VERSION}"' \
 			--command='sdk use ${PACKAGE_NAME} "${PACKAGE_VERSION}"'
 	fi

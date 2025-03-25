@@ -39,6 +39,7 @@ services:
       - REQUESTS_CA_BUNDLE=${GLOBAL_STACK_BASE_REQUESTS_CA_BUNDLE}
       - SERVERLESS_ACCESS_KEY=${GLOBAL_STACK_BASE_SERVERLESS_ACCESS_KEY}
     volumes:
+      - /etc/ssl/certs/ca-certificates.crt:/etc/ssl/certs/ca-certificates.crt:rw,delegated
       - ./projects:${GLOBAL_STACK_DOCKER_WORKDIR}:rw
       - ./tools:${GLOBAL_STACK_DOCKER_TOOLS_PATH}:rw
       - ./docker/config/root:${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/home/user:rw

@@ -23,3 +23,7 @@ fi
 if [ -d "${GOROOT}"/bin ]; then 
     PATH="${GOROOT}/bin:${PATH}"
 fi
+
+if [ -d "${ZIGPATH}" ]; then 
+    PATH="${ZIGPATH}:${PATH}"
+fi

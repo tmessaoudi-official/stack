@@ -37,6 +37,7 @@ global-stack-base-init-mkcert.sh
 global-stack-base-reinstall-mkcert.sh
 
 global-stack-base-install-go.sh
+global-stack-base-install-zig.sh
 global-stack-base-install-awscli.sh
 
 touch "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/base"

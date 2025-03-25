@@ -62,6 +62,7 @@ export type AwsLambdaRuntime =
   | "php8.5" // @override
   | "rust" // @override
   | "java23" // @override
+  | "java24" // @override
   | "java17"
   | "java11"
   | "java8"

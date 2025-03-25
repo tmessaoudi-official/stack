@@ -39,6 +39,7 @@ services:
       - ${GLOBAL_STACK_SELENIUM_STANDALONE_CHROME_PORT_4444:-}4444
       - ${GLOBAL_STACK_SELENIUM_STANDALONE_CHROME_PORT_5900:-}5900
     volumes:
+      - /etc/ssl/certs/ca-certificates.crt:/etc/ssl/certs/ca-certificates.crt:rw,delegated
       - ./projects:${GLOBAL_STACK_DOCKER_WORKDIR}:rw
       - ./tools:${GLOBAL_STACK_DOCKER_TOOLS_PATH}:rw
       - ./docker/config/root:${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/home/user:rw

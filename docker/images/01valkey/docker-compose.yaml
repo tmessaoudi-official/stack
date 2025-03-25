@@ -1,0 +1,14 @@
+---
+services:
+  01valkey:
+    image: valkey/valkey:${GLOBAL_STACK_VALKEY_VERSION}
+    ports:
+      - ${GLOBAL_STACK_VALKEY_PORT_6379:-}6379
+    volumes:
+      - 01valkey_data:/data
+    restart: unless-stopped
+    networks:
+      - public
+volumes:
+  01valkey_data:
+    name: ${COMPOSE_PROJECT_NAME}_${GLOBAL_STACK_VERSION}_01valkey_data

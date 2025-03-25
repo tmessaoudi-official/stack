@@ -32,6 +32,7 @@ services:
       - SSL_CERT_FILE=${GLOBAL_STACK_BASE_SSL_CERT_FILE}
       - REQUESTS_CA_BUNDLE=${GLOBAL_STACK_BASE_REQUESTS_CA_BUNDLE}
     volumes:
+      - /etc/ssl/certs/ca-certificates.crt:/etc/ssl/certs/ca-certificates.crt:rw,delegated
       - ./projects:${GLOBAL_STACK_DOCKER_WORKDIR}:rw
       - ./tools:${GLOBAL_STACK_DOCKER_TOOLS_PATH}:rw
       - ./docker/config/root:${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/home/user:rw

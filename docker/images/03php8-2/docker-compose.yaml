@@ -162,6 +162,7 @@ services:
     privileged: true
     restart: unless-stopped
     volumes:
+      - /etc/ssl/certs/ca-certificates.crt:/etc/ssl/certs/ca-certificates.crt:rw,delegated
       - ./projects:${GLOBAL_STACK_DOCKER_WORKDIR}:rw
       - ./tools:${GLOBAL_STACK_DOCKER_TOOLS_PATH}:rw
       - ./${GLOBAL_STACK_SHELL_HISTORY}:/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_HISTORY_TARGET}:rw

@@ -1,2 +1,2 @@
 #!/bin/sh
-php src/handlers/lambda/os-only/php/hello/invoke.php $@
+php ${CUSTOM_LAMBDA_FUNCTION_ROOT}/invoke.php $@

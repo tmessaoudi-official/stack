@@ -102,6 +102,7 @@ build: create-paths
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="build" GLOBAL_STACK_COMPOSE_CLI_SERVICE="01mysql9" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="build" GLOBAL_STACK_COMPOSE_CLI_SERVICE="01postgres17" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="build" GLOBAL_STACK_COMPOSE_CLI_SERVICE="01redis" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
+	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="build" GLOBAL_STACK_COMPOSE_CLI_SERVICE="01valkey" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="build" GLOBAL_STACK_COMPOSE_CLI_SERVICE="01selenium-standalone-chrome" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="build" GLOBAL_STACK_COMPOSE_CLI_SERVICE="01selenium-standalone-firefox" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="build" GLOBAL_STACK_COMPOSE_CLI_SERVICE="02dpage-pgadmin4" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
@@ -124,8 +125,8 @@ build: create-paths
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="push" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03java11-zulu" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="build" GLOBAL_STACK_COMPOSE_CLI_EXEC_FLAGS="--push" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03java17-zulu" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="push" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03java17-zulu" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
-	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="build" GLOBAL_STACK_COMPOSE_CLI_EXEC_FLAGS="--push" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03java23-zulu" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
-	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="push" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03java23-zulu" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
+	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="build" GLOBAL_STACK_COMPOSE_CLI_EXEC_FLAGS="--push" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03java24-zulu" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
+	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="push" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03java24-zulu" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="build" GLOBAL_STACK_COMPOSE_CLI_EXEC_FLAGS="--push" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03node18" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="push" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03node18" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="build" GLOBAL_STACK_COMPOSE_CLI_EXEC_FLAGS="--push" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03node22" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
@@ -180,7 +181,7 @@ login-01mongo8:
 login-01epiclabs-docker-oracle-xe-11g:
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="exec" GLOBAL_STACK_COMPOSE_CLI_SERVICE="01epiclabs-docker-oracle-xe-11g" GLOBAL_STACK_COMPOSE_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 login-01postgres17:
-	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="exec" GLOBAL_STACK_COMPOSE_CLI_SERVICE="01postgres17" GLOBAL_STACK_COMPOSE_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
+	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="exec" GLOBAL_STACK_COMPOSE_CLI_SERVICE="01postgres17" GLOBAL_STACK_COMPOSE_CLI_CONTAINER_COMMAND="sh" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 login-02nvm:
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="exec" GLOBAL_STACK_COMPOSE_CLI_SERVICE="02nvm" GLOBAL_STACK_COMPOSE_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 login-02sdkman:
@@ -189,8 +190,8 @@ login-03java11-zulu:
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="exec" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03java11-zulu" GLOBAL_STACK_COMPOSE_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 login-03java17-zulu:
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="exec" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03java17-zulu" GLOBAL_STACK_COMPOSE_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
-login-03java23-zulu:
-	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="exec" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03java23-zulu" GLOBAL_STACK_COMPOSE_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
+login-03java24-zulu:
+	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="exec" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03java24-zulu" GLOBAL_STACK_COMPOSE_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 login-02phpbrew:
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="exec" GLOBAL_STACK_COMPOSE_CLI_SERVICE="02phpbrew" GLOBAL_STACK_COMPOSE_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 login-02rbenv:
@@ -228,7 +229,9 @@ login-02pyenv:
 login-03python3:
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="exec" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03python3" GLOBAL_STACK_COMPOSE_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 login-01redis:
-	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="exec" GLOBAL_STACK_COMPOSE_CLI_SERVICE="01redis" GLOBAL_STACK_COMPOSE_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
+	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="exec" GLOBAL_STACK_COMPOSE_CLI_SERVICE="01redis" GLOBAL_STACK_COMPOSE_CLI_CONTAINER_COMMAND="sh" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
+login-01valkey:
+	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="exec" GLOBAL_STACK_COMPOSE_CLI_SERVICE="01valkey" GLOBAL_STACK_COMPOSE_CLI_CONTAINER_COMMAND="sh" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 login-01nginx:
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="exec" GLOBAL_STACK_COMPOSE_CLI_SERVICE="01nginx" GLOBAL_STACK_COMPOSE_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 login-01localstack-localstack:
@@ -268,8 +271,8 @@ log-03java11-zulu:
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="logs" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03java11-zulu" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 log-03java17-zulu:
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="logs" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03java17-zulu" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
-log-03java23-zulu:
-	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="logs" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03java23-zulu" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
+log-03java24-zulu:
+	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="logs" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03java24-zulu" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 log-02phpbrew:
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="logs" GLOBAL_STACK_COMPOSE_CLI_SERVICE="02phpbrew" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 log-02rbenv:
@@ -308,6 +311,8 @@ log-03python3:
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="logs" GLOBAL_STACK_COMPOSE_CLI_SERVICE="03python3" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 log-01redis:
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="logs" GLOBAL_STACK_COMPOSE_CLI_SERVICE="01redis" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
+log-01valkey:
+	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="logs" GLOBAL_STACK_COMPOSE_CLI_SERVICE="01valkey" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 log-01nginx:
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="logs" GLOBAL_STACK_COMPOSE_CLI_SERVICE="01nginx" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 log-01localstack-localstack:
