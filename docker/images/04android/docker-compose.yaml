@@ -20,7 +20,7 @@ services:
       - 02nvm
       - 03java24-zulu
       - 03ruby3
-      - 03node22
+      - 03node24
     environment:
       - GLOBAL_STACK_SDKMAN_VERSION=${GLOBAL_STACK_SDKMAN_VERSION}
       - SDKMAN_DIR=${GLOBAL_STACK_SDKMAN_DIR}

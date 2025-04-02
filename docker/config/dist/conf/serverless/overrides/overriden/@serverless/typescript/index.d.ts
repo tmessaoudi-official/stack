@@ -5,7 +5,6 @@
  * and run json-schema-to-typescript to regenerate this file.
  */
 
-export type AwsArnString = string;
 export type ErrorCode = string;
 export type AwsCfFunction =
   | AwsCfImport
@@ -17,6 +16,7 @@ export type AwsCfFunction =
   | AwsCfToJsonString;
 export type AwsCfInstruction = string | AwsCfFunction;
 export type AwsArn = AwsArnString | AwsCfFunction;
+export type AwsArnString = string;
 export type FunctionName = string;
 export type AwsSecretsManagerArnString = string;
 export type FilterPatterns = {
@@ -57,12 +57,14 @@ export type AwsLambdaMemorySize = number;
 export type AwsLambdaRole = string | AwsCfSub | AwsCfImport | AwsCfGetAtt;
 export type AwsLambdaRuntime =
   | "dotnet6"
+  | "dotnet8"
   | "go1.x"
   | "php8.4" // @override
   | "php8.5" // @override
   | "rust" // @override
-  | "java23" // @override
   | "java24" // @override
+  | "java23" // @override
+  | "java21"
   | "java17"
   | "java11"
   | "java8"
@@ -71,7 +73,7 @@ export type AwsLambdaRuntime =
   | "nodejs16.x"
   | "nodejs18.x"
   | "nodejs20.x"
-  | "nodejs22.x" // @override
+  | "nodejs22.x"
   | "nodejs24.x" // @override
   | "provided"
   | "provided.al2"
@@ -81,12 +83,12 @@ export type AwsLambdaRuntime =
   | "python3.9"
   | "python3.10"
   | "python3.11"
-  | "python3.12" // @override
-  | "python3.13" // @override
+  | "python3.12"
+  | "python3.13"
   | "ruby2.7"
   | "ruby3.2"
-  | "ruby3.3" // @override
-  | "ruby3.4";  // @override
+  | "ruby3.3"
+  | "ruby3.4"; // @override
 export type AwsLambdaRuntimeManagement =
   | ("auto" | "onFunctionUpdate")
   | {
@@ -146,6 +148,18 @@ export type AwsCfArrayInstruction = AwsCfInstruction[] | AwsCfSplit;
 export type ServiceName = string;
 
 export interface AWS {
+  org?: string;
+  app?: string;
+  outputs?: {
+    [k: string]:
+      | string
+      | number
+      | boolean
+      | unknown[]
+      | {
+          [k: string]: unknown;
+        };
+  };
   configValidationMode?: "error" | "warn" | "off";
   console?:
     | boolean
@@ -153,17 +167,6 @@ export interface AWS {
         [k: string]: unknown;
       };
   custom?: {
-    enterprise?: {
-      collectApiGatewayLogs?: boolean;
-      collectLambdaLogs?: boolean;
-      compressLogs?: boolean;
-      disableAwsSpans?: boolean;
-      disableFrameworksInstrumentation?: boolean;
-      disableHttpSpans?: boolean;
-      logAccessIamRole?: AwsArnString;
-      logIngestMode?: "push" | "pull";
-      disableWrapping?: boolean;
-    };
     [k: string]: unknown;
   };
   dashboard?: {
@@ -171,6 +174,29 @@ export interface AWS {
   };
   deprecationNotificationMode?: "error" | "warn" | "warn:summary";
   disabledDeprecations?: "*" | ErrorCode[];
+  build?:
+    | string
+    | {
+        esbuild?:
+          | {
+              external?: string[];
+              exclude?: string[];
+              packages?: "external";
+              buildConcurrency?: number;
+              bundle?: boolean;
+              minify?: boolean;
+              sourcemap?:
+                | boolean
+                | {
+                    type?: "inline" | "linked" | "external";
+                    setNodeOptions?: boolean;
+                    [k: string]: unknown;
+                  };
+              [k: string]: unknown;
+            }
+          | boolean;
+        [k: string]: unknown;
+      };
   frameworkVersion?: string;
   functions?: {
     /**
@@ -325,6 +351,7 @@ export interface AWS {
                       };
                     };
                   };
+                  timeoutInMillis?: number;
                 };
           }
         | {
@@ -699,6 +726,7 @@ export interface AWS {
       layers?: AwsLambdaLayers;
       logRetentionInDays?: AwsLogRetentionInDays;
       logDataProtectionPolicy?: AwsLogDataProtectionPolicy;
+      logs?: AwsLambdaLoggingConfiguration;
       maximumEventAge?: number;
       maximumRetryAttempts?: number;
       memorySize?: AwsLambdaMemorySize;
@@ -714,6 +742,7 @@ export interface AWS {
       reservedConcurrency?: number | AwsCfFunction | AwsCfIf;
       role?: AwsLambdaRole;
       runtime?: AwsLambdaRuntime;
+      build?: string;
       runtimeManagement?: AwsLambdaRuntimeManagement;
       tags?: AwsResourceTags;
       timeout?: AwsLambdaTimeout;
@@ -741,6 +770,7 @@ export interface AWS {
       };
     };
   };
+  licenseKey?: string;
   package?: {
     artifact?: string;
     exclude?: string[];
@@ -756,6 +786,25 @@ export interface AWS {
      * via the `patternProperty` "^[a-zA-Z0-9-]+$".
      */
     [k: string]: {
+      [k: string]: unknown;
+    };
+  };
+  stages?: {
+    /**
+     * This interface was referenced by `undefined`'s JSON-Schema definition
+     * via the `patternProperty` "^[a-zA-Z0-9-]+$".
+     */
+    [k: string]: {
+      observability?:
+        | boolean
+        | ("axiom" | "dashboard")
+        | {
+            provider: "axiom" | "dashboard";
+            dataset?: string;
+          };
+      resolvers?: {
+        [k: string]: unknown;
+      };
       [k: string]: unknown;
     };
   };
@@ -835,6 +884,7 @@ export interface AWS {
       };
       shouldStartNameWithService?: boolean;
       stage?: string;
+      timeoutInMillis?: number;
       usagePlan?:
         | {
             quota?: {
@@ -985,8 +1035,10 @@ export interface AWS {
               buildArgs?: {
                 [k: string]: string;
               };
+              buildOptions?: string[];
               cacheFrom?: string[];
               platform?: string;
+              provenance?: string;
             }
           | string;
       };
@@ -998,6 +1050,7 @@ export interface AWS {
     logDataProtectionPolicy?: AwsLogDataProtectionPolicy;
     logs?: {
       frameworkLambda?: boolean;
+      lambda?: AwsLambdaLoggingConfiguration;
       httpApi?:
         | boolean
         | {
@@ -1049,7 +1102,10 @@ export interface AWS {
       | "ap-southeast-2"
       | "ap-southeast-3"
       | "ap-southeast-4"
+      | "ap-southeast-5"
+      | "ap-southeast-7"
       | "ca-central-1"
+      | "ca-west-1"
       | "cn-north-1"
       | "cn-northwest-1"
       | "eu-central-1"
@@ -1063,7 +1119,9 @@ export interface AWS {
       | "il-central-1"
       | "me-central-1"
       | "me-south-1"
-      | "sa-east-1";
+      | "sa-east-1"
+      | "mx-central-1";
+    resolver?: string;
     role?: AwsLambdaRole;
     rolePermissionsBoundary?: AwsArnString;
     rollbackConfiguration?: {
@@ -1075,7 +1133,9 @@ export interface AWS {
     };
     runtime?: AwsLambdaRuntime;
     runtimeManagement?: AwsLambdaRuntimeManagement;
+    build?: string;
     deploymentMethod?: "changesets" | "direct";
+    enableLegacyDeploymentBucket?: boolean;
     s3?: {
       [k: string]: {
         accelerateConfiguration?: {
@@ -1353,6 +1413,11 @@ export interface AWS {
     websocketsDescription?: string;
   };
   service: ServiceName;
+  state?:
+    | {
+        resolver: string;
+      }
+    | string;
   useDotenv?: true;
   variablesResolutionMode?: "20210219" | "20210326";
   resources?: {
@@ -1448,18 +1513,6 @@ export interface AWS {
       retain?: boolean;
     };
   };
-  org?: string;
-  app?: string;
-  outputs?: {
-    [k: string]:
-      | string
-      | number
-      | boolean
-      | unknown[]
-      | {
-          [k: string]: unknown;
-        };
-  };
 }
 export interface AwsCfImport {
   "Fn::ImportValue": unknown;
@@ -1524,6 +1577,12 @@ export interface AwsLogDataProtectionPolicy {
   Description?: string;
   Version: string;
   Statement: unknown[];
+}
+export interface AwsLambdaLoggingConfiguration {
+  applicationLogLevel?: "DEBUG" | "ERROR" | "FATAL" | "INFO" | "TRACE" | "WARN";
+  logFormat?: "JSON" | "Text";
+  logGroup?: string;
+  systemLogLevel?: "DEBUG" | "INFO" | "WARN";
 }
 export interface AwsResourceTags {
   /**
