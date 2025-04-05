@@ -59,9 +59,6 @@ export type AwsLambdaRuntime =
   | "dotnet6"
   | "dotnet8"
   | "go1.x"
-  | "php8.4" // @override
-  | "php8.5" // @override
-  | "rust" // @override
   | "java24" // @override
   | "java23" // @override
   | "java21"
@@ -88,7 +85,10 @@ export type AwsLambdaRuntime =
   | "ruby2.7"
   | "ruby3.2"
   | "ruby3.3"
-  | "ruby3.4"; // @override
+  | "ruby3.4" // @override
+  | "php8.4" // @override
+  | "php8.5" // @override
+  | "rust" ; // @override
 export type AwsLambdaRuntimeManagement =
   | ("auto" | "onFunctionUpdate")
   | {
@@ -738,7 +738,16 @@ export interface AWS {
         individually?: boolean;
         patterns?: string[];
       };
-      provisionedConcurrency?: number | AwsCfFunction | AwsCfIf;
+      provisionedConcurrency?:
+        | (
+            | number
+            | {
+                executions: number;
+                alias?: string;
+              }
+          )
+        | AwsCfFunction
+        | AwsCfIf;
       reservedConcurrency?: number | AwsCfFunction | AwsCfIf;
       role?: AwsLambdaRole;
       runtime?: AwsLambdaRuntime;
