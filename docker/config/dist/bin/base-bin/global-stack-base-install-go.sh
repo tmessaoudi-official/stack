@@ -6,6 +6,6 @@ if [[ -n "${GLOBAL_STACK_GO_VERSION}" && ( "/usr/bin/go" = "$(command -v go)" ||
     sudo tar -C "${GOROOT}"/ --strip-component=1 -xzf go${GLOBAL_STACK_GO_VERSION}.linux-amd64.tar.gz
     sudo mkdir -p "${GOPATH}"
     sudo chmod -R a+rwx "${GOROOT}"/
-    sudo chown -R "${GLOBAL_STACK_BASE_USERNAME}:${GLOBAL_STACK_BASE_GROUP}" "${GOROOT}"/
+    sudo chown -R "${GLOBAL_STACK_DOCKER_USER_ID}:${GLOBAL_STACK_DOCKER_GROUP_ID}" "${GOROOT}"/
     rm -rf go${GLOBAL_STACK_GO_VERSION}.linux-amd64.tar.gz
 fi

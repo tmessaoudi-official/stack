@@ -1,3 +1,0 @@
-#!/bin/sh
-chmod a+x ./src/handlers/lambda/os-only/rust/hello/target/release/rust-lambda
-./src/handlers/lambda/os-only/rust/hello/target/release/rust-lambda $@

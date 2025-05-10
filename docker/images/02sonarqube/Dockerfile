@@ -18,8 +18,8 @@ USER root
 
 # @todo fix pin versions
 # hadolint ignore=DL3008
-RUN apt-get update --allow-releaseinfo-change \
-    && apt-get install -y --no-install-recommends --fix-missing \
+RUN apt-get -o Acquire::AllowInsecureRepositories=true update --allow-releaseinfo-change \
+    && apt-get --allow-unauthenticated install -y --no-install-recommends --fix-missing \
     libnss3-tools \
     sudo \
     && apt-get clean -y \

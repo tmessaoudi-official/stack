@@ -1,2 +1,0 @@
-#!/bin/sh
-echo '{ "__offline_payload__": { "statusCode": 200, "body": "Hello world" } }'

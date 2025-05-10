@@ -27,3 +27,7 @@ fi
 if [ -d "${ZIGPATH}" ]; then 
     PATH="${ZIGPATH}:${PATH}"
 fi
+
+if [ -d "${HURLPATH}" ]; then 
+    PATH="${HURLPATH}:${PATH}"
+fi

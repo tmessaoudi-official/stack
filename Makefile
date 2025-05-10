@@ -99,7 +99,7 @@ build: create-paths
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="build" GLOBAL_STACK_COMPOSE_CLI_SERVICE="01axllent-mailpit" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="build" GLOBAL_STACK_COMPOSE_CLI_SERVICE="01mariadb11" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="build" GLOBAL_STACK_COMPOSE_CLI_SERVICE="01mongo8" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
-	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="build" GLOBAL_STACK_COMPOSE_CLI_SERVICE="01mysql9" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
+	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="build" GLOBAL_STACK_COMPOSE_CLI_SERVICE="01mysql8" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="build" GLOBAL_STACK_COMPOSE_CLI_SERVICE="01postgres17" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="build" GLOBAL_STACK_COMPOSE_CLI_SERVICE="01redis" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="build" GLOBAL_STACK_COMPOSE_CLI_SERVICE="01valkey" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
@@ -174,8 +174,8 @@ login-01httpd:
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="exec" GLOBAL_STACK_COMPOSE_CLI_SERVICE="01httpd" GLOBAL_STACK_COMPOSE_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 login-01mariadb11:
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="exec" GLOBAL_STACK_COMPOSE_CLI_SERVICE="01mariadb11" GLOBAL_STACK_COMPOSE_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
-login-01mysql9:
-	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="exec" GLOBAL_STACK_COMPOSE_CLI_SERVICE="01mysql9" GLOBAL_STACK_COMPOSE_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
+login-01mysql8:
+	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="exec" GLOBAL_STACK_COMPOSE_CLI_SERVICE="01mysql8" GLOBAL_STACK_COMPOSE_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 login-01mongo8:
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="exec" GLOBAL_STACK_COMPOSE_CLI_SERVICE="01mongo8" GLOBAL_STACK_COMPOSE_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 login-01epiclabs-docker-oracle-xe-11g:
@@ -255,8 +255,8 @@ log-01mariadb11:
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="logs" GLOBAL_STACK_COMPOSE_CLI_SERVICE="01mariadb11" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 log-01epiclabs-docker-oracle-xe-11g:
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="logs" GLOBAL_STACK_COMPOSE_CLI_SERVICE="01epiclabs-docker-oracle-xe-11g" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
-log-01mysql9:
-	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="logs" GLOBAL_STACK_COMPOSE_CLI_SERVICE="01mysql9" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
+log-01mysql8:
+	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="logs" GLOBAL_STACK_COMPOSE_CLI_SERVICE="01mysql8" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 log-01mongo8:
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="logs" GLOBAL_STACK_COMPOSE_CLI_SERVICE="01mongo8" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 log-01postgres17:

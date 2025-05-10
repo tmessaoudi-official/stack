@@ -1,6 +1,6 @@
 # shellcheck disable=SC2148
 ARG GLOBAL_STACK_VERSION=1_5_0_local
-ARG GLOBAL_STACK_IMAGE_SELENIUM_STANDALONE_FIREFOX_VERSION=4.30.0-20250323
+ARG GLOBAL_STACK_IMAGE_SELENIUM_STANDALONE_FIREFOX_VERSION=4.32.0-20250505
 
 # shellcheck disable=SC2086
 ARG GLOBAL_STACK_LOCAL_REGISTRY_PORT_5000=5000
@@ -18,8 +18,8 @@ USER root
 
 # @todo fix pin versions
 # hadolint ignore=DL3008
-RUN apt-get update --allow-releaseinfo-change \
-    && apt-get install -y --no-install-recommends --fix-missing \
+RUN apt-get -o Acquire::AllowInsecureRepositories=true update --allow-releaseinfo-change \
+    && apt-get --allow-unauthenticated install -y --no-install-recommends --fix-missing \
     libnss3-tools \
     sudo \
     && apt-get clean -y \

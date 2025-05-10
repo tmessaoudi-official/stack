@@ -26,8 +26,8 @@ ENV GLOBAL_STACK_ANDROID_LOCALE="${GLOBAL_STACK_ANDROID_LOCALE}" \
 # hadolint ignore=DL3008,DL3018
 RUN shopt -s extdebug \
     && IFS=$'\n\t' \
-    && apt-get update --allow-releaseinfo-change \
-    && apt-get install -y --no-install-recommends --fix-missing \
+    && apt-get -o Acquire::AllowInsecureRepositories=true update --allow-releaseinfo-change \
+    && apt-get --allow-unauthenticated install -y --no-install-recommends --fix-missing \
     usbutils \
     clang \
     cmake \

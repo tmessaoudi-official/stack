@@ -16,7 +16,7 @@
 #
 
 
-# install:- channel: stable; cliVersion: 5.19.0; cliNativeVersion: 0.5.0; api: https://api.sdkman.io/2
+# install:- channel: stable; cliVersion: 5.19.0; cliNativeVersion: 0.7.4; api: https://api.sdkman.io/2
 
 set -e
 
@@ -38,7 +38,7 @@ trap echo_failed_command EXIT
 # Global variables
 export SDKMAN_SERVICE="https://api.sdkman.io/2"
 export SDKMAN_VERSION="5.19.0"
-export SDKMAN_NATIVE_VERSION="0.5.0"
+export SDKMAN_NATIVE_VERSION="0.7.4"
 
 if [ -z "$SDKMAN_DIR" ]; then
     SDKMAN_DIR="$HOME/.sdkman"
@@ -319,22 +319,30 @@ echo "$SDKMAN_PLATFORM" > "$sdkman_platform_file"
 
 echo "Prime the config file..."
 touch "$sdkman_config_file"
+
+
+# Interactive mode - optimized for human use
 echo "sdkman_auto_answer=false" >> "$sdkman_config_file"
+echo "sdkman_colour_enable=true" >> "$sdkman_config_file"
+echo "sdkman_selfupdate_feature=true" >> "$sdkman_config_file"
+
+
+# Set shell-specific config
 if [ -z "$ZSH_VERSION" -a -z "$BASH_VERSION" ]; then
     echo "sdkman_auto_complete=false" >> "$sdkman_config_file"
 else
     echo "sdkman_auto_complete=true" >> "$sdkman_config_file"
 fi
+
+# Common settings that don't change based on CI mode
 echo "sdkman_auto_env=false" >> "$sdkman_config_file"
 echo "sdkman_beta_channel=false" >> "$sdkman_config_file"
 echo "sdkman_checksum_enable=true" >> "$sdkman_config_file"
-echo "sdkman_colour_enable=true" >> "$sdkman_config_file"
 echo "sdkman_curl_connect_timeout=7" >> "$sdkman_config_file"
 echo "sdkman_curl_max_time=10" >> "$sdkman_config_file"
 echo "sdkman_debug_mode=false" >> "$sdkman_config_file"
 echo "sdkman_insecure_ssl=false" >> "$sdkman_config_file"
 echo "sdkman_native_enable=true" >> "$sdkman_config_file"
-echo "sdkman_selfupdate_feature=true" >> "$sdkman_config_file"
 
 # script cli distribution
 echo "Installing script cli archive..."

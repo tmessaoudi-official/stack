@@ -18,13 +18,10 @@ SHELL ["/bin/bash", "-xeEu", "-o", "pipefail", "-c"]
 
 # @todo fix pin versions
 # hadolint ignore=DL3008,DL3018
-RUN apt-key adv \
-    --keyserver hkp://keyserver.ubuntu.com:80 \
-    --recv-keys 14AA40EC0831756756D7F66C4F4EA0AAE5267A6C \
-    && apt-key export 14AA40EC0831756756D7F66C4F4EA0AAE5267A6C | gpg --dearmor | sudo dd of=/etc/apt/trusted.gpg.d/php.gpg \
-    && sh -c 'echo "deb [signed-by=/etc/apt/trusted.gpg.d/php.gpg arch=$(dpkg --print-architecture)] http://ppa.launchpad.net/ondrej/php/ubuntu noble main" > /etc/apt/sources.list.d/php-noble-main.list' \
-    && apt-get update --allow-releaseinfo-change \
-    && apt-get install -y --no-install-recommends --fix-missing \
+RUN curl -fsSL 'https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x14AA40EC0831756756D7F66C4F4EA0AAE5267A6C' | gpg --dearmor | tee /etc/apt/trusted.gpg.d/php.gpg \
+    && sh -c 'echo "deb [trusted=yes signed-by=/etc/apt/trusted.gpg.d/php.gpg arch=$(dpkg --print-architecture)] http://ppa.launchpad.net/ondrej/php/ubuntu noble main" > /etc/apt/sources.list.d/php-noble-main.list' \
+    && apt-get -o Acquire::AllowInsecureRepositories=true update --allow-releaseinfo-change \
+    && apt-get --allow-unauthenticated install -y --no-install-recommends --fix-missing \
     bison \
     re2c \
     libzip4 \

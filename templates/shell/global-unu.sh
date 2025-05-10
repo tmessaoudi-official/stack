@@ -8,7 +8,7 @@ if eval "${env_file_exists}"; then
 fi
 
 # Update and fix broken dependencies
-sudo apt update --allow-releaseinfo-change
+sudo apt -o Acquire::AllowInsecureRepositories=true update --allow-releaseinfo-change
 sudo dpkg --configure -a
 sudo apt install -y --fix-broken --no-install-recommends --fix-missing
 
@@ -25,7 +25,7 @@ sudo apt autoclean -y
 sudo apt autopurge -y
 
 # Final update and cleanup of remaining cached files
-sudo apt update --allow-releaseinfo-change
+sudo apt -o Acquire::AllowInsecureRepositories=true update --allow-releaseinfo-change
 if [[ "" != "$(command -v snap)" ]]; then
 	sudo snap refresh
 fi

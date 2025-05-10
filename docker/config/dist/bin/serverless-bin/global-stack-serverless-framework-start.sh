@@ -152,7 +152,7 @@ rm -rf ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/tmp/finder-res
 
 npm install
 
-for overriden_package in "s3rver" "serverless-offline" "@serverless/typescript"; do
+for overriden_package in "s3rver"; do
   if [[ ! -d ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/overrides/original/${overriden_package}/ ]]; then
     mkdir -p ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/overrides/original/${overriden_package}/
     cp -R ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/node_modules/${overriden_package}/* ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/overrides/original/${overriden_package}/
@@ -207,7 +207,7 @@ ${line}" >> "${temp_file}"
   mv "${temp_file}" "${file}"
 done < ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/tmp/finder-result.txt
 
-for overriden_package in "s3rver" "serverless-offline" "@serverless/typescript"; do
+for overriden_package in "s3rver"; do
   cp -R ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/overrides/ready/${overriden_package}/* ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/node_modules/${overriden_package}/
 done
 

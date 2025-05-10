@@ -41,9 +41,12 @@ mkdir -p "${RUSTUP_HOME}" "${CARGO_HOME}"
 if [ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/rust" ] || [ "true" = "${GLOBAL_STACK_RELOAD_RUST}" ]; then
   global-stack-rust-iou.sh
 fi
+
 source "${CARGO_HOME}/env"
 
 global-stack-base-init-mkcert.sh
+global-stack-rust-install-jujutsu.sh
+global-stack-rust-install-mergiraf.sh
 
 echo -e "\nWriting success"
 touch "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/rust"

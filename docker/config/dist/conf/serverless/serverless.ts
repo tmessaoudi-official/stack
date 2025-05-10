@@ -89,141 +89,8 @@ const serverlessConfiguration: AWS = {
     },
   },
   functions: {
-    'nodejs-hello-ts': {
-      runtime: 'nodejs20.x',
-      handler: 'build/lambda/hello-ts.handler',
-      events: [
-        {
-          http: {
-            path: '/lambda/nodejs/hello-ts',
-            method: 'get',
-          },
-        }
-      ],
-    },
-    'nodejs-hello-js': {
-      runtime: 'nodejs20.x',
-      handler: 'src/handlers/lambda/nodejs/hello-js.handler',
-      events: [
-        {
-          http: {
-            path: '/lambda/nodejs/hello-js',
-            method: 'get',
-          },
-        }
-      ],
-    },
-    'python-hello': {
-      runtime: 'python3.13',
-      handler: 'src/handlers/lambda/python/hello.handler',
-      events: [
-        {
-          http: {
-            path: '/lambda/python/hello',
-            method: 'get',
-          },
-        }
-      ],
-    },
-    'ruby-hello': {
-      runtime: 'ruby3.2',
-      handler: 'src/handlers/lambda/ruby/hello.handler',
-      events: [
-        {
-          http: {
-            path: '/lambda/ruby/hello',
-            method: 'get',
-          },
-        }
-      ],
-    },
-    'provided-al2023-test-hello': {
-      runtime: 'provided.al2023',
-      handler: 'src/handlers/lambda/os-only/hello/bootstrap',
-      events: [
-        {
-          http: {
-            path: '/lambda/provided.al2023-test/hello',
-            method: 'get',
-          },
-        }
-      ],
-      environment: {
-        CUSTOM_LAMBDA_FUNCTION_ROOT: 'src/handlers/lambda/os-only/hello/',
-        CUSTOM_LAMBDA_FUNCTION_RUNTIME: 'php',
-        CUSTOM_LAMBDA_FUNCTION_HANDLER: 'src/handlers/lambda/os-only/hello/Hello.Hello::handler'
-      },
-    },
-    'provided-al2023-rust-hello': {
-      runtime: 'provided.al2023',
-      handler: 'src/handlers/lambda/os-only/rust/hello/bootstrap',
-      events: [
-        {
-          http: {
-            path: '/lambda/provided.al2023-rust/hello',
-            method: 'get',
-          },
-        }
-      ],
-      environment: {
-        CUSTOM_LAMBDA_FUNCTION_ROOT: 'src/handlers/lambda/os-only/rust/hello/',
-        CUSTOM_LAMBDA_FUNCTION_RUNTIME: 'rust',
-        CUSTOM_LAMBDA_FUNCTION_HANDLER: 'src/handlers/lambda/os-only/hello/Hello.Hello::handler'
-      },
-    },
-    'provided-al2023-php-hello': {
-      runtime: 'provided.al2023',
-      handler: 'src/handlers/lambda/os-only/php/hello/bootstrap',
-      events: [
-        {
-          http: {
-            path: '/lambda/php/hello',
-            method: 'get',
-          },
-        }
-      ],
-    },
-    // 'php-hello': {
-    //   runtime: 'php8.5',
-    //   handler: 'src/handlers/lambda/php/Hello.Hello::handler',
-    //   events: [
-    //     {
-    //       http: {
-    //         path: '/lambda/php/hello',
-    //         method: 'get',
-    //       },
-    //     }
-    //   ],
-    // },
-    'go-hello': {
-      runtime: 'go1.x',
-      handler: 'src/handlers/lambda/go/hello.handler',
-      events: [
-        {
-          http: {
-            path: '/lambda/go/hello',
-            method: 'get',
-          },
-        }
-      ],
-    },
-    'java-hello': {
-      runtime: 'java17',
-      handler: 'com.local.Hello',
-      events: [
-        {
-          http: {
-            path: '/lambda/java/hello',
-            method: 'get',
-          },
-        }
-      ],
-      package: {
-        artifact: 'src/handlers/lambda/java/hello/target/hello-1.0.jar'
-      },
-    },
     'nodejs-s3-hook-ts': {
-      runtime: 'nodejs20.x',
+      runtime: 'nodejs22.x',
       handler: 'build/s3/hook.handler',
       events: [
         {
@@ -235,7 +102,7 @@ const serverlessConfiguration: AWS = {
       ],
     },
     'nodejs-sqs-processor-ts': {
-      runtime: 'nodejs20.x',
+      runtime: 'nodejs22.x',
       handler: 'build/sqs/processor.handler',
       events: [
         {
@@ -248,7 +115,7 @@ const serverlessConfiguration: AWS = {
       ]
     },
     'nodejs-sns-publisher-ts': {
-      runtime: 'nodejs20.x',
+      runtime: 'nodejs22.x',
       handler: 'build/sns/publisher.handler',
       events: [
         {
@@ -260,7 +127,7 @@ const serverlessConfiguration: AWS = {
       ],
     },
     'nodejs-sns-subscriber-ts': {
-      runtime: 'nodejs20.x',
+      runtime: 'nodejs22.x',
       handler: 'build/sns/subscriber.handler',
       events: [
         {
