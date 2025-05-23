@@ -67,6 +67,8 @@ docker/config/dist/conf/http-common/ssl/*.pem
 /docker/config/root/.*_history
 /docker/config/etc/env*
 
+!/docker/config/root/.gitconfig
+!/docker/config/root/.gitattributes
 /docker/config/root/**/*
 
 /docker/data/**/*
