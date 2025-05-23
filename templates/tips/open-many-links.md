@@ -6,6 +6,8 @@ awk '!seen[$0]++' .env | grep -oE '#(.*)@todo(.*)check-update(s)? (.*)http(s)?:/
     wait $chrome_pid
 done
 
+source /etc/profile.d/stack.sh
+
 awk '!seen[$0]++' .env | \
 grep -oE '#(.*)@todo(.*)check-update(s)? (.*)http(s)?://[^ ]*' | \
 grep -oE 'http(s)?://[^ ]*' | \
@@ -17,7 +19,6 @@ while read -r link; do
     wait $chrome_pid
 done
 
-source /etc/profile.d/stack.sh
 sdk offline disable
 sdk list ant
 sdk list gradle

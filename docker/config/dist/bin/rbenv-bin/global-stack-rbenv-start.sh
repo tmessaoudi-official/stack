@@ -48,11 +48,11 @@ if [ "${RBENV_MODE}" = "setup" ]; then
     "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/rbenv"
 
 
-  if [ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/ruby" && "true" = "${GLOBAL_STACK_USE_LOCKS}" ]; then
+  if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/ruby" && "true" = "${GLOBAL_STACK_USE_LOCKS}" ]]; then
     echo "$([[ -n "${RUBY_VERSION_AS:-}" && "" != "${RUBY_VERSION_AS:-}" ]] && echo "${RUBY_VERSION_AS:-}" || echo "${RUBY_VERSION:-}")" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/ruby"
   fi
 
-  if [ "$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/ruby")" != "$([[ -n "${RUBY_VERSION_AS:-}" && "" != "${RUBY_VERSION_AS:-}" ]] && echo "${RUBY_VERSION_AS:-}" || echo "${RUBY_VERSION:-}")" && "true" = "${GLOBAL_STACK_USE_LOCKS}" ]; then
+  if [[ "$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/ruby")" != "$([[ -n "${RUBY_VERSION_AS:-}" && "" != "${RUBY_VERSION_AS:-}" ]] && echo "${RUBY_VERSION_AS:-}" || echo "${RUBY_VERSION:-}")" && "true" = "${GLOBAL_STACK_USE_LOCKS}" ]]; then
     RUBY_SHOW_WAITING=""
     RUBY_WAITING_FOR=""
     while [ -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/ruby" ]

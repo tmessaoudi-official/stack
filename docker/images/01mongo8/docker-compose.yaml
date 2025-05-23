@@ -11,6 +11,7 @@ services:
     depends_on:
       - 00base
     environment:
+      - MONGO_DBS=${GLOBAL_STACK_MONGO8_DBS}
       - MONGODB_PASSWORD=${GLOBAL_STACK_DATABASE_ROOT_PASSWORD}
       - MONGODB_USER=root
       - TZ=${GLOBAL_STACK_TIMEZONE}

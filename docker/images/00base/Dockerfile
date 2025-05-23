@@ -68,6 +68,8 @@ ARG GLOBAL_STACK_TASK_VERSION
 ARG GLOBAL_STACK_SOPS_VERSION
 ARG GLOBAL_STACK_YAMLFMT_VERSION
 ARG GLOBAL_STACK_HURL_VERSION
+ARG GLOBAL_STACK_WKHTMLTOPDF_VERSION
+ARG GLOBAL_STACK_WKHTMLTOPDF_DISTRO
 ARG GLOBAL_STACK_JUJUTSU_VERSION
 ARG GLOBAL_STACK_MERGIRAF_VERSION
 ARG GLOBAL_STACK_USE_LOCKS
@@ -150,6 +152,8 @@ ENV DEBIAN_FRONTEND="noninteractive" \
     MISE_CONFIG_DIR="${MISE_CONFIG_DIR}" \
     MISE_CACHE_DIR="${MISE_CACHE_DIR}" \
     CAROOT="${CAROOT}" \
+    GLOBAL_STACK_WKHTMLTOPDF_VERSION="${GLOBAL_STACK_WKHTMLTOPDF_VERSION}" \
+    GLOBAL_STACK_WKHTMLTOPDF_DISTRO="${GLOBAL_STACK_WKHTMLTOPDF_DISTRO}" \
     PATH="${GLOBAL_STACK_CARGO_HOME}/bin:${HURLPATH}/bin:${ZIGPATH}:${GOROOT}/bin:/opt/${GLOBAL_STACK_DOCKER_USER_ID}/sonar-scanner-cli/bin/:/opt/${GLOBAL_STACK_DOCKER_USER_ID}/task:/opt/${GLOBAL_STACK_DOCKER_USER_ID}/bat:${GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN}:${PATH}"
 
 COPY docker/images/00base/conf/bin/ /usr/local/bin/
@@ -249,10 +253,17 @@ RUN shopt -s extdebug \
     && wget -qO- https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor | dd of=/etc/apt/trusted.gpg.d/google-chrome.gpg \
     && echo "deb [trusted=yes signed-by=/etc/apt/trusted.gpg.d/google-chrome.gpg arch=$(dpkg --print-architecture)] http://dl.google.com/linux/chrome/deb/ stable main" | dd of=/etc/apt/sources.list.d/google-chrome.list \
     && apt-get -o Acquire::AllowInsecureRepositories=true update --allow-releaseinfo-change \
+    && wget https://github.com/wkhtmltopdf/packaging/releases/download/${GLOBAL_STACK_WKHTMLTOPDF_VERSION}/wkhtmltox_${GLOBAL_STACK_WKHTMLTOPDF_VERSION}.${GLOBAL_STACK_WKHTMLTOPDF_DISTRO}_amd64.deb \
     && apt-get --allow-unauthenticated install -y --no-install-recommends --fix-missing \
     git \
     google-chrome-stable \
     postgresql-client-17 \
+    libgoffice-0.10-10t64 \
+    libgoffice-0.10-dev \
+    libfontconfig1 \
+    libxrender1 \
+    ./wkhtmltox_${GLOBAL_STACK_WKHTMLTOPDF_VERSION}.${GLOBAL_STACK_WKHTMLTOPDF_DISTRO}_amd64.deb \
+    && rm wkhtmltox_${GLOBAL_STACK_WKHTMLTOPDF_VERSION}.${GLOBAL_STACK_WKHTMLTOPDF_DISTRO}_amd64.deb \
     && usermod -u 1001 ubuntu \
     && (find / -user 1000 -exec chown -h 1001 {} \; 2>/dev/null || true) \
     && groupmod -g 1001 ubuntu \

@@ -27,14 +27,23 @@ touch ${GLOBAL_STACK_SSL_PATH}/localhost-Bundle.pem
 cat "${GLOBAL_STACK_SSL_PATH}/localhost-key.pem" > ${GLOBAL_STACK_SSL_PATH}/localhost-Bundle.pem
 cat "${GLOBAL_STACK_SSL_PATH}/localhost.pem" >> ${GLOBAL_STACK_SSL_PATH}/localhost-Bundle.pem
 
-caddy_server_ip=$(global-stack-base-get-container-ip.sh 01caddy)
-if [[ "" != ${caddy_server_ip} ]]; then
-    if [[ "" != ${GLOBAL_STACK_HTTPS_LOCALHOST_IPS} ]]; then
-        GLOBAL_STACK_HTTPS_LOCALHOST_IPS+=" ${caddy_server_ip}"
-    else
-        GLOBAL_STACK_HTTPS_LOCALHOST_IPS=${caddy_server_ip}
+for container_host in ${GLOBAL_STACK_HTTPS_CONTAINER_IPS//[\"\']/}; do
+    container_server_ip=$(global-stack-base-get-container-ip.sh ${container_host})
+    if [[ "" != ${container_server_ip} ]]; then
+        if [[ "" != ${GLOBAL_STACK_HTTPS_LOCALHOST_IPS} ]]; then
+            GLOBAL_STACK_HTTPS_LOCALHOST_IPS+=" ${container_host} ${container_server_ip}"
+        else
+            GLOBAL_STACK_HTTPS_LOCALHOST_IPS="${container_host} ${container_server_ip}"
+        fi
     fi
-fi
+
+    # Generate new certificate using mkcert
+    mkcert -cert-file ${GLOBAL_STACK_SSL_PATH}/${container_host}.pem -key-file ${GLOBAL_STACK_SSL_PATH}/${container_host}-key.pem -p12-file ${GLOBAL_STACK_SSL_PATH}/${container_host}-p12.pem ${container_host}
+
+    touch ${GLOBAL_STACK_SSL_PATH}/${container_host}-Bundle.pem
+    cat "${GLOBAL_STACK_SSL_PATH}/${container_host}-key.pem" > ${GLOBAL_STACK_SSL_PATH}/${container_host}-Bundle.pem
+    cat "${GLOBAL_STACK_SSL_PATH}/${container_host}.pem" >> ${GLOBAL_STACK_SSL_PATH}/${container_host}-Bundle.pem
+done
 
 mkcert -cert-file ${GLOBAL_STACK_SSL_PATH}/localhost+ips.pem -key-file ${GLOBAL_STACK_SSL_PATH}/localhost+ips-key.pem -p12-file ${GLOBAL_STACK_SSL_PATH}/localhost+ips-p12.pem localhost 127.0.0.1 ::1 ${GLOBAL_STACK_HTTPS_LOCALHOST_IPS}
 touch ${GLOBAL_STACK_SSL_PATH}/localhost+ips-Bundle.pem

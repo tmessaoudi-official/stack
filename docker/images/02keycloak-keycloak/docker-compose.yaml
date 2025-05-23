@@ -1,0 +1,67 @@
+---
+services:
+  02keycloak-keycloak:
+    build:
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+        GLOBAL_STACK_SHELL_HISTORY: ${GLOBAL_STACK_SHELL_HISTORY}
+        GLOBAL_STACK_IMAGE_KEYCLOAK_KEYCLOAK_VERSION: ${GLOBAL_STACK_IMAGE_KEYCLOAK_KEYCLOAK_VERSION}
+      context: ./
+      dockerfile: ./docker/images/02keycloak-keycloak/Dockerfile
+    command:
+      - start-dev
+      - --proxy-headers=forwarded
+      - --verbose
+    depends_on:
+      - 00base
+      - 01postgres17
+    extra_hosts:
+      - ${GLOBAL_STACK_LOCAL_REGISTRY_ALIAS}:${GLOBAL_STACK_HOST_GATEWAY_IP}
+      - ${GLOBAL_STACK_DOCKER_HOST_DSN}:${GLOBAL_STACK_HOST_GATEWAY_IP}
+      - ${GLOBAL_STACK_EXPOSED_VIRTUAL_HOSTS}:${GLOBAL_STACK_HOST_GATEWAY_IP}
+    environment:
+      - KC_BOOTSTRAP_ADMIN_USERNAME=${GLOBAL_STACK_KEYCLOAK_ADMIN}
+      - KC_BOOTSTRAP_ADMIN_PASSWORD=${GLOBAL_STACK_KEYCLOAK_ADMIN_PASSWORD}
+      - KEYCLOAK_ADMIN=${GLOBAL_STACK_KEYCLOAK_ADMIN}
+      - KEYCLOAK_ADMIN_PASSWORD=${GLOBAL_STACK_KEYCLOAK_ADMIN_PASSWORD}
+      - KC_DB=postgres
+      - KC_DB_URL_HOST=01postgres17
+      - KC_DB_URL_PORT=5432
+      - KC_DB_URL_DATABASE=keycloak
+      - KC_DB_USERNAME=root
+      - KC_DB_PASSWORD=${GLOBAL_STACK_DATABASE_ROOT_PASSWORD}
+      - KC_METRICS_ENABLED=true
+      - KC_HEALTH_ENABLED=true
+      - KC_LOG_LEVEL=DEBUG
+      - KC_PROXY=edge
+      - KC_HOSTNAME=https://${GLOBAL_STACK_KEYCLOAK_KEYCLOAK_HOSTNAME}
+      # - KC_HTTP_ENABLED=true
+      - KC_HTTPS_CERTIFICATE_FILE=${GLOBAL_STACK_SSL_PATH}/all.pem
+      - KC_HTTPS_CERTIFICATE_KEY_FILE=${GLOBAL_STACK_SSL_PATH}/all-key.pem
+      - KC_HOSTNAME_DEBUG=true
+      - KC_FEATURES=account-api:v1,account:v3,admin-api:v1,admin-fine-grained-authz:v2,admin:v2,authorization:v1,cache-embedded-remote-store:v1,ciba:v1,client-policies:v1,client-secret-rotation:v1,client-types:v1,declarative-ui:v1,device-flow:v1,docker:v1,dpop:v1,dynamic-scopes:v1,hostname:v2,impersonation:v1,ipa-tuura-federation:v1,kerberos:v1,login:v2,oid4vc-vci:v1,opentelemetry:v1,organization:v1,par:v1,passkeys:v1,persistent-user-sessions:v1,preview,quick-theme:v1,recovery-codes:v1,rolling-updates:v1,scripts:v1,step-up-authentication:v1,token-exchange-standard:v2,token-exchange:v1,transient-users:v1,update-email:v1,user-event-metrics:v1,web-authn:v1
+      - NODE_EXTRA_CA_CERTS=${GLOBAL_STACK_BASE_NODE_EXTRA_CA_CERTS}
+      - SSL_CERT_FILE=${GLOBAL_STACK_BASE_SSL_CERT_FILE}
+      - REQUESTS_CA_BUNDLE=${GLOBAL_STACK_BASE_REQUESTS_CA_BUNDLE}
+      - CURL_CA_BUNDLE=${GLOBAL_STACK_BASE_CURL_CA_BUNDLE}
+    volumes:
+      - /etc/ssl/certs/ca-certificates.crt:/etc/ssl/certs/ca-certificates.crt:rw,delegated
+      - ./projects:${GLOBAL_STACK_DOCKER_WORKDIR}:rw
+      - ./tools:${GLOBAL_STACK_DOCKER_TOOLS_PATH}:rw
+      - ./docker/config/root:${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/home/user:rw
+      - ./docker/config/dist/bin:${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/bin:rw
+      - ./docker/images/02keycloak-keycloak/conf/themes:/opt/keycloak/themes:rw
+      - ./docker/logs/keycloak:/opt/keycloak/logs:rw
+      - ./docker/images/02keycloak-keycloak/conf/conf:/opt/keycloak/conf:rw
+      - keycloak_data:/opt/keycloak/data:rw,delegated
+    networks:
+      - public
+    ports:
+      - ${GLOBAL_STACK_KEYCLOAK_KEYCLOAK_PORT_8080:-}8080
+      - ${GLOBAL_STACK_KEYCLOAK_KEYCLOAK_PORT_8443:-}8443
+      - ${GLOBAL_STACK_KEYCLOAK_KEYCLOAK_PORT_9990:-}9990
+      - ${GLOBAL_STACK_KEYCLOAK_KEYCLOAK_PORT_9000:-}9000
+    restart: unless-stopped
+volumes:
+  keycloak_data:
+    name: ${COMPOSE_PROJECT_NAME}_${GLOBAL_STACK_VERSION}_keycloak_data

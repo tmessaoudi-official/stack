@@ -106,6 +106,7 @@ build: create-paths
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="build" GLOBAL_STACK_COMPOSE_CLI_SERVICE="01selenium-standalone-chrome" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="build" GLOBAL_STACK_COMPOSE_CLI_SERVICE="01selenium-standalone-firefox" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="build" GLOBAL_STACK_COMPOSE_CLI_SERVICE="02dpage-pgadmin4" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
+	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="build" GLOBAL_STACK_COMPOSE_CLI_SERVICE="02keycloak-keycloak" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="build" GLOBAL_STACK_COMPOSE_CLI_SERVICE="02mongoclient-mongoclient" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="build" GLOBAL_STACK_COMPOSE_CLI_EXEC_FLAGS="--push" GLOBAL_STACK_COMPOSE_CLI_SERVICE="02nvm" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="push" GLOBAL_STACK_COMPOSE_CLI_SERVICE="02nvm" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
@@ -166,6 +167,8 @@ down-n-up: down up
 
 login-02dpage-pgadmin4:
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="exec" GLOBAL_STACK_COMPOSE_CLI_SERVICE="02dpage-pgadmin4" GLOBAL_STACK_COMPOSE_CLI_CONTAINER_COMMAND="sh" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
+login-02keycloak-keycloak:
+	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="exec" GLOBAL_STACK_COMPOSE_CLI_SERVICE="02keycloak-keycloak" GLOBAL_STACK_COMPOSE_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 login-02mongoclient-mongoclient:
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="exec" GLOBAL_STACK_COMPOSE_CLI_SERVICE="02mongoclient-mongoclient" GLOBAL_STACK_COMPOSE_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 login-04phpmyadmin:
@@ -245,6 +248,8 @@ login-04serverless-framework:
 
 log-02dpage-pgadmin4:
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="logs" GLOBAL_STACK_COMPOSE_CLI_SERVICE="02dpage-pgadmin4" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
+log-02keycloak-keycloak:
+	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="logs" GLOBAL_STACK_COMPOSE_CLI_SERVICE="02keycloak-keycloak" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 log-02mongoclient-mongoclient:
 	$(MAKE) GLOBAL_STACK_COMPOSE_CLI_EXEC="logs" GLOBAL_STACK_COMPOSE_CLI_SERVICE="02mongoclient-mongoclient" docker-compose --silent --ignore-errors --keep-going --warn-undefined-variables
 log-04phpmyadmin:

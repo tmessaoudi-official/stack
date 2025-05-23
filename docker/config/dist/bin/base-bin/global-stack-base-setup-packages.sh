@@ -42,6 +42,10 @@ global_stack_base_setup_packages() {
         eval "PACKAGE_VERSION=\"\${${VARIABLE_NAME}:-}\"; export PACKAGE_VERSION"
         eval "PACKAGE_COMMAND_SUFFIX=\"\${${PACKAGE_CONFIG_COMMAND_SUFFIX}:-}\"; export PACKAGE_COMMAND_SUFFIX"
 
+        if [[ "${PACKAGE_NAME}" = "dummy" ]]; then
+            continue
+        fi
+
         if [[ -n "${PACKAGE_NAME}" && -n "${PACKAGE_VERSION}" ]]; then
             for (( INDEX=0; INDEX<${#COMMANDS[@]}; INDEX++ )); do
                 eval "${COMMANDS[${INDEX}]}"
