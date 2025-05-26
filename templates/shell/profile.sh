@@ -9,6 +9,8 @@ sudo chown root:root /opt/tames/vscode/chrome-sandbox
 sudo chmod 4755 /opt/tames/vscode/chrome-sandbox
 sudo chown root:root /opt/tames/windsurf/chrome-sandbox
 sudo chmod 4755 /opt/tames/windsurf/chrome-sandbox
+sudo chown root:root /opt/tames/balena-etcher/chrome-sandbox
+sudo chmod 4755 /opt/tames/balena-etcher/chrome-sandbox
 
 alias gksudo='pkexec env DISPLAY=$DISPLAY XAUTHORITY=$XAUTHORITY'
 alias code='/opt/tames/vscode/bin/code'

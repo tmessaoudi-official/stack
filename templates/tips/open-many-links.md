@@ -8,17 +8,6 @@ done
 
 source /etc/profile.d/stack.sh
 
-awk '!seen[$0]++' .env | \
-grep -oE '#(.*)@todo(.*)check-update(s)? (.*)http(s)?://[^ ]*' | \
-grep -oE 'http(s)?://[^ ]*' | \
-grep -vE 'https://(pecl\.php\.net|pypi\.org|www\.npmjs\.com)' | \
-awk '!seen[$0]++' | \
-while read -r link; do 
-    google-chrome --incognito "${link}" &
-    chrome_pid=$!
-    wait $chrome_pid
-done
-
 sdk offline disable
 sdk list ant
 sdk list gradle
@@ -33,11 +22,29 @@ sdk list quarkus
 sdk list spark
 sdk list java
 
+nvm use 18
 npm --global outdated
+nvm use 22
+npm --global outdated
+nvm use 24
+npm --global outdated
+
+sdkmanager --sdk_root="${ANDROID_HOME}" --list
 
 /stack/tools/pyenv/versions/3.13.3/bin/pip3.13 list --outdated
 
 awk '!seen[$0]++' .env | grep -oE '#(.*)@todo(.*)check-update(s)? (.*)http(s)?://pecl.php.net[^ ]*' | grep -oE 'http(s)?://[^ ]*' | awk '!seen[$0]++' | while read -r link; do 
+    google-chrome --incognito "${link}" &
+    chrome_pid=$!
+    wait $chrome_pid
+done
+
+awk '!seen[$0]++' .env | \
+grep -oE '#(.*)@todo(.*)check-update(s)? (.*)http(s)?://[^ ]*' | \
+grep -oE 'http(s)?://[^ ]*' | \
+grep -vE 'https://(pecl\.php\.net|pypi\.org|www\.npmjs\.com)' | \
+awk '!seen[$0]++' | \
+while read -r link; do 
     google-chrome --incognito "${link}" &
     chrome_pid=$!
     wait $chrome_pid
