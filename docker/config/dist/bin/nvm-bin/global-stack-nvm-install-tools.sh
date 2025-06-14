@@ -33,3 +33,11 @@ fi
 if [ ! -f "${DENO_INSTALL_ROOT}/bin/mandarine" ]; then
   deno install --global --allow-import --allow-read --allow-write --allow-run --force --name mandarine https://deno.land/x/mandarinets@${GLOBAL_STACK_DENO_MANDARINETS_VERSION}/cli.ts
 fi
+
+BUN_JS="${BUN_INSTALL}/bin/bun"
+if [ -f "${BUN_JS}" ]; then
+    echo "**** ${BUN_JS} already installed."
+else
+    echo "**** Installing ${BUN_JS}"
+    curl -fsSL https://bun.sh/install | bash -s ${GLOBAL_STACK_BUN_VERSION}
+fi

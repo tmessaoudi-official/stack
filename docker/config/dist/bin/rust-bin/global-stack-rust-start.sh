@@ -17,20 +17,20 @@ SECONDS=0
 
 rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/rust"
 
-PATH="${RUSTUP_HOME}/bin:${RUSTUP_HOME}/toolchains/stable-x86_64-unknown-linux-gnu/bin/:${CARGO_HOME}/bin:${PATH}"
-export PATH
-
 sed -i '/# global-stack-setup-started/,/# global-stack-setup-finished/d' "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
-
-echo "# global-stack-setup-started" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
-
-echo "PATH=${RUSTUP_HOME}/bin:${RUSTUP_HOME}/toolchains/stable-x86_64-unknown-linux-gnu/bin/:${CARGO_HOME}/bin:${PATH}" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
-echo "export PATH" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 
 sleep 1
 
 global-stack-base-wait-for.sh \
   "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/base"
+
+PATH="${RUSTUP_HOME}/bin:${RUSTUP_HOME}/toolchains/stable-x86_64-unknown-linux-gnu/bin/:${CARGO_HOME}/bin:${PATH}"
+export PATH
+
+echo "# global-stack-setup-started" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
+
+echo "PATH=${RUSTUP_HOME}/bin:${RUSTUP_HOME}/toolchains/stable-x86_64-unknown-linux-gnu/bin/:${CARGO_HOME}/bin:${PATH}" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
+echo "export PATH" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 
 if [ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/rust" ] || [ "true" = "${GLOBAL_STACK_RELOAD_RUST}" ]; then
   rm -rf "${RUSTUP_HOME}" "${CARGO_HOME}" "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/rust" "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/rust" "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/rust-init"
