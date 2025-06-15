@@ -262,6 +262,9 @@ RUN shopt -s extdebug \
     libgoffice-0.10-dev \
     libfontconfig1 \
     libxrender1 \
+    cmake \
+	libbrotli-dev \
+    libstdc++6 \
     ./wkhtmltox_${GLOBAL_STACK_WKHTMLTOPDF_VERSION}.${GLOBAL_STACK_WKHTMLTOPDF_DISTRO}_amd64.deb \
     && rm wkhtmltox_${GLOBAL_STACK_WKHTMLTOPDF_VERSION}.${GLOBAL_STACK_WKHTMLTOPDF_DISTRO}_amd64.deb \
     && usermod -u 1001 ubuntu \

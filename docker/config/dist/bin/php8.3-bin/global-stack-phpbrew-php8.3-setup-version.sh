@@ -19,6 +19,6 @@ mkdir ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/frankenphp/frankenphp-${GLOBAL_STACK_FRA
 tar -xzf ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/frankenphp/frankenphp-${GLOBAL_STACK_FRANKENPHP_VERSION}.tar.gz --directory=${GLOBAL_STACK_DOCKER_TOOLS_PATH}/frankenphp/frankenphp-${GLOBAL_STACK_FRANKENPHP_VERSION}-${PHP_VERSION} --strip-components=1
 
 cd ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/frankenphp/frankenphp-${GLOBAL_STACK_FRANKENPHP_VERSION}-${PHP_VERSION}/caddy/frankenphp
-LD_LIBRARY_PATH="$(php-config --prefix)/lib:${LD_LIBRARY_PATH}" CGO_CFLAGS=$(php-config --includes) CGO_LDFLAGS="-L$(php-config --prefix)/lib $(php-config --ldflags) $(php-config --libs)" go build -tags=nobadger,nowatcher -ldflags="-v" -o ${PHPBREW_BIN}/frankenphp-${PHP_VERSION} || true
+LD_LIBRARY_PATH="$(php-config --prefix)/lib:${LD_LIBRARY_PATH}" CGO_CFLAGS=$(php-config --includes) CGO_LDFLAGS="-L$(php-config --prefix)/lib $(php-config --ldflags) $(php-config --libs)" go build -ldflags="-v" -o ${PHPBREW_BIN}/frankenphp-${PHP_VERSION} || true
 
 rm -rf ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/frankenphp/frankenphp-${GLOBAL_STACK_FRANKENPHP_VERSION}-${PHP_VERSION}

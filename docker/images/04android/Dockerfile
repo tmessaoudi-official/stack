@@ -30,14 +30,12 @@ RUN shopt -s extdebug \
     && apt-get --allow-unauthenticated install -y --no-install-recommends --fix-missing \
     usbutils \
     clang \
-    cmake \
     ninja-build \
     libblkid-dev \
     android-sdk-platform-tools-common \
     libglu1-mesa \
     xz-utils \
     libc6:amd64 \
-    libstdc++6:amd64 \
     lib32z1 \
     libbz2-1.0:amd64 \
     && [ "true" = "${GLOBAL_STACK_ANDROID_SET_LOCALE}" ] && global-stack-base-setup-locale.sh "${GLOBAL_STACK_ANDROID_LOCALE}" || echo -e "\n Locale will not be set" \

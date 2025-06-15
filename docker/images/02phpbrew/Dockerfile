@@ -16,6 +16,8 @@ USER root
 
 SHELL ["/bin/bash", "-xeEu", "-o", "pipefail", "-c"]
 
+ARG GLOBAL_STACK_FRANKENPHP_WATCHER_VERSION
+ENV GLOBAL_STACK_FRANKENPHP_WATCHER_VERSION=${GLOBAL_STACK_FRANKENPHP_WATCHER_VERSION}
 # @todo fix pin versions
 # hadolint ignore=DL3008,DL3018
 RUN curl -fsSL 'https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x14AA40EC0831756756D7F66C4F4EA0AAE5267A6C' | gpg --dearmor | tee /etc/apt/trusted.gpg.d/php.gpg \
@@ -82,7 +84,17 @@ RUN curl -fsSL 'https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x14AA40EC
     && apt-get clean -y \
     && rm -rf /var/lib/apt/lists/* \
     && ln -s /usr/lib/x86_64-linux-gnu/libldap.so /usr/lib/libldap.so \
-    && ln -s /usr/lib/x86_64-linux-gnu/liblber.so /usr/lib/liblber.so
+    && ln -s /usr/lib/x86_64-linux-gnu/liblber.so /usr/lib/liblber.so \
+    && mkdir /tmp/watcher-c \
+    && cd /tmp/watcher-c \
+    && wget -O watcher-${GLOBAL_STACK_FRANKENPHP_WATCHER_VERSION}.tar.gz https://api.github.com/repos/e-dant/watcher/tarball/${GLOBAL_STACK_FRANKENPHP_WATCHER_VERSION} \
+    && tar -xf watcher-${GLOBAL_STACK_FRANKENPHP_WATCHER_VERSION}.tar.gz --strip-components 1 -C /tmp/watcher-c \
+    && rm -rf watcher-${GLOBAL_STACK_FRANKENPHP_WATCHER_VERSION}.tar.gz \
+    && cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+    && cmake --build build \
+    && cmake --install build \
+    && ldconfig \
+    && rm -rf /tmp/watcher-c
 
 EXPOSE 9000 9001
 

@@ -40,7 +40,6 @@ RUN shopt -s extdebug \
     libgd-dev \
     libgeoip-dev \
     libmaxminddb-dev \
-    libbrotli-dev \
     libtool \
     uuid-dev \
     libperl-dev \
