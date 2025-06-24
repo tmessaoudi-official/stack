@@ -1,8 +1,8 @@
 # shellcheck disable=SC2148
-ARG GLOBAL_STACK_IMAGE_MARIADB11_VERSION=11.8.2-noble
+ARG GLOBAL_STACK_IMAGE_MARIADB12_VERSION=12.0.1-noble-rc
 
 # shellcheck disable=SC2148
-FROM mariadb:${GLOBAL_STACK_IMAGE_MARIADB11_VERSION}
+FROM mariadb:${GLOBAL_STACK_IMAGE_MARIADB12_VERSION}
 
 LABEL maintainer="Takieddine Messaoudi <takieddine.messaoudi.official@gmail.com>"
 
@@ -14,8 +14,8 @@ USER root
 
 SHELL ["/bin/bash", "-xeEu", "-o", "pipefail", "-c"]
 
-COPY docker/images/01mariadb11/conf/etc/ /etc/mysql/mariadb.conf.d/
-COPY docker/images/01mariadb11/conf/initdb/ /docker-entrypoint-initdb.d/
+COPY docker/images/01mariadb12/conf/etc/ /etc/mysql/mariadb.conf.d/
+COPY docker/images/01mariadb12/conf/initdb/ /docker-entrypoint-initdb.d/
 
 ARG GLOBAL_STACK_SHELL_HISTORY
 COPY "${GLOBAL_STACK_SHELL_HISTORY}" /root/.bash_history

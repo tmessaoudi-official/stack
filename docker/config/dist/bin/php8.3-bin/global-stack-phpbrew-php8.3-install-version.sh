@@ -15,8 +15,25 @@ stackCatch() {
 
 echo "*** Installing php version $([[ -n "${PHP_VERSION_AS:-}" && "" != "${PHP_VERSION_AS:-}" ]] && echo "${PHP_VERSION_AS:-}" || echo "${PHP_VERSION:-}") as $(global-stack-phpbrew-find-latest.sh "${PHP_VERSION}")"
 
-if [[ "next" = "${PHP_VERSION}" ]]; then
-  phpbrew --debug --verbose --profile install "${PHP_VERSION}" as php-master +default +debug +sodium +pdo +mysql +pgsql +sqlite +fpm -- --with-libxml --with-password-argon2 --enable-embed --enable-zts --disable-zend-signals --enable-zend-max-execution-timers
+PHP_VERSION_INSTALL=""
+PHP_VERSION_INSTALL_AS=""
+PHP_VERSION_INSTALL_AS_NAME=""
+if [[ "next" == "${PHP_VERSION_AS:-}" ]]; then
+  PHP_VERSION_INSTALL="${PHP_VERSION}"
+  PHP_VERSION_INSTALL_AS="as"
+  PHP_VERSION_INSTALL_AS_NAME="php-master"
 else
-  phpbrew --debug --verbose --profile install "php-${PHP_VERSION}" +default +debug +sodium +pdo +mysql +pgsql +sqlite +fpm -- --with-libxml --with-password-argon2 --enable-embed --enable-zts --disable-zend-signals --enable-zend-max-execution-timers
+  PHP_VERSION_INSTALL="php-${PHP_VERSION}"
 fi
+
+if [[ "${PHP_VERSION:-}" =~ ^github\.com/php/php-src* ]]; then
+  if [[ "${PHP_VERSION_INSTALL_AS_NAME}" == "php-master" ]]; then
+    PHP_VERSION_INSTALL="${PHP_VERSION}"
+  else
+    PHP_VERSION_INSTALL="${PHP_VERSION}"
+    PHP_VERSION_INSTALL_AS="as"
+    PHP_VERSION_INSTALL_AS_NAME="php-${PHP_VERSION_AS}"
+  fi
+fi
+
+phpbrew --debug --verbose --profile install ${PHP_VERSION_INSTALL} ${PHP_VERSION_INSTALL_AS} ${PHP_VERSION_INSTALL_AS_NAME} +default +debug +sodium +pdo +mysql +pgsql +sqlite +fpm -- --with-libxml --with-password-argon2 --enable-embed --enable-zts --disable-zend-signals --enable-zend-max-execution-timers

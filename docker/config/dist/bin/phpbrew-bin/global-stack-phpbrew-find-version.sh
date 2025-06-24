@@ -4,6 +4,8 @@ PHPBREW_FIND=""
 
 if [[ -n "${PHP_VERSION_AS:-}" && "next" = "${PHP_VERSION_AS:-}" ]]; then
   PHPBREW_FIND="php-master"
+elif [[ "${1:-}" =~ ^github\.com/php/php-src* ]]; then
+  PHPBREW_LATEST="php-${PHP_VERSION_AS:-}"
 else
   if [ -n "${1}" ]; then
     if [ -e "${PHPBREW_HOME}/php/${1}" ]; then

@@ -14,8 +14,15 @@ stackCatch() {
   fi
 }
 
-for CONFIG_FILE in "${ANDROID_SDK_HOME}"/.android/avd/*.avd/config.ini; do
-    cp -f ${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/conf/android-avd-conf/config-apis.ini ${CONFIG_FILE}
-    android_version=$(echo -e ${CONFIG_FILE} | grep -oP '.*android_\K[^_]+(?=_google_apis)')
-    sed -i "s|{AvdId}|pixel_7_pro_android_${android_version}_google_apis|g; s|{AvdDisplayname}|pixel 7 pro android ${android_version} google apis|g; s|{deviceName}|pixel_7_pro|g; s|{androidSystemName}|android-${android_version}|g; s|{androidHome}|${ANDROID_HOME}|g; s|{skinName}|pixel_7_pro|g" "${CONFIG_FILE}"
-done
+if [ "${GLOBAL_STACK_ANDROID_INSTALL_SYSTEM_IMAGES}" = "true" ]; then
+  avdmanager create avd --name global_stack_auto_pixel_7_pro_android_34_google_apis --package "system-images;android-34;google_apis;x86_64" --device "pixel_7_pro"
+  avdmanager create avd --name global_stack_auto_pixel_9_pro_android_35_google_apis --package "system-images;android-35;google_apis;x86_64" --device "pixel_9_pro"
+  avdmanager create avd --name global_stack_auto_pixel_9_pro_android_36_google_apis --package "system-images;android-36;google_apis;x86_64" --device "pixel_9_pro"
+  
+  for CONFIG_FILE in "${ANDROID_SDK_HOME}"/.android/avd/global_stack_auto_*.avd/config.ini; do
+      cp -f ${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/conf/android-avd-conf/config-apis.ini ${CONFIG_FILE}
+      android_version=$(echo -e ${CONFIG_FILE} | grep -oP '.*android_\K[^_]+(?=_google_apis)')
+      pixel_version=$(echo -e ${CONFIG_FILE} | grep -oP '.*pixel_\K[^_]+(?=_pro)')
+      sed -i "s|{AvdId}|global_stack_auto_pixel_${pixel_version}_pro_android_${android_version}_google_apis|g; s|{AvdDisplayname}|global stack auto pixel ${pixel_version} pro android ${android_version} google apis|g; s|{deviceName}|pixel_${pixel_version}_pro|g; s|{androidSystemName}|android-${android_version}|g; s|{androidHome}|${ANDROID_HOME}|g; s|{skinName}|pixel_${pixel_version}_pro|g" "${CONFIG_FILE}"
+  done
+fi

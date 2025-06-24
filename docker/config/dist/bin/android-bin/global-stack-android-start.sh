@@ -76,7 +76,6 @@ if [ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/android.sdkmanager" ] || [
   global-stack-android-setup.sh
 fi
 
-global-stack-android-sync-dist.sh
 global-stack-android-setup-dist.sh
 
 if [ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/flutter" ] || [ "${GLOBAL_STACK_RELOAD_ANDROID}" = "true" ]; then

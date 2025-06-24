@@ -49,6 +49,10 @@ if [[ "${GLOBAL_STACK_CADDY_VERSION}" != "${CURRENT_CADDY_VERSION}" ]]; then
   go build -o ${CADDY_PATH}/bin/caddy
 
   ${CADDY_PATH}/bin/caddy add-package github.com/caddyserver/transform-encoder
+  ${CADDY_PATH}/bin/caddy add-package github.com/ueffel/caddy-brotli
+  ${CADDY_PATH}/bin/caddy add-package github.com/greenpau/caddy-security
+  ${CADDY_PATH}/bin/caddy add-package github.com/caddyserver/cache-handler
+  # ${CADDY_PATH}/bin/caddy add-package github.com/dunglas/caddy-cbrotli
 
   cd "${CADDY_PATH}"
 

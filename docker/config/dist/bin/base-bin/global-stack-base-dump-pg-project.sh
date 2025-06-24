@@ -1,0 +1,3 @@
+#!/bin/bash
+
+PGPASSWORD=$DATABASE_PASSWORD pg_dump --no-owner -h $DATABASE_HOST -U $DATABASE_USER -w -Fc $DATABASE_NAME > "${1}"

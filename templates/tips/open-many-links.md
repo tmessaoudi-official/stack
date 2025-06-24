@@ -31,7 +31,7 @@ npm --global outdated
 
 sdkmanager --sdk_root="${ANDROID_HOME}" --list
 
-/stack/tools/pyenv/versions/${GLOBAL_STACK_PYTHON3_VERSION}/bin/pip3.13 list --outdated
+/stack/tools/pyenv/versions/${GLOBAL_STACK_PYTHON3_VERSION}/bin/pip${GLOBAL_STACK_PYTHON3_VERSION%.*} list --outdated
 
 awk '!seen[$0]++' .env | grep -oE '#(.*)@todo(.*)check-update(s)? (.*)http(s)?://pecl.php.net[^ ]*' | grep -oE 'http(s)?://[^ ]*' | awk '!seen[$0]++' | while read -r link; do 
     google-chrome --incognito "${link}" &

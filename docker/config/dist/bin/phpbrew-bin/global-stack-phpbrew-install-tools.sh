@@ -123,20 +123,30 @@ else
 fi
 rm -rf pickle.pha*
 
+PIE_PHAR_FILE="${PHPBREW_BIN}/pie"
+PIE_LATEST=${GLOBAL_STACK_PIE_VERSION}
+if [[ -f "${PIE_PHAR_FILE}" && "${PIE_LATEST}" = "$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew.pie")" ]]; then
+    echo -e "\n${PIE_PHAR_FILE} already installed ($(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew.pie") - ${PIE_LATEST})."
+else
+    echo -e "\nInstalling ${PIE_PHAR_FILE}."
+    echo -e "${PIE_LATEST}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew.pie"
+    wget https://github.com/php/pie/releases/download/${PIE_LATEST}/pie.phar
+    mv pie.phar "${PIE_PHAR_FILE}"
+    chmod a+x "${PIE_PHAR_FILE}"
+fi
+rm -rf pie.pha*
+
 FABPOT_LOCAL_PHP_SECURITY_CHECKER="${PHPBREW_BIN}/fabpot-local-php-security-checker"
 # FABPOT_LOCAL_PHP_SECURITY_CHECKER_LATEST=$(curl --silent https://api.github.com/repos/fabpot/local-php-security-checker/releases/latest | jq .name -r)
 FABPOT_LOCAL_PHP_SECURITY_CHECKER_LATEST=${GLOBAL_STACK_FABPOT_LOCAL_PHP_SECURITY_CHECKER_VERSION}
-FABPOT_LOCAL_PHP_SECURITY_CHECKER_LATEST_PROCESSED=$(echo "${FABPOT_LOCAL_PHP_SECURITY_CHECKER_LATEST}" | sed "s/v//g")
 if [[ -f "${FABPOT_LOCAL_PHP_SECURITY_CHECKER}" && "${FABPOT_LOCAL_PHP_SECURITY_CHECKER_LATEST}" = "$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew.fabpot-local-php-security-checker")" ]]; then
     echo -e "\n${FABPOT_LOCAL_PHP_SECURITY_CHECKER} already installed ($(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew.fabpot-local-php-security-checker") - ${FABPOT_LOCAL_PHP_SECURITY_CHECKER_LATEST})."
 else
     echo -e "\nInstalling ${FABPOT_LOCAL_PHP_SECURITY_CHECKER}."
     echo -e "${FABPOT_LOCAL_PHP_SECURITY_CHECKER_LATEST}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew.fabpot-local-php-security-checker"
-    curl -LsS "https://github.com/fabpot/local-php-security-checker/releases/download/${FABPOT_LOCAL_PHP_SECURITY_CHECKER_LATEST}/local-php-security-checker_${FABPOT_LOCAL_PHP_SECURITY_CHECKER_LATEST_PROCESSED}_linux_amd64" -o "${FABPOT_LOCAL_PHP_SECURITY_CHECKER}"
+    curl -LsS "https://github.com/fabpot/local-php-security-checker/releases/download/${FABPOT_LOCAL_PHP_SECURITY_CHECKER_LATEST}/local-php-security-checker_linux_amd64" -o "${FABPOT_LOCAL_PHP_SECURITY_CHECKER}"
     chmod a+x "${FABPOT_LOCAL_PHP_SECURITY_CHECKER}"
 fi
 
 mkdir -p ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/frankenphp
 sudo chmod -R a+rwx ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/frankenphp
-
-curl -LsS "https://github.com/dunglas/frankenphp/archive/refs/tags/v${GLOBAL_STACK_FRANKENPHP_VERSION}.tar.gz" -o ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/frankenphp/frankenphp-${GLOBAL_STACK_FRANKENPHP_VERSION}.tar.gz

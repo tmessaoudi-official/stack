@@ -33,11 +33,11 @@ if [ "${PHPBREW_MODE}" = "install" ]; then
     "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/base"
 
   if [ "${GLOBAL_STACK_RELOAD_PHPBREW}" = "true" ]; then
-    rm -rf "${COMPOSER_HOME}" "${SYMFONY_HOME}" "${PHPBREW_ROOT}" "${PHPBREW_SRC}" "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/php"* "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/phpbrew.shellrc" "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/php"* "${PHPBREW_BIN}/composer" "${PHPBREW_BIN}/dep" "${PHPBREW_BIN}/phpbrew" "${PHPBREW_BIN}/pickle" "${PHPBREW_BIN}/symfony-installer" "${PHPBREW_BIN}/fabpot-local-php-security-checker" "${PHPBREW_BIN}/phalcon" "${PHPBREW_BIN}/zephir"
-    mkdir -p "${COMPOSER_HOME}" "${COMPOSER_HOME}/bin" "${COMPOSER_SOURCE}" "${SYMFONY_HOME}/bin" "${PHPBREW_ROOT}" "${PHPBREW_SRC}" "${PHPBREW_BIN}"
+    rm -rf "${COMPOSER_HOME}" "${SYMFONY_HOME}" "${PHPBREW_ROOT}" "${PHPBREW_SRC}" "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/php"* "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/phpbrew.shellrc" "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/php"* "${PHPBREW_BIN}/composer" "${PHPBREW_BIN}/dep" "${PHPBREW_BIN}/phpbrew" "${PHPBREW_BIN}/pickle" "${PHPBREW_BIN}/symfony-installer" "${PHPBREW_BIN}/fabpot-local-php-security-checker" "${PHPBREW_BIN}/phalcon" "${PHPBREW_BIN}/zephir" "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/frankenphp"
+    mkdir -p "${COMPOSER_HOME}" "${COMPOSER_HOME}/bin" "${COMPOSER_SOURCE}" "${SYMFONY_HOME}/bin" "${PHPBREW_ROOT}" "${PHPBREW_SRC}" "${PHPBREW_BIN}" "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/frankenphp"
   fi
 
-  mkdir -p "${COMPOSER_HOME}" "${COMPOSER_HOME}/bin" "${COMPOSER_SOURCE}" "${SYMFONY_HOME}/bin" "${PHPBREW_ROOT}" "${PHPBREW_SRC}" "${PHPBREW_BIN}"
+  mkdir -p "${COMPOSER_HOME}" "${COMPOSER_HOME}/bin" "${COMPOSER_SOURCE}" "${SYMFONY_HOME}/bin" "${PHPBREW_ROOT}" "${PHPBREW_SRC}" "${PHPBREW_BIN}" "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/frankenphp"
 fi
 
 if [ "${PHPBREW_MODE}" = "setup" ]; then
@@ -117,7 +117,15 @@ if [ "${PHPBREW_MODE}" = "setup" ]; then
 
   LD_LIBRARY_PATH="$(php-config --prefix)/lib:${LD_LIBRARY_PATH}"
   export LD_LIBRARY_PATH
-  source "/home/${GLOBAL_STACK_DOCKER_USER_ID}/.phpbrew.shellrc" && LD_LIBRARY_PATH="${LD_LIBRARY_PATH}" frankenphp-${PHP_VERSION} run --config $(php-config --prefix)/var/caddy/Caddyfile &
+  
+  ACTUAL_PHP_VERSION="${PHP_VERSION:-}"
+  if [[ "${PHP_VERSION:-}" =~ ^github\.com/php/php-src* ]]; then
+    ACTUAL_PHP_VERSION="${PHP_VERSION_AS:-}"
+  fi
+  
+  if [[ -f ${PHPBREW_BIN}/frankenphp-${GLOBAL_STACK_FRANKENPHP_VERSION}-${ACTUAL_PHP_VERSION} ]]; then
+    source "/home/${GLOBAL_STACK_DOCKER_USER_ID}/.phpbrew.shellrc" && LD_LIBRARY_PATH="${LD_LIBRARY_PATH}" frankenphp-${GLOBAL_STACK_FRANKENPHP_VERSION}-${ACTUAL_PHP_VERSION} run --config $(php-config --prefix)/var/frankenphp/Caddyfile &
+  fi
 fi
 
 if [ "${PHPBREW_MODE}" = "install" ]; then

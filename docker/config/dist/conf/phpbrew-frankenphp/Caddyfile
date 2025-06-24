@@ -6,7 +6,7 @@
 	http_port 8080
 	https_port 8443
 	log {
-		output file ${PHP_PREFIX}/logs/caddy.log {
+		output file ${PHP_PREFIX}/logs/frankenphp.log {
 			roll_size 10MB
 			roll_keep 5
 			roll_keep_for 72h

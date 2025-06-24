@@ -1,8 +1,8 @@
 # shellcheck disable=SC2148
-ARG GLOBAL_STACK_IMAGE_MYSQL8_VERSION=8.4.5-oraclelinux9
+ARG GLOBAL_STACK_IMAGE_MYSQL9_VERSION=9.3.0-oraclelinux9
 
 # shellcheck disable=SC2148
-FROM mysql:${GLOBAL_STACK_IMAGE_MYSQL8_VERSION}
+FROM mysql:${GLOBAL_STACK_IMAGE_MYSQL9_VERSION}
 
 LABEL maintainer="Takieddine Messaoudi <takieddine.messaoudi.official@gmail.com>"
 
@@ -19,8 +19,8 @@ ARG GLOBAL_STACK_DATABASE_COLLATE
 ENV GLOBAL_STACK_DATABASE_CHARSET="${GLOBAL_STACK_DATABASE_CHARSET}" \
     GLOBAL_STACK_DATABASE_COLLATE="${GLOBAL_STACK_DATABASE_COLLATE}"
 
-COPY docker/images/01mysql8/conf/etc/mysql/ /etc/mysql/conf.d/
-COPY docker/images/01mysql8/conf/initdb/ /docker-entrypoint-initdb.d/
+COPY docker/images/01mysql9/conf/etc/mysql/ /etc/mysql/conf.d/
+COPY docker/images/01mysql9/conf/initdb/ /docker-entrypoint-initdb.d/
 
 RUN sed -i "s|\${GLOBAL_STACK_DATABASE_CHARSET}|${GLOBAL_STACK_DATABASE_CHARSET}|g" \
     /etc/mysql/conf.d/my.cnf \

@@ -1,24 +1,23 @@
 ---
 services:
-  01mysql8:
+  01mariadb12:
     build:
       args:
         BUILDKIT_INLINE_CACHE: 1
         GLOBAL_STACK_SHELL_HISTORY: ${GLOBAL_STACK_SHELL_HISTORY}
-        GLOBAL_STACK_IMAGE_MYSQL8_VERSION: ${GLOBAL_STACK_IMAGE_MYSQL8_VERSION}
-        GLOBAL_STACK_DATABASE_CHARSET: ${GLOBAL_STACK_DATABASE_CHARSET}
-        GLOBAL_STACK_DATABASE_COLLATE: ${GLOBAL_STACK_DATABASE_COLLATE}
+        GLOBAL_STACK_IMAGE_MARIADB12_VERSION: ${GLOBAL_STACK_IMAGE_MARIADB12_VERSION}
+        GLOBAL_STACK_IMAGE_UBUNTU_NOBLE_VERSION: ${GLOBAL_STACK_IMAGE_UBUNTU_NOBLE_VERSION}
       context: ./
-      dockerfile: ./docker/images/01mysql8/Dockerfile
+      dockerfile: ./docker/images/01mariadb12/Dockerfile
     command:
-      - mysqld
-      # - --default-authentication-plugin=caching_sha2_password
+      - mariadbd
+      - --default-authentication-plugin=caching_sha2_password
       - --character-set-server=${GLOBAL_STACK_DATABASE_CHARSET}
       - --collation-server=${GLOBAL_STACK_DATABASE_COLLATE}
     depends_on:
       - 00base
     environment:
-      - MYSQL_DBS=${GLOBAL_STACK_MYSQL8_DBS}
+      - MARIADB_DBS=${GLOBAL_STACK_MARIADB12_DBS}
       - MYSQL_PASSWORD=${GLOBAL_STACK_DATABASE_PASSWORD}
       - MYSQL_ROOT_PASSWORD=${GLOBAL_STACK_DATABASE_ROOT_PASSWORD}
       - MYSQL_USER=${GLOBAL_STACK_DATABASE_USER}
@@ -29,15 +28,14 @@ services:
     networks:
       - public
     ports:
-      - ${GLOBAL_STACK_MYSQL8_PORT_3306:-}3306
-      - ${GLOBAL_STACK_MYSQL8_PORT_33060:-}33060
+      - ${GLOBAL_STACK_MARIADB12_PORT_3306:-}3306
     volumes:
-      - ./docker/data/dumps/mysql/9:/opt/dumps:rw
-      - 01mysql8_data:/var/lib/mysql:rw,delegated
-        # - ./var/database-history/.mysql_history:/root/.mysql_history:rw,delegated
-        # - source: ./docker/logs/mysql/9
+      - ./docker/data/dumps/mariadb/12:/opt/dumps:rw
+      - 01mariadb12_data:/var/lib/mysql:rw,delegated
+        # - ./var/database-history/.mariadb_history:/root/.mariadb_history:rw,delegated
+        # - source: ./docker/logs/mariadb/12
         #   target: /var/log/mysql
         #   type: bind
 volumes:
-  01mysql8_data:
-    name: ${COMPOSE_PROJECT_NAME}_${GLOBAL_STACK_VERSION}_01mysql8_data
+  01mariadb12_data:
+    name: ${COMPOSE_PROJECT_NAME}_${GLOBAL_STACK_VERSION}_01mariadb12_data

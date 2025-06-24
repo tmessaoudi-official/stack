@@ -138,9 +138,12 @@ export PYENV_VERSION
 PHP_VERSION="next"
 PHPBREW_PHP="${GLOBAL_STACK_PHP8_5_VERSION}"
 export PHPBREW_PHP
-PHPBREW_PHP_PATH="${PHPBREW_ROOT}/php/${PHPBREW_PHP}"
-if [[ "next" = "$PHPBREW_PHP" ]]; then
+PHPBREW_PHP_PATH="${PHPBREW_ROOT}/php/php-${PHPBREW_PHP}"
+if [[ "next" == "${PHP_VERSION}" ]]; then
 	PHPBREW_PHP_PATH="${PHPBREW_ROOT}/php/php-master"
+fi
+if [[ "${PHPBREW_PHP}" =~ ^github\.com/php/php-src* && "${PHP_VERSION}" != "next" ]]; then
+	PHPBREW_PHP_PATH="${PHPBREW_ROOT}/php/php-${PHP_VERSION}"
 fi
 export PHPBREW_PHP_PATH
 PHPBREW_PATH="${PHPBREW_PHP_PATH}/bin"
@@ -218,8 +221,10 @@ if [[ "" != "$(command -v nvm)" ]]; then
 	nvm use "${NODE_VERSION}"
 fi
 if [[ "" != "$(command -v phpbrew)" ]]; then
-	if [[ "next" = "$PHPBREW_PHP" ]]; then
+	if [[ "next" == "${PHP_VERSION}" ]]; then
 		phpbrew switch php-master
+	elif [[ "${PHPBREW_PHP}" =~ ^github\.com/php/php-src* ]]; then
+		phpbrew switch php-${PHP_VERSION}
 	else
 		phpbrew switch php-${PHPBREW_PHP}
 	fi

@@ -40,3 +40,5 @@
 
 [core]
     attributesfile = ~/.gitattributes
+[rerere]
+	enabled = true
