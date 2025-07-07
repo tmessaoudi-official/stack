@@ -12,6 +12,9 @@ HTTP_COMMON_CORERULESET_VERSION_PATH="${3}"
 MODSECURITY_SOURCE_LIB_PATH="${4}"
 MODSECURITY_LIB_PATH="${5}"
 CORERULESET_PATH="${6}"
+HTTP_COMMON_CJOSE_VERSION_PATH="${7}"
+CJOSE_SOURCE_PATH="${8}"
+CJOSE_PATH="${9}"
 
 # Function to handle errors and trap cleanup
 stackCatch() {
@@ -97,3 +100,42 @@ if [[ -n "${GLOBAL_STACK_HTTP_CORERULESET_VERSION}" ]] && \
   # Save the installed version
   echo "${GLOBAL_STACK_HTTP_CORERULESET_VERSION}" > "${HTTP_COMMON_CORERULESET_VERSION_PATH}"
 fi
+
+# # Install cJOSE if needed
+# if [[ -n "${GLOBAL_STACK_HTTP_CJOSE_VERSION}" ]] && \
+#    { [[ ! -e "${HTTP_COMMON_CJOSE_VERSION_PATH}" ]] || \
+#      [[ "$(cat "${HTTP_COMMON_CJOSE_VERSION_PATH}")" != "${GLOBAL_STACK_HTTP_CJOSE_VERSION}" ]]; }; then
+  
+#   # Create directory for cJOSE source & lib
+#   mkdir -p \
+#     "${CJOSE_SOURCE_PATH}" \
+#     "${CJOSE_PATH}"
+  
+#   # Clone the cJOSE repository
+#   git clone --progress \
+#     --branch "${GLOBAL_STACK_HTTP_CJOSE_VERSION}" \
+#     https://github.com/OpenIDC/cjose.git \
+#     --depth 1 \
+#     "${CJOSE_SOURCE_PATH}"
+  
+#   # Configure Git and update submodules
+#   git -C "${CJOSE_SOURCE_PATH}" config core.fileMode false
+#   git -C "${CJOSE_SOURCE_PATH}" submodule update --init
+  
+#   # Build and install cJOSE
+#   cd "${CJOSE_SOURCE_PATH}"
+#   CFLAGS="-Og" ./configure \
+#     --prefix="${CJOSE_PATH}"
+#   make
+#   make install
+
+#   cd "${HTTP_COMMONS_PATH}"
+
+#   rm -rf \
+#     "${CJOSE_SOURCE_PATH}"
+
+#   find ${CJOSE_PATH}/bin -type f -exec sudo chmod a+x {} \;
+  
+#   # Save the installed version
+#   echo "${GLOBAL_STACK_HTTP_CJOSE_VERSION}" > "${HTTP_COMMON_CJOSE_VERSION_PATH}"
+# fi

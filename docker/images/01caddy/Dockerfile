@@ -27,7 +27,6 @@ RUN shopt -s extdebug \
     && apt-get --allow-unauthenticated install -y --no-install-recommends --fix-missing \
     subversion \
     libnghttp2-dev \
-    libjansson-dev \
     libcurl4-gnutls-dev \
     libtool-bin \
     libnghttp2-14 \

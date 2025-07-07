@@ -17,12 +17,12 @@ SECONDS=0
 
 sed -i '/# global-stack-setup-started/,/# global-stack-setup-finished/d' "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 
-PATH="${RUSTUP_HOME}/bin:${RUSTUP_HOME}/toolchains/stable-x86_64-unknown-linux-gnu/bin/:${CARGO_HOME}/bin:${PYENV_ROOT}/bin:${PATH}"
+PATH="${RUSTUP_HOME}/bin:${RUSTUP_HOME}/toolchains/stable-x86_64-unknown-linux-gnu/bin:${CARGO_HOME}/bin:${PYENV_ROOT}/bin:${PATH}"
 export PATH
 
 echo "# global-stack-setup-started" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 
-echo "PATH=${RUSTUP_HOME}/bin:${RUSTUP_HOME}/toolchains/stable-x86_64-unknown-linux-gnu/bin/:${CARGO_HOME}/bin:${PYENV_ROOT}/bin:${PATH}" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
+echo "PATH=${RUSTUP_HOME}/bin:${RUSTUP_HOME}/toolchains/stable-x86_64-unknown-linux-gnu/bin:${CARGO_HOME}/bin:${PYENV_ROOT}/bin:${PATH}" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 echo "export PATH" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 
 sleep 1
@@ -49,7 +49,7 @@ if [ "${PYENV_MODE}" = "setup" ]; then
     "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/rust"
 
 
-  if [ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/python" && "true" = "${GLOBAL_STACK_USE_LOCKS}" ]; then
+  if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/python" && "true" = "${GLOBAL_STACK_USE_LOCKS}" ]]; then
     echo "$([[ -n "${PYTHON_VERSION_AS:-}" && "" != "${PYTHON_VERSION_AS:-}" ]] && echo "${PYTHON_VERSION_AS:-}" || echo "${PYTHON_VERSION:-}")" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/python"
   fi
 

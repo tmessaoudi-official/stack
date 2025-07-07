@@ -46,11 +46,11 @@ if [ "${NVM_MODE}" = "setup" ]; then
   global-stack-base-wait-for.sh \
     "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/nvm"
 
-  if [ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/node" && "true" = "${GLOBAL_STACK_USE_LOCKS}" ]; then
+  if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/node" && "true" = "${GLOBAL_STACK_USE_LOCKS}" ]]; then
     echo "$([[ -n "${NODE_VERSION_AS:-}" && "" != "${NODE_VERSION_AS:-}" ]] && echo "${NODE_VERSION_AS:-}" || echo "${NODE_VERSION:-}")" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/node"
   fi
 
-  if [ "$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/node")" != "$([[ -n "${NODE_VERSION_AS:-}" && "" != "${NODE_VERSION_AS:-}" ]] && echo "${NODE_VERSION_AS:-}" || echo "${NODE_VERSION:-}")" && "true" = "${GLOBAL_STACK_USE_LOCKS}" ]; then
+  if [[ "$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/node")" != "$([[ -n "${NODE_VERSION_AS:-}" && "" != "${NODE_VERSION_AS:-}" ]] && echo "${NODE_VERSION_AS:-}" || echo "${NODE_VERSION:-}")" && "true" = "${GLOBAL_STACK_USE_LOCKS}" ]]; then
     NODE_SHOW_WAITING=""
     NODE_WAITING_FOR=""
     while [ -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/node" ]

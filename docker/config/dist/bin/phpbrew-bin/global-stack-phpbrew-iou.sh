@@ -8,7 +8,7 @@ stackCatch() {
   if [ "${1}" != "0" ]; then
     # error handling goes here
     echo "Error detected !!"
-    echo -e "\n$(date '+%d-%m-%Y %H:%M:%S'): Error - ** line: ${2} ** ** message: ${3} ** phpbrew ($([[ -n "${PHP_VERSION_AS:-}" && "" != "${PHP_VERSION_AS:-}" ]] && echo "${PHP_VERSION_AS:-}" || echo "${PHP_VERSION:-}")) ${PHPBREW_MODE:-} global-stack-phpbrew-iou.sh" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/elapsed"
+    echo -e "\n$(date '+%d-%m-%Y %H:%M:%S'): Error - ** line: ${2} ** ** message: ${3} ** phpbrew (${PHPBREW_PHP_FINAL_VERSION}) ${PHPBREW_MODE:-} global-stack-phpbrew-iou.sh" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/elapsed"
     sleep infinity
   fi
 }
@@ -22,7 +22,14 @@ if [ ! -d "${PHPBREW_SRC}/.git" ]; then
 	sudo chown -R "${GLOBAL_STACK_DOCKER_USER_ID}":"${GLOBAL_STACK_DOCKER_GROUP_ID}" "${PHPBREW_SRC}"
 	git clone --progress --verbose --branch ${GLOBAL_STACK_PHPBREW_VERSION} https://github.com/phpbrew/phpbrew.git --depth 1 "${PHPBREW_SRC}"
 	sudo chmod a+x "${PHPBREW_SRC}"/bin/phpbrew
-  rsync -rav ${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/conf/phpbrew/source/ "${PHPBREW_SRC}"
+  if [[ "${GLOBAL_STACK_PHPBREW_VERSION}" != "2.2.0" && -d ${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/conf/phpbrew/source/ ]]; then
+    echo "There is an override for phpbrew source, but it is not used for version ${GLOBAL_STACK_PHPBREW_VERSION}."
+    exit 1
+  fi
+
+  if [[ -d ${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/conf/phpbrew/source/ ]]; then
+    rsync -rav ${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/conf/phpbrew/source/ "${PHPBREW_SRC}"
+  fi
   cd "${PHPBREW_SRC}" && php "${COMPOSER_HOME}/bin/composer" --ignore-platform-reqs update
   git -C "${PHPBREW_SRC}" config core.fileMode false
 fi
@@ -30,7 +37,7 @@ fi
 echo -e "\n**** phpbrew init"
 phpbrew init
 
-echo -e "\n**** phpbrbew self-update"
+# echo -e "\n**** phpbrbew self-update"
 # phpbrew self-update
 echo -e "\n**** phpbrbew update"
 phpbrew update || true

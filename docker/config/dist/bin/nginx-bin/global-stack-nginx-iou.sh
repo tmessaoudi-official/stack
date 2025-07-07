@@ -12,7 +12,10 @@ NGINX_VERSIONS_PATH="${3}"
 MODSECURITY_SOURCE_LIB_PATH="${4}"
 MODSECURITY_LIB_PATH="${5}"
 CORERULESET_PATH="${6}"
+CJOSE_SOURCE_PATH="${7}"
+CJOSE_PATH="${8}"
 MODSECURITY_NGINX_PATH="${NGINX_PATH}/mods/modsecurity-source"
+MOD_AUTH_OPENIDC_NGINX_PATH="${NGINX_PATH}/mods/mod_auth_openidc-source"
 
 # Trap errors and handle cleanup or error reporting
 trap 'stackCatch $? ${LINENO} "${BASH_COMMAND}"' ERR EXIT
@@ -35,7 +38,7 @@ cd "${NGINX_PATH}"
 LATEST_NGINX_VERSION=${GLOBAL_STACK_NGINX_VERSION}
 CURRENT_NGINX_VERSION=$( [[ -f "${NGINX_VERSIONS_PATH}" ]] && cat "${NGINX_VERSIONS_PATH}" || echo "null" )
 
-# Install the Apache ModSecurity connector if needed
+# Install the Nginx ModSecurity connector if needed
 if [[ -n "${GLOBAL_STACK_NGINX_MODSECURITY_MOD_VERSION}" ]]; then
   mkdir -p "${MODSECURITY_NGINX_PATH}"
   git clone --progress --branch "${GLOBAL_STACK_NGINX_MODSECURITY_MOD_VERSION}" \
@@ -45,6 +48,25 @@ if [[ -n "${GLOBAL_STACK_NGINX_MODSECURITY_MOD_VERSION}" ]]; then
   git -C "${MODSECURITY_NGINX_PATH}" config core.fileMode false
   git -C "${MODSECURITY_NGINX_PATH}" submodule update --init
 fi
+
+# # Install the Nginx mod_auth_openidc connector if needed
+# if [[ -n "${GLOBAL_STACK_NGINX_MOD_AUTH_OPENIDC_VERSION}" && "" != "${GLOBAL_STACK_NGINX_MOD_AUTH_OPENIDC_VERSION}" ]]; then
+#   mkdir -p "${MOD_AUTH_OPENIDC_NGINX_PATH}"
+#   git clone --progress --branch "${GLOBAL_STACK_NGINX_MOD_AUTH_OPENIDC_VERSION}" \
+#     https://github.com/OpenIDC/ngx_openidc_module.git \
+#     --depth 1 "${MOD_AUTH_OPENIDC_NGINX_PATH}"
+
+#   git -C "${MOD_AUTH_OPENIDC_NGINX_PATH}" config core.fileMode false
+#   git -C "${MOD_AUTH_OPENIDC_NGINX_PATH}" submodule update --init
+
+#   cd "${MOD_AUTH_OPENIDC_NGINX_PATH}"
+
+#   ./autogen.sh
+
+#   CFLAGS="-Og" ./configure
+
+#   cd "${NGINX_PATH}"
+# fi
 
 # If the versions differ, update NGINX
 if [[ "${LATEST_NGINX_VERSION}" != "${CURRENT_NGINX_VERSION}" ]]; then
@@ -90,6 +112,9 @@ if [[ "${LATEST_NGINX_VERSION}" != "${CURRENT_NGINX_VERSION}" ]]; then
     --with-cc-opt="-I${MODSECURITY_LIB_PATH}/include" \
     --with-ld-opt="-Wl,-rpath=${MODSECURITY_LIB_PATH}/lib \
                    -L${MODSECURITY_LIB_PATH}/lib"
+
+    # --add-module="${MOD_AUTH_OPENIDC_NGINX_PATH}" \
+    
   make prefix="${NGINX_PATH}"
   make prefix="${NGINX_PATH}" install
 

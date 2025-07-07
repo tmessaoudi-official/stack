@@ -94,7 +94,9 @@ RUN curl -fsSL 'https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x14AA40EC
     && cmake --build build \
     && cmake --install build \
     && ldconfig \
-    && rm -rf /tmp/watcher-c
+    && rm -rf /tmp/watcher-c \
+    && ulimit -c unlimited
+    # && echo "/tmp/core.%e.%p" | tee /proc/sys/kernel/core_pattern
 
 EXPOSE 9000 9001
 

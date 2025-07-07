@@ -47,7 +47,7 @@ RUN find /usr/local/bin/ -type f -exec chmod a+x {} \;
 RUN chown -R sonarqube:root /opt/sonarqube/sonar-scanner-cli/ \
     && chmod -R a+rwx /opt/sonarqube/sonar-scanner-cli/
 
-ENV PATH="/opt/sonarqube/sonar-scanner-cli/bin/:${PATH}"
+ENV PATH="/opt/sonarqube/sonar-scanner-cli/bin:${PATH}"
 
 USER sonarqube
 

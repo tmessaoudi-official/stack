@@ -1,0 +1,10 @@
+package: corneltek/cliframework
+version: 3.0.x-dev#0e69e4d9d8ee6c8b5abb7ebf0cf846e47d93b656
+date: 2023-04-20T14:05:15.000Z
+purpose: Fix deprecations
+files:
+    - src/Command/MetaCommand.php
+    - src/Application.php
+    - src/Command.php
+    - src/CommandBase.php
+    - src/Logger.php

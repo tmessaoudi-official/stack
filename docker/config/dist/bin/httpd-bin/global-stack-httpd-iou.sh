@@ -12,7 +12,10 @@ HTTPD_VERSIONS_PATH="${3}"
 MODSECURITY_SOURCE_LIB_PATH="${4}"
 MODSECURITY_LIB_PATH="${5}"
 CORERULESET_PATH="${6}"
+CJOSE_SOURCE_PATH="${7}"
+CJOSE_PATH="${8}"
 MODSECURITY_APACHE_PATH="${HTTPD_PATH}/mods/modsecurity-source"
+MOD_AUTH_OPENIDC_APACHE_PATH="${HTTPD_PATH}/mods/mod_auth_openidc-source"
 
 # Trap errors and handle cleanup or error reporting
 trap 'stackCatch $? ${LINENO} "${BASH_COMMAND}"' ERR EXIT
@@ -101,6 +104,29 @@ if [[ -n "${GLOBAL_STACK_HTTPD_MODSECURITY_MOD_VERSION}" && "" != "${GLOBAL_STAC
     --with-libmodsecurity="${MODSECURITY_LIB_PATH}"
   make
   make install
+
+  rm -rf "${MODSECURITY_APACHE_PATH}"
+fi
+
+# Install the Apache mod_auth_openidc connector if needed
+if [[ -n "${GLOBAL_STACK_HTTPD_MOD_AUTH_OPENIDC_VERSION}" && "" != "${GLOBAL_STACK_HTTPD_MOD_AUTH_OPENIDC_VERSION}" ]]; then
+  mkdir -p "${MOD_AUTH_OPENIDC_APACHE_PATH}"
+  git clone --progress --branch "${GLOBAL_STACK_HTTPD_MOD_AUTH_OPENIDC_VERSION}" \
+    https://github.com/OpenIDC/mod_auth_openidc.git \
+    --depth 1 "${MOD_AUTH_OPENIDC_APACHE_PATH}"
+
+  git -C "${MOD_AUTH_OPENIDC_APACHE_PATH}" config core.fileMode false
+  git -C "${MOD_AUTH_OPENIDC_APACHE_PATH}" submodule update --init
+
+  # Build and install the Apache connector
+  cd "${MOD_AUTH_OPENIDC_APACHE_PATH}"
+  ./autogen.sh
+  CFLAGS="-Og" ./configure \
+    --with-apxs="${HTTPD_PATH}/bin/apxs"
+  make
+  make install
+
+  rm -rf "${MOD_AUTH_OPENIDC_APACHE_PATH}"
 fi
 
 # Final permissions and cleanup

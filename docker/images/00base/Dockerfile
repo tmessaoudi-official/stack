@@ -1,5 +1,5 @@
 # shellcheck disable=SC2148
-ARG GLOBAL_STACK_IMAGE_UBUNTU_NOBLE_VERSION=noble-20250529
+ARG GLOBAL_STACK_IMAGE_UBUNTU_NOBLE_VERSION=noble-20250619
 
 # shellcheck disable=SC2148
 FROM ubuntu:${GLOBAL_STACK_IMAGE_UBUNTU_NOBLE_VERSION}
@@ -70,6 +70,7 @@ ARG GLOBAL_STACK_YAMLFMT_VERSION
 ARG GLOBAL_STACK_HURL_VERSION
 ARG GLOBAL_STACK_WKHTMLTOPDF_VERSION
 ARG GLOBAL_STACK_WKHTMLTOPDF_DISTRO
+ARG GLOBAL_STACK_AUTOMAKE_VERSION
 ARG GLOBAL_STACK_JUJUTSU_VERSION
 ARG GLOBAL_STACK_MERGIRAF_VERSION
 ARG GLOBAL_STACK_USE_LOCKS
@@ -154,6 +155,7 @@ ENV DEBIAN_FRONTEND="noninteractive" \
     CAROOT="${CAROOT}" \
     GLOBAL_STACK_WKHTMLTOPDF_VERSION="${GLOBAL_STACK_WKHTMLTOPDF_VERSION}" \
     GLOBAL_STACK_WKHTMLTOPDF_DISTRO="${GLOBAL_STACK_WKHTMLTOPDF_DISTRO}" \
+    GLOBAL_STACK_AUTOMAKE_VERSION="${GLOBAL_STACK_AUTOMAKE_VERSION}" \
     PATH="${GLOBAL_STACK_CARGO_HOME}/bin:${HURLPATH}/bin:${ZIGPATH}:${GOROOT}/bin:/opt/${GLOBAL_STACK_DOCKER_USER_ID}/sonar-scanner-cli/bin/:/opt/${GLOBAL_STACK_DOCKER_USER_ID}/task:/opt/${GLOBAL_STACK_DOCKER_USER_ID}/bat:${GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN}:${PATH}"
 
 COPY docker/images/00base/conf/bin/ /usr/local/bin/
@@ -265,8 +267,16 @@ RUN shopt -s extdebug \
     cmake \
 	libbrotli-dev \
     libstdc++6 \
+    libcjose-dev \
+    libjansson-dev \
     ./wkhtmltox_${GLOBAL_STACK_WKHTMLTOPDF_VERSION}.${GLOBAL_STACK_WKHTMLTOPDF_DISTRO}_amd64.deb \
     && rm wkhtmltox_${GLOBAL_STACK_WKHTMLTOPDF_VERSION}.${GLOBAL_STACK_WKHTMLTOPDF_DISTRO}_amd64.deb \
+    && wget https://ftp.gnu.org/gnu/automake/automake-${GLOBAL_STACK_AUTOMAKE_VERSION}.tar.gz \
+    && tar -xf automake-${GLOBAL_STACK_AUTOMAKE_VERSION}.tar.gz \
+    && cd automake-${GLOBAL_STACK_AUTOMAKE_VERSION} \
+    && ./configure --prefix=/opt/automake-${GLOBAL_STACK_AUTOMAKE_VERSION} \
+    && make -j$(nproc) \
+    && make install \
     && usermod -u 1001 ubuntu \
     && (find / -user 1000 -exec chown -h 1001 {} \; 2>/dev/null || true) \
     && groupmod -g 1001 ubuntu \

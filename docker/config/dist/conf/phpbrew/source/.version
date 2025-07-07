@@ -1,0 +1,7 @@
+package: corneltek/cliframework
+version: 2.2.0#04934ead82d18ebc3292aca33baaf23521725cb40
+date: 2023-12-12T03:25:49.000Z
+purpose: Fix deprecations
+files:
+    - src/PhpBrew/Extension/ExtensionInstaller.php
+    - src/PhpBrew/Tasks/BaseTask.php

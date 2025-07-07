@@ -85,6 +85,12 @@ if [[ -n "${GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION}" && -n "${GLOBAL_STACK_HT
   fi
 fi
 
+# Handle mod_auth_openidc configuration if enabled
+if [[ -n "${GLOBAL_STACK_HTTPD_MOD_AUTH_OPENIDC_VERSION}" ]]; then
+  sed -i "s/\# LoadModule foo_module modules\/mod_foo\.so/\# LoadModule foo_module modules\/mod_foo\.so\nLoadModule auth_openidc_module modules\/mod_auth_openidc\.so/g" \
+    "${HTTPD_PATH}"/conf/httpd.conf
+fi
+
 # Update SSL configuration
 # sed -i "s|\:443|\:8443|g" "${HTTPD_PATH}/conf/custom-extra/docker-httpd-ssl.conf"
 # sed -i "s| 443$| 8443|g" "${HTTPD_PATH}/conf/custom-extra/docker-httpd-ssl.conf"
