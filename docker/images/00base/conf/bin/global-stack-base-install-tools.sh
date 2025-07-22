@@ -244,3 +244,8 @@ if [[ "" != "${SOPS_OPERATING_SYSTEM}${SOPS_ARCH}" ]]; then
 	sudo curl -L "https://github.com/getsops/sops/releases/download/${GLOBAL_STACK_SOPS_VERSION}/${SOPS_FILE_NAME}" -o "/usr/local/bin/sops"
 	sudo chmod a+x "/usr/local/bin/sops"
 fi
+
+echo "Updating/Installing yq"
+echo "https://github.com/mikefarah/yq/releases/download/${GLOBAL_STACK_YQ_VERSION}/yq_linux_amd64"
+curl -L https://github.com/mikefarah/yq/releases/download/${GLOBAL_STACK_YQ_VERSION}/yq_linux_amd64 -o /usr/local/bin/yq
+sudo chmod a+x /usr/local/bin/yq

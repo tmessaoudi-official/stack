@@ -454,6 +454,17 @@ if eval "${env_file_exists}"; then
 	fi
 fi
 
+
+if [ -f ~/.local/bin/yq ]; then GLOBAL_UNU_YQ_VERSION="$(yq --version | sed "s/yq (https:\/\/github.com\/mikefarah\/yq\/) version //")"; else GLOBAL_UNU_YQ_VERSION=0; fi
+if [ "${GLOBAL_UNU_YQ_VERSION}" != "${GLOBAL_STACK_YQ_VERSION}" ]; then
+	echo "Updating/Installing yq"
+	echo "https://github.com/mikefarah/yq/releases/download/${GLOBAL_STACK_YQ_VERSION}/yq_linux_amd64"
+	curl -L https://github.com/mikefarah/yq/releases/download/${GLOBAL_STACK_YQ_VERSION}/yq_linux_amd64 -o ~/.local/bin/yq
+	sudo chmod a+x ~/.local/bin/yq
+else
+	echo "Yq is latest ${GLOBAL_STACK_YQ_VERSION}"
+fi
+
 if [[ ! -f ~/.local/bin/docker-reclaim-disk-space-script.sh ]]; then
 	echo "Downloading docker-reclaim-disk-space-script.sh"
 	curl -L https://raw.githubusercontent.com/samoshkin/docker-reclaim-disk-space/master/script.sh -o ~/.local/bin/docker-reclaim-disk-space-script.sh

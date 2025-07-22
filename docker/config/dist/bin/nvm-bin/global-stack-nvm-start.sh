@@ -3,7 +3,6 @@
 set -xeE -o pipefail
 shopt -s extdebug
 IFS=$'\n\t'
-trap 'stackCatch ${?} ${LINENO} "${BASH_COMMAND}"' EXIT ERR PIPE SIGPIPE SIGHUP
 stackCatch() {
   if [ "${1}" != "0" ]; then
     # error handling goes here
@@ -12,6 +11,8 @@ stackCatch() {
     sleep infinity
   fi
 }
+
+trap 'stackCatch ${?} ${LINENO} "${BASH_COMMAND}"' EXIT ERR PIPE SIGPIPE SIGHUP
 
 SECONDS=0
 

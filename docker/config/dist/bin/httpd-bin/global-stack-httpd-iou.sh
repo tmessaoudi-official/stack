@@ -105,6 +105,8 @@ if [[ -n "${GLOBAL_STACK_HTTPD_MODSECURITY_MOD_VERSION}" && "" != "${GLOBAL_STAC
   make
   make install
 
+  cd "${HTTPD_PATH}"
+
   rm -rf "${MODSECURITY_APACHE_PATH}"
 fi
 
@@ -125,6 +127,8 @@ if [[ -n "${GLOBAL_STACK_HTTPD_MOD_AUTH_OPENIDC_VERSION}" && "" != "${GLOBAL_STA
     --with-apxs="${HTTPD_PATH}/bin/apxs"
   make
   make install
+
+  cd "${HTTPD_PATH}"
 
   rm -rf "${MOD_AUTH_OPENIDC_APACHE_PATH}"
 fi

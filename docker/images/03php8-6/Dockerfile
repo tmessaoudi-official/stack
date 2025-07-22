@@ -6,7 +6,7 @@ ARG GLOBAL_STACK_LOCAL_REGISTRY_PORT_5000=5000
 # shellcheck disable=SC2086
 ARG GLOBAL_STACK_LOCAL_REGISTRY_ALIAS=local-global-stack-registry.local
 # shellcheck disable=SC2086
-FROM ${GLOBAL_STACK_LOCAL_REGISTRY_ALIAS}:${GLOBAL_STACK_LOCAL_REGISTRY_PORT_5000}/local_global_stack_03php8-6:${GLOBAL_STACK_VERSION}
+FROM ${GLOBAL_STACK_LOCAL_REGISTRY_ALIAS}:${GLOBAL_STACK_LOCAL_REGISTRY_PORT_5000}/local_global_stack_02phpbrew:${GLOBAL_STACK_VERSION}
 
 LABEL maintainer="Takieddine Messaoudi <takieddine.messaoudi.official@gmail.com>"
 
@@ -18,4 +18,4 @@ SHELL ["/bin/bash", "-xeEu", "-o", "pipefail", "-c"]
 
 USER "${GLOBAL_STACK_DOCKER_USER_ID}":"${GLOBAL_STACK_DOCKER_GROUP_ID}"
 
-CMD ["global-stack-base-sync-bin-n-exec.sh", "global-stack-phpmyadmin-start.sh"]
+CMD ["global-stack-base-sync-bin-n-exec.sh", "global-stack-phpbrew-start.sh"]

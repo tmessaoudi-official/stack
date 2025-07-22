@@ -4,5 +4,13 @@ if ! PGPASSWORD=${DATABASE_PASSWORD} psql -h ${DATABASE_HOST} -U ${DATABASE_USER
     echo "Database already populated"
 else
     echo "Importing database dump ${1} to database: ${DATABASE_NAME}, server: ${DATABASE_HOST}"
-    PGPASSWORD=${DATABASE_PASSWORD} pg_restore --no-owner -h ${DATABASE_HOST} -U ${DATABASE_USER} -d ${DATABASE_NAME} -Fc "${1}"
+    if [[ "${1}" == *\.bak ]]; then
+        echo "pg_restore .bak"
+        PGPASSWORD=${DATABASE_PASSWORD} pg_restore --no-owner -h ${DATABASE_HOST} -U ${DATABASE_USER} -d ${DATABASE_NAME} -Fc "${1}"
+    elif [[ "${1}" == *\.sql ]]; then
+        echo "psql .sql"
+        PGPASSWORD=${DATABASE_PASSWORD} psql -h ${DATABASE_HOST} -U ${DATABASE_USER} -d ${DATABASE_NAME} -f "${1}"
+    else
+        echo "Unsupported file format"
+    fi
 fi

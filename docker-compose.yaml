@@ -4,8 +4,8 @@ networks:
     ipam:
       driver: default
       config:
-      - subnet: 172.18.0.0/16
-        gateway: 172.18.0.1
+      - subnet: ${GLOBAL_STACK_HOST_GATEWAY_IP_MASK}
+        gateway: ${GLOBAL_STACK_HOST_GATEWAY_IP}
 
 # Additional services can be defined in docker/images/**
 # Activate or deactivate specific images by using the COMPOSE_FILE variable 

@@ -5,6 +5,23 @@ set -xeEuo pipefail
 shopt -s extdebug
 IFS=$'\n\t'
 
+# Function to handle errors and trap cleanup
+stackCatch() {
+  local exit_code=$1
+  local line_num=$2
+  local command=$3
+  if [[ $exit_code -ne 0 && $exit_code -ne 141 && $exit_code -ne 1 ]]; then
+    echo "Error detected!"
+    echo -e "\n$(date '+%d-%m-%Y %H:%M:%S'): Error - line: $line_num, command: $command, caddy global-stack-caddy-start.sh" \
+      >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/elapsed"
+    sleep infinity
+  fi
+}
+# Trap errors for cleanup or error reporting
+trap 'stackCatch $? ${LINENO} "${BASH_COMMAND}"' ERR EXIT
+
+SECONDS=0
+
 PATH="${GLOBAL_STACK_DOCKER_TOOLS_PATH}/caddy/bin:${PATH}"
 export PATH
 
@@ -20,24 +37,6 @@ CADDY_PATH="${GLOBAL_STACK_DOCKER_TOOLS_PATH}/caddy"
 CADDY_LOGS_PATH="${CADDY_PATH}/logs"
 CADDY_VERSIONS_PATH="${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/caddy"
 CADDY_SUCCESSES_PATH="${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/web-server"
-
-# Function to handle errors and trap cleanup
-stackCatch() {
-  local exit_code=$1
-  local line_num=$2
-  local command=$3
-  if [[ $exit_code -ne 0 && $exit_code -ne 141 && $exit_code -ne 1 ]]; then
-    echo "Error detected!"
-    echo -e "\n$(date '+%d-%m-%Y %H:%M:%S'): Error - line: $line_num, command: $command, caddy global-stack-caddy-start.sh" \
-      >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/elapsed"
-    sleep infinity
-  fi
-}
-
-# Trap errors for cleanup or error reporting
-trap 'stackCatch $? ${LINENO} "${BASH_COMMAND}"' ERR EXIT
-
-SECONDS=0
 
 # Remove old caddy success directory
 sudo rm -rf \

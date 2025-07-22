@@ -44,4 +44,5 @@ fi
 global-stack-phpmyadmin-sync-dist.sh
 rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin/phpmyadmin${PHPMYADMIN_LATEST_RELEASE}.zip"
 rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin/phpmyadmin${PHPMYADMIN_LATEST_RELEASE}/"
+rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin/phpmyadmin-${PHPMYADMIN_LATEST_RELEASE}/"
 rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin/phpMyAdmin-${PHPMYADMIN_LATEST_RELEASE}-all-languages"

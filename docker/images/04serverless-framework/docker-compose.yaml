@@ -146,7 +146,7 @@ services:
       - 03java24-zulu
       - 03ruby3
       - 03python3
-      - 03php8-5
+      - 03php8-6
     extra_hosts:
       - ${GLOBAL_STACK_LOCAL_REGISTRY_ALIAS}:${GLOBAL_STACK_HOST_GATEWAY_IP}
       - ${GLOBAL_STACK_DOCKER_HOST_DSN}:${GLOBAL_STACK_HOST_GATEWAY_IP}

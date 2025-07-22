@@ -26,6 +26,13 @@
 docker-compose*.local.yaml
 local.*docker-compose.yaml
 docker-compose.all.yaml
+docker-compose.full.yaml
+
+docker*.local.hcl
+local.*docker-bake.hcl
+
+docker*.local.json
+local.*docker-bake.json
 
 Dockerfile*.local
 

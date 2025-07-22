@@ -5,7 +5,6 @@ sudo rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/base" "${GLOBAL_STACK_D
 set -xeEu -o pipefail
 shopt -s extdebug
 IFS=$'\n\t'
-trap 'stackCatch ${?} ${LINENO} "${BASH_COMMAND}"' EXIT ERR
 stackCatch() {
   if [ "${1}" != "0" ]; then
     # error handling goes here
@@ -14,6 +13,8 @@ stackCatch() {
     sleep infinity
   fi
 }
+
+trap 'stackCatch ${?} ${LINENO} "${BASH_COMMAND}"' EXIT ERR
 
 SECONDS=0
 

@@ -5,6 +5,24 @@ set -xeEuo pipefail
 shopt -s extdebug
 IFS=$'\n\t'
 
+# Function to handle errors and trap cleanup
+stackCatch() {
+  local exit_code=$1
+  local line_num=$2
+  local command=$3
+  if [[ $exit_code -ne 0 && $exit_code -ne 141 && $exit_code -ne 1 ]]; then
+    echo "Error detected!"
+    echo -e "\n$(date '+%d-%m-%Y %H:%M:%S'): Error - line: $line_num, command: $command, nginx global-stack-nginx-start.sh" \
+      >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/elapsed"
+    sleep infinity
+  fi
+}
+
+# Trap errors for cleanup or error reporting
+trap 'stackCatch $? ${LINENO} "${BASH_COMMAND}"' ERR EXIT
+
+SECONDS=0
+
 PATH="${GLOBAL_STACK_DOCKER_TOOLS_PATH}/nginx/sbin:${GLOBAL_STACK_DOCKER_TOOLS_PATH}/http/libs/modsecurity/bin:${PATH}"
 export PATH
 
@@ -32,24 +50,6 @@ CORERULESET_PATH="${HTTP_COMMONS_PATH}/rules/coreruleset"
 MODSECURITY_TMP_PATH="${HTTP_COMMONS_PATH}/mod_security/tmp"
 MODSECURITY_LOGS_PATH="${HTTP_COMMONS_PATH}/mod_security/logs"
 MODSECURITY_CONF_PATH="${HTTP_COMMONS_PATH}/mod_security/conf"
-
-# Function to handle errors and trap cleanup
-stackCatch() {
-  local exit_code=$1
-  local line_num=$2
-  local command=$3
-  if [[ $exit_code -ne 0 && $exit_code -ne 141 && $exit_code -ne 1 ]]; then
-    echo "Error detected!"
-    echo -e "\n$(date '+%d-%m-%Y %H:%M:%S'): Error - line: $line_num, command: $command, nginx global-stack-nginx-start.sh" \
-      >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/elapsed"
-    sleep infinity
-  fi
-}
-
-# Trap errors for cleanup or error reporting
-trap 'stackCatch $? ${LINENO} "${BASH_COMMAND}"' ERR EXIT
-
-SECONDS=0
 
 # Remove old nginx success directory
 sudo rm -rf \
