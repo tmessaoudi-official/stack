@@ -14,7 +14,7 @@ GLOBAL_STACK_DOCKER_CLI_FLAGS ?=
 include ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}
 export $(shell sed 's/=.*//' ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV})
 
-NO_COMPOSE_BAKE ?= ${COMPOSE_BAKE}
+GLOBAL_STACK_DOCKER_CLI_NO_COMPOSE_BAKE ?= ${COMPOSE_BAKE}
 
 default: help
 
@@ -72,9 +72,15 @@ touch:
 create-paths:
 	$(MAKE) GLOBAL_STACK_TARGET_DIR="tools ${GLOBAL_STACK_AXLLENT_MAILPIT_MP_DATABASE} docker/data/dumps/dpage-pgadmin4 ./docker/registry/certs/ ./docker/registry/data/ ./docker/registry/registry/" mkdir-p --silent --ignore-errors --keep-going --warn-undefined-variables
 	$(MAKE) GLOBAL_STACK_TARGET_FILE="${GLOBAL_STACK_SHELL_HISTORY} tools/.gitkeep ./docker/registry/certs/.gitkeep ./docker/registry/data/.gitkeep ./docker/registry/registry/.gitkeep" touch --silent --ignore-errors --keep-going --warn-undefined-variables
+generate-buildx:
+	rm -rf ${BUILDX_BAKE_FILE}
+	rm -rf ${COMPOSE_FULL_FILE}
+	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="config" GLOBAL_STACK_DOCKER_CLI_EXEC_FLAGS="--output ${COMPOSE_FULL_FILE}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
+	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="bake" GLOBAL_STACK_DOCKER_CLI_EXEC_FLAGS="--file ${COMPOSE_FULL_FILE} --print" GLOBAL_STACK_DOCKER_CLI="docker buildx" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables > ${BUILDX_BAKE_FILE}
 docker-cli: create-paths
 	# @echo ${GLOBAL_STACK_DOCKER_CLI} ${GLOBAL_STACK_DOCKER_CLI_FLAGS} ${GLOBAL_STACK_DOCKER_CLI_EXEC} ${GLOBAL_STACK_DOCKER_CLI_EXEC_FLAGS} ${GLOBAL_STACK_DOCKER_CLI_SERVICE} ${GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND}
-	COMPOSE_BAKE=${NO_COMPOSE_BAKE} ${GLOBAL_STACK_DOCKER_CLI} ${GLOBAL_STACK_DOCKER_CLI_FLAGS} ${GLOBAL_STACK_DOCKER_CLI_EXEC} ${GLOBAL_STACK_DOCKER_CLI_EXEC_FLAGS} ${GLOBAL_STACK_DOCKER_CLI_SERVICE} ${GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND}
+	# COMPOSE_BAKE=${GLOBAL_STACK_DOCKER_CLI_NO_COMPOSE_BAKE} 
+	${GLOBAL_STACK_DOCKER_CLI} ${GLOBAL_STACK_DOCKER_CLI_FLAGS} ${GLOBAL_STACK_DOCKER_CLI_EXEC} ${GLOBAL_STACK_DOCKER_CLI_EXEC_FLAGS} ${GLOBAL_STACK_DOCKER_CLI_SERVICE} ${GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND}
 create-buildx-builder:
 	docker buildx stop docker-buildx-builder &>/dev/null
 	docker buildx rm docker-buildx-builder &>/dev/null
@@ -96,21 +102,21 @@ start-local-registory:
 	sudo cp ./docker/registry/certs/${GLOBAL_STACK_LOCAL_REGISTRY_ALIAS}.crt /etc/docker/certs.d/${GLOBAL_STACK_LOCAL_REGISTRY_ALIAS}:${GLOBAL_STACK_LOCAL_REGISTRY_PORT_5000}/ca.crt
 	sudo systemctl restart docker
 	docker run --detach --publish ${GLOBAL_STACK_LOCAL_REGISTRY_PORT_5000}:5000 --restart=always --mount type=bind,source=./docker/registry/certs,target=/docker/registry/certs --env REGISTRY_HTTP_ADDR=0.0.0.0:5000 --env REGISTRY_HTTP_TLS_CERTIFICATE=/docker/registry/certs/${GLOBAL_STACK_LOCAL_REGISTRY_ALIAS}.crt --env REGISTRY_HTTP_TLS_KEY=/docker/registry/certs/${GLOBAL_STACK_LOCAL_REGISTRY_ALIAS}.key --env REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY=/data --mount type=bind,source=./docker/registry/data,target=/data --mount type=bind,source=./docker/registry/registry,target=/var/lib/registry --name ${GLOBAL_STACK_LOCAL_REGISTRY_NAME} registry:${GLOBAL_STACK_LOCAL_REGISTRY_VERSION}
-build: create-paths
+build: create-paths generate-buildx
 	# change the order of this in local.Makefile
-	rm -rf ${BUILDX_BAKE_FILE}
-	rm -rf ${COMPOSE_FULL_FILE}
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="config" GLOBAL_STACK_DOCKER_CLI_EXEC_FLAGS="--output ${COMPOSE_FULL_FILE}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="bake" GLOBAL_STACK_DOCKER_CLI_EXEC_FLAGS="--file ${COMPOSE_FULL_FILE} --print" GLOBAL_STACK_DOCKER_CLI="docker buildx" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables > ${BUILDX_BAKE_FILE}
 	@jq -r '.group.default.targets[]' ${BUILDX_BAKE_FILE} | while read target; do echo "Processing $$target..."; $(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="bake" GLOBAL_STACK_DOCKER_CLI_EXEC_FLAGS="--push --load" GLOBAL_STACK_DOCKER_CLI="docker buildx" GLOBAL_STACK_DOCKER_CLI_SERVICE="$$target" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables ;done
-up: create-paths
-	NO_COMPOSE_BAKE=false $(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="up" GLOBAL_STACK_DOCKER_CLI_EXEC_FLAGS="--remove-orphans --detach" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-up-build: create-paths
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="up" GLOBAL_STACK_DOCKER_CLI_EXEC_FLAGS="--remove-orphans --detach --build" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-up-build-force-recreate: create-paths
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="up" GLOBAL_STACK_DOCKER_CLI_EXEC_FLAGS="--remove-orphans --detach --build --force-recreate --always-recreate-deps" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
+up: create-paths generate-buildx
+	rm -rf ${BUILDX_BAKE_FILE}
+	GLOBAL_STACK_DOCKER_CLI_NO_COMPOSE_BAKE="false" $(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="up" GLOBAL_STACK_DOCKER_CLI_EXEC_FLAGS="--remove-orphans --detach" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
+up-build: create-paths generate-buildx
+	rm -rf ${BUILDX_BAKE_FILE}
+	GLOBAL_STACK_DOCKER_CLI_NO_COMPOSE_BAKE="false" $(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="up" GLOBAL_STACK_DOCKER_CLI_EXEC_FLAGS="--remove-orphans --detach --build" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
+up-build-force-recreate: create-paths generate-buildx
+	rm -rf ${BUILDX_BAKE_FILE}
+	GLOBAL_STACK_DOCKER_CLI_NO_COMPOSE_BAKE="false" $(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="up" GLOBAL_STACK_DOCKER_CLI_EXEC_FLAGS="--remove-orphans --detach --build --force-recreate --always-recreate-deps" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
 down:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="down" GLOBAL_STACK_DOCKER_CLI_EXEC_FLAGS="--remove-orphans" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
+	rm -rf ${BUILDX_BAKE_FILE}
+	GLOBAL_STACK_DOCKER_CLI_NO_COMPOSE_BAKE="false" $(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="down" GLOBAL_STACK_DOCKER_CLI_EXEC_FLAGS="--remove-orphans" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
 down-n-rebuild: down build up-build
 down-n-rebuild-force-recreate: down build up-build-force-recreate
 rebuild: up-build
@@ -305,9 +311,9 @@ hard-restart:
 	sudo rm -rf tools 
 	cp -R var/tools/ tools
 	sudo rm -rf ./docker/registry/data ./docker/registry/certs
-	$(MAKE) create-paths
-	$(MAKE) start-local-registory
-	$(MAKE) create-buildx-builder
+	$(MAKE) create-paths --silent --ignore-errors --keep-going --warn-undefined-variables
+	$(MAKE) start-local-registory --silent --ignore-errors --keep-going --warn-undefined-variables
+	$(MAKE) create-buildx-builder --silent --ignore-errors --keep-going --warn-undefined-variables
 	$(MAKE) build --silent --ignore-errors --keep-going --warn-undefined-variables
 	$(MAKE) up --silent --ignore-errors --keep-going --warn-undefined-variables
 

@@ -1,5 +1,5 @@
 # shellcheck disable=SC2148
-ARG GLOBAL_STACK_VERSION=1_5_0_local
+ARG GLOBAL_STACK_VERSION=2_0_0_local
 ARG GLOBAL_STACK_SONARQUBE_VERSION=2025.3.1-developer
 
 # shellcheck disable=SC2086

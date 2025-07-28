@@ -98,8 +98,8 @@ fi
 
 if [ "${PHPBREW_MODE}" = "setup" ]; then
   if [ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/php.${PHPBREW_PHP_FINAL_VERSION}" ]; then
-    echo -e "\n**** global-stack-phpbrew-php${PHP_VERSION_AS}-install-version.sh"
-    global-stack-phpbrew-php${PHP_VERSION_AS}-install-version.sh
+    echo -e "\n**** global-stack-phpbrew-php-install-version.sh"
+    global-stack-phpbrew-php-install-version.sh
   fi
 
   echo -e "\n*** Activating php version $(global-stack-phpbrew-find-version.sh "${PHP_VERSION}")"

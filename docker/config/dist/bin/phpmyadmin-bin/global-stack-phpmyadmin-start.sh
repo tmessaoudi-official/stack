@@ -18,7 +18,34 @@ SECONDS=0
 sleep 1
 
 global-stack-base-wait-for.sh \
-  "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/php.next"
+  "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/php.next" \
+  "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/node.24"
+
+PATH="${COMPOSER_HOME}/vendor/bin:${COMPOSER_SOURCE}/bin:${SYMFONY_HOME}/bin:${PHPBREW_SRC}/bin:${GLOBAL_STACK_DOCKER_TOOLS_PATH}/yarn/bin:${DENO_DIR}/bin:${BUN_INSTALL}/bin:${PNPM_HOME}:${PATH}"
+export PATH
+
+echo "# global-stack-setup-started" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
+
+echo "PATH=${COMPOSER_HOME}/vendor/bin:${COMPOSER_SOURCE}/bin:${SYMFONY_HOME}/bin:${PHPBREW_SRC}/bin:${GLOBAL_STACK_DOCKER_TOOLS_PATH}/yarn/bin:${DENO_DIR}/bin:${BUN_INSTALL}/bin:${PNPM_HOME}:${PATH}" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
+echo "export PATH" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
+
+source ${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/nvm.shellrc
+source ${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/phpbrew.shellrc
+source "${NVM_DIR}/nvm.sh"
+
+PATH=${PHPBREW_ROOT}/php/$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/php.next")/bin:${PHPBREW_ROOT}/php/$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/php.next")/sbin:${NVM_DIR}/versions/node/$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/node.24")/bin:${PNPM_GLOBAL_DIR}/4/node_modules/.bin:${PNPM_GLOBAL_DIR}/5/node_modules/.bin:${YARN_GLOBAL_FOLDER}/bin:${GLOBAL_STACK_DOCKER_TOOLS_PATH}/deno/bin:${PATH}
+export PATH
+
+global-stack-nvm-eval-yarnrc.sh
+
+echo 'source ${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/nvm.shellrc' >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
+echo 'source ${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/phpbrew.shellrc' >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
+echo 'source "${NVM_DIR}/nvm.sh"' >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
+
+echo 'PATH=${PHPBREW_ROOT}/php/$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/php.next")/bin:${PHPBREW_ROOT}/php/$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/php.next")/sbin:${NVM_DIR}/versions/node/$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/node.24")/bin:${PNPM_GLOBAL_DIR}/4/node_modules/.bin:${PNPM_GLOBAL_DIR}/5/node_modules/.bin:${YARN_GLOBAL_FOLDER}/bin:${GLOBAL_STACK_DOCKER_TOOLS_PATH}/deno/bin:${PATH}' >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
+echo "export PATH" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
+
+source "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 
 if [ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpmyadmin" ] || [ "${GLOBAL_STACK_RELOAD_PHPMYADMIN}" = "true" ]; then
   rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin" "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpmyadmin"
@@ -30,18 +57,30 @@ if [ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpmyadmin" ] || [ "${GLOB
   global-stack-phpmyadmin-iou.sh
 fi
 
-PHPMYADMIN_CURRENT_RELEASE=$([[ -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpmyadmin" ]] && cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpmyadmin" || echo "${PHPMYADMIN_LATEST_RELEASE}")
-
 global-stack-phpmyadmin-sync-dist.sh
 
 cd "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin"
 
 if [ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpmyadmin" ] || [ "${GLOBAL_STACK_RELOAD_PHPMYADMIN}" = "true" ]; then
-  source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/phpbrew.shellrc" && export PATH="${PHPBREW_ROOT}/php/$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/php.next")/bin:${PATH}"
-  # composer install --ignore-platform-reqs
+  if [[ "${GLOBAL_STACK_PHPMYADMIN_TYPE_VERSION}" == "branch" ]]; then
+    sed -i 's/"name": "phpmyadmin\/phpmyadmin",/"name": "phpmyadmin\/phpmyadminx",/' "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin/composer.json" 
+    composer install --ignore-platform-reqs
+    yarn install
+    yarn build
+  elif [[ "${GLOBAL_STACK_PHPMYADMIN_TYPE_VERSION}" == "tag" ]]; then
+    sed -i 's/"name": "phpmyadmin\/phpmyadmin",/"name": "phpmyadmin\/phpmyadminx",/' "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin/composer.json" 
+    composer install --ignore-platform-reqs
+    yarn install
+    yarn build
+  elif [[ "${GLOBAL_STACK_PHPMYADMIN_TYPE_VERSION}" == "commit" ]]; then
+    sed -i 's/"name": "phpmyadmin\/phpmyadmin",/"name": "phpmyadmin\/phpmyadminx",/' "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin/composer.json" 
+    composer install --ignore-platform-reqs
+    yarn install
+    yarn build
+  fi
 fi
 
-echo "$(global-stack-phpmyadmin-get-latest-version.sh)" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpmyadmin"
+echo "${GLOBAL_STACK_PHPMYADMIN_VERSION}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpmyadmin"
 
 chmod 0444 "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin/config."*
 

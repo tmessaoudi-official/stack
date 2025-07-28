@@ -16,7 +16,7 @@ stackCatch() {
 PHPBREW_PHP_PATH="${PHPBREW_ROOT}/php/$(global-stack-phpbrew-find-version.sh "${PHP_VERSION}")"
 
 touch "${PHPBREW_PHP_PATH}/var/log/xdebug.log"
-mkdir -p "${PHPBREW_PHP_PATH}/var/log/profiler"
+mkdir -p "${PHPBREW_PHP_PATH}/var/log/profiler" "${PHPBREW_PHP_PATH}/var/session"
 
 if [[ ! -d "${PHPBREW_PHP_PATH}/etc/dist-fpm" ]]; then
   mkdir -p "${PHPBREW_PHP_PATH}/etc/dist-fpm"
