@@ -15,9 +15,9 @@ npm --global outdated
 nvm use 24
 npm --global outdated
 
-sdkmanager --sdk_root="${ANDROID_HOME}" --list
-
 /stack/tools/pyenv/versions/${GLOBAL_STACK_PYTHON3_VERSION}/bin/pip${GLOBAL_STACK_PYTHON3_VERSION%.*} list --outdated
+
+sdkmanager --sdk_root="${ANDROID_HOME}" --list
 
 sdk offline disable
 sdk list ant

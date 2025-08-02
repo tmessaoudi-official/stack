@@ -73,8 +73,7 @@ create-paths:
 	$(MAKE) GLOBAL_STACK_TARGET_DIR="tools ${GLOBAL_STACK_AXLLENT_MAILPIT_MP_DATABASE} docker/data/dumps/dpage-pgadmin4 ./docker/registry/certs/ ./docker/registry/data/ ./docker/registry/registry/" mkdir-p --silent --ignore-errors --keep-going --warn-undefined-variables
 	$(MAKE) GLOBAL_STACK_TARGET_FILE="${GLOBAL_STACK_SHELL_HISTORY} tools/.gitkeep ./docker/registry/certs/.gitkeep ./docker/registry/data/.gitkeep ./docker/registry/registry/.gitkeep" touch --silent --ignore-errors --keep-going --warn-undefined-variables
 generate-buildx:
-	rm -rf ${BUILDX_BAKE_FILE}
-	rm -rf ${COMPOSE_FULL_FILE}
+	rm -rf ${BUILDX_BAKE_FILE} ${COMPOSE_FULL_FILE}
 	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="config" GLOBAL_STACK_DOCKER_CLI_EXEC_FLAGS="--output ${COMPOSE_FULL_FILE}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
 	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="bake" GLOBAL_STACK_DOCKER_CLI_EXEC_FLAGS="--file ${COMPOSE_FULL_FILE} --print" GLOBAL_STACK_DOCKER_CLI="docker buildx" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables > ${BUILDX_BAKE_FILE}
 docker-cli: create-paths
@@ -106,16 +105,16 @@ build: create-paths generate-buildx
 	# change the order of this in local.Makefile
 	@jq -r '.group.default.targets[]' ${BUILDX_BAKE_FILE} | while read target; do echo "Processing $$target..."; $(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="bake" GLOBAL_STACK_DOCKER_CLI_EXEC_FLAGS="--push --load" GLOBAL_STACK_DOCKER_CLI="docker buildx" GLOBAL_STACK_DOCKER_CLI_SERVICE="$$target" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables ;done
 up: create-paths generate-buildx
-	rm -rf ${BUILDX_BAKE_FILE}
+	rm -rf ${BUILDX_BAKE_FILE} ${COMPOSE_FULL_FILE}
 	GLOBAL_STACK_DOCKER_CLI_NO_COMPOSE_BAKE="false" $(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="up" GLOBAL_STACK_DOCKER_CLI_EXEC_FLAGS="--remove-orphans --detach" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
 up-build: create-paths generate-buildx
-	rm -rf ${BUILDX_BAKE_FILE}
+	rm -rf ${BUILDX_BAKE_FILE} ${COMPOSE_FULL_FILE}
 	GLOBAL_STACK_DOCKER_CLI_NO_COMPOSE_BAKE="false" $(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="up" GLOBAL_STACK_DOCKER_CLI_EXEC_FLAGS="--remove-orphans --detach --build" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
 up-build-force-recreate: create-paths generate-buildx
-	rm -rf ${BUILDX_BAKE_FILE}
+	rm -rf ${BUILDX_BAKE_FILE} ${COMPOSE_FULL_FILE}
 	GLOBAL_STACK_DOCKER_CLI_NO_COMPOSE_BAKE="false" $(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="up" GLOBAL_STACK_DOCKER_CLI_EXEC_FLAGS="--remove-orphans --detach --build --force-recreate --always-recreate-deps" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
 down:
-	rm -rf ${BUILDX_BAKE_FILE}
+	rm -rf ${BUILDX_BAKE_FILE} ${COMPOSE_FULL_FILE}
 	GLOBAL_STACK_DOCKER_CLI_NO_COMPOSE_BAKE="false" $(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="down" GLOBAL_STACK_DOCKER_CLI_EXEC_FLAGS="--remove-orphans" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
 down-n-rebuild: down build up-build
 down-n-rebuild-force-recreate: down build up-build-force-recreate
@@ -168,8 +167,8 @@ login-03php8-4:
 	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="03php8-4" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
 login-03php8-5:
 	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="03php8-5" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-login-03php8-6:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="03php8-6" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
+login-03phpnext:
+	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="03phpnext" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
 login-00base:
 	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="00base" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
 login-03node18:
@@ -255,8 +254,8 @@ log-03php8-4:
 	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="03php8-4" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
 log-03php8-5:
 	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="03php8-5" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-log-03php8-6:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="03php8-6" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
+log-03phpnext:
+	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="03phpnext" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
 log-03node18:
 	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="03node18" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
 log-03node22:
@@ -305,12 +304,13 @@ restore:
 log-follow:
 	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs --follow" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
 hard-restart:
+	bin/load-env.sh --update-differences="update_differences"
+	yes y | global-unu.sh || echo 'script does not exit'
 	$(MAKE) down --silent --ignore-errors --keep-going --warn-undefined-variables
 	docker system prune -a -f --volumes
 	yes y | docker-reclaim-disk-space-script.sh || echo 'script does not exist'
-	sudo rm -rf tools 
+	sudo rm -rf tools ./docker/registry/data ./docker/registry/certs
 	cp -R var/tools/ tools
-	sudo rm -rf ./docker/registry/data ./docker/registry/certs
 	$(MAKE) create-paths --silent --ignore-errors --keep-going --warn-undefined-variables
 	$(MAKE) start-local-registory --silent --ignore-errors --keep-going --warn-undefined-variables
 	$(MAKE) create-buildx-builder --silent --ignore-errors --keep-going --warn-undefined-variables

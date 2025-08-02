@@ -16,7 +16,7 @@
 #
 
 
-# install:- channel: stable; cliVersion: 5.19.0; cliNativeVersion: 0.7.4; api: https://api.sdkman.io/2
+# install:- channel: stable; cliVersion: 5.20.0; cliNativeVersion: 0.7.4; api: https://api.sdkman.io/2
 
 set -e
 
@@ -37,7 +37,7 @@ trap echo_failed_command EXIT
 
 # Global variables
 export SDKMAN_SERVICE="https://api.sdkman.io/2"
-export SDKMAN_VERSION="5.19.0"
+export SDKMAN_VERSION="5.20.0"
 export SDKMAN_NATIVE_VERSION="0.7.4"
 
 if [ -z "$SDKMAN_DIR" ]; then

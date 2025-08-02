@@ -8,12 +8,12 @@ stackCatch() {
   if [ "${1}" != "0" ]; then
     # error handling goes here
     echo "Error detected !!"
-    echo -e "\n$(date '+%d-%m-%Y %H:%M:%S'): Error - ** line: ${2} ** ** message: ${3} ** phpbrew (${PHPBREW_PHP_FINAL_VERSION}) ${PHPBREW_MODE:-} global-stack-phpbrew-copy-dist-conf.sh" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/elapsed"
+    echo -e "\n$(date '+%d-%m-%Y %H:%M:%S'): Error - ** line: ${2} ** ** message: ${3} ** phpbrew (${PHP_VERSION_AS}) ${PHPBREW_MODE:-} global-stack-phpbrew-copy-dist-conf.sh" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/elapsed"
     sleep infinity
   fi
 }
 
-PHPBREW_PHP_PATH="${PHPBREW_ROOT}/php/$(global-stack-phpbrew-find-version.sh "${PHP_VERSION}")"
+PHPBREW_PHP_PATH="${PHPBREW_ROOT}/php/${PHP_VERSION_NAME}"
 
 touch "${PHPBREW_PHP_PATH}/var/log/xdebug.log"
 mkdir -p "${PHPBREW_PHP_PATH}/var/log/profiler" "${PHPBREW_PHP_PATH}/var/session"

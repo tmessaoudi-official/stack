@@ -1,28 +1,28 @@
 {
-    "name": "serverless-framework",
-    "version": "1.0.0",
-    "description": "Serverless framework with TypeScript, exposing Lambda, S3, SQS and SNS setup",
-    "main": "build/serverless.js",
-    "scripts": {
-      "build": "tsc",
-      "start": "serverless offline start",
-      "deploy": "serverless deploy",
-      "clean": "serverless remove"
-    },
-    "dependencies": {
-      "aws-sdk": "^2.1692.0"
-    },
-    "devDependencies": {
-      "typescript": "^5.8.3",
-      "serverless": "^4.17.2",
-      "@serverless/utils": "^6.15.0",
-      "@serverless/typescript": "^4.17.1",
-      "@types/serverless": "^3.12.27",
-      "@types/aws-lambda": "^8.10.152",
-      "@types/node": "^24.1.0",
-      "serverless-s3-local": "^0.8.5",
-      "serverless-offline-sqs": "^8.0.0",
-      "serverless-offline-sns": "^0.78.1",
-      "serverless-offline": "^14.4.0"
-    }
+  "name": "serverless-framework",
+  "version": "1.0.0",
+  "description": "Serverless framework with TypeScript, exposing Lambda, S3, SQS and SNS setup",
+  "main": "build/serverless.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "serverless offline start",
+    "deploy": "serverless deploy",
+    "clean": "serverless remove"
+  },
+  "dependencies": {
+    "aws-sdk": "^2.1692.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2",
+    "serverless": "^4.17.2",
+    "@serverless/utils": "^6.15.0",
+    "@serverless/typescript": "^4.17.2",
+    "@types/serverless": "^3.12.27",
+    "@types/aws-lambda": "^8.10.152",
+    "@types/node": "^24.1.0",
+    "serverless-s3-local": "^0.8.5",
+    "serverless-offline-sqs": "^8.0.0",
+    "serverless-offline-sns": "^0.78.1",
+    "serverless-offline": "^14.4.0"
   }
+}

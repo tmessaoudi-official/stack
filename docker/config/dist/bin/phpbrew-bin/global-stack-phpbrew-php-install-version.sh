@@ -8,32 +8,11 @@ stackCatch() {
   if [ "${1}" != "0" ]; then
     # error handling goes here
     echo "Error detected !!"
-    echo -e "\n$(date '+%d-%m-%Y %H:%M:%S'): Error - ** line: ${2} ** ** message: ${3} ** phpbrew (${PHPBREW_PHP_FINAL_VERSION}) ${PHPBREW_MODE:-} global-stack-phpbrew-php-install-version.sh" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/elapsed"
+    echo -e "\n$(date '+%d-%m-%Y %H:%M:%S'): Error - ** line: ${2} ** ** message: ${3} ** phpbrew (${PHP_VERSION_AS}) ${PHPBREW_MODE:-} global-stack-phpbrew-php-install-version.sh" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/elapsed"
     sleep infinity
   fi
 }
 
-echo "*** Installing php version ${PHPBREW_PHP_FINAL_VERSION} as $(global-stack-phpbrew-find-latest.sh "${PHP_VERSION}")"
+echo "*** Installing php version ${PHP_VERSION_AS} as ${PHP_VERSION_NAME}"
 
-PHP_VERSION_INSTALL=""
-PHP_VERSION_INSTALL_AS=""
-PHP_VERSION_INSTALL_AS_NAME=""
-if [[ "next" == "${PHP_VERSION_AS:-}" ]]; then
-  PHP_VERSION_INSTALL="${PHP_VERSION}"
-  PHP_VERSION_INSTALL_AS="as"
-  PHP_VERSION_INSTALL_AS_NAME="php-master"
-else
-  PHP_VERSION_INSTALL="php-${PHP_VERSION}"
-fi
-
-if [[ "${PHP_VERSION:-}" =~ ^github\.com/php/php-src* ]]; then
-  if [[ "${PHP_VERSION_INSTALL_AS_NAME}" == "php-master" ]]; then
-    PHP_VERSION_INSTALL="${PHP_VERSION}"
-  else
-    PHP_VERSION_INSTALL="${PHP_VERSION}"
-    PHP_VERSION_INSTALL_AS="as"
-    PHP_VERSION_INSTALL_AS_NAME="php-${PHP_VERSION_AS}"
-  fi
-fi
-
-phpbrew --debug --verbose --profile install ${PHP_VERSION_INSTALL} ${PHP_VERSION_INSTALL_AS} ${PHP_VERSION_INSTALL_AS_NAME} +default +debug +sodium +pdo +mysql +pgsql +sqlite +fpm -- --with-libxml --with-password-argon2 --enable-embed --enable-zts --disable-zend-signals --enable-zend-max-execution-timers
+eval "phpbrew --debug --verbose --profile install ${PHP_VERSION} as ${PHP_VERSION_NAME} ${PHP_INSTALL_CLI_VARIANTS} ${PHP_INSTALL_CLI_OPTIONS}"
