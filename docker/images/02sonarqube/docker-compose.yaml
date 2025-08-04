@@ -1,6 +1,7 @@
 ---
 services:
   02sonarqube:
+    init: true
     build:
       args:
         BUILDKIT_INLINE_CACHE: 1

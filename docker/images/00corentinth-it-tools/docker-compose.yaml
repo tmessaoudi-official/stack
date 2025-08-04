@@ -1,6 +1,7 @@
 ---
 services:
   00corentinth-it-tools:
+    init: true
     image: corentinth/it-tools:${GLOBAL_STACK_CORENTINTH_IT_TOOLS_VERSION}
     ports:
       - ${GLOBAL_STACK_CORENTINTH_IT_TOOLS_PORT_80:-}80

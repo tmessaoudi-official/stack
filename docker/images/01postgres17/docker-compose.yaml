@@ -1,6 +1,7 @@
 ---
 services:
   01postgres17:
+    init: true
     build:
       args:
         BUILDKIT_INLINE_CACHE: 1

@@ -1,6 +1,7 @@
 ---
 services:
   01valkey:
+    init: true
     image: valkey/valkey:${GLOBAL_STACK_VALKEY_VERSION}
     ports:
       - ${GLOBAL_STACK_VALKEY_PORT_6379:-}6379

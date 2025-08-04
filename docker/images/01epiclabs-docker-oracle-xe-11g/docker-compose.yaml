@@ -1,6 +1,7 @@
 ---
 services:
   01epiclabs-docker-oracle-xe-11g:
+    init: true
     build:
       args:
         BUILDKIT_INLINE_CACHE: 1

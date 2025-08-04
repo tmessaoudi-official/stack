@@ -1,6 +1,7 @@
 ---
 services:
   02mongoclient-mongoclient:
+    init: true
     build:
       args:
         BUILDKIT_INLINE_CACHE: 1

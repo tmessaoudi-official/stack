@@ -1,6 +1,7 @@
 ---
 services:
   02phpbrew:
+    init: true
     build:
       args:
         BUILDKIT_INLINE_CACHE: 1

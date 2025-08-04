@@ -1,6 +1,7 @@
 ---
 services:
   03phpnext:
+    init: true
     build:
       args:
         BUILDKIT_INLINE_CACHE: 1

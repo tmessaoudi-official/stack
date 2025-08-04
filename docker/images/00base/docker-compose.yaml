@@ -1,6 +1,7 @@
 ---
 services:
   00base:
+    init: true
     build:
       context: ./
       dockerfile: ./docker/images/00base/Dockerfile
