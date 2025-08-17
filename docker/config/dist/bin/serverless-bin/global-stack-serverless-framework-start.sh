@@ -213,15 +213,6 @@ done
 
 npm run build
 
-# Mark serverless as successfully started
-echo "framework" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}"/serverless
-
-# Print success message with duration
-DURATION=${SECONDS}
-global-stack-base-print-success.sh "${DURATION}" "serverless (framework)"
-
-global-stack-base-prepare-shell.sh
-
 touch ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/log/elasticmq-$(date '+%d-%m-%Y').log ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/log/serverless-framework-$(date '+%d-%m-%Y').log
 
 [ "${GLOBAL_STACK_DOCKER_IN_DOCKER}" = "true" ] && global-stack-base-start-docker.sh || echo -e "\n Docker In Docker will not be started"
@@ -234,6 +225,12 @@ serverless_framework_pid=$!
 echo ${elasticmq_pid} > ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/run/elasticmq.pid
 echo ${serverless_framework_pid} > ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/run/serverless-framework.pid
 
+global-stack-base-prepare-shell.sh
 echo "# global-stack-setup-finished" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
+
+DURATION=${SECONDS}
+global-stack-base-print-success.sh "${DURATION}" "serverless (framework)"
+
+echo "framework" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}"/serverless
 
 sleep infinity

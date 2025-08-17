@@ -1,7 +1,7 @@
 ---
 services:
   01mongo8:
-    init: true
+    init: ${DOCKER_INIT}
     build:
       args:
         BUILDKIT_INLINE_CACHE: 1

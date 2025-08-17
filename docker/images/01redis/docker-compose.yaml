@@ -1,7 +1,7 @@
 ---
 services:
   01redis:
-    init: true
+    init: ${DOCKER_INIT}
     image: redis:${GLOBAL_STACK_REDIS_VERSION}
     ports:
       - ${GLOBAL_STACK_REDIS_PORT_6379:-}6379

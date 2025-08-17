@@ -175,16 +175,14 @@ if [[ ! -f "${HTTPD_VERSIONS_PATH}" || "${GLOBAL_STACK_RELOAD_HTTPD}" == "true" 
   echo "${GLOBAL_STACK_HTTPD_VERSION}" > "${HTTPD_VERSIONS_PATH}"
 fi
 
-# Mark httpd as successfully started
-: > "${HTTPD_SUCCESSES_PATH}"
-
-# Print success message with duration
-DURATION=${SECONDS}
-global-stack-base-print-success.sh "${DURATION}" "httpd"
-
 global-stack-base-prepare-shell.sh
 
 echo "# global-stack-setup-finished" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
+
+DURATION=${SECONDS}
+global-stack-base-print-success.sh "${DURATION}" "httpd"
+
+: > "${HTTPD_SUCCESSES_PATH}"
 
 # Prevent the script from exiting
 sleep infinity

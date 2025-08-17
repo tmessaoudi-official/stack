@@ -42,3 +42,6 @@
     attributesfile = ~/.gitattributes
 [rerere]
 	enabled = true
+[safe]
+	directory = /stack/projects/clts/grdf/bsuri/application
+	directory = /stack/projects/

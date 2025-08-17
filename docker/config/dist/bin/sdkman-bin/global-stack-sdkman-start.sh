@@ -139,27 +139,27 @@ fi
 if [ "${SDKMAN_MODE}" = "install" ]; then
   echo -e "\nWriting /shellrc/sdkman.shellrc"
   echo "export SDKMAN_DIR=${SDKMAN_DIR}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/sdkman.shellrc"
+fi
+
+global-stack-base-init-mkcert.sh
+global-stack-base-prepare-shell.sh
+echo "# global-stack-setup-finished" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
+
+DURATION="${SECONDS}"
+global-stack-base-print-success.sh "${DURATION}" "sdkman (${JAVA_VERSION:-})"
+
+if [ "${SDKMAN_MODE}" = "install" ]; then
   echo -e "\nWriting success"
-  touch "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/sdkman"
+  : > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/sdkman"
 fi
 
 if [ "${SDKMAN_MODE}" = "setup" ]; then
   echo -e "\nWriting version"
   echo "${JAVA_VERSION}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/java.$([[ -n "${JAVA_VERSION_AS:-}" && "" != "${JAVA_VERSION_AS:-}" ]] && echo "${JAVA_VERSION_AS}" || echo "${JAVA_VERSION}")"
   echo -e "\nWriting success"
-  touch "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/java.$([[ -n "${JAVA_VERSION_AS:-}" && "" != "${JAVA_VERSION_AS:-}" ]] && echo "${JAVA_VERSION_AS}" || echo "${JAVA_VERSION}")"
+  : > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/java.$([[ -n "${JAVA_VERSION_AS:-}" && "" != "${JAVA_VERSION_AS:-}" ]] && echo "${JAVA_VERSION_AS}" || echo "${JAVA_VERSION}")"
   echo -e "\nRemoving lock"
   rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/java"
 fi
-
-global-stack-base-init-mkcert.sh
-
-DURATION="${SECONDS}"
-
-global-stack-base-print-success.sh "${DURATION}" "sdkman (${JAVA_VERSION:-})"
-
-global-stack-base-prepare-shell.sh
-
-echo "# global-stack-setup-finished" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 
 sleep infinity

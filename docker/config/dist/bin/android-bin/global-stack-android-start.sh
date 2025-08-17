@@ -84,14 +84,13 @@ fi
 
 global-stack-base-init-mkcert.sh
 
-DURATION="${SECONDS}"
-
-touch "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/android"
-
-global-stack-base-print-success.sh "${DURATION}" "android"
-
 global-stack-base-prepare-shell.sh
 
 echo "# global-stack-setup-finished" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
+
+DURATION="${SECONDS}"
+global-stack-base-print-success.sh "${DURATION}" "android"
+
+: > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/android"
 
 sleep infinity

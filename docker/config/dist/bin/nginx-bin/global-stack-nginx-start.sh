@@ -174,16 +174,14 @@ if [[ ! -f "${NGINX_VERSIONS_PATH}" || "${GLOBAL_STACK_RELOAD_NGINX}" == "true" 
   echo "${GLOBAL_STACK_NGINX_VERSION}" > "${NGINX_VERSIONS_PATH}"
 fi
 
-# Mark nginx as successfully started
-: > "${NGINX_SUCCESSES_PATH}"
-
-# Print success message with duration
-DURATION=${SECONDS}
-global-stack-base-print-success.sh "${DURATION}" "nginx"
-
 global-stack-base-prepare-shell.sh
 
 echo "# global-stack-setup-finished" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
+
+DURATION=${SECONDS}
+global-stack-base-print-success.sh "${DURATION}" "nginx"
+
+: > "${NGINX_SUCCESSES_PATH}"
 
 # Prevent the script from exiting
 sleep infinity

@@ -14,9 +14,7 @@ nvm use 22
 npm --global outdated
 nvm use 24
 npm --global outdated
-
 /stack/tools/pyenv/versions/${GLOBAL_STACK_PYTHON3_VERSION}/bin/pip${GLOBAL_STACK_PYTHON3_VERSION%.*} list --outdated
-
 sdkmanager --sdk_root="${ANDROID_HOME}" --list
 
 sdk offline disable
@@ -33,7 +31,7 @@ sdk list quarkus
 sdk list spark
 sdk list java
 
-awk '!seen[$0]++' .env | grep -oE '#(.*)@todo(.*)check-update(s)? (.*)http(s)?://pecl.php.net[^ ]*' | grep -oE 'http(s)?://[^ ]*' | awk '!seen[$0]++' | while read -r link; do 
+awk '!seen[$0]++' .env | grep -oE '(#(.*)@todo(.*)check-update(s)? (.*)http(s)?://pecl.php.net[^ ]*|# @todo could be a repo url https://[^ ]* branch or commit [^ ]*)' | grep -oE 'http(s)?://[^ ]*' | awk '!seen[$0]++' | while read -r link; do 
     google-chrome --incognito "${link}" &
     chrome_pid=$!
     wait $chrome_pid

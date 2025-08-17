@@ -47,15 +47,13 @@ source "${CARGO_HOME}/env"
 global-stack-base-init-mkcert.sh
 global-stack-rust-install-jujutsu.sh
 global-stack-rust-install-mergiraf.sh
-
-echo -e "\nWriting success"
-touch "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/rust"
+global-stack-base-prepare-shell.sh
+echo "# global-stack-setup-finished" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 
 DURATION="${SECONDS}"
 global-stack-base-print-success.sh "${DURATION}" "rust"
 
-global-stack-base-prepare-shell.sh
-
-echo "# global-stack-setup-finished" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
+echo -e "\nWriting success"
+: > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/rust"
 
 sleep infinity

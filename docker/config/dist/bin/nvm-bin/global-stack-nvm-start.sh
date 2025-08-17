@@ -142,27 +142,25 @@ if [ "${NVM_MODE}" = "install" ]; then
 fi
 # ----------------------------------
 
+global-stack-base-init-mkcert.sh
+global-stack-base-prepare-shell.sh
+echo "# global-stack-setup-finished" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
+
+DURATION="${SECONDS}"
+global-stack-base-print-success.sh "${DURATION}" "nvm (${NODE_VERSION:-})"
+
 if [ "${NVM_MODE}" = "install" ]; then
   echo -e "\nWriting success"
-  touch "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/nvm"
+  : > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/nvm"
 fi
 
 if [ "${NVM_MODE}" = "setup" ]; then
   echo -e "\nWriting version"
   echo "$(nvm version "${NODE_VERSION:-}")" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/node.$([[ -n "${NODE_VERSION_AS:-}" && "" != "${NODE_VERSION_AS:-}" ]] && echo "${NODE_VERSION_AS:-}" || echo "${NODE_VERSION:-}")"
   echo -e "\nWriting success"
-  touch "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/node.$([[ -n "${NODE_VERSION_AS:-}" && "" != "${NODE_VERSION_AS:-}" ]] && echo "${NODE_VERSION_AS:-}" || echo "${NODE_VERSION:-}")"
+  : > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/node.$([[ -n "${NODE_VERSION_AS:-}" && "" != "${NODE_VERSION_AS:-}" ]] && echo "${NODE_VERSION_AS:-}" || echo "${NODE_VERSION:-}")"
   echo -e "\nRemoving lock"
   rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/node"
 fi
-
-global-stack-base-init-mkcert.sh
-
-DURATION="${SECONDS}"
-global-stack-base-print-success.sh "${DURATION}" "nvm (${NODE_VERSION:-})"
-
-global-stack-base-prepare-shell.sh
-
-echo "# global-stack-setup-finished" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 
 sleep infinity

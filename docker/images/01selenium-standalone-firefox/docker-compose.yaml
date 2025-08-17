@@ -1,7 +1,7 @@
 ---
 services:
   01selenium-standalone-firefox:
-    init: true
+    init: ${DOCKER_INIT}
     build:
       args:
         BUILDKIT_INLINE_CACHE: 1

@@ -98,9 +98,17 @@ if [ "${PYENV_MODE}" = "install" ]; then
   fi
 fi
 
+if [ "${PYENV_MODE}" = "setup" ]; then
+  echo "export PYENV_VERSION=${PYENV_VERSION}" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
+  echo -e "pyenv local ${PYENV_VERSION}" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
+fi
+
+global-stack-base-init-mkcert.sh
+global-stack-base-prepare-shell.sh
+
 if [ "${PYENV_MODE}" = "install" ]; then
   echo -e "\nWriting success"
-  touch "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/pyenv"
+  : > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/pyenv"
 fi
 
 if [ "${PYENV_MODE}" = "setup" ]; then
@@ -128,29 +136,20 @@ if [ "${PYENV_MODE}" = "setup" ]; then
   if [ "" = "${PYENV_VERSION}" ]; then
     export PYENV_VERSION=$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/python.$([[ -n "${PYTHON_VERSION_AS:-}" && "" != "${PYTHON_VERSION_AS:-}" ]] && echo "${PYTHON_VERSION_AS:-}" || echo "${PYTHON_VERSION:-}")")
   fi
-  
-  echo "export PYENV_VERSION=${PYENV_VERSION}" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
-
-  echo -e "pyenv local ${PYENV_VERSION}" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 
   if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/python.$([[ -n "${PYTHON_VERSION_AS:-}" && "" != "${PYTHON_VERSION_AS:-}" ]] && echo "${PYTHON_VERSION_AS:-}" || echo "${PYTHON_VERSION:-}")" || "true" = "${GLOBAL_STACK_RELOAD_PYENV}" ]]; then
     source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/pyenv.shellrc" && eval "$(pyenv init -)" && pyenv shell && pyenv local "${PYENV_VERSION}" && global-stack-pyenv-python${PYTHON_VERSION_AS}-setup-version.sh
   fi
   
   echo -e "\nWriting success"
-  touch "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/python.$([[ -n "${PYTHON_VERSION_AS:-}" && "" != "${PYTHON_VERSION_AS:-}" ]] && echo "${PYTHON_VERSION_AS:-}" || echo "${PYTHON_VERSION:-}")"
+  : > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/python.$([[ -n "${PYTHON_VERSION_AS:-}" && "" != "${PYTHON_VERSION_AS:-}" ]] && echo "${PYTHON_VERSION_AS:-}" || echo "${PYTHON_VERSION:-}")"
   echo -e "\nRemoving lock"
   rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/python"
 fi
 
-global-stack-base-init-mkcert.sh
+echo "# global-stack-setup-finished" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 
 DURATION="${SECONDS}"
-
 global-stack-base-print-success.sh "${DURATION}" "pyenv (${PYTHON_VERSION:-})"
-
-global-stack-base-prepare-shell.sh
-
-echo "# global-stack-setup-finished" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 
 sleep infinity

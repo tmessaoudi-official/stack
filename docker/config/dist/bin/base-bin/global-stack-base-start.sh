@@ -42,14 +42,6 @@ global-stack-base-install-zig.sh
 global-stack-base-install-awscli.sh
 global-stack-base-install-hurl.sh
 
-touch "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/base"
-touch "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/permissions"
-echo -e "${GLOBAL_STACK_VERSION}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/version"
-
-DURATION="${SECONDS}"
-
-global-stack-base-print-success.sh "${DURATION}" "base" "create"
-
 # GLOBAL_STACK_RELOAD_PERMISSIONS=true global-stack-base-set-permissions.sh
 
 global-stack-base-install-mise.sh
@@ -63,5 +55,13 @@ global-stack-base-prepare-shell.sh
 echo "# global-stack-setup-finished" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 
 [ "${GLOBAL_STACK_DOCKER_IN_DOCKER}" = "true" ] && global-stack-base-start-docker.sh || echo -e "\n Docker In Docker will not be started"
+
+: > "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/permissions"
+echo -e "${GLOBAL_STACK_VERSION}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/version"
+
+DURATION="${SECONDS}"
+global-stack-base-print-success.sh "${DURATION}" "base" "create"
+
+: > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/base"
 
 sleep infinity

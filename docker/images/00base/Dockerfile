@@ -1,5 +1,5 @@
 # shellcheck disable=SC2148
-ARG GLOBAL_STACK_IMAGE_UBUNTU_NOBLE_VERSION=noble-20250714
+ARG GLOBAL_STACK_IMAGE_UBUNTU_NOBLE_VERSION=noble-20250716
 
 # shellcheck disable=SC2148
 FROM ubuntu:${GLOBAL_STACK_IMAGE_UBUNTU_NOBLE_VERSION}
@@ -273,7 +273,7 @@ RUN shopt -s extdebug \
     libjansson-dev \
     ./wkhtmltox_${GLOBAL_STACK_WKHTMLTOPDF_VERSION}.${GLOBAL_STACK_WKHTMLTOPDF_DISTRO}_amd64.deb \
     && rm wkhtmltox_${GLOBAL_STACK_WKHTMLTOPDF_VERSION}.${GLOBAL_STACK_WKHTMLTOPDF_DISTRO}_amd64.deb \
-    && wget https://ftp.gnu.org/gnu/automake/automake-${GLOBAL_STACK_AUTOMAKE_VERSION}.tar.gz \
+    && wget https://mirror.lyrahosting.com/gnu/automake/automake-${GLOBAL_STACK_AUTOMAKE_VERSION}.tar.gz \
     && tar -xf automake-${GLOBAL_STACK_AUTOMAKE_VERSION}.tar.gz \
     && cd automake-${GLOBAL_STACK_AUTOMAKE_VERSION} \
     && ./configure --prefix=/opt/automake-${GLOBAL_STACK_AUTOMAKE_VERSION} \

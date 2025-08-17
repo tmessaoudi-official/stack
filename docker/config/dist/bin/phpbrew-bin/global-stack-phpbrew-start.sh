@@ -145,29 +145,27 @@ fi
 
 # ----------------------------------
 
+global-stack-base-init-mkcert.sh
+global-stack-base-prepare-shell.sh
+echo "# global-stack-setup-finished" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
+
+DURATION="${SECONDS}"
+global-stack-base-print-success.sh "${DURATION}" "phpbrew (${PHP_VERSION} - ${PHP_VERSION_NAME:-})"
+
 if [ "${PHPBREW_MODE}" = "install" ]; then
   echo -e "\nWriting success"
   echo "${GLOBAL_STACK_PHPBREW_VERSION}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew"
-  touch "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/phpbrew"
+  : > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/phpbrew"
 fi
 
 if [ "${PHPBREW_MODE}" = "setup" ]; then
   echo -e "\nWriting version"
   echo "${PHP_VERSION_NAME}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/php.${PHP_VERSION_AS}"
   echo -e "\nWriting success"
-  touch "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/php.${PHP_VERSION_AS}"
+  : > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/php.${PHP_VERSION_AS}"
   
   echo -e "\nRemoving lock"
   rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/php"
 fi
-
-global-stack-base-init-mkcert.sh
-
-DURATION="${SECONDS}"
-global-stack-base-print-success.sh "${DURATION}" "phpbrew (${PHP_VERSION} - ${PHP_VERSION_NAME:-})"
-
-global-stack-base-prepare-shell.sh
-
-echo "# global-stack-setup-finished" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 
 sleep infinity

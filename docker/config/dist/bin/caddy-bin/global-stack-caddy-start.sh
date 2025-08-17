@@ -92,16 +92,13 @@ if [[ ! -f "${CADDY_VERSIONS_PATH}" || "${GLOBAL_STACK_RELOAD_CADDY}" == "true" 
   echo "${GLOBAL_STACK_CADDY_VERSION}" > "${CADDY_VERSIONS_PATH}"
 fi
 
-# Mark caddy as successfully started
-: > "${CADDY_SUCCESSES_PATH}"
-
-# Print success message with duration
-DURATION=${SECONDS}
-global-stack-base-print-success.sh "${DURATION}" "caddy"
-
 global-stack-base-prepare-shell.sh
 
 echo "# global-stack-setup-finished" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 
-# Prevent the script from exiting
+DURATION=${SECONDS}
+global-stack-base-print-success.sh "${DURATION}" "caddy"
+
+: > "${CADDY_SUCCESSES_PATH}"
+
 sleep infinity
