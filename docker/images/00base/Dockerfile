@@ -1,5 +1,5 @@
 # shellcheck disable=SC2148
-ARG GLOBAL_STACK_IMAGE_UBUNTU_NOBLE_VERSION=noble-20250805
+ARG GLOBAL_STACK_IMAGE_UBUNTU_NOBLE_VERSION=noble-20251001
 
 # shellcheck disable=SC2148
 FROM ubuntu:${GLOBAL_STACK_IMAGE_UBUNTU_NOBLE_VERSION}
@@ -160,7 +160,7 @@ ENV DEBIAN_FRONTEND="noninteractive" \
     GLOBAL_STACK_WKHTMLTOPDF_DISTRO="${GLOBAL_STACK_WKHTMLTOPDF_DISTRO}" \
     GLOBAL_STACK_AUTOMAKE_VERSION="${GLOBAL_STACK_AUTOMAKE_VERSION}" \
     GLOBAL_STACK_AUTOMAKE_MIRROR="${GLOBAL_STACK_AUTOMAKE_MIRROR}" \
-    PATH="${GLOBAL_STACK_CARGO_HOME}/bin:${HURLPATH}/bin:${ZIGPATH}:${GOROOT}/bin:/opt/${GLOBAL_STACK_DOCKER_USER_ID}/sonar-scanner-cli/bin/:/opt/${GLOBAL_STACK_DOCKER_USER_ID}/task:/opt/${GLOBAL_STACK_DOCKER_USER_ID}/bat:${GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN}:${PATH}"
+    PATH="/opt/automake-${GLOBAL_STACK_AUTOMAKE_VERSION}/bin:${GLOBAL_STACK_CARGO_HOME}/bin:${HURLPATH}/bin:${ZIGPATH}:${GOROOT}/bin:/opt/${GLOBAL_STACK_DOCKER_USER_ID}/sonar-scanner-cli/bin/:/opt/${GLOBAL_STACK_DOCKER_USER_ID}/task:/opt/${GLOBAL_STACK_DOCKER_USER_ID}/bat:${GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN}:${PATH}"
 
 COPY docker/images/00base/conf/bin/ /usr/local/bin/
 
@@ -259,7 +259,6 @@ RUN shopt -s extdebug \
     && wget -qO- https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor | dd of=/etc/apt/trusted.gpg.d/google-chrome.gpg \
     && echo "deb [trusted=yes signed-by=/etc/apt/trusted.gpg.d/google-chrome.gpg arch=$(dpkg --print-architecture)] http://dl.google.com/linux/chrome/deb/ stable main" | dd of=/etc/apt/sources.list.d/google-chrome.list \
     && apt-get -o Acquire::AllowInsecureRepositories=true update --allow-releaseinfo-change \
-    && wget https://github.com/wkhtmltopdf/packaging/releases/download/${GLOBAL_STACK_WKHTMLTOPDF_VERSION}/wkhtmltox_${GLOBAL_STACK_WKHTMLTOPDF_VERSION}.${GLOBAL_STACK_WKHTMLTOPDF_DISTRO}_amd64.deb \
     && apt-get --allow-unauthenticated install -y --no-install-recommends --fix-missing \
     git \
     google-chrome-stable \
@@ -273,14 +272,9 @@ RUN shopt -s extdebug \
     libstdc++6 \
     libcjose-dev \
     libjansson-dev \
-    ./wkhtmltox_${GLOBAL_STACK_WKHTMLTOPDF_VERSION}.${GLOBAL_STACK_WKHTMLTOPDF_DISTRO}_amd64.deb \
-    && rm wkhtmltox_${GLOBAL_STACK_WKHTMLTOPDF_VERSION}.${GLOBAL_STACK_WKHTMLTOPDF_DISTRO}_amd64.deb \
-    && wget ${GLOBAL_STACK_AUTOMAKE_MIRROR}/automake-${GLOBAL_STACK_AUTOMAKE_VERSION}.tar.gz \
-    && tar -xf automake-${GLOBAL_STACK_AUTOMAKE_VERSION}.tar.gz \
-    && cd automake-${GLOBAL_STACK_AUTOMAKE_VERSION} \
-    && ./configure --prefix=/opt/automake-${GLOBAL_STACK_AUTOMAKE_VERSION} \
-    && make -j$(nproc) \
-    && make install \
+    && [ "${GLOBAL_STACK_WKHTMLTOPDF_VERSION}" != "" ] && [ "${GLOBAL_STACK_WKHTMLTOPDF_DISTRO}" != "" ] && (wget https://github.com/wkhtmltopdf/packaging/releases/download/${GLOBAL_STACK_WKHTMLTOPDF_VERSION}/wkhtmltox_${GLOBAL_STACK_WKHTMLTOPDF_VERSION}.${GLOBAL_STACK_WKHTMLTOPDF_DISTRO}_amd64.deb && apt-get --allow-unauthenticated install -y --no-install-recommends --fix-missing ./wkhtmltox_${GLOBAL_STACK_WKHTMLTOPDF_VERSION}.${GLOBAL_STACK_WKHTMLTOPDF_DISTRO}_amd64.deb && rm wkhtmltox_${GLOBAL_STACK_WKHTMLTOPDF_VERSION}.${GLOBAL_STACK_WKHTMLTOPDF_DISTRO}_amd64.deb) || echo -e "\n wkhtmltopdf will not be installed" \
+    #  --prefix=/opt/automake-${GLOBAL_STACK_AUTOMAKE_VERSION}
+    && [ "${GLOBAL_STACK_AUTOMAKE_VERSION}" != "" ] && [ "${GLOBAL_STACK_AUTOMAKE_MIRROR}" != "" ] && (wget ${GLOBAL_STACK_AUTOMAKE_MIRROR}/automake-${GLOBAL_STACK_AUTOMAKE_VERSION}.tar.gz && tar -xf automake-${GLOBAL_STACK_AUTOMAKE_VERSION}.tar.gz && cd automake-${GLOBAL_STACK_AUTOMAKE_VERSION} && ./configure && make -j$(nproc) && make install && rm -rf automake-${GLOBAL_STACK_AUTOMAKE_VERSION}) || echo -e "\n automake will not be installed" \
     && usermod -u 1001 ubuntu \
     && (find / -user 1000 -exec chown -h 1001 {} \; 2>/dev/null || true) \
     && groupmod -g 1001 ubuntu \

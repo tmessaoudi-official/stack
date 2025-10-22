@@ -187,11 +187,11 @@ if [[ -f "${SDKMAN_DIR}/bin/sdkman-init.sh" ]]; then
 fi
 if [[ "" != "$(command -v sdk)" ]]; then
 	sdk offline enable
-	sdk use java ${GLOBAL_STACK_JAVA24_VERSION}
+	sdk use java ${GLOBAL_STACK_JAVA25_VERSION}
 
 	source "${GLOBAL_STACK_DOCKER_ROOT_PATH}"/docker/config/dist/bin/base-bin/global-stack-base-setup-packages.sh
 	global_stack_base_setup_packages \
-		--prefix='GLOBAL_STACK_JAVA24' \
+		--prefix='GLOBAL_STACK_JAVA25' \
 		--command='echo -e "**** Using ${PACKAGE_NAME} ${PACKAGE_VERSION}"' \
 		--command='sdk use ${PACKAGE_NAME} "${PACKAGE_VERSION}"'
 fi

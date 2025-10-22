@@ -33,6 +33,9 @@ if [[ "" != "$(command -v flatpak)" ]]; then
 	flatpak update
 fi
 
+sudo ${HOME}/.local/bin/gnome-shell-extension-installer.sh --yes --update --restart-shell || echo "Gnome extension installer does not exist"
+gnome-shell-extension-installer.sh --yes --update --restart-shell || echo "Gnome extension installer does not exist"
+
 mkdir -p ~/.local/bin/ ~/.docker/cli-plugins/ 
 if [[ ! -d /opt/"${USER}" ]]; then
 	sudo mkdir -p /opt/"${USER}"

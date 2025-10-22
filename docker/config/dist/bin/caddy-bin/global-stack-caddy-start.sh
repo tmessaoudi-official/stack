@@ -5,6 +5,22 @@ set -xeEuo pipefail
 shopt -s extdebug
 IFS=$'\n\t'
 
+PATH="${GLOBAL_STACK_DOCKER_TOOLS_PATH}/caddy/bin:/opt/automake-${GLOBAL_STACK_AUTOMAKE_VERSION}/bin:${PATH}"
+export PATH
+
+sed -i '/# global-stack-setup-started/,/# global-stack-setup-finished/d' "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
+
+echo "# global-stack-setup-started" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
+
+echo "PATH=${GLOBAL_STACK_DOCKER_TOOLS_PATH}/caddy/bin:/opt/automake-${GLOBAL_STACK_AUTOMAKE_VERSION}/bin:${PATH}" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
+echo "export PATH" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
+
+# Define reusable paths
+CADDY_PATH="${GLOBAL_STACK_DOCKER_TOOLS_PATH}/caddy"
+CADDY_LOGS_PATH="${CADDY_PATH}/logs"
+CADDY_VERSIONS_PATH="${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/caddy"
+CADDY_SUCCESSES_PATH="${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/web-server"
+
 # Function to handle errors and trap cleanup
 stackCatch() {
   local exit_code=$1
@@ -17,26 +33,11 @@ stackCatch() {
     sleep infinity
   fi
 }
+
 # Trap errors for cleanup or error reporting
 trap 'stackCatch $? ${LINENO} "${BASH_COMMAND}"' ERR EXIT
 
 SECONDS=0
-
-PATH="${GLOBAL_STACK_DOCKER_TOOLS_PATH}/caddy/bin:${PATH}"
-export PATH
-
-sed -i '/# global-stack-setup-started/,/# global-stack-setup-finished/d' "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
-
-echo "# global-stack-setup-started" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
-
-echo "PATH=${GLOBAL_STACK_DOCKER_TOOLS_PATH}/caddy/bin:${PATH}" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
-echo "export PATH" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
-
-# Define reusable paths
-CADDY_PATH="${GLOBAL_STACK_DOCKER_TOOLS_PATH}/caddy"
-CADDY_LOGS_PATH="${CADDY_PATH}/logs"
-CADDY_VERSIONS_PATH="${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/caddy"
-CADDY_SUCCESSES_PATH="${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/web-server"
 
 # Remove old caddy success directory
 sudo rm -rf \

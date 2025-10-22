@@ -5,14 +5,14 @@ set -xeEuo pipefail
 shopt -s extdebug
 IFS=$'\n\t'
 
-PATH="${GLOBAL_STACK_DOCKER_TOOLS_PATH}/httpd/bin:${GLOBAL_STACK_DOCKER_TOOLS_PATH}/http/libs/modsecurity/bin/=:${PATH}"
+PATH="${GLOBAL_STACK_DOCKER_TOOLS_PATH}/httpd/bin:${GLOBAL_STACK_DOCKER_TOOLS_PATH}/http/libs/modsecurity/bin:/opt/automake-${GLOBAL_STACK_AUTOMAKE_VERSION}/bin:${PATH}"
 export PATH
 
 sed -i '/# global-stack-setup-started/,/# global-stack-setup-finished/d' "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 
 echo "# global-stack-setup-started" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 
-echo "PATH=${GLOBAL_STACK_DOCKER_TOOLS_PATH}/httpd/bin:${GLOBAL_STACK_DOCKER_TOOLS_PATH}/http/libs/modsecurity/bin:${PATH}" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
+echo "PATH=${GLOBAL_STACK_DOCKER_TOOLS_PATH}/httpd/bin:${GLOBAL_STACK_DOCKER_TOOLS_PATH}/http/libs/modsecurity/bin:/opt/automake-${GLOBAL_STACK_AUTOMAKE_VERSION}/bin:${PATH}" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 echo "export PATH" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 
 # Define reusable paths
@@ -25,9 +25,6 @@ HTTP_COMMON_MOD_SECURITY_VERSION_PATH="${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS
 HTTP_COMMON_CORERULESET_VERSION_PATH="${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/http.coreruleset"
 MODSECURITY_SOURCE_LIB_PATH="${HTTP_COMMONS_PATH}/libs/modsecurity-source"
 MODSECURITY_LIB_PATH="${HTTP_COMMONS_PATH}/libs/modsecurity"
-HTTP_COMMON_CJOSE_VERSION_PATH="${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/http.cjose"
-CJOSE_SOURCE_PATH="${HTTP_COMMONS_PATH}/libs/cjose-source"
-CJOSE_PATH="${HTTP_COMMONS_PATH}/libs/cjose"
 CORERULESET_PATH="${HTTP_COMMONS_PATH}/rules/coreruleset"
 MODSECURITY_TMP_PATH="${HTTP_COMMONS_PATH}/mod_security/tmp"
 MODSECURITY_LOGS_PATH="${HTTP_COMMONS_PATH}/mod_security/logs"
@@ -73,8 +70,7 @@ if [[ "${GLOBAL_STACK_RELOAD_HTTP_COMMON}" == "true" ]]; then
   rm -rf \
     "${HTTP_COMMONS_PATH}" \
     "${HTTP_COMMON_MOD_SECURITY_VERSION_PATH}" \
-    "${HTTP_COMMON_CORERULESET_VERSION_PATH}" \
-    "${HTTP_COMMON_CJOSE_VERSION_PATH}"
+    "${HTTP_COMMON_CORERULESET_VERSION_PATH}"
 fi
 
 # Clean mod_security if version mismatch
@@ -90,16 +86,6 @@ if [[ -n "${GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION}" ]] && \
     "${MODSECURITY_CONF_PATH}"
 fi
 
-# # Clean mod_auth_openidc if version mismatch
-# if [[ -n "${GLOBAL_STACK_HTTP_CJOSE_VERSION}" ]] && \
-#    { [[ ! -e "${HTTP_COMMON_CJOSE_VERSION_PATH}" ]] || \
-#      [[ "$(cat "${HTTP_COMMON_CJOSE_VERSION_PATH}")" != "${GLOBAL_STACK_HTTP_CJOSE_VERSION}" ]]; }; then
-#   rm -rf \
-#     "${CJOSE_SOURCE_PATH}" \
-#     "${CJOSE_PATH}" \
-#     "${HTTP_COMMON_CJOSE_VERSION_PATH}"
-# fi
-
 # Clean CoreRuleSet if version mismatch
 if [[ -n "${GLOBAL_STACK_HTTP_CORERULESET_VERSION}" ]] && \
    { [[ ! -e "${HTTP_COMMON_CORERULESET_VERSION_PATH}" ]] || \
@@ -113,10 +99,6 @@ fi
 mkdir -p \
   "${HTTPD_PATH}/tmp"
 
-
-  #  { [[ -n "${GLOBAL_STACK_HTTP_CJOSE_VERSION}" ]] && \
-  #    { [[ ! -e "${HTTP_COMMON_CJOSE_VERSION_PATH}" ]] || \
-  #      [[ "$(cat "${HTTP_COMMON_CJOSE_VERSION_PATH}")" != "${GLOBAL_STACK_HTTP_CJOSE_VERSION}" ]]; }; } || \
 # Run IOU setup for common HTTPd components if required
 if [[ "${GLOBAL_STACK_RELOAD_HTTP_COMMON}" == "true" ]] || \
    { [[ -n "${GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION}" ]] && \
@@ -131,10 +113,7 @@ if [[ "${GLOBAL_STACK_RELOAD_HTTP_COMMON}" == "true" ]] || \
     "${HTTP_COMMON_CORERULESET_VERSION_PATH}" \
     "${MODSECURITY_SOURCE_LIB_PATH}" \
     "${MODSECURITY_LIB_PATH}" \
-    "${CORERULESET_PATH}" \
-    "${HTTP_COMMON_CJOSE_VERSION_PATH}" \
-    "${CJOSE_SOURCE_PATH}" \
-    "${CJOSE_PATH}"
+    "${CORERULESET_PATH}"
 fi
 
 # Install httpd if necessary
@@ -145,9 +124,7 @@ if [[ ! -f "${HTTPD_VERSIONS_PATH}" || "${GLOBAL_STACK_RELOAD_HTTPD}" == "true" 
     "${HTTPD_VERSIONS_PATH}" \
     "${MODSECURITY_SOURCE_LIB_PATH}" \
     "${MODSECURITY_LIB_PATH}" \
-    "${CORERULESET_PATH}" \
-    "${CJOSE_SOURCE_PATH}" \
-    "${CJOSE_PATH}"
+    "${CORERULESET_PATH}"
 fi
 
 # Run httpd setup and mkcert commands
