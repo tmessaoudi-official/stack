@@ -1,8 +1,8 @@
 # shellcheck disable=SC2148
-ARG GLOBAL_STACK_IMAGE_UBUNTU_NOBLE_VERSION=noble-20251001
+ARG GLOBAL_STACK_IMAGE_UBUNTU_VERSION=resolute-20251101
 
 # shellcheck disable=SC2148
-FROM ubuntu:${GLOBAL_STACK_IMAGE_UBUNTU_NOBLE_VERSION}
+FROM ubuntu:${GLOBAL_STACK_IMAGE_UBUNTU_VERSION}
 
 LABEL maintainer="Takieddine Messaoudi <takieddine.messaoudi.official@gmail.com>"
 
@@ -39,6 +39,7 @@ ARG ZIGPATH
 ARG HURLPATH
 ARG GLOBAL_STACK_CARGO_HOME
 ARG GLOBAL_STACK_PYTHON3_INSTALL_PACKAGE_AWSCLI_LOCAL_VERSION
+ARG GLOBAL_STACK_PYTHON3_INSTALL_PACKAGE_SETUPTOOLS_VERSION
 ARG GLOBAL_STACK_SHELL_RC_TARGET
 ARG GLOBAL_STACK_SHELL
 ARG GLOBAL_STACK_INSTALL_ANSIBLE
@@ -113,6 +114,7 @@ ENV DEBIAN_FRONTEND="noninteractive" \
     ZIGPATH="${ZIGPATH}" \
     HURLPATH="${HURLPATH}" \
     GLOBAL_STACK_CARGO_HOME="${GLOBAL_STACK_CARGO_HOME}" \
+    GLOBAL_STACK_PYTHON3_INSTALL_PACKAGE_SETUPTOOLS_VERSION="${GLOBAL_STACK_PYTHON3_INSTALL_PACKAGE_SETUPTOOLS_VERSION}" \
     GLOBAL_STACK_PYTHON3_INSTALL_PACKAGE_AWSCLI_LOCAL_VERSION="${GLOBAL_STACK_PYTHON3_INSTALL_PACKAGE_AWSCLI_LOCAL_VERSION}" \
     GLOBAL_STACK_SHELL_RC_TARGET="${GLOBAL_STACK_SHELL_RC_TARGET}" \
     GLOBAL_STACK_SHELL="${GLOBAL_STACK_SHELL}" \
@@ -164,6 +166,8 @@ ENV DEBIAN_FRONTEND="noninteractive" \
 
 COPY docker/images/00base/conf/bin/ /usr/local/bin/
 
+# && sed -i "s|questing|resolute|g" /etc/apt/sources.list \
+# && sed -i "s|questing|resolute|g" /etc/apt/sources.list.d/ubuntu.sources \
 # @todo fix pin versions
 # hadolint ignore=DL3008,DL3018
 RUN shopt -s extdebug \
@@ -175,6 +179,7 @@ RUN shopt -s extdebug \
     && mkdir -p /usr/share/man/man1 \
     && apt-get -o Acquire::AllowInsecureRepositories=true update --allow-releaseinfo-change \
     && dpkg --add-architecture i386 \
+    && apt-get dist-upgrade -y \
     && apt-get --allow-unauthenticated install -y --no-install-recommends --fix-missing \
     tzdata \
     && dpkg-reconfigure tzdata \
@@ -192,7 +197,6 @@ RUN shopt -s extdebug \
     libpcre3-dev \
     libpcre2-8-0 \
     libpcre3 \
-    libpcre3-dev \
     g++ \
     aptitude \
     jq \
@@ -235,7 +239,7 @@ RUN shopt -s extdebug \
     libxtst6 \
     xauth \
     xvfb \
-    libxml2 \
+    libxml2-16 \
     libxml2-dev \
     golang \
     libnss3-tools \
@@ -251,18 +255,21 @@ RUN shopt -s extdebug \
     ripgrep \
     httpie \
     iputils-ping \
+    bsdextrautils \
+    && pip install --no-cache-dir --upgrade setuptools==${GLOBAL_STACK_PYTHON3_INSTALL_PACKAGE_SETUPTOOLS_VERSION} --break-system-packages \
     && pip install --no-cache-dir awscli-local==${GLOBAL_STACK_PYTHON3_INSTALL_PACKAGE_AWSCLI_LOCAL_VERSION} --break-system-packages \
-    && curl -o /etc/apt/trusted.gpg.d/postgresql.asc --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc \
-    && sh -c 'echo "deb [trusted=yes signed-by=/etc/apt/trusted.gpg.d/postgresql.asc arch=$(dpkg --print-architecture)] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list' \
-    && curl -fsSL 'https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xE1DD270288B4E6030699E45FA1715D88E1DF1F24' | gpg --dearmor | tee /etc/apt/trusted.gpg.d/git.gpg \
-    && echo "deb [trusted=yes signed-by=/etc/apt/trusted.gpg.d/git.gpg arch=$(dpkg --print-architecture)] https://ppa.launchpadcontent.net/git-core/ppa/ubuntu noble main" | dd of=/etc/apt/sources.list.d/git.list \
-    && wget -qO- https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor | dd of=/etc/apt/trusted.gpg.d/google-chrome.gpg \
-    && echo "deb [trusted=yes signed-by=/etc/apt/trusted.gpg.d/google-chrome.gpg arch=$(dpkg --print-architecture)] http://dl.google.com/linux/chrome/deb/ stable main" | dd of=/etc/apt/sources.list.d/google-chrome.list \
+    && curl -o /usr/share/keyrings/postgresql.asc --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+    # @todo make it $(lsb_release -cs) later
+    && sh -c 'echo "Types: deb\nTrusted: yes\nSigned-By: /usr/share/keyrings/postgresql.asc\nArch: $(dpkg --print-architecture)\nURIs: https://apt.postgresql.org/pub/repos/apt\nSuites: questing-pgdg\nComponents: main" > /etc/apt/sources.list.d/pgdg.sources' \
+    && curl -fsSL 'https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xF911AB184317630C59970973E363C90F8F1B6217' | gpg --dearmor | tee /usr/share/keyrings/git.gpg \
+    && echo -e "Types: deb\nTrusted: yes\nSigned-By: /usr/share/keyrings/git.gpg\nArch: $(dpkg --print-architecture)\nURIs: https://ppa.launchpadcontent.net/git-core/ppa/ubuntu\nSuites: $(lsb_release -cs)\nComponents: main" | dd of=/etc/apt/sources.list.d/git.sources \
+    && wget -qO- https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor | dd of=/usr/share/keyrings/google-chrome.gpg \
+    && echo -e "Types: deb\nTrusted: yes\nSigned-By: /usr/share/keyrings/google-chrome.gpg\nArch: $(dpkg --print-architecture)\nURIs: http://dl.google.com/linux/chrome/deb/\nSuites: stable\nComponents: main" | dd of=/etc/apt/sources.list.d/google-chrome.sources \
     && apt-get -o Acquire::AllowInsecureRepositories=true update --allow-releaseinfo-change \
     && apt-get --allow-unauthenticated install -y --no-install-recommends --fix-missing \
     git \
     google-chrome-stable \
-    postgresql-client-17 \
+    postgresql-client-18 \
     libgoffice-0.10-10t64 \
     libgoffice-0.10-dev \
     libfontconfig1 \
@@ -272,6 +279,7 @@ RUN shopt -s extdebug \
     libstdc++6 \
     libcjose-dev \
     libjansson-dev \
+    && rm -rf /etc/apt/sources.list.d/google-chrome.list \
     && [ "${GLOBAL_STACK_WKHTMLTOPDF_VERSION}" != "" ] && [ "${GLOBAL_STACK_WKHTMLTOPDF_DISTRO}" != "" ] && (wget https://github.com/wkhtmltopdf/packaging/releases/download/${GLOBAL_STACK_WKHTMLTOPDF_VERSION}/wkhtmltox_${GLOBAL_STACK_WKHTMLTOPDF_VERSION}.${GLOBAL_STACK_WKHTMLTOPDF_DISTRO}_amd64.deb && apt-get --allow-unauthenticated install -y --no-install-recommends --fix-missing ./wkhtmltox_${GLOBAL_STACK_WKHTMLTOPDF_VERSION}.${GLOBAL_STACK_WKHTMLTOPDF_DISTRO}_amd64.deb && rm wkhtmltox_${GLOBAL_STACK_WKHTMLTOPDF_VERSION}.${GLOBAL_STACK_WKHTMLTOPDF_DISTRO}_amd64.deb) || echo -e "\n wkhtmltopdf will not be installed" \
     #  --prefix=/opt/automake-${GLOBAL_STACK_AUTOMAKE_VERSION}
     && [ "${GLOBAL_STACK_AUTOMAKE_VERSION}" != "" ] && [ "${GLOBAL_STACK_AUTOMAKE_MIRROR}" != "" ] && (wget ${GLOBAL_STACK_AUTOMAKE_MIRROR}/automake-${GLOBAL_STACK_AUTOMAKE_VERSION}.tar.gz && tar -xf automake-${GLOBAL_STACK_AUTOMAKE_VERSION}.tar.gz && cd automake-${GLOBAL_STACK_AUTOMAKE_VERSION} && ./configure && make -j$(nproc) && make install && rm -rf automake-${GLOBAL_STACK_AUTOMAKE_VERSION}) || echo -e "\n automake will not be installed" \

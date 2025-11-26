@@ -2,10 +2,13 @@
 Put this at the end of ~/.shellrc
 
 alias gksudo='pkexec env DISPLAY=$DISPLAY XAUTHORITY=$XAUTHORITY'
-alias code='/opt/tames/vscode/bin/code'
-alias android-studio='/opt/tames/android-studio/bin/studio'
-alias megit='/opt/tames/megit/megit'
-alias subl='/opt/tames/sublime_text/sublime_text'
+alias code='/opt/${GLOBAL_STACK_DOCKER_USER_ID}/vscode/bin/code'
+alias windsurf='/opt/${GLOBAL_STACK_DOCKER_USER_ID}/windsurf/bin/windsurf'
+alias phpstorm='/opt/${GLOBAL_STACK_DOCKER_USER_ID}/phpstorm/bin/phpstorm'
+alias webstorm='/opt/${GLOBAL_STACK_DOCKER_USER_ID}/webstorm/bin/webstorm'
+alias android-studio='/opt/${GLOBAL_STACK_DOCKER_USER_ID}/android-studio/bin/studio'
+alias megit='/opt/${GLOBAL_STACK_DOCKER_USER_ID}/megit/megit'
+alias subl='/opt/${GLOBAL_STACK_DOCKER_USER_ID}/sublime_text/sublime_text'
 
 if [[ -n "${GLOBAL_STACK_DOCKER_ROOT_PATH}" && -f "${GLOBAL_STACK_DOCKER_ROOT_PATH}"/.env.local ]]; then
   	# @todo change this if you have you stack in another folder

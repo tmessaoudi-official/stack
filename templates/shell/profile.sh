@@ -5,19 +5,6 @@ xset led 3
 GPG_TTY=$(tty)
 export GPG_TTY
 
-sudo chown root:root /opt/tames/vscode/chrome-sandbox
-sudo chmod 4755 /opt/tames/vscode/chrome-sandbox
-sudo chown root:root /opt/tames/windsurf/chrome-sandbox
-sudo chmod 4755 /opt/tames/windsurf/chrome-sandbox
-sudo chown root:root /opt/tames/balena-etcher/chrome-sandbox
-sudo chmod 4755 /opt/tames/balena-etcher/chrome-sandbox
-
-alias gksudo='pkexec env DISPLAY=$DISPLAY XAUTHORITY=$XAUTHORITY'
-alias code='/opt/tames/vscode/bin/code'
-alias android-studio='/opt/tames/android-studio/bin/studio'
-alias megit='/opt/tames/megit/megit'
-alias subl='/opt/tames/sublime_text/sublime_text'
-
 # @todo change this if you have you stack in another folder
 if [[ -z "${GLOBAL_STACK_DOCKER_ROOT_PATH}" ]]; then
 	GLOBAL_STACK_DOCKER_ROOT_PATH=/stack
@@ -26,10 +13,27 @@ fi
 
 if [ ! -f "${GLOBAL_STACK_DOCKER_ROOT_PATH}"/.env.local ]; then
 	exit 0
-fi  	
+fi
+
 eval $(grep -vE "^(COMPOSE_FILE|BUILDX_EXPERIMENTAL|BUILDKIT_PROGRESS|BUILDX_BUILDER|COMPOSE_PROJECT_NAME|COMPOSE_REMOVE_ORPHANS|COMPOSE_HTTP_TIMEOUT|GLOBAL_STACK_EXPOSED_VIRTUAL_HOSTS|COMPOSE_PATH_SEPARATOR|DOCKER_BUILDKIT|COMPOSE_DOCKER_CLI_BUILD|GLOBAL_STACK_COMPOSE_CLI|GLOBAL_STACK_HTTPS_LOCALHOST_IPS|GLOBAL_STACK_HTTPS_CONTAINER_IPS|GLOBAL_STACK_(.*)_COMMAND_SUFFIX|GLOBAL_STACK_(.*)_CLI_OPTIONS|GLOBAL_STACK_(.*)_CLI_VARIANTS|GLOBAL_STACK_ANDROID_SYSTEM_IMAGES|GLOBAL_STACK_ANDROID_PACKAGES)=" "${GLOBAL_STACK_DOCKER_ROOT_PATH}"/.env.local | sed 's/^/export /')
 eval $(grep -vE "^(COMPOSE_FILE|BUILDX_EXPERIMENTAL|BUILDKIT_PROGRESS|BUILDX_BUILDER|COMPOSE_PROJECT_NAME|COMPOSE_REMOVE_ORPHANS|COMPOSE_HTTP_TIMEOUT|GLOBAL_STACK_EXPOSED_VIRTUAL_HOSTS|COMPOSE_PATH_SEPARATOR|DOCKER_BUILDKIT|COMPOSE_DOCKER_CLI_BUILD|GLOBAL_STACK_COMPOSE_CLI|GLOBAL_STACK_HTTPS_LOCALHOST_IPS|GLOBAL_STACK_HTTPS_CONTAINER_IPS|GLOBAL_STACK_(.*)_COMMAND_SUFFIX|GLOBAL_STACK_(.*)_CLI_OPTIONS|GLOBAL_STACK_(.*)_CLI_VARIANTS|GLOBAL_STACK_ANDROID_SYSTEM_IMAGES|GLOBAL_STACK_ANDROID_PACKAGES)=" "${GLOBAL_STACK_DOCKER_ROOT_PATH}"/.env.local | sed 's/^/export /')
 eval $(grep -vE "^(COMPOSE_FILE|BUILDX_EXPERIMENTAL|BUILDKIT_PROGRESS|BUILDX_BUILDER|COMPOSE_PROJECT_NAME|COMPOSE_REMOVE_ORPHANS|COMPOSE_HTTP_TIMEOUT|GLOBAL_STACK_EXPOSED_VIRTUAL_HOSTS|COMPOSE_PATH_SEPARATOR|DOCKER_BUILDKIT|COMPOSE_DOCKER_CLI_BUILD|GLOBAL_STACK_COMPOSE_CLI|GLOBAL_STACK_HTTPS_LOCALHOST_IPS|GLOBAL_STACK_HTTPS_CONTAINER_IPS|GLOBAL_STACK_(.*)_COMMAND_SUFFIX|GLOBAL_STACK_(.*)_CLI_OPTIONS|GLOBAL_STACK_(.*)_CLI_VARIANTS|GLOBAL_STACK_ANDROID_SYSTEM_IMAGES|GLOBAL_STACK_ANDROID_PACKAGES)=" "${GLOBAL_STACK_DOCKER_ROOT_PATH}"/.env.local | sed 's/^/export /')
+
+sudo chown root:root /opt/${GLOBAL_STACK_DOCKER_USER_ID}/vscode/chrome-sandbox
+sudo chmod 4755 /opt/${GLOBAL_STACK_DOCKER_USER_ID}/vscode/chrome-sandbox
+sudo chown root:root /opt/${GLOBAL_STACK_DOCKER_USER_ID}/windsurf/chrome-sandbox
+sudo chmod 4755 /opt/${GLOBAL_STACK_DOCKER_USER_ID}/windsurf/chrome-sandbox
+sudo chown root:root /opt/${GLOBAL_STACK_DOCKER_USER_ID}/balena-etcher/chrome-sandbox
+sudo chmod 4755 /opt/${GLOBAL_STACK_DOCKER_USER_ID}/balena-etcher/chrome-sandbox
+
+alias gksudo='pkexec env DISPLAY=$DISPLAY XAUTHORITY=$XAUTHORITY'
+alias code='/opt/${GLOBAL_STACK_DOCKER_USER_ID}/vscode/bin/code'
+alias windsurf='/opt/${GLOBAL_STACK_DOCKER_USER_ID}/windsurf/bin/windsurf'
+alias phpstorm='/opt/${GLOBAL_STACK_DOCKER_USER_ID}/phpstorm/bin/phpstorm'
+alias webstorm='/opt/${GLOBAL_STACK_DOCKER_USER_ID}/webstorm/bin/webstorm'
+alias android-studio='/opt/${GLOBAL_STACK_DOCKER_USER_ID}/android-studio/bin/studio'
+alias megit='/opt/${GLOBAL_STACK_DOCKER_USER_ID}/megit/megit'
+alias subl='/opt/${GLOBAL_STACK_DOCKER_USER_ID}/sublime_text/sublime_text'
 
 GOROOT=${GLOBAL_STACK_GOROOT}
 export GOROOT
@@ -142,9 +146,9 @@ PHPBREW_PHP_PATH="${PHPBREW_ROOT}/php/${PHPBREW_PHP}"
 export PHPBREW_PHP_PATH
 PHPBREW_PATH="${PHPBREW_PHP_PATH}/bin"
 export PHPBREW_PATH
-NODE_VERSION=24
+NODE_VERSION=26
 export NODE_VERSION
-NVM_VERSION="${GLOBAL_STACK_NODE24_VERSION}"
+NVM_VERSION="${GLOBAL_STACK_NODE26_VERSION}"
 export NVM_VERSION
 RBENV_ROOT="${GLOBAL_STACK_RBENV_ROOT}"
 export RBENV_ROOT
@@ -157,14 +161,14 @@ PATH="${RBENV_ROOT}/bin:${PYENV_ROOT}/bin:${GLOBAL_STACK_DOCKER_TOOLS_PATH}/bin:
 if [ -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/ruby.${RUBY_VERSION}" ]; then
 	PATH="${RBENV_ROOT}/versions/$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/ruby.${RUBY_VERSION}")/bin:${PATH}"
 fi
-if [ -d /opt/tames/sonar-scanner-cli/bin ]; then 
-	PATH="/opt/tames/sonar-scanner-cli/bin:${PATH}"
+if [ -d /opt/${GLOBAL_STACK_DOCKER_USER_ID}/sonar-scanner-cli/bin ]; then 
+	PATH="/opt/${GLOBAL_STACK_DOCKER_USER_ID}/sonar-scanner-cli/bin:${PATH}"
 fi
-if [ -d /opt/tames/task ]; then 
-	PATH="/opt/tames/task:${PATH}"
+if [ -d /opt/${GLOBAL_STACK_DOCKER_USER_ID}/task ]; then 
+	PATH="/opt/${GLOBAL_STACK_DOCKER_USER_ID}/task:${PATH}"
 fi
-if [ -d /opt/tames/bat ]; then 
-	PATH="/opt/tames/bat:${PATH}"
+if [ -d /opt/${GLOBAL_STACK_DOCKER_USER_ID}/bat ]; then 
+	PATH="/opt/${GLOBAL_STACK_DOCKER_USER_ID}/bat:${PATH}"
 fi
 if [ -d "${GOROOT}"/bin ]; then 
 	PATH="${GOROOT}/bin:${PATH}"

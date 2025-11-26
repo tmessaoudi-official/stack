@@ -192,7 +192,7 @@ if [[ "" != "${OPERATING_SYSTEM}" ]]; then
 		sudo curl -L https://github.com/google/yamlfmt/releases/download/${GLOBAL_STACK_YAMLFMT_VERSION}/${YAMLFMT_ARCHIVE_NAME}.tar.gz -o /usr/local/bin/${YAMLFMT_ARCHIVE_NAME}.tar.gz
 		sudo mkdir -p /usr/local/bin/${YAMLFMT_ARCHIVE_NAME}
 		sudo tar -xf /usr/local/bin/${YAMLFMT_ARCHIVE_NAME}.tar.gz -C /usr/local/bin/${YAMLFMT_ARCHIVE_NAME}
-		sudp cp /usr/local/bin/${YAMLFMT_ARCHIVE_NAME}/yamlfmt /usr/local/bin/yamlfmt
+		sud cp /usr/local/bin/${YAMLFMT_ARCHIVE_NAME}/yamlfmt /usr/local/bin/yamlfmt
 		sudo rm -rf /usr/local/bin/${YAMLFMT_ARCHIVE_NAME} /usr/local/bin/${YAMLFMT_ARCHIVE_NAME}.tar.gz
 		sudo chmod a+x /usr/local/bin/yamlfmt
 	fi

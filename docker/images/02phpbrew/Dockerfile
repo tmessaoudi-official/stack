@@ -2,11 +2,11 @@
 ARG GLOBAL_STACK_VERSION=2_0_0_local
 
 # shellcheck disable=SC2086
-ARG GLOBAL_STACK_LOCAL_REGISTRY_PORT_5000=5000
+ARG GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_PORT_5000=5000
 # shellcheck disable=SC2086
-ARG GLOBAL_STACK_LOCAL_REGISTRY_ALIAS=local-global-stack-registry.local
+ARG GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS=local-global-stack-registry.local
 # shellcheck disable=SC2086
-FROM ${GLOBAL_STACK_LOCAL_REGISTRY_ALIAS}:${GLOBAL_STACK_LOCAL_REGISTRY_PORT_5000}/local_global_stack_00base:${GLOBAL_STACK_VERSION}
+FROM ${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}:${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_PORT_5000}/local_global_stack_00base:${GLOBAL_STACK_VERSION}
 
 LABEL maintainer="Takieddine Messaoudi <takieddine.messaoudi.official@gmail.com>"
 
@@ -18,15 +18,16 @@ SHELL ["/bin/bash", "-xeEu", "-o", "pipefail", "-c"]
 
 ARG GLOBAL_STACK_FRANKENPHP_WATCHER_VERSION
 ENV GLOBAL_STACK_FRANKENPHP_WATCHER_VERSION=${GLOBAL_STACK_FRANKENPHP_WATCHER_VERSION}
+
+# curl -fsSL 'https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x14AA40EC0831756756D7F66C4F4EA0AAE5267A6C' | gpg --dearmor | tee /usr/share/keyrings/php.gpg \
+# && sh -c 'echo "Types: deb\nTrusted: yes\nSigned-By: /usr/share/keyrings/php.gpg\nArch: $(dpkg --print-architecture)\nURIs: http://ppa.launchpad.net/ondrej/php/ubuntu\nSuites: noble\nComponents: main" > /etc/apt/sources.list.d/php-noble-main.sources' \
 # @todo fix pin versions
 # hadolint ignore=DL3008,DL3018
-RUN curl -fsSL 'https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x14AA40EC0831756756D7F66C4F4EA0AAE5267A6C' | gpg --dearmor | tee /etc/apt/trusted.gpg.d/php.gpg \
-    && sh -c 'echo "deb [trusted=yes signed-by=/etc/apt/trusted.gpg.d/php.gpg arch=$(dpkg --print-architecture)] http://ppa.launchpad.net/ondrej/php/ubuntu noble main" > /etc/apt/sources.list.d/php-noble-main.list' \
-    && apt-get -o Acquire::AllowInsecureRepositories=true update --allow-releaseinfo-change \
+RUN apt-get -o Acquire::AllowInsecureRepositories=true update --allow-releaseinfo-change \
     && apt-get --allow-unauthenticated install -y --no-install-recommends --fix-missing \
     bison \
     re2c \
-    libzip4 \
+    libzip5 \
     libzip-dev \
     libedit-dev \
     libxslt1-dev \

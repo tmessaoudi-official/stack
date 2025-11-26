@@ -13,9 +13,9 @@ stackCatch() {
   fi
 }
 
-if [[ -n "${NODE_INSTALL_PACKAGE_CORDOVA_VERSION:-}" && "" != "${NODE_INSTALL_PACKAGE_CORDOVA_VERSION:-}" ]]; then
-  cordova telemetry off
-fi
+# if [[ -n "${NODE_INSTALL_PACKAGE_CORDOVA_VERSION:-}" && "" != "${NODE_INSTALL_PACKAGE_CORDOVA_VERSION:-}" ]]; then
+#   # cordova telemetry off
+# fi
 
 if [[ -n "${NODE_INSTALL_PACKAGE_IONIC_CLI_VERSION:-}" && "" != "${NODE_INSTALL_PACKAGE_IONIC_CLI_VERSION:-}" ]]; then
   ionic config set -g telemetry false

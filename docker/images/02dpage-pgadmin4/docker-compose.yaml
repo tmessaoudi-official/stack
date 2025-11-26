@@ -22,7 +22,7 @@ services:
       - ${GLOBAL_STACK_DPAGE_PGADMIN4_PORT_443:-}443
     restart: unless-stopped
     volumes:
-      - ./docker/data/dumps/dpage-pgadmin4:/var/lib/pgadmin/storage/tames_local.io:rw
+      - ./docker/data/dumps/dpage-pgadmin4:/var/lib/pgadmin/storage/${GLOBAL_STACK_DOCKER_USER_ID}_local.io:rw
       - pgadmin_lib:/var/lib/pgadmin:rw,delegated
 volumes:
   pgadmin_lib:
