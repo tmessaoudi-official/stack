@@ -198,6 +198,7 @@ sudo apt-get --allow-unauthenticated install -y --fix-missing \
     libc6:amd64 \
     lib32z1 \
     libbz2-1.0:amd64 \
+    mesa-utils \
     && sudo ln -s /usr/lib/x86_64-linux-gnu/libldap.so /usr/lib/libldap.so \
     && sudo ln -s /usr/lib/x86_64-linux-gnu/liblber.so /usr/lib/liblber.so \
     && sudo mkdir /tmp/watcher-c \
