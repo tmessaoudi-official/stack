@@ -12,7 +12,9 @@ services:
       context: ./
       dockerfile: ./docker/images/01localstack-localstack/Dockerfile
     depends_on:
-      - 00base
+      00base:
+        condition: service_started
+        required: true
     ports:
       - ${GLOBAL_STACK_LOCALSTACK_LOCALSTACK_PORT_4566_WITH_ENDING_POINTS:-}4566
       - ${GLOBAL_STACK_LOCALSTACK_LOCALSTACK_PORT_4510_4559:-}4510-4559

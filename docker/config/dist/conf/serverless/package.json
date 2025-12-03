@@ -14,7 +14,7 @@
   },
   "devDependencies": {
     "typescript": "^5.9.3",
-    "serverless": "^4.25.0",
+    "serverless": "^4.26.1",
     "@serverless/utils": "^6.15.0",
     "@serverless/typescript": "^4.23.0",
     "@types/serverless": "^3.12.27",

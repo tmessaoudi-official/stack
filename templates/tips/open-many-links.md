@@ -8,11 +8,11 @@ done
 
 source /etc/profile.d/stack.sh
 
-nvm use 22
+nvm use ${GLOBAL_STACK_NODE22_VERSION}
 npm --global outdated
-nvm use 24
+nvm use ${GLOBAL_STACK_NODE24_VERSION}
 npm --global outdated
-nvm use 26
+nvm use ${GLOBAL_STACK_NODEEDGE_VERSION}
 npm --global outdated
 /stack/tools/pyenv/versions/${GLOBAL_STACK_PYTHON3_VERSION}/bin/pip${GLOBAL_STACK_PYTHON3_VERSION%.*} list --outdated
 sdkmanager --sdk_root="${ANDROID_HOME}" --list

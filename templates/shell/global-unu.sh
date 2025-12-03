@@ -263,14 +263,6 @@ if eval "${env_file_exists}"; then
 			else
 				echo "Docker buildx is latest '${GLOBAL_UNU_DOCKER_BUILDX_VERSION}'"
 			fi
-
-			if [ "${GLOBAL_STACK_DOCKER_IN_DOCKER_ACTIVATE_BUILDX}" = "true" ]; then
-				echo "Activating docker buildx"
-				docker buildx install
-			else				
-				echo "Deactivating docker buildx"
-				docker buildx uninstall
-			fi
 		fi
 
 		if [[ "" != "${HADOLINT_ARCH}" && -n "${GLOBAL_STACK_HADOLINT_VERSION}" && "" != "${GLOBAL_STACK_HADOLINT_VERSION}" ]]; then

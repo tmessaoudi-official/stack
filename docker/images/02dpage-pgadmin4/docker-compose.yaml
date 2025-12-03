@@ -10,7 +10,9 @@ services:
       context: ./
       dockerfile: ./docker/images/02dpage-pgadmin4/Dockerfile
     depends_on:
-      - 00base
+      00base:
+        condition: service_started
+        required: true
     environment:
       - PGADMIN_DEFAULT_EMAIL=${GLOBAL_STACK_PGADMIN_DEFAULT_EMAIL}
       - PGADMIN_DEFAULT_PASSWORD=${GLOBAL_STACK_PGADMIN_DEFAULT_PASSWORD}

@@ -167,16 +167,16 @@ login-03php8-4:
 	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="03php8-4" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
 login-03php8-5:
 	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="03php8-5" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-login-03phpnext:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="03phpnext" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
+login-03phpedge:
+	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="03phpedge" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
 login-00base:
 	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="00base" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
 login-03node22:
 	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="03node22" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
 login-03node24:
 	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="03node24" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-login-03node26:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="03node26" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
+login-03nodeedge:
+	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="03nodeedge" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
 login-01selenium-standalone-chrome:
 	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="01selenium-standalone-chrome" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
 login-01selenium-standalone-firefox:
@@ -207,6 +207,10 @@ login-01caddy:
 	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="01caddy" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
 login-04serverless-framework:
 	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="04serverless-framework" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
+login-05stable:
+	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="05stable" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
+login-05edge:
+	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="05edge" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
 
 log-02dpage-pgadmin4:
 	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="02dpage-pgadmin4" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
@@ -254,14 +258,14 @@ log-03php8-4:
 	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="03php8-4" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
 log-03php8-5:
 	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="03php8-5" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-log-03phpnext:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="03phpnext" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
+log-03phpedge:
+	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="03phpedge" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
 log-03node22:
 	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="03node22" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
 log-03node24:
 	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="03node24" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-log-03node26:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="03node26" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
+log-03nodeedge:
+	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="03nodeedge" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
 log-01selenium-standalone-chrome:
 	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="01selenium-standalone-chrome" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
 log-01selenium-standalone-firefox:
@@ -292,6 +296,10 @@ log-01caddy:
 	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="01caddy" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
 log-04serverless-framework:
 	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="04serverless-framework" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
+log-05stable:
+	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="05stable" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
+log-05edge:
+	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="05edge" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
 
 restart-x:
 	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="restart" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables

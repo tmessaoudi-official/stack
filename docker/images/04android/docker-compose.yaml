@@ -15,15 +15,33 @@ services:
     cap_add:
       - NET_ADMIN
     depends_on:
-      - 00base
-      - 02sdkman
-      - 02rbenv
-      - 02nvm
-      - 02fvm
-      - 03java25-zulu
-      - 03ruby3
-      - 03node24
-      - 03flutter3
+      00base:
+        condition: service_started
+        required: true
+      02sdkman:
+        condition: service_started
+        required: true
+      02rbenv:
+        condition: service_started
+        required: true
+      02nvm:
+        condition: service_started
+        required: true
+      02fvm:
+        condition: service_started
+        required: true
+      03java25-zulu:
+        condition: service_started
+        required: true
+      03ruby3:
+        condition: service_started
+        required: true
+      03nodeedge:
+        condition: service_started
+        required: true
+      03flutter3:
+        condition: service_started
+        required: true
     environment:
       - GLOBAL_STACK_SDKMAN_VERSION=${GLOBAL_STACK_SDKMAN_VERSION}
       - SDKMAN_DIR=${GLOBAL_STACK_SDKMAN_DIR}
@@ -82,10 +100,10 @@ services:
       - GLOBAL_STACK_PNPM_STORE_DIR=${GLOBAL_STACK_PNPM_STORE_DIR}
       - NPM_CACHE_DIR=${GLOBAL_STACK_NPM_CACHE_DIR}
       - CYPRESS_CACHE_FOLDER=${GLOBAL_STACK_CYPRESS_CACHE_FOLDER}
-      - NODE_VERSION_AS=${GLOBAL_STACK_NODE24_VERSION_AS}
-      - NODE_VERSION=${GLOBAL_STACK_NODE24_VERSION}
-      - GLOBAL_STACK_NODE_UPGRADE=${GLOBAL_STACK_NODE24_UPGRADE}
-      - GLOBAL_STACK_NODE_UPGRADE_ALL=${GLOBAL_STACK_NODE24_UPGRADE_ALL}
+      - NODE_VERSION_AS=${GLOBAL_STACK_NODEEDGE_VERSION_AS}
+      - NODE_VERSION=${GLOBAL_STACK_NODEEDGE_VERSION}
+      - GLOBAL_STACK_NODE_UPGRADE=${GLOBAL_STACK_NODEEDGE_UPGRADE}
+      - GLOBAL_STACK_NODE_UPGRADE_ALL=${GLOBAL_STACK_NODEEDGE_UPGRADE_ALL}
       - GLOBAL_STACK_ANDROID_BUILD_TOOLS_VERSION=${GLOBAL_STACK_ANDROID_BUILD_TOOLS_VERSION}
       - GLOBAL_STACK_ANDROID_CMDLINE_TOOLS_VERSION=${GLOBAL_STACK_ANDROID_CMDLINE_TOOLS_VERSION}
       - GLOBAL_STACK_ANDROID_INSTALL_SYSTEM_IMAGES=${GLOBAL_STACK_ANDROID_INSTALL_SYSTEM_IMAGES}
@@ -101,6 +119,8 @@ services:
       - GRADLE_USER_HOME=${GLOBAL_STACK_GRADLE_USER_HOME}
       - FLUTTER_VERSION=${GLOBAL_STACK_FLUTTER3_VERSION}
       - FLUTTER_VERSION_AS=${GLOBAL_STACK_FLUTTER3_VERSION_AS}
+      - FLUTTER_ROOT=${GLOBAL_STACK_FLUTTER3_ROOT}
+      - FLUTTER_HOME=${GLOBAL_STACK_FLUTTER3_HOME}
       - FVM_VERSION=${GLOBAL_STACK_FVM_VERSION}
       - FVM_CACHE_PATH=${GLOBAL_STACK_FVM_CACHE_PATH}
       - FVM_USE_GIT_CACHE=${GLOBAL_STACK_FVM_USE_GIT_CACHE}
@@ -123,6 +143,8 @@ services:
       - REQUESTS_CA_BUNDLE=${GLOBAL_STACK_BASE_REQUESTS_CA_BUNDLE}
       - CURL_CA_BUNDLE=${GLOBAL_STACK_BASE_CURL_CA_BUNDLE}
       - SERVERLESS_ACCESS_KEY=${GLOBAL_STACK_BASE_SERVERLESS_ACCESS_KEY}
+      - GLOBAL_STACK_DOCKER_USER_EMAIL=${GLOBAL_STACK_DOCKER_USER_EMAIL}
+      - GLOBAL_STACK_DOCKER_USER_NAME=${GLOBAL_STACK_DOCKER_USER_NAME}
     extra_hosts:
       - ${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}:${GLOBAL_STACK_HOST_GATEWAY_IP}
       - ${GLOBAL_STACK_DOCKER_HOST_DSN}:${GLOBAL_STACK_HOST_GATEWAY_IP}

@@ -17,7 +17,9 @@ services:
       - --character-set-server=${GLOBAL_STACK_DATABASE_CHARSET}
       - --collation-server=${GLOBAL_STACK_DATABASE_COLLATE}
     depends_on:
-      - 00base
+      00base:
+        condition: service_started
+        required: true
     environment:
       - MYSQL_DBS=${GLOBAL_STACK_MYSQL9_DBS}
       - MYSQL_PASSWORD=${GLOBAL_STACK_DATABASE_PASSWORD}

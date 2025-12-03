@@ -7,5 +7,3 @@ Make php build variants and embeded cli args dynamic
 
 Improve !!
 Refactor !!
-
-add FLUTTER_HOME to each separatly

@@ -13,8 +13,12 @@ services:
     cap_add:
       - NET_ADMIN
     depends_on:
-      - 00base
-      - 02phpbrew
+      00base:
+        condition: service_started
+        required: true
+      02phpbrew:
+        condition: service_started
+        required: true
     extra_hosts:
       - ${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}:${GLOBAL_STACK_HOST_GATEWAY_IP}
       - ${GLOBAL_STACK_DOCKER_HOST_DSN}:${GLOBAL_STACK_HOST_GATEWAY_IP}
@@ -167,6 +171,8 @@ services:
       - REQUESTS_CA_BUNDLE=${GLOBAL_STACK_BASE_REQUESTS_CA_BUNDLE}
       - CURL_CA_BUNDLE=${GLOBAL_STACK_BASE_CURL_CA_BUNDLE}
       - SERVERLESS_ACCESS_KEY=${GLOBAL_STACK_BASE_SERVERLESS_ACCESS_KEY}
+      - GLOBAL_STACK_DOCKER_USER_EMAIL=${GLOBAL_STACK_DOCKER_USER_EMAIL}
+      - GLOBAL_STACK_DOCKER_USER_NAME=${GLOBAL_STACK_DOCKER_USER_NAME}
     image: ${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}:${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_PORT_5000}/local_global_stack_03php8-5:${GLOBAL_STACK_VERSION}
     networks:
       - public

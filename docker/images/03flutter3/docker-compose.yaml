@@ -11,14 +11,20 @@ services:
       context: ./
       dockerfile: ./docker/images/03flutter3/Dockerfile
     depends_on:
-      - 00base
-      - 02fvm
+      00base:
+        condition: service_started
+        required: true
+      02fvm:
+        condition: service_started
+        required: true
     environment:
       - FVM_MODE=setup
       - GLOBAL_STACK_RELOAD_FVM=${GLOBAL_STACK_RELOAD_FVM}
       - GLOBAL_STACK_RELOAD_FLUTTER3=${GLOBAL_STACK_RELOAD_FLUTTER3}
       - FLUTTER_VERSION=${GLOBAL_STACK_FLUTTER3_VERSION}
       - FLUTTER_VERSION_AS=${GLOBAL_STACK_FLUTTER3_VERSION_AS}
+      - FLUTTER_ROOT=${GLOBAL_STACK_FLUTTER3_ROOT}
+      - FLUTTER_HOME=${GLOBAL_STACK_FLUTTER3_HOME}
       - FVM_VERSION=${GLOBAL_STACK_FVM_VERSION}
       - FVM_CACHE_PATH=${GLOBAL_STACK_FVM_CACHE_PATH}
       - FVM_USE_GIT_CACHE=${GLOBAL_STACK_FVM_USE_GIT_CACHE}

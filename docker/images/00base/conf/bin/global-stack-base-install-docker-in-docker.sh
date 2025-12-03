@@ -109,11 +109,6 @@ if [[ "" != "${OPERATING_SYSTEM}" ]]; then
 		echo "Installing docker-buildx - system : ${OPERATING_SYSTEM}, arch : ${DOCKER_BUILDX_ARCH}"
 		curl -L https://github.com/docker/buildx/releases/download/${GLOBAL_UNU_DOCKER_BUILDX_LATEST}/buildx-${GLOBAL_UNU_DOCKER_BUILDX_LATEST}.${OPERATING_SYSTEM}-${DOCKER_BUILDX_ARCH} -o /home/"${GLOBAL_STACK_DOCKER_USER_ID}"/.docker/cli-plugins/docker-buildx
 		chmod a+rwx /home/"${GLOBAL_STACK_DOCKER_USER_ID}"/.docker/cli-plugins/docker-buildx
-
-		if [ "${GLOBAL_STACK_DOCKER_IN_DOCKER_ACTIVATE_BUILDX}" = "true" ]; then
-			echo "Activating buildx"
-			docker buildx install
-		fi
 	fi
 fi
 # Latest Sep 18, 2021, 1:35 PM GMT+1

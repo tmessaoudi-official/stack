@@ -16,11 +16,19 @@ USER root
 
 SHELL ["/bin/bash", "-xeEu", "-o", "pipefail", "-c"]
 
+ARG GLOBAL_STACK_AUTOMAKE_VERSION
+ARG GLOBAL_STACK_AUTOMAKE_MIRROR
+
+ENV GLOBAL_STACK_AUTOMAKE_VERSION="${GLOBAL_STACK_AUTOMAKE_VERSION}" \
+    GLOBAL_STACK_AUTOMAKE_MIRROR="${GLOBAL_STACK_AUTOMAKE_MIRROR}" \
+    PATH="/opt/automake-${GLOBAL_STACK_AUTOMAKE_VERSION}/bin:${PATH}"
+
 # @todo check-updates conf files
 
 # @todo fix pin versions
 # hadolint ignore=DL3008,DL3018
 RUN shopt -s extdebug \
+    && [ "${GLOBAL_STACK_AUTOMAKE_VERSION}" != "" ] && [ "${GLOBAL_STACK_AUTOMAKE_MIRROR}" != "" ] && (wget ${GLOBAL_STACK_AUTOMAKE_MIRROR}/automake-${GLOBAL_STACK_AUTOMAKE_VERSION}.tar.gz && tar -xf automake-${GLOBAL_STACK_AUTOMAKE_VERSION}.tar.gz && cd automake-${GLOBAL_STACK_AUTOMAKE_VERSION} && ./configure --prefix=/opt/automake-${GLOBAL_STACK_AUTOMAKE_VERSION} && make -j$(nproc) && make install && rm -rf automake-${GLOBAL_STACK_AUTOMAKE_VERSION}) || echo -e "\n automake will not be installed" \
     && IFS=$'\n\t' \
     && apt-get -o Acquire::AllowInsecureRepositories=true update --allow-releaseinfo-change \
     && apt-get --allow-unauthenticated install -y --no-install-recommends --fix-missing \

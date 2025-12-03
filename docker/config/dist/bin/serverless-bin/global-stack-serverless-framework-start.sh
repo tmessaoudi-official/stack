@@ -12,8 +12,7 @@
 #   local command=${3}
 #   if [[ ${exit_code} -ne 0 ]]; then
 #     echo "Error detected!"
-#     echo -e "\n$(date '+%d-%m-%Y %H:%M:%S'): Error - exit_code: ${exit_code}, line: ${line_num}, command: ${command}, serverless-framework global-stack-serverless-framework-start.sh" \
-#       >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/elapsed"
+#     echo -e "$(date '+%d-%m-%Y %H:%M:%S'): Error - exit_code: ${exit_code}, line: ${line_num}, command: ${command}, serverless-framework global-stack-serverless-framework-start.sh" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/elapsed"
 #     sleep infinity
 #   fi
 # }

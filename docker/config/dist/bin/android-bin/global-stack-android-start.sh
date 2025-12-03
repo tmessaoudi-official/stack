@@ -8,7 +8,7 @@
 #   if [ "${1}" != "0" ] && [ "${1}" != "1" ]; then
 #     # error handling goes here
 #     echo "Error detected !!"
-#     echo -e "\n$(date '+%d-%m-%Y %H:%M:%S'): Error - ** line: ${2} ** ** message: ${3} ** global-stack-android-start.sh" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/elapsed"
+#     echo -e "$(date '+%d-%m-%Y %H:%M:%S'): Error - ** line: ${2} ** ** message: ${3} ** global-stack-android-start.sh" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/elapsed"
 #     sleep infinity
 #   fi
 # }
@@ -71,6 +71,10 @@ if [ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/android.sdkmanager" ] || [
 fi
 
 global-stack-android-setup-dist.sh
+
+flutter config --android-sdk "${ANDROID_HOME}"
+flutter doctor --android-licenses
+flutter doctor -v
 
 global-stack-base-init-mkcert.sh
 

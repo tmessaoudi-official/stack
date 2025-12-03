@@ -15,3 +15,12 @@ if [[ -f "${mise_shellrc}" ]]; then
     } >> "${user_shellrc}"
     eval "$(mise activate ${GLOBAL_STACK_SHELL})"
 fi
+
+if [[ -n "${GLOBAL_STACK_DOCKER_USER_EMAIL}" ]]; then
+    git config --global user.email "${GLOBAL_STACK_DOCKER_USER_EMAIL}"
+fi
+
+
+if [[ -n "${GLOBAL_STACK_DOCKER_USER_NAME}" ]]; then
+    git config --global user.name "${GLOBAL_STACK_DOCKER_USER_NAME}"
+fi

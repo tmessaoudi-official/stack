@@ -10,7 +10,9 @@ services:
       context: ./
       dockerfile: ./docker/images/01epiclabs-docker-oracle-xe-11g/Dockerfile
     depends_on:
-      - 00base
+      00base:
+        condition: service_started
+        required: true
     environment:
       - ORACLE_ALLOW_REMOTE=${GLOBAL_STACK_EPICLABS_DOCKER_ORACLE_XE_11G_ORACLE_ALLOW_REMOTE}
       - ORACLE_PASSWORD=${GLOBAL_STACK_DATABASE_ROOT_PASSWORD}

@@ -14,8 +14,12 @@ services:
       - --proxy-headers=forwarded
       - --verbose
     depends_on:
-      - 00base
-      - 01postgres18
+      00base:
+        condition: service_started
+        required: true
+      01postgres18:
+        condition: service_started
+        required: true
     extra_hosts:
       - ${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}:${GLOBAL_STACK_HOST_GATEWAY_IP}
       - ${GLOBAL_STACK_DOCKER_HOST_DSN}:${GLOBAL_STACK_HOST_GATEWAY_IP}

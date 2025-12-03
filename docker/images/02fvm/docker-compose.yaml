@@ -13,7 +13,9 @@ services:
     cap_add:
       - NET_ADMIN
     depends_on:
-      - 00base
+      00base:
+        condition: service_started
+        required: true
     environment:
       - FVM_MODE=install
       - GLOBAL_STACK_RELOAD_FVM=${GLOBAL_STACK_RELOAD_FVM}

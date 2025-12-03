@@ -10,7 +10,9 @@ services:
       context: ./
       dockerfile: ./docker/images/02mongoclient-mongoclient/Dockerfile
     depends_on:
-      - 00base
+      00base:
+        condition: service_started
+        required: true
     environment:
       - MONGO_URL=${GLOBAL_STACK_MONGOCLIENT_MONGOCLIENT_DEFAULT_MONGO_URL}
     networks:
