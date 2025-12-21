@@ -5,14 +5,14 @@ set -xeEuo pipefail
 shopt -s extdebug
 IFS=$'\n\t'
 
-PATH="${GLOBAL_STACK_DOCKER_TOOLS_PATH}/httpd/bin:${GLOBAL_STACK_DOCKER_TOOLS_PATH}/http/libs/modsecurity/bin:/opt/automake-${GLOBAL_STACK_AUTOMAKE_VERSION}/bin:${PATH}"
+PATH="${GLOBAL_STACK_DOCKER_TOOLS_PATH}/httpd/bin:${GLOBAL_STACK_DOCKER_TOOLS_PATH}/http/libs/modsecurity/bin:${PATH}"
 export PATH
 
 sed -i '/# global-stack-setup-started/,/# global-stack-setup-finished/d' "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 
 echo "# global-stack-setup-started" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 
-echo "PATH=${GLOBAL_STACK_DOCKER_TOOLS_PATH}/httpd/bin:${GLOBAL_STACK_DOCKER_TOOLS_PATH}/http/libs/modsecurity/bin:/opt/automake-${GLOBAL_STACK_AUTOMAKE_VERSION}/bin:${PATH}" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
+echo "PATH=${GLOBAL_STACK_DOCKER_TOOLS_PATH}/httpd/bin:${GLOBAL_STACK_DOCKER_TOOLS_PATH}/http/libs/modsecurity/bin:${PATH}" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 echo "export PATH" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 
 # Define reusable paths

@@ -4,6 +4,8 @@
 # echo 'GPG_TTY=$(tty)' >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 
 # Source mise.shellrc if it exists and add activation to .she
+eval "$(ssh-agent -s)"
+
 mise_shellrc="${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/mise.shellrc"
 user_shellrc="/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 

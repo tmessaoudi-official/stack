@@ -312,9 +312,9 @@ restore:
 log-follow:
 	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs --follow" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
 hard-restart:
+	$(MAKE) down --silent --ignore-errors --keep-going --warn-undefined-variables
 	bin/load-env.sh --update-differences="update_differences"
 	yes y | global-unu.sh || echo 'script does not exit'
-	$(MAKE) down --silent --ignore-errors --keep-going --warn-undefined-variables
 	docker system prune -a -f --volumes
 	yes y | docker-reclaim-disk-space-script.sh || echo 'script does not exist'
 	sudo rm -rf tools ./docker/registry/data ./docker/registry/certs
@@ -324,4 +324,8 @@ hard-restart:
 	$(MAKE) create-buildx-builder --silent --ignore-errors --keep-going --warn-undefined-variables
 	$(MAKE) build --silent --ignore-errors --keep-going --warn-undefined-variables
 	$(MAKE) up --silent --ignore-errors --keep-going --warn-undefined-variables
-
+soft-restart:
+	$(MAKE) down --silent --ignore-errors --keep-going --warn-undefined-variables
+	sudo rm -rf tools
+	cp -R var/tools/ tools
+	$(MAKE) up --silent --ignore-errors --keep-going --warn-undefined-variables
