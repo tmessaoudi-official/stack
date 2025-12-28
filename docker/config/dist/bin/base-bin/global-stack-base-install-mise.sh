@@ -21,6 +21,8 @@ if [[ -n "${GLOBAL_STACK_MISE_VERSION}" && "${GLOBAL_STACK_BASE_INSTALL_TOOLS}" 
 
     # Install mise
     curl -sSL https://mise.run | sh
+
+    mise use -g usage
 else
     echo "Mise already installed"
 fi

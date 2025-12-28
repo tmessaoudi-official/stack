@@ -136,6 +136,17 @@ else
 fi
 rm -rf pie.pha*
 
+MAGO_PHAR_FILE="${PHPBREW_BIN}/mago"
+MAGO_LATEST=${GLOBAL_STACK_MAGO_VERSION}
+if [[ -f "${MAGO_PHAR_FILE}" && "${MAGO_LATEST}" = "$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew.mago")" ]]; then
+    echo -e "\n${MAGO_PHAR_FILE} already installed ($(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew.mago") - ${MAGO_LATEST})."
+else
+    echo -e "\nInstalling ${MAGO_PHAR_FILE}."
+    echo -e "${MAGO_LATEST}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew.mago"
+    curl --proto '=https' --tlsv1.2 -sSf https://carthage.software/mago.sh | bash -s -- --install-dir=${PHPBREW_BIN} --version=${MAGO_LATEST}
+    chmod a+x "${MAGO_PHAR_FILE}"
+fi
+
 FABPOT_LOCAL_PHP_SECURITY_CHECKER="${PHPBREW_BIN}/fabpot-local-php-security-checker"
 # FABPOT_LOCAL_PHP_SECURITY_CHECKER_LATEST=$(curl --silent https://api.github.com/repos/fabpot/local-php-security-checker/releases/latest | jq .name -r)
 FABPOT_LOCAL_PHP_SECURITY_CHECKER_LATEST=${GLOBAL_STACK_FABPOT_LOCAL_PHP_SECURITY_CHECKER_VERSION}

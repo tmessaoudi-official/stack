@@ -109,7 +109,7 @@ if [ "${RBENV_MODE}" = "setup" ]; then
   export RBENV_VERSION=$(global-stack-rbenv-find-latest.sh "${RUBY_VERSION}")
   
   if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/ruby.$([[ -n "${RUBY_VERSION_AS:-}" && "" != "${RUBY_VERSION_AS:-}" ]] && echo "${RUBY_VERSION_AS:-}" || echo "${RUBY_VERSION:-}")" || "true" = "${GLOBAL_STACK_RELOAD_RUBY}" ]]; then  
-    source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/rbenv.shellrc" && global-stack-rbenv-ruby${RUBY_VERSION_AS}-install-version.sh  
+    source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/rbenv.shellrc" && rbenv install --verbose --skip-existing --keep "${RBENV_VERSION}" 
     source /usr/local/bin/global-stack-base-setup-packages.sh
     source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/rbenv.shellrc"
     eval "$(rbenv init - ${GLOBAL_STACK_SHELL})"

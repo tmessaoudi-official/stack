@@ -9,7 +9,6 @@ done
 look for noble|oracular|plucky|questing and try to replace them with resolute (look is there is a release)
 
 source /etc/profile.d/stack.sh
-
 nvm use ${GLOBAL_STACK_NODE22_VERSION}
 npm --global outdated
 nvm use ${GLOBAL_STACK_NODE24_VERSION}
