@@ -1,5 +1,5 @@
 # shellcheck disable=SC2148
-ARG GLOBAL_STACK_IMAGE_UBUNTU_VERSION=resolute-20251208
+ARG GLOBAL_STACK_IMAGE_UBUNTU_VERSION=resolute-20260106.1
 
 # shellcheck disable=SC2148
 FROM ubuntu:${GLOBAL_STACK_IMAGE_UBUNTU_VERSION}
@@ -160,8 +160,8 @@ ENV DEBIAN_FRONTEND="noninteractive" \
 
 COPY docker/images/00base/conf/bin/ /usr/local/bin/
 
-# && sed -i "s|questing|resolute|g" /etc/apt/sources.list \
-# && sed -i "s|questing|resolute|g" /etc/apt/sources.list.d/ubuntu.sources \
+# && sed -i "s|current_dist|wanted_dist|g" /etc/apt/sources.list \
+# && sed -i "s|current_dist|wanted_dist|g" /etc/apt/sources.list.d/ubuntu.sources \
 # @todo fix pin versions
 # hadolint ignore=DL3008,DL3018
 RUN shopt -s extdebug \
@@ -254,7 +254,7 @@ RUN shopt -s extdebug \
     && pip install --no-cache-dir awscli-local==${GLOBAL_STACK_PYTHON3_INSTALL_PACKAGE_AWSCLI_LOCAL_VERSION} --break-system-packages \
     && curl -o /usr/share/keyrings/postgresql.asc --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc \
     # @todo make it $(lsb_release -cs) later
-    && sh -c 'echo "Types: deb\nTrusted: yes\nSigned-By: /usr/share/keyrings/postgresql.asc\nArch: $(dpkg --print-architecture)\nURIs: https://apt.postgresql.org/pub/repos/apt\nSuites: questing-pgdg\nComponents: main" > /etc/apt/sources.list.d/pgdg.sources' \
+    && sh -c 'echo "Types: deb\nTrusted: yes\nSigned-By: /usr/share/keyrings/postgresql.asc\nArch: $(dpkg --print-architecture)\nURIs: https://apt.postgresql.org/pub/repos/apt\nSuites: resolute-pgdg\nComponents: main" > /etc/apt/sources.list.d/pgdg.sources' \
     && curl -fsSL 'https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xF911AB184317630C59970973E363C90F8F1B6217' | gpg --dearmor | tee /usr/share/keyrings/git.gpg \
     && echo -e "Types: deb\nTrusted: yes\nSigned-By: /usr/share/keyrings/git.gpg\nArch: $(dpkg --print-architecture)\nURIs: https://ppa.launchpadcontent.net/git-core/ppa/ubuntu\nSuites: $(lsb_release -cs)\nComponents: main" | dd of=/etc/apt/sources.list.d/git.sources \
     && wget -qO- https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor | dd of=/usr/share/keyrings/google-chrome.gpg \

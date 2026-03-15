@@ -147,6 +147,17 @@ else
     chmod a+x "${MAGO_PHAR_FILE}"
 fi
 
+CASTOR_PHAR_FILE="${PHPBREW_BIN}/castor"
+CASTOR_LATEST=${GLOBAL_STACK_CASTOR_VERSION}
+if [[ -f "${CASTOR_PHAR_FILE}" && "${CASTOR_LATEST}" = "$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew.castor")" ]]; then
+    echo -e "\n${CASTOR_PHAR_FILE} already installed ($(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew.castor") - ${CASTOR_LATEST})."
+else
+    echo -e "\nInstalling ${CASTOR_PHAR_FILE}."
+    echo -e "${CASTOR_LATEST}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew.castor"
+    curl "https://castor.jolicode.com/install" | bash -s -- --install-dir=${PHPBREW_BIN} --version=${CASTOR_LATEST}
+    chmod a+x "${CASTOR_PHAR_FILE}"
+fi
+
 FABPOT_LOCAL_PHP_SECURITY_CHECKER="${PHPBREW_BIN}/fabpot-local-php-security-checker"
 # FABPOT_LOCAL_PHP_SECURITY_CHECKER_LATEST=$(curl --silent https://api.github.com/repos/fabpot/local-php-security-checker/releases/latest | jq .name -r)
 FABPOT_LOCAL_PHP_SECURITY_CHECKER_LATEST=${GLOBAL_STACK_FABPOT_LOCAL_PHP_SECURITY_CHECKER_VERSION}

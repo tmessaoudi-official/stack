@@ -84,6 +84,7 @@ create-buildx-builder:
 	docker buildx stop docker-buildx-builder &>/dev/null
 	docker buildx rm docker-buildx-builder &>/dev/null
 	docker build --file docker/buildkit/Dockerfile --build-arg GLOBAL_STACK_MOBY_BUILDKIT_VERSION=${GLOBAL_STACK_MOBY_BUILDKIT_VERSION} --build-arg GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS=${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS} --tag custom-moby/buildkit .
+	rm -rf ${GLOBAL_STACK_DOCKER_ROOT_PATH}/docker/registry/config.local.json
 	[ ! -f ${GLOBAL_STACK_DOCKER_ROOT_PATH}/docker/registry/config.local.json ] && cp ${GLOBAL_STACK_DOCKER_ROOT_PATH}/docker/registry/config.json ${GLOBAL_STACK_DOCKER_ROOT_PATH}/docker/registry/config.local.json || true
 	sudo systemctl stop docker
 	sudo rm -rf /var/lib/docker/volumes/buildx_buildkit_docker-buildx-builder0_state
@@ -319,11 +320,11 @@ restore:
 log-follow:
 	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs --follow" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
 hard-restart:
-	$(MAKE) down --silent --ignore-errors --keep-going --warn-undefined-variables
-	bin/load-env.sh --update-differences="update_differences"
-	yes y | global-unu.sh || echo 'script does not exit'
+	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="down" GLOBAL_STACK_DOCKER_CLI_EXEC_FLAGS="--rmi all --volumes --remove-orphans" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
 	docker system prune -a -f --volumes
 	yes y | docker-reclaim-disk-space-script.sh || echo 'script does not exist'
+	bin/load-env.sh --update-differences="update_differences"
+	yes y | global-unu.sh || echo 'script does not exit'
 	sudo rm -rf tools ./docker/registry/data ./docker/registry/certs
 	cp -R var/tools/ tools
 	$(MAKE) create-paths --silent --ignore-errors --keep-going --warn-undefined-variables

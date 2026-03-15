@@ -15,9 +15,9 @@ stackCatch() {
 }
 
 if [ "${GLOBAL_STACK_ANDROID_INSTALL_SYSTEM_IMAGES}" = "true" ]; then
-  avdmanager create avd --name global_stack_auto_pixel_7_pro_android_35_google_apis --package "system-images;android-35;google_apis;x86_64" --device "pixel_7_pro"
-  avdmanager create avd --name global_stack_auto_pixel_9_pro_android_36_google_apis --package "system-images;android-36;google_apis;x86_64" --device "pixel_9_pro"
+  avdmanager create avd --name global_stack_auto_pixel_7_pro_android_36_google_apis --package "system-images;android-36;google_apis;x86_64" --device "pixel_7_pro"
   avdmanager create avd --name global_stack_auto_pixel_9_pro_android_36.1_google_apis --package "system-images;android-36.1;google_apis;x86_64" --device "pixel_9_pro"
+  avdmanager create avd --name global_stack_auto_pixel_9_pro_android_CinnamonBun_google_apis --package "system-images;android-CinnamonBun;google_apis_ps16k;x86_64" --device "pixel_9_pro"
   
   for CONFIG_FILE in "${ANDROID_SDK_HOME}"/.android/avd/global_stack_auto_*.avd/config.ini; do
       cp -f ${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/conf/android-avd-conf/config-apis.ini ${CONFIG_FILE}

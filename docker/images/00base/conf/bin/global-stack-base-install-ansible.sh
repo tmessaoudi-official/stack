@@ -4,7 +4,7 @@
 . /etc/os-release
 
 # @todo change later
-UBUNTU_CODENAME="plucky"
+UBUNTU_CODENAME="questing"
 
 # Update repositories
 sudo apt-get -o Acquire::AllowInsecureRepositories=true update --allow-releaseinfo-change
