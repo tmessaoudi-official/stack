@@ -409,13 +409,13 @@ global_stack_load_env_check_missing_variables() {
 	local CLEANUP_TMP
 	CLEANUP_TMP="$(echo "${9}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
 
-	cut -d'=' -f1 "${EXTRACT_ALL_ENV_OUTPUT_FILE}" | sort -u >"${DIR}/${TXT_FILE_NAME}_extracted_vars.txt"
-	cut -d'=' -f1 "${TARGET_FILE}" | sort -u >"${DIR}/${TXT_FILE_NAME}_vars.txt"
+	cut -d'=' -f1 "${EXTRACT_ALL_ENV_OUTPUT_FILE}" | LC_ALL=C sort -u >"${DIR}/${TXT_FILE_NAME}_extracted_vars.txt"
+	cut -d'=' -f1 "${TARGET_FILE}" | LC_ALL=C sort -u >"${DIR}/${TXT_FILE_NAME}_vars.txt"
 	local MISSING_VARIABLES
 	if [[ "true" = "${REVERSE_CHECKING}" ]]; then
-		MISSING_VARIABLES=$(comm -23 "${DIR}/${TXT_FILE_NAME}_vars.txt" "${DIR}/${TXT_FILE_NAME}_extracted_vars.txt" | if [[ -n "${EXCLUDE_PATTERN}" ]]; then grep -vE "${EXCLUDE_PATTERN}"; else cat; fi)
+		MISSING_VARIABLES=$(LC_ALL=C  comm -23 "${DIR}/${TXT_FILE_NAME}_vars.txt" "${DIR}/${TXT_FILE_NAME}_extracted_vars.txt" | if [[ -n "${EXCLUDE_PATTERN}" ]]; then grep -vE "${EXCLUDE_PATTERN}"; else cat; fi)
 	else
-		MISSING_VARIABLES=$(comm -23 "${DIR}/${TXT_FILE_NAME}_extracted_vars.txt" "${DIR}/${TXT_FILE_NAME}_vars.txt" | if [[ -n "${EXCLUDE_PATTERN}" ]]; then grep -vE "${EXCLUDE_PATTERN}"; else cat; fi)
+		MISSING_VARIABLES=$(LC_ALL=C  comm -23 "${DIR}/${TXT_FILE_NAME}_extracted_vars.txt" "${DIR}/${TXT_FILE_NAME}_vars.txt" | if [[ -n "${EXCLUDE_PATTERN}" ]]; then grep -vE "${EXCLUDE_PATTERN}"; else cat; fi)
 	fi
 	if [[ -n "${MISSING_VARIABLES}" ]]; then
 		if [[ "true" = "${REVERSE_CHECKING}" ]]; then
@@ -629,7 +629,7 @@ global_stack_load_env_main() {
 			echo -e "\n ---- (global_stack_load_env_main): ${GLOBAL_STACK_LOAD_ENV_SEARCH_PATH} is neither a file nor a directory, exiting !\n\n"
 			exit 1
 		fi
-		sort -u "${GLOBAL_STACK_LOAD_ENV_EXTRACT_ALL_ENV_OUTPUT_FILE}" -o "${GLOBAL_STACK_LOAD_ENV_EXTRACT_ALL_ENV_OUTPUT_FILE}"
+		LC_ALL=C sort -u "${GLOBAL_STACK_LOAD_ENV_EXTRACT_ALL_ENV_OUTPUT_FILE}" -o "${GLOBAL_STACK_LOAD_ENV_EXTRACT_ALL_ENV_OUTPUT_FILE}"
 	fi
 
 	global_stack_load_env_detect_multiple_default_different_values_for_key \

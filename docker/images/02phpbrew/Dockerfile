@@ -75,13 +75,13 @@ RUN apt-get -o Acquire::AllowInsecureRepositories=true update --allow-releaseinf
     libgpgme-dev \
     libc-ares-dev \
     libsystemd-dev \
-    php8.4-cli \
-    php8.4-phar \
-    php8.4-readline \
-    php8.4-bz2 \
-    php8.4-xml \
-    php8.4-curl \
-    php8.4-sqlite3 \
+    php8.5-cli \
+    php8.5-phar \
+    php8.5-readline \
+    php8.5-bz2 \
+    php8.5-xml \
+    php8.5-curl \
+    php8.5-sqlite3 \
     && apt-get clean -y \
     && rm -rf /var/lib/apt/lists/* \
     && ln -s /usr/lib/x86_64-linux-gnu/libldap.so /usr/lib/libldap.so \
