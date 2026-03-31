@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 
 if [ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/permissions" ] || [ "${GLOBAL_STACK_RELOAD_ALL}" = "true" ] || [ "${GLOBAL_STACK_RELOAD_PERMISSIONS}" = "true" ]; then
     echo -e "\nSetting up stack permissions"

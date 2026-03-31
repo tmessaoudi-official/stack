@@ -4,9 +4,8 @@ ARG GLOBAL_STACK_IMAGE_MONGOCLIENT_MONGOCLIENT_VERSION=4.0.1
 # shellcheck disable=SC2148
 FROM mongoclient/mongoclient:${GLOBAL_STACK_IMAGE_MONGOCLIENT_MONGOCLIENT_VERSION}
 
-LABEL maintainer="Takieddine Messaoudi <takieddine.messaoudi.official@gmail.com>"
-
-LABEL info="local_global_stack"
+LABEL maintainer="Takieddine Messaoudi <takieddine.messaoudi.official@gmail.com>" \
+      info="local_global_stack"
 
 USER root
 

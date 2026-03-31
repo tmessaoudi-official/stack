@@ -5,9 +5,19 @@ services:
     image: corentinth/it-tools:${GLOBAL_STACK_CORENTINTH_IT_TOOLS_VERSION}
     ports:
       - ${GLOBAL_STACK_CORENTINTH_IT_TOOLS_PORT_80:-}80
+    labels:
+      stack.service: "00corentinth-it-tools"
+      stack.tier: "tools"
+      stack.version: "${GLOBAL_STACK_VERSION}"
     environment:
       - NGINX_VERSION=${GLOBAL_STACK_NGINX_VERSION}
       - NJS_VERSION=${GLOBAL_STACK_CORENTINTH_IT_TOOLS_NJS_VERSION}
-    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:80/ -o /dev/null"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: "on-failure:5"
     networks:
       - public

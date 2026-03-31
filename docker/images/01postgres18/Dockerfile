@@ -4,9 +4,8 @@ ARG GLOBAL_STACK_IMAGE_POSTGRES18_VERSION=18.3-alpine3.23
 # shellcheck disable=SC2148
 FROM postgres:${GLOBAL_STACK_IMAGE_POSTGRES18_VERSION}
 
-LABEL maintainer="Takieddine Messaoudi <takieddine.messaoudi.official@gmail.com>"
-
-LABEL info="local_global_stack"
+LABEL maintainer="Takieddine Messaoudi <takieddine.messaoudi.official@gmail.com>" \
+      info="local_global_stack"
 
 # @todo fix last user should not be root
 # hadolint ignore=DL3002

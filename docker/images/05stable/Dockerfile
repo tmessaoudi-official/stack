@@ -1,3 +1,8 @@
+# This Dockerfile is intentionally identical to 05edge/Dockerfile.
+# The distinction between stable and edge is handled entirely in docker-compose:
+# 05stable uses pinned/stable parent images (e.g. 03php8-5, 03node24)
+# 05edge uses bleeding-edge parent images (e.g. 03phpedge, 03nodeedge).
+# Do not add version-specific logic here; use the compose file instead.
 # shellcheck disable=SC2148
 ARG GLOBAL_STACK_VERSION=2_0_0_local
 
@@ -8,11 +13,12 @@ ARG GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS=local-global-stack-registry.local
 # shellcheck disable=SC2086
 FROM ${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}:${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_PORT_5000}/local_global_stack_03php8-5:${GLOBAL_STACK_VERSION}
 
-LABEL maintainer="Takieddine Messaoudi <tmessaoudi@smart-team.tn>"
+LABEL maintainer="Takieddine Messaoudi <takieddine.messaoudi.official@gmail.com>" \
+      info="local_global_stack"
 
 USER root
 
-SHELL ["/bin/bash", "-xeE", "-o", "pipefail", "-c"]
+SHELL ["/bin/bash", "-xeEu", "-o", "pipefail", "-c"]
 
 ARG GLOBAL_STACK_ANDROID_LOCALE
 ARG GLOBAL_STACK_ANDROID_SET_LOCALE
@@ -21,11 +27,10 @@ ENV GLOBAL_STACK_ANDROID_LOCALE="${GLOBAL_STACK_ANDROID_LOCALE}" \
     GLOBAL_STACK_ANDROID_SET_LOCALE="${GLOBAL_STACK_ANDROID_SET_LOCALE}"
 
 # @todo fix pin versions
-# hadolint ignore=DL3008,DL3018
 RUN shopt -s extdebug \
     && IFS=$'\n\t' \
-    && apt-get update --allow-releaseinfo-change \
-    && apt-get install -y --no-install-recommends --fix-missing \
+    && apt-get -o Acquire::AllowInsecureRepositories=true update --allow-releaseinfo-change \
+    && apt-get --allow-unauthenticated install -y --no-install-recommends --fix-missing \
     usbutils \
     clang \
     cmake \

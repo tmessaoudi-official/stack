@@ -8,7 +8,8 @@ stackCatch() {
     # error handling goes here
     echo "Error detected !!"
     echo -e "$(date '+%d-%m-%Y %H:%M:%S'): Error - ** line: ${2} ** ** message: ${3} ** fvm ($([[ -n "${FLUTTER_VERSION_AS:-}" && "" != "${FLUTTER_VERSION_AS:-}" ]] && echo "${FLUTTER_VERSION_AS:-}" || echo "${FLUTTER_VERSION:-}")) ${FVM_MODE:-} global-stack-fvm-start.sh" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/elapsed"
-    sleep infinity
+    [[ -n "${GLOBAL_STACK_ERROR_TOKEN:-}" ]] && touch "${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}/${GLOBAL_STACK_ERROR_TOKEN}"
+    exit 1
   fi
 }
 
@@ -27,6 +28,7 @@ echo "export PATH" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL
 
 if [ "${FVM_MODE}" = "install" ]; then
   sudo rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/fvm"
+  rm -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}/${GLOBAL_STACK_ERROR_TOKEN:-}"
   sleep 1
 
   global-stack-base-wait-for.sh \
@@ -41,26 +43,17 @@ fi
 
 if [ "${FVM_MODE}" = "setup" ]; then
   sudo rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/flutter.$([[ -n "${FLUTTER_VERSION_AS:-}" && "" != "${FLUTTER_VERSION_AS:-}" ]] && echo "${FLUTTER_VERSION_AS:-}" || echo "${FLUTTER_VERSION:-}")"
+  rm -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}/${GLOBAL_STACK_ERROR_TOKEN:-}"
   sleep 1
 
   global-stack-base-wait-for.sh \
     "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/fvm"
 
-  if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/flutter" && "true" = "${GLOBAL_STACK_USE_LOCKS}" ]]; then
-    echo "$([[ -n "${FLUTTER_VERSION_AS:-}" && "" != "${FLUTTER_VERSION_AS:-}" ]] && echo "${FLUTTER_VERSION_AS:-}" || echo "${FLUTTER_VERSION:-}")" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/flutter"
-  fi
-
-  if [[ "$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/flutter")" != "$([[ -n "${FLUTTER_VERSION_AS:-}" && "" != "${FLUTTER_VERSION_AS:-}" ]] && echo "${FLUTTER_VERSION_AS:-}" || echo "${FLUTTER_VERSION:-}")" && "true" = "${GLOBAL_STACK_USE_LOCKS}" ]]; then
-    FLUTTER_SHOW_WAITING=""
-    FLUTTER_WAITING_FOR=""
-    while [ -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/flutter" ]
-    do
-      [[ "${FLUTTER_SHOW_WAITING}" != "false" || "${FLUTTER_WAITING_FOR}" != "$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/flutter")" ]] && echo -e "\nWaiting for flutter $(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/flutter") ..."
-      FLUTTER_SHOW_WAITING="false"
-      FLUTTER_WAITING_FOR="$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/flutter")"
-      sleep "$(shuf -i 3-6 -n 1)"
-    done
-    echo "$([[ -n "${FLUTTER_VERSION_AS:-}" && "" != "${FLUTTER_VERSION_AS:-}" ]] && echo "${FLUTTER_VERSION_AS:-}" || echo "${FLUTTER_VERSION:-}")" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/flutter"
+  if [[ "true" = "${GLOBAL_STACK_USE_LOCKS}" ]]; then
+    echo -e "\nAcquiring fvm lock ..."
+    exec 200>"${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/fvm.flock"
+    flock 200
+    echo -e "Lock acquired"
   fi
 fi
 
@@ -119,8 +112,11 @@ if [ "${FVM_MODE}" = "setup" ]; then
   echo "${FLUTTER_VERSION:-}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/flutter.$([[ -n "${FLUTTER_VERSION_AS:-}" && "" != "${FLUTTER_VERSION_AS:-}" ]] && echo "${FLUTTER_VERSION_AS:-}" || echo "${FLUTTER_VERSION:-}")"
   echo -e "\nWriting success"
   : > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/flutter.$([[ -n "${FLUTTER_VERSION_AS:-}" && "" != "${FLUTTER_VERSION_AS:-}" ]] && echo "${FLUTTER_VERSION_AS:-}" || echo "${FLUTTER_VERSION:-}")"
-  echo -e "\nRemoving lock"
-  rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/flutter"
+  if [[ "true" = "${GLOBAL_STACK_USE_LOCKS}" ]]; then
+    echo -e "\nReleasing fvm lock"
+    flock -u 200
+    exec 200>&-
+  fi
 fi
 
 sleep infinity

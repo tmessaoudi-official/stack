@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 
 # Check if mise installation is required
 if [[ -n "${GLOBAL_STACK_MISE_VERSION}" && "${GLOBAL_STACK_BASE_INSTALL_TOOLS}" == "true" && ! -f "${MISE_INSTALL_PATH}" ]]; then

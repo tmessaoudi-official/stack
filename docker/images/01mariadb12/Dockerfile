@@ -4,9 +4,8 @@ ARG GLOBAL_STACK_IMAGE_MARIADB12_VERSION=12.3.1-noble-rc
 # shellcheck disable=SC2148
 FROM mariadb:${GLOBAL_STACK_IMAGE_MARIADB12_VERSION}
 
-LABEL maintainer="Takieddine Messaoudi <takieddine.messaoudi.official@gmail.com>"
-
-LABEL info="local_global_stack"
+LABEL maintainer="Takieddine Messaoudi <takieddine.messaoudi.official@gmail.com>" \
+      info="local_global_stack"
 
 # @todo fix last user should not be root
 # hadolint ignore=DL3002

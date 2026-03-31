@@ -10,9 +10,8 @@ ARG GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS=local-global-stack-registry.local
 FROM ${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}:${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_PORT_5000}/local_global_stack_00base:${GLOBAL_STACK_VERSION} AS local_global_stack_base
 FROM ghost:${GLOBAL_STACK_IMAGE_GHOST_BLOG_VERSION}
 
-LABEL maintainer="Takieddine Messaoudi <takieddine.messaoudi.official@gmail.com>"
-
-LABEL info="local_global_stack"
+LABEL maintainer="Takieddine Messaoudi <takieddine.messaoudi.official@gmail.com>" \
+      info="local_global_stack"
 
 USER root
 

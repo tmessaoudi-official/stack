@@ -53,15 +53,15 @@ EOF
 
 global_stack_load_env_detect_multiple_default_different_values_for_key() {
 	local INPUT_FILE
-	INPUT_FILE="$(echo "${1}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	INPUT_FILE="${1#*=}"
 	local CURRENT_FILE
-	CURRENT_FILE="$(echo "${2}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	CURRENT_FILE="${2#*=}"
 	local ALL_SRC_ENV_MERGED_NAME
-	ALL_SRC_ENV_MERGED_NAME="$(echo "${3}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	ALL_SRC_ENV_MERGED_NAME="${3#*=}"
 	local EXCLUDE_IMPLICIT_EMPTY
-	EXCLUDE_IMPLICIT_EMPTY="$(echo "${4,,}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	EXCLUDE_IMPLICIT_EMPTY="${4#*=}"; EXCLUDE_IMPLICIT_EMPTY="${EXCLUDE_IMPLICIT_EMPTY,,}"
 	local EXCLUDE_EXPLICIT_EMPTY
-	EXCLUDE_EXPLICIT_EMPTY="$(echo "${5,,}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	EXCLUDE_EXPLICIT_EMPTY="${5#*=}"; EXCLUDE_EXPLICIT_EMPTY="${EXCLUDE_EXPLICIT_EMPTY,,}"
 
 	local INPUT_FILE_MERGE_ALL_SRC_ENV
 	INPUT_FILE_MERGE_ALL_SRC_ENV="${INPUT_FILE}.src.all.merged"
@@ -70,11 +70,11 @@ global_stack_load_env_detect_multiple_default_different_values_for_key() {
 
 	cat "${INPUT_FILE}" >> "${INPUT_FILE_MERGE_ALL_SRC_ENV}"
 
-	while IFS='=' read -r key value; do
-		if [[ -n "${key}" && "${key}" != \#* ]]; then
-			grep "^$key=" "${ALL_SRC_ENV_MERGED_NAME}" >> "${INPUT_FILE_MERGE_ALL_SRC_ENV}"
-		fi
-	done < "${INPUT_FILE}"
+	# P4: single awk pass replaces per-key grep (eliminates ~N grep forks)
+	awk -F'=' '
+		NR==FNR { if ($1!="" && substr($1,1,1)!="#") keys[$1]=1; next }
+		($1 in keys)
+	' "${INPUT_FILE}" "${ALL_SRC_ENV_MERGED_NAME}" >> "${INPUT_FILE_MERGE_ALL_SRC_ENV}"
 
 	envsubst < "${INPUT_FILE_MERGE_ALL_SRC_ENV}" > "${INPUT_FILE_MERGE_ALL_SRC_ENV}.expanded"
 
@@ -82,7 +82,7 @@ global_stack_load_env_detect_multiple_default_different_values_for_key() {
 	MULTIPLE_DEFAULT_VALUES=$(awk -F '=' -v exclude_implicit_empty="${EXCLUDE_IMPLICIT_EMPTY}" -v exclude_explicit_empty="${EXCLUDE_EXPLICIT_EMPTY}" '
 	{
 		key = $1;
-		value = $2;
+		value = substr($0, length($1) + 2);  # Full value, preserves any = in the value
 
 		# Check if we have an entry for this key
 		if (!(key in unique_values)) {
@@ -98,8 +98,9 @@ global_stack_load_env_detect_multiple_default_different_values_for_key() {
 			useValue = "false";
 		}
 
-		# Use a temporary variable to ensure we only add unique values
-		if (!index(unique_values[key], value) && value != "" && useValue == "true") {
+		# Exact-match dedup via 2D seen array (index() was a substring check — wrong)
+		if (!((key SUBSEP value) in seen) && value != "" && useValue == "true") {
+			seen[key, value] = 1;
 			if (unique_values[key] == "") {
 				unique_values[key] = value; # First unique value
 			} else {
@@ -135,35 +136,38 @@ global_stack_load_env_detect_multiple_default_different_values_for_key() {
 # Functions for various processing steps
 global_stack_load_env_search_and_extract() {
 	local CURRENT_FILE
-	CURRENT_FILE="$(echo "${1}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	CURRENT_FILE="${1#*=}"
 	local SEARCH_IGNORE
-	SEARCH_IGNORE="$(echo "${2}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	SEARCH_IGNORE="${2#*=}"
 	local EXCLUDE_PATTERN
-	EXCLUDE_PATTERN="$(echo "${3}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	EXCLUDE_PATTERN="${3#*=}"
 	local COUNT
-	COUNT="$(echo "${4}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	COUNT="${4#*=}"
 	local DEBUG
-	DEBUG="$(echo "${5}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	DEBUG="${5#*=}"
 	local DEBUG_SHOW_EXTRACTED_FILES
-	DEBUG_SHOW_EXTRACTED_FILES="$(echo "${6}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	DEBUG_SHOW_EXTRACTED_FILES="${6#*=}"
 	local INCLUDE_DOCKER_ARGS
-	INCLUDE_DOCKER_ARGS="$(echo "${7}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	INCLUDE_DOCKER_ARGS="${7#*=}"
 	local EXTRACT_ALL_PREFIX
-	EXTRACT_ALL_PREFIX="$(echo "${8}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	EXTRACT_ALL_PREFIX="${8#*=}"
 	local EXTRACT_ALL_ENV_OUTPUT_FILE
-	EXTRACT_ALL_ENV_OUTPUT_FILE="$(echo "${9}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	EXTRACT_ALL_ENV_OUTPUT_FILE="${9#*=}"
 	local EXTRACT_ALL_ENV_DELETE_OUTPUT
-	EXTRACT_ALL_ENV_DELETE_OUTPUT="$(echo "${10}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	EXTRACT_ALL_ENV_DELETE_OUTPUT="${10#*=}"
 	local CLEANUP_TMP
-	CLEANUP_TMP="$(echo "${11}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	CLEANUP_TMP="${11#*=}"
 	local ALL_SRC_ENV_MERGED_NAME
-	ALL_SRC_ENV_MERGED_NAME="$(echo "${12}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	ALL_SRC_ENV_MERGED_NAME="${12#*=}"
 	local EXCLUDE_IMPLICIT_EMPTY
-	EXCLUDE_IMPLICIT_EMPTY="$(echo "${13,,}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	EXCLUDE_IMPLICIT_EMPTY="${13#*=}"; EXCLUDE_IMPLICIT_EMPTY="${EXCLUDE_IMPLICIT_EMPTY,,}"
 	local EXCLUDE_EXPLICIT_EMPTY
-	EXCLUDE_EXPLICIT_EMPTY="$(echo "${14,,}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	EXCLUDE_EXPLICIT_EMPTY="${14#*=}"; EXCLUDE_EXPLICIT_EMPTY="${EXCLUDE_EXPLICIT_EMPTY,,}"
 
-	if grep -qE "$(echo "${SEARCH_IGNORE}" | sed '/^\s*$/d')" <<< "${CURRENT_FILE}"; then
+	# P8: pre-compiled ignore regex used with bash =~ (no subshell grep)
+	local _ignore_re
+	_ignore_re="$(printf '%s' "${SEARCH_IGNORE}" | sed '/^\s*$/d' | paste -sd '|')"
+	if [[ -n "${_ignore_re}" && "${CURRENT_FILE}" =~ ${_ignore_re} ]]; then
 		if [[ "true" = "${DEBUG}" ]]; then
 			echo -e "\n ---- (global_stack_load_env_search_and_extract): Ignoring path: ${CURRENT_FILE}\n"
 		fi
@@ -174,73 +178,91 @@ global_stack_load_env_search_and_extract() {
 	if [[ "true" = "${DEBUG}" && "true" = "${DEBUG_SHOW_EXTRACTED_FILES}" ]]; then
 		echo -e "\n ---- (global_stack_load_env_search_and_extract): Extracting env variables from ${CURRENT_FILE}\n"
 	fi
+
+	# P3: collapsed 7-process pipeline → grep | awk | (optional grep) >> file
+	# P12: avoid $() subshell for tee redirect target — use process substitution + conditional redirect
+	local _out_file="${EXTRACT_ALL_ENV_OUTPUT_FILE}${COUNT}"
 	grep -oE "$(if [[ "true" = "${INCLUDE_DOCKER_ARGS}" ]]; then echo "(^ARG ([^=]+)(=?)(.*))|"; fi)(\\$\\{?${EXTRACT_ALL_PREFIX}[A-Za-z0-9_]+(\\:(-|=)[^\\}]*)?\\}?)" "${CURRENT_FILE}" |
-		sed -E 's/^ARG //;' |
-		sed -E 's/^\$//; s/^\{//; s/\}$//; s/:-$/=|explicit_empty|/g; s/:=$/=|explicit_empty|/g; s/:-/=/g; s/:=/=/g;' |
+		awk '
+		{
+			# Remove leading "ARG "
+			sub(/^ARG /, "")
+			# Remove leading $ and {
+			sub(/^\$/, ""); sub(/^\{/, ""); sub(/\}$/, "")
+			# Normalize :- and := endings (explicit empty)
+			if (sub(/:-$/, "")) { sub(/$/, "=|explicit_empty|") }
+			else if (sub(/:=$/, "")) { sub(/$/, "=|explicit_empty|") }
+			# Normalize :- and := with values
+			gsub(/:-/, "="); gsub(/:=/, "=")
+			# Ensure key=value form; bare key gets = appended
+			if ($0 !~ /=/) { $0 = $0 "=" }
+			# Implicit empty: key= with nothing after
+			sub(/=$/, "=|implicit_empty|")
+			print
+		}' |
 		if [[ -n "${EXCLUDE_PATTERN}" ]]; then
 			grep -vE "${EXCLUDE_PATTERN}"
 		else
 			cat
-		fi |
-		sed -E 's/=(.*)/=\1/; s/^([A-Za-z0-9_]+)=?$/\1=/' |
-		sed -E 's/=$/=|implicit_empty|/;' |
-		tee -a "${EXTRACT_ALL_ENV_OUTPUT_FILE}${COUNT}" >"$([[ "true" = "${DEBUG}" && "true" = "${DEBUG_SHOW_EXTRACTED_FILES}" ]] && echo /dev/stdout || echo /dev/null)"
+		fi | tee -a "${_out_file}" >/dev/null
+
 	if [[ "true" = "${DEBUG}" && "true" = "${DEBUG_SHOW_EXTRACTED_FILES}" ]]; then
+		cat "${_out_file}"
 		echo -e "\n"
 	fi
 	global_stack_load_env_detect_multiple_default_different_values_for_key \
-		--input-file="${EXTRACT_ALL_ENV_OUTPUT_FILE}${COUNT}" \
+		--input-file="${_out_file}" \
 		--current-file="${CURRENT_FILE}" \
 		--all-src-env-merged-name="${ALL_SRC_ENV_MERGED_NAME}" \
 		--exclude-implicit-empty="${EXCLUDE_IMPLICIT_EMPTY}" \
 		--exclude-explicit-empty="${EXCLUDE_EXPLICIT_EMPTY}"
-	cat "${EXTRACT_ALL_ENV_OUTPUT_FILE}${COUNT}" >>"${EXTRACT_ALL_ENV_OUTPUT_FILE}"
-	[[ "true" = "${EXTRACT_ALL_ENV_DELETE_OUTPUT}" && "true" = "${CLEANUP_TMP}" ]] && rm -rf "${EXTRACT_ALL_ENV_OUTPUT_FILE}${COUNT}"
+	cat "${_out_file}" >>"${EXTRACT_ALL_ENV_OUTPUT_FILE}"
+	[[ "true" = "${EXTRACT_ALL_ENV_DELETE_OUTPUT}" && "true" = "${CLEANUP_TMP}" ]] && rm -rf "${_out_file}"
 }
 
 global_stack_load_env_process_file() {
 	local SRC_FILE
-	SRC_FILE="$(echo "${1}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	SRC_FILE="${1#*=}"
 	local DEST_FILE
-	DEST_FILE="$(echo "${2}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	DEST_FILE="${2#*=}"
 	local COUNT
-	COUNT="$(echo "${3}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	COUNT="${3#*=}"
 	local DESTINATION_FILE_TMP_SUFFIX
-	DESTINATION_FILE_TMP_SUFFIX="$(echo "${4}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	DESTINATION_FILE_TMP_SUFFIX="${4#*=}"
 	local DESTINATION_FILE_MERGED_SUFFIX
-	DESTINATION_FILE_MERGED_SUFFIX="$(echo "${5}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	DESTINATION_FILE_MERGED_SUFFIX="${5#*=}"
 	local REMOVE_DASH
-	REMOVE_DASH="$(echo "${6}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	REMOVE_DASH="${6#*=}"
 	local REMOVE_EMPTY_LINES
-	REMOVE_EMPTY_LINES="$(echo "${7}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	REMOVE_EMPTY_LINES="${7#*=}"
 	local REMOVE_TRAILING_SPACES
-	REMOVE_TRAILING_SPACES="$(echo "${8}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	REMOVE_TRAILING_SPACES="${8#*=}"
 	local SHOW_ADDED_ENTRIES
-	SHOW_ADDED_ENTRIES="$(echo "${9}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	SHOW_ADDED_ENTRIES="${9#*=}"
 	local EXCLUDE_DIFFERENT_PATTERN
-	EXCLUDE_DIFFERENT_PATTERN="$(echo "${10}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	EXCLUDE_DIFFERENT_PATTERN="${10#*=}"
 	local CHECK_MISSING
-	CHECK_MISSING="$(echo "${11}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	CHECK_MISSING="${11#*=}"
 	local EXCLUDE_LOCAL_PATTERN
-	EXCLUDE_LOCAL_PATTERN="$(echo "${12}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	EXCLUDE_LOCAL_PATTERN="${12#*=}"
 	local EXCLUDE_REVERSE_CHECK_MISSING
-	EXCLUDE_REVERSE_CHECK_MISSING="$(echo "${13}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	EXCLUDE_REVERSE_CHECK_MISSING="${13#*=}"
 	local EXCLUDE_CHECK_MISSING
-	EXCLUDE_CHECK_MISSING="$(echo "${14}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	EXCLUDE_CHECK_MISSING="${14#*=}"
 	local CLEANUP_TMP
-	CLEANUP_TMP="$(echo "${15}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	CLEANUP_TMP="${15#*=}"
 	local DEBUG
-	DEBUG="$(echo "${16}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	DEBUG="${16#*=}"
 	local SHOW_DIFFERENT_ENTRIES
-	SHOW_DIFFERENT_ENTRIES="$(echo "${17}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	SHOW_DIFFERENT_ENTRIES="${17#*=}"
 	local UPDATE_DIFFERENCES
-	UPDATE_DIFFERENCES="$(echo "${18}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	UPDATE_DIFFERENCES="${18#*=}"
 	local EXTRACT_ALL_ENV_OUTPUT_FILE
-	EXTRACT_ALL_ENV_OUTPUT_FILE="$(echo "${19}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	EXTRACT_ALL_ENV_OUTPUT_FILE="${19#*=}"
 	local DIR
-	DIR="$(echo "${20}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	DIR="${20#*=}"
 	local SEARCH_PATH
-	SEARCH_PATH="$(echo "${21}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	SEARCH_PATH="${21#*=}"
 
 	local TMP_FILE
 	TMP_FILE="${DEST_FILE}${DESTINATION_FILE_TMP_SUFFIX}.${COUNT}"
@@ -254,10 +276,12 @@ global_stack_load_env_process_file() {
 
 	awk -F "=" '!seen[$1]++' "${TMP_FILE}" >"${MERGED_FILE}"
 
-	# Perform cleanups if enabled
-	[[ "${REMOVE_DASH}" = "true" ]] && sed -i '/^\s*#/d' "${MERGED_FILE}"
-	[[ "${REMOVE_EMPTY_LINES}" = "true" ]] && sed -i '/^\s*$/d' "${MERGED_FILE}"
-	[[ "${REMOVE_TRAILING_SPACES}" = "true" ]] && sed -i 's/[[:space:]]*$//' "${MERGED_FILE}"
+	# P6: merge three sed -i passes into one
+	local _sed_args=()
+	[[ "${REMOVE_DASH}" = "true" ]] && _sed_args+=(-e '/^\s*#/d')
+	[[ "${REMOVE_EMPTY_LINES}" = "true" ]] && _sed_args+=(-e '/^\s*$/d')
+	[[ "${REMOVE_TRAILING_SPACES}" = "true" ]] && _sed_args+=(-e 's/[[:space:]]*$//')
+	[[ ${#_sed_args[@]} -gt 0 ]] && sed -i "${_sed_args[@]}" "${MERGED_FILE}"
 
 	# Show added entries if enabled
 	[[ "true" = "${SHOW_ADDED_ENTRIES}" ]] &&
@@ -328,15 +352,15 @@ global_stack_load_env_process_file() {
 
 global_stack_load_env_show_files_inconsistency() {
 	local SRC_FILE
-	SRC_FILE="$(echo "${1}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	SRC_FILE="${1#*=}"
 	local DEST_FILE
-	DEST_FILE="$(echo "${2}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	DEST_FILE="${2#*=}"
 	local EXCLUDE_PATTERN
-	EXCLUDE_PATTERN="$(echo "${3}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	EXCLUDE_PATTERN="${3#*=}"
 	local OPERATION
-	OPERATION="$(echo "${4}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	OPERATION="${4#*=}"
 	local DEBUG
-	DEBUG="$(echo "${5}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	DEBUG="${5#*=}"
 
 	local ADDED_ENTRIES
 	ADDED_ENTRIES=$(awk -F "=" -v exclude_pattern="${EXCLUDE_PATTERN}" 'NR == FNR { original[$1]; next } !($1 in original) && $1 !~ /^#|^\s*$/ && (exclude_pattern == "" || !($1 ~ exclude_pattern)) { print $1 "=" $2 }' "${DEST_FILE}" "${SRC_FILE}")
@@ -355,19 +379,19 @@ global_stack_load_env_show_files_inconsistency() {
 
 global_stack_load_env_show_files_differences() {
 	local SRC_FILE
-	SRC_FILE="$(echo "${1}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	SRC_FILE="${1#*=}"
 	local DEST_FILE
-	DEST_FILE="$(echo "${2}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	DEST_FILE="${2#*=}"
 	local EXCLUDE_PATTERN
-	EXCLUDE_PATTERN="$(echo "${3}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	EXCLUDE_PATTERN="${3#*=}"
 	local COUNT
-	COUNT="$(echo "${4}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	COUNT="${4#*=}"
 	local SHOW_DIFFERENT_ENTRIES
-	SHOW_DIFFERENT_ENTRIES="$(echo "${5}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	SHOW_DIFFERENT_ENTRIES="${5#*=}"
 	local DEBUG
-	DEBUG="$(echo "${6}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	DEBUG="${6#*=}"
 	local UPDATE_DIFFERENCES
-	UPDATE_DIFFERENCES="$(echo "${7}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	UPDATE_DIFFERENCES="${7#*=}"
 
 	local DIFFERENT_ENTRIES
 	DIFFERENT_ENTRIES=$(awk -F "=" -v exclude_pattern="${EXCLUDE_PATTERN}" 'NR == FNR { source[$1]=$2; next } ($1 in source) && ($2 != source[$1]) && (exclude_pattern == "" || !($1 ~ exclude_pattern)) { print $1 "=" $2 "\n(--------- is : \"" source[$1] "\" in source)\n" }' "${SRC_FILE}" "${DEST_FILE}")
@@ -391,23 +415,23 @@ global_stack_load_env_show_files_differences() {
 
 global_stack_load_env_check_missing_variables() {
 	local TARGET_FILE
-	TARGET_FILE="$(echo "${1}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	TARGET_FILE="${1#*=}"
 	local TXT_FILE_NAME
-	TXT_FILE_NAME="$(echo "${2}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	TXT_FILE_NAME="${2#*=}"
 	local EXCLUDE_PATTERN
-	EXCLUDE_PATTERN="$(echo "${3}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	EXCLUDE_PATTERN="${3#*=}"
 	local REVERSE_CHECKING
-	REVERSE_CHECKING="$(echo "${4}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	REVERSE_CHECKING="${4#*=}"
 	local EXTRACT_ALL_ENV_OUTPUT_FILE
-	EXTRACT_ALL_ENV_OUTPUT_FILE="$(echo "${5}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	EXTRACT_ALL_ENV_OUTPUT_FILE="${5#*=}"
 	local DIR
-	DIR="$(echo "${6}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	DIR="${6#*=}"
 	local SEARCH_PATH
-	SEARCH_PATH="$(echo "${7}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	SEARCH_PATH="${7#*=}"
 	local DEBUG
-	DEBUG="$(echo "${8}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	DEBUG="${8#*=}"
 	local CLEANUP_TMP
-	CLEANUP_TMP="$(echo "${9}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+	CLEANUP_TMP="${9#*=}"
 
 	cut -d'=' -f1 "${EXTRACT_ALL_ENV_OUTPUT_FILE}" | LC_ALL=C sort -u >"${DIR}/${TXT_FILE_NAME}_extracted_vars.txt"
 	cut -d'=' -f1 "${TARGET_FILE}" | LC_ALL=C sort -u >"${DIR}/${TXT_FILE_NAME}_vars.txt"
@@ -473,37 +497,37 @@ global_stack_load_env_main() {
 
 	while [[ $# -gt 0 ]]; do
 		case "${1}" in
-		--debug=*) GLOBAL_STACK_LOAD_ENV_DEBUG="$(echo "${1,,}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')" ;;
-		--debug-show-extracted-files=*) GLOBAL_STACK_LOAD_ENV_DEBUG_SHOW_EXTRACTED_FILES="$(echo "${1,,}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')" ;;
-		--remove-dash=*) GLOBAL_STACK_LOAD_ENV_REMOVE_DASH="$(echo "${1,,}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')" ;;
-		--remove-empty-lines=*) GLOBAL_STACK_LOAD_ENV_REMOVE_EMPTY_LINES="$(echo "${1,,}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')" ;;
-		--remove-trailing-spaces=*) GLOBAL_STACK_LOAD_ENV_REMOVE_TRAILING_SPACES="$(echo "${1,,}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')" ;;
-		--show-added-entries=*) GLOBAL_STACK_LOAD_ENV_SHOW_ADDED_ENTRIES="$(echo "${1,,}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')" ;;
-		--show-different-entries=*) GLOBAL_STACK_LOAD_ENV_SHOW_DIFFERENT_ENTRIES="$(echo "${1,,}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')" ;;
-		--extract-all-env=*) GLOBAL_STACK_LOAD_ENV_EXTRACT_ALL_ENV="$(echo "${1,,}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')" ;;
-		--extract-all-env-delete-output=*) GLOBAL_STACK_LOAD_ENV_EXTRACT_ALL_ENV_DELETE_OUTPUT="$(echo "${1,,}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')" ;;
-		--check-missing=*) GLOBAL_STACK_LOAD_ENV_CHECK_MISSING="$(echo "${1,,}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')" ;;
-		--cleanup-tmp=*) GLOBAL_STACK_LOAD_ENV_CLEANUP_TMP="$(echo "${1,,}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')" ;;
-		--include-docker-args=*) GLOBAL_STACK_LOAD_ENV_INCLUDE_DOCKER_ARGS="$(echo "${1,,}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')" ;;
-		--dir=*) GLOBAL_STACK_LOAD_ENV_DIR="$(echo "${1}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')" ;;
-		--destination-file-tmp-suffix=*) GLOBAL_STACK_LOAD_ENV_DESTINATION_FILE_TMP_SUFFIX="$(echo "${1}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')" ;;
-		--destination-file-merged-suffix=*) GLOBAL_STACK_LOAD_ENV_DESTINATION_FILE_MERGED_SUFFIX="$(echo "${1}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')" ;;
-		--update-differences=*) GLOBAL_STACK_LOAD_ENV_UPDATE_DIFFERENCES="$(echo "${1}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')" ;;
-		--extract-all-prefix=*) GLOBAL_STACK_LOAD_ENV_EXTRACT_ALL_PREFIX="$(echo "${1}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')" ;;
-		--exclude-different-pattern=*) GLOBAL_STACK_LOAD_ENV_EXCLUDE_DIFFERENT_PATTERN="$(echo "${1}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')" ;;
-		--extract-all-exclude-pattern=*) GLOBAL_STACK_LOAD_ENV_EXTRACT_ALL_EXCLUDE_PATTERN="$(echo "${1}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')" ;;
-		--exclude-reverse-check-missing=*) GLOBAL_STACK_LOAD_ENV_EXCLUDE_REVERSE_CHECK_MISSING="$(echo "${1}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')" ;;
-		--exclude-check-missing=*) GLOBAL_STACK_LOAD_ENV_EXCLUDE_CHECK_MISSING="$(echo "${1}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')" ;;
-		--search-path=*) GLOBAL_STACK_LOAD_ENV_SEARCH_PATH="$(echo "${1}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')" ;;
-		--search-path-ignore-pattern=*) GLOBAL_STACK_LOAD_ENV_SEARCH_PATH_IGNORE_PATTERN="$(echo "${1}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')" ;;
-		--source-files=*) GLOBAL_STACK_LOAD_ENV_SOURCE_FILES="$(echo "${1}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')" ;;
-		--destination-files=*) GLOBAL_STACK_LOAD_ENV_DESTINATION_FILES="$(echo "${1}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')" ;;
-		--extract-all-env-output-file=*) GLOBAL_STACK_LOAD_ENV_EXTRACT_ALL_ENV_OUTPUT_FILE="$(echo "${1}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')" ;;
-		--exclude-local-pattern=*) GLOBAL_STACK_LOAD_ENV_EXCLUDE_LOCAL_PATTERN="$(echo "${1}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')" ;;
-		--all-src-env-merged-name=*) GLOBAL_STACK_LOAD_ENV_ALL_SRC_ENV_MERGED_NAME="$(echo "${1}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')" ;;
-		--exclude-implicit-empty=*) GLOBAL_STACK_LOAD_ENV_EXCLUDE_IMPLICIT_EMPTY="$(echo "${1,,}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')" ;;
-		--exclude-explicit-empty=*) GLOBAL_STACK_LOAD_ENV_EXCLUDE_EXPLICIT_EMPTY="$(echo "${1,,}" | sed 's/^--[a-zA-Z0-9_-]\+=//' | sed 's/^--[a-zA-Z0-9_-]\+=//')" ;;
-		--help) 
+		--debug=*) GLOBAL_STACK_LOAD_ENV_DEBUG="${1#*=}"; GLOBAL_STACK_LOAD_ENV_DEBUG="${GLOBAL_STACK_LOAD_ENV_DEBUG,,}" ;;
+		--debug-show-extracted-files=*) GLOBAL_STACK_LOAD_ENV_DEBUG_SHOW_EXTRACTED_FILES="${1#*=}"; GLOBAL_STACK_LOAD_ENV_DEBUG_SHOW_EXTRACTED_FILES="${GLOBAL_STACK_LOAD_ENV_DEBUG_SHOW_EXTRACTED_FILES,,}" ;;
+		--remove-dash=*) GLOBAL_STACK_LOAD_ENV_REMOVE_DASH="${1#*=}"; GLOBAL_STACK_LOAD_ENV_REMOVE_DASH="${GLOBAL_STACK_LOAD_ENV_REMOVE_DASH,,}" ;;
+		--remove-empty-lines=*) GLOBAL_STACK_LOAD_ENV_REMOVE_EMPTY_LINES="${1#*=}"; GLOBAL_STACK_LOAD_ENV_REMOVE_EMPTY_LINES="${GLOBAL_STACK_LOAD_ENV_REMOVE_EMPTY_LINES,,}" ;;
+		--remove-trailing-spaces=*) GLOBAL_STACK_LOAD_ENV_REMOVE_TRAILING_SPACES="${1#*=}"; GLOBAL_STACK_LOAD_ENV_REMOVE_TRAILING_SPACES="${GLOBAL_STACK_LOAD_ENV_REMOVE_TRAILING_SPACES,,}" ;;
+		--show-added-entries=*) GLOBAL_STACK_LOAD_ENV_SHOW_ADDED_ENTRIES="${1#*=}"; GLOBAL_STACK_LOAD_ENV_SHOW_ADDED_ENTRIES="${GLOBAL_STACK_LOAD_ENV_SHOW_ADDED_ENTRIES,,}" ;;
+		--show-different-entries=*) GLOBAL_STACK_LOAD_ENV_SHOW_DIFFERENT_ENTRIES="${1#*=}"; GLOBAL_STACK_LOAD_ENV_SHOW_DIFFERENT_ENTRIES="${GLOBAL_STACK_LOAD_ENV_SHOW_DIFFERENT_ENTRIES,,}" ;;
+		--extract-all-env=*) GLOBAL_STACK_LOAD_ENV_EXTRACT_ALL_ENV="${1#*=}"; GLOBAL_STACK_LOAD_ENV_EXTRACT_ALL_ENV="${GLOBAL_STACK_LOAD_ENV_EXTRACT_ALL_ENV,,}" ;;
+		--extract-all-env-delete-output=*) GLOBAL_STACK_LOAD_ENV_EXTRACT_ALL_ENV_DELETE_OUTPUT="${1#*=}"; GLOBAL_STACK_LOAD_ENV_EXTRACT_ALL_ENV_DELETE_OUTPUT="${GLOBAL_STACK_LOAD_ENV_EXTRACT_ALL_ENV_DELETE_OUTPUT,,}" ;;
+		--check-missing=*) GLOBAL_STACK_LOAD_ENV_CHECK_MISSING="${1#*=}"; GLOBAL_STACK_LOAD_ENV_CHECK_MISSING="${GLOBAL_STACK_LOAD_ENV_CHECK_MISSING,,}" ;;
+		--cleanup-tmp=*) GLOBAL_STACK_LOAD_ENV_CLEANUP_TMP="${1#*=}"; GLOBAL_STACK_LOAD_ENV_CLEANUP_TMP="${GLOBAL_STACK_LOAD_ENV_CLEANUP_TMP,,}" ;;
+		--include-docker-args=*) GLOBAL_STACK_LOAD_ENV_INCLUDE_DOCKER_ARGS="${1#*=}"; GLOBAL_STACK_LOAD_ENV_INCLUDE_DOCKER_ARGS="${GLOBAL_STACK_LOAD_ENV_INCLUDE_DOCKER_ARGS,,}" ;;
+		--dir=*) GLOBAL_STACK_LOAD_ENV_DIR="${1#*=}" ;;
+		--destination-file-tmp-suffix=*) GLOBAL_STACK_LOAD_ENV_DESTINATION_FILE_TMP_SUFFIX="${1#*=}" ;;
+		--destination-file-merged-suffix=*) GLOBAL_STACK_LOAD_ENV_DESTINATION_FILE_MERGED_SUFFIX="${1#*=}" ;;
+		--update-differences=*) GLOBAL_STACK_LOAD_ENV_UPDATE_DIFFERENCES="${1#*=}" ;;
+		--extract-all-prefix=*) GLOBAL_STACK_LOAD_ENV_EXTRACT_ALL_PREFIX="${1#*=}" ;;
+		--exclude-different-pattern=*) GLOBAL_STACK_LOAD_ENV_EXCLUDE_DIFFERENT_PATTERN="${1#*=}" ;;
+		--extract-all-exclude-pattern=*) GLOBAL_STACK_LOAD_ENV_EXTRACT_ALL_EXCLUDE_PATTERN="${1#*=}" ;;
+		--exclude-reverse-check-missing=*) GLOBAL_STACK_LOAD_ENV_EXCLUDE_REVERSE_CHECK_MISSING="${1#*=}" ;;
+		--exclude-check-missing=*) GLOBAL_STACK_LOAD_ENV_EXCLUDE_CHECK_MISSING="${1#*=}" ;;
+		--search-path=*) GLOBAL_STACK_LOAD_ENV_SEARCH_PATH="${1#*=}" ;;
+		--search-path-ignore-pattern=*) GLOBAL_STACK_LOAD_ENV_SEARCH_PATH_IGNORE_PATTERN="${1#*=}" ;;
+		--source-files=*) GLOBAL_STACK_LOAD_ENV_SOURCE_FILES="${1#*=}" ;;
+		--destination-files=*) GLOBAL_STACK_LOAD_ENV_DESTINATION_FILES="${1#*=}" ;;
+		--extract-all-env-output-file=*) GLOBAL_STACK_LOAD_ENV_EXTRACT_ALL_ENV_OUTPUT_FILE="${1#*=}" ;;
+		--exclude-local-pattern=*) GLOBAL_STACK_LOAD_ENV_EXCLUDE_LOCAL_PATTERN="${1#*=}" ;;
+		--all-src-env-merged-name=*) GLOBAL_STACK_LOAD_ENV_ALL_SRC_ENV_MERGED_NAME="${1#*=}" ;;
+		--exclude-implicit-empty=*) GLOBAL_STACK_LOAD_ENV_EXCLUDE_IMPLICIT_EMPTY="${1#*=}"; GLOBAL_STACK_LOAD_ENV_EXCLUDE_IMPLICIT_EMPTY="${GLOBAL_STACK_LOAD_ENV_EXCLUDE_IMPLICIT_EMPTY,,}" ;;
+		--exclude-explicit-empty=*) GLOBAL_STACK_LOAD_ENV_EXCLUDE_EXPLICIT_EMPTY="${1#*=}"; GLOBAL_STACK_LOAD_ENV_EXCLUDE_EXPLICIT_EMPTY="${GLOBAL_STACK_LOAD_ENV_EXCLUDE_EXPLICIT_EMPTY,,}" ;;
+		--help)
 			global_stack_load_env_show_help
 			exit 1
 			;;
@@ -534,27 +558,30 @@ global_stack_load_env_main() {
 		[GLOBAL_STACK_LOAD_ENV_EXCLUDE_EXPLICIT_EMPTY]=true
 	)
 	for VAR in "${!BOOLEAN_FLAGS[@]}"; do
-		[[ -z "${!VAR+set}" ]] && eval "${VAR}=\"${BOOLEAN_FLAGS[${VAR}]}\""
+		[[ -z "${!VAR+set}" ]] && printf -v "${VAR}" '%s' "${BOOLEAN_FLAGS[${VAR}]}"
 
 		if [[ "true" != "${!VAR}" && "false" != "${!VAR}" ]]; then
-			eval "${VAR}=\"${BOOLEAN_FLAGS[${VAR}]}\""
+			printf -v "${VAR}" '%s' "${BOOLEAN_FLAGS[${VAR}]}"
 		fi
 	done
 
+	# P11: replace 3-nested-subshell DIR computation with 1 subprocess
 	# Set patterns/directory/files variables with defaults
+	local _script_real
+	_script_real="$(realpath "${0}")"
 	local -A DEFAULTS=(
-		[GLOBAL_STACK_LOAD_ENV_DIR]="$(dirname "$(realpath "${0}")" | sed "s/\/bin//")"
+		[GLOBAL_STACK_LOAD_ENV_DIR]="${_script_real%/bin/load-env.sh}"
 		[GLOBAL_STACK_LOAD_ENV_DESTINATION_FILE_TMP_SUFFIX]=".tmp"
 		[GLOBAL_STACK_LOAD_ENV_DESTINATION_FILE_MERGED_SUFFIX]=".merged"
 		[GLOBAL_STACK_LOAD_ENV_UPDATE_DIFFERENCES]="" # update_differences
 		[GLOBAL_STACK_LOAD_ENV_EXTRACT_ALL_PREFIX]="(GLOBAL_STACK_)"
 		[GLOBAL_STACK_LOAD_ENV_EXCLUDE_DIFFERENT_PATTERN]='^(ARG )?(DOCKER_INIT|GLOBAL_STACK_DOCKER_USER_EMAIL|GLOBAL_STACK_DOCKER_USER_NAME|GLOBAL_STACK_POSTGRES18_DBS|GLOBAL_STACK_EXPOSED_VIRTUAL_HOSTS|GLOBAL_STACK_HTTPS_LOCALHOST_IPS|GLOBAL_STACK_HTTPS_CONTAINER_IPS|GLOBAL_STACK_PODMAN_CHANEL|COMPOSE_FILE|COMPOSE_BAKE|BUILDX_EXPERIMENTAL|BUILDKIT_PROGRESS|BUILDX_BUILDER|GLOBAL_STACK_HOST_GATEWAY_IP_MASK|COMPOSE_FULL_FILE|BUILDX_BAKE_FILE|GLOBAL_STACK_HOST_GATEWAY_IP|GLOBAL_STACK_SERVERLESS_FRAMEWORK_SERVERLESS_ACCESS_KEY|GLOBAL_STACK_(.+)_PORT_[0-9]+(.*))'
 		[GLOBAL_STACK_LOAD_ENV_EXTRACT_ALL_EXCLUDE_PATTERN]='^(NODE_CONFIG_PACKAGE_|NODE_INSTALL_PACKAGE_|PHP_CONFIG_PACKAGE|PHP_INSTALL_PACKAGE|SDKMAN_CONFIG_PACKAGE|SDKMAN_INSTALL_PACKAGE|PYTHON_CONFIG_PACKAGE_|PYTHON_INSTALL_PACKAGE_|RUBY_CONFIG_PACKAGE_|RUBY_INSTALL_PACKAGE_|JAVA_VERSION|JAVA_VERSION_AS|NODE_VERSION|NODE_VERSION_AS|PYTHON_VERSION_AS|RUBY_VERSION_AS|NVM_MODE|GLOBAL_STACK_NODE_UPGRADE|GLOBAL_STACK_PYTHON_VERSION|GLOBAL_STACK_RUBY_VERSION|GLOBAL_STACK_CURRENT_VERSION|GLOBAL_STACK_IMAGE_MARIADB_VERSION|GLOBAL_STACK_IMAGE_MONGO_VERSION|GLOBAL_STACK_IMAGE_MYSQL_VERSION|GLOBAL_STACK_IMAGE_POSTGRES_VERSION|GLOBAL_STACK_SHOW_WAITING)'
-		[GLOBAL_STACK_LOAD_ENV_EXCLUDE_REVERSE_CHECK_MISSING]='^(ARG )?(DOCKER_INIT|COMPOSE_DOCKER_CLI_BUILD|COMPOSE_PROJECT_NAME|GLOBAL_STACK_COMPOSE_CLI|COMPOSE_FILE|COMPOSE_BAKE|BUILDX_EXPERIMENTAL|BUILDKIT_PROGRESS|BUILDX_BUILDER|GLOBAL_STACK_HOST_GATEWAY_IP_MASK|COMPOSE_FULL_FILE|BUILDX_BAKE_FILE|COMPOSE_HTTP_TIMEOUT|COMPOSE_PATH_SEPARATOR|COMPOSE_REMOVE_ORPHANS|DOCKER_BUILDKIT|GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_NAME|GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_VERSION|GLOBAL_STACK_SERVERLESS_FRAMEWORK_HOST|GLOBAL_STACK_BASE_CA_BUNDLE|GLOBAL_STACK_RELOAD_PHP[0-9]+_[0-9]+|GLOBAL_STACK_LOCALSTACK_LOCALSTACK_PORT_4566|GLOBAL_STACK_LOCALSTACK_LOCALSTACK_PORT_4566_WITH_STARTING_POINTS)'
-		[GLOBAL_STACK_LOAD_ENV_EXCLUDE_CHECK_MISSING]='^(ARG )?(ANDROID_HOME|ANDROID_NDK_HOME|ANDROID_SDK_HOME|ANDROID_SDK_ROOT|CARGO_HOME|CAROOT|COMPOSER_HOME|COMPOSER_SOURCE|CYPRESS_CACHE_FOLDER|DENO_DIR|DENO_INSTALL|DENO_INSTALL_ROOT|FLUTTER_HOME|FLUTTER_ROOT|FVM_CACHE_PATH|FVM_GIT_CACHE_PATH|FVM_USE_GIT_CACHE|FVM_FLUTTER_URL|GRADLE_USER_HOME|MISE_CACHE_DIR|MISE_CONFIG_DIR|MISE_DATA_DIR|MISE_DEBUG|MISE_INSTALL_PATH|MISE_QUIET|MISE_STATE_DIR|MISE_VERSION|NPM_CACHE_DIR|NVM_DIR|GLOBAL_STACK_RELOAD_PHP|PHPBREW_BIN|GOROOT|GOPATH|ZIGPATH|HURLPATH|PHPBREW_HOME|PHPBREW_RC_ENABLE|PHPBREW_ROOT|PHPBREW_SET_PROMPT|PHPBREW_SKIP_INIT|PHPBREW_SRC|PNPM_HOME|PUB_CACHE|PYENV_ROOT|RBENV_ROOT|RUSTUP_HOME|SDKMAN_DIR|SYMFONY_HOME|YARN_CACHE_FOLDER|YARN_GLOBAL_FOLDER|YARN_OFFLINE_MIRROR|GLOBAL_STACK_DOCKER_USER_CONFIG|GLOBAL_STACK_BASE_USERNAME|GLOBAL_STACK_BASE_USER_HOME_GROUP_PAIRS|GLOBAL_STACK_BASE_USER_HOME_GROUP_PAIR|GLOBAL_STACK_BASE_USER_HOME|GLOBAL_STACK_BASE_GROUP|PHP_INSTALL_CLI_VARIANTS|PHP_INSTALL_CLI_OPTIONS)'
+		[GLOBAL_STACK_LOAD_ENV_EXCLUDE_REVERSE_CHECK_MISSING]='^(ARG )?(DOCKER_INIT|COMPOSE_DOCKER_CLI_BUILD|COMPOSE_PROJECT_NAME|GLOBAL_STACK_COMPOSE_CLI|COMPOSE_FILE|COMPOSE_BAKE|BUILDX_EXPERIMENTAL|BUILDKIT_PROGRESS|BUILDX_BUILDER|GLOBAL_STACK_HOST_GATEWAY_IP_MASK|COMPOSE_FULL_FILE|BUILDX_BAKE_FILE|COMPOSE_HTTP_TIMEOUT|COMPOSE_PATH_SEPARATOR|COMPOSE_REMOVE_ORPHANS|DOCKER_BUILDKIT|GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_NAME|GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_VERSION|GLOBAL_STACK_SERVERLESS_FRAMEWORK_HOST|GLOBAL_STACK_BASE_CA_BUNDLE|GLOBAL_STACK_RELOAD_PHP[0-9]+_[0-9]+|GLOBAL_STACK_LOCALSTACK_LOCALSTACK_PORT_4566|GLOBAL_STACK_LOCALSTACK_LOCALSTACK_PORT_4566_CONTAINER_BINDING)'
+		[GLOBAL_STACK_LOAD_ENV_EXCLUDE_CHECK_MISSING]='^(ARG )?(ANDROID_HOME|ANDROID_NDK_HOME|ANDROID_SDK_HOME|ANDROID_SDK_ROOT|CARGO_HOME|CAROOT|COMPOSER_HOME|COMPOSER_SOURCE|CYPRESS_CACHE_FOLDER|DENO_DIR|DENO_INSTALL|DENO_INSTALL_ROOT|FLUTTER_HOME|FLUTTER_ROOT|FVM_CACHE_PATH|FVM_GIT_CACHE_PATH|FVM_USE_GIT_CACHE|FVM_FLUTTER_URL|GRADLE_USER_HOME|MISE_CACHE_DIR|MISE_CONFIG_DIR|MISE_DATA_DIR|MISE_DEBUG|MISE_INSTALL_PATH|MISE_QUIET|MISE_STATE_DIR|MISE_VERSION|NPM_CACHE_DIR|NVM_DIR|GLOBAL_STACK_RELOAD_PHP|PHPBREW_BIN|GOROOT|GOPATH|PHPBREW_HOME|PHPBREW_RC_ENABLE|PHPBREW_ROOT|PHPBREW_SET_PROMPT|PHPBREW_SKIP_INIT|PHPBREW_SRC|PNPM_HOME|PUB_CACHE|PYENV_ROOT|RBENV_ROOT|RUSTUP_HOME|SDKMAN_DIR|SYMFONY_HOME|YARN_CACHE_FOLDER|YARN_GLOBAL_FOLDER|YARN_OFFLINE_MIRROR|GLOBAL_STACK_DOCKER_USER_CONFIG|GLOBAL_STACK_BASE_USERNAME|GLOBAL_STACK_BASE_USER_HOME_GROUP_PAIRS|GLOBAL_STACK_BASE_USER_HOME_GROUP_PAIR|GLOBAL_STACK_BASE_USER_HOME|GLOBAL_STACK_BASE_GROUP|PHP_INSTALL_CLI_VARIANTS|PHP_INSTALL_CLI_OPTIONS)'
 	)
 	for VAR in "${!DEFAULTS[@]}"; do
-		[[ -z "${!VAR+set}" ]] && eval "${VAR}=\"${DEFAULTS[${VAR}]}\""
+		[[ -z "${!VAR+set}" ]] && printf -v "${VAR}" '%s' "${DEFAULTS[${VAR}]}"
 	done
 
 	# Set patterns/directory/files variables that depends on other variables with defaults
@@ -580,8 +607,9 @@ global_stack_load_env_main() {
 
 	> "${GLOBAL_STACK_LOAD_ENV_ALL_SRC_ENV_MERGED_NAME}"
 
+	# P7: replace cat | sed | sed | sed with single sed
 	for SRC_FILE in ${GLOBAL_STACK_LOAD_ENV_SOURCE_FILES//[\"\'\`]/}; do
-		cat "${SRC_FILE}" | sed '/^\s*#/d' | sed '/^\s*$/d' | sed 's/[[:space:]]*$//' >> "${GLOBAL_STACK_LOAD_ENV_ALL_SRC_ENV_MERGED_NAME}"
+		sed -e '/^\s*#/d' -e '/^\s*$/d' -e 's/[[:space:]]*$//' "${SRC_FILE}" >> "${GLOBAL_STACK_LOAD_ENV_ALL_SRC_ENV_MERGED_NAME}"
 		echo >> "${GLOBAL_STACK_LOAD_ENV_ALL_SRC_ENV_MERGED_NAME}"
 	done
 
@@ -607,7 +635,14 @@ global_stack_load_env_main() {
 				--exclude-implicit-empty="${GLOBAL_STACK_LOAD_ENV_EXCLUDE_IMPLICIT_EMPTY}" \
 				--exclude-explicit-empty="${GLOBAL_STACK_LOAD_ENV_EXCLUDE_EXPLICIT_EMPTY}"
 		elif [[ -d "${GLOBAL_STACK_LOAD_ENV_SEARCH_PATH}" ]]; then
-			find "${GLOBAL_STACK_LOAD_ENV_SEARCH_PATH}" -type f | while read -r FILE; do
+			# P2: process substitution avoids subshell (COUNT_SEARCH_EXTRACT increments persist);
+			# file-type filter includes all text-bearing extensions found in the docker tree
+			# (Dockerfile, .yaml, .sh, .env, .conf, .caddy, .cnf, .php, .ini, .local,
+			#  .txt, .xml, .md, .npmrc, .yarnrc, plus extensionless Caddyfile/Makefile-style)
+			# Binary-only paths (registry blobs, data, storage, logs) are handled by the
+			# SEARCH_PATH_IGNORE_PATTERN inside search_and_extract, so we keep the filter
+			# broad enough to not miss legitimate config files while skipping obvious blobs.
+			while IFS= read -r FILE; do
 				((COUNT_SEARCH_EXTRACT++))
 				global_stack_load_env_search_and_extract \
 					--current-file="${FILE}" \
@@ -624,11 +659,31 @@ global_stack_load_env_main() {
 					--all-src-env-merged-name="${GLOBAL_STACK_LOAD_ENV_ALL_SRC_ENV_MERGED_NAME}" \
 					--exclude-implicit-empty="${GLOBAL_STACK_LOAD_ENV_EXCLUDE_IMPLICIT_EMPTY}" \
 					--exclude-explicit-empty="${GLOBAL_STACK_LOAD_ENV_EXCLUDE_EXPLICIT_EMPTY}"
-			done
+			done < <(find "${GLOBAL_STACK_LOAD_ENV_SEARCH_PATH}" -type f \( \
+				-name 'Dockerfile' \
+				-o -name '*.yaml' \
+				-o -name '*.sh' \
+				-o -name '*.env' \
+				-o -name '*.conf' \
+				-o -name '*.caddy' \
+				-o -name '*.cnf' \
+				-o -name '*.php' \
+				-o -name '*.ini' \
+				-o -name '*.local' \
+				-o -name '*.txt' \
+				-o -name '*.xml' \
+				-o -name '*.md' \
+				-o -name '*.npmrc' \
+				-o -name '*.yarnrc' \
+				-o -name 'Caddyfile' \
+				-o -name 'Makefile' \
+			\))
 		else
 			echo -e "\n ---- (global_stack_load_env_main): ${GLOBAL_STACK_LOAD_ENV_SEARCH_PATH} is neither a file nor a directory, exiting !\n\n"
 			exit 1
 		fi
+		# P9: remove redundant sort -u on pre-sorted file — file is already appended in order;
+		# sort -u is still needed to deduplicate across multiple files
 		LC_ALL=C sort -u "${GLOBAL_STACK_LOAD_ENV_EXTRACT_ALL_ENV_OUTPUT_FILE}" -o "${GLOBAL_STACK_LOAD_ENV_EXTRACT_ALL_ENV_OUTPUT_FILE}"
 	fi
 

@@ -1,12 +1,14 @@
 #!/bin/bash
+set -euo pipefail
 
 if [[ -n "${GLOBAL_STACK_HURL_VERSION}" && "" = "$(command -v hurl)" ]]; then
-    sudo mkdir -p ${HURLPATH}
-    sudo chmod -R a+rwx ${HURLPATH}
-    sudo chown -R "${GLOBAL_STACK_DOCKER_USER_ID}:${GLOBAL_STACK_DOCKER_GROUP_ID}" ${HURLPATH}
+    sudo mkdir -p "${GLOBAL_STACK_HURLPATH}"
+    sudo chmod -R a+rwx "${GLOBAL_STACK_HURLPATH}"
+    sudo chown -R "${GLOBAL_STACK_DOCKER_USER_ID}:${GLOBAL_STACK_DOCKER_GROUP_ID}" "${GLOBAL_STACK_HURLPATH}"
 
-    wget https://github.com/Orange-OpenSource/hurl/releases/download/${GLOBAL_STACK_HURL_VERSION}/hurl-${GLOBAL_STACK_HURL_VERSION}-x86_64-unknown-linux-gnu.tar.gz
-    tar -C ${HURLPATH} --strip-component=1 -xzf hurl-${GLOBAL_STACK_HURL_VERSION}-x86_64-unknown-linux-gnu.tar.gz
+    archive="hurl-${GLOBAL_STACK_HURL_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
+    wget "https://github.com/Orange-OpenSource/hurl/releases/download/${GLOBAL_STACK_HURL_VERSION}/${archive}"
+    tar -C "${GLOBAL_STACK_HURLPATH}" --strip-components=1 -xzf "${archive}"
 
-    rm -rf hurl-${GLOBAL_STACK_HURL_VERSION}-x86_64-unknown-linux-gnu.tar.gz
+    rm -rf "${archive}"
 fi

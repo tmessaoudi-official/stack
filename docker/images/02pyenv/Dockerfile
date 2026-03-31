@@ -8,16 +8,14 @@ ARG GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS=local-global-stack-registry.local
 # shellcheck disable=SC2086
 FROM ${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}:${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_PORT_5000}/local_global_stack_00base:${GLOBAL_STACK_VERSION}
 
-LABEL maintainer="Takieddine Messaoudi <takieddine.messaoudi.official@gmail.com>"
-
-LABEL info="local_global_stack"
+LABEL maintainer="Takieddine Messaoudi <takieddine.messaoudi.official@gmail.com>" \
+      info="local_global_stack"
 
 USER root
 
 SHELL ["/bin/bash", "-xeEu", "-o", "pipefail", "-c"]
 
 # @todo fix pin versions
-# hadolint ignore=DL3008,DL3018
 RUN shopt -s extdebug \
     && IFS=$'\n\t' \
     && apt-get -o Acquire::AllowInsecureRepositories=true update --allow-releaseinfo-change \

@@ -1,0 +1,14 @@
+---
+# hadolint global configuration
+# https://github.com/hadolint/hadolint
+
+ignore:
+  # DL3008: Pin versions in apt-get install — acceptable in development environments
+  # where we intentionally track latest packages
+  - DL3008
+  # DL3018: Pin versions in apk add — acceptable for same reason
+  - DL3018
+
+trustedRegistries:
+  - localhost
+  - registry.local

@@ -4,9 +4,8 @@ ARG GLOBAL_STACK_IMAGE_DPAGE_PGADMIN4_VERSION=9.13.0
 # shellcheck disable=SC2148
 FROM dpage/pgadmin4:${GLOBAL_STACK_IMAGE_DPAGE_PGADMIN4_VERSION}
 
-LABEL maintainer="Takieddine Messaoudi <takieddine.messaoudi.official@gmail.com>"
-
-LABEL info="local_global_stack"
+LABEL maintainer="Takieddine Messaoudi <takieddine.messaoudi.official@gmail.com>" \
+      info="local_global_stack"
 
 # @todo fix last user should not be root
 # hadolint ignore=DL3002

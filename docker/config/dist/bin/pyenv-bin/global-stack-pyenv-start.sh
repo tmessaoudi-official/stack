@@ -9,7 +9,8 @@ stackCatch() {
     # error handling goes here
     echo "Error detected !!"
     echo -e "$(date '+%d-%m-%Y %H:%M:%S'): Error - ** line: ${2} ** ** message: ${3} ** pyenv ($([[ -n "${PYTHON_VERSION_AS:-}" && "" != "${PYTHON_VERSION_AS:-}" ]] && echo "${PYTHON_VERSION_AS:-}" || echo "${PYTHON_VERSION:-}")) ${PYENV_MODE:-} global-stack-pyenv-start.sh" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/elapsed"
-    sleep infinity
+    [[ -n "${GLOBAL_STACK_ERROR_TOKEN:-}" ]] && touch "${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}/${GLOBAL_STACK_ERROR_TOKEN}"
+    exit 1
   fi
 }
 
@@ -29,6 +30,7 @@ sleep 1
 
 if [ "${PYENV_MODE}" = "install" ]; then
   sudo rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/pyenv"
+  rm -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}/${GLOBAL_STACK_ERROR_TOKEN:-}"
   sleep 1
 
   global-stack-base-wait-for.sh \
@@ -42,6 +44,7 @@ fi
 
 if [ "${PYENV_MODE}" = "setup" ]; then
   rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/python.$([[ -n "${PYTHON_VERSION_AS:-}" && "" != "${PYTHON_VERSION_AS:-}" ]] && echo "${PYTHON_VERSION_AS:-}" || echo "${PYTHON_VERSION:-}")"
+  rm -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}/${GLOBAL_STACK_ERROR_TOKEN:-}"
   sleep 1
   
   global-stack-base-wait-for.sh \
@@ -49,21 +52,11 @@ if [ "${PYENV_MODE}" = "setup" ]; then
     "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/rust"
 
 
-  if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/python" && "true" = "${GLOBAL_STACK_USE_LOCKS}" ]]; then
-    echo "$([[ -n "${PYTHON_VERSION_AS:-}" && "" != "${PYTHON_VERSION_AS:-}" ]] && echo "${PYTHON_VERSION_AS:-}" || echo "${PYTHON_VERSION:-}")" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/python"
-  fi
-
-  if [ "$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/python")" != "$([[ -n "${PYTHON_VERSION_AS:-}" && "" != "${PYTHON_VERSION_AS:-}" ]] && echo "${PYTHON_VERSION_AS:-}" || echo "${PYTHON_VERSION:-}")" && "true" = "${GLOBAL_STACK_USE_LOCKS}" ]; then
-    PYTHON_SHOW_WAITING=""
-    PYTHON_WAITING_FOR=""
-    while [ -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/python" ]
-    do
-      [[ "${PYTHON_SHOW_WAITING}" != "false" || "${PYTHON_WAITING_FOR}" != "$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/python")" ]] && echo -e "\nWaiting for python $(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/python") ..."
-      PYTHON_SHOW_WAITING="false"
-      PYTHON_WAITING_FOR=$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/python")
-      sleep "$(shuf -i 3-6 -n 1)"
-    done
-    echo "$([[ -n "${PYTHON_VERSION_AS:-}" && "" != "${PYTHON_VERSION_AS:-}" ]] && echo "${PYTHON_VERSION_AS:-}" || echo "${PYTHON_VERSION:-}")" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/python"
+  if [[ "true" = "${GLOBAL_STACK_USE_LOCKS}" ]]; then
+    echo -e "\nAcquiring pyenv lock ..."
+    exec 200>"${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/pyenv.flock"
+    flock 200
+    echo -e "Lock acquired"
   fi
 fi
 
@@ -143,8 +136,11 @@ if [ "${PYENV_MODE}" = "setup" ]; then
   
   echo -e "\nWriting success"
   : > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/python.$([[ -n "${PYTHON_VERSION_AS:-}" && "" != "${PYTHON_VERSION_AS:-}" ]] && echo "${PYTHON_VERSION_AS:-}" || echo "${PYTHON_VERSION:-}")"
-  echo -e "\nRemoving lock"
-  rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/python"
+  if [[ "true" = "${GLOBAL_STACK_USE_LOCKS}" ]]; then
+    echo -e "\nReleasing pyenv lock"
+    flock -u 200
+    exec 200>&-
+  fi
 fi
 
 echo "# global-stack-setup-finished" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"

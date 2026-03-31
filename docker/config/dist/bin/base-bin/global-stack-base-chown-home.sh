@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 
 GLOBAL_STACK_DOCKER_USER_CONFIG="${GLOBAL_STACK_DOCKER_USER_CONFIG:-"/home/${GLOBAL_STACK_DOCKER_USER_ID:-}:${GLOBAL_STACK_DOCKER_GROUP_ID:-}"}"
 
@@ -24,7 +25,8 @@ if [[ "${GLOBAL_STACK_DOCKER_USER_CONFIG:-}" != ":" && "${GLOBAL_STACK_DOCKER_US
             echo -e "\nrsynching ${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/home/user/ into ${GLOBAL_STACK_BASE_USER_HOME} \n"
             sudo rsync -raz --ignore-times \
                 ${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/home/user/ \
-                ${GLOBAL_STACK_BASE_USER_HOME}
+                ${GLOBAL_STACK_BASE_USER_HOME} \
+                || { _rsync_exit=$?; [ $_rsync_exit -eq 23 ] && echo "rsync exit 23: some files busy/locked (e.g. .bash_history), continuing" || exit $_rsync_exit; }
         fi
 
         if [[ -d "${GLOBAL_STACK_BASE_USER_HOME}" ]]; then

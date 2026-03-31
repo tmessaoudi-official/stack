@@ -1,6 +1,6 @@
 # shellcheck disable=SC2148
 ARG GLOBAL_STACK_VERSION=2_0_0_local
-ARG GLOBAL_STACK_SONARQUBE_VERSION=22026.1.0-developer
+ARG GLOBAL_STACK_SONARQUBE_VERSION=2026.1.0-developer
 
 # shellcheck disable=SC2086
 ARG GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_PORT_5000=5000
@@ -10,14 +10,12 @@ ARG GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS=local-global-stack-registry.local
 FROM ${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}:${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_PORT_5000}/local_global_stack_00base:${GLOBAL_STACK_VERSION} AS local_global_stack_base
 FROM sonarqube:${GLOBAL_STACK_SONARQUBE_VERSION}
 
-LABEL maintainer="Takieddine Messaoudi <takieddine.messaoudi.official@gmail.com>"
-
-LABEL info="local_global_stack"
+LABEL maintainer="Takieddine Messaoudi <takieddine.messaoudi.official@gmail.com>" \
+      info="local_global_stack"
 
 USER root
 
 # @todo fix pin versions
-# hadolint ignore=DL3008
 RUN apt-get -o Acquire::AllowInsecureRepositories=true update --allow-releaseinfo-change \
     && apt-get --allow-unauthenticated install -y --no-install-recommends --fix-missing \
     libnss3-tools \

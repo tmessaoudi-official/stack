@@ -31,6 +31,7 @@ alias code='/opt/${GLOBAL_STACK_DOCKER_USER_ID}/vscode/bin/code'
 alias windsurf='/opt/${GLOBAL_STACK_DOCKER_USER_ID}/windsurf/bin/windsurf'
 alias phpstorm='/opt/${GLOBAL_STACK_DOCKER_USER_ID}/phpstorm/bin/phpstorm'
 alias webstorm='/opt/${GLOBAL_STACK_DOCKER_USER_ID}/webstorm/bin/webstorm'
+alias idea='/opt/${GLOBAL_STACK_DOCKER_USER_ID}/idea/bin/idea'
 alias android-studio='/opt/${GLOBAL_STACK_DOCKER_USER_ID}/android-studio/bin/studio'
 alias megit='/opt/${GLOBAL_STACK_DOCKER_USER_ID}/megit/megit'
 alias subl='/opt/${GLOBAL_STACK_DOCKER_USER_ID}/sublime_text/sublime_text'
@@ -39,10 +40,6 @@ GOROOT=${GLOBAL_STACK_GOROOT}
 export GOROOT
 GOPATH=${GLOBAL_STACK_GOPATH}
 export GOPATH
-ZIGPATH=${GLOBAL_STACK_ZIGPATH}
-export ZIGPATH
-HURLPATH=${GLOBAL_STACK_HURLPATH}
-export HURLPATH
 CAROOT=${GLOBAL_STACK_CAROOT}
 export CAROOT
 AWS_ENDPOINT_URL_S3=${GLOBAL_STACK_BASE_AWS_ENDPOINT_URL_S3}
@@ -188,11 +185,11 @@ fi
 if [ -d "${GOROOT}"/bin ]; then 
 	PATH="${GOROOT}/bin:${PATH}"
 fi
-if [ -d "${ZIGPATH}" ]; then 
-	PATH="${ZIGPATH}:${PATH}"
+if [[ -d "${GLOBAL_STACK_ZIGPATH}" ]]; then 
+    PATH="${GLOBAL_STACK_ZIGPATH}:${PATH}"
 fi
-if [ -d "${HURLPATH}/bin" ]; then 
-	PATH="${HURLPATH}/bin:${PATH}"
+if [[ -d "${GLOBAL_STACK_HURLPATH}/bin" ]]; then 
+	PATH="${GLOBAL_STACK_HURLPATH}/bin:${PATH}"
 fi
 
 export PATH

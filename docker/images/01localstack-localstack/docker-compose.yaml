@@ -11,17 +11,34 @@ services:
         GLOBAL_STACK_LOCALSTACK_LOCALSTACK_VERSION: ${GLOBAL_STACK_LOCALSTACK_LOCALSTACK_VERSION}
       context: ./
       dockerfile: ./docker/images/01localstack-localstack/Dockerfile
+    labels:
+      stack.service: "01localstack-localstack"
+      stack.tier: "tools"
+      stack.version: "${GLOBAL_STACK_VERSION}"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: "on-failure:5"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:4566/_localstack/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 99999
+      start_period: 24h
     depends_on:
       00base:
-        condition: service_started
+        condition: service_healthy
         required: true
     ports:
-      - ${GLOBAL_STACK_LOCALSTACK_LOCALSTACK_PORT_4566_WITH_ENDING_POINTS:-}4566
+      - ${GLOBAL_STACK_LOCALSTACK_LOCALSTACK_PORT_4566_HOST_BINDING:-}4566
       - ${GLOBAL_STACK_LOCALSTACK_LOCALSTACK_PORT_4510_4559:-}4510-4559
       - ${GLOBAL_STACK_LOCALSTACK_LOCALSTACK_PORT_5678:-}5678
     environment:
       - CAROOT=${GLOBAL_STACK_CAROOT}
       - GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES=${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}
+      - GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS=${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}
       - GLOBAL_STACK_DOCKER_ROOT_DIST_PATH=${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}
       - SERVICES=${GLOBAL_STACK_LOCALSTACK_LOCALSTACK_SERVICES}
       - GATEWAY_LISTEN=0.0.0.0

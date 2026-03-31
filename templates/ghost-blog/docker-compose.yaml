@@ -1,8 +1,9 @@
 ---
-services: 
-  ghost-blog: 
-    build: 
-      args: 
+services:
+  ghost-blog:
+    init: ${DOCKER_INIT}
+    build:
+      args:
         BUILDKIT_INLINE_CACHE: 1
         GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS: ${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}
         GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_PORT_5000: ${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_PORT_5000}
@@ -11,10 +12,14 @@ services:
         GLOBAL_STACK_IMAGE_GHOST_BLOG_VERSION: ${GLOBAL_STACK_IMAGE_GHOST_BLOG_VERSION}
       context: ./
       dockerfile: ./docker/images/01ghost-blog/Dockerfile
-    depends_on: 
-      - 00base
-      - 01mariadb11
-    environment: 
+    depends_on:
+      00base:
+        condition: service_healthy
+        required: true
+      01mariadb11:
+        condition: service_healthy
+        required: true
+    environment:
       - database__client=mysql
       - database__connection__database=${GLOBAL_STACK_ITRNL_BLG_APP_GHOST_DATABASE}
       - database__connection__host=01mariadb11
@@ -23,6 +28,7 @@ services:
       - url=${GLOBAL_STACK_ITRNL_BLG_APP_GHOST_URL}
       - CAROOT=${GLOBAL_STACK_CAROOT}
       - GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES=${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}
+      - GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS=${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}
       - GLOBAL_STACK_DOCKER_ROOT_DIST_PATH=${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}
       - AWS_ENDPOINT_URL_S3=${GLOBAL_STACK_BASE_AWS_ENDPOINT_URL_S3}
       - AWS_ENDPOINT_URL_SQS=${GLOBAL_STACK_BASE_AWS_ENDPOINT_URL_SQS}
@@ -40,16 +46,31 @@ services:
       - SERVERLESS_ACCESS_KEY=${GLOBAL_STACK_BASE_SERVERLESS_ACCESS_KEY}
       - GLOBAL_STACK_DOCKER_USER_EMAIL=${GLOBAL_STACK_DOCKER_USER_EMAIL}
       - GLOBAL_STACK_DOCKER_USER_NAME=${GLOBAL_STACK_DOCKER_USER_NAME}
-    extra_hosts: 
+    extra_hosts:
       - ${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}:${GLOBAL_STACK_HOST_GATEWAY_IP}
       - ${GLOBAL_STACK_DOCKER_HOST_DSN}:${GLOBAL_STACK_HOST_GATEWAY_IP}
       - ${GLOBAL_STACK_EXPOSED_VIRTUAL_HOSTS}:${GLOBAL_STACK_HOST_GATEWAY_IP}
-    networks: 
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:2368/ 2>/dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 99999
+      start_period: 24h
+    labels:
+      stack.service: "ghost-blog"
+      stack.tier: "tool"
+      stack.version: "${GLOBAL_STACK_VERSION}"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
       public: ~
-    ports: 
+    ports:
       - ${GLOBAL_STACK_ITRNL_BLG_APP_GHOST_PORT_2368:-}2368
-    restart: always
-    volumes: 
+    restart: unless-stopped
+    volumes:
       - ./projects:${GLOBAL_STACK_DOCKER_WORKDIR}:rw
       - ./tools:${GLOBAL_STACK_DOCKER_TOOLS_PATH}:rw
       - ./docker/config/dist/bin:${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/bin:rw

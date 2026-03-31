@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 
 # Uncomment to set GPG_TTY in the .shellrc file
 # echo 'GPG_TTY=$(tty)' >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"

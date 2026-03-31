@@ -9,10 +9,6 @@ services:
         GLOBAL_STACK_IMAGE_DPAGE_PGADMIN4_VERSION: ${GLOBAL_STACK_IMAGE_DPAGE_PGADMIN4_VERSION}
       context: ./
       dockerfile: ./docker/images/02dpage-pgadmin4/Dockerfile
-    depends_on:
-      00base:
-        condition: service_started
-        required: true
     environment:
       - PGADMIN_DEFAULT_EMAIL=${GLOBAL_STACK_PGADMIN_DEFAULT_EMAIL}
       - PGADMIN_DEFAULT_PASSWORD=${GLOBAL_STACK_PGADMIN_DEFAULT_PASSWORD}
@@ -22,7 +18,17 @@ services:
     ports:
       - ${GLOBAL_STACK_DPAGE_PGADMIN4_PORT_80:-}80
       - ${GLOBAL_STACK_DPAGE_PGADMIN4_PORT_443:-}443
-    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:80/misc/ping -o /dev/null"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    labels:
+      stack.service: "02dpage-pgadmin4"
+      stack.tier: "tools"
+      stack.version: "${GLOBAL_STACK_VERSION}"
+    restart: "on-failure:5"
     volumes:
       - ./docker/data/dumps/dpage-pgadmin4:/var/lib/pgadmin/storage/${GLOBAL_STACK_DOCKER_USER_ID}_local.io:rw
       - pgadmin_lib:/var/lib/pgadmin:rw,delegated

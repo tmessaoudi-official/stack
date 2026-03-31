@@ -9,7 +9,8 @@ stackCatch() {
     # error handling goes here
     echo "Error detected !!"
     echo -e "$(date '+%d-%m-%Y %H:%M:%S'): Error - ** line: ${2} ** ** message: ${3} ** phpbrew (${PHP_VERSION_AS}) ${PHPBREW_MODE:-} global-stack-phpbrew-start.sh" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/elapsed"
-    sleep infinity
+    [[ -n "${GLOBAL_STACK_ERROR_TOKEN:-}" ]] && touch "${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}/${GLOBAL_STACK_ERROR_TOKEN}"
+    exit 1
   fi
 }
 
@@ -27,6 +28,7 @@ echo "export PATH" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL
 
 if [ "${PHPBREW_MODE}" = "install" ]; then
   sudo rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/phpbrew"
+  rm -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}/${GLOBAL_STACK_ERROR_TOKEN:-}"
   sleep 1
 
   global-stack-base-wait-for.sh \
@@ -42,6 +44,7 @@ fi
 
 if [ "${PHPBREW_MODE}" = "setup" ]; then
   rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/php.${PHP_VERSION_AS}"
+  rm -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}/${GLOBAL_STACK_ERROR_TOKEN:-}"
   if [ "${GLOBAL_STACK_RELOAD_PHP}" = "true" ]; then
     PHPBREW_PHP="${PHP_VERSION_NAME}"
     PHPBREW_PHP_PATH="${PHPBREW_ROOT}/php/${PHPBREW_PHP}"
@@ -53,21 +56,11 @@ if [ "${PHPBREW_MODE}" = "setup" ]; then
   global-stack-base-wait-for.sh \
     "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/phpbrew"
 
-  if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/php" && "true" = "${GLOBAL_STACK_USE_LOCKS}" ]]; then
-    echo "${PHP_VERSION_AS}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/php"
-  fi
-
-  if [[ "$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/php")" != "${PHP_VERSION_AS}" && "true" = "${GLOBAL_STACK_USE_LOCKS}" ]]; then
-    PHP_SHOW_WAITING=""
-    PHP_WAITING_FOR=""
-    while [ -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/php" ]
-    do
-      [[ "${PHP_SHOW_WAITING}" != "false" || "${PHP_WAITING_FOR}" != "$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/php")" ]] && echo -e "\nWaiting for php $(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/php") ..."
-      PHP_SHOW_WAITING="false"
-      PHP_WAITING_FOR=$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/php")
-      sleep "$(shuf -i 3-6 -n 1)"
-    done
-    echo "${PHP_VERSION_AS}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/php"
+  if [[ "true" = "${GLOBAL_STACK_USE_LOCKS}" ]]; then
+    echo -e "\nAcquiring phpbrew lock ..."
+    exec 200>"${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/phpbrew.flock"
+    flock 200
+    echo -e "Lock acquired"
   fi
 fi
 
@@ -164,8 +157,11 @@ if [ "${PHPBREW_MODE}" = "setup" ]; then
   echo -e "\nWriting success"
   : > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/php.${PHP_VERSION_AS}"
   
-  echo -e "\nRemoving lock"
-  rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/php"
+  if [[ "true" = "${GLOBAL_STACK_USE_LOCKS}" ]]; then
+    echo -e "\nReleasing phpbrew lock"
+    flock -u 200
+    exec 200>&-
+  fi
 fi
 
 sleep infinity

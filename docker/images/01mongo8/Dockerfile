@@ -4,9 +4,8 @@ ARG GLOBAL_STACK_IMAGE_MONGO8_VERSION=8.2.6-rc0-noble
 # shellcheck disable=SC2148
 FROM mongo:${GLOBAL_STACK_IMAGE_MONGO8_VERSION}
 
-LABEL maintainer="Takieddine Messaoudi <takieddine.messaoudi.official@gmail.com>"
-
-LABEL info="local_global_stack"
+LABEL maintainer="Takieddine Messaoudi <takieddine.messaoudi.official@gmail.com>" \
+      info="local_global_stack"
 
 # @todo fix last user should not be root
 # hadolint ignore=DL3002

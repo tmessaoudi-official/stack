@@ -4,9 +4,8 @@ ARG GLOBAL_STACK_IMAGE_MYSQL9_VERSION=9.6.0-oraclelinux9
 # shellcheck disable=SC2148
 FROM mysql:${GLOBAL_STACK_IMAGE_MYSQL9_VERSION}
 
-LABEL maintainer="Takieddine Messaoudi <takieddine.messaoudi.official@gmail.com>"
-
-LABEL info="local_global_stack"
+LABEL maintainer="Takieddine Messaoudi <takieddine.messaoudi.official@gmail.com>" \
+      info="local_global_stack"
 
 # @todo fix last user should not be root
 # hadolint ignore=DL3002

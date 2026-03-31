@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 
 # Allow root access from any host
 mysql -uroot -p${MYSQL_ROOT_PASSWORD} -e "CREATE USER IF NOT EXISTS 'root'@'%' IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}';"

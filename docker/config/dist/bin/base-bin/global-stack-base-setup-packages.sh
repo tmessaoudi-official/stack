@@ -38,9 +38,9 @@ global_stack_base_setup_packages() {
         PACKAGE_CONFIG_NAME="$(echo "${PACKAGE_CONFIG_TEMPLATE}" |  sed 's/_VERSION$/_NAME/')"
         PACKAGE_CONFIG_COMMAND_SUFFIX="$(echo "${PACKAGE_CONFIG_TEMPLATE}" | sed 's/_VERSION$/_COMMAND_SUFFIX/')"
 
-        eval "PACKAGE_NAME=\"\${${PACKAGE_CONFIG_NAME}:-}\"; export PACKAGE_NAME"
-        eval "PACKAGE_VERSION=\"\${${VARIABLE_NAME}:-}\"; export PACKAGE_VERSION"
-        eval "PACKAGE_COMMAND_SUFFIX=\"\${${PACKAGE_CONFIG_COMMAND_SUFFIX}:-}\"; export PACKAGE_COMMAND_SUFFIX"
+        PACKAGE_NAME="${!PACKAGE_CONFIG_NAME:-}"
+        PACKAGE_VERSION="${!VARIABLE_NAME:-}"
+        PACKAGE_COMMAND_SUFFIX="${!PACKAGE_CONFIG_COMMAND_SUFFIX:-}"
 
         if [[ "${PACKAGE_NAME}" = "dummy" ]]; then
             continue
@@ -48,6 +48,7 @@ global_stack_base_setup_packages() {
 
         if [[ -n "${PACKAGE_NAME}" && -n "${PACKAGE_VERSION}" ]]; then
             for (( INDEX=0; INDEX<${#COMMANDS[@]}; INDEX++ )); do
+                # Commands are caller-provided templates evaluated in the current env context (see --command= arg).
                 eval "${COMMANDS[${INDEX}]}"
             done
         fi

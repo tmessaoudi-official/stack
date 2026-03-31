@@ -101,4 +101,6 @@ echo "# global-stack-setup-finished" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${
 DURATION=$SECONDS
 global-stack-base-print-success.sh "${DURATION}" "${ALLTOGETHER_NAME}"
 
+: > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/${ALLTOGETHER_NAME}"
+
 sleep infinity

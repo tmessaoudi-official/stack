@@ -13,7 +13,7 @@ services:
       dockerfile: ./docker/images/01selenium-standalone-chrome/Dockerfile
     depends_on:
       00base:
-        condition: service_started
+        condition: service_healthy
         required: true
     extra_hosts:
       - ${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}:${GLOBAL_STACK_HOST_GATEWAY_IP}
@@ -22,6 +22,7 @@ services:
     environment:
       - CAROOT=${GLOBAL_STACK_CAROOT}
       - GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES=${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}
+      - GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS=${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}
       - AWS_ENDPOINT_URL_S3=${GLOBAL_STACK_BASE_AWS_ENDPOINT_URL_S3}
       - AWS_ENDPOINT_URL_SQS=${GLOBAL_STACK_BASE_AWS_ENDPOINT_URL_SQS}
       - AWS_ENDPOINT_URL_LAMBDA=${GLOBAL_STACK_BASE_AWS_ENDPOINT_URL_LAMBDA}
@@ -39,6 +40,22 @@ services:
       - SERVERLESS_ACCESS_KEY=${GLOBAL_STACK_BASE_SERVERLESS_ACCESS_KEY}
       - GLOBAL_STACK_DOCKER_USER_EMAIL=${GLOBAL_STACK_DOCKER_USER_EMAIL}
       - GLOBAL_STACK_DOCKER_USER_NAME=${GLOBAL_STACK_DOCKER_USER_NAME}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:4444/wd/hub/status | grep -q '\"ready\":true'"]
+      interval: 30s
+      timeout: 10s
+      retries: 99999
+      start_period: 24h
+    labels:
+      stack.service: "01selenium-standalone-chrome"
+      stack.tier: "tools"
+      stack.version: "${GLOBAL_STACK_VERSION}"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: "on-failure:5"
     networks:
       - public
     ports:

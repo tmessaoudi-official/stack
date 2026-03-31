@@ -1,8 +1,5 @@
 #!make
 
-# export $(shell chmod a+x bin/load-env.sh)
-# export $(shell bin/load-env.sh)
-
 GLOBAL_STACK_DOCKER_CLI_SERVICE ?=
 GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND ?=
 GLOBAL_STACK_DOCKER_CLI_EXEC_FLAGS ?=
@@ -17,6 +14,299 @@ export $(shell sed 's/=.*//' ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV})
 GLOBAL_STACK_DOCKER_CLI_NO_COMPOSE_BAKE ?= ${COMPOSE_BAKE}
 
 default: help
+
+.PHONY: help mkdir-p touch create-paths generate-buildx docker-cli create-buildx-builder \
+	start-local-registry build up up-build up-build-force-recreate down \
+	down-n-rebuild down-n-rebuild-force-recreate rebuild rebuild-force-recreate \
+	down-n-up exec restart save commit restore log-follow hard-restart soft-restart \
+	login-00base login-00corentinth-it-tools \
+	login-01axllent-mailpit login-01caddy login-01epiclabs-docker-oracle-xe-11g \
+	login-01httpd login-01localstack-localstack login-01mariadb12 login-01mongo8 \
+	login-01mysql9 login-01nginx login-01postgres18 login-01redis \
+	login-01selenium-standalone-chrome login-01selenium-standalone-firefox \
+	login-01valkey \
+	login-02dpage-pgadmin4 login-02fvm login-02keycloak-keycloak \
+	login-02mongoclient-mongoclient login-02nvm login-02phpbrew login-02pyenv \
+	login-02rbenv login-02rust login-02sdkman login-02sonarqube \
+	login-03flutter3 login-03java11-zulu login-03java17-zulu login-03java25-zulu \
+	login-03node22 login-03node24 login-03nodeedge \
+	login-03php8-2 login-03php8-3 login-03php8-4 login-03php8-5 login-03phpedge \
+	login-03python3 login-03ruby3 login-03ruby4 \
+	login-04android login-04phpmyadmin login-04serverless-framework \
+	login-05edge login-05stable \
+	log-00base log-00corentinth-it-tools \
+	log-01axllent-mailpit log-01caddy log-01epiclabs-docker-oracle-xe-11g \
+	log-01httpd log-01localstack-localstack log-01mariadb12 log-01mongo8 \
+	log-01mysql9 log-01nginx log-01postgres18 log-01redis \
+	log-01selenium-standalone-chrome log-01selenium-standalone-firefox \
+	log-01valkey \
+	log-02dpage-pgadmin4 log-02fvm log-02keycloak-keycloak \
+	log-02mongoclient-mongoclient log-02nvm log-02phpbrew log-02pyenv \
+	log-02rbenv log-02rust log-02sdkman log-02sonarqube \
+	log-03flutter3 log-03java11-zulu log-03java17-zulu log-03java25-zulu \
+	log-03node22 log-03node24 log-03nodeedge \
+	log-03php8-2 log-03php8-3 log-03php8-4 log-03php8-5 log-03phpedge \
+	log-03python3 log-03ruby3 log-03ruby4 \
+	log-04android log-04phpmyadmin log-04serverless-framework \
+	log-05edge log-05stable \
+	log-follow-00base log-follow-00corentinth-it-tools \
+	log-follow-01axllent-mailpit log-follow-01caddy log-follow-01epiclabs-docker-oracle-xe-11g \
+	log-follow-01httpd log-follow-01localstack-localstack log-follow-01mariadb12 log-follow-01mongo8 \
+	log-follow-01mysql9 log-follow-01nginx log-follow-01postgres18 log-follow-01redis \
+	log-follow-01selenium-standalone-chrome log-follow-01selenium-standalone-firefox \
+	log-follow-01valkey \
+	log-follow-02dpage-pgadmin4 log-follow-02fvm log-follow-02keycloak-keycloak \
+	log-follow-02mongoclient-mongoclient log-follow-02nvm log-follow-02phpbrew log-follow-02pyenv \
+	log-follow-02rbenv log-follow-02rust log-follow-02sdkman log-follow-02sonarqube \
+	log-follow-03flutter3 log-follow-03java11-zulu log-follow-03java17-zulu log-follow-03java25-zulu \
+	log-follow-03node22 log-follow-03node24 log-follow-03nodeedge \
+	log-follow-03php8-2 log-follow-03php8-3 log-follow-03php8-4 log-follow-03php8-5 log-follow-03phpedge \
+	log-follow-03python3 log-follow-03ruby3 log-follow-03ruby4 \
+	log-follow-04android log-follow-04phpmyadmin log-follow-04serverless-framework \
+	log-follow-05edge log-follow-05stable \
+	restart-00base restart-00corentinth-it-tools \
+	restart-01axllent-mailpit restart-01caddy restart-01epiclabs-docker-oracle-xe-11g \
+	restart-01httpd restart-01localstack-localstack restart-01mariadb12 restart-01mongo8 \
+	restart-01mysql9 restart-01nginx restart-01postgres18 restart-01redis \
+	restart-01selenium-standalone-chrome restart-01selenium-standalone-firefox \
+	restart-01valkey \
+	restart-02dpage-pgadmin4 restart-02fvm restart-02keycloak-keycloak \
+	restart-02mongoclient-mongoclient restart-02nvm restart-02phpbrew restart-02pyenv \
+	restart-02rbenv restart-02rust restart-02sdkman restart-02sonarqube \
+	restart-03flutter3 restart-03java11-zulu restart-03java17-zulu restart-03java25-zulu \
+	restart-03node22 restart-03node24 restart-03nodeedge \
+	restart-03php8-2 restart-03php8-3 restart-03php8-4 restart-03php8-5 restart-03phpedge \
+	restart-03python3 restart-03ruby3 restart-03ruby4 \
+	restart-04android restart-04phpmyadmin restart-04serverless-framework \
+	restart-05edge restart-05stable
+
+# Macro: login with ${GLOBAL_STACK_SHELL} (bash/zsh capable containers)
+define login-service-shell
+login-$(1):
+	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="$(1)" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="$${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file $${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
+endef
+
+# Macro: login with sh (containers that only have sh, e.g. postgres, redis, pgadmin)
+define login-service-sh
+login-$(1):
+	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="$(1)" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="sh" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file $${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
+endef
+
+# Macro: tail logs for a service
+define log-service
+log-$(1):
+	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="$(1)" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file $${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
+endef
+
+# Macro: tail log-follow for a service
+define log-follow-service
+log-follow-$(1):
+	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs --follow" GLOBAL_STACK_DOCKER_CLI_SERVICE="$(1)" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
+endef
+
+# Macro: tail restart for a service
+define restart-service
+restart-$(1):
+	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="restart" GLOBAL_STACK_DOCKER_CLI_SERVICE="$(1)" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
+endef
+
+# login targets — shell-capable containers
+$(eval $(call login-service-shell,00base))
+$(eval $(call login-service-shell,00corentinth-it-tools))
+$(eval $(call login-service-shell,01axllent-mailpit))
+$(eval $(call login-service-shell,01caddy))
+$(eval $(call login-service-shell,01epiclabs-docker-oracle-xe-11g))
+$(eval $(call login-service-shell,01httpd))
+$(eval $(call login-service-shell,01localstack-localstack))
+$(eval $(call login-service-shell,01mariadb12))
+$(eval $(call login-service-shell,01mongo8))
+$(eval $(call login-service-shell,01mysql9))
+$(eval $(call login-service-shell,01nginx))
+$(eval $(call login-service-shell,01selenium-standalone-chrome))
+$(eval $(call login-service-shell,01selenium-standalone-firefox))
+$(eval $(call login-service-shell,02fvm))
+$(eval $(call login-service-shell,02keycloak-keycloak))
+$(eval $(call login-service-shell,02mongoclient-mongoclient))
+$(eval $(call login-service-shell,02nvm))
+$(eval $(call login-service-shell,02phpbrew))
+$(eval $(call login-service-shell,02pyenv))
+$(eval $(call login-service-shell,02rbenv))
+$(eval $(call login-service-shell,02rust))
+$(eval $(call login-service-shell,02sdkman))
+$(eval $(call login-service-shell,02sonarqube))
+$(eval $(call login-service-shell,03flutter3))
+$(eval $(call login-service-shell,03java11-zulu))
+$(eval $(call login-service-shell,03java17-zulu))
+$(eval $(call login-service-shell,03java25-zulu))
+$(eval $(call login-service-shell,03node22))
+$(eval $(call login-service-shell,03node24))
+$(eval $(call login-service-shell,03nodeedge))
+$(eval $(call login-service-shell,03php8-2))
+$(eval $(call login-service-shell,03php8-3))
+$(eval $(call login-service-shell,03php8-4))
+$(eval $(call login-service-shell,03php8-5))
+$(eval $(call login-service-shell,03phpedge))
+$(eval $(call login-service-shell,03python3))
+$(eval $(call login-service-shell,03ruby3))
+$(eval $(call login-service-shell,03ruby4))
+$(eval $(call login-service-shell,04android))
+$(eval $(call login-service-shell,04phpmyadmin))
+$(eval $(call login-service-shell,04serverless-framework))
+$(eval $(call login-service-shell,05edge))
+$(eval $(call login-service-shell,05stable))
+
+# login targets — sh-only containers
+$(eval $(call login-service-sh,01postgres18))
+$(eval $(call login-service-sh,01redis))
+$(eval $(call login-service-sh,01valkey))
+$(eval $(call login-service-sh,02dpage-pgadmin4))
+
+# log targets
+$(eval $(call log-service,00base))
+$(eval $(call log-service,00corentinth-it-tools))
+$(eval $(call log-service,01axllent-mailpit))
+$(eval $(call log-service,01caddy))
+$(eval $(call log-service,01epiclabs-docker-oracle-xe-11g))
+$(eval $(call log-service,01httpd))
+$(eval $(call log-service,01localstack-localstack))
+$(eval $(call log-service,01mariadb12))
+$(eval $(call log-service,01mongo8))
+$(eval $(call log-service,01mysql9))
+$(eval $(call log-service,01nginx))
+$(eval $(call log-service,01postgres18))
+$(eval $(call log-service,01redis))
+$(eval $(call log-service,01selenium-standalone-chrome))
+$(eval $(call log-service,01selenium-standalone-firefox))
+$(eval $(call log-service,01valkey))
+$(eval $(call log-service,02dpage-pgadmin4))
+$(eval $(call log-service,02fvm))
+$(eval $(call log-service,02keycloak-keycloak))
+$(eval $(call log-service,02mongoclient-mongoclient))
+$(eval $(call log-service,02nvm))
+$(eval $(call log-service,02phpbrew))
+$(eval $(call log-service,02pyenv))
+$(eval $(call log-service,02rbenv))
+$(eval $(call log-service,02rust))
+$(eval $(call log-service,02sdkman))
+$(eval $(call log-service,02sonarqube))
+$(eval $(call log-service,03flutter3))
+$(eval $(call log-service,03java11-zulu))
+$(eval $(call log-service,03java17-zulu))
+$(eval $(call log-service,03java25-zulu))
+$(eval $(call log-service,03node22))
+$(eval $(call log-service,03node24))
+$(eval $(call log-service,03nodeedge))
+$(eval $(call log-service,03php8-2))
+$(eval $(call log-service,03php8-3))
+$(eval $(call log-service,03php8-4))
+$(eval $(call log-service,03php8-5))
+$(eval $(call log-service,03phpedge))
+$(eval $(call log-service,03python3))
+$(eval $(call log-service,03ruby3))
+$(eval $(call log-service,03ruby4))
+$(eval $(call log-service,04android))
+$(eval $(call log-service,04phpmyadmin))
+$(eval $(call log-service,04serverless-framework))
+$(eval $(call log-service,05edge))
+$(eval $(call log-service,05stable))
+
+# log-follow targets
+$(eval $(call log-follow-service,00base))
+$(eval $(call log-follow-service,00corentinth-it-tools))
+$(eval $(call log-follow-service,01axllent-mailpit))
+$(eval $(call log-follow-service,01caddy))
+$(eval $(call log-follow-service,01epiclabs-docker-oracle-xe-11g))
+$(eval $(call log-follow-service,01httpd))
+$(eval $(call log-follow-service,01localstack-localstack))
+$(eval $(call log-follow-service,01mariadb12))
+$(eval $(call log-follow-service,01mongo8))
+$(eval $(call log-follow-service,01mysql9))
+$(eval $(call log-follow-service,01nginx))
+$(eval $(call log-follow-service,01postgres18))
+$(eval $(call log-follow-service,01redis))
+$(eval $(call log-follow-service,01selenium-standalone-chrome))
+$(eval $(call log-follow-service,01selenium-standalone-firefox))
+$(eval $(call log-follow-service,01valkey))
+$(eval $(call log-follow-service,02dpage-pgadmin4))
+$(eval $(call log-follow-service,02fvm))
+$(eval $(call log-follow-service,02keycloak-keycloak))
+$(eval $(call log-follow-service,02mongoclient-mongoclient))
+$(eval $(call log-follow-service,02nvm))
+$(eval $(call log-follow-service,02phpbrew))
+$(eval $(call log-follow-service,02pyenv))
+$(eval $(call log-follow-service,02rbenv))
+$(eval $(call log-follow-service,02rust))
+$(eval $(call log-follow-service,02sdkman))
+$(eval $(call log-follow-service,02sonarqube))
+$(eval $(call log-follow-service,03flutter3))
+$(eval $(call log-follow-service,03java11-zulu))
+$(eval $(call log-follow-service,03java17-zulu))
+$(eval $(call log-follow-service,03java25-zulu))
+$(eval $(call log-follow-service,03node22))
+$(eval $(call log-follow-service,03node24))
+$(eval $(call log-follow-service,03nodeedge))
+$(eval $(call log-follow-service,03php8-2))
+$(eval $(call log-follow-service,03php8-3))
+$(eval $(call log-follow-service,03php8-4))
+$(eval $(call log-follow-service,03php8-5))
+$(eval $(call log-follow-service,03phpedge))
+$(eval $(call log-follow-service,03python3))
+$(eval $(call log-follow-service,03ruby3))
+$(eval $(call log-follow-service,03ruby4))
+$(eval $(call log-follow-service,04android))
+$(eval $(call log-follow-service,04phpmyadmin))
+$(eval $(call log-follow-service,04serverless-framework))
+$(eval $(call log-follow-service,05edge))
+$(eval $(call log-follow-service,05stable))
+
+# restart targets
+$(eval $(call restart-service,00base))
+$(eval $(call restart-service,00corentinth-it-tools))
+$(eval $(call restart-service,01axllent-mailpit))
+$(eval $(call restart-service,01caddy))
+$(eval $(call restart-service,01epiclabs-docker-oracle-xe-11g))
+$(eval $(call restart-service,01httpd))
+$(eval $(call restart-service,01localstack-localstack))
+$(eval $(call restart-service,01mariadb12))
+$(eval $(call restart-service,01mongo8))
+$(eval $(call restart-service,01mysql9))
+$(eval $(call restart-service,01nginx))
+$(eval $(call restart-service,01postgres18))
+$(eval $(call restart-service,01redis))
+$(eval $(call restart-service,01selenium-standalone-chrome))
+$(eval $(call restart-service,01selenium-standalone-firefox))
+$(eval $(call restart-service,01valkey))
+$(eval $(call restart-service,02dpage-pgadmin4))
+$(eval $(call restart-service,02fvm))
+$(eval $(call restart-service,02keycloak-keycloak))
+$(eval $(call restart-service,02mongoclient-mongoclient))
+$(eval $(call restart-service,02nvm))
+$(eval $(call restart-service,02phpbrew))
+$(eval $(call restart-service,02pyenv))
+$(eval $(call restart-service,02rbenv))
+$(eval $(call restart-service,02rust))
+$(eval $(call restart-service,02sdkman))
+$(eval $(call restart-service,02sonarqube))
+$(eval $(call restart-service,03flutter3))
+$(eval $(call restart-service,03java11-zulu))
+$(eval $(call restart-service,03java17-zulu))
+$(eval $(call restart-service,03java25-zulu))
+$(eval $(call restart-service,03node22))
+$(eval $(call restart-service,03node24))
+$(eval $(call restart-service,03nodeedge))
+$(eval $(call restart-service,03php8-2))
+$(eval $(call restart-service,03php8-3))
+$(eval $(call restart-service,03php8-4))
+$(eval $(call restart-service,03php8-5))
+$(eval $(call restart-service,03phpedge))
+$(eval $(call restart-service,03python3))
+$(eval $(call restart-service,03ruby3))
+$(eval $(call restart-service,03ruby4))
+$(eval $(call restart-service,04android))
+$(eval $(call restart-service,04phpmyadmin))
+$(eval $(call restart-service,04serverless-framework))
+$(eval $(call restart-service,05edge))
+$(eval $(call restart-service,05stable))
 
 help:
 	@echo "Welcome to the multipurpose dockerized stack\n"
@@ -65,11 +355,12 @@ help:
 	@echo " ------ ******** --- Try again until it works \n"
 	@echo " ------ ******** Templates \n"
 	@echo " ------ ******** --- take a look at ./templates :) \n"
+	@echo "  make restart                           # Restart all running containers"
 mkdir-p:
 	mkdir -p ${GLOBAL_STACK_TARGET_DIR}
 touch:
 	touch ${GLOBAL_STACK_TARGET_FILE}
-create-paths:
+create-paths::
 	$(MAKE) GLOBAL_STACK_TARGET_DIR="tools ${GLOBAL_STACK_AXLLENT_MAILPIT_MP_DATABASE} docker/data/dumps/dpage-pgadmin4 ./docker/registry/certs/ ./docker/registry/data/ ./docker/registry/registry/" mkdir-p --silent --ignore-errors --keep-going --warn-undefined-variables
 	$(MAKE) GLOBAL_STACK_TARGET_FILE="${GLOBAL_STACK_SHELL_HISTORY} tools/.gitkeep ./docker/registry/certs/.gitkeep ./docker/registry/data/.gitkeep ./docker/registry/registry/.gitkeep" touch --silent --ignore-errors --keep-going --warn-undefined-variables
 generate-buildx:
@@ -104,6 +395,7 @@ start-local-registry:
 	docker run --detach --publish ${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_PORT_5000}:5000 --restart=always --mount type=bind,source=./docker/registry/certs,target=/docker/registry/certs --env REGISTRY_HTTP_ADDR=0.0.0.0:5000 --env REGISTRY_HTTP_TLS_CERTIFICATE=/docker/registry/certs/${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}.crt --env REGISTRY_HTTP_TLS_KEY=/docker/registry/certs/${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}.key --env REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY=/data --mount type=bind,source=./docker/registry/data,target=/data --mount type=bind,source=./docker/registry/registry,target=/var/lib/registry --name ${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_NAME} registry:${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_VERSION}
 build: create-paths generate-buildx
 	# change the order of this in local.Makefile
+	#  --no-cache --progress=plain
 	@jq -r '.group.default.targets[]' ${BUILDX_BAKE_FILE} | while read target; do echo "Processing $$target..."; $(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="bake" GLOBAL_STACK_DOCKER_CLI_EXEC_FLAGS="--push --load" GLOBAL_STACK_DOCKER_CLI="docker buildx" GLOBAL_STACK_DOCKER_CLI_SERVICE="$$target" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables ;done
 up: create-paths generate-buildx
 	rm -rf ${BUILDX_BAKE_FILE} ${COMPOSE_FULL_FILE}
@@ -117,6 +409,10 @@ up-build-force-recreate: create-paths generate-buildx
 down:
 	rm -rf ${BUILDX_BAKE_FILE} ${COMPOSE_FULL_FILE}
 	GLOBAL_STACK_DOCKER_CLI_NO_COMPOSE_BAKE="false" $(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="down" GLOBAL_STACK_DOCKER_CLI_EXEC_FLAGS="--remove-orphans" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
+	rm -rf tools/successes/*
+	rm -rf tools/errors/*
+	rm -rf tools/locks/*
+	rm -rf tools/elapsed
 down-n-rebuild: down build up-build
 down-n-rebuild-force-recreate: down build up-build-force-recreate
 rebuild: up-build
@@ -127,193 +423,12 @@ down-n-up: down up
 exec:
 	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
 
-login-02dpage-pgadmin4:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="02dpage-pgadmin4" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="sh" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-login-02keycloak-keycloak:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="02keycloak-keycloak" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-login-02mongoclient-mongoclient:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="02mongoclient-mongoclient" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-login-04phpmyadmin:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="04phpmyadmin" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-login-01httpd:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="01httpd" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-login-01mariadb12:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="01mariadb12" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-login-01mysql9:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="01mysql9" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-login-01mongo8:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="01mongo8" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-login-01epiclabs-docker-oracle-xe-11g:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="01epiclabs-docker-oracle-xe-11g" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-login-01postgres18:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="01postgres18" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="sh" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-login-02nvm:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="02nvm" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-login-02sdkman:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="02sdkman" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-login-03java11-zulu:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="03java11-zulu" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-login-03java17-zulu:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="03java17-zulu" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-login-03java25-zulu:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="03java25-zulu" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-login-02phpbrew:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="02phpbrew" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-login-02rbenv:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="02rbenv" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-login-03ruby3:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="03ruby3" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-login-03ruby4:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="03ruby4" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-login-03php8-2:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="03php8-2" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-login-03php8-3:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="03php8-3" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-login-03php8-4:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="03php8-4" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-login-03php8-5:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="03php8-5" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-login-03phpedge:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="03phpedge" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-login-00base:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="00base" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-login-03node22:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="03node22" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-login-03node24:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="03node24" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-login-03nodeedge:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="03nodeedge" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-login-01selenium-standalone-chrome:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="01selenium-standalone-chrome" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-login-01selenium-standalone-firefox:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="01selenium-standalone-firefox" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-login-02sonarqube:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="02sonarqube" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-login-01axllent-mailpit:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="01axllent-mailpit" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-login-04android:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="04android" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-login-02rust:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="02rust" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-login-02pyenv:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="02pyenv" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-login-03python3:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="03python3" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-login-01redis:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="01redis" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="sh" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-login-01valkey:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="01valkey" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="sh" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-login-01nginx:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="01nginx" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-login-01localstack-localstack:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="01localstack-localstack" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-login-00corentinth-it-tools:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="00corentinth-it-tools" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-login-01caddy:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="01caddy" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-login-04serverless-framework:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="04serverless-framework" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-login-05stable:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="05stable" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-login-05edge:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI_SERVICE="05edge" GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND="${GLOBAL_STACK_SHELL}" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-
-log-02dpage-pgadmin4:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="02dpage-pgadmin4" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-log-02keycloak-keycloak:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="02keycloak-keycloak" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-log-02mongoclient-mongoclient:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="02mongoclient-mongoclient" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-log-04phpmyadmin:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="04phpmyadmin" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-log-01httpd:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="01httpd" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-log-01mariadb12:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="01mariadb12" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-log-01epiclabs-docker-oracle-xe-11g:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="01epiclabs-docker-oracle-xe-11g" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-log-01mysql9:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="01mysql9" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-log-01mongo8:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="01mongo8" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-log-01postgres18:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="01postgres18" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-log-00base:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="00base" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-log-02nvm:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="02nvm" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-log-02sdkman:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="02sdkman" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-log-03java11-zulu:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="03java11-zulu" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-log-03java17-zulu:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="03java17-zulu" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-log-03java25-zulu:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="03java25-zulu" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-log-02phpbrew:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="02phpbrew" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-log-02rbenv:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="02rbenv" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-log-03ruby3:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="03ruby3" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-log-03ruby4:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="03ruby4" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-log-03php8-2:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="03php8-2" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-log-03php8-3:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="03php8-3" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-log-03php8-4:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="03php8-4" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-log-03php8-5:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="03php8-5" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-log-03phpedge:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="03phpedge" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-log-03node22:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="03node22" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-log-03node24:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="03node24" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-log-03nodeedge:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="03nodeedge" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-log-01selenium-standalone-chrome:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="01selenium-standalone-chrome" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-log-01selenium-standalone-firefox:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="01selenium-standalone-firefox" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-log-02sonarqube:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="02sonarqube" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-log-01axllent-mailpit:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="01axllent-mailpit" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-log-04android:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="04android" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-log-02rust:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="02rust" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-log-02pyenv:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="02pyenv" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-log-03python3:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="03python3" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-log-01redis:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="01redis" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-log-01valkey:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="01valkey" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-log-01nginx:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="01nginx" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-log-01localstack-localstack:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="01localstack-localstack" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-log-00corentinth-it-tools:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="00corentinth-it-tools" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-log-01caddy:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="01caddy" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-log-04serverless-framework:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="04serverless-framework" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-log-05stable:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="05stable" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-log-05edge:
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs" GLOBAL_STACK_DOCKER_CLI_SERVICE="05edge" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-
-restart-x:
+restart:
 	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="restart" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
 save:
-	source ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV} && docker save $(docker images --format '{{.Repository}}:{{.Tag}}') -o var/images/stack-${GLOBAL_STACK_VERSION}.tar
+	source ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV} && docker save $$(docker images --format '{{.Repository}}:{{.Tag}}') -o var/images/stack-${GLOBAL_STACK_VERSION}.tar
 commit:
+	@test -n "$(CONTAINER_NAME)" || (echo "Error: CONTAINER_NAME is required. Usage: CONTAINER_NAME=my_container make commit"; exit 1)
 	source ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV} && docker commit ${CONTAINER_NAME} repository:tag
 restore:
 	source ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV} && docker load -i var/images/stack-${GLOBAL_STACK_VERSION}.tar
@@ -337,3 +452,5 @@ soft-restart:
 	sudo rm -rf tools
 	cp -R var/tools/ tools
 	$(MAKE) up --silent --ignore-errors --keep-going --warn-undefined-variables
+
+-include local.Makefile

@@ -8,7 +8,8 @@ stackCatch() {
     # error handling goes here
     echo "Error detected !!"
     echo -e "$(date '+%d-%m-%Y %H:%M:%S'): Error - ** line: ${2} ** ** message: ${3} ** sdkman (${JAVA_VERSION:-}) ${SDKMAN_MODE:-} global-stack-sdkman-start.sh" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/elapsed"
-    sleep infinity
+    [[ -n "${GLOBAL_STACK_ERROR_TOKEN:-}" ]] && touch "${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}/${GLOBAL_STACK_ERROR_TOKEN}"
+    exit 1
   fi
 }
 
@@ -32,7 +33,8 @@ trap 'stackCatch ${?} ${LINENO} "${BASH_COMMAND}"' EXIT ERR PIPE SIGPIPE SIGHUP
 SECONDS=0
 
 if [ "${SDKMAN_MODE}" = "install" ]; then
-  sudo rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}"/sdkman "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}"/java*
+  sudo rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}"/sdkman
+  rm -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}/${GLOBAL_STACK_ERROR_TOKEN:-}"
   sleep 1
 
   global-stack-base-wait-for.sh \
@@ -46,27 +48,18 @@ fi
 
 if [ "${SDKMAN_MODE}" = "setup" ]; then
   sudo rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/java.$([[ -n "${JAVA_VERSION_AS:-}" && "" != "${JAVA_VERSION_AS:-}" ]] && echo "${JAVA_VERSION_AS}" || echo "${JAVA_VERSION}")"
+  rm -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}/${GLOBAL_STACK_ERROR_TOKEN:-}"
   sleep 1
 
   global-stack-base-wait-for.sh \
     "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/sdkman"
 
-  if [ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/java" ]; then #  && "true" = "${GLOBAL_STACK_USE_LOCKS}"
-    echo "${JAVA_VERSION}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/java"
-  fi
-
-  if [ "$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/java")" != "${JAVA_VERSION}" ]; then #  && "true" = "${GLOBAL_STACK_USE_LOCKS}"
-    JAVA_SHOW_WAITING=""
-    JAVA_WAITING_FOR=""
-    while [ -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/java" ]
-    do
-      [[ "${JAVA_SHOW_WAITING}" != "false" || "${JAVA_WAITING_FOR}" != "$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/java")" ]] && echo -e "\nWaiting for java $(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/java") ..."
-      JAVA_SHOW_WAITING="false"
-      JAVA_WAITING_FOR="$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/java")"
-      sleep "$(shuf -i 3-6 -n 1)"
-    done
-    echo "${JAVA_VERSION}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/java"
-  fi
+  # if [[ "true" = "${GLOBAL_STACK_USE_LOCKS}" ]]; then
+  echo -e "\nAcquiring sdkman lock ..."
+  exec 200>"${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/sdkman.flock"
+  flock 200
+  echo -e "Lock acquired"
+  # fi
 fi
 
 echo -e "\n******** Starting sdkman ${SDKMAN_MODE} ${JAVA_VERSION:-} ********"
@@ -113,6 +106,7 @@ if [ "${SDKMAN_MODE}" = "setup" ]; then
   fi
 
   source /home/"${GLOBAL_STACK_DOCKER_USER_ID}"/${GLOBAL_STACK_SHELL_RC_TARGET} && sdk install java "${JAVA_VERSION}"
+  [[ -d "${SDKMAN_DIR}/candidates/java/${JAVA_VERSION}" ]] || { echo -e "Error: java ${JAVA_VERSION} directory missing after sdk install"; exit 2; }
   echo "sdk use java '${JAVA_VERSION}'" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 
   source /usr/local/bin/global-stack-base-setup-packages.sh
@@ -158,8 +152,11 @@ if [ "${SDKMAN_MODE}" = "setup" ]; then
   echo "${JAVA_VERSION}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/java.$([[ -n "${JAVA_VERSION_AS:-}" && "" != "${JAVA_VERSION_AS:-}" ]] && echo "${JAVA_VERSION_AS}" || echo "${JAVA_VERSION}")"
   echo -e "\nWriting success"
   : > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/java.$([[ -n "${JAVA_VERSION_AS:-}" && "" != "${JAVA_VERSION_AS:-}" ]] && echo "${JAVA_VERSION_AS}" || echo "${JAVA_VERSION}")"
-  echo -e "\nRemoving lock"
-  rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/java"
+  # if [[ "true" = "${GLOBAL_STACK_USE_LOCKS}" ]]; then
+  echo -e "\nReleasing sdkman lock"
+  flock -u 200
+  exec 200>&-
+  # fi
 fi
 
 sleep infinity

@@ -16,7 +16,7 @@ services:
       - NET_ADMIN
     depends_on:
       00base:
-        condition: service_started
+        condition: service_healthy
         required: true
     extra_hosts:
       - ${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}:${GLOBAL_STACK_HOST_GATEWAY_IP}
@@ -46,11 +46,22 @@ services:
       - SERVERLESS_ACCESS_KEY=${GLOBAL_STACK_BASE_SERVERLESS_ACCESS_KEY}
       - GLOBAL_STACK_DOCKER_USER_EMAIL=${GLOBAL_STACK_DOCKER_USER_EMAIL}
       - GLOBAL_STACK_DOCKER_USER_NAME=${GLOBAL_STACK_DOCKER_USER_NAME}
+      - GLOBAL_STACK_ERROR_TOKEN=rbenv
     image: ${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}:${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_PORT_5000}/local_global_stack_02rbenv:${GLOBAL_STACK_VERSION}
     networks:
       - public
+    healthcheck:
+      test: ["CMD-SHELL", "! test -f ${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}/rbenv && test -f ${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/rbenv || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 99999
+      start_period: 24h
+    labels:
+      stack.service: "02rbenv"
+      stack.tier: "runtime"
+      stack.version: "${GLOBAL_STACK_VERSION}"
     privileged: true
-    restart: unless-stopped
+    restart: "on-failure:5"
     volumes:
       - /etc/ssl/certs/ca-certificates.crt:/etc/ssl/certs/ca-certificates.crt:rw,delegated
       - ./projects:${GLOBAL_STACK_DOCKER_WORKDIR}:rw

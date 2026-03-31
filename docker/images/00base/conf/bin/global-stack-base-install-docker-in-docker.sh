@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 
 # Load OS information
 . /etc/os-release

@@ -16,10 +16,6 @@ services:
       # - --default-authentication-plugin=caching_sha2_password
       - --character-set-server=${GLOBAL_STACK_DATABASE_CHARSET}
       - --collation-server=${GLOBAL_STACK_DATABASE_COLLATE}
-    depends_on:
-      00base:
-        condition: service_started
-        required: true
     environment:
       - MYSQL_DBS=${GLOBAL_STACK_MYSQL9_DBS}
       - MYSQL_PASSWORD=${GLOBAL_STACK_DATABASE_PASSWORD}
@@ -29,8 +25,19 @@ services:
       - GLOBAL_STACK_DATABASE_COLLATE=${GLOBAL_STACK_DATABASE_COLLATE}
       - MYSQL_ALLOW_EMPTY_PASSWORD=yes
       - TZ=${GLOBAL_STACK_TIMEZONE}
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "${GLOBAL_STACK_DOCKER_USER_ID}", "-p${GLOBAL_STACK_DATABASE_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    labels:
+      stack.service: "01mysql9"
+      stack.tier: "database"
+      stack.version: "${GLOBAL_STACK_VERSION}"
     networks:
       - public
+    restart: "on-failure:5"
     ports:
       - ${GLOBAL_STACK_MYSQL9_PORT_3306:-}3306
       - ${GLOBAL_STACK_MYSQL9_PORT_33060:-}33060

@@ -9,10 +9,6 @@ services:
         GLOBAL_STACK_IMAGE_POSTGRES18_VERSION: ${GLOBAL_STACK_IMAGE_POSTGRES18_VERSION}
       context: ./
       dockerfile: ./docker/images/01postgres18/Dockerfile
-    depends_on:
-      00base:
-        condition: service_started
-        required: true
     environment:
       - POSTGRES_DBS=${GLOBAL_STACK_POSTGRES18_DBS}
       - POSTGRES_PASSWORD=${GLOBAL_STACK_DATABASE_ROOT_PASSWORD}
@@ -20,6 +16,17 @@ services:
       - TZ=${GLOBAL_STACK_TIMEZONE}
     networks:
       - public
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U root"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    labels:
+      stack.service: "01postgres18"
+      stack.tier: "database"
+      stack.version: "${GLOBAL_STACK_VERSION}"
+    restart: "on-failure:5"
     shm_size: ${GLOBAL_STACK_POSTGRES18_SHM_SIZE:-1gb}
     ports:
       - ${GLOBAL_STACK_POSTGRES18_PORT_5432:-}5432

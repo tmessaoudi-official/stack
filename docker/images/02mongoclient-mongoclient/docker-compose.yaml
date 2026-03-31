@@ -9,14 +9,20 @@ services:
         GLOBAL_STACK_IMAGE_MONGOCLIENT_MONGOCLIENT_VERSION: ${GLOBAL_STACK_IMAGE_MONGOCLIENT_MONGOCLIENT_VERSION}
       context: ./
       dockerfile: ./docker/images/02mongoclient-mongoclient/Dockerfile
-    depends_on:
-      00base:
-        condition: service_started
-        required: true
     environment:
       - MONGO_URL=${GLOBAL_STACK_MONGOCLIENT_MONGOCLIENT_DEFAULT_MONGO_URL}
     networks:
       - public
     ports:
       - ${GLOBAL_STACK_MONGOCLIENT_MONGOCLIENT_PORT_3000:-}3000
-    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:3000/ -o /dev/null"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    labels:
+      stack.service: "02mongoclient-mongoclient"
+      stack.tier: "tools"
+      stack.version: "${GLOBAL_STACK_VERSION}"
+    restart: "on-failure:5"

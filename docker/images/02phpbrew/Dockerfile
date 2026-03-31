@@ -8,9 +8,8 @@ ARG GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS=local-global-stack-registry.local
 # shellcheck disable=SC2086
 FROM ${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}:${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_PORT_5000}/local_global_stack_00base:${GLOBAL_STACK_VERSION}
 
-LABEL maintainer="Takieddine Messaoudi <takieddine.messaoudi.official@gmail.com>"
-
-LABEL info="local_global_stack"
+LABEL maintainer="Takieddine Messaoudi <takieddine.messaoudi.official@gmail.com>" \
+      info="local_global_stack"
 
 USER root
 
@@ -22,7 +21,6 @@ ENV GLOBAL_STACK_FRANKENPHP_WATCHER_VERSION=${GLOBAL_STACK_FRANKENPHP_WATCHER_VE
 # curl -fsSL 'https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x14AA40EC0831756756D7F66C4F4EA0AAE5267A6C' | gpg --dearmor | tee /usr/share/keyrings/php.gpg \
 # && sh -c 'echo "Types: deb\nTrusted: yes\nSigned-By: /usr/share/keyrings/php.gpg\nArch: $(dpkg --print-architecture)\nURIs: http://ppa.launchpad.net/ondrej/php/ubuntu\nSuites: noble\nComponents: main" > /etc/apt/sources.list.d/php-noble-main.sources' \
 # @todo fix pin versions
-# hadolint ignore=DL3008,DL3018
 RUN apt-get -o Acquire::AllowInsecureRepositories=true update --allow-releaseinfo-change \
     && apt-get --allow-unauthenticated install -y --no-install-recommends --fix-missing \
     bison \
@@ -75,6 +73,10 @@ RUN apt-get -o Acquire::AllowInsecureRepositories=true update --allow-releaseinf
     libgpgme-dev \
     libc-ares-dev \
     libsystemd-dev \
+    # php8.5 is intentionally installed here as the bootstrap PHP version required by phpbrew.
+    # phpbrew needs a working PHP binary to function — this is NOT the target PHP version
+    # for end-user images. The actual PHP version for each image (8.2, 8.3, 8.4, etc.)
+    # is managed and installed by phpbrew at runtime.
     php8.5-cli \
     php8.5-phar \
     php8.5-readline \

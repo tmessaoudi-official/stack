@@ -24,10 +24,10 @@ if [ -d "${GOROOT}"/bin ]; then
     PATH="${GOROOT}/bin:${PATH}"
 fi
 
-if [ -d "${ZIGPATH}" ]; then 
-    PATH="${ZIGPATH}:${PATH}"
+if [ -d "${GLOBAL_STACK_ZIGPATH}" ]; then 
+    PATH="${GLOBAL_STACK_ZIGPATH}:${PATH}"
 fi
 
-if [ -d "${HURLPATH}" ]; then 
-    PATH="${HURLPATH}:${PATH}"
+if [ -d "${GLOBAL_STACK_HURLPATH}" ]; then 
+    PATH="${GLOBAL_STACK_HURLPATH}:${PATH}"
 fi

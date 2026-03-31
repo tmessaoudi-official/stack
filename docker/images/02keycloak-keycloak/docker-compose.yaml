@@ -14,11 +14,8 @@ services:
       - --proxy-headers=forwarded
       - --verbose
     depends_on:
-      00base:
-        condition: service_started
-        required: true
       01postgres18:
-        condition: service_started
+        condition: service_healthy
         required: true
     extra_hosts:
       - ${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}:${GLOBAL_STACK_HOST_GATEWAY_IP}
@@ -66,7 +63,22 @@ services:
       - ${GLOBAL_STACK_KEYCLOAK_KEYCLOAK_PORT_8443:-}8443
       - ${GLOBAL_STACK_KEYCLOAK_KEYCLOAK_PORT_9990:-}9990
       - ${GLOBAL_STACK_KEYCLOAK_KEYCLOAK_PORT_9000:-}9000
-    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health/ready || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 90s
+    labels:
+      stack.service: "02keycloak-keycloak"
+      stack.tier: "auth"
+      stack.version: "${GLOBAL_STACK_VERSION}"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: "on-failure:5"
 volumes:
   keycloak_data:
     name: ${COMPOSE_PROJECT_NAME}_${GLOBAL_STACK_VERSION}_keycloak_data

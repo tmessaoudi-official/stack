@@ -7,7 +7,17 @@ services:
       - ${GLOBAL_STACK_VALKEY_PORT_6379:-}6379
     volumes:
       - 01valkey_data:/data
-    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    labels:
+      stack.service: "01valkey"
+      stack.tier: "cache"
+      stack.version: "${GLOBAL_STACK_VERSION}"
+    restart: "on-failure:5"
     networks:
       - public
 volumes:
