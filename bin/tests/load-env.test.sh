@@ -134,7 +134,7 @@ t "Remove empty lines (--remove-empty-lines=true)" bash -c "
     printf 'GLOBAL_STACK_A=1\n\n\nGLOBAL_STACK_B=2\n\n' > \"\$D/.env\"
     printf 'GLOBAL_STACK_A=1\nGLOBAL_STACK_B=2\n'       > \"\$D/.env.local\"
     bash '${LOAD_ENV}' --dir=\"\$D\" --remove-empty-lines=true --check-missing=false \
-        --extract-all-env=false \
+        --scan-sources=false \
         --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
     count=\$(grep -c '^\$' \"\$D/.env.local\" 2>/dev/null || true)
     [[ \"\${count:-0}\" -eq 0 ]] && echo PASS || echo FAIL
@@ -155,17 +155,17 @@ t "Remove trailing spaces" bash -c "
     printf 'GLOBAL_STACK_A=1   \nGLOBAL_STACK_B=2  \n' > \"\$D/.env\"
     cp \"\$D/.env\" \"\$D/.env.local\"
     bash '${LOAD_ENV}' --dir=\"\$D\" --remove-trailing-spaces=true --check-missing=false \
-        --extract-all-env=false \
+        --scan-sources=false \
         --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
     grep -P ' +\$' \"\$D/.env.local\" && echo FAIL || echo PASS
 "
 
-t "Remove commented lines (--remove-dash=true)" bash -c "
+t "Remove commented lines (--strip-comments=true)" bash -c "
     D='${TMP_DIR}/t1d'; mkdir -p \"\$D\"
     printf '# this is a comment\nGLOBAL_STACK_A=1\n' > \"\$D/.env\"
     cp \"\$D/.env\" \"\$D/.env.local\"
-    bash '${LOAD_ENV}' --dir=\"\$D\" --remove-dash=true --check-missing=false \
-        --extract-all-env=false \
+    bash '${LOAD_ENV}' --dir=\"\$D\" --strip-comments=true --check-missing=false \
+        --scan-sources=false \
         --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
     grep -q '# this is a comment' \"\$D/.env.local\" && echo FAIL || echo PASS
 "
@@ -179,7 +179,7 @@ t "show-added-entries=true: new key reported in output" bash -c "
     printf 'GLOBAL_STACK_EXISTING=1\nGLOBAL_STACK_NEW_KEY=hello\n' > \"\$D/.env\"
     printf 'GLOBAL_STACK_EXISTING=1\n' > \"\$D/.env.local\"
     out=\$(bash '${LOAD_ENV}' --dir=\"\$D\" --show-added-entries=true \
-        --extract-all-env=false \
+        --scan-sources=false \
         --show-different-entries=false --check-missing=false 2>&1)
     echo \"\$out\" | grep -q 'GLOBAL_STACK_NEW_KEY' && echo PASS || echo FAIL
 "
@@ -198,7 +198,7 @@ t "show-different-entries=true: differing value reported" bash -c "
     printf 'GLOBAL_STACK_FOO=new_value\n' > \"\$D/.env\"
     printf 'GLOBAL_STACK_FOO=old_value\n' > \"\$D/.env.local\"
     out=\$(bash '${LOAD_ENV}' --dir=\"\$D\" --show-different-entries=true \
-        --extract-all-env=false \
+        --scan-sources=false \
         --show-added-entries=false --check-missing=false 2>&1)
     echo \"\$out\" | grep -q 'GLOBAL_STACK_FOO' && echo PASS || echo FAIL
 "
@@ -220,8 +220,8 @@ t "update-differences: dst key gets src value" bash -c "
     D='${TMP_DIR}/t3a'; mkdir -p \"\$D\"
     printf 'GLOBAL_STACK_FOO=updated\n' > \"\$D/.env\"
     printf 'GLOBAL_STACK_FOO=old\n'     > \"\$D/.env.local\"
-    bash '${LOAD_ENV}' --dir=\"\$D\" --update-differences=update_differences \
-        --extract-all-env=false \
+    bash '${LOAD_ENV}' --dir=\"\$D\" --sync-values=true \
+        --scan-sources=false \
         --show-added-entries=false --show-different-entries=false --check-missing=false 2>&1 >/dev/null
     grep -q 'GLOBAL_STACK_FOO=updated' \"\$D/.env.local\" && echo PASS || echo FAIL
 "
@@ -230,7 +230,7 @@ t "update-differences: keys unique to dst are preserved" bash -c "
     D='${TMP_DIR}/t3b'; mkdir -p \"\$D\"
     printf 'GLOBAL_STACK_FOO=updated\n' > \"\$D/.env\"
     printf 'GLOBAL_STACK_FOO=old\nGLOBAL_STACK_CUSTOM=keep_me\n' > \"\$D/.env.local\"
-    bash '${LOAD_ENV}' --dir=\"\$D\" --update-differences=update_differences \
+    bash '${LOAD_ENV}' --dir=\"\$D\" --sync-values=true \
         --show-added-entries=false --show-different-entries=false --check-missing=false 2>&1 >/dev/null
     grep -q 'GLOBAL_STACK_CUSTOM=keep_me' \"\$D/.env.local\" && echo PASS || echo FAIL
 "
@@ -253,7 +253,7 @@ t "check-missing=true: key in src but not dst is reported" bash -c "
     printf 'GLOBAL_STACK_A=1\nGLOBAL_STACK_MISSING=x\n' > \"\$D/.env\"
     printf 'GLOBAL_STACK_A=1\n' > \"\$D/.env.local\"
     out=\$(bash '${LOAD_ENV}' --dir=\"\$D\" --check-missing=true \
-        --extract-all-env=false \
+        --scan-sources=false \
         --show-added-entries=false --show-different-entries=false 2>&1)
     echo \"\$out\" | grep -q 'GLOBAL_STACK_MISSING' && echo PASS || echo FAIL
 "
@@ -286,8 +286,8 @@ t "extract-all-env=true: output file is created" bash -c "
     printf 'GLOBAL_STACK_A=1\nGLOBAL_STACK_B=2\n' > \"\$D/.env\"
     cp \"\$D/.env\" \"\$D/.env.local\"
     printf 'ARG GLOBAL_STACK_A\nARG GLOBAL_STACK_B\n' > \"\$D/docker/images/test/Dockerfile\"
-    bash '${LOAD_ENV}' --dir=\"\$D\" --extract-all-env=true \
-        --extract-all-env-delete-output=false \
+    bash '${LOAD_ENV}' --dir=\"\$D\" --scan-sources=true \
+        --scan-delete-output=false \
         --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
     [[ -f \"\$D/.env.all.local\" ]] && echo PASS || echo FAIL
 "
@@ -297,8 +297,8 @@ t "extract-all-env: discovered variable appears in output file" bash -c "
     printf 'GLOBAL_STACK_A=1\nGLOBAL_STACK_B=2\n' > \"\$D/.env\"
     cp \"\$D/.env\" \"\$D/.env.local\"
     printf 'ARG GLOBAL_STACK_A\n' > \"\$D/docker/images/test/Dockerfile\"
-    bash '${LOAD_ENV}' --dir=\"\$D\" --extract-all-env=true \
-        --extract-all-env-delete-output=false \
+    bash '${LOAD_ENV}' --dir=\"\$D\" --scan-sources=true \
+        --scan-delete-output=false \
         --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
     grep -q 'GLOBAL_STACK_A' \"\$D/.env.all.local\" && echo PASS || echo FAIL
 "
@@ -307,8 +307,8 @@ t "extract-all-env-delete-output=true: output file cleaned up" bash -c "
     D='${TMP_DIR}/t5c'; mkdir -p \"\$D/docker/images/test\"
     printf 'GLOBAL_STACK_A=1\n' > \"\$D/.env\"; cp \"\$D/.env\" \"\$D/.env.local\"
     printf 'ARG GLOBAL_STACK_A\n' > \"\$D/docker/images/test/Dockerfile\"
-    bash '${LOAD_ENV}' --dir=\"\$D\" --extract-all-env=true \
-        --extract-all-env-delete-output=true \
+    bash '${LOAD_ENV}' --dir=\"\$D\" --scan-sources=true \
+        --scan-delete-output=true \
         --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
     [[ ! -f \"\$D/.env.all.local\" ]] && echo PASS || echo FAIL
 "
@@ -317,8 +317,8 @@ t "include-docker-args=false: Dockerfile ARG lines not extracted" bash -c "
     D='${TMP_DIR}/t5d'; mkdir -p \"\$D/docker/images/test\"
     printf 'GLOBAL_STACK_A=1\n' > \"\$D/.env\"; cp \"\$D/.env\" \"\$D/.env.local\"
     printf 'ARG GLOBAL_STACK_ONLY_IN_DOCKERFILE=default\n' > \"\$D/docker/images/test/Dockerfile\"
-    bash '${LOAD_ENV}' --dir=\"\$D\" --extract-all-env=true \
-        --extract-all-env-delete-output=false --include-docker-args=false \
+    bash '${LOAD_ENV}' --dir=\"\$D\" --scan-sources=true \
+        --scan-delete-output=false --include-docker-args=false \
         --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
     grep -q 'GLOBAL_STACK_ONLY_IN_DOCKERFILE' \"\$D/.env.all.local\" 2>/dev/null && echo FAIL || echo PASS
 "
@@ -346,7 +346,7 @@ t "multiple destination files: each gets updated value" bash -c "
     bash '${LOAD_ENV}' --dir=\"\$D\" \
         --source-files=\"\$D/.env\" \
         --destination-files=\"\$D/dst1.env.local \$D/dst2.env.local\" \
-        --update-differences=update_differences --extract-all-env=false \
+        --sync-values=true --scan-sources=false \
         --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
     grep -q 'GLOBAL_STACK_A=new' \"\$D/dst1.env.local\" \
         && grep -q 'GLOBAL_STACK_A=new' \"\$D/dst2.env.local\" \
@@ -388,9 +388,9 @@ t "extract-all-prefix: vars not matching prefix are excluded" bash -c "
     D='${TMP_DIR}/t8a'; mkdir -p \"\$D/docker/images/x\"
     printf 'GLOBAL_STACK_A=1\nOTHER_VAR=2\n' > \"\$D/.env\"; cp \"\$D/.env\" \"\$D/.env.local\"
     printf 'ARG GLOBAL_STACK_A\nARG OTHER_VAR\n' > \"\$D/docker/images/x/Dockerfile\"
-    bash '${LOAD_ENV}' --dir=\"\$D\" --extract-all-env=true \
-        --extract-all-env-delete-output=false \
-        --extract-all-prefix='(GLOBAL_STACK_)' \
+    bash '${LOAD_ENV}' --dir=\"\$D\" --scan-sources=true \
+        --scan-delete-output=false \
+        --scan-var-prefix='(GLOBAL_STACK_)' \
         --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
     grep -q 'OTHER_VAR' \"\$D/.env.all.local\" 2>/dev/null && echo FAIL || echo PASS
 "
@@ -424,8 +424,8 @@ t "search-path: files outside the path are not scanned" bash -c "
     printf 'GLOBAL_STACK_A=1\n' > \"\$D/.env\"; cp \"\$D/.env\" \"\$D/.env.local\"
     printf 'ARG GLOBAL_STACK_FROM_INCLUDED\n' > \"\$D/docker/included/Dockerfile\"
     printf 'ARG GLOBAL_STACK_FROM_OTHER\n'    > \"\$D/other/Dockerfile\"
-    bash '${LOAD_ENV}' --dir=\"\$D\" --search-path=\"\$D/docker\" --extract-all-env=true \
-        --extract-all-env-delete-output=false \
+    bash '${LOAD_ENV}' --dir=\"\$D\" --scan-path=\"\$D/docker\" --scan-sources=true \
+        --scan-delete-output=false \
         --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
     grep -q 'GLOBAL_STACK_FROM_OTHER' \"\$D/.env.all.local\" 2>/dev/null && echo FAIL || echo PASS
 "
@@ -434,9 +434,9 @@ t "search-path-ignore-pattern: ignored paths produce no extracted vars" bash -c 
     D='${TMP_DIR}/t10b'; mkdir -p \"\$D/docker/included\" \"\$D/docker/ignored\"
     printf 'GLOBAL_STACK_A=1\n' > \"\$D/.env\"; cp \"\$D/.env\" \"\$D/.env.local\"
     printf 'ARG GLOBAL_STACK_IGNORED_VAR\n' > \"\$D/docker/ignored/Dockerfile\"
-    bash '${LOAD_ENV}' --dir=\"\$D\" --search-path=\"\$D/docker\" \
-        --search-path-ignore-pattern='ignored' --extract-all-env=true \
-        --extract-all-env-delete-output=false \
+    bash '${LOAD_ENV}' --dir=\"\$D\" --scan-path=\"\$D/docker\" \
+        --scan-ignore-pattern='ignored' --scan-sources=true \
+        --scan-delete-output=false \
         --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
     grep -q 'GLOBAL_STACK_IGNORED_VAR' \"\$D/.env.all.local\" 2>/dev/null && echo FAIL || echo PASS
 "
@@ -509,7 +509,7 @@ t "all-src-env-merged-name: custom path accepted without crash" bash -c "
     printf 'GLOBAL_STACK_A=1\nGLOBAL_STACK_B=2\n' > \"\$D/.env.local\"
     bash '${LOAD_ENV}' --dir=\"\$D\" \
         --source-files=\"\$D/a.env \$D/b.env\" --destination-files=\"\$D/.env.local\" \
-        --all-src-env-merged-name=\"\$D/custom.merged\" --cleanup-tmp=false \
+        --source-merged-file=\"\$D/custom.merged\" --cleanup-tmp=false \
         --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
     echo PASS
 "
@@ -523,8 +523,8 @@ t "Dockerfile ARG with default" bash -c "
     printf 'GLOBAL_STACK_EXTRACT_TEST=placeholder\n' > \"\$D/.env\"
     cp \"\$D/.env\" \"\$D/.env.local\"
     printf 'ARG GLOBAL_STACK_EXTRACT_TEST=defaultval\n' > \"\$D/docker/images/test/Dockerfile\"
-    bash '${LOAD_ENV}' --dir=\"\$D\" --extract-all-env=true \
-        --extract-all-env-delete-output=false \
+    bash '${LOAD_ENV}' --dir=\"\$D\" --scan-sources=true \
+        --scan-delete-output=false \
         --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
     grep -q 'GLOBAL_STACK_EXTRACT_TEST' \"\$D/.env.all.local\" && echo PASS || echo FAIL
 "
@@ -534,8 +534,8 @@ t "Dockerfile ENV single-line (= form)" bash -c "
     printf 'GLOBAL_STACK_EXTRACT_TEST=placeholder\n' > \"\$D/.env\"
     cp \"\$D/.env\" \"\$D/.env.local\"
     printf 'ENV GLOBAL_STACK_EXTRACT_TEST=testval\n' > \"\$D/docker/images/test/Dockerfile\"
-    bash '${LOAD_ENV}' --dir=\"\$D\" --extract-all-env=true \
-        --extract-all-env-delete-output=false \
+    bash '${LOAD_ENV}' --dir=\"\$D\" --scan-sources=true \
+        --scan-delete-output=false \
         --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
     grep -q 'GLOBAL_STACK_EXTRACT_TEST' \"\$D/.env.all.local\" && echo PASS || echo FAIL
 "
@@ -545,8 +545,8 @@ t "Dockerfile ENV single-line (space form)" bash -c "
     printf 'GLOBAL_STACK_EXTRACT_TEST=placeholder\n' > \"\$D/.env\"
     cp \"\$D/.env\" \"\$D/.env.local\"
     printf 'ENV GLOBAL_STACK_EXTRACT_TEST testval\n' > \"\$D/docker/images/test/Dockerfile\"
-    bash '${LOAD_ENV}' --dir=\"\$D\" --extract-all-env=true \
-        --extract-all-env-delete-output=false \
+    bash '${LOAD_ENV}' --dir=\"\$D\" --scan-sources=true \
+        --scan-delete-output=false \
         --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
     grep -q 'GLOBAL_STACK_EXTRACT_TEST' \"\$D/.env.all.local\" && echo PASS || echo FAIL
 "
@@ -557,8 +557,8 @@ t "Dockerfile ENV multi-line continuation" bash -c "
     cp \"\$D/.env\" \"\$D/.env.local\"
     printf 'ENV GLOBAL_STACK_EXTRACT_TEST_A=aval \\\\\n    GLOBAL_STACK_EXTRACT_TEST=testval\n' \
         > \"\$D/docker/images/test/Dockerfile\"
-    bash '${LOAD_ENV}' --dir=\"\$D\" --extract-all-env=true \
-        --extract-all-env-delete-output=false \
+    bash '${LOAD_ENV}' --dir=\"\$D\" --scan-sources=true \
+        --scan-delete-output=false \
         --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
     grep -q 'GLOBAL_STACK_EXTRACT_TEST' \"\$D/.env.all.local\" && echo PASS || echo FAIL
 "
@@ -568,8 +568,8 @@ t "Plain assignment in shell script" bash -c "
     printf 'GLOBAL_STACK_EXTRACT_TEST=placeholder\n' > \"\$D/.env\"
     cp \"\$D/.env\" \"\$D/.env.local\"
     printf 'GLOBAL_STACK_EXTRACT_TEST=shellval\n' > \"\$D/docker/images/test/entrypoint.sh\"
-    bash '${LOAD_ENV}' --dir=\"\$D\" --extract-all-env=true \
-        --extract-all-env-delete-output=false \
+    bash '${LOAD_ENV}' --dir=\"\$D\" --scan-sources=true \
+        --scan-delete-output=false \
         --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
     grep -q 'GLOBAL_STACK_EXTRACT_TEST' \"\$D/.env.all.local\" && echo PASS || echo FAIL
 "
@@ -579,8 +579,8 @@ t "Export assignment in shell script" bash -c "
     printf 'GLOBAL_STACK_EXTRACT_TEST=placeholder\n' > \"\$D/.env\"
     cp \"\$D/.env\" \"\$D/.env.local\"
     printf 'export GLOBAL_STACK_EXTRACT_TEST=exportval\n' > \"\$D/docker/images/test/entrypoint.sh\"
-    bash '${LOAD_ENV}' --dir=\"\$D\" --extract-all-env=true \
-        --extract-all-env-delete-output=false \
+    bash '${LOAD_ENV}' --dir=\"\$D\" --scan-sources=true \
+        --scan-delete-output=false \
         --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
     grep -q 'GLOBAL_STACK_EXTRACT_TEST' \"\$D/.env.all.local\" && echo PASS || echo FAIL
 "
@@ -591,8 +591,8 @@ t "docker-compose environment list form" bash -c "
     cp \"\$D/.env\" \"\$D/.env.local\"
     printf 'environment:\n  - GLOBAL_STACK_EXTRACT_TEST=composeval\n' \
         > \"\$D/docker/images/test/docker-compose.yaml\"
-    bash '${LOAD_ENV}' --dir=\"\$D\" --extract-all-env=true \
-        --extract-all-env-delete-output=false \
+    bash '${LOAD_ENV}' --dir=\"\$D\" --scan-sources=true \
+        --scan-delete-output=false \
         --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
     grep -q 'GLOBAL_STACK_EXTRACT_TEST' \"\$D/.env.all.local\" && echo PASS || echo FAIL
 "
@@ -603,8 +603,8 @@ t "YAML map form" bash -c "
     cp \"\$D/.env\" \"\$D/.env.local\"
     printf 'environment:\n  GLOBAL_STACK_EXTRACT_TEST: yamlval\n' \
         > \"\$D/docker/images/test/docker-compose.yaml\"
-    bash '${LOAD_ENV}' --dir=\"\$D\" --extract-all-env=true \
-        --extract-all-env-delete-output=false \
+    bash '${LOAD_ENV}' --dir=\"\$D\" --scan-sources=true \
+        --scan-delete-output=false \
         --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
     grep -q 'GLOBAL_STACK_EXTRACT_TEST' \"\$D/.env.all.local\" && echo PASS || echo FAIL
 "
@@ -615,8 +615,8 @@ t "Shell reference with default (\${VAR:-default})" bash -c "
     cp \"\$D/.env\" \"\$D/.env.local\"
     printf 'CMD=\"\${GLOBAL_STACK_EXTRACT_TEST:-shelldefault}\"\n' \
         > \"\$D/docker/images/test/entrypoint.sh\"
-    bash '${LOAD_ENV}' --dir=\"\$D\" --extract-all-env=true \
-        --extract-all-env-delete-output=false \
+    bash '${LOAD_ENV}' --dir=\"\$D\" --scan-sources=true \
+        --scan-delete-output=false \
         --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
     grep -q 'GLOBAL_STACK_EXTRACT_TEST' \"\$D/.env.all.local\" && echo PASS || echo FAIL
 "
@@ -627,8 +627,8 @@ t "Caddyfile {env.VAR} form" bash -c "
     cp \"\$D/.env\" \"\$D/.env.local\"
     printf 'respond {env.GLOBAL_STACK_EXTRACT_TEST}\n' \
         > \"\$D/docker/images/test/Caddyfile\"
-    bash '${LOAD_ENV}' --dir=\"\$D\" --extract-all-env=true \
-        --extract-all-env-delete-output=false \
+    bash '${LOAD_ENV}' --dir=\"\$D\" --scan-sources=true \
+        --scan-delete-output=false \
         --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
     grep -q 'GLOBAL_STACK_EXTRACT_TEST' \"\$D/.env.all.local\" && echo PASS || echo FAIL
 "
@@ -639,8 +639,8 @@ t "PHP getenv() form" bash -c "
     cp \"\$D/.env\" \"\$D/.env.local\"
     printf '%s\n' 'getenv(\"GLOBAL_STACK_EXTRACT_TEST\")' \
         > \"\$D/docker/images/test/config.php\"
-    bash '${LOAD_ENV}' --dir=\"\$D\" --extract-all-env=true \
-        --extract-all-env-delete-output=false \
+    bash '${LOAD_ENV}' --dir=\"\$D\" --scan-sources=true \
+        --scan-delete-output=false \
         --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
     grep -q 'GLOBAL_STACK_EXTRACT_TEST' \"\$D/.env.all.local\" && echo PASS || echo FAIL
 "
@@ -651,8 +651,8 @@ t "PHP \$_ENV[] form" bash -c "
     cp \"\$D/.env\" \"\$D/.env.local\"
     printf '%s\n' '\$_ENV[\"GLOBAL_STACK_EXTRACT_TEST\"]' \
         > \"\$D/docker/images/test/config.php\"
-    bash '${LOAD_ENV}' --dir=\"\$D\" --extract-all-env=true \
-        --extract-all-env-delete-output=false \
+    bash '${LOAD_ENV}' --dir=\"\$D\" --scan-sources=true \
+        --scan-delete-output=false \
         --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
     grep -q 'GLOBAL_STACK_EXTRACT_TEST' \"\$D/.env.all.local\" && echo PASS || echo FAIL
 "
@@ -663,8 +663,8 @@ t "JS/TS process.env.VAR form" bash -c "
     cp \"\$D/.env\" \"\$D/.env.local\"
     printf 'const v = process.env.GLOBAL_STACK_EXTRACT_TEST;\n' \
         > \"\$D/docker/images/test/config.js\"
-    bash '${LOAD_ENV}' --dir=\"\$D\" --extract-all-env=true \
-        --extract-all-env-delete-output=false \
+    bash '${LOAD_ENV}' --dir=\"\$D\" --scan-sources=true \
+        --scan-delete-output=false \
         --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
     grep -q 'GLOBAL_STACK_EXTRACT_TEST' \"\$D/.env.all.local\" && echo PASS || echo FAIL
 "
@@ -675,8 +675,8 @@ t "Python os.environ.get() form" bash -c "
     cp \"\$D/.env\" \"\$D/.env.local\"
     printf '%s\n' 'os.environ.get(\"GLOBAL_STACK_EXTRACT_TEST\")' \
         > \"\$D/docker/images/test/config.py\"
-    bash '${LOAD_ENV}' --dir=\"\$D\" --extract-all-env=true \
-        --extract-all-env-delete-output=false \
+    bash '${LOAD_ENV}' --dir=\"\$D\" --scan-sources=true \
+        --scan-delete-output=false \
         --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
     grep -q 'GLOBAL_STACK_EXTRACT_TEST' \"\$D/.env.all.local\" && echo PASS || echo FAIL
 "
@@ -687,8 +687,8 @@ t "Python os.environ[] form" bash -c "
     cp \"\$D/.env\" \"\$D/.env.local\"
     printf '%s\n' 'os.environ[\"GLOBAL_STACK_EXTRACT_TEST\"]' \
         > \"\$D/docker/images/test/config.py\"
-    bash '${LOAD_ENV}' --dir=\"\$D\" --extract-all-env=true \
-        --extract-all-env-delete-output=false \
+    bash '${LOAD_ENV}' --dir=\"\$D\" --scan-sources=true \
+        --scan-delete-output=false \
         --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
     grep -q 'GLOBAL_STACK_EXTRACT_TEST' \"\$D/.env.all.local\" && echo PASS || echo FAIL
 "
@@ -703,8 +703,8 @@ t "Dockerfile ENV quoted literal: no leading-quote leak in output" bash -c "
     cp \"\$D/.env\" \"\$D/.env.local\"
     printf 'ENV GLOBAL_STACK_QUOTE_A=first \\\\\n    GLOBAL_STACK_QUOTE_B=\"literal_value\"\n' \
         > \"\$D/docker/images/test/Dockerfile\"
-    bash '${LOAD_ENV}' --dir=\"\$D\" --extract-all-env=true \
-        --extract-all-env-delete-output=false \
+    bash '${LOAD_ENV}' --dir=\"\$D\" --scan-sources=true \
+        --scan-delete-output=false \
         --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
     count=\$(grep -c 'GLOBAL_STACK_QUOTE_B=\"' \"\$D/.env.all.local\" 2>/dev/null || true)
     [[ \"\${count:-0}\" -eq 0 ]] && echo PASS || echo FAIL
@@ -716,8 +716,8 @@ t "Dockerfile ENV quoted pass-through: no leading-quote leak in output" bash -c 
     cp \"\$D/.env\" \"\$D/.env.local\"
     printf 'ENV GLOBAL_STACK_QUOTE_A=first \\\\\n    GLOBAL_STACK_QUOTE_C=\"\${GLOBAL_STACK_QUOTE_C}\"\n' \
         > \"\$D/docker/images/test/Dockerfile\"
-    bash '${LOAD_ENV}' --dir=\"\$D\" --extract-all-env=true \
-        --extract-all-env-delete-output=false \
+    bash '${LOAD_ENV}' --dir=\"\$D\" --scan-sources=true \
+        --scan-delete-output=false \
         --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
     count=\$(grep -c 'GLOBAL_STACK_QUOTE_C=\"' \"\$D/.env.all.local\" 2>/dev/null || true)
     [[ \"\${count:-0}\" -eq 0 ]] && echo PASS || echo FAIL
@@ -729,8 +729,8 @@ t "PHP \$_ENV[]: trailing bracket not leaked into key name" bash -c "
     cp \"\$D/.env\" \"\$D/.env.local\"
     printf '%s\n' '\$_ENV[\"GLOBAL_STACK_PHP_KEY\"]' \
         > \"\$D/docker/images/test/config.php\"
-    bash '${LOAD_ENV}' --dir=\"\$D\" --extract-all-env=true \
-        --extract-all-env-delete-output=false \
+    bash '${LOAD_ENV}' --dir=\"\$D\" --scan-sources=true \
+        --scan-delete-output=false \
         --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
     grep -q 'GLOBAL_STACK_PHP_KEY' \"\$D/.env.all.local\" || { echo FAIL; exit 0; }
     grep -qF 'GLOBAL_STACK_PHP_KEY\"' \"\$D/.env.all.local\" && { echo FAIL; exit 0; }
@@ -744,8 +744,8 @@ t "Python os.environ[]: trailing bracket not leaked into key name" bash -c "
     cp \"\$D/.env\" \"\$D/.env.local\"
     printf '%s\n' 'os.environ[\"GLOBAL_STACK_PY_KEY\"]' \
         > \"\$D/docker/images/test/config.py\"
-    bash '${LOAD_ENV}' --dir=\"\$D\" --extract-all-env=true \
-        --extract-all-env-delete-output=false \
+    bash '${LOAD_ENV}' --dir=\"\$D\" --scan-sources=true \
+        --scan-delete-output=false \
         --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
     grep -q 'GLOBAL_STACK_PY_KEY' \"\$D/.env.all.local\" || { echo FAIL; exit 0; }
     line=\$(grep 'GLOBAL_STACK_PY_KEY' \"\$D/.env.all.local\" | head -1)
@@ -763,8 +763,8 @@ t "Different values across files: reported" bash -c "
     cp \"\$D/.env\" \"\$D/.env.local\"
     printf '%s\n' '- GLOBAL_STACK_MULTI_TEST=val_one' > \"\$D/docker/images/svc1/docker-compose.yaml\"
     printf '%s\n' '- GLOBAL_STACK_MULTI_TEST=val_two' > \"\$D/docker/images/svc2/docker-compose.yaml\"
-    out=\$(bash '${LOAD_ENV}' --dir=\"\$D\" --extract-all-env=true \
-        --extract-all-env-delete-output=false \
+    out=\$(bash '${LOAD_ENV}' --dir=\"\$D\" --scan-sources=true \
+        --scan-delete-output=false \
         --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1)
     echo \"\$out\" | grep -q 'GLOBAL_STACK_MULTI_TEST' && echo PASS || echo FAIL
 "
@@ -777,8 +777,8 @@ t "Self-referencing pass-through: not reported as conflict" bash -c "
         > \"\$D/docker/images/svc1/docker-compose.yaml\"
     printf '%s\n' '- GLOBAL_STACK_PASSTHRU=\${GLOBAL_STACK_PASSTHRU}' \
         > \"\$D/docker/images/svc2/docker-compose.yaml\"
-    out=\$(bash '${LOAD_ENV}' --dir=\"\$D\" --extract-all-env=true \
-        --extract-all-env-delete-output=false \
+    out=\$(bash '${LOAD_ENV}' --dir=\"\$D\" --scan-sources=true \
+        --scan-delete-output=false \
         --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1)
     echo \"\$out\" | grep -q 'GLOBAL_STACK_PASSTHRU' && echo FAIL || echo PASS
 "
@@ -791,8 +791,8 @@ t "Quoted Dockerfile ENV vs compose pass-through: not reported as conflict" bash
         > \"\$D/docker/images/svc1/Dockerfile\"
     printf '%s\n' '- GLOBAL_STACK_COLLATE_TEST=\${GLOBAL_STACK_COLLATE_TEST}' \
         > \"\$D/docker/images/svc2/docker-compose.yaml\"
-    out=\$(bash '${LOAD_ENV}' --dir=\"\$D\" --extract-all-env=true \
-        --extract-all-env-delete-output=false \
+    out=\$(bash '${LOAD_ENV}' --dir=\"\$D\" --scan-sources=true \
+        --scan-delete-output=false \
         --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1)
     echo \"\$out\" | grep -q 'GLOBAL_STACK_COLLATE_TEST' && echo FAIL || echo PASS
 "
@@ -803,8 +803,8 @@ t "--exclude-multiple-values-pattern: excluded key not reported" bash -c "
     cp \"\$D/.env\" \"\$D/.env.local\"
     printf '%s\n' '- GLOBAL_STACK_NOISY_VAR=noise_one' > \"\$D/docker/images/svc1/docker-compose.yaml\"
     printf '%s\n' '- GLOBAL_STACK_NOISY_VAR=noise_two' > \"\$D/docker/images/svc2/docker-compose.yaml\"
-    out=\$(bash '${LOAD_ENV}' --dir=\"\$D\" --extract-all-env=true \
-        --extract-all-env-delete-output=false \
+    out=\$(bash '${LOAD_ENV}' --dir=\"\$D\" --scan-sources=true \
+        --scan-delete-output=false \
         --exclude-multiple-values-pattern='GLOBAL_STACK_NOISY_VAR' \
         --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1)
     echo \"\$out\" | grep -q 'GLOBAL_STACK_NOISY_VAR' && echo FAIL || echo PASS
@@ -816,8 +816,8 @@ t "--exclude-implicit-empty: empty value not counted as conflict" bash -c "
     cp \"\$D/.env\" \"\$D/.env.local\"
     printf '%s\n' '- GLOBAL_STACK_MAYBE=' > \"\$D/docker/images/svc1/docker-compose.yaml\"
     printf '%s\n' '- GLOBAL_STACK_MAYBE=realval' > \"\$D/docker/images/svc2/docker-compose.yaml\"
-    out=\$(bash '${LOAD_ENV}' --dir=\"\$D\" --extract-all-env=true \
-        --extract-all-env-delete-output=false \
+    out=\$(bash '${LOAD_ENV}' --dir=\"\$D\" --scan-sources=true \
+        --scan-delete-output=false \
         --exclude-implicit-empty=true \
         --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1)
     echo \"\$out\" | grep -q 'GLOBAL_STACK_MAYBE' && echo FAIL || echo PASS
@@ -829,8 +829,8 @@ t "--exclude-explicit-empty: explicit empty not counted as conflict" bash -c "
     cp \"\$D/.env\" \"\$D/.env.local\"
     printf 'CMD=\"\${GLOBAL_STACK_XEMPTY:-}\"\n' > \"\$D/docker/images/svc1/entrypoint.sh\"
     printf '%s\n' '- GLOBAL_STACK_XEMPTY=realval' > \"\$D/docker/images/svc2/docker-compose.yaml\"
-    out=\$(bash '${LOAD_ENV}' --dir=\"\$D\" --extract-all-env=true \
-        --extract-all-env-delete-output=false \
+    out=\$(bash '${LOAD_ENV}' --dir=\"\$D\" --scan-sources=true \
+        --scan-delete-output=false \
         --exclude-explicit-empty=true \
         --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1)
     echo \"\$out\" | grep -q 'GLOBAL_STACK_XEMPTY' && echo FAIL || echo PASS
@@ -845,7 +845,7 @@ t "--quiet=true: suppresses informational output" bash -c "
     printf 'GLOBAL_STACK_EXISTING=1\nGLOBAL_STACK_NEW_KEY=hello\n' > \"\$D/.env\"
     printf 'GLOBAL_STACK_EXISTING=1\n' > \"\$D/.env.local\"
     out=\$(bash '${LOAD_ENV}' --dir=\"\$D\" \
-        --quiet=true --extract-all-env=false \
+        --quiet=true --scan-sources=false \
         --show-added-entries=true --show-different-entries=true --check-missing=true 2>&1)
     echo \"\$out\" | grep -qE '(Added|Different|Missing|show_inconsistency|show_differences|check_missing)' \
         && echo FAIL || echo PASS
@@ -856,7 +856,7 @@ t "--exclude-different-pattern: matched key skipped in diff report" bash -c "
     printf 'GLOBAL_STACK_COMPOSE_FILE=val1\n' > \"\$D/.env\"
     printf 'GLOBAL_STACK_COMPOSE_FILE=val2\n' > \"\$D/.env.local\"
     out=\$(bash '${LOAD_ENV}' --dir=\"\$D\" \
-        --extract-all-env=false \
+        --scan-sources=false \
         --exclude-different-pattern='GLOBAL_STACK_COMPOSE_FILE' \
         --show-added-entries=false --show-different-entries=true --check-missing=false 2>&1)
     echo \"\$out\" | grep -q 'GLOBAL_STACK_COMPOSE_FILE' && echo FAIL || echo PASS
@@ -868,9 +868,9 @@ t "--extract-all-exclude-pattern: matched prefix not extracted" bash -c "
     cp \"\$D/.env\" \"\$D/.env.local\"
     printf 'ARG GLOBAL_STACK_SKIP_THIS=x\nARG GLOBAL_STACK_KEEP_THIS=y\n' \
         > \"\$D/docker/images/test/Dockerfile\"
-    bash '${LOAD_ENV}' --dir=\"\$D\" --extract-all-env=true \
-        --extract-all-env-delete-output=false \
-        --extract-all-exclude-pattern='GLOBAL_STACK_SKIP_THIS' \
+    bash '${LOAD_ENV}' --dir=\"\$D\" --scan-sources=true \
+        --scan-delete-output=false \
+        --scan-exclude-pattern='GLOBAL_STACK_SKIP_THIS' \
         --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
     grep -q 'GLOBAL_STACK_KEEP_THIS' \"\$D/.env.all.local\" || { echo FAIL; exit 0; }
     grep -q 'GLOBAL_STACK_SKIP_THIS' \"\$D/.env.all.local\" 2>/dev/null && echo FAIL || echo PASS
@@ -882,9 +882,9 @@ t "--exclude-reverse-check-missing: excluded pattern skipped" bash -c "
     cp \"\$D/.env\" \"\$D/.env.local\"
     printf 'ARG GLOBAL_STACK_DOCKER_ONLY=x\nARG GLOBAL_STACK_NORMAL\n' \
         > \"\$D/docker/images/test/Dockerfile\"
-    out=\$(bash '${LOAD_ENV}' --dir=\"\$D\" --extract-all-env=true \
-        --extract-all-env-delete-output=false \
-        --exclude-reverse-check-missing='GLOBAL_STACK_DOCKER_ONLY' \
+    out=\$(bash '${LOAD_ENV}' --dir=\"\$D\" --scan-sources=true \
+        --scan-delete-output=false \
+        --exclude-source-check-pattern='GLOBAL_STACK_DOCKER_ONLY' \
         --check-missing=true --show-added-entries=false --show-different-entries=false 2>&1)
     echo \"\$out\" | grep -q 'GLOBAL_STACK_DOCKER_ONLY' && echo FAIL || echo PASS
 "
@@ -895,8 +895,8 @@ t "RHS variable extraction: both derived and source vars appear" bash -c "
     cp \"\$D/.env\" \"\$D/.env.local\"
     printf '%s\n' '- GLOBAL_STACK_DERIVED=\${GLOBAL_STACK_SOURCE_VAR}' \
         > \"\$D/docker/images/test/docker-compose.yaml\"
-    bash '${LOAD_ENV}' --dir=\"\$D\" --extract-all-env=true \
-        --extract-all-env-delete-output=false \
+    bash '${LOAD_ENV}' --dir=\"\$D\" --scan-sources=true \
+        --scan-delete-output=false \
         --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
     grep -q 'GLOBAL_STACK_DERIVED' \"\$D/.env.all.local\" || { echo FAIL; exit 0; }
     grep -q 'GLOBAL_STACK_SOURCE_VAR' \"\$D/.env.all.local\" || { echo FAIL; exit 0; }
