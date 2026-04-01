@@ -1,5 +1,4 @@
 #!/bin/bash
-set -euo pipefail
 
 # Load OS information
 . /etc/os-release
@@ -10,7 +9,7 @@ curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o 
 # @todo change later
 echo -e "Types: deb\nTrusted: yes\nSigned-By: /usr/share/keyrings/docker.gpg\nArch: $(dpkg --print-architecture)\nURIs: https://download.docker.com/linux/ubuntu\nSuites: ${UBUNTU_CODENAME}\nComponents: stable" | sudo tee /etc/apt/sources.list.d/docker.sources > /dev/null
 sudo apt-get -o Acquire::AllowInsecureRepositories=true update --allow-releaseinfo-change
-sudo apt-get --allow-unauthenticated install -y docker.io
+sudo apt-get --allow-unauthenticated install -y docker-ce docker-ce-cli containerd.io
 sudo groupadd docker > /dev/null
 sudo usermod -aG docker "${GLOBAL_STACK_DOCKER_USER_ID}"
 

@@ -6,7 +6,7 @@ awk '!seen[$0]++' .env | grep -oE '#(.*)@todo(.*)check-update(s)? (.*)http(s)?:/
     wait $navigator_pid
 done
 
-look for noble|oracular|plucky|questing and try to replace them with resolute (look is there is a release)
+look for noble|oracular|plucky|questing and try to replace them with resolute (if resolute dist exists else replace with the newest available dist) (look is there is a release)
 
 source /etc/profile.d/stack.sh
 nvm use ${GLOBAL_STACK_NODE22_VERSION}
