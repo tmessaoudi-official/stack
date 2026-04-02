@@ -5,9 +5,13 @@
 
 set -eEuo pipefail
 
+# Include guard — safe to source multiple times
+[[ -n "${_GS_CU_SDKMANAGER_SH_LOADED:-}" ]] && return 0
+readonly _GS_CU_SDKMANAGER_SH_LOADED=1
+
 # Fetch latest version for an Android SDK component
-# Usage: _sdkmanager_fetch_latest "build-tools" "37.0.0-rc2"
-_sdkmanager_fetch_latest() {
+# Usage: _gs_cu_sdkmanager_fetch_latest "build-tools" "37.0.0-rc2"
+_gs_cu_sdkmanager_fetch_latest() {
   local identifier="${1}"    # e.g. "build-tools", "cmdline-tools", "ndk", "platform-tools"
   local current_version="${2}"
   local offline="${3:-false}"
@@ -17,7 +21,7 @@ _sdkmanager_fetch_latest() {
 
   if [[ "${no_cache}" != "true" ]]; then
     local cached
-    if cached="$(_cache_read "${cache_key}" 2>/dev/null)"; then
+    if cached="$(_gs_cu_cache_read "${cache_key}" 2>/dev/null)"; then
       echo "${cached}"
       return 0
     fi
@@ -47,28 +51,28 @@ _sdkmanager_fetch_latest() {
   done
 
   if [[ -z "${sdkmanager_bin}" ]]; then
-    _log_debug "sdkmanager not found — skipping ${identifier}"
+    _gs_cu_log_debug "sdkmanager not found — skipping ${identifier}"
     return 1
   fi
 
   # Run sdkmanager --list and parse for the component
   local list_output
   if ! list_output="$("${sdkmanager_bin}" "--sdk_root=${sdk_root}" --list 2>/dev/null)"; then
-    _log_debug "sdkmanager --list failed"
+    _gs_cu_log_debug "sdkmanager --list failed"
     return 1
   fi
 
   local proposed
-  proposed="$(_sdkmanager_parse_latest "${list_output}" "${identifier}")"
+  proposed="$(_gs_cu_sdkmanager_parse_latest "${list_output}" "${identifier}")"
 
   if [[ -n "${proposed}" ]]; then
-    _cache_write "${cache_key}" "${proposed}"
+    _gs_cu_cache_write "${cache_key}" "${proposed}"
     echo "${proposed}"
   fi
 }
 
 # Parse sdkmanager --list output to find latest version of a component
-_sdkmanager_parse_latest() {
+_gs_cu_sdkmanager_parse_latest() {
   local list_output="${1}"
   local component="${2}"
 

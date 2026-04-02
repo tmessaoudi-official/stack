@@ -6,13 +6,13 @@
 set -eEuo pipefail
 
 # Include guard — safe to source multiple times
-[[ -n "${_CU_TYPE_MAP_LOADED:-}" ]] && return 0
-readonly _CU_TYPE_MAP_LOADED=1
+[[ -n "${_GS_CU_TYPE_MAP_SH_LOADED:-}" ]] && return 0
+readonly _GS_CU_TYPE_MAP_SH_LOADED=1
 
 # Given a raw URL from a legacy annotation, return the structured type:identifier
-# Usage: _infer_type_from_url "https://hub.docker.com/r/axllent/mailpit/tags" "v1.29.3"
+# Usage: _gs_cu_infer_type_from_url "https://hub.docker.com/r/axllent/mailpit/tags" "v1.29.3"
 # Output format: "<type>:<identifier>" echoed to stdout
-_infer_type_from_url() {
+_gs_cu_infer_type_from_url() {
   local url="${1}"
   local current_version="${2:-}"
 
@@ -64,8 +64,7 @@ _infer_type_from_url() {
 
   # RubyGems: https://rubygems.org/gems/fastlane
   if [[ "${url}" =~ rubygems\.org/gems/([^/[:space:]]+) ]]; then
-    local gem="${BASH_REMATCH[1]}"
-    # Map to npm-like format; treat as url since we don't have rubygems fetcher
+    # Map to url type since we don't have rubygems fetcher
     echo "url:${url}"
     return 0
   fi
@@ -102,9 +101,9 @@ _infer_type_from_url() {
 
 # Infer SDKMAN candidate from variable name pattern
 # e.g. "GLOBAL_STACK_JAVA11_INSTALL_PACKAGE_GRADLE_VX1_VERSION" → "gradle" with major from current_version
-# Usage: _infer_sdkman_candidate "GLOBAL_STACK_JAVA11_INSTALL_PACKAGE_GRADLE_VX1_VERSION" "9.4.0"
+# Usage: _gs_cu_infer_sdkman_candidate "GLOBAL_STACK_JAVA11_INSTALL_PACKAGE_GRADLE_VX1_VERSION" "9.4.0"
 # Output: "sdkman:gradle:9"
-_infer_sdkman_candidate() {
+_gs_cu_infer_sdkman_candidate() {
   local var_name="${1}"
   local current_version="${2}"
 

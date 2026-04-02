@@ -12,42 +12,41 @@ set -eEuo pipefail
 # --------------------------------------------------------------------------
 
 # Returns 0 if version looks like a pre-release
-_is_prerelease() {
+_gs_cu_is_prerelease() {
   local version="${1}"
   # Indicators: alpha, beta, rc, preview, nightly, edge, dev, next, snapshot
-  # Also: -rc0, -rc1, -beta, -alpha, -preview
   local lower="${version,,}"
   [[ "${lower}" =~ (alpha|beta|rc[0-9]*|preview|nightly|edge|\.dev|snapshot|-dev) ]]
 }
 
 # Returns 0 if version is unversioned (nightly/latest/edge/next/master)
-_is_unversioned() {
+_gs_cu_is_unversioned() {
   local version="${1}"
   local lower="${version,,}"
   [[ "${lower}" =~ ^(nightly|latest|edge|master|next|head|main)$ ]]
 }
 
 # Returns 0 if version contains a git SHA (40 or 12 hex chars)
-_is_git_sha() {
+_gs_cu_is_git_sha() {
   local version="${1}"
   [[ "${version}" =~ ^[a-f0-9]{12,40}$ ]]
 }
 
 # Returns 0 if version contains a Debian/Ubuntu codename
-_has_distro_codename() {
+_gs_cu_has_distro_codename() {
   local version="${1}"
   local lower="${version,,}"
   [[ "${lower}" =~ (focal|jammy|kinetic|lunar|mantic|noble|oracular|plucky|questing|resolute|oraclelinux|alpine|bullseye|bookworm|buster|stretch|bionic|xenial) ]]
 }
 
 # Returns 0 if version has alpine suffix (e.g. 18.3-alpine3.23)
-_has_alpine_suffix() {
+_gs_cu_has_alpine_suffix() {
   local version="${1}"
   [[ "${version}" =~ -alpine[0-9] ]]
 }
 
 # Extract alpine suffix from version
-_get_alpine_suffix() {
+_gs_cu_get_alpine_suffix() {
   local version="${1}"
   if [[ "${version}" =~ (-alpine[0-9.]+)$ ]]; then
     echo "${BASH_REMATCH[1]}"
@@ -57,13 +56,13 @@ _get_alpine_suffix() {
 }
 
 # Strip alpine suffix from version for numeric comparison
-_strip_alpine_suffix() {
+_gs_cu_strip_alpine_suffix() {
   local version="${1}"
   echo "${version%%-alpine*}"
 }
 
 # Returns 0 if the version has non-ubuntu distro codename (oraclelinux, etc.)
-_has_non_ubuntu_distro() {
+_gs_cu_has_non_ubuntu_distro() {
   local version="${1}"
   local lower="${version,,}"
   [[ "${lower}" =~ (oraclelinux|centos|fedora|debian|bullseye|bookworm|buster|stretch|bionic|xenial|wheezy) ]]
@@ -74,7 +73,7 @@ _has_non_ubuntu_distro() {
 # Returns: 0 if a == b, 1 if a > b, 2 if a < b
 # Handles: v prefix, pre-release qualifiers
 # --------------------------------------------------------------------------
-_semver_compare() {
+_gs_cu_semver_compare() {
   local a="${1}"
   local b="${2}"
 
@@ -112,7 +111,7 @@ _semver_compare() {
 #   hint       - hint text (e.g. "php >= 8.5.0")
 # Outputs: echoes one of: AUTO | MANUAL:<reason> | SKIP:<reason>
 # --------------------------------------------------------------------------
-_decide_action() {
+_gs_cu_decide_action() {
   local type="${1}"
   local identifier="${2}"
   local flags="${3}"
@@ -143,13 +142,13 @@ _decide_action() {
   fi
 
   # Unversioned current (nightly, latest, edge, etc.) → SKIP
-  if _is_unversioned "${current}"; then
+  if _gs_cu_is_unversioned "${current}"; then
     echo "SKIP:unversioned"
     return 0
   fi
 
   # git SHA track → MANUAL (promotion suggestion)
-  if _is_git_sha "${current}"; then
+  if _gs_cu_is_git_sha "${current}"; then
     echo "MANUAL:git-sha-track"
     return 0
   fi
@@ -161,35 +160,31 @@ _decide_action() {
   fi
 
   # SDKMAN multi-major: the major constraint is in identifier (e.g. gradle:8)
-  # Cross-major updates are filtered by fetcher; any proposal here is within-major
-  # But still MANUAL (per spec)
   if [[ "${type}" == "sdkman" && "${identifier}" =~ :[0-9]+$ ]]; then
     echo "MANUAL:sdkman-multi-major"
     return 0
   fi
 
   # Ubuntu codename in version → special handling
-  if _has_distro_codename "${current}" && ! _has_non_ubuntu_distro "${current}"; then
-    # Ubuntu-tagged versions are handled by ubuntu.sh separately
-    # The diff.sh AUTO decision for ubuntu is made after tag confirmation
+  if _gs_cu_has_distro_codename "${current}" && ! _gs_cu_has_non_ubuntu_distro "${current}"; then
     echo "MANUAL:ubuntu-codename"
     return 0
   fi
 
   # Non-ubuntu distro in version (oraclelinux etc.) → MANUAL
-  if _has_non_ubuntu_distro "${current}"; then
+  if _gs_cu_has_non_ubuntu_distro "${current}"; then
     echo "MANUAL:distro-suffix"
     return 0
   fi
 
   # Alpine suffix handling
-  if _has_alpine_suffix "${current}" && _has_alpine_suffix "${proposed}"; then
+  if _gs_cu_has_alpine_suffix "${current}" && _gs_cu_has_alpine_suffix "${proposed}"; then
     local cur_alpine cur_base
     local prop_alpine prop_base
-    cur_alpine="$(_get_alpine_suffix "${current}")"
-    prop_alpine="$(_get_alpine_suffix "${proposed}")"
-    cur_base="$(_strip_alpine_suffix "${current}")"
-    prop_base="$(_strip_alpine_suffix "${proposed}")"
+    cur_alpine="$(_gs_cu_get_alpine_suffix "${current}")"
+    prop_alpine="$(_gs_cu_get_alpine_suffix "${proposed}")"
+    cur_base="$(_gs_cu_strip_alpine_suffix "${current}")"
+    prop_base="$(_gs_cu_strip_alpine_suffix "${proposed}")"
 
     if [[ "${cur_alpine}" != "${prop_alpine}" ]]; then
       # Alpine suffix changed → MANUAL
@@ -199,10 +194,10 @@ _decide_action() {
 
     # Same alpine suffix — check if base version changed
     local cmp
-    cmp="$(_semver_compare "${cur_base}" "${prop_base}")"
+    cmp="$(_gs_cu_semver_compare "${cur_base}" "${prop_base}")"
     if [[ "${cmp}" == "older" ]]; then
       # proposed is newer, same alpine suffix → AUTO
-      if _is_prerelease "${proposed}" && ! _is_prerelease "${current}"; then
+      if _gs_cu_is_prerelease "${proposed}" && ! _gs_cu_is_prerelease "${current}"; then
         echo "HOLD:pre-release-proposed"
         return 0
       fi
@@ -215,15 +210,15 @@ _decide_action() {
   fi
 
   # Pre-release proposed vs stable current → HOLD (manual review)
-  if _is_prerelease "${proposed}" && ! _is_prerelease "${current}"; then
+  if _gs_cu_is_prerelease "${proposed}" && ! _gs_cu_is_prerelease "${current}"; then
     echo "HOLD:pre-release-proposed"
     return 0
   fi
 
   # Pre-release proposed AND current is same qualifier → AUTO
-  if _is_prerelease "${proposed}" && _is_prerelease "${current}"; then
+  if _gs_cu_is_prerelease "${proposed}" && _gs_cu_is_prerelease "${current}"; then
     local cmp
-    cmp="$(_semver_compare "${current}" "${proposed}")"
+    cmp="$(_gs_cu_semver_compare "${current}" "${proposed}")"
     if [[ "${cmp}" == "older" ]]; then
       echo "AUTO"
       return 0
@@ -235,7 +230,7 @@ _decide_action() {
 
   # Normal semver comparison
   local cmp
-  cmp="$(_semver_compare "${current}" "${proposed}")"
+  cmp="$(_gs_cu_semver_compare "${current}" "${proposed}")"
   if [[ "${cmp}" == "older" ]]; then
     echo "AUTO"
   elif [[ "${cmp}" == "equal" ]]; then

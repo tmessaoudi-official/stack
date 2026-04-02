@@ -3,9 +3,13 @@
 
 set -eEuo pipefail
 
+# Include guard — safe to source multiple times
+[[ -n "${_GS_CU_PYPI_SH_LOADED:-}" ]] && return 0
+readonly _GS_CU_PYPI_SH_LOADED=1
+
 # Fetch latest version of a PyPI package
-# Usage: _pypi_fetch_latest "Django" "6.0.3"
-_pypi_fetch_latest() {
+# Usage: _gs_cu_pypi_fetch_latest "Django" "6.0.3"
+_gs_cu_pypi_fetch_latest() {
   local identifier="${1}"    # package name (case-sensitive as per PyPI)
   local current_version="${2}"
   local offline="${3:-false}"
@@ -15,7 +19,7 @@ _pypi_fetch_latest() {
 
   if [[ "${no_cache}" != "true" ]]; then
     local cached
-    if cached="$(_cache_read "${cache_key}" 2>/dev/null)"; then
+    if cached="$(_gs_cu_cache_read "${cache_key}" 2>/dev/null)"; then
       echo "${cached}"
       return 0
     fi
@@ -50,7 +54,7 @@ _pypi_fetch_latest() {
   fi
 
   if [[ -n "${proposed}" ]]; then
-    _cache_write "${cache_key}" "${proposed}"
+    _gs_cu_cache_write "${cache_key}" "${proposed}"
     echo "${proposed}"
   fi
 }

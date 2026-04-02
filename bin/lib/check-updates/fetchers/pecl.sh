@@ -4,9 +4,13 @@
 
 set -eEuo pipefail
 
+# Include guard — safe to source multiple times
+[[ -n "${_GS_CU_PECL_SH_LOADED:-}" ]] && return 0
+readonly _GS_CU_PECL_SH_LOADED=1
+
 # Fetch latest stable version of a PECL extension
-# Usage: _pecl_fetch_latest "imagick" "3.8.1"
-_pecl_fetch_latest() {
+# Usage: _gs_cu_pecl_fetch_latest "imagick" "3.8.1"
+_gs_cu_pecl_fetch_latest() {
   local identifier="${1}"    # extension name, e.g. "imagick"
   local current_version="${2}"
   local offline="${3:-false}"
@@ -16,7 +20,7 @@ _pecl_fetch_latest() {
 
   if [[ "${no_cache}" != "true" ]]; then
     local cached
-    if cached="$(_cache_read "${cache_key}" 2>/dev/null)"; then
+    if cached="$(_gs_cu_cache_read "${cache_key}" 2>/dev/null)"; then
       echo "${cached}"
       return 0
     fi
@@ -34,37 +38,26 @@ _pecl_fetch_latest() {
   fi
 
   # Parse XML with grep/sed (xmllint may not be available on host)
-  # The XML looks like:
-  #   <v>3.8.1</v><s>stable</s>
-  # We want the highest stable version
-
   local proposed
-  proposed="$(_pecl_parse_latest_stable "${response}")"
+  proposed="$(_gs_cu_pecl_parse_latest_stable "${response}")"
 
   if [[ -n "${proposed}" ]]; then
-    _cache_write "${cache_key}" "${proposed}"
+    _gs_cu_cache_write "${cache_key}" "${proposed}"
     echo "${proposed}"
   fi
 }
 
 # Parse PECL allreleases XML and return highest stable version
-_pecl_parse_latest_stable() {
+_gs_cu_pecl_parse_latest_stable() {
   local xml="${1}"
 
   # Extract version/stability pairs
   # XML format: <v>X.Y.Z</v><s>stable|beta|alpha|...</s>
-  # We want stable only unless no stable exists
-
   local versions=()
-  local version=""
-  local stability=""
-  local in_r=false
 
   # Simple line-by-line extraction using grep
-  # Each <r> block has <v> and <s> tags
   local pair
   while IFS= read -r pair; do
-    # pair looks like: "X.Y.Z:stable" from our transformation
     local ver="${pair%%:*}"
     local stab="${pair##*:}"
     if [[ "${stab,,}" == "stable" ]]; then

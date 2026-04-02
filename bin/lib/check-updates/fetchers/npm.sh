@@ -4,9 +4,13 @@
 
 set -eEuo pipefail
 
+# Include guard — safe to source multiple times
+[[ -n "${_GS_CU_NPM_SH_LOADED:-}" ]] && return 0
+readonly _GS_CU_NPM_SH_LOADED=1
+
 # Fetch latest version of an npm package from the registry
-# Usage: _npm_fetch_latest "@angular/cli" "21.2.2"
-_npm_fetch_latest() {
+# Usage: _gs_cu_npm_fetch_latest "@angular/cli" "21.2.2"
+_gs_cu_npm_fetch_latest() {
   local identifier="${1}"    # "package-name" or "@scope/package"
   local current_version="${2}"
   local offline="${3:-false}"
@@ -16,7 +20,7 @@ _npm_fetch_latest() {
 
   if [[ "${no_cache}" != "true" ]]; then
     local cached
-    if cached="$(_cache_read "${cache_key}" 2>/dev/null)"; then
+    if cached="$(_gs_cu_cache_read "${cache_key}" 2>/dev/null)"; then
       echo "${cached}"
       return 0
     fi
@@ -55,15 +59,15 @@ _npm_fetch_latest() {
   fi
 
   if [[ -n "${proposed}" ]]; then
-    _cache_write "${cache_key}" "${proposed}"
+    _gs_cu_cache_write "${cache_key}" "${proposed}"
     echo "${proposed}"
   fi
 }
 
 # Check npm --global outdated for a specific Node version using nvm
-# Usage: _npm_global_outdated_for_node "22.22.1" "GLOBAL_STACK_NODE22_VERSION"
+# Usage: _gs_cu_npm_global_outdated_for_node "22.22.1" "GLOBAL_STACK_NODE22_VERSION"
 # Returns: JSON object mapping package_name → latest_version
-_npm_global_outdated_for_node() {
+_gs_cu_npm_global_outdated_for_node() {
   local node_version="${1}"
   local node_var="${2}"
 
@@ -71,7 +75,7 @@ _npm_global_outdated_for_node() {
   local nvm_dir="${GLOBAL_STACK_NVM_DIR:-${GLOBAL_STACK_DOCKER_TOOLS_PATH:-/stack/tools}/nvm}"
 
   if [[ ! -f "${nvm_dir}/nvm.sh" ]]; then
-    _log_debug "nvm.sh not found at ${nvm_dir}/nvm.sh — skipping npm global outdated for ${node_version}"
+    _gs_cu_log_debug "nvm.sh not found at ${nvm_dir}/nvm.sh — skipping npm global outdated for ${node_version}"
     echo "{}"
     return 0
   fi
@@ -98,7 +102,7 @@ _npm_global_outdated_for_node() {
 
 # Run npm global outdated for all node versions and return merged results
 # Returns: echoes tab-separated "package_name\tlatest_version" pairs
-_npm_global_outdated_all() {
+_gs_cu_npm_global_outdated_all() {
   local offline="${1:-false}"
   [[ "${offline}" == "true" ]] && return 0
 
@@ -116,9 +120,9 @@ _npm_global_outdated_all() {
     local label="${entry##*:}"
     [[ -z "${nv}" ]] && continue
 
-    _log_debug "Running npm --global outdated for node ${nv} (${label})"
+    _gs_cu_log_debug "Running npm --global outdated for node ${nv} (${label})"
     local result
-    result="$(_npm_global_outdated_for_node "${nv}" "${label}")"
+    result="$(_gs_cu_npm_global_outdated_for_node "${nv}" "${label}")"
     if [[ -n "${result}" && "${result}" != "{}" ]]; then
       # Merge: combined = combined + result (latest key wins)
       combined="$(printf '%s\n%s\n' "${combined}" "${result}" | \

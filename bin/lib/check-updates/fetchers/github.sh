@@ -4,21 +4,27 @@
 
 set -eEuo pipefail
 
+# Include guard — safe to source multiple times
+[[ -n "${_GS_CU_GITHUB_SH_LOADED:-}" ]] && return 0
+readonly _GS_CU_GITHUB_SH_LOADED=1
+
 # Fetch latest release from GitHub
-# Usage: _github_fetch_latest "golang/go" "1.26.1"
+# Usage: _gs_cu_github_fetch_latest "golang/go" "1.26.1"
+# Usage: _gs_cu_github_fetch_latest "php/php-src" "8.2.30" "false" "false" "8.2"
 # Returns: echoed version string or empty on failure
-_github_fetch_latest() {
+_gs_cu_github_fetch_latest() {
   local identifier="${1}"    # "owner/repo"
   local current_version="${2}"
   local offline="${3:-false}"
   local no_cache="${4:-false}"
+  local major_pin="${5:-}"
 
-  local cache_key="github:${identifier}"
+  local cache_key="github:${identifier}:${major_pin:-all}"
 
   # Cache check
   if [[ "${no_cache}" != "true" ]]; then
     local cached
-    if cached="$(_cache_read "${cache_key}" 2>/dev/null)"; then
+    if cached="$(_gs_cu_cache_read "${cache_key}" 2>/dev/null)"; then
       echo "${cached}"
       return 0
     fi
@@ -34,6 +40,34 @@ _github_fetch_latest() {
     auth_args=(-H "Authorization: Bearer ${GITHUB_TOKEN}")
   fi
 
+  local proposed=""
+
+  # If major_pin is set, use tags API with pin filtering
+  if [[ -n "${major_pin}" ]]; then
+    local tags_url="https://api.github.com/repos/${identifier}/tags?per_page=100"
+    local raw_tags=""
+    if raw_tags="$(curl --silent --fail --max-time 10 --retry 2 \
+      "${auth_args[@]}" \
+      -H "Accept: application/vnd.github+json" \
+      "${tags_url}" 2>/dev/null)"; then
+
+      proposed="$(printf '%s' "${raw_tags}" | jq -r \
+        --arg pin "${major_pin}" \
+        '[.[] | .name
+          | select(test("^[^0-9]*" + ($pin | gsub("\\."; "\\.")) + "\\."))
+          | ltrimstr("php-") | ltrimstr("v")]
+         | sort_by(split(".") | map(tonumber? // 0))
+         | last // empty' 2>/dev/null || echo "")"
+    fi
+
+    if [[ -n "${proposed}" ]]; then
+      _gs_cu_cache_write "${cache_key}" "${proposed}"
+      echo "${proposed}"
+      return 0
+    fi
+    return 1
+  fi
+
   # Try releases API first
   local releases_url="https://api.github.com/repos/${identifier}/releases"
   local response
@@ -42,10 +76,9 @@ _github_fetch_latest() {
     -H "Accept: application/vnd.github+json" \
     "${releases_url}" 2>/dev/null)"; then
 
-    local proposed
-    proposed="$(_github_select_best_release "${response}" "${current_version}")"
+    proposed="$(_gs_cu_github_select_best_release "${response}" "${current_version}")"
     if [[ -n "${proposed}" ]]; then
-      _cache_write "${cache_key}" "${proposed}"
+      _gs_cu_cache_write "${cache_key}" "${proposed}"
       echo "${proposed}"
       return 0
     fi
@@ -58,10 +91,9 @@ _github_fetch_latest() {
     -H "Accept: application/vnd.github+json" \
     "${tags_url}" 2>/dev/null)"; then
 
-    local proposed
-    proposed="$(_github_select_best_tag "${response}" "${current_version}")"
+    proposed="$(_gs_cu_github_select_best_tag "${response}" "${current_version}")"
     if [[ -n "${proposed}" ]]; then
-      _cache_write "${cache_key}" "${proposed}"
+      _gs_cu_cache_write "${cache_key}" "${proposed}"
       echo "${proposed}"
       return 0
     fi
@@ -71,7 +103,7 @@ _github_fetch_latest() {
 }
 
 # Select best release from GitHub releases API JSON
-_github_select_best_release() {
+_gs_cu_github_select_best_release() {
   local releases_json="${1}"
   local current_version="${2}"
 
@@ -98,7 +130,7 @@ _github_select_best_release() {
 }
 
 # Select best tag from GitHub tags API JSON
-_github_select_best_tag() {
+_gs_cu_github_select_best_tag() {
   local tags_json="${1}"
   local current_version="${2}"
 
@@ -142,8 +174,8 @@ _github_select_best_tag() {
 }
 
 # Fetch the latest commit SHA from a GitHub repo branch
-# Usage: _github_fetch_latest_sha "Imagick/imagick" "master"
-_github_fetch_latest_sha() {
+# Usage: _gs_cu_github_fetch_latest_sha "Imagick/imagick" "master"
+_gs_cu_github_fetch_latest_sha() {
   local identifier="${1}"   # "owner/repo"
   local branch="${2:-master}"
 

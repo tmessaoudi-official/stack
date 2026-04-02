@@ -4,10 +4,14 @@
 
 set -eEuo pipefail
 
+# Include guard — safe to source multiple times
+[[ -n "${_GS_CU_DOCKERHUB_SH_LOADED:-}" ]] && return 0
+readonly _GS_CU_DOCKERHUB_SH_LOADED=1
+
 # Fetch all tags for a Docker Hub image, returns JSON array of tag names
-# Usage: _dockerhub_fetch_tags "_" "ubuntu"
-# Usage: _dockerhub_fetch_tags "axllent" "mailpit"
-_dockerhub_fetch_tags() {
+# Usage: _gs_cu_dockerhub_fetch_tags "_" "ubuntu"
+# Usage: _gs_cu_dockerhub_fetch_tags "axllent" "mailpit"
+_gs_cu_dockerhub_fetch_tags() {
   local namespace="${1}"
   local image="${2}"
 
@@ -34,9 +38,9 @@ _dockerhub_fetch_tags() {
 
 # Fetch the latest stable tag from Docker Hub matching a version prefix pattern.
 # For images with Ubuntu codename suffixes, we handle that separately.
-# Usage: _dockerhub_fetch_latest "axllent/mailpit" "v1.29.3"
+# Usage: _gs_cu_dockerhub_fetch_latest "axllent/mailpit" "v1.29.3"
 # Returns: proposed version string (echoed) or empty on failure
-_dockerhub_fetch_latest() {
+_gs_cu_dockerhub_fetch_latest() {
   local identifier="${1}"    # "namespace/image" or "_/image"
   local current_version="${2}"
   local offline="${3:-false}"
@@ -50,7 +54,7 @@ _dockerhub_fetch_latest() {
   # Cache check
   if [[ "${offline}" != "true" && "${no_cache}" != "true" ]]; then
     local cached
-    if cached="$(_cache_read "${cache_key}" 2>/dev/null)"; then
+    if cached="$(_gs_cu_cache_read "${cache_key}" 2>/dev/null)"; then
       echo "${cached}"
       return 0
     fi
@@ -62,22 +66,22 @@ _dockerhub_fetch_latest() {
 
   # Fetch tags
   local tags_json
-  if ! tags_json="$(_dockerhub_fetch_tags "${namespace}" "${image}")"; then
+  if ! tags_json="$(_gs_cu_dockerhub_fetch_tags "${namespace}" "${image}")"; then
     return 1
   fi
 
   # Determine version filter strategy based on current_version
   local proposed
-  proposed="$(_dockerhub_select_best_tag "${tags_json}" "${current_version}")"
+  proposed="$(_gs_cu_dockerhub_select_best_tag "${tags_json}" "${current_version}")"
 
   if [[ -n "${proposed}" ]]; then
-    _cache_write "${cache_key}" "${proposed}"
+    _gs_cu_cache_write "${cache_key}" "${proposed}"
     echo "${proposed}"
   fi
 }
 
 # Select best matching tag from a JSON array of tags given the current version
-_dockerhub_select_best_tag() {
+_gs_cu_dockerhub_select_best_tag() {
   local tags_json="${1}"
   local current_version="${2}"
 
@@ -101,7 +105,6 @@ _dockerhub_select_best_tag() {
 
   if [[ -n "${found_codename}" ]]; then
     # Find highest tag matching same suffix pattern
-    # e.g. current "8.2.6-rc0-noble" → find latest "X.Y.Z-noble" or "X.Y.Z-rcN-noble"
     local proposed
     proposed="$(printf '%s' "${tags_json}" | jq -r \
       --arg cn "${found_codename}" \
@@ -134,8 +137,6 @@ _dockerhub_select_best_tag() {
   fi
 
   # Simple semver: find highest pure version tag (no suffix qualifiers)
-  # Filter: tag must look like semver (possibly with v prefix and rc/alpha/beta)
-  # Prefer stable over pre-release if current is stable
   local is_pre=false
   if [[ "${current_version,,}" =~ (alpha|beta|rc[0-9]*|preview) ]]; then
     is_pre=true

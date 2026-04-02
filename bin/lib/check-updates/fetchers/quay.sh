@@ -4,9 +4,13 @@
 
 set -eEuo pipefail
 
+# Include guard — safe to source multiple times
+[[ -n "${_GS_CU_QUAY_SH_LOADED:-}" ]] && return 0
+readonly _GS_CU_QUAY_SH_LOADED=1
+
 # Fetch latest tag from Quay.io
-# Usage: _quay_fetch_latest "keycloak/keycloak" "26.5.5-0"
-_quay_fetch_latest() {
+# Usage: _gs_cu_quay_fetch_latest "keycloak/keycloak" "26.5.5-0"
+_gs_cu_quay_fetch_latest() {
   local identifier="${1}"    # "org/image"
   local current_version="${2}"
   local offline="${3:-false}"
@@ -16,7 +20,7 @@ _quay_fetch_latest() {
 
   if [[ "${no_cache}" != "true" ]]; then
     local cached
-    if cached="$(_cache_read "${cache_key}" 2>/dev/null)"; then
+    if cached="$(_gs_cu_cache_read "${cache_key}" 2>/dev/null)"; then
       echo "${cached}"
       return 0
     fi
@@ -36,16 +40,16 @@ _quay_fetch_latest() {
   fi
 
   local proposed
-  proposed="$(_quay_select_best_tag "${response}" "${current_version}")"
+  proposed="$(_gs_cu_quay_select_best_tag "${response}" "${current_version}")"
 
   if [[ -n "${proposed}" ]]; then
-    _cache_write "${cache_key}" "${proposed}"
+    _gs_cu_cache_write "${cache_key}" "${proposed}"
     echo "${proposed}"
   fi
 }
 
 # Select best tag from Quay.io API response
-_quay_select_best_tag() {
+_gs_cu_quay_select_best_tag() {
   local response="${1}"
   local current_version="${2}"
 

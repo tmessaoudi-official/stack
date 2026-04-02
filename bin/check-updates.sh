@@ -15,6 +15,7 @@
 #   --filter=<pattern>     Only process vars matching pattern
 #   --type=<types>         Comma-separated fetcher types to run
 #   --no-auto-apply        Report all, apply nothing
+#   --no-override          Skip override-flagged records entirely
 #   --patch-file=<path>    Override patch output path
 #   --report-file=<path>   Override JSON report path
 #   --github-token=<token> Override GITHUB_TOKEN env var
@@ -79,25 +80,26 @@ source "${LIB_DIR}/core/ubuntu.sh"
 # --------------------------------------------------------------------------
 # Defaults
 # --------------------------------------------------------------------------
-readonly ENV_FILE="${STACK_DIR}/.env"
-CU_DRY_RUN="false"
-export CU_OFFLINE="false"
-export CU_NO_CACHE="false"
-export CU_CACHE_TTL="${CU_CACHE_TTL:-3600}"
-CU_FILTER=""
-CU_TYPE_FILTER=""
-CU_NO_AUTO_APPLY="false"
-TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
-readonly TIMESTAMP
-CU_PATCH_FILE="/tmp/check-updates-${TIMESTAMP}.patch"
-CU_REPORT_FILE="/tmp/check-updates-${TIMESTAMP}.json"
-export CU_DEBUG="${CU_DEBUG:-false}"
+readonly _GS_CU_ENV_FILE="${STACK_DIR}/.env"
+_GS_CU_DRY_RUN="false"
+export _GS_CU_OFFLINE="false"
+export _GS_CU_NO_CACHE="false"
+export _GS_CU_CACHE_TTL="${_GS_CU_CACHE_TTL:-3600}"
+_GS_CU_FILTER=""
+_GS_CU_TYPE_FILTER=""
+_GS_CU_NO_AUTO_APPLY="false"
+_GS_CU_NO_OVERRIDE="false"
+_GS_CU_TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
+readonly _GS_CU_TIMESTAMP
+_GS_CU_PATCH_FILE="/tmp/check-updates-${_GS_CU_TIMESTAMP}.patch"
+_GS_CU_REPORT_FILE="/tmp/check-updates-${_GS_CU_TIMESTAMP}.json"
+export _GS_CU_DEBUG="${_GS_CU_DEBUG:-false}"
 GITHUB_TOKEN="${GITHUB_TOKEN:-}"
 
 # --------------------------------------------------------------------------
 # Argument parsing
 # --------------------------------------------------------------------------
-_show_help() {
+_gs_cu_show_help() {
   cat <<'EOF'
 bin/check-updates.sh — Global Stack version update checker
 
@@ -114,6 +116,7 @@ Options:
                          Types: dockerhub quay github npm pecl pecl-git
                                 sdkman sdkmanager pypi url
   --no-auto-apply        Report all changes, apply nothing automatically
+  --no-override          Skip override-flagged records entirely
   --patch-file=<path>    Path for patch output file
   --report-file=<path>   Path for JSON report file
   --github-token=<token> GitHub API token (overrides GITHUB_TOKEN env var)
@@ -128,25 +131,26 @@ Examples:
 EOF
 }
 
-_parse_args() {
+_gs_cu_parse_args() {
   local arg
   for arg in "$@"; do
     case "${arg}" in
-      --dry-run)         CU_DRY_RUN="true" ;;
-      --offline)         CU_OFFLINE="true" ;;
-      --no-cache)        CU_NO_CACHE="true" ;;
-      --cache-ttl=*)     CU_CACHE_TTL="${arg#*=}" ;;
-      --filter=*)        CU_FILTER="${arg#*=}" ;;
-      --type=*)          CU_TYPE_FILTER="${arg#*=}" ;;
-      --no-auto-apply)   CU_NO_AUTO_APPLY="true" ;;
-      --patch-file=*)    CU_PATCH_FILE="${arg#*=}" ;;
-      --report-file=*)   CU_REPORT_FILE="${arg#*=}" ;;
+      --dry-run)         _GS_CU_DRY_RUN="true" ;;
+      --offline)         _GS_CU_OFFLINE="true" ;;
+      --no-cache)        _GS_CU_NO_CACHE="true" ;;
+      --cache-ttl=*)     _GS_CU_CACHE_TTL="${arg#*=}" ;;
+      --filter=*)        _GS_CU_FILTER="${arg#*=}" ;;
+      --type=*)          _GS_CU_TYPE_FILTER="${arg#*=}" ;;
+      --no-auto-apply)   _GS_CU_NO_AUTO_APPLY="true" ;;
+      --no-override)     _GS_CU_NO_OVERRIDE="true" ;;
+      --patch-file=*)    _GS_CU_PATCH_FILE="${arg#*=}" ;;
+      --report-file=*)   _GS_CU_REPORT_FILE="${arg#*=}" ;;
       --github-token=*)  GITHUB_TOKEN="${arg#*=}" ;;
-      --debug)           CU_DEBUG="true" ;;
-      --help)            _show_help; exit 0 ;;
+      --debug)           _GS_CU_DEBUG="true" ;;
+      --help)            _gs_cu_show_help; exit 0 ;;
       *)
         printf 'Unknown option: %s\n' "${arg}" >&2
-        _show_help >&2
+        _gs_cu_show_help >&2
         exit 1
         ;;
     esac
@@ -157,13 +161,14 @@ _parse_args() {
 # --------------------------------------------------------------------------
 # Type filter check
 # --------------------------------------------------------------------------
-_type_is_enabled() {
+_gs_cu_type_is_enabled() {
   local type="${1}"
-  if [[ -z "${CU_TYPE_FILTER}" ]]; then
+  if [[ -z "${_GS_CU_TYPE_FILTER}" ]]; then
     return 0
   fi
   local enabled_type
-  IFS=',' read -ra enabled_types <<< "${CU_TYPE_FILTER}"
+  local enabled_types=()
+  IFS=',' read -ra enabled_types <<< "${_GS_CU_TYPE_FILTER}"
   for enabled_type in "${enabled_types[@]}"; do
     [[ "${enabled_type}" == "${type}" ]] && return 0
   done
@@ -173,54 +178,59 @@ _type_is_enabled() {
 # --------------------------------------------------------------------------
 # Dispatch to the appropriate fetcher
 # --------------------------------------------------------------------------
-_fetch_latest_version() {
+_gs_cu_fetch_latest_version() {
   local type="${1}"
   local identifier="${2}"
   local current_version="${3}"
+  local pecl_ref="${4:-}"
 
   case "${type}" in
     dockerhub)
-      _dockerhub_fetch_latest "${identifier}" "${current_version}" \
-        "${CU_OFFLINE}" "${CU_NO_CACHE}"
+      _gs_cu_dockerhub_fetch_latest "${identifier}" "${current_version}" \
+        "${_GS_CU_OFFLINE}" "${_GS_CU_NO_CACHE}"
       ;;
     quay)
-      _quay_fetch_latest "${identifier}" "${current_version}" \
-        "${CU_OFFLINE}" "${CU_NO_CACHE}"
+      _gs_cu_quay_fetch_latest "${identifier}" "${current_version}" \
+        "${_GS_CU_OFFLINE}" "${_GS_CU_NO_CACHE}"
       ;;
     github)
-      _github_fetch_latest "${identifier}" "${current_version}" \
-        "${CU_OFFLINE}" "${CU_NO_CACHE}"
+      local gh_id="${identifier}" gh_pin=""
+      if [[ "${identifier}" =~ ^([^:]+):([0-9]+\.[0-9]+)$ ]]; then
+        gh_id="${BASH_REMATCH[1]}"; gh_pin="${BASH_REMATCH[2]}"
+      fi
+      _gs_cu_github_fetch_latest "${gh_id}" "${current_version}" \
+        "${_GS_CU_OFFLINE}" "${_GS_CU_NO_CACHE}" "${gh_pin}"
       ;;
     npm)
-      _npm_fetch_latest "${identifier}" "${current_version}" \
-        "${CU_OFFLINE}" "${CU_NO_CACHE}"
+      _gs_cu_npm_fetch_latest "${identifier}" "${current_version}" \
+        "${_GS_CU_OFFLINE}" "${_GS_CU_NO_CACHE}"
       ;;
     pecl)
-      _pecl_fetch_latest "${identifier}" "${current_version}" \
-        "${CU_OFFLINE}" "${CU_NO_CACHE}"
+      _gs_cu_pecl_fetch_latest "${identifier}" "${current_version}" \
+        "${_GS_CU_OFFLINE}" "${_GS_CU_NO_CACHE}"
       ;;
     pecl-git)
-      _pecl_git_fetch_latest "${identifier}" "${current_version}" \
-        "${CU_OFFLINE}" "${CU_NO_CACHE}"
+      _gs_cu_pecl_git_fetch_latest "${identifier}" "${current_version}" \
+        "${_GS_CU_OFFLINE}" "${_GS_CU_NO_CACHE}" "${pecl_ref:-}"
       ;;
     sdkman)
-      _sdkman_fetch_latest "${identifier}" "${current_version}" \
-        "${CU_OFFLINE}" "${CU_NO_CACHE}"
+      _gs_cu_sdkman_fetch_latest "${identifier}" "${current_version}" \
+        "${_GS_CU_OFFLINE}" "${_GS_CU_NO_CACHE}"
       ;;
     sdkmanager)
-      _sdkmanager_fetch_latest "${identifier}" "${current_version}" \
-        "${CU_OFFLINE}" "${CU_NO_CACHE}"
+      _gs_cu_sdkmanager_fetch_latest "${identifier}" "${current_version}" \
+        "${_GS_CU_OFFLINE}" "${_GS_CU_NO_CACHE}"
       ;;
     pypi)
-      _pypi_fetch_latest "${identifier}" "${current_version}" \
-        "${CU_OFFLINE}" "${CU_NO_CACHE}"
+      _gs_cu_pypi_fetch_latest "${identifier}" "${current_version}" \
+        "${_GS_CU_OFFLINE}" "${_GS_CU_NO_CACHE}"
       ;;
     url)
-      _url_fetch_latest "${identifier}" "${current_version}" \
-        "${CU_OFFLINE}" "${CU_NO_CACHE}"
+      _gs_cu_url_fetch_latest "${identifier}" "${current_version}" \
+        "${_GS_CU_OFFLINE}" "${_GS_CU_NO_CACHE}"
       ;;
     *)
-      _log_debug "Unknown fetcher type: ${type}"
+      _gs_cu_log_debug "Unknown fetcher type: ${type}"
       echo ""
       ;;
   esac
@@ -229,7 +239,7 @@ _fetch_latest_version() {
 # --------------------------------------------------------------------------
 # Handle pecl-git promotion suggestion
 # --------------------------------------------------------------------------
-_handle_pecl_git_promotion() {
+_gs_cu_handle_pecl_git_promotion() {
   local env_var="${1}"
   local identifier="${2}"
   local current_sha="${3}"
@@ -245,7 +255,7 @@ _handle_pecl_git_promotion() {
     # Determine the _NAME variable (same prefix, _NAME suffix)
     local name_var="${env_var/_VERSION/_NAME}"
 
-    printf '\n%b\n' "${CU_CLR_CYAN}[PROMOTE]${CU_CLR_RESET} pecl-git → pecl stable detected for ${ext_name}:"
+    printf '\n%b\n' "${_GS_CU_CLR_CYAN}[PROMOTE]${_GS_CU_CLR_RESET} pecl-git → pecl stable detected for ${ext_name}:"
     printf '  Suggested changes (MANUAL — both lines must be updated together):\n'
     printf '  %s=%s  →  %s=%s\n' "${name_var}" "${identifier}" "${name_var}" "${ext_name}"
     printf '  %s=%s  →  %s=%s\n' "${env_var}" "${current_sha}" "${env_var}" "${pecl_version}"
@@ -255,7 +265,7 @@ _handle_pecl_git_promotion() {
       printf '    (hint: %s)\n' "${hint}"
     fi
 
-    _log_manual "${env_var}" "pecl-git:${identifier}" \
+    _gs_cu_log_manual "${env_var}" "pecl-git:${identifier}" \
       "${current_sha}" "${pecl_version}" \
       "PROMOTE: pecl stable available — update _NAME and _VERSION together"
   fi
@@ -264,134 +274,154 @@ _handle_pecl_git_promotion() {
 # --------------------------------------------------------------------------
 # Process a single record
 # --------------------------------------------------------------------------
-_process_record() {
+_gs_cu_process_record() {
   local idx="${1}"
 
-  local env_var="${CU_RECORDS_ENV_VAR[${idx}]}"
-  local current_version="${CU_RECORDS_CURRENT_VERSION[${idx}]}"
-  local type="${CU_RECORDS_TYPE[${idx}]}"
-  local identifier="${CU_RECORDS_IDENTIFIER[${idx}]}"
-  local hint="${CU_RECORDS_HINT[${idx}]:-}"
-  local flags="${CU_RECORDS_FLAGS[${idx}]:-}"
-  local line_number="${CU_RECORDS_LINE_NUMBER[${idx}]:-}"
+  local env_var="${_GS_CU_RECORDS_ENV_VAR[${idx}]}"
+  local current_version="${_GS_CU_RECORDS_CURRENT_VERSION[${idx}]}"
+  local type="${_GS_CU_RECORDS_TYPE[${idx}]}"
+  local identifier="${_GS_CU_RECORDS_IDENTIFIER[${idx}]}"
+  local hint="${_GS_CU_RECORDS_HINT[${idx}]:-}"
+  local flags="${_GS_CU_RECORDS_FLAGS[${idx}]:-}"
+  local line_number="${_GS_CU_RECORDS_LINE_NUMBER[${idx}]:-}"
+  local depends_on="${_GS_CU_RECORDS_DEPENDS_ON[${idx}]:-}"
+  local pecl_ref="${_GS_CU_RECORDS_PECL_REF[${idx}]:-}"
   local type_id="${type}:${identifier}"
 
-  _log_debug "Processing record #${idx}: ${env_var} [${type_id}] current=${current_version}"
+  _gs_cu_log_debug "Processing record #${idx}: ${env_var} [${type_id}] current=${current_version}"
 
   # Type filter
-  if ! _type_is_enabled "${type}"; then
-    _log_debug "Type ${type} not in filter — skipping ${env_var}"
+  if ! _gs_cu_type_is_enabled "${type}"; then
+    _gs_cu_log_debug "Type ${type} not in filter — skipping ${env_var}"
     return 0
   fi
 
   # Skip unversioned
-  if _is_unversioned "${current_version}"; then
-    _log_skip "${env_var}" "${type_id}" "unversioned (${current_version})"
+  if _gs_cu_is_unversioned "${current_version}"; then
+    _gs_cu_log_skip "${env_var}" "${type_id}" "unversioned (${current_version})"
     return 0
   fi
 
   # Manual/skip flags
   if [[ "${flags}" =~ skip ]]; then
-    _log_skip "${env_var}" "${type_id}" "flagged-skip"
+    _gs_cu_log_skip "${env_var}" "${type_id}" "flagged-skip"
+    return 0
+  fi
+
+  # Override flag — fetch for reporting but hold for manual review
+  if [[ "${flags}" =~ override ]]; then
+    if [[ "${_GS_CU_NO_OVERRIDE}" == "true" ]]; then
+      _gs_cu_log_skip "${env_var}" "${type_id}" "override-suppressed (--no-override)"
+      return 0
+    fi
+    local proposed=""
+    if _gs_cu_type_is_enabled "${type}" && ! _gs_cu_is_unversioned "${current_version}"; then
+      proposed="$(_gs_cu_fetch_latest_version "${type}" "${identifier}" "${current_version}" "${pecl_ref:-}" 2>/dev/null || echo "?")"
+    fi
+    _gs_cu_log_override "${env_var}" "${type_id}" "${current_version}" "${proposed:-?}" \
+      "pinned-override (check manually before upgrading)"
     return 0
   fi
 
   # URL type is always manual
   if [[ "${type}" == "url" ]]; then
-    _log_manual "${env_var}" "${type_id}" "${current_version}" "?" "manual-url — check ${identifier}"
+    _gs_cu_log_manual "${env_var}" "${type_id}" "${current_version}" "?" "manual-url — check ${identifier}"
     return 0
   fi
 
   # Fetch latest
   local proposed=""
-  local fetch_error=""
-  if proposed="$(_fetch_latest_version "${type}" "${identifier}" "${current_version}" 2>/dev/null)"; then
-    _log_debug "Fetched: ${proposed}"
+  if proposed="$(_gs_cu_fetch_latest_version "${type}" "${identifier}" "${current_version}" "${pecl_ref:-}" 2>/dev/null)"; then
+    _gs_cu_log_debug "Fetched: ${proposed}"
   else
-    fetch_error="fetch failed"
-    _log_warn "${env_var}" "${type_id}" "API error — check ${identifier} manually"
+    _gs_cu_log_warn "${env_var}" "${type_id}" "API error — check ${identifier} manually"
     return 0
   fi
 
   if [[ -z "${proposed}" ]]; then
-    _log_debug "No proposed version returned for ${env_var}"
-    # URL type returns empty intentionally
+    _gs_cu_log_debug "No proposed version returned for ${env_var}"
     if [[ "${type}" != "url" ]]; then
-      _log_manual "${env_var}" "${type_id}" "${current_version}" "?" "no-result — check ${identifier} manually"
+      _gs_cu_log_manual "${env_var}" "${type_id}" "${current_version}" "?" "no-result — check ${identifier} manually"
     fi
     return 0
   fi
 
   # Handle pecl-git promotion
   if [[ "${proposed}" == __pecl_promotion__* ]]; then
-    _handle_pecl_git_promotion "${env_var}" "${identifier}" "${current_version}" \
+    _gs_cu_handle_pecl_git_promotion "${env_var}" "${identifier}" "${current_version}" \
       "${proposed}" "${hint}" "${line_number}"
     return 0
   fi
 
+  # depends-on hold logic
+  if [[ -n "${depends_on}" && -n "${proposed}" ]]; then
+    local dep_var="${depends_on%%:*}"
+    local dep_constraint="${depends_on##*:}"
+    local dep_version=""
+    local j
+    for (( j=0; j<_GS_CU_RECORD_COUNT; j++ )); do
+      if [[ "${_GS_CU_RECORDS_ENV_VAR[${j}]}" == "${dep_var}" ]]; then
+        dep_version="${_GS_CU_RECORDS_CURRENT_VERSION[${j}]}"
+        break
+      fi
+    done
+    if [[ -n "${dep_version}" && "${dep_constraint}" == "major" ]]; then
+      local proposed_major="${proposed%%.*}"
+      local dep_major="${dep_version%%.*}"
+      if [[ "${proposed_major}" != "${dep_major}" ]]; then
+        _gs_cu_log_manual "${env_var}" "${type_id}" "${current_version}" "${proposed}" \
+          "depends-on:${dep_var}:major — upgrade ${dep_var} first"
+        return 0
+      fi
+    fi
+  fi
+
   # Ubuntu-tagged versions: delegate to ubuntu module
-  if [[ "${type}" == "dockerhub" ]] && _has_distro_codename "${current_version}" && \
-     ! _has_non_ubuntu_distro "${current_version}"; then
-    # Check codename alignment
+  if [[ "${type}" == "dockerhub" ]] && _gs_cu_has_distro_codename "${current_version}" && \
+     ! _gs_cu_has_non_ubuntu_distro "${current_version}"; then
     local namespace="${identifier%%/*}"
     local image="${identifier##*/}"
     local ubuntu_decision
-    ubuntu_decision="$(_ubuntu_process_record \
+    ubuntu_decision="$(_gs_cu_ubuntu_process_record \
       "${env_var}" "${current_version}" "${type_id}" \
       "${namespace}" "${image}" \
-      "${CU_NO_AUTO_APPLY}" "${CU_DRY_RUN}")"
+      "${_GS_CU_NO_AUTO_APPLY}" "${_GS_CU_DRY_RUN}")"
 
     local ubuntu_action="${ubuntu_decision%%:*}"
     local ubuntu_reason="${ubuntu_decision#*:}"
 
     if [[ "${ubuntu_action}" == "SKIP" ]]; then
       if [[ "${ubuntu_reason}" != "codename-current" && "${ubuntu_reason}" != "no-change" ]]; then
-        _log_debug "Ubuntu SKIP for ${env_var}: ${ubuntu_reason}"
+        _gs_cu_log_debug "Ubuntu SKIP for ${env_var}: ${ubuntu_reason}"
       fi
     elif [[ "${ubuntu_action}" == "MANUAL" ]]; then
       if [[ "${ubuntu_reason}" == "codename-mismatch-no-tag-available" ]]; then
-        # wkhtmltopdf-style: always report
-        printf '%b\n' "${CU_CLR_YELLOW}[UBUNTU]${CU_CLR_RESET} %-60s codename mismatch — no new-codename tag available  ${CU_CLR_DIM}(check ${identifier} manually)${CU_CLR_RESET}" "${type_id}"
-        _log_ubuntu "${env_var}" "${current_version}" "${proposed}" "manual: no-tag-for-new-codename"
+        printf '%b\n' "${_GS_CU_CLR_YELLOW}[UBUNTU]${_GS_CU_CLR_RESET} %-60s codename mismatch — no new-codename tag available  ${_GS_CU_CLR_DIM}(check ${identifier} manually)${_GS_CU_CLR_RESET}" "${type_id}"
+        _gs_cu_log_ubuntu "${env_var}" "${current_version}" "${proposed}" "manual: no-tag-for-new-codename"
       else
-        _log_ubuntu "${env_var}" "${current_version}" "${proposed}" "manual"
-        _log_manual "${env_var}" "${type_id}" "${current_version}" "${proposed}" "${ubuntu_reason}"
+        _gs_cu_log_ubuntu "${env_var}" "${current_version}" "${proposed}" "manual"
+        _gs_cu_log_manual "${env_var}" "${type_id}" "${current_version}" "${proposed}" "${ubuntu_reason}"
       fi
     elif [[ "${ubuntu_action}" == "AUTO" ]]; then
-      _log_ubuntu "${env_var}" "${current_version}" "${proposed}" "applied"
-      _apply_update "${STACK_DIR}" "${ENV_FILE}" \
-        "${env_var}" "${current_version}" "${proposed}" "${CU_DRY_RUN}"
-      _log_auto "${env_var}" "${type_id}" "${current_version}" "${proposed}" ".env:${line_number}"
-    fi
-
-    # Also check if the fetched version (proposed) is different from current for non-codename changes
-    # (e.g. same codename but newer version number: 8.2.6-rc0-noble → 8.2.7-noble)
-    if [[ "${proposed}" != "${current_version}" && \
-          "${ubuntu_action}" != "AUTO" ]]; then
-      local diff_decision
-      diff_decision="$(_decide_action "${type}" "${identifier}" "${flags}" \
-        "${current_version}" "${proposed}" "${hint}")"
-      local diff_action="${diff_decision%%:*}"
-      if [[ "${diff_action}" != "SKIP" && "${diff_action}" != "MANUAL" ]]; then
-        # The ubuntu module already handled it
-        true
-      fi
+      _gs_cu_log_ubuntu "${env_var}" "${current_version}" "${proposed}" "applied"
+      _gs_cu_apply_update "${STACK_DIR}" "${_GS_CU_ENV_FILE}" \
+        "${env_var}" "${current_version}" "${proposed}" "${_GS_CU_DRY_RUN}"
+      _gs_cu_log_auto "${env_var}" "${type_id}" "${current_version}" "${proposed}" ".env:${line_number}"
     fi
     return 0
   fi
 
   # Special handling for GLOBAL_STACK_IMAGE_UBUNTU_VERSION (the base image itself)
   if [[ "${env_var}" == "GLOBAL_STACK_IMAGE_UBUNTU_VERSION" && "${type}" == "dockerhub" ]]; then
-    # Fetch latest dated tag
     local latest_ubuntu
-    if latest_ubuntu="$(_ubuntu_fetch_latest_ubuntu_image "${current_version}" "${CU_UBUNTU_ENV_CODENAME}" 2>/dev/null)"; then
+    if latest_ubuntu="$(_gs_cu_ubuntu_fetch_latest_ubuntu_image "${current_version}" "${_GS_CU_UBUNTU_ENV_CODENAME}" 2>/dev/null)"; then
       if [[ -n "${latest_ubuntu}" && "${latest_ubuntu}" != "${current_version}" ]]; then
-        if [[ "${CU_NO_AUTO_APPLY}" == "true" || "${CU_DRY_RUN}" == "true" ]]; then
-          _log_manual "${env_var}" "${type_id}" "${current_version}" "${latest_ubuntu}" "ubuntu-base-image"
+        if [[ "${_GS_CU_NO_AUTO_APPLY}" == "true" || "${_GS_CU_DRY_RUN}" == "true" ]]; then
+          _gs_cu_log_manual "${env_var}" "${type_id}" "${current_version}" "${latest_ubuntu}" "ubuntu-base-image"
         else
-          _apply_update "${STACK_DIR}" "${ENV_FILE}" \
-            "${env_var}" "${current_version}" "${latest_ubuntu}" "${CU_DRY_RUN}"
-          _log_auto "${env_var}" "${type_id}" "${current_version}" "${latest_ubuntu}" ".env:${line_number}"
+          _gs_cu_apply_update "${STACK_DIR}" "${_GS_CU_ENV_FILE}" \
+            "${env_var}" "${current_version}" "${latest_ubuntu}" "${_GS_CU_DRY_RUN}"
+          _gs_cu_log_auto "${env_var}" "${type_id}" "${current_version}" "${latest_ubuntu}" ".env:${line_number}"
         fi
       fi
     fi
@@ -400,123 +430,60 @@ _process_record() {
 
   # Standard decision
   local decision
-  decision="$(_decide_action "${type}" "${identifier}" "${flags}" \
+  decision="$(_gs_cu_decide_action "${type}" "${identifier}" "${flags}" \
     "${current_version}" "${proposed}" "${hint}")"
   local action="${decision%%:*}"
   local reason="${decision#*:}"
 
   case "${action}" in
     AUTO)
-      if [[ "${CU_NO_AUTO_APPLY}" == "true" || "${CU_DRY_RUN}" == "true" ]]; then
-        _log_manual "${env_var}" "${type_id}" "${current_version}" "${proposed}" "no-auto-apply-mode"
+      if [[ "${_GS_CU_NO_AUTO_APPLY}" == "true" || "${_GS_CU_DRY_RUN}" == "true" ]]; then
+        _gs_cu_log_manual "${env_var}" "${type_id}" "${current_version}" "${proposed}" "no-auto-apply-mode"
       else
-        _apply_update "${STACK_DIR}" "${ENV_FILE}" \
-          "${env_var}" "${current_version}" "${proposed}" "${CU_DRY_RUN}"
-        _log_auto "${env_var}" "${type_id}" "${current_version}" "${proposed}" ".env:${line_number}"
+        _gs_cu_apply_update "${STACK_DIR}" "${_GS_CU_ENV_FILE}" \
+          "${env_var}" "${current_version}" "${proposed}" "${_GS_CU_DRY_RUN}"
+        _gs_cu_log_auto "${env_var}" "${type_id}" "${current_version}" "${proposed}" ".env:${line_number}"
       fi
       ;;
     HOLD)
-      _log_hold "${env_var}" "${type_id}" "${current_version}" "${proposed}" "${reason}"
+      _gs_cu_log_hold "${env_var}" "${type_id}" "${current_version}" "${proposed}" "${reason}"
       ;;
     MANUAL)
-      _log_manual "${env_var}" "${type_id}" "${current_version}" "${proposed}" "${reason}"
+      _gs_cu_log_manual "${env_var}" "${type_id}" "${current_version}" "${proposed}" "${reason}"
       ;;
     SKIP)
-      # Only log if reason is not "no-change"
       if [[ "${reason}" != "no-change" ]]; then
-        _log_skip "${env_var}" "${type_id}" "${reason}"
+        _gs_cu_log_skip "${env_var}" "${type_id}" "${reason}"
       fi
       ;;
   esac
 }
 
 # --------------------------------------------------------------------------
-# Parallel execution helpers
-# --------------------------------------------------------------------------
-# Run a batch of record indices in parallel, up to N jobs at a time
-_run_parallel() {
-  local max_jobs="${1}"
-  shift
-  local indices=("$@")
-
-  local pids=()
-  local pid_idx=()
-  local job_count=0
-
-  local idx
-  for idx in "${indices[@]}"; do
-    # Process record in a subshell
-    (
-      _process_record "${idx}"
-    ) &
-    pids+=("$!")
-    pid_idx+=("${idx}")
-    (( job_count++ )) || true
-
-    # Throttle
-    if [[ ${job_count} -ge ${max_jobs} ]]; then
-      # Wait for all current batch
-      local pid
-      for pid in "${pids[@]}"; do
-        wait "${pid}" || true
-      done
-      pids=()
-      pid_idx=()
-      job_count=0
-    fi
-  done
-
-  # Wait for remaining
-  local pid
-  for pid in "${pids[@]}"; do
-    wait "${pid}" || true
-  done
-}
-
-# --------------------------------------------------------------------------
-# Group records by type for parallel execution per type
-# --------------------------------------------------------------------------
-_group_records_by_type() {
-  declare -A type_groups
-
-  local i
-  for (( i=0; i<CU_RECORD_COUNT; i++ )); do
-    local t="${CU_RECORDS_TYPE[${i}]}"
-    if [[ -n "${type_groups[${t}]+x}" ]]; then
-      type_groups[${t}]+=" ${i}"
-    else
-      type_groups[${t}]="${i}"
-    fi
-  done
-
-  declare -p type_groups
-}
-
-# --------------------------------------------------------------------------
 # Patch file generation
 # --------------------------------------------------------------------------
-_generate_patch_file() {
+_gs_cu_generate_patch_file() {
   local patch_file="${1}"
 
   # Create empty patch file
   : > "${patch_file}"
 
   local entry
-  for entry in "${CU_REPORT_AUTO[@]:-}"; do
+  for entry in "${_GS_CU_REPORT_AUTO[@]:-}"; do
     [[ -z "${entry}" ]] && continue
     IFS='|' read -r ev ti ov nv _loc <<< "${entry}"
 
     # Generate diff for .env change
     local tmpfile
     tmpfile="$(mktemp)"
-    cp "${ENV_FILE}" "${tmpfile}"
+    cp "${_GS_CU_ENV_FILE}" "${tmpfile}"
     local escaped_old escaped_new
     # shellcheck disable=SC2001
     escaped_old="$(printf '%s' "${ov}" | sed 's|[.[\*^$()+?{|]|\\&|g')"
     # shellcheck disable=SC2001
     escaped_new="$(printf '%s' "${nv}" | sed 's|[&/\]|\\&|g')"
     sed -i "s|^${ev}=${escaped_old}$|${ev}=${escaped_new}|g" "${tmpfile}" 2>/dev/null || true
-    diff -u "${ENV_FILE}" "${tmpfile}" >> "${patch_file}" 2>/dev/null || true
+    diff -u "${_GS_CU_ENV_FILE}" "${tmpfile}" >> "${patch_file}" 2>/dev/null || true
     rm -f "${tmpfile}"
   done
 }
@@ -525,88 +492,85 @@ _generate_patch_file() {
 # Main execution
 # --------------------------------------------------------------------------
 main() {
-  _parse_args "$@"
+  _gs_cu_parse_args "$@"
 
-  _log_info "Global Stack check-updates starting..."
-  _log_info "Stack dir: ${STACK_DIR}"
-  _log_info "Env file:  ${ENV_FILE}"
+  _gs_cu_log_info "Global Stack check-updates starting..."
+  _gs_cu_log_info "Stack dir: ${STACK_DIR}"
+  _gs_cu_log_info "Env file:  ${_GS_CU_ENV_FILE}"
 
-  if [[ ! -f "${ENV_FILE}" ]]; then
-    printf 'ERROR: .env file not found at %s\n' "${ENV_FILE}" >&2
+  if [[ ! -f "${_GS_CU_ENV_FILE}" ]]; then
+    printf 'ERROR: .env file not found at %s\n' "${_GS_CU_ENV_FILE}" >&2
     exit 1
   fi
 
   # Initialize cache
-  _cache_init
+  _gs_cu_cache_init
 
   # Initialize Ubuntu codename context
-  _ubuntu_init "${ENV_FILE}"
-  if [[ -n "${CU_UBUNTU_ENV_CODENAME}" ]]; then
-    _log_info "Ubuntu target codename: ${CU_UBUNTU_ENV_CODENAME} (from ${CU_UBUNTU_ENV_VERSION})"
+  _gs_cu_ubuntu_init "${_GS_CU_ENV_FILE}"
+  if [[ -n "${_GS_CU_UBUNTU_ENV_CODENAME}" ]]; then
+    _gs_cu_log_info "Ubuntu target codename: ${_GS_CU_UBUNTU_ENV_CODENAME} (from ${_GS_CU_UBUNTU_ENV_VERSION})"
   fi
 
   # Build Dockerfile map
-  _dockerfile_build_map "${STACK_DIR}"
+  _gs_cu_dockerfile_build_map "${STACK_DIR}"
 
   # Parse .env file
-  _log_info "Parsing .env annotations..."
-  _parse_env_file "${ENV_FILE}" "${CU_FILTER}"
-  _log_info "Found ${CU_RECORD_COUNT} annotated variables"
+  _gs_cu_log_info "Parsing .env annotations..."
+  _gs_cu_parse_env_file "${_GS_CU_ENV_FILE}" "${_GS_CU_FILTER}"
+  _gs_cu_log_info "Found ${_GS_CU_RECORD_COUNT} annotated variables"
 
-  if [[ "${CU_RECORD_COUNT}" -eq 0 ]]; then
-    _log_info "No annotated variables found. Run bin/migrate-annotations.sh first."
+  if [[ "${_GS_CU_RECORD_COUNT}" -eq 0 ]]; then
+    _gs_cu_log_info "No annotated variables found. Run bin/migrate-annotations.sh first."
     exit 0
   fi
 
-  # Process all records — parallel per type group to avoid rate limits
-  _log_info "Checking for updates..."
+  # Process all records — sequential per type group to avoid mixing output
+  _gs_cu_log_info "Checking for updates..."
 
   # Collect records by type
-  declare -A type_to_indices=()
+  declare -A _gs_cu_type_to_indices=()
   local i
-  for (( i=0; i<CU_RECORD_COUNT; i++ )); do
-    local t="${CU_RECORDS_TYPE[${i}]}"
-    if [[ -n "${type_to_indices[${t}]+x}" ]]; then
-      type_to_indices[${t}]+=" ${i}"
+  for (( i=0; i<_GS_CU_RECORD_COUNT; i++ )); do
+    local t="${_GS_CU_RECORDS_TYPE[${i}]}"
+    if [[ -n "${_gs_cu_type_to_indices[${t}]+x}" ]]; then
+      _gs_cu_type_to_indices[${t}]+=" ${i}"
     else
-      type_to_indices[${t}]="${i}"
+      _gs_cu_type_to_indices[${t}]="${i}"
     fi
   done
 
-  # Process each type group in parallel (max 8 concurrent per type)
-  # But types themselves run sequentially to avoid mixing output
+  # Process each type group sequentially (output ordering matters)
   local type
-  for type in "${!type_to_indices[@]}"; do
-    if ! _type_is_enabled "${type}"; then
+  for type in "${!_gs_cu_type_to_indices[@]}"; do
+    if ! _gs_cu_type_is_enabled "${type}"; then
       continue
     fi
 
-    local indices_str="${type_to_indices[${type}]}"
+    local indices_str="${_gs_cu_type_to_indices[${type}]}"
     local indices=()
     # shellcheck disable=SC2207
     IFS=' ' read -ra indices <<< "${indices_str}"
 
-    _log_debug "Processing type ${type}: ${#indices[@]} records"
+    _gs_cu_log_debug "Processing type ${type}: ${#indices[@]} records"
 
-    # For each index in this type, run sequentially (output ordering matters)
-    # Parallel would intermix _log_ output lines
     local idx
     for idx in "${indices[@]}"; do
       [[ -z "${idx}" ]] && continue
-      _process_record "${idx}" || true
+      _gs_cu_process_record "${idx}" || true
     done
   done
 
   # Generate patch file
-  if [[ ${#CU_REPORT_AUTO[@]} -gt 0 ]]; then
-    _generate_patch_file "${CU_PATCH_FILE}"
+  if [[ ${#_GS_CU_REPORT_AUTO[@]} -gt 0 ]]; then
+    _gs_cu_generate_patch_file "${_GS_CU_PATCH_FILE}"
   fi
 
   # Write JSON report
-  _write_json_report "${CU_REPORT_FILE}"
+  _gs_cu_write_json_report "${_GS_CU_REPORT_FILE}"
 
   # Print summary
-  _print_summary "${CU_PATCH_FILE}" "${CU_REPORT_FILE}"
+  _gs_cu_print_summary "${_GS_CU_PATCH_FILE}" "${_GS_CU_REPORT_FILE}"
 }
 
 main "$@"

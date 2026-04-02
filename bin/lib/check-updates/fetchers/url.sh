@@ -4,10 +4,14 @@
 
 set -eEuo pipefail
 
+# Include guard — safe to source multiple times
+[[ -n "${_GS_CU_URL_SH_LOADED:-}" ]] && return 0
+readonly _GS_CU_URL_SH_LOADED=1
+
 # Manual-only URL check.
 # Always returns SKIP with the URL for manual inspection.
-# Usage: _url_fetch_latest "https://svn.apache.org/repos/asf/..." "tags/1.6.3"
-_url_fetch_latest() {
+# Usage: _gs_cu_url_fetch_latest "https://svn.apache.org/repos/asf/..." "tags/1.6.3"
+_gs_cu_url_fetch_latest() {
   local identifier="${1}"    # the URL
   local current_version="${2}"
   local offline="${3:-false}"

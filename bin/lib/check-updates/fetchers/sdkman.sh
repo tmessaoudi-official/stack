@@ -6,15 +6,15 @@
 set -eEuo pipefail
 
 # Include guard — safe to source multiple times
-[[ -n "${_CU_SDKMAN_LOADED:-}" ]] && return 0
-readonly _CU_SDKMAN_LOADED=1
+[[ -n "${_GS_CU_SDKMAN_SH_LOADED:-}" ]] && return 0
+readonly _GS_CU_SDKMAN_SH_LOADED=1
 
-readonly SDKMAN_API_BASE="https://api.sdkman.io/2"
+readonly _GS_CU_SDKMAN_API_BASE="https://api.sdkman.io/2"
 
 # Fetch latest version of an SDKMAN candidate, optionally constrained to a major version
-# Usage: _sdkman_fetch_latest "gradle:8" "8.14"    → latest 8.x
-# Usage: _sdkman_fetch_latest "gradle" "9.4.0"     → latest overall
-_sdkman_fetch_latest() {
+# Usage: _gs_cu_sdkman_fetch_latest "gradle:8" "8.14"    → latest 8.x
+# Usage: _gs_cu_sdkman_fetch_latest "gradle" "9.4.0"     → latest overall
+_gs_cu_sdkman_fetch_latest() {
   local identifier="${1}"    # "candidate" or "candidate:major"
   local current_version="${2}"
   local offline="${3:-false}"
@@ -37,7 +37,7 @@ _sdkman_fetch_latest() {
 
   if [[ "${no_cache}" != "true" ]]; then
     local cached
-    if cached="$(_cache_read "${cache_key}" 2>/dev/null)"; then
+    if cached="$(_gs_cu_cache_read "${cache_key}" 2>/dev/null)"; then
       echo "${cached}"
       return 0
     fi
@@ -48,11 +48,11 @@ _sdkman_fetch_latest() {
   fi
 
   # SDKMAN API: list versions for candidate
-  local url="${SDKMAN_API_BASE}/candidates/${candidate}/list?current=${current_version}&pageSize=40"
+  local url="${_GS_CU_SDKMAN_API_BASE}/candidates/${candidate}/list?current=${current_version}&pageSize=40"
   local response
   if ! response="$(curl --silent --fail --max-time 15 --retry 2 "${url}" 2>/dev/null)"; then
     # Try alternative endpoint
-    url="${SDKMAN_API_BASE}/candidates/${candidate}/default"
+    url="${_GS_CU_SDKMAN_API_BASE}/candidates/${candidate}/default"
     if ! response="$(curl --silent --fail --max-time 15 --retry 2 "${url}" 2>/dev/null)"; then
       return 1
     fi
@@ -61,11 +61,11 @@ _sdkman_fetch_latest() {
     default_ver="${default_ver//[[:space:]]/}"
     if [[ -n "${default_ver}" && -n "${major_constraint}" ]]; then
       if [[ "${default_ver}" == "${major_constraint}."* ]]; then
-        _cache_write "${cache_key}" "${default_ver}"
+        _gs_cu_cache_write "${cache_key}" "${default_ver}"
         echo "${default_ver}"
       fi
     elif [[ -n "${default_ver}" ]]; then
-      _cache_write "${cache_key}" "${default_ver}"
+      _gs_cu_cache_write "${cache_key}" "${default_ver}"
       echo "${default_ver}"
     fi
     return 0
@@ -73,17 +73,17 @@ _sdkman_fetch_latest() {
 
   # Parse version list response — it's a text list of versions
   local proposed
-  proposed="$(_sdkman_select_best_version "${response}" "${major_constraint}")"
+  proposed="$(_gs_cu_sdkman_select_best_version "${response}" "${major_constraint}")"
 
   if [[ -n "${proposed}" ]]; then
-    _cache_write "${cache_key}" "${proposed}"
+    _gs_cu_cache_write "${cache_key}" "${proposed}"
     echo "${proposed}"
   fi
 }
 
 # Select best version from SDKMAN list response
 # SDKMAN list output is a formatted table; extract version numbers
-_sdkman_select_best_version() {
+_gs_cu_sdkman_select_best_version() {
   local response="${1}"
   local major_constraint="${2}"
 

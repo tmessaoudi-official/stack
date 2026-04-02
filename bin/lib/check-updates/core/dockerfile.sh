@@ -6,13 +6,13 @@ set -eEuo pipefail
 
 # Map: env_var → array of dockerfile paths (populated lazily)
 # We use a global associative array for this.
-declare -A CU_DOCKERFILE_MAP=()
-CU_DOCKERFILE_MAP_BUILT="false"
+declare -A _GS_CU_DOCKERFILE_MAP=()
+_GS_CU_DOCKERFILE_MAP_BUILT="false"
 
 # Build the env_var → dockerfile path map by scanning all Dockerfiles
 # Only needs to run once per execution.
-_dockerfile_build_map() {
-  if [[ "${CU_DOCKERFILE_MAP_BUILT}" == "true" ]]; then
+_gs_cu_dockerfile_build_map() {
+  if [[ "${_GS_CU_DOCKERFILE_MAP_BUILT}" == "true" ]]; then
     return 0
   fi
 
@@ -30,30 +30,30 @@ _dockerfile_build_map() {
       if [[ "${line}" =~ ^ARG[[:space:]]+(GLOBAL_STACK_[A-Za-z0-9_]+)(=.*)?$ ]]; then
         local var_name="${BASH_REMATCH[1]}"
         # Append dockerfile to map entry (pipe-separated)
-        if [[ -n "${CU_DOCKERFILE_MAP[${var_name}]+x}" ]]; then
-          CU_DOCKERFILE_MAP[${var_name}]+="${dockerfile}|"
+        if [[ -n "${_GS_CU_DOCKERFILE_MAP[${var_name}]+x}" ]]; then
+          _GS_CU_DOCKERFILE_MAP[${var_name}]+="${dockerfile}|"
         else
-          CU_DOCKERFILE_MAP[${var_name}]="${dockerfile}|"
+          _GS_CU_DOCKERFILE_MAP[${var_name}]="${dockerfile}|"
         fi
       fi
     done < "${dockerfile}"
   done
 
-  CU_DOCKERFILE_MAP_BUILT="true"
-  _log_debug "Dockerfile map built: ${#CU_DOCKERFILE_MAP[@]} unique vars"
+  _GS_CU_DOCKERFILE_MAP_BUILT="true"
+  _gs_cu_log_debug "Dockerfile map built: ${#_GS_CU_DOCKERFILE_MAP[@]} unique vars"
 }
 
 # Get list of Dockerfiles that reference a given env var as an ARG
-# Usage: _dockerfile_get_files "GLOBAL_STACK_IMAGE_UBUNTU_VERSION"
+# Usage: _gs_cu_dockerfile_get_files "GLOBAL_STACK_IMAGE_UBUNTU_VERSION"
 # Returns: newline-separated list of paths
-_dockerfile_get_files() {
+_gs_cu_dockerfile_get_files() {
   local var_name="${1}"
 
-  if [[ -z "${CU_DOCKERFILE_MAP[${var_name}]+x}" ]]; then
+  if [[ -z "${_GS_CU_DOCKERFILE_MAP[${var_name}]+x}" ]]; then
     return 0
   fi
 
-  local entries="${CU_DOCKERFILE_MAP[${var_name}]}"
+  local entries="${_GS_CU_DOCKERFILE_MAP[${var_name}]}"
   # Split by pipe
   local IFS='|'
   local path
@@ -63,10 +63,10 @@ _dockerfile_get_files() {
 }
 
 # Update a Dockerfile ARG default value in-place
-# Usage: _dockerfile_update_arg "/stack/docker/images/00base/Dockerfile" \
+# Usage: _gs_cu_dockerfile_update_arg "/stack/docker/images/00base/Dockerfile" \
 #           "GLOBAL_STACK_IMAGE_UBUNTU_VERSION" "resolute-20260108" "resolute-20260115"
 # Returns: 0 on success, 1 on failure
-_dockerfile_update_arg() {
+_gs_cu_dockerfile_update_arg() {
   local dockerfile="${1}"
   local var_name="${2}"
   local old_value="${3}"
@@ -74,7 +74,7 @@ _dockerfile_update_arg() {
   local dry_run="${5:-false}"
 
   if [[ ! -f "${dockerfile}" ]]; then
-    _log_debug "Dockerfile not found: ${dockerfile}"
+    _gs_cu_log_debug "Dockerfile not found: ${dockerfile}"
     return 1
   fi
 
@@ -85,27 +85,27 @@ _dockerfile_update_arg() {
     if grep -q "^ARG ${var_name}=" "${dockerfile}" 2>/dev/null; then
       if [[ "${dry_run}" != "true" ]]; then
         sed -i "s|^ARG ${var_name}=.*$|ARG ${var_name}=${new_value}|g" "${dockerfile}"
-        _log_debug "Updated ARG ${var_name} in ${dockerfile} (value was different from expected)"
+        _gs_cu_log_debug "Updated ARG ${var_name} in ${dockerfile} (value was different from expected)"
       fi
       return 0
     fi
-    _log_debug "ARG ${var_name}=${old_value} not found in ${dockerfile}"
+    _gs_cu_log_debug "ARG ${var_name}=${old_value} not found in ${dockerfile}"
     return 1
   fi
 
   if [[ "${dry_run}" != "true" ]]; then
     sed -i "s|^ARG ${var_name}=${old_value}$|ARG ${var_name}=${new_value}|g" "${dockerfile}"
-    _log_debug "Updated ARG ${var_name}=${old_value} → ${new_value} in ${dockerfile}"
+    _gs_cu_log_debug "Updated ARG ${var_name}=${old_value} → ${new_value} in ${dockerfile}"
   else
-    _log_debug "[DRY-RUN] Would update ARG ${var_name}=${old_value} → ${new_value} in ${dockerfile}"
+    _gs_cu_log_debug "[DRY-RUN] Would update ARG ${var_name}=${old_value} → ${new_value} in ${dockerfile}"
   fi
   return 0
 }
 
 # Update .env file in-place for a given variable
-# Usage: _env_update_var "/stack/.env" "GLOBAL_STACK_IMAGE_UBUNTU_VERSION" \
+# Usage: _gs_cu_env_update_var "/stack/.env" "GLOBAL_STACK_IMAGE_UBUNTU_VERSION" \
 #           "resolute-20260108" "resolute-20260115"
-_env_update_var() {
+_gs_cu_env_update_var() {
   local env_file="${1}"
   local var_name="${2}"
   local old_value="${3}"
@@ -113,7 +113,7 @@ _env_update_var() {
   local dry_run="${5:-false}"
 
   if [[ ! -f "${env_file}" ]]; then
-    _log_error "" "" ".env file not found: ${env_file}"
+    _gs_cu_log_error "" "" ".env file not found: ${env_file}"
     return 1
   fi
 
@@ -125,17 +125,17 @@ _env_update_var() {
     # shellcheck disable=SC2001
     escaped_new="$(printf '%s' "${new_value}" | sed 's|[&/\]|\\&|g')"
     sed -i "s|^${var_name}=${escaped_old}$|${var_name}=${escaped_new}|g" "${env_file}"
-    _log_debug "Updated .env: ${var_name}=${old_value} → ${new_value}"
+    _gs_cu_log_debug "Updated .env: ${var_name}=${old_value} → ${new_value}"
   else
-    _log_debug "[DRY-RUN] Would update .env: ${var_name}=${old_value} → ${new_value}"
+    _gs_cu_log_debug "[DRY-RUN] Would update .env: ${var_name}=${old_value} → ${new_value}"
   fi
 }
 
 # Apply an update: update .env and all matching Dockerfiles
-# Usage: _apply_update "/stack" "/stack/.env" "GLOBAL_STACK_IMAGE_UBUNTU_VERSION" \
+# Usage: _gs_cu_apply_update "/stack" "/stack/.env" "GLOBAL_STACK_IMAGE_UBUNTU_VERSION" \
 #           "resolute-20260108" "resolute-20260115" false
 # Returns: list of modified files (newline-separated)
-_apply_update() {
+_gs_cu_apply_update() {
   local stack_dir="${1}"
   local env_file="${2}"
   local var_name="${3}"
@@ -146,28 +146,28 @@ _apply_update() {
   local modified_files=()
 
   # Update .env
-  _env_update_var "${env_file}" "${var_name}" "${old_value}" "${new_value}" "${dry_run}"
+  _gs_cu_env_update_var "${env_file}" "${var_name}" "${old_value}" "${new_value}" "${dry_run}"
   modified_files+=("${env_file}")
 
   # Build map if needed
-  _dockerfile_build_map "${stack_dir}"
+  _gs_cu_dockerfile_build_map "${stack_dir}"
 
   # Update Dockerfiles
   local dockerfile
   while IFS= read -r dockerfile; do
     [[ -z "${dockerfile}" ]] && continue
-    if _dockerfile_update_arg "${dockerfile}" "${var_name}" "${old_value}" "${new_value}" "${dry_run}"; then
+    if _gs_cu_dockerfile_update_arg "${dockerfile}" "${var_name}" "${old_value}" "${new_value}" "${dry_run}"; then
       modified_files+=("${dockerfile}")
     fi
-  done < <(_dockerfile_get_files "${var_name}")
+  done < <(_gs_cu_dockerfile_get_files "${var_name}")
 
   printf '%s\n' "${modified_files[@]}"
 }
 
 # Generate a unified diff for proposed changes (without applying them)
-# Usage: _generate_patch "/stack/.env" "GLOBAL_STACK_IMAGE_UBUNTU_VERSION" \
+# Usage: _gs_cu_generate_patch_line "/stack/.env" "GLOBAL_STACK_IMAGE_UBUNTU_VERSION" \
 #           "resolute-20260108" "resolute-20260115"
-_generate_patch_line() {
+_gs_cu_generate_patch_line() {
   local env_file="${1}"
   local var_name="${2}"
   local old_value="${3}"
