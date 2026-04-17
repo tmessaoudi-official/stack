@@ -193,7 +193,7 @@ Provide copy-paste-ready testing instructions scaled to task size:
 3. **Idempotency by default** — all scripts, Makefiles, and Docker operations should be safe to run multiple times.
 4. **Propose sub-agents proactively** — if a specialized agent would improve quality or efficiency, suggest it.
 5. **Abort when needed** — if any phase reveals the task is unsafe, infeasible, or fundamentally wrong, STOP and explain before continuing.
-6. **Protected artifacts** — never propose deletion of: `.env`, `.env.local`, `Makefile`, root `docker-compose.yaml`, `CLAUDE.md`, any file under `docker/images/*/`, `.claude/hooks/*`, `.claude/settings.json`, `.claude/commands/*`, or `~/.claude/agents/*` without explicit user request. These are load-bearing; losing them is catastrophic.
+6. **Protected artifacts** — never propose deletion of: `.env`, `.env.local`, `Makefile`, root `docker-compose.yaml`, `CLAUDE.md`, any file under `docker/images/*/`, `.claude/hooks/*`, `.claude/settings.json`, `.claude/commands/*`, `.claude/agents/*`, or `~/.claude/agents/*` without explicit user request. These are load-bearing; losing them is catastrophic.
 7. **Parallel execution** — when Phase 5 involves independent changes to unrelated files, propose parallel sub-agents or worktrees. Reference `superpowers:dispatching-parallel-agents` for the dispatch pattern.
 
 ## Communication Style
