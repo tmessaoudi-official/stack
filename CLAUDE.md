@@ -192,6 +192,8 @@ make start-local-registry            # Start local TLS registry (port 5000)
 - `/env-diff` — show divergences between `.env` and `.env.local`
 - `/service-info <name>` — deep-dive on one service (compose, Dockerfile, startup, health, ports, versions)
 - `/recent` — quick context: recent commits, uncommitted changes, stack health
+- `/export-setup` — bundle `~/.claude/` config into a portable `.tar.gz` (supports `--scrub`, `--scope project`)
+- `/adapt` — probe a project directory and write a tailored Claude Code config
 
 **Automatic hooks** (PostToolUse on Edit/Write):
 - `shell-check` — lints `.sh` files on every write
