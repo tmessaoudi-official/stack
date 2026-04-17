@@ -192,8 +192,8 @@ make start-local-registry            # Start local TLS registry (port 5000)
 - `/env-diff` — show divergences between `.env` and `.env.local`
 - `/service-info <name>` — deep-dive on one service (compose, Dockerfile, startup, health, ports, versions)
 - `/recent` — quick context: recent commits, uncommitted changes, stack health
-- `/export-setup` — bundle `~/.claude/` config into a portable `.tar.gz` (`--scope project` default; `--scope global` or `--scope all` for cross-machine)
-- `/import-setup` — install a claude-export bundle onto this machine or into a project (self-destructive on target)
+- `/export-setup` — bundle config into a portable `.tar.gz`; `--scope project` (default) LLM-generalizes this project's CLAUDE.md + .claude/ into a rich template with ADAPT markers; `--scope global` exports `~/.claude/` as-is; `--scope all` produces both archives
+- `/import-setup` — install a bundle: Phase 0 detects existing `.claude/` (asks replace/manual-merge); bash installer runs; Phase 5 probes target project and fills ADAPT markers in-place
 - `/adapt` — probe a project directory and write a tailored Claude Code config
 
 **Automatic hooks** (PostToolUse on Edit/Write):
