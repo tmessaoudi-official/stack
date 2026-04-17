@@ -195,6 +195,17 @@ Provide copy-paste-ready testing instructions scaled to task size:
 5. **Abort when needed** — if any phase reveals the task is unsafe, infeasible, or fundamentally wrong, STOP and explain before continuing.
 6. **Protected artifacts** — never propose deletion of: `.env`, `.env.local`, `Makefile`, root `docker-compose.yaml`, `CLAUDE.md`, any file under `docker/images/*/`, `.claude/hooks/*`, `.claude/settings.json`, `.claude/commands/*`, `.claude/agents/*`, or `~/.claude/agents/*` without explicit user request. These are load-bearing; losing them is catastrophic.
 7. **Parallel execution** — when Phase 5 involves independent changes to unrelated files, propose parallel sub-agents or worktrees. Reference `superpowers:dispatching-parallel-agents` for the dispatch pattern.
+8. **Keep docs in sync — same turn, regardless of task size.** Any edit to the files below triggers a *same-turn* update of every doc that references them. Small tasks skip Phase 7 — this rule doesn't.
+
+| Change to… | Update in… |
+|---|---|
+| `settings.json` (perms/hooks/MCP/plugins) | `~/.claude/README.md`, `/stack/CLAUDE.md` "Claude Code Tooling" section |
+| Hooks (`.claude/hooks/`) | Same as above |
+| Slash commands (`.claude/commands/`) | `~/.claude/README.md` command list, `/stack/CLAUDE.md` |
+| Agent files (`.claude/agents/*.md`) | Every `CLAUDE.md` with a routing instruction for that agent |
+| Routing logic or file moves | `grep -rl "<old-path>" ~/.claude/*.md ~/.claude/README.md **/CLAUDE.md` — update each hit |
+
+If no doc currently references the thing, **say so in the response** (flag the gap). If ambiguous, pick the closest canonical doc and proceed. Leave the repo with no stale references to what you just changed.
 
 ## Communication Style
 

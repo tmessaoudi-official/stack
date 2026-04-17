@@ -315,4 +315,18 @@ templates/shell/                     # Host system shell config templates
 
 ---
 
+## Core Operating Rule — Keep Docs In Sync
+
+**Keep docs in sync — same turn, regardless of task size.** Any edit to the files below triggers a *same-turn* update of every doc that references them. Small tasks skip Phase 7 — this rule doesn't.
+
+| Change to… | Update in… |
+|---|---|
+| `settings.json` (perms/hooks/MCP/plugins) | `~/.claude/README.md`, this `CLAUDE.md` "Claude Code Tooling" section |
+| Hooks (`.claude/hooks/`) | Same as above |
+| Slash commands (`.claude/commands/`) | `~/.claude/README.md` command list, this `CLAUDE.md` |
+| Agent files (`.claude/agents/*.md`) | Every `CLAUDE.md` with a routing instruction for that agent |
+| Routing logic or file moves | `grep -rl "<old-path>" ~/.claude/*.md ~/.claude/README.md **/CLAUDE.md` — update each hit |
+
+If no doc currently references the thing, **say so in the response** (flag the gap). If ambiguous, pick the closest canonical doc and proceed — don't block to ask. Leave the repo with no stale references to what you just changed.
+
 > **Remember**: Delegate /stack infrastructure tasks to `global-stack-lead-dev`; handle non-/stack tasks directly with the global reasoning framework. Use `/lint` before committing shell changes. Check for trailing `;` in `COMPOSE_FILE`. Verify with `--dry-run` before applying changes. Tier 02 = install, tier 03 = setup — same startup script, different `MODE`.
