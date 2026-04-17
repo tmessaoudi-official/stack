@@ -262,7 +262,7 @@ Claude Code's configuration for this project lives in:
 ```
 ~/.claude/CLAUDE.md                      # Global reasoning framework (all projects)
 ~/.claude/settings.json                  # Global settings (model, plugins)
-~/.claude/agents/global-stack-lead-dev.md  # /stack infrastructure agent definition
+/stack/.claude/agents/global-stack-lead-dev.md  # /stack infrastructure agent definition (project-scoped)
 .claude/settings.json                    # Project permissions, hooks
 .claude/settings.local.json              # Local UI preferences (gitignored)
 .claude/hooks/                           # PostToolUse hook scripts
