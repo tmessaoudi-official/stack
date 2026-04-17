@@ -1,0 +1,48 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(docker compose --env-file .env.local config *)",
+      "Bash(docker compose --env-file .env.local ps *)",
+      "Bash(docker compose --env-file .env.local logs *)",
+      "Bash(bin/env-update.sh --dry-run *)",
+      "Bash(bin/env-scan.sh --dry-run *)",
+      "Bash(bin/tests/env-scan.test.sh)"
+    ],
+    "deny": [
+      "Bash(make hard-restart)"
+    ],
+    "ask": [
+      "Bash(bin/env-update.sh)",
+      "Bash(bin/env-scan.sh)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/shellcheck-on-write.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/hadolint-on-write.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/yamllint-on-write.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/shfmt-on-write.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

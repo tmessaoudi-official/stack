@@ -438,7 +438,7 @@ hard-restart:
 	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="down" GLOBAL_STACK_DOCKER_CLI_EXEC_FLAGS="--rmi all --volumes --remove-orphans" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
 	docker system prune -a -f --volumes
 	yes y | docker-reclaim-disk-space-script.sh || echo 'script does not exist'
-	bin/load-env.sh --sync-values=true
+	bin/env-scan.sh --sync-values=true
 	yes y | global-unu.sh || echo 'script does not exit'
 	sudo rm -rf tools ./docker/registry/data ./docker/registry/certs
 	cp -R var/tools/ tools

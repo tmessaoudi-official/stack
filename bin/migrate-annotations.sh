@@ -1,5 +1,5 @@
 #!/bin/bash
-# migrate-annotations.sh — One-shot migration of legacy @todo check-updates
+# migrate-annotations.sh — One-shot migration of legacy @todo env-update
 # annotations in .env to the new unified type:identifier format.
 #
 # Usage:
@@ -19,7 +19,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_DIR
 STACK_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 readonly STACK_DIR
-LIB_DIR="${SCRIPT_DIR}/lib/check-updates"
+LIB_DIR="${SCRIPT_DIR}/lib/env-update"
 readonly LIB_DIR
 ENV_FILE="${STACK_DIR}/.env"
 readonly ENV_FILE
@@ -27,11 +27,11 @@ readonly ENV_FILE
 # --------------------------------------------------------------------------
 # Source required libraries
 # --------------------------------------------------------------------------
-# shellcheck source=lib/check-updates/core/report.sh
+# shellcheck source=lib/env-update/core/report.sh
 source "${LIB_DIR}/core/report.sh"
-# shellcheck source=lib/check-updates/config/type_map.sh
+# shellcheck source=lib/env-update/config/type_map.sh
 source "${LIB_DIR}/config/type_map.sh"
-# shellcheck source=lib/check-updates/config/codename_map.sh
+# shellcheck source=lib/env-update/config/codename_map.sh
 source "${LIB_DIR}/config/codename_map.sh"
 
 # --------------------------------------------------------------------------
@@ -39,19 +39,19 @@ source "${LIB_DIR}/config/codename_map.sh"
 # --------------------------------------------------------------------------
 MIGRATE_DRY_RUN="false"
 MIGRATE_BACKUP="true"
-_GS_CU_MIGRATE_SHOW_ALREADY_MIGRATED="false"
+_GS_EU_MIGRATE_SHOW_ALREADY_MIGRATED="false"
 
 # --------------------------------------------------------------------------
 # Known depends-on relationships (hardcoded map)
 # --------------------------------------------------------------------------
-declare -A _GS_CU_MIGRATE_DEPENDS_ON_MAP=(
+declare -A _GS_EU_MIGRATE_DEPENDS_ON_MAP=(
   ["GLOBAL_STACK_SONAR_SCANNER_CLI_VERSION"]="depends-on:GLOBAL_STACK_SONARQUBE_VERSION:major"
 )
 
 # --------------------------------------------------------------------------
 # Argument parsing
 # --------------------------------------------------------------------------
-_gs_cu_migrate_show_help() {
+_gs_eu_migrate_show_help() {
   cat <<'EOF'
 bin/migrate-annotations.sh — Migrate legacy .env annotations to new format
 
@@ -64,38 +64,38 @@ Options:
   --show-already-migrated (-s)  List lines already in new format
   --help                  Show this help
 
-This script rewrites all @todo check-updates annotations in .env from the
+This script rewrites all @todo env-update annotations in .env from the
 legacy URL-based format to the new structured type:identifier format.
 
 Example transformations:
-  Before: # @todo check-updates axllent/mailpit https://hub.docker.com/r/axllent/mailpit/tags v1.29.3
-  After:  # @todo check-updates dockerhub:axllent/mailpit v1.29.3
+  Before: # @todo env-update axllent/mailpit https://hub.docker.com/r/axllent/mailpit/tags v1.29.3
+  After:  # @todo env-update dockerhub:axllent/mailpit v1.29.3
 
-  Before: # @todo check-updates https://github.com/golang/go/tags 1.26.1
-  After:  # @todo check-updates github:golang/go 1.26.1
+  Before: # @todo env-update https://github.com/golang/go/tags 1.26.1
+  After:  # @todo env-update github:golang/go 1.26.1
 
-  Before: # @todo (override) check-updates dpage/pgadmin4 https://hub.docker.com/r/dpage/pgadmin4/tags 9.13.0
-  After:  # @todo check-updates (override) dockerhub:dpage/pgadmin4 9.13.0
+  Before: # @todo (override) env-update dpage/pgadmin4 https://hub.docker.com/r/dpage/pgadmin4/tags 9.13.0
+  After:  # @todo env-update (override) dockerhub:dpage/pgadmin4 9.13.0
 
-  Before: # @todo check-updates https://github.com/php/php-src/tags 8.2.30
-  After:  # @todo check-updates github:php/php-src:8.2 8.2.30
+  Before: # @todo env-update https://github.com/php/php-src/tags 8.2.30
+  After:  # @todo env-update github:php/php-src:8.2 8.2.30
 
-  Before: # @todo check-updates https://pecl.php.net/package/imagick 3.8.1 (php >= 8.1)
-  After:  # @todo check-updates pecl:imagick 3.8.1 (php >= 8.1)
+  Before: # @todo env-update https://pecl.php.net/package/imagick 3.8.1 (php >= 8.1)
+  After:  # @todo env-update pecl:imagick 3.8.1 (php >= 8.1)
 EOF
 }
 
-_gs_cu_migrate_parse_args() {
+_gs_eu_migrate_parse_args() {
   local arg
   for arg in "$@"; do
     case "${arg}" in
       --dry-run)                MIGRATE_DRY_RUN="true" ;;
       --no-backup)              MIGRATE_BACKUP="false" ;;
-      --show-already-migrated|-s) _GS_CU_MIGRATE_SHOW_ALREADY_MIGRATED="true" ;;
-      --help)                   _gs_cu_migrate_show_help; exit 0 ;;
+      --show-already-migrated|-s) _GS_EU_MIGRATE_SHOW_ALREADY_MIGRATED="true" ;;
+      --help)                   _gs_eu_migrate_show_help; exit 0 ;;
       *)
         printf 'Unknown option: %s\n' "${arg}" >&2
-        _gs_cu_migrate_show_help >&2
+        _gs_eu_migrate_show_help >&2
         exit 1
         ;;
     esac
@@ -106,7 +106,7 @@ _gs_cu_migrate_parse_args() {
 # Resolve higher semver from a "A | B" or "A | B (compat)" string
 # Returns the higher version of the two sides
 # --------------------------------------------------------------------------
-_gs_cu_resolve_pipe_version() {
+_gs_eu_resolve_pipe_version() {
   local combined="${1}"
   # Extract both sides of the pipe
   local lhs="${combined%%|*}"
@@ -157,7 +157,7 @@ _gs_cu_resolve_pipe_version() {
 # --------------------------------------------------------------------------
 # Normalize a compat hint like "php >= 7.0.0" → "compat:php>=7.0"
 # --------------------------------------------------------------------------
-_gs_cu_normalize_compat_hint() {
+_gs_eu_normalize_compat_hint() {
   local hint="${1}"
   local lower="${hint,,}"
 
@@ -178,17 +178,17 @@ _gs_cu_normalize_compat_hint() {
 
 # --------------------------------------------------------------------------
 # Pre-scan to detect adjacent pecl-git pairs
-# Builds _GS_CU_MIGRATE_PECL_GIT_PAIRS associative array
+# Builds _GS_EU_MIGRATE_PECL_GIT_PAIRS associative array
 # Keys: annotation line numbers, values: "REPLACE:git_url:sha:ext_name:compat" or "DROP"
 # --------------------------------------------------------------------------
-declare -gA _GS_CU_MIGRATE_PECL_GIT_PAIRS=()
-declare -ga _GS_CU_MIGRATE_ORIG_LINES=()
-declare -ga _GS_CU_MIGRATE_MIGRATED_LINES=()
-declare -ga _GS_CU_MIGRATE_CHANGE_LNUMS=()
-declare -gi _GS_CU_MIGRATE_ALREADY_COUNT=0
-declare -ga _GS_CU_MIGRATE_ALREADY_LINES=()
+declare -gA _GS_EU_MIGRATE_PECL_GIT_PAIRS=()
+declare -ga _GS_EU_MIGRATE_ORIG_LINES=()
+declare -ga _GS_EU_MIGRATE_MIGRATED_LINES=()
+declare -ga _GS_EU_MIGRATE_CHANGE_LNUMS=()
+declare -gi _GS_EU_MIGRATE_ALREADY_COUNT=0
+declare -ga _GS_EU_MIGRATE_ALREADY_LINES=()
 
-_gs_cu_migrate_pre_scan_pecl_git_pairs() {
+_gs_eu_migrate_pre_scan_pecl_git_pairs() {
   local line_number=0
   local pending_git_url=""
   local pending_git_sha=""
@@ -199,7 +199,7 @@ _gs_cu_migrate_pre_scan_pecl_git_pairs() {
   _re_git_url='^[[:space:]]*#[[:space:]]*@todo[[:space:]]+could[[:space:]]+be[[:space:]]+a[[:space:]]+repo[[:space:]]+url[[:space:]]+(https://github[^[:space:]]+)[[:space:]]+(branch[[:space:]]+or[[:space:]]+commit[[:space:]]+)?([a-f0-9]+)'
 
   local _re_pecl_url
-  _re_pecl_url='^[[:space:]]*#.*@todo.*check-updates.*https://pecl\.php\.net/package/([^[:space:]]+)[[:space:]]+([0-9][^[:space:]]*)'
+  _re_pecl_url='^[[:space:]]*#.*@todo.*env-update.*https://pecl\.php\.net/package/([^[:space:]]+)[[:space:]]+([0-9][^[:space:]]*)'
 
   while IFS= read -r line || [[ -n "${line}" ]]; do
     (( line_number++ )) || true
@@ -214,12 +214,12 @@ _gs_cu_migrate_pre_scan_pecl_git_pairs() {
 
     if [[ "${in_pair_scan}" == "true" ]]; then
       # Allow blank lines, comment-only lines, and CONFIG_PACKAGE var assignments
-      # between the "could be a repo url" line and the "check-updates pecl" line
-      if [[ "${line}" =~ @todo.*check-updates && "${line}" =~ ${_re_pecl_url} ]]; then
+      # between the "could be a repo url" line and the "env-update pecl" line
+      if [[ "${line}" =~ @todo.*env-update && "${line}" =~ ${_re_pecl_url} ]]; then
         local ext_name="${BASH_REMATCH[1]}"
         # Use | as separator (safe: can't appear in a git URL or sha)
-        _GS_CU_MIGRATE_PECL_GIT_PAIRS[${pending_git_line}]="DROP"
-        _GS_CU_MIGRATE_PECL_GIT_PAIRS[${line_number}]="REPLACE|${pending_git_url}|${pending_git_sha}|${ext_name}"
+        _GS_EU_MIGRATE_PECL_GIT_PAIRS[${pending_git_line}]="DROP"
+        _GS_EU_MIGRATE_PECL_GIT_PAIRS[${line_number}]="REPLACE|${pending_git_url}|${pending_git_sha}|${ext_name}"
         in_pair_scan="false"
         pending_git_url=""
         pending_git_sha=""
@@ -233,8 +233,8 @@ _gs_cu_migrate_pre_scan_pecl_git_pairs() {
         pending_git_line="${line_number}"
         continue
       fi
-      # Any other @todo check-updates (non-PECL) ends the window
-      if [[ "${line}" =~ @todo.*check-updates && ! "${line}" =~ pecl\.php\.net ]]; then
+      # Any other @todo env-update (non-PECL) ends the window
+      if [[ "${line}" =~ @todo.*env-update && ! "${line}" =~ pecl\.php\.net ]]; then
         in_pair_scan="false"
         pending_git_url=""
         pending_git_sha=""
@@ -247,13 +247,13 @@ _gs_cu_migrate_pre_scan_pecl_git_pairs() {
 }
 
 # --------------------------------------------------------------------------
-# Pre-scan to detect adjacent "@todo change ... everywhere" + "@todo check-updates" pairs
+# Pre-scan to detect adjacent "@todo change ... everywhere" + "@todo env-update" pairs
 # Keys: line number of the "change" line → "DROP" (paired) or "STANDALONE:VAR_NAME"
-#       line number of the "check-updates" line → "ADD_PROPAGATE" (add (propagate) flag)
+#       line number of the "env-update" line → "ADD_PROPAGATE" (add (propagate) flag)
 # --------------------------------------------------------------------------
-declare -gA _GS_CU_MIGRATE_PROPAGATE_PAIRS=()
+declare -gA _GS_EU_MIGRATE_PROPAGATE_PAIRS=()
 
-_gs_cu_migrate_pre_scan_propagate_pairs() {
+_gs_eu_migrate_pre_scan_propagate_pairs() {
   local line_number=0
   local pending_change_line=0
   local pending_change_varname=""
@@ -275,13 +275,13 @@ _gs_cu_migrate_pre_scan_propagate_pairs() {
       if [[ -z "${line}" || ( "${line}" =~ ^[[:space:]]*# && ! "${line}" =~ @todo ) ]]; then
         continue
       fi
-      # Paired with a check-updates annotation?
-      if [[ "${line}" =~ @todo.*check-updates ]]; then
-        _GS_CU_MIGRATE_PROPAGATE_PAIRS[${pending_change_line}]="DROP"
-        _GS_CU_MIGRATE_PROPAGATE_PAIRS[${line_number}]="ADD_PROPAGATE"
+      # Paired with a env-update annotation?
+      if [[ "${line}" =~ @todo.*env-update ]]; then
+        _GS_EU_MIGRATE_PROPAGATE_PAIRS[${pending_change_line}]="DROP"
+        _GS_EU_MIGRATE_PROPAGATE_PAIRS[${line_number}]="ADD_PROPAGATE"
       else
-        # Standalone (no check-updates partner)
-        _GS_CU_MIGRATE_PROPAGATE_PAIRS[${pending_change_line}]="STANDALONE:${pending_change_varname}"
+        # Standalone (no env-update partner)
+        _GS_EU_MIGRATE_PROPAGATE_PAIRS[${pending_change_line}]="STANDALONE:${pending_change_varname}"
       fi
       pending_change_line=0
       pending_change_varname=""
@@ -290,14 +290,14 @@ _gs_cu_migrate_pre_scan_propagate_pairs() {
 
   # Any remaining pending_change_line with no partner is standalone
   if [[ "${pending_change_line}" -gt 0 ]]; then
-    _GS_CU_MIGRATE_PROPAGATE_PAIRS[${pending_change_line}]="STANDALONE:${pending_change_varname}"
+    _GS_EU_MIGRATE_PROPAGATE_PAIRS[${pending_change_line}]="STANDALONE:${pending_change_varname}"
   fi
 }
 
 # --------------------------------------------------------------------------
 # Build a pecl-git merged annotation from pair data
 # --------------------------------------------------------------------------
-_gs_cu_build_pecl_git_annotation() {
+_gs_eu_build_pecl_git_annotation() {
   local prefix="${1}"
   local todo_prefix="${2}"
   local flags="${3}"
@@ -321,7 +321,7 @@ _gs_cu_build_pecl_git_annotation() {
     pecl_ref_str=" (pecl-ref:${ext_name})"
   fi
 
-  printf '%s%scheck-updates %specl-git:%s %s%s%s\n' \
+  printf '%s%senv-update %specl-git:%s %s%s%s\n' \
     "${prefix}" "${todo_prefix}" "${flags_str}" \
     "${git_url}" "${version}" "${hint_str}" "${pecl_ref_str}"
 }
@@ -332,19 +332,19 @@ _gs_cu_build_pecl_git_annotation() {
 
 # Given a raw annotation line, produce the migrated version.
 # Returns the new line (echoed) or the original line if no migration needed/possible.
-_gs_cu_migrate_annotation_line() {
+_gs_eu_migrate_annotation_line() {
   local line="${1}"
   local line_number="${2:-0}"
 
-  # Must contain @todo ... check-updates
-  if [[ ! "${line}" =~ @todo.*check-updates ]]; then
+  # Must contain @todo ... env-update
+  if [[ ! "${line}" =~ @todo.*env-update ]]; then
     echo "${line}"
     return 0
   fi
 
   # Check for DROP (git-url pair lines handled by pre-scan)
-  if [[ -n "${_GS_CU_MIGRATE_PECL_GIT_PAIRS[${line_number}]+x}" ]]; then
-    local pair_action="${_GS_CU_MIGRATE_PECL_GIT_PAIRS[${line_number}]}"
+  if [[ -n "${_GS_EU_MIGRATE_PECL_GIT_PAIRS[${line_number}]+x}" ]]; then
+    local pair_action="${_GS_EU_MIGRATE_PECL_GIT_PAIRS[${line_number}]}"
     if [[ "${pair_action}" == "DROP" ]]; then
       # Return empty to signal this line should be deleted
       echo "__DROP_LINE__"
@@ -356,11 +356,11 @@ _gs_cu_migrate_annotation_line() {
     fi
   fi
 
-  # Already in new format? Require type to follow immediately after check-updates + optional flags
+  # Already in new format? Require type to follow immediately after env-update + optional flags
   local _re_already_migrated
-  _re_already_migrated='^[[:space:]]*#.*@todo[[:space:]]+(check-updates|propagate)[[:space:]]+(\([^)]+\)[[:space:]]+)*(dockerhub:|quay:|github:|npm:|pecl:|pecl-git:|sdkman:|sdkmanager:|pypi:|url:|[A-Z_][A-Z0-9_]+$)'
+  _re_already_migrated='^[[:space:]]*#.*@todo[[:space:]]+(env-update|propagate)[[:space:]]+(\([^)]+\)[[:space:]]+)*(dockerhub:|quay:|github:|npm:|pecl:|pecl-git:|sdkman:|sdkmanager:|pypi:|url:|[A-Z_][A-Z0-9_]+$)'
   if [[ "${line}" =~ ${_re_already_migrated} ]]; then
-    _gs_cu_log_debug "Already migrated: ${line}"
+    _gs_eu_log_debug "Already migrated: ${line}"
     echo "${line}"
     return 0
   fi
@@ -382,7 +382,7 @@ _gs_cu_migrate_annotation_line() {
     check_updates_content="${BASH_REMATCH[2]}"
   fi
 
-  # Extract flags in parens before or after check-updates
+  # Extract flags in parens before or after env-update
   local flags=""
   local remaining="${check_updates_content}"
   local _flag_re='^[(]([^)]+)[)][[:space:]]*(.*)'
@@ -396,11 +396,11 @@ _gs_cu_migrate_annotation_line() {
     flags+="(${flag_val}) "
   done
 
-  # Strip "check-updates" keyword
-  remaining="${remaining#check-updates}"
+  # Strip "env-update" keyword
+  remaining="${remaining#env-update}"
   remaining="${remaining# }"
 
-  # Handle flags after check-updates keyword too
+  # Handle flags after env-update keyword too
   while [[ "${remaining}" =~ ${_flag_re} ]]; do
     local flag_val="${BASH_REMATCH[1]}"
     remaining="${BASH_REMATCH[2]}"
@@ -414,8 +414,8 @@ _gs_cu_migrate_annotation_line() {
   # -----------------------------------------------------------------------
   # Handle pecl-git REPLACE (paired annotations)
   # -----------------------------------------------------------------------
-  if [[ -n "${_GS_CU_MIGRATE_PECL_GIT_PAIRS[${line_number}]+x}" ]]; then
-    local pair_action="${_GS_CU_MIGRATE_PECL_GIT_PAIRS[${line_number}]}"
+  if [[ -n "${_GS_EU_MIGRATE_PECL_GIT_PAIRS[${line_number}]+x}" ]]; then
+    local pair_action="${_GS_EU_MIGRATE_PECL_GIT_PAIRS[${line_number}]}"
     if [[ "${pair_action}" =~ ^REPLACE\|(.+)\|([a-f0-9]+)\|([^|]+)$ ]]; then
       local git_url="${BASH_REMATCH[1]}"
       local git_sha="${BASH_REMATCH[2]}"
@@ -424,9 +424,9 @@ _gs_cu_migrate_annotation_line() {
       local compat_hint=""
       local _re_compat_paren='[(](php[^)]+)[)]'
       if [[ "${remaining}" =~ ${_re_compat_paren} ]]; then
-        compat_hint="$(_gs_cu_normalize_compat_hint "${BASH_REMATCH[1]}")"
+        compat_hint="$(_gs_eu_normalize_compat_hint "${BASH_REMATCH[1]}")"
       fi
-      echo "$(_gs_cu_build_pecl_git_annotation "${prefix}" "${todo_prefix}" "${flags}" "${git_url}" "${ext_name}" "${git_sha}" "${compat_hint}")"
+      echo "$(_gs_eu_build_pecl_git_annotation "${prefix}" "${todo_prefix}" "${flags}" "${git_url}" "${ext_name}" "${git_sha}" "${compat_hint}")"
       return 0
     fi
   fi
@@ -455,7 +455,7 @@ _gs_cu_migrate_annotation_line() {
     local version="${BASH_REMATCH[2]}"
     local flags_str=""
     [[ -n "${flags}" ]] && flags_str="${flags} "
-    printf '%s%scheck-updates %ssdkmanager:%s %s\n' \
+    printf '%s%senv-update %ssdkmanager:%s %s\n' \
       "${prefix}" "${todo_prefix}" "${flags_str}" "${component}" "${version}"
     return 0
   fi
@@ -469,7 +469,7 @@ _gs_cu_migrate_annotation_line() {
     local java_version="${BASH_REMATCH[2]}"
     local flags_str=""
     [[ -n "${flags}" ]] && flags_str="${flags} "
-    printf '%s%scheck-updates %ssdkman:java:%s %s\n' \
+    printf '%s%senv-update %ssdkman:java:%s %s\n' \
       "${prefix}" "${todo_prefix}" "${flags_str}" "${java_major}" "${java_version}"
     return 0
   fi
@@ -487,7 +487,7 @@ _gs_cu_migrate_annotation_line() {
     [[ -n "${vx_part}" ]] && type_id_str="sdkman:${candidate}:${major}"
     local flags_str=""
     [[ -n "${flags}" ]] && flags_str="${flags} "
-    printf '%s%scheck-updates %s%s %s\n' \
+    printf '%s%senv-update %s%s %s\n' \
       "${prefix}" "${todo_prefix}" "${flags_str}" "${type_id_str}" "${version}"
     return 0
   fi
@@ -499,7 +499,7 @@ _gs_cu_migrate_annotation_line() {
     local version="${BASH_REMATCH[1]}"
     local flags_str=""
     [[ -n "${flags}" ]] && flags_str="${flags} "
-    printf '%s%scheck-updates %surl:https://developer.android.com/studio %s\n' \
+    printf '%s%senv-update %surl:https://developer.android.com/studio %s\n' \
       "${prefix}" "${todo_prefix}" "${flags_str}" "${version}"
     return 0
   fi
@@ -521,7 +521,7 @@ _gs_cu_migrate_annotation_line() {
 
     # Resolve: take the stable/bigger version from both sides
     local resolved
-    resolved="$(_gs_cu_resolve_pipe_version "${remaining}")"
+    resolved="$(_gs_eu_resolve_pipe_version "${remaining}")"
     if [[ -n "${resolved}" ]]; then
       # Keep URLs and non-version tokens from the LHS; replace the version with the resolved one
       # Strip all version-like tokens from lhs to get just the URL/name prefix
@@ -576,7 +576,7 @@ _gs_cu_migrate_annotation_line() {
     local flags_str=""
     [[ -n "${flags}" ]] && flags_str="${flags} "
     if [[ -n "${next_url}" ]]; then
-      printf '%s%scheck-updates %sgithub:%s next urls: %s/commits/master/\n' \
+      printf '%s%senv-update %sgithub:%s next urls: %s/commits/master/\n' \
         "${prefix}" "${todo_prefix}" "${flags_str}" \
         "$(printf '%s' "${next_url}" | grep -oE 'github\.com/[^/]+/[^/[:space:]]+')" \
         "${next_url}"
@@ -607,7 +607,7 @@ _gs_cu_migrate_annotation_line() {
   if [[ ${#urls[@]} -gt 0 ]]; then
     # Use the LAST URL as the principal one — user places the most relevant URL last
     local best_url="${urls[${#urls[@]}-1]}"
-    type_id="$(_gs_cu_infer_type_from_url "${best_url}" "${version}")"
+    type_id="$(_gs_eu_infer_type_from_url "${best_url}" "${version}")"
 
     # PHP major-pin inference
     if [[ "${type_id}" == "github:php/php-src" && "${version}" =~ ^([0-9]+\.[0-9]+)\. ]]; then
@@ -642,7 +642,7 @@ _gs_cu_migrate_annotation_line() {
       urls+=("${paren}")
     elif [[ "${paren}" =~ ${_re_compat_check} ]]; then
       # Looks like a compat constraint
-      paren_hint="$(_gs_cu_normalize_compat_hint "${paren}")"
+      paren_hint="$(_gs_eu_normalize_compat_hint "${paren}")"
     else
       paren_hint="${paren}"
     fi
@@ -650,7 +650,7 @@ _gs_cu_migrate_annotation_line() {
 
   # pipe_compat also contributes to hint
   if [[ -n "${pipe_compat}" && -z "${paren_hint}" ]]; then
-    paren_hint="$(_gs_cu_normalize_compat_hint "${pipe_compat}")"
+    paren_hint="$(_gs_eu_normalize_compat_hint "${pipe_compat}")"
   fi
 
   if [[ -n "${paren_hint}" ]]; then
@@ -665,7 +665,7 @@ _gs_cu_migrate_annotation_line() {
     [[ "${u}" == "${used_url}" ]] && continue
     # Don't add the authoritative URL that was already used for type inference
     local inferred_check
-    inferred_check="$(_gs_cu_infer_type_from_url "${u}" "${version}" 2>/dev/null || echo "")"
+    inferred_check="$(_gs_eu_infer_type_from_url "${u}" "${version}" 2>/dev/null || echo "")"
     if [[ "${inferred_check}" == "${type_id}" ]]; then
       continue
     fi
@@ -684,7 +684,7 @@ _gs_cu_migrate_annotation_line() {
   # -----------------------------------------------------------------------
   local depends_on_str=""
   # The env var name is on the next line — we can only check the mapping here
-  # We'll append depends-on in _gs_cu_run_migration after seeing the variable name
+  # We'll append depends-on in _gs_eu_run_migration after seeing the variable name
 
   # -----------------------------------------------------------------------
   # Final output
@@ -692,7 +692,7 @@ _gs_cu_migrate_annotation_line() {
   local flags_str=""
   [[ -n "${flags}" ]] && flags_str="${flags} "
 
-  printf '%s%scheck-updates %s%s %s%s%s\n' \
+  printf '%s%senv-update %s%s %s%s%s\n' \
     "${prefix}" "${todo_prefix}" "${flags_str}" "${type_id}" "${version}" \
     "${hint_str}" "${extra_urls_str}"
 }
@@ -700,43 +700,43 @@ _gs_cu_migrate_annotation_line() {
 # --------------------------------------------------------------------------
 # Main migration logic
 # --------------------------------------------------------------------------
-_gs_cu_run_migration() {
+_gs_eu_run_migration() {
   local line_number=0
   local changed_count=0
   local unchanged_count=0
 
   # Pre-scan for pecl-git pairs and propagate pairs
-  _gs_cu_migrate_pre_scan_pecl_git_pairs
-  _gs_cu_migrate_pre_scan_propagate_pairs
+  _gs_eu_migrate_pre_scan_pecl_git_pairs
+  _gs_eu_migrate_pre_scan_propagate_pairs
 
   # Arrays to collect changes — declared at script scope so dry-run report can read them
-  _GS_CU_MIGRATE_ORIG_LINES=()
-  _GS_CU_MIGRATE_MIGRATED_LINES=()
-  _GS_CU_MIGRATE_CHANGE_LNUMS=()
-  _GS_CU_MIGRATE_ALREADY_COUNT=0
-  _GS_CU_MIGRATE_ALREADY_LINES=()
+  _GS_EU_MIGRATE_ORIG_LINES=()
+  _GS_EU_MIGRATE_MIGRATED_LINES=()
+  _GS_EU_MIGRATE_CHANGE_LNUMS=()
+  _GS_EU_MIGRATE_ALREADY_COUNT=0
+  _GS_EU_MIGRATE_ALREADY_LINES=()
 
   while IFS= read -r line || [[ -n "${line}" ]]; do
     (( line_number++ )) || true
 
     # Handle "@todo change ... everywhere" lines from propagate pre-scan
     if [[ "${line}" =~ @todo[[:space:]]+(change[[:space:]]+this[[:space:]]+|change[[:space:]]+)ARG ]]; then
-      local _prop_action="${_GS_CU_MIGRATE_PROPAGATE_PAIRS[${line_number}]:-}"
+      local _prop_action="${_GS_EU_MIGRATE_PROPAGATE_PAIRS[${line_number}]:-}"
       if [[ "${_prop_action}" == "DROP" ]]; then
-        # Paired with a check-updates — drop this line
-        _GS_CU_MIGRATE_ORIG_LINES+=("${line}")
-        _GS_CU_MIGRATE_MIGRATED_LINES+=("")
-        _GS_CU_MIGRATE_CHANGE_LNUMS+=("${line_number}")
+        # Paired with a env-update — drop this line
+        _GS_EU_MIGRATE_ORIG_LINES+=("${line}")
+        _GS_EU_MIGRATE_MIGRATED_LINES+=("")
+        _GS_EU_MIGRATE_CHANGE_LNUMS+=("${line_number}")
         (( changed_count++ )) || true
       elif [[ "${_prop_action}" == STANDALONE:* ]]; then
-        # No check-updates partner — migrate to standalone propagate annotation
+        # No env-update partner — migrate to standalone propagate annotation
         local _varname="${_prop_action#STANDALONE:}"
         local _prop_prefix
         _prop_prefix="$(printf '%s' "${line}" | grep -oE '^[[:space:]]*#[[:space:]]*')"
         local _migrated_prop="${_prop_prefix}@todo propagate ${_varname}"
-        _GS_CU_MIGRATE_ORIG_LINES+=("${line}")
-        _GS_CU_MIGRATE_MIGRATED_LINES+=("${_migrated_prop}")
-        _GS_CU_MIGRATE_CHANGE_LNUMS+=("${line_number}")
+        _GS_EU_MIGRATE_ORIG_LINES+=("${line}")
+        _GS_EU_MIGRATE_MIGRATED_LINES+=("${_migrated_prop}")
+        _GS_EU_MIGRATE_CHANGE_LNUMS+=("${line_number}")
         (( changed_count++ )) || true
       fi
       continue
@@ -744,47 +744,47 @@ _gs_cu_run_migration() {
 
     # Handle "could be a repo url" lines — these are DROP candidates from pecl-git pre-scan
     if [[ "${line}" =~ @todo[[:space:]]+could[[:space:]]+be[[:space:]]+a[[:space:]]+repo ]]; then
-      if [[ "${_GS_CU_MIGRATE_PECL_GIT_PAIRS[${line_number}]:-}" == "DROP" ]]; then
-        _GS_CU_MIGRATE_ORIG_LINES+=("${line}")
-        _GS_CU_MIGRATE_MIGRATED_LINES+=("")
-        _GS_CU_MIGRATE_CHANGE_LNUMS+=("${line_number}")
+      if [[ "${_GS_EU_MIGRATE_PECL_GIT_PAIRS[${line_number}]:-}" == "DROP" ]]; then
+        _GS_EU_MIGRATE_ORIG_LINES+=("${line}")
+        _GS_EU_MIGRATE_MIGRATED_LINES+=("")
+        _GS_EU_MIGRATE_CHANGE_LNUMS+=("${line_number}")
         (( changed_count++ )) || true
       fi
       continue
     fi
 
     # Only process annotation lines
-    if [[ "${line}" =~ @todo.*check-updates ]]; then
+    if [[ "${line}" =~ @todo.*env-update ]]; then
       local migrated
-      migrated="$(_gs_cu_migrate_annotation_line "${line}" "${line_number}")"
+      migrated="$(_gs_eu_migrate_annotation_line "${line}" "${line_number}")"
 
-      # Inject (propagate) flag if this check-updates line is paired with a change line
-      if [[ "${migrated}" != "${line}" && "${_GS_CU_MIGRATE_PROPAGATE_PAIRS[${line_number}]:-}" == "ADD_PROPAGATE" ]]; then
-        # Insert (propagate) flag after "check-updates " in the migrated output
-        migrated="${migrated/check-updates /check-updates (propagate) }"
-      elif [[ "${migrated}" == "${line}" && "${_GS_CU_MIGRATE_PROPAGATE_PAIRS[${line_number}]:-}" == "ADD_PROPAGATE" ]]; then
+      # Inject (propagate) flag if this env-update line is paired with a change line
+      if [[ "${migrated}" != "${line}" && "${_GS_EU_MIGRATE_PROPAGATE_PAIRS[${line_number}]:-}" == "ADD_PROPAGATE" ]]; then
+        # Insert (propagate) flag after "env-update " in the migrated output
+        migrated="${migrated/env-update /env-update (propagate) }"
+      elif [[ "${migrated}" == "${line}" && "${_GS_EU_MIGRATE_PROPAGATE_PAIRS[${line_number}]:-}" == "ADD_PROPAGATE" ]]; then
         # Annotation was already in new format — still need to add propagate flag
-        migrated="${migrated/check-updates /check-updates (propagate) }"
+        migrated="${migrated/env-update /env-update (propagate) }"
       fi
 
       if [[ "${migrated}" == "__DROP_LINE__" ]]; then
         # This line should be removed entirely
-        _GS_CU_MIGRATE_ORIG_LINES+=("${line}")
-        _GS_CU_MIGRATE_MIGRATED_LINES+=("")
-        _GS_CU_MIGRATE_CHANGE_LNUMS+=("${line_number}")
+        _GS_EU_MIGRATE_ORIG_LINES+=("${line}")
+        _GS_EU_MIGRATE_MIGRATED_LINES+=("")
+        _GS_EU_MIGRATE_CHANGE_LNUMS+=("${line_number}")
         (( changed_count++ )) || true
       elif [[ "${migrated}" != "${line}" ]]; then
         # Check if we need to inject depends-on for the next variable
         # We do this after seeing the variable name, but we need to know the annotation line
-        _GS_CU_MIGRATE_ORIG_LINES+=("${line}")
-        _GS_CU_MIGRATE_MIGRATED_LINES+=("${migrated}")
-        _GS_CU_MIGRATE_CHANGE_LNUMS+=("${line_number}")
+        _GS_EU_MIGRATE_ORIG_LINES+=("${line}")
+        _GS_EU_MIGRATE_MIGRATED_LINES+=("${migrated}")
+        _GS_EU_MIGRATE_CHANGE_LNUMS+=("${line_number}")
         (( changed_count++ )) || true
-        _gs_cu_log_debug "Line ${line_number} migrated"
+        _gs_eu_log_debug "Line ${line_number} migrated"
       else
         (( unchanged_count++ )) || true
-        (( _GS_CU_MIGRATE_ALREADY_COUNT++ )) || true
-        _GS_CU_MIGRATE_ALREADY_LINES+=("${line}")
+        (( _GS_EU_MIGRATE_ALREADY_COUNT++ )) || true
+        _GS_EU_MIGRATE_ALREADY_LINES+=("${line}")
       fi
     fi
   done < "${ENV_FILE}"
@@ -792,9 +792,9 @@ _gs_cu_run_migration() {
   # Second pass: for each changed annotation, look ahead to find env var name
   # and inject depends-on if in the map
   local k
-  for (( k=0; k<${#_GS_CU_MIGRATE_CHANGE_LNUMS[@]}; k++ )); do
-    local ann_line_num="${_GS_CU_MIGRATE_CHANGE_LNUMS[${k}]}"
-    local ann_migrated="${_GS_CU_MIGRATE_MIGRATED_LINES[${k}]}"
+  for (( k=0; k<${#_GS_EU_MIGRATE_CHANGE_LNUMS[@]}; k++ )); do
+    local ann_line_num="${_GS_EU_MIGRATE_CHANGE_LNUMS[${k}]}"
+    local ann_migrated="${_GS_EU_MIGRATE_MIGRATED_LINES[${k}]}"
     [[ -z "${ann_migrated}" ]] && continue  # DROP line
 
     # Read forward from ann_line_num to find the variable name
@@ -816,10 +816,10 @@ _gs_cu_run_migration() {
     done < "${ENV_FILE}"
 
     # Inject depends-on if mapped
-    if [[ -n "${found_var}" && -n "${_GS_CU_MIGRATE_DEPENDS_ON_MAP[${found_var}]+x}" ]]; then
-      local dep_annotation="${_GS_CU_MIGRATE_DEPENDS_ON_MAP[${found_var}]}"
+    if [[ -n "${found_var}" && -n "${_GS_EU_MIGRATE_DEPENDS_ON_MAP[${found_var}]+x}" ]]; then
+      local dep_annotation="${_GS_EU_MIGRATE_DEPENDS_ON_MAP[${found_var}]}"
       ann_migrated="${ann_migrated} (${dep_annotation})"
-      _GS_CU_MIGRATE_MIGRATED_LINES[${k}]="${ann_migrated}"
+      _GS_EU_MIGRATE_MIGRATED_LINES[${k}]="${ann_migrated}"
     fi
 
     # Apply major-pin from variable name pattern (e.g. NODE22 → :22, RUBY3 → :3)
@@ -837,7 +837,7 @@ _gs_cu_run_migration() {
           local _id_part="${_cur_id#github:}"
           if [[ "${_id_part}" != *:* ]]; then
             ann_migrated="${ann_migrated//${_cur_id} /${_cur_id}:${_mp_major} }"
-            _GS_CU_MIGRATE_MIGRATED_LINES[${k}]="${ann_migrated}"
+            _GS_EU_MIGRATE_MIGRATED_LINES[${k}]="${ann_migrated}"
           fi
         fi
       fi
@@ -845,7 +845,7 @@ _gs_cu_run_migration() {
   done
 
   if [[ "${MIGRATE_DRY_RUN}" == "true" ]]; then
-    _gs_cu_migrate_print_dry_run_report "${change_line_numbers[@]+"${change_line_numbers[@]}"}"
+    _gs_eu_migrate_print_dry_run_report "${change_line_numbers[@]+"${change_line_numbers[@]}"}"
     return 0
   fi
 
@@ -871,9 +871,9 @@ _gs_cu_run_migration() {
     # Check if this line number needs migration
     local needs_change="false"
     local kk
-    for (( kk=0; kk<${#_GS_CU_MIGRATE_CHANGE_LNUMS[@]}; kk++ )); do
-      if [[ "${_GS_CU_MIGRATE_CHANGE_LNUMS[${kk}]}" -eq "${current_line}" ]]; then
-        local ml="${_GS_CU_MIGRATE_MIGRATED_LINES[${kk}]}"
+    for (( kk=0; kk<${#_GS_EU_MIGRATE_CHANGE_LNUMS[@]}; kk++ )); do
+      if [[ "${_GS_EU_MIGRATE_CHANGE_LNUMS[${kk}]}" -eq "${current_line}" ]]; then
+        local ml="${_GS_EU_MIGRATE_MIGRATED_LINES[${kk}]}"
         if [[ -n "${ml}" ]]; then
           printf '%s\n' "${ml}" >> "${tmpfile}"
         fi
@@ -891,45 +891,45 @@ _gs_cu_run_migration() {
   mv "${tmpfile}" "${ENV_FILE}"
 
   printf 'Migration complete: %d annotations updated, %d line(s) already in new format (skipped).\n' \
-    "${changed_count}" "${_GS_CU_MIGRATE_ALREADY_COUNT}"
+    "${changed_count}" "${_GS_EU_MIGRATE_ALREADY_COUNT}"
 
-  if [[ "${_GS_CU_MIGRATE_SHOW_ALREADY_MIGRATED}" == "true" && "${_GS_CU_MIGRATE_ALREADY_COUNT}" -gt 0 ]]; then
-    printf '%b\n' "${_GS_CU_CLR_DIM}Already in new format:${_GS_CU_CLR_RESET}"
+  if [[ "${_GS_EU_MIGRATE_SHOW_ALREADY_MIGRATED}" == "true" && "${_GS_EU_MIGRATE_ALREADY_COUNT}" -gt 0 ]]; then
+    printf '%b\n' "${_GS_EU_CLR_DIM}Already in new format:${_GS_EU_CLR_RESET}"
     local _al
-    for _al in "${_GS_CU_MIGRATE_ALREADY_LINES[@]}"; do
-      printf '  %b%s%b\n' "${_GS_CU_CLR_CYAN}" "${_al}" "${_GS_CU_CLR_RESET}"
+    for _al in "${_GS_EU_MIGRATE_ALREADY_LINES[@]}"; do
+      printf '  %b%s%b\n' "${_GS_EU_CLR_CYAN}" "${_al}" "${_GS_EU_CLR_RESET}"
     done
   fi
 }
 
-_gs_cu_migrate_print_dry_run_report() {
+_gs_eu_migrate_print_dry_run_report() {
   # Uses the global arrays already computed (including second-pass adjustments)
-  # by _gs_cu_run_migration: _GS_CU_MIGRATE_ORIG_LINES, _GS_CU_MIGRATE_MIGRATED_LINES,
-  # _GS_CU_MIGRATE_CHANGE_LNUMS
-  printf '%b\n' "${_GS_CU_CLR_BOLD}=== DRY-RUN: Migration Preview ===${_GS_CU_CLR_RESET}"
-  local count="${#_GS_CU_MIGRATE_CHANGE_LNUMS[@]}"
+  # by _gs_eu_run_migration: _GS_EU_MIGRATE_ORIG_LINES, _GS_EU_MIGRATE_MIGRATED_LINES,
+  # _GS_EU_MIGRATE_CHANGE_LNUMS
+  printf '%b\n' "${_GS_EU_CLR_BOLD}=== DRY-RUN: Migration Preview ===${_GS_EU_CLR_RESET}"
+  local count="${#_GS_EU_MIGRATE_CHANGE_LNUMS[@]}"
   local k
   for (( k=0; k<count; k++ )); do
-    local _orig="${_GS_CU_MIGRATE_ORIG_LINES[${k}]}"
-    local _migr="${_GS_CU_MIGRATE_MIGRATED_LINES[${k}]}"
-    local _lnum="${_GS_CU_MIGRATE_CHANGE_LNUMS[${k}]}"
-    printf '%b  Line %d:\n' "${_GS_CU_CLR_DIM}" "${_lnum}"
-    printf '  %bBEFORE:%b %s\n' "${_GS_CU_CLR_RED}" "${_GS_CU_CLR_RESET}" "${_orig}"
+    local _orig="${_GS_EU_MIGRATE_ORIG_LINES[${k}]}"
+    local _migr="${_GS_EU_MIGRATE_MIGRATED_LINES[${k}]}"
+    local _lnum="${_GS_EU_MIGRATE_CHANGE_LNUMS[${k}]}"
+    printf '%b  Line %d:\n' "${_GS_EU_CLR_DIM}" "${_lnum}"
+    printf '  %bBEFORE:%b %s\n' "${_GS_EU_CLR_RED}" "${_GS_EU_CLR_RESET}" "${_orig}"
     if [[ -z "${_migr}" ]]; then
-      printf '  %bAFTER: %b (line removed)\n' "${_GS_CU_CLR_GREEN}" "${_GS_CU_CLR_RESET}"
+      printf '  %bAFTER: %b (line removed)\n' "${_GS_EU_CLR_GREEN}" "${_GS_EU_CLR_RESET}"
     else
-      printf '  %bAFTER: %b %s\n' "${_GS_CU_CLR_GREEN}" "${_GS_CU_CLR_RESET}" "${_migr}"
+      printf '  %bAFTER: %b %s\n' "${_GS_EU_CLR_GREEN}" "${_GS_EU_CLR_RESET}" "${_migr}"
     fi
     printf '\n'
   done
   printf '%d annotation(s) would be migrated.\n' "${count}"
-  printf '%d line(s) already in new format.\n' "${_GS_CU_MIGRATE_ALREADY_COUNT}"
+  printf '%d line(s) already in new format.\n' "${_GS_EU_MIGRATE_ALREADY_COUNT}"
 
-  if [[ "${_GS_CU_MIGRATE_SHOW_ALREADY_MIGRATED}" == "true" && "${_GS_CU_MIGRATE_ALREADY_COUNT}" -gt 0 ]]; then
-    printf '%b\n' "${_GS_CU_CLR_DIM}Already in new format:${_GS_CU_CLR_RESET}"
+  if [[ "${_GS_EU_MIGRATE_SHOW_ALREADY_MIGRATED}" == "true" && "${_GS_EU_MIGRATE_ALREADY_COUNT}" -gt 0 ]]; then
+    printf '%b\n' "${_GS_EU_CLR_DIM}Already in new format:${_GS_EU_CLR_RESET}"
     local _al
-    for _al in "${_GS_CU_MIGRATE_ALREADY_LINES[@]}"; do
-      printf '  %b%s%b\n' "${_GS_CU_CLR_CYAN}" "${_al}" "${_GS_CU_CLR_RESET}"
+    for _al in "${_GS_EU_MIGRATE_ALREADY_LINES[@]}"; do
+      printf '  %b%s%b\n' "${_GS_EU_CLR_CYAN}" "${_al}" "${_GS_EU_CLR_RESET}"
     done
   fi
 }
@@ -938,19 +938,19 @@ _gs_cu_migrate_print_dry_run_report() {
 # Entry point
 # --------------------------------------------------------------------------
 main() {
-  _gs_cu_migrate_parse_args "$@"
+  _gs_eu_migrate_parse_args "$@"
 
   if [[ ! -f "${ENV_FILE}" ]]; then
     printf 'ERROR: .env file not found at %s\n' "${ENV_FILE}" >&2
     exit 1
   fi
 
-  _gs_cu_log_info "Migrating annotations in: ${ENV_FILE}"
+  _gs_eu_log_info "Migrating annotations in: ${ENV_FILE}"
   if [[ "${MIGRATE_DRY_RUN}" == "true" ]]; then
-    _gs_cu_log_info "DRY-RUN mode — no files will be modified"
+    _gs_eu_log_info "DRY-RUN mode — no files will be modified"
   fi
 
-  _gs_cu_run_migration
+  _gs_eu_run_migration
 }
 
 main "$@"
