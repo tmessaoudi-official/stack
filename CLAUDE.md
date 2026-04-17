@@ -12,8 +12,8 @@ This file provides guidance to Claude Code when working with code in this reposi
 **Global Stack** (`global_stack`) is a single-developer Dockerized local development environment. It runs many containerized services (databases, web servers, language runtimes, tooling) via Docker Compose on Linux. All services share a common Docker bridge network and a bind-mounted `tools/` volume.
 
 - **Version**: `2_0_0_local` — **Platform**: Linux only
-- **Remote**: GitLab (`git@gitlab.com:TakieddineMSDI/stack.git`) — single `master` branch
-- **Developer**: Takieddine Messaoudi (`takieddine.messaoudi.official@gmail.com`)
+- **Remote**: GitLab — single `master` branch
+- **Developer**: single developer
 
 ## Architecture — Image Tier Hierarchy
 
