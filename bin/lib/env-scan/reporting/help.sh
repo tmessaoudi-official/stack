@@ -7,6 +7,8 @@ readonly _GS_ES_HELP_SH_LOADED=1
 
 gs_es_show_help() {
 	cat << EOF
+bin/env-scan.sh v${_GS_ES_VERSION} — env sync + Dockerfile propagation
+
 Usage: env-scan.sh [OPTIONS]
 
 Options:

@@ -1,4 +1,4 @@
-# env-scan — Environment File Sync Tool
+# env-scan v1.0.0 — Environment File Sync Tool
 
 `bin/env-scan.sh` synchronises `.env` (source) into `.env.local` (destination),
 scans all Docker sources for `GLOBAL_STACK_*` variable references, detects missing
@@ -100,7 +100,8 @@ All options use `--key=value` form. Boolean options accept `true` or `false`.
 | `--debug=true\|false` | `false` | Enable verbose diagnostic messages |
 | `--profile=true\|false` | `false` | Print per-phase execution time and memory usage after run |
 | `--dry-run` | `false` | Report what would change but suppress all filesystem writes (env file sync, Dockerfile propagation, and backups) |
-| `--help` | — | Show usage and exit |
+| `--version` | — | Print version string (`1.0.0`) and exit 0 |
+| `--help` | — | Show usage and exit 0 |
 
 ---
 

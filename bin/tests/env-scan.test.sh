@@ -1239,6 +1239,24 @@ t "t19l: Phase 6 tracked Dockerfile does NOT get a .bak.* file" bash -c "
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Section 20 — Version flag
+# ═══════════════════════════════════════════════════════════════════════════
+section "20 — Version flag"
+
+t "t20a: --version emits 1.0.0 and exits 0" bash -c "
+    out=\$(bash '${ENV_SCAN}' --version 2>&1)
+    code=\$?
+    [[ \"\$out\" == '1.0.0' && \"\$code\" -eq 0 ]] || { echo \"got output='\$out' exit=\$code\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t20b: --help output contains v1.0.0" bash -c "
+    out=\$(bash '${ENV_SCAN}' --help 2>&1 || true)
+    echo \"\$out\" | grep -qF 'v1.0.0' || { echo \"v1.0.0 not found in help output\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section

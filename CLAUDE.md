@@ -100,15 +100,38 @@ Parses `.env` annotations, fetches latest versions from 12 registries, auto-appl
 
 ### bin/env-update-v2.sh
 
-Scaffold for the replacement version fetcher. Not yet implemented — exits 0 with a notice. Fetcher stubs (`dockerhub`, `github`, `npm`) to be filled in one by one.
+**v0.2.0 (Phase 2 — dockerhub fetcher + channel selection)** — parses `.env` annotations, fetches latest versions from Docker Hub, and streams a `[AUTO|HOLD|SKIP|ERROR]` report. No writes to `.env` yet.
+
+**Key flags**:
+```bash
+--version              # Print 0.2.0 and exit
+--check                # Fetch latest versions and stream report (network required)
+--no-cache             # Bypass fetch cache
+--cache-ttl=<N>        # Cache TTL in seconds (default: 3600)
+--dump                 # Emit parsed records (default: text; see --format)
+--format=text|json     # Dump format (default: text)
+--filter=<regex>       # Only process records whose env_var matches regex
+--env-file=<path>      # Source file (default: /stack/.env)
+--dry-run              # No-op; gates cache writes. Reserved for .env write phases.
+```
+
+**Default (no flags)**: prints a parser summary — record count, per-type breakdown, hint to run `--check`.
+
+**Fetcher scope**: `dockerhub` only in Phase 2. All other types (`github`, `npm`, `pecl`, etc.) show `[SKIP]` — Phase 3+.
+
+**Record model**: 31 fields per record — 28 parser fields + `proposed_version`, `decision`, `error_message` added in Phase 2. Indexed field vars `_GS_EU2_REC_${i}_${field}`. Canonical list in `_gs_eu2_record_fields()` is single source of truth.
+
+**Error policy**: parser failures exit non-zero with `env-update-v2: <file>:<line>: <reason>`. Fetch errors set `decision=ERROR` and continue — they do not abort.
+
+**Full reference**: `templates/tips/env-update-v2.md`
 
 ### bin/env-scan.sh
 
-8-phase pipeline: parse args → build source index → scan docker sources → detect conflicts → **backup pre-flight** → sync env files → propagate to Dockerfiles (+ Dockerfile backup) → retention prune → cleanup.
+**v1.0.0 (stable baseline)** — run `--version` to confirm. 8-phase pipeline: parse args → build source index → scan docker sources → detect conflicts → **backup pre-flight** → sync env files → propagate to Dockerfiles (+ Dockerfile backup) → retention prune → cleanup.
 
 Propagation is automatic: any `ARG VAR=value` line in a Dockerfile whose value diverges from the canonical `.env` value is rewritten in-place. Vars with `${` in their `.env` value are skipped (expansion-dependent). Vars matching `_GS_ES_PATTERN_EXCLUDE_MULTIPLE_VALUES` are protected.
 
-**Key flags**: `--sync-values=false` (preserve dest values that differ from source; default is `true` — values are overwritten), `--profile=true` (show timing), `--dry-run` (report only — suppresses both env file sync and Dockerfile propagation), `--backup=false` (skip backup this run), `--backup-keep=<N>` (keep N newest backups per file; 0 = unlimited; default 10), `--backup-purge=true` (delete all existing `<file>.bak.*` before run), `--backup-suffix=<str>` (suffix anchor; default `.bak`; full name: `<file><suffix>.<YYYYMMDD-HHMMSS>`)
+**Key flags**: `--version` (print version and exit), `--sync-values=false` (preserve dest values that differ from source; default is `true` — values are overwritten), `--profile=true` (show timing), `--dry-run` (report only — suppresses both env file sync and Dockerfile propagation), `--backup=false` (skip backup this run), `--backup-keep=<N>` (keep N newest backups per file; 0 = unlimited; default 10), `--backup-purge=true` (delete all existing `<file>.bak.*` before run), `--backup-suffix=<str>` (suffix anchor; default `.bak`; full name: `<file><suffix>.<YYYYMMDD-HHMMSS>`)
 
 ### bin/migrate-annotations.sh
 

@@ -1,0 +1,58 @@
+#!/bin/bash
+# semver.sh — version comparison + pre-release detection helpers
+
+[[ -n "${_GS_EU2_SEMVER_SH_LOADED:-}" ]] && return 0
+readonly _GS_EU2_SEMVER_SH_LOADED=1
+
+# shellcheck source=./../config/prerelease_markers.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../config/prerelease_markers.sh"
+
+# Returns 0 if version looks like a pre-release
+_gs_eu2_is_prerelease() {
+  local _v="${1,,}"
+  [[ "${_v}" =~ (${_GS_EU2_PRERELEASE_REGEX}) ]]
+}
+
+# Returns 0 if version is unversioned (nightly/latest/edge/next/master)
+_gs_eu2_is_unversioned() {
+  local _v="${1,,}"
+  [[ "${_v}" =~ ^(nightly|latest|edge|master|next|head|main)$ ]]
+}
+
+# Compare two version strings. Echoes: older | newer | equal
+# Handles v-prefix and SemVer pre-release ordering (1.0.0-rc1 < 1.0.0)
+_gs_eu2_semver_compare() {
+  local _a="${1#v}" _b="${2#v}"
+  [[ "${_a}" == "${_b}" ]] && { echo "equal"; return 0; }
+
+  local _a_base="${_a}" _b_base="${_b}"
+  local _a_pre=false _b_pre=false
+  if [[ "${_a}" =~ ^([0-9]+(\.[0-9]+)*)-([a-zA-Z]) ]]; then
+    _a_base="${BASH_REMATCH[1]}"; _a_pre=true
+  fi
+  if [[ "${_b}" =~ ^([0-9]+(\.[0-9]+)*)-([a-zA-Z]) ]]; then
+    _b_base="${BASH_REMATCH[1]}"; _b_pre=true
+  fi
+  if [[ "${_a_base}" == "${_b_base}" ]]; then
+    if [[ "${_a_pre}" == "true" && "${_b_pre}" == "false" ]]; then
+      echo "older"; return 0
+    elif [[ "${_a_pre}" == "false" && "${_b_pre}" == "true" ]]; then
+      echo "newer"; return 0
+    fi
+  fi
+
+  local _first
+  _first="$(printf '%s\n%s\n' "${_a}" "${_b}" | sort -V | head -1)"
+  if [[ "${_first}" == "${_a}" ]]; then echo "older"; else echo "newer"; fi
+}
+
+# Returns delta type between two versions: major | minor | patch | unknown
+_gs_eu2_semver_delta() {
+  local _a="${1#v}" _b="${2#v}"
+  [[ -z "${_a}" || -z "${_b}" ]] && { echo "unknown"; return; }
+  local _am="${_a%%.*}" _bm="${_b%%.*}"
+  [[ "${_am}" != "${_bm}" ]] && { echo "major"; return; }
+  local _ar="${_a#*.}" _br="${_b#*.}"
+  [[ "${_ar%%.*}" != "${_br%%.*}" ]] && { echo "minor"; return; }
+  echo "patch"
+}

@@ -51,9 +51,13 @@ gs_es_parse_args() {
 		--backup-purge=*)                 _GS_ES_CFG[backup_purge]="${1#*=}";                 _GS_ES_CFG[backup_purge]="${_GS_ES_CFG[backup_purge],,}" ;;
 		--backup-keep=*)                  _GS_ES_CFG[backup_keep]="${1#*=}" ;;
 		--backup-suffix=*)                _GS_ES_CFG[backup_suffix]="${1#*=}" ;;
+		--version)
+			printf '%s\n' "${_GS_ES_VERSION}"
+			exit 0
+			;;
 		--help)
 			gs_es_show_help
-			exit 1
+			exit 0
 			;;
 		*)
 			echo -e "\n ---- Unknown option passed: '${1}' \n" >&2

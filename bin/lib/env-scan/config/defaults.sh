@@ -5,6 +5,8 @@
 [[ -n "${_GS_ES_DEFAULTS_SH_LOADED:-}" ]] && return 0
 readonly _GS_ES_DEFAULTS_SH_LOADED=1
 
+readonly _GS_ES_VERSION="1.0.0"
+
 # Global shared config associative array — populated by args.sh / gs_es_main
 declare -Ag _GS_ES_CFG
 
