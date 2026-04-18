@@ -349,23 +349,6 @@ templates/shell/                     # Host system shell config templates
 
 ---
 
-## Core Operating Rules 6 & 7 — Completion Gate and TDD
-
-6. **Completion Gate — mandatory before Phase 8, regardless of task size or domain.** Self-attestation ("I did it") is not accepted. For every implementation task, produce concrete evidence for all four dimensions:
-
-| Dimension | What to verify | Required evidence |
-|---|---|---|
-| **Coverage** | Every new/changed behavior has a test | Paste test run output or name the exact test cases added; if no test suite exists, say so explicitly |
-| **Docs** | Every changed public interface is documented | Show the updated help text, CLAUDE.md section, README diff, or command description — something a human can read |
-| **Config** | Claude can do its job correctly in future sessions | Show what was updated in CLAUDE.md / agent definition / README — or state "no config impact" with one-line reasoning |
-| **Blast radius** | No callers, references, or dependent files left stale | Show `grep` output for the changed symbol/flag/function/path and account for every hit |
-
-"Public interface" means anything a human or agent would use or depend on: CLI flags, public functions, env vars, slash commands, hook behavior, agent routing rules, documented workflows.
-
-A task is **not complete** until all four rows have evidence attached. Skipping a row requires explicitly stating why it does not apply.
-
-7. **Test-driven by default.** For any task adding or changing behavior: write the failing test *before* the implementation. Invoke `superpowers:test-driven-development` at the start of implementation work. A passing test run at Phase 8 is the Coverage evidence above. This is the upstream fix — it makes the Coverage row structurally impossible to skip.
-
-If no doc currently references the thing, **say so in the response** (flag the gap). If ambiguous, pick the closest canonical doc and proceed — don't block to ask. Leave the repo with no stale references to what you just changed.
+> **Core Operating Rules 6 & 7** (Completion Gate and TDD) are defined in the global `~/.claude/CLAUDE.md` and apply here without exception.
 
 > **Remember**: Delegate /stack infrastructure tasks to `global-stack-lead-dev`; handle non-/stack tasks directly with the global reasoning framework. Use `/lint` before committing shell changes. Check for trailing `;` in `COMPOSE_FILE`. Verify with `--dry-run` before applying changes. Tier 02 = install, tier 03 = setup — same startup script, different `MODE`.

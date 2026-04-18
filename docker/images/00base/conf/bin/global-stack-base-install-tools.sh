@@ -41,6 +41,7 @@ BAT_ARCH=""
 TASK_ARCH=""
 SOPS_ARCH=""
 YAMLFMT_ARCH=""
+RTK_ARCH=""
 
 if [[ "linux" == "${OPERATING_SYSTEM}" ]]; then
 	DIFFTASTIC_OPERATING_SYSTEM="unknown-${OPERATING_SYSTEM}-gnu"
@@ -55,6 +56,7 @@ if [[ "linux" == "${OPERATING_SYSTEM}" ]]; then
 		SONAR_SCANNER_CLI_ARCH="${SYSTEM_ARCH}"
 		DIFFTASTIC_ARCH="${SYSTEM_ARCH}"
 		SHFMT_ARCH="arm64"
+		RTK_ARCH="aarch64"
 		;;
 	"armv6l")
 		GITLEAKS_ARCH="armv6"
@@ -89,6 +91,7 @@ if [[ "linux" == "${OPERATING_SYSTEM}" ]]; then
 		TASK_ARCH="amd64"
 		SOPS_ARCH="amd64"
 		YAMLFMT_ARCH="${SYSTEM_ARCH}"
+		RTK_ARCH="x86_64"
 		;;
 	"i386")
 		GITLEAKS_ARCH="x32"
@@ -118,6 +121,7 @@ if [[ "darwin" == "${OPERATING_SYSTEM}" ]]; then
 		SONAR_SCANNER_CLI_ARCH="${SYSTEM_ARCH}"
 		DIFFTASTIC_ARCH="${SYSTEM_ARCH}"
 		SHFMT_ARCH="arm64"
+		RTK_ARCH="aarch64"
 		echo "Unsupported system/architecture hadolint: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
 		;;
 	"x86_64")
@@ -129,6 +133,7 @@ if [[ "darwin" == "${OPERATING_SYSTEM}" ]]; then
 		SHFMT_ARCH="amd64"
 		SOPS_ARCH="amd64"
 		YAMLFMT_ARCH="${SYSTEM_ARCH}"
+		RTK_ARCH="x86_64"
 		;;
 	*)
 		echo "Unsupported system/architecture hadolint/shell-check/gitleaks/sonar-scanner-cli/difftastic/shfmt: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
@@ -243,6 +248,22 @@ if [[ "" != "${SOPS_OPERATING_SYSTEM}${SOPS_ARCH}" ]]; then
 	echo "https://github.com/getsops/sops/releases/download/${GLOBAL_STACK_SOPS_VERSION}/${SOPS_FILE_NAME}"
 	sudo curl -L "https://github.com/getsops/sops/releases/download/${GLOBAL_STACK_SOPS_VERSION}/${SOPS_FILE_NAME}" -o "/usr/local/bin/sops"
 	sudo chmod a+x "/usr/local/bin/sops"
+fi
+
+if [[ "" != "${RTK_ARCH}" ]]; then
+	echo "Installing rtk - system : ${OPERATING_SYSTEM}, arch : ${RTK_ARCH}"
+	RTK_OS_TARGET=""
+	if [[ "linux" == "${OPERATING_SYSTEM}" ]]; then
+		RTK_OS_TARGET="${RTK_ARCH}-unknown-linux-gnu"
+	elif [[ "darwin" == "${OPERATING_SYSTEM}" ]]; then
+		RTK_OS_TARGET="${RTK_ARCH}-apple-darwin"
+	fi
+	sudo curl -L "https://github.com/rtk-ai/rtk/releases/download/${GLOBAL_STACK_RTK_VERSION}/rtk-${RTK_OS_TARGET}.tar.gz" -o /usr/local/bin/rtk.tar.gz
+	sudo mkdir -p /usr/local/bin/rtk_archive
+	sudo tar -xzf /usr/local/bin/rtk.tar.gz -C /usr/local/bin/rtk_archive
+	sudo mv /usr/local/bin/rtk_archive/rtk /usr/local/bin/rtk
+	sudo rm -rf /usr/local/bin/rtk_archive /usr/local/bin/rtk.tar.gz
+	sudo chmod a+x /usr/local/bin/rtk
 fi
 
 echo "Updating/Installing yq"

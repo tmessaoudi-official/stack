@@ -2,9 +2,7 @@
 
 env_file_exists="[ -n \"${GLOBAL_STACK_DOCKER_ROOT_PATH}\" ] && [ -f \"${GLOBAL_STACK_DOCKER_ROOT_PATH}/.env.local\" ]"
 if eval "${env_file_exists}"; then
-  	eval $(grep -vE "^(COMPOSE_FILE|BUILDX_EXPERIMENTAL|BUILDKIT_PROGRESS|BUILDX_BUILDER|COMPOSE_PROJECT_NAME|COMPOSE_REMOVE_ORPHANS|COMPOSE_HTTP_TIMEOUT|GLOBAL_STACK_EXPOSED_VIRTUAL_HOSTS|COMPOSE_PATH_SEPARATOR|DOCKER_BUILDKIT|COMPOSE_DOCKER_CLI_BUILD|GLOBAL_STACK_COMPOSE_CLI|GLOBAL_STACK_HTTPS_LOCALHOST_IPS|GLOBAL_STACK_HTTPS_CONTAINER_IPS|GLOBAL_STACK_(.*)_COMMAND_SUFFIX|GLOBAL_STACK_(.*)_CLI_OPTIONS|GLOBAL_STACK_(.*)_CLI_VARIANTS|GLOBAL_STACK_ANDROID_SYSTEM_IMAGES|GLOBAL_STACK_ANDROID_PACKAGES)=" "${GLOBAL_STACK_DOCKER_ROOT_PATH}"/.env.local | sed 's/^/export /')
-  	eval $(grep -vE "^(COMPOSE_FILE|BUILDX_EXPERIMENTAL|BUILDKIT_PROGRESS|BUILDX_BUILDER|COMPOSE_PROJECT_NAME|COMPOSE_REMOVE_ORPHANS|COMPOSE_HTTP_TIMEOUT|GLOBAL_STACK_EXPOSED_VIRTUAL_HOSTS|COMPOSE_PATH_SEPARATOR|DOCKER_BUILDKIT|COMPOSE_DOCKER_CLI_BUILD|GLOBAL_STACK_COMPOSE_CLI|GLOBAL_STACK_HTTPS_LOCALHOST_IPS|GLOBAL_STACK_HTTPS_CONTAINER_IPS|GLOBAL_STACK_(.*)_COMMAND_SUFFIX|GLOBAL_STACK_(.*)_CLI_OPTIONS|GLOBAL_STACK_(.*)_CLI_VARIANTS|GLOBAL_STACK_ANDROID_SYSTEM_IMAGES|GLOBAL_STACK_ANDROID_PACKAGES)=" "${GLOBAL_STACK_DOCKER_ROOT_PATH}"/.env.local | sed 's/^/export /')
-  	eval $(grep -vE "^(COMPOSE_FILE|BUILDX_EXPERIMENTAL|BUILDKIT_PROGRESS|BUILDX_BUILDER|COMPOSE_PROJECT_NAME|COMPOSE_REMOVE_ORPHANS|COMPOSE_HTTP_TIMEOUT|GLOBAL_STACK_EXPOSED_VIRTUAL_HOSTS|COMPOSE_PATH_SEPARATOR|DOCKER_BUILDKIT|COMPOSE_DOCKER_CLI_BUILD|GLOBAL_STACK_COMPOSE_CLI|GLOBAL_STACK_HTTPS_LOCALHOST_IPS|GLOBAL_STACK_HTTPS_CONTAINER_IPS|GLOBAL_STACK_(.*)_COMMAND_SUFFIX|GLOBAL_STACK_(.*)_CLI_OPTIONS|GLOBAL_STACK_(.*)_CLI_VARIANTS|GLOBAL_STACK_ANDROID_SYSTEM_IMAGES|GLOBAL_STACK_ANDROID_PACKAGES)=" "${GLOBAL_STACK_DOCKER_ROOT_PATH}"/.env.local | sed 's/^/export /')
+  eval "$(grep -vE "^(COMPOSE_FILE|BUILDX_EXPERIMENTAL|BUILDKIT_PROGRESS|BUILDX_BUILDER|COMPOSE_PROJECT_NAME|COMPOSE_REMOVE_ORPHANS|COMPOSE_HTTP_TIMEOUT|GLOBAL_STACK_EXPOSED_VIRTUAL_HOSTS|COMPOSE_PATH_SEPARATOR|DOCKER_BUILDKIT|COMPOSE_DOCKER_CLI_BUILD|GLOBAL_STACK_COMPOSE_CLI|GLOBAL_STACK_HTTPS_LOCALHOST_IPS|GLOBAL_STACK_HTTPS_CONTAINER_IPS|GLOBAL_STACK_(.*)_COMMAND_SUFFIX|GLOBAL_STACK_(.*)_CLI_OPTIONS|GLOBAL_STACK_(.*)_CLI_VARIANTS|GLOBAL_STACK_ANDROID_SYSTEM_IMAGES|GLOBAL_STACK_ANDROID_PACKAGES)=" "${GLOBAL_STACK_DOCKER_ROOT_PATH}"/.env.local | sed 's/^/export /')"
 fi
 
 # Update and fix broken dependencies
@@ -102,6 +100,8 @@ BAT_ARCH=""
 TASK_ARCH=""
 SOPS_ARCH=""
 YAMLFMT_ARCH=""
+RTK_ARCH=""
+YQ_ARCH=""
 
 if [[ "linux" == "${OPERATING_SYSTEM}" ]]; then
 	DIFFTASTIC_OPERATING_SYSTEM="unknown-${OPERATING_SYSTEM}-gnu"
@@ -118,6 +118,8 @@ if [[ "linux" == "${OPERATING_SYSTEM}" ]]; then
 		SONAR_SCANNER_CLI_ARCH="${SYSTEM_ARCH}"
 		DIFFTASTIC_ARCH="${SYSTEM_ARCH}"
 		SHFMT_ARCH="arm64"
+		RTK_ARCH="aarch64"
+		YQ_ARCH="arm64"
 		;;
 	"armv6l")
 		DOCKER_COMPOSE_ARCH="armv6"
@@ -170,6 +172,8 @@ if [[ "linux" == "${OPERATING_SYSTEM}" ]]; then
 		TASK_ARCH="amd64"
 		SOPS_ARCH="amd64"
 		YAMLFMT_ARCH="${SYSTEM_ARCH}"
+		RTK_ARCH="x86_64"
+		YQ_ARCH="amd64"
 		;;
 	"i386")
 		GITLEAKS_ARCH="x32"
@@ -201,6 +205,8 @@ if [[ "darwin" == "${OPERATING_SYSTEM}" ]]; then
 		SONAR_SCANNER_CLI_ARCH="${SYSTEM_ARCH}"
 		DIFFTASTIC_ARCH="${SYSTEM_ARCH}"
 		SHFMT_ARCH="arm64"
+		RTK_ARCH="aarch64"
+		YQ_ARCH="arm64"
 		echo "Unsupported system/architecture hadolint: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
 		;;
 	"x86_64")
@@ -216,6 +222,8 @@ if [[ "darwin" == "${OPERATING_SYSTEM}" ]]; then
 		TASK_ARCH="amd64"
 		SOPS_ARCH="amd64"
 		YAMLFMT_ARCH="${SYSTEM_ARCH}"
+		RTK_ARCH="x86_64"
+		YQ_ARCH="amd64"
 		;;
 	*)
 		echo "Unsupported system/architecture (docker compose)/(docker buildx)/hadolint/shell-check/gitleaks/sonar-scanner-cli/difftastic/shfmt: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
@@ -316,7 +324,7 @@ if eval "${env_file_exists}"; then
 			if [ -f ~/.local/bin/shfmt ]; then GLOBAL_UNU_SHFMT_VERSION="$(shfmt --version)"; else GLOBAL_UNU_SHFMT_VERSION=0; fi
 			GLOBAL_UNU_SHFMT_LATEST=$(echo "${GLOBAL_STACK_SHFMT_VERSION}")
 			if [ "${GLOBAL_UNU_SHFMT_LATEST}" != "${GLOBAL_UNU_SHFMT_VERSION}" ]; then
-				echo "Updating/Installing shfmt - ${OPERATING_SYSTEM}, arch : ${GITLEAKS_ARCH} https://github.com/mvdan/sh/releases/download/${GLOBAL_UNU_SHFMT_LATEST}/shfmt_${GLOBAL_UNU_SHFMT_LATEST}_${OPERATING_SYSTEM}_${SHFMT_ARCH}"
+				echo "Updating/Installing shfmt - ${OPERATING_SYSTEM}, arch : ${SHFMT_ARCH} https://github.com/mvdan/sh/releases/download/${GLOBAL_UNU_SHFMT_LATEST}/shfmt_${GLOBAL_UNU_SHFMT_LATEST}_${OPERATING_SYSTEM}_${SHFMT_ARCH}"
 				curl -L https://github.com/mvdan/sh/releases/download/${GLOBAL_UNU_SHFMT_LATEST}/shfmt_${GLOBAL_UNU_SHFMT_LATEST}_${OPERATING_SYSTEM}_${SHFMT_ARCH} -o ~/.local/bin/shfmt
 				chmod a+rwx ~/.local/bin/shfmt
 			else
@@ -329,15 +337,14 @@ if eval "${env_file_exists}"; then
 			GLOBAL_UNU_TASK_LATEST="${GLOBAL_STACK_TASK_VERSION}"
 			if [ "${GLOBAL_UNU_TASK_LATEST}" != "v${GLOBAL_UNU_TASK_VERSION}" ]; then
 				echo "Updating/Installing task - ${OPERATING_SYSTEM}, arch : ${TASK_ARCH}"
-				rm -rf /opt/${USER}/task
+				rm -rf "/opt/${USER}/task"
 				TASK_ARCHIVE_NAME="task_${OPERATING_SYSTEM}_${TASK_ARCH}"
 				echo "https://github.com/go-task/task/releases/download/${GLOBAL_UNU_TASK_LATEST}/${TASK_ARCHIVE_NAME}.tar.gz"
 				curl -L https://github.com/go-task/task/releases/download/${GLOBAL_UNU_TASK_LATEST}/${TASK_ARCHIVE_NAME}.tar.gz -o "/opt/${USER}/${TASK_ARCHIVE_NAME}.tar.gz"
-				cd "/opt/${USER}"
 				mkdir -p "/opt/${USER}/${TASK_ARCHIVE_NAME}"
-				tar -xf ${TASK_ARCHIVE_NAME}.tar.gz -C "/opt/${USER}/${TASK_ARCHIVE_NAME}"
-				mv "${TASK_ARCHIVE_NAME}" task
-				rm -rf ${TASK_ARCHIVE_NAME}.tar.gz
+				tar -xf "/opt/${USER}/${TASK_ARCHIVE_NAME}.tar.gz" -C "/opt/${USER}/${TASK_ARCHIVE_NAME}"
+				mv "/opt/${USER}/${TASK_ARCHIVE_NAME}" "/opt/${USER}/task"
+				rm -rf "/opt/${USER}/${TASK_ARCHIVE_NAME}.tar.gz"
 				sudo chmod a+x "/opt/${USER}/task/task"
 			else
 				echo "Task is latest ${GLOBAL_UNU_TASK_VERSION}"
@@ -347,7 +354,7 @@ if eval "${env_file_exists}"; then
 		if [[ "" != "${YAMLFMT_ARCH}" && -n "${GLOBAL_STACK_YAMLFMT_VERSION}" && "" != "${GLOBAL_STACK_YAMLFMT_VERSION}" ]]; then
 			if [ -f ~/.local/bin/yamlfmt ]; then GLOBAL_UNU_YAMLFMT_VERSION="$(yamlfmt -version | sed 's/yamlfmt //' | sed 's/ \(.*\)//')"; else GLOBAL_UNU_YAMLFMT_VERSION=0; fi
 			if [ "${GLOBAL_STACK_YAMLFMT_VERSION}" != "v${GLOBAL_UNU_YAMLFMT_VERSION}" ]; then
-				echo "Updating/Installing yamfmt - ${OPERATING_SYSTEM}, arch : ${YAMLFMT_ARCH}"
+				echo "Updating/Installing yamlfmt - ${OPERATING_SYSTEM}, arch : ${YAMLFMT_ARCH}"
 				YAMLFMT_ARCHIVE_NAME="yamlfmt_$(echo "${GLOBAL_STACK_YAMLFMT_VERSION}" | sed 's/v//')_${OPERATING_SYSTEM}_${YAMLFMT_ARCH}"
 				echo "https://github.com/google/yamlfmt/releases/download/${GLOBAL_STACK_YAMLFMT_VERSION}/${YAMLFMT_ARCHIVE_NAME}.tar.gz"
 				curl -L https://github.com/google/yamlfmt/releases/download/${GLOBAL_STACK_YAMLFMT_VERSION}/${YAMLFMT_ARCHIVE_NAME}.tar.gz -o ~/.local/bin/${YAMLFMT_ARCHIVE_NAME}.tar.gz
@@ -357,7 +364,7 @@ if eval "${env_file_exists}"; then
 				rm -rf ~/.local/bin/${YAMLFMT_ARCHIVE_NAME} ~/.local/bin/${YAMLFMT_ARCHIVE_NAME}.tar.gz
 				chmod a+x ~/.local/bin/yamlfmt
 			else
-				echo "Yamfmt is latest ${GLOBAL_UNU_YAMLFMT_VERSION}"
+				echo "Yamlfmt is latest ${GLOBAL_UNU_YAMLFMT_VERSION}"
 			fi
 		fi
 	fi
@@ -388,10 +395,9 @@ if eval "${env_file_exists}"; then
 			fi
 			echo "https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/${SONAR_SCANNER_CLI_ARCHIVE_NAME}.zip"
 			curl -L https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/${SONAR_SCANNER_CLI_ARCHIVE_NAME}.zip -o "/opt/${USER}/${SONAR_SCANNER_CLI_ARCHIVE_NAME}.zip"
-			cd "/opt/${USER}"
-			unzip ${SONAR_SCANNER_CLI_ARCHIVE_NAME}.zip
-			mv $(echo ${SONAR_SCANNER_CLI_ARCHIVE_NAME} | sed 's/sonar-scanner-cli-/sonar-scanner-/') sonar-scanner-cli
-			rm -rf ${SONAR_SCANNER_CLI_ARCHIVE_NAME}.zip
+			unzip "/opt/${USER}/${SONAR_SCANNER_CLI_ARCHIVE_NAME}.zip" -d "/opt/${USER}/"
+			mv "/opt/${USER}/$(echo "${SONAR_SCANNER_CLI_ARCHIVE_NAME}" | sed 's/sonar-scanner-cli-/sonar-scanner-/')" "/opt/${USER}/sonar-scanner-cli"
+			rm -rf "/opt/${USER}/${SONAR_SCANNER_CLI_ARCHIVE_NAME}.zip"
 			sudo chmod a+x "/opt/${USER}/sonar-scanner-cli/bin/sonar-scanner" "/opt/${USER}/sonar-scanner-cli/bin/sonar-scanner-debug"
 		else
 			echo "Sonar scanner cli is latest ${GLOBAL_UNU_SONAR_SCANNER_CLI_VERSION}"
@@ -423,11 +429,10 @@ if eval "${env_file_exists}"; then
 			BAT_ARCHIVE_NAME="bat-${GLOBAL_UNU_BAT_LATEST}-${BAT_ARCH}-${BAT_OPERATING_SYSTEM}"
 			echo "https://github.com/sharkdp/bat/releases/download/${GLOBAL_UNU_BAT_LATEST}/${BAT_ARCHIVE_NAME}.tar.gz"
 			curl -L https://github.com/sharkdp/bat/releases/download/${GLOBAL_UNU_BAT_LATEST}/${BAT_ARCHIVE_NAME}.tar.gz -o "/opt/${USER}/${BAT_ARCHIVE_NAME}.tar.gz"
-			cd "/opt/${USER}"
 			mkdir -p "/opt/${USER}/${BAT_ARCHIVE_NAME}"
-			tar -xzf ${BAT_ARCHIVE_NAME}.tar.gz --strip-components=1 -C "/opt/${USER}/${BAT_ARCHIVE_NAME}"
-			mv "${BAT_ARCHIVE_NAME}" bat
-			rm -rf ${BAT_ARCHIVE_NAME}.tar.gz
+			tar -xzf "/opt/${USER}/${BAT_ARCHIVE_NAME}.tar.gz" --strip-components=1 -C "/opt/${USER}/${BAT_ARCHIVE_NAME}"
+			mv "/opt/${USER}/${BAT_ARCHIVE_NAME}" "/opt/${USER}/bat"
+			rm -rf "/opt/${USER}/${BAT_ARCHIVE_NAME}.tar.gz"
 			sudo chmod a+x "/opt/${USER}/bat/bat"
 		else
 			echo "Bat is latest ${GLOBAL_UNU_BAT_VERSION}"
@@ -447,17 +452,58 @@ if eval "${env_file_exists}"; then
 			echo "Sops is latest ${GLOBAL_UNU_SOPS_VERSION}"
 		fi
 	fi
-fi
 
+	if [[ "" != "${RTK_ARCH}" && -n "${GLOBAL_STACK_RTK_VERSION}" && "" != "${GLOBAL_STACK_RTK_VERSION}" ]]; then
+		if [ -f ~/.local/bin/rtk ]; then
+			GLOBAL_UNU_RTK_VERSION="v$(rtk --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+		else
+			GLOBAL_UNU_RTK_VERSION=0
+		fi
+		GLOBAL_UNU_RTK_LATEST="${GLOBAL_STACK_RTK_VERSION}"
+		if [[ "${GLOBAL_UNU_RTK_LATEST}" != "${GLOBAL_UNU_RTK_VERSION}" ]]; then
+			RTK_OS_TARGET=""
+			if [[ "linux" == "${OPERATING_SYSTEM}" ]]; then
+				RTK_OS_TARGET="${RTK_ARCH}-unknown-linux-gnu"
+			elif [[ "darwin" == "${OPERATING_SYSTEM}" ]]; then
+				RTK_OS_TARGET="${RTK_ARCH}-apple-darwin"
+			fi
+			echo "Updating/Installing rtk - ${OPERATING_SYSTEM}, arch : ${RTK_ARCH} https://github.com/rtk-ai/rtk/releases/download/${GLOBAL_UNU_RTK_LATEST}/rtk-${RTK_OS_TARGET}.tar.gz"
+			curl -L "https://github.com/rtk-ai/rtk/releases/download/${GLOBAL_UNU_RTK_LATEST}/rtk-${RTK_OS_TARGET}.tar.gz" -o ~/.local/bin/rtk.tar.gz
+			mkdir -p ~/.local/bin/rtk_archive
+			tar -xzf ~/.local/bin/rtk.tar.gz -C ~/.local/bin/rtk_archive
+			mv ~/.local/bin/rtk_archive/rtk ~/.local/bin/rtk
+			rm -rf ~/.local/bin/rtk_archive ~/.local/bin/rtk.tar.gz
+			chmod a+x ~/.local/bin/rtk
+		else
+			echo "rtk is latest '${GLOBAL_UNU_RTK_VERSION}'"
+		fi
+	fi
 
-if [ -f ~/.local/bin/yq ]; then GLOBAL_UNU_YQ_VERSION="$(yq --version | sed "s/yq (https:\/\/github.com\/mikefarah\/yq\/) version //")"; else GLOBAL_UNU_YQ_VERSION=0; fi
-if [ "${GLOBAL_UNU_YQ_VERSION}" != "${GLOBAL_STACK_YQ_VERSION}" ]; then
-	echo "Updating/Installing yq"
-	echo "https://github.com/mikefarah/yq/releases/download/${GLOBAL_STACK_YQ_VERSION}/yq_linux_amd64"
-	curl -L https://github.com/mikefarah/yq/releases/download/${GLOBAL_STACK_YQ_VERSION}/yq_linux_amd64 -o ~/.local/bin/yq
-	sudo chmod a+x ~/.local/bin/yq
-else
-	echo "Yq is latest ${GLOBAL_STACK_YQ_VERSION}"
+	if [[ "" != "${YQ_ARCH}" && -n "${GLOBAL_STACK_YQ_VERSION}" && "" != "${GLOBAL_STACK_YQ_VERSION}" ]]; then
+		if [ -f ~/.local/bin/yq ]; then GLOBAL_UNU_YQ_VERSION="$(yq --version | sed "s/yq (https:\/\/github.com\/mikefarah\/yq\/) version //")"; else GLOBAL_UNU_YQ_VERSION=0; fi
+		if [ "${GLOBAL_UNU_YQ_VERSION}" != "${GLOBAL_STACK_YQ_VERSION}" ]; then
+			echo "Updating/Installing yq - ${OPERATING_SYSTEM}, arch : ${YQ_ARCH} https://github.com/mikefarah/yq/releases/download/${GLOBAL_STACK_YQ_VERSION}/yq_${OPERATING_SYSTEM}_${YQ_ARCH}"
+			curl -L "https://github.com/mikefarah/yq/releases/download/${GLOBAL_STACK_YQ_VERSION}/yq_${OPERATING_SYSTEM}_${YQ_ARCH}" -o ~/.local/bin/yq
+			chmod a+x ~/.local/bin/yq
+		else
+			echo "Yq is latest ${GLOBAL_STACK_YQ_VERSION}"
+		fi
+	fi
+
+	if [[ -n "${GLOBAL_STACK_CLAUDE_CODE_VERSION}" && "" != "${GLOBAL_STACK_CLAUDE_CODE_VERSION}" ]]; then
+		if command -v claude &>/dev/null; then
+			GLOBAL_UNU_CLAUDE_CODE_VERSION="$(claude --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+		else
+			GLOBAL_UNU_CLAUDE_CODE_VERSION=0
+		fi
+		GLOBAL_UNU_CLAUDE_CODE_LATEST="${GLOBAL_STACK_CLAUDE_CODE_VERSION}"
+		if [[ "${GLOBAL_UNU_CLAUDE_CODE_LATEST}" != "${GLOBAL_UNU_CLAUDE_CODE_VERSION}" ]]; then
+			echo "Updating/Installing claude-code ${GLOBAL_UNU_CLAUDE_CODE_LATEST}"
+			curl -sSL https://claude.ai/install.sh | bash -s -- "${GLOBAL_STACK_CLAUDE_CODE_VERSION}"
+		else
+			echo "claude-code is latest '${GLOBAL_UNU_CLAUDE_CODE_VERSION}'"
+		fi
+	fi
 fi
 
 if [[ ! -f ~/.local/bin/docker-reclaim-disk-space-script.sh ]]; then
@@ -472,4 +518,4 @@ fi
 # change python 3 path in podman compose
 # sed -i "s|\/usr\/bin\/python3|${GLOBAL_STACK_PYENV_ROOT}/versions/${GLOBAL_STACK_PYTHON3_VERSION}/bin/python3|g" ~/.local/bin/podman-compose
 
-echo -e "Successfull :)"
+echo -e "Successful :)"
