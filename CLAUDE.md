@@ -80,7 +80,9 @@ See `templates/tips/env-update.md` for full annotation reference.
 
 ### bin/env-update.sh
 
-Parses `.env` annotations, fetches latest versions from 12 registries, auto-applies safe updates.
+**DEPRECATED** — use `bin/env-update-v2.sh` for new workflows. Preserved for reference and backward compatibility until `env-update-v2.sh` reaches feature parity.
+
+Parses `.env` annotations, fetches latest versions from 12 registries, auto-applies safe updates. Note: propagation of fetched values to Dockerfiles is now handled automatically by `bin/env-scan.sh`.
 
 **Decision outcomes**: `[AUTO]` auto-applied; `[MANUAL]` requires human review; `[HOLD]` pre-release vs stable; `[SKIP]` no change/unversioned; `[UBUNTU]` codename alignment needed
 
@@ -96,11 +98,17 @@ Parses `.env` annotations, fetches latest versions from 12 registries, auto-appl
 --cache-ttl=<sec>    # Default 3600
 ```
 
+### bin/env-update-v2.sh
+
+Scaffold for the replacement version fetcher. Not yet implemented — exits 0 with a notice. Fetcher stubs (`dockerhub`, `github`, `npm`) to be filled in one by one.
+
 ### bin/env-scan.sh
 
-6-phase pipeline: parse args → build source index → scan docker sources → detect conflicts → sync env files → cleanup.
+7-phase pipeline: parse args → build source index → scan docker sources → detect conflicts → sync env files → **propagate to Dockerfiles** → cleanup.
 
-**Key flags**: `--sync-values=true` (overwrite dest values from source), `--profile=true` (show timing), `--dry-run`
+Propagation is automatic: any `ARG VAR=value` line in a Dockerfile whose value diverges from the canonical `.env` value is rewritten in-place. Vars with `${` in their `.env` value are skipped (expansion-dependent). Vars matching `_GS_ES_PATTERN_EXCLUDE_MULTIPLE_VALUES` are protected.
+
+**Key flags**: `--sync-values=true` (overwrite dest values from source), `--profile=true` (show timing), `--dry-run` (report only, no writes — propagation included)
 
 ### bin/migrate-annotations.sh
 
@@ -151,13 +159,13 @@ make login-03node24                  # Shell into a container
 make log-follow-03node24             # Tail container logs
 make restart-03node24                # Restart one service
 
-# Version updates (safe preview first)
+# Version updates (safe preview first) — env-update.sh is deprecated; use until v2 is ready
 bin/env-update.sh --dry-run --progress
 bin/env-update.sh --type=github --filter=NODE --dry-run
-bin/env-update.sh  # Apply auto-updates
+bin/env-update.sh  # Apply auto-updates (also propagates to Dockerfiles via env-scan)
 
 # After updating versions in .env
-bin/env-scan.sh --sync-values=true   # Propagate to .env.local
+bin/env-scan.sh --sync-values=true   # Propagate to .env.local + rewrite ARG lines in Dockerfiles
 make down-n-rebuild-force-recreate
 
 # Env sync / audit
@@ -318,17 +326,22 @@ templates/shell/                     # Host system shell config templates
 
 ---
 
-## Core Operating Rule — Keep Docs In Sync
+## Core Operating Rules 6 & 7 — Completion Gate and TDD
 
-**Keep docs in sync — same turn, regardless of task size.** Any edit to the files below triggers a *same-turn* update of every doc that references them. Small tasks skip Phase 7 — this rule doesn't.
+6. **Completion Gate — mandatory before Phase 8, regardless of task size or domain.** Self-attestation ("I did it") is not accepted. For every implementation task, produce concrete evidence for all four dimensions:
 
-| Change to… | Update in… |
-|---|---|
-| `settings.json` (perms/hooks/MCP/plugins) | `~/.claude/README.md`, this `CLAUDE.md` "Claude Code Tooling" section |
-| Hooks (`.claude/hooks/`) | Same as above |
-| Slash commands (`.claude/commands/`) | `~/.claude/README.md` command list, this `CLAUDE.md` |
-| Agent files (`.claude/agents/*.md`) | Every `CLAUDE.md` with a routing instruction for that agent |
-| Routing logic or file moves | `grep -rl "<old-path>" ~/.claude/*.md ~/.claude/README.md **/CLAUDE.md` — update each hit |
+| Dimension | What to verify | Required evidence |
+|---|---|---|
+| **Coverage** | Every new/changed behavior has a test | Paste test run output or name the exact test cases added; if no test suite exists, say so explicitly |
+| **Docs** | Every changed public interface is documented | Show the updated help text, CLAUDE.md section, README diff, or command description — something a human can read |
+| **Config** | Claude can do its job correctly in future sessions | Show what was updated in CLAUDE.md / agent definition / README — or state "no config impact" with one-line reasoning |
+| **Blast radius** | No callers, references, or dependent files left stale | Show `grep` output for the changed symbol/flag/function/path and account for every hit |
+
+"Public interface" means anything a human or agent would use or depend on: CLI flags, public functions, env vars, slash commands, hook behavior, agent routing rules, documented workflows.
+
+A task is **not complete** until all four rows have evidence attached. Skipping a row requires explicitly stating why it does not apply.
+
+7. **Test-driven by default.** For any task adding or changing behavior: write the failing test *before* the implementation. Invoke `superpowers:test-driven-development` at the start of implementation work. A passing test run at Phase 8 is the Coverage evidence above. This is the upstream fix — it makes the Coverage row structurally impossible to skip.
 
 If no doc currently references the thing, **say so in the response** (flag the gap). If ambiguous, pick the closest canonical doc and proceed — don't block to ask. Leave the repo with no stale references to what you just changed.
 

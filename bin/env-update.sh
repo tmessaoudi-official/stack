@@ -1,4 +1,12 @@
 #!/bin/bash
+# =============================================================================
+# DEPRECATED — bin/env-update.sh
+# Use bin/env-update-v2.sh for new version-fetch workflows.
+# Propagation of values to Dockerfiles is now handled by bin/env-scan.sh.
+# This file is preserved for reference and backward compatibility.
+# Remove after bin/env-update-v2.sh reaches feature parity.
+# =============================================================================
+#
 # env-update.sh — Automated version update checker for Global Stack.
 #
 # Reads @todo env-update annotations from .env, fetches latest versions

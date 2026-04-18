@@ -143,6 +143,7 @@ Write a structured, detailed implementation plan containing:
 ⚠️ **See Task-Size Calibration above** for when to HARD STOP vs proceed.
 
 ### Phase 5: IMPLEMENT
+- **Before writing implementation code**: invoke `superpowers:test-driven-development` — write the failing test first, then implement. This is the upstream guarantee for the Completion Gate's Coverage row.
 - Execute the approved plan precisely
 - Apply expert-level craftsmanship in every language/domain touched
 - Use critical thinking — if you discover something unexpected, surface it immediately
@@ -195,15 +196,20 @@ Provide copy-paste-ready testing instructions scaled to task size:
 5. **Abort when needed** — if any phase reveals the task is unsafe, infeasible, or fundamentally wrong, STOP and explain before continuing.
 6. **Protected artifacts** — never propose deletion of: `.env`, `.env.local`, `Makefile`, root `docker-compose.yaml`, `CLAUDE.md`, any file under `docker/images/*/`, `.claude/hooks/*`, `.claude/settings.json`, `.claude/commands/*`, `.claude/agents/*`, or `~/.claude/agents/*` without explicit user request. These are load-bearing; losing them is catastrophic.
 7. **Parallel execution** — when Phase 5 involves independent changes to unrelated files, propose parallel sub-agents or worktrees. Reference `superpowers:dispatching-parallel-agents` for the dispatch pattern.
-8. **Keep docs in sync — same turn, regardless of task size.** Any edit to the files below triggers a *same-turn* update of every doc that references them. Small tasks skip Phase 7 — this rule doesn't.
+8. **Completion Gate — mandatory before Phase 8, regardless of task size or domain.** Self-attestation ("I did it") is not accepted. For every implementation task, produce concrete evidence for all four dimensions:
 
-| Change to… | Update in… |
-|---|---|
-| `settings.json` (perms/hooks/MCP/plugins) | `~/.claude/README.md`, `/stack/CLAUDE.md` "Claude Code Tooling" section |
-| Hooks (`.claude/hooks/`) | Same as above |
-| Slash commands (`.claude/commands/`) | `~/.claude/README.md` command list, `/stack/CLAUDE.md` |
-| Agent files (`.claude/agents/*.md`) | Every `CLAUDE.md` with a routing instruction for that agent |
-| Routing logic or file moves | `grep -rl "<old-path>" ~/.claude/*.md ~/.claude/README.md **/CLAUDE.md` — update each hit |
+| Dimension | What to verify | Required evidence |
+|---|---|---|
+| **Coverage** | Every new/changed behavior has a test | Paste test run output or name the exact test cases added; if no test suite exists, say so explicitly |
+| **Docs** | Every changed public interface is documented | Show the updated help text, CLAUDE.md section, README diff, or command description — something a human can read |
+| **Config** | Claude can do its job correctly in future sessions | Show what was updated in CLAUDE.md / agent definition / README — or state "no config impact" with one-line reasoning |
+| **Blast radius** | No callers, references, or dependent files left stale | Show `grep` output for the changed symbol/flag/function/path and account for every hit |
+
+"Public interface" means anything a human or agent would use or depend on: CLI flags, public functions, env vars, slash commands, hook behavior, agent routing rules, documented workflows.
+
+A task is **not complete** until all four rows have evidence attached. Skipping a row requires explicitly stating why it does not apply.
+
+9. **Test-driven by default.** For any task adding or changing behavior: write the failing test *before* the implementation. Invoke `superpowers:test-driven-development` at the start of implementation work. A passing test run at Phase 8 is the Coverage evidence above. This is the upstream fix — it makes the Coverage row structurally impossible to skip.
 
 If no doc currently references the thing, **say so in the response** (flag the gap). If ambiguous, pick the closest canonical doc and proceed. Leave the repo with no stale references to what you just changed.
 

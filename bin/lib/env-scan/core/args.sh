@@ -46,6 +46,7 @@ gs_es_parse_args() {
 		--exclude-multiple-values-pattern=*) _GS_ES_CFG[exclude_multiple_values_pattern]="${1#*=}" ;;
 		--quiet=*)                        _GS_ES_CFG[quiet]="${1#*=}";                        _GS_ES_CFG[quiet]="${_GS_ES_CFG[quiet],,}" ;;
 		--profile=*)                      _GS_ES_CFG[profile]="${1#*=}";                      _GS_ES_CFG[profile]="${_GS_ES_CFG[profile],,}" ;;
+		--dry-run)                        _GS_ES_CFG[dry_run]="true" ;;
 		--help)
 			gs_es_show_help
 			exit 1
@@ -78,6 +79,7 @@ gs_es_parse_args() {
 		[quiet]=false
 		[profile]=false
 		[sync_values]=false
+		[dry_run]=false
 	)
 	local _key
 	for _key in "${!_bool_defaults[@]}"; do

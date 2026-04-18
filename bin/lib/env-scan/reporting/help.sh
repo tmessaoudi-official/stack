@@ -26,6 +26,7 @@ Options:
   --destination-file-tmp-suffix=<value>      Temporary file suffix for destination files (default: .tmp)
   --destination-file-merged-suffix=<value>   Merged file suffix for destination files (default: .merged)
   --sync-values=<value>                      Sync destination values to match source when they differ (default: false)
+  --dry-run                                  Report propagation changes but suppress Dockerfile writes; env file syncing still runs (default: false)
   --scan-var-prefix=<value>                  Prefix pattern for environment variable extraction (default: "(GLOBAL_STACK_)")
   --exclude-different-pattern=<value>        Pattern to exclude from difference detection (default: predefined regex)
   --scan-exclude-pattern=<value>             Pattern to exclude from variable extraction (default: predefined regex)
@@ -55,6 +56,8 @@ Description:
   - Syncing and merging with destination files.
   - Cleaning up formats (removing empty lines, trailing spaces, etc.).
   - Detecting differences or missing variables between source and destination.
-  - Optionally updating destination files to match source files.
+  - Optionally updating destination files to match source files (--sync-values).
+  - Propagating canonical .env values to Dockerfile ARG defaults (Phase 6).
+  - Pass --dry-run to suppress Dockerfile ARG propagation writes (Phase 6 only).
 EOF
 }

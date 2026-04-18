@@ -15,6 +15,8 @@ source "$(dirname "${BASH_SOURCE[0]}")/core/extract.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/core/merge.sh"
 # shellcheck source=./reporting/profile.sh
 source "$(dirname "${BASH_SOURCE[0]}")/reporting/profile.sh"
+# shellcheck source=./propagate.sh
+source "$(dirname "${BASH_SOURCE[0]}")/propagate.sh"
 
 # Session-scoped temp directory — set here, used by extract.sh and missing.sh
 _GS_ES_SESSION_TMP=""
@@ -75,7 +77,16 @@ gs_es_main() {
 	done
 	_gs_es_profile_end "Sync env files"
 
-	# Phase 6: Cleanup
+	# Phase 6: Propagate canonical values to Dockerfiles
+	_gs_es_profile_start
+	gs_es_propagate_to_dockerfiles \
+		"${_GS_ES_CFG[source_files]}" \
+		"${_GS_ES_CFG[scan_path]}" \
+		"${_GS_ES_CFG[exclude_multiple_values_pattern]:-}" \
+		"${_GS_ES_CFG[dry_run]}"
+	_gs_es_profile_end "Propagate to Dockerfiles"
+
+	# Phase 7: Cleanup
 	_gs_es_profile_start
 	# ── Final cleanup of user-facing output files ──────────────────────────────
 	[[ "true" = "${_GS_ES_CFG[scan_delete_output],,}" && "true" = "${_GS_ES_CFG[cleanup_tmp],,}" ]] &&

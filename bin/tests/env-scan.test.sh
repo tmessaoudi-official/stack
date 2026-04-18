@@ -904,6 +904,140 @@ t "RHS variable extraction: both derived and source vars appear" bash -c "
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
+section "17. --dry-run"
+# ═══════════════════════════════════════════════════════════════════════════
+
+t "--dry-run: propagation reports intent but does not modify Dockerfile" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t17a; mkdir -p \"\$D/docker/images/test\"
+    printf 'GLOBAL_STACK_DRY_VAR=canonical_value\n' > \"\$D/.env\"
+    cp \"\$D/.env\" \"\$D/.env.local\"
+    printf 'ARG GLOBAL_STACK_DRY_VAR=stale_default\n' > \"\$D/docker/images/test/Dockerfile\"
+    before=\$(cat \"\$D/docker/images/test/Dockerfile\")
+    out=\$(bash '${LOAD_ENV}' --dir=\"\$D\" --dry-run \
+        --scan-sources=false \
+        --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1)
+    after=\$(cat \"\$D/docker/images/test/Dockerfile\")
+    echo \"\$out\" | grep -q 'dry-run' || { echo \"dry-run marker absent in output\"; echo FAIL; exit 0; }
+    [[ \"\$before\" == \"\$after\" ]] || { echo \"Dockerfile was modified under --dry-run\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "--dry-run: zero changes written to Dockerfile (propagation suppressed)" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t17b; mkdir -p \"\$D/docker/images/test\"
+    printf 'GLOBAL_STACK_DRY_MULTI=canonical\n' > \"\$D/.env\"
+    cp \"\$D/.env\" \"\$D/.env.local\"
+    printf 'ARG GLOBAL_STACK_DRY_MULTI=stale_one\n' > \"\$D/docker/images/test/Dockerfile\"
+    before_df=\$(cat \"\$D/docker/images/test/Dockerfile\")
+    out=\$(bash '${LOAD_ENV}' --dir=\"\$D\" --dry-run \
+        --scan-sources=false \
+        --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1)
+    after_df=\$(cat \"\$D/docker/images/test/Dockerfile\")
+    echo \"\$out\" | grep -q '(dry-run)' || { echo \"(dry-run) marker absent\"; echo FAIL; exit 0; }
+    [[ \"\$before_df\" == \"\$after_df\" ]] || { echo \"Dockerfile mutated under --dry-run\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
+section "18. propagate: gs_es_propagate_to_dockerfiles unit tests"
+# ═══════════════════════════════════════════════════════════════════════════
+# Tests call gs_es_propagate_to_dockerfiles directly (no env-scan.sh).
+# Each test builds a self-contained temp dir and cleans up on exit.
+
+_PROP_LIB="/stack/bin/lib/env-scan/propagate.sh"
+
+t "basic rewrite: ARG VAR=old → ARG VAR=new when .env has new value" bash -c "
+    D=\$(mktemp -d); trap 'rm -rf \"\$D\"' EXIT
+    mkdir -p \"\$D/docker/images/svc\"
+    printf 'MY_VAR=new_value\n' > \"\$D/.env\"
+    printf 'ARG MY_VAR=old_value\n' > \"\$D/docker/images/svc/Dockerfile\"
+    source '${_PROP_LIB}'
+    gs_es_propagate_to_dockerfiles \"\$D/.env\" \"\$D/docker\" '' 'false' >/dev/null 2>&1
+    content=\$(cat \"\$D/docker/images/svc/Dockerfile\")
+    [[ \"\$content\" == 'ARG MY_VAR=new_value' ]] || { echo \"Expected 'ARG MY_VAR=new_value', got: \$content\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "shell-expansion skip: var with \${...} value is not written to Dockerfile" bash -c "
+    D=\$(mktemp -d); trap 'rm -rf \"\$D\"' EXIT
+    mkdir -p \"\$D/docker/images/svc\"
+    printf 'EXPANDED_VAR=\${SOME_OTHER_VAR}/suffix\n' > \"\$D/.env\"
+    printf 'ARG EXPANDED_VAR=literal_original\n' > \"\$D/docker/images/svc/Dockerfile\"
+    source '${_PROP_LIB}'
+    gs_es_propagate_to_dockerfiles \"\$D/.env\" \"\$D/docker\" '' 'false' >/dev/null 2>&1
+    content=\$(cat \"\$D/docker/images/svc/Dockerfile\")
+    [[ \"\$content\" == 'ARG EXPANDED_VAR=literal_original' ]] || { echo \"Dockerfile should not have been modified; got: \$content\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "exclude pattern respected: matching var is NOT rewritten even when stale" bash -c "
+    D=\$(mktemp -d); trap 'rm -rf \"\$D\"' EXIT
+    mkdir -p \"\$D/docker/images/svc\"
+    printf 'EXCLUDED_REGISTRY=env_value\n' > \"\$D/.env\"
+    printf 'ARG EXCLUDED_REGISTRY=docker_value\n' > \"\$D/docker/images/svc/Dockerfile\"
+    source '${_PROP_LIB}'
+    gs_es_propagate_to_dockerfiles \"\$D/.env\" \"\$D/docker\" 'EXCLUDED_REGISTRY' 'false' >/dev/null 2>&1
+    content=\$(cat \"\$D/docker/images/svc/Dockerfile\")
+    [[ \"\$content\" == 'ARG EXCLUDED_REGISTRY=docker_value' ]] || { echo \"Excluded var should not be rewritten; got: \$content\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "multiple Dockerfiles: both are rewritten in a single run" bash -c "
+    D=\$(mktemp -d); trap 'rm -rf \"\$D\"' EXIT
+    mkdir -p \"\$D/docker/images/svc1\" \"\$D/docker/images/svc2\"
+    printf 'SHARED_VAR=canonical\n' > \"\$D/.env\"
+    printf 'ARG SHARED_VAR=stale\n' > \"\$D/docker/images/svc1/Dockerfile\"
+    printf 'ARG SHARED_VAR=stale\n' > \"\$D/docker/images/svc2/Dockerfile\"
+    source '${_PROP_LIB}'
+    gs_es_propagate_to_dockerfiles \"\$D/.env\" \"\$D/docker\" '' 'false' >/dev/null 2>&1
+    c1=\$(cat \"\$D/docker/images/svc1/Dockerfile\")
+    c2=\$(cat \"\$D/docker/images/svc2/Dockerfile\")
+    [[ \"\$c1\" == 'ARG SHARED_VAR=canonical' ]] || { echo \"svc1 not updated; got: \$c1\"; echo FAIL; exit 0; }
+    [[ \"\$c2\" == 'ARG SHARED_VAR=canonical' ]] || { echo \"svc2 not updated; got: \$c2\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "idempotency: running propagation twice produces 0 changes on second run" bash -c "
+    D=\$(mktemp -d); trap 'rm -rf \"\$D\"' EXIT
+    mkdir -p \"\$D/docker/images/svc\"
+    printf 'IDEM_VAR=settled\n' > \"\$D/.env\"
+    printf 'ARG IDEM_VAR=stale\n' > \"\$D/docker/images/svc/Dockerfile\"
+    source '${_PROP_LIB}'
+    # First run — rewrites the file
+    gs_es_propagate_to_dockerfiles \"\$D/.env\" \"\$D/docker\" '' 'false' >/dev/null 2>&1
+    # Second run — should report 0 values propagated
+    out2=\$(gs_es_propagate_to_dockerfiles \"\$D/.env\" \"\$D/docker\" '' 'false' 2>&1)
+    echo \"\$out2\" | grep -q 'propagated 0 value(s) across 0 file(s)' || { echo \"Expected 0 changes on second run; got: \$out2\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "already in sync: Dockerfile ARG matches .env → no rewrite, 0 changes" bash -c "
+    D=\$(mktemp -d); trap 'rm -rf \"\$D\"' EXIT
+    mkdir -p \"\$D/docker/images/svc\"
+    printf 'SYNC_VAR=same_value\n' > \"\$D/.env\"
+    printf 'ARG SYNC_VAR=same_value\n' > \"\$D/docker/images/svc/Dockerfile\"
+    before=\$(cat \"\$D/docker/images/svc/Dockerfile\")
+    source '${_PROP_LIB}'
+    out=\$(gs_es_propagate_to_dockerfiles \"\$D/.env\" \"\$D/docker\" '' 'false' 2>&1)
+    after=\$(cat \"\$D/docker/images/svc/Dockerfile\")
+    echo \"\$out\" | grep -q 'propagated 0 value(s) across 0 file(s)' || { echo \"Expected 0 changes; got: \$out\"; echo FAIL; exit 0; }
+    [[ \"\$before\" == \"\$after\" ]] || { echo \"Dockerfile should not have changed\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "missing Dockerfile ARG: var in .env with no ARG line → no error, 0 changes" bash -c "
+    D=\$(mktemp -d); trap 'rm -rf \"\$D\"' EXIT
+    mkdir -p \"\$D/docker/images/svc\"
+    printf 'ABSENT_VAR=some_value\n' > \"\$D/.env\"
+    printf 'ARG UNRELATED_VAR=unchanged\n' > \"\$D/docker/images/svc/Dockerfile\"
+    source '${_PROP_LIB}'
+    out=\$(gs_es_propagate_to_dockerfiles \"\$D/.env\" \"\$D/docker\" '' 'false' 2>&1)
+    rc=\$?
+    [[ \$rc -eq 0 ]] || { echo \"Expected exit 0, got \$rc\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -q 'propagated 0 value(s) across 0 file(s)' || { echo \"Expected 0 changes; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section
