@@ -42,6 +42,7 @@ TASK_ARCH=""
 SOPS_ARCH=""
 YAMLFMT_ARCH=""
 RTK_ARCH=""
+CLAUDE_CODE_ARCH=""
 
 if [[ "linux" == "${OPERATING_SYSTEM}" ]]; then
 	DIFFTASTIC_OPERATING_SYSTEM="unknown-${OPERATING_SYSTEM}-gnu"
@@ -57,6 +58,7 @@ if [[ "linux" == "${OPERATING_SYSTEM}" ]]; then
 		DIFFTASTIC_ARCH="${SYSTEM_ARCH}"
 		SHFMT_ARCH="arm64"
 		RTK_ARCH="aarch64"
+		CLAUDE_CODE_ARCH="arm64"
 		;;
 	"armv6l")
 		GITLEAKS_ARCH="armv6"
@@ -92,6 +94,7 @@ if [[ "linux" == "${OPERATING_SYSTEM}" ]]; then
 		SOPS_ARCH="amd64"
 		YAMLFMT_ARCH="${SYSTEM_ARCH}"
 		RTK_ARCH="x86_64"
+		CLAUDE_CODE_ARCH="x64"
 		;;
 	"i386")
 		GITLEAKS_ARCH="x32"
@@ -122,6 +125,7 @@ if [[ "darwin" == "${OPERATING_SYSTEM}" ]]; then
 		DIFFTASTIC_ARCH="${SYSTEM_ARCH}"
 		SHFMT_ARCH="arm64"
 		RTK_ARCH="aarch64"
+		CLAUDE_CODE_ARCH="arm64"
 		echo "Unsupported system/architecture hadolint: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
 		;;
 	"x86_64")
@@ -134,6 +138,7 @@ if [[ "darwin" == "${OPERATING_SYSTEM}" ]]; then
 		SOPS_ARCH="amd64"
 		YAMLFMT_ARCH="${SYSTEM_ARCH}"
 		RTK_ARCH="x86_64"
+		CLAUDE_CODE_ARCH="x64"
 		;;
 	*)
 		echo "Unsupported system/architecture hadolint/shell-check/gitleaks/sonar-scanner-cli/difftastic/shfmt: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
@@ -264,6 +269,12 @@ if [[ "" != "${RTK_ARCH}" ]]; then
 	sudo mv /usr/local/bin/rtk_archive/rtk /usr/local/bin/rtk
 	sudo rm -rf /usr/local/bin/rtk_archive /usr/local/bin/rtk.tar.gz
 	sudo chmod a+x /usr/local/bin/rtk
+fi
+
+if [[ "" != "${CLAUDE_CODE_ARCH}" && "" != "${OPERATING_SYSTEM}" && "" != "${GLOBAL_STACK_CLAUDE_CODE_VERSION}" ]]; then
+	echo "Installing claude - system : ${OPERATING_SYSTEM}, arch : ${CLAUDE_CODE_ARCH}"
+	sudo curl -L "https://downloads.claude.ai/claude-code-releases/${GLOBAL_STACK_CLAUDE_CODE_VERSION}/${OPERATING_SYSTEM}-${CLAUDE_CODE_ARCH}/claude" -o /usr/local/bin/claude
+	sudo chmod a+x /usr/local/bin/claude
 fi
 
 echo "Updating/Installing yq"
