@@ -25,8 +25,8 @@ Options:
   --dir=<value>                              Set the working directory (default: inferred from script location removing /bin)
   --destination-file-tmp-suffix=<value>      Temporary file suffix for destination files (default: .tmp)
   --destination-file-merged-suffix=<value>   Merged file suffix for destination files (default: .merged)
-  --sync-values=<value>                      Sync destination values to match source when they differ (default: false)
-  --dry-run                                  Report propagation changes but suppress Dockerfile writes; env file syncing still runs (default: false)
+  --sync-values=<value>                      Sync destination values to match source when they differ (default: true)
+  --dry-run                                  Report what would change but suppress all filesystem writes (env file sync and Dockerfile propagation) (default: false)
   --scan-var-prefix=<value>                  Prefix pattern for environment variable extraction (default: "(GLOBAL_STACK_)")
   --exclude-different-pattern=<value>        Pattern to exclude from difference detection (default: predefined regex)
   --scan-exclude-pattern=<value>             Pattern to exclude from variable extraction (default: predefined regex)
@@ -44,6 +44,10 @@ Options:
   --exclude-multiple-values-pattern=<value>  Pattern to exclude vars from multiple-values detection (default: predefined regex)
   --quiet=<value>                            Suppress informational output; errors still print (default: false)
   --profile=<value>                          Show execution time and memory usage per phase (default: false)
+  --backup=<bool>                            Create a timestamped backup of destination files before overwriting (default: true)
+  --backup-keep=<N>                          Keep the N newest backups per file after each run; 0 = unlimited (default: 10)
+  --backup-purge=<bool>                      Delete ALL existing <file>.bak.* backups before the run (default: false)
+  --backup-suffix=<str>                      Suffix anchor for backup files; full name: <file><suffix>.<YYYYMMDD-HHMMSS> (default: .bak)
 
 Examples:
   ./env-scan.sh --debug=true --dir=/stack/.env --show-added-entries=false
@@ -58,6 +62,14 @@ Description:
   - Detecting differences or missing variables between source and destination.
   - Optionally updating destination files to match source files (--sync-values).
   - Propagating canonical .env values to Dockerfile ARG defaults (Phase 6).
-  - Pass --dry-run to suppress Dockerfile ARG propagation writes (Phase 6 only).
+  - Pass --dry-run to suppress all writes: env file sync (Phase 5) and Dockerfile propagation (Phase 6).
+  - Creating timestamped backups of destination files and gitignored Dockerfiles before overwriting (Phase 4.5 / 6).
+
+Common backup workflows:
+  Normal run, keep 10 backups:           bin/env-scan.sh
+  Disable backup this run:               bin/env-scan.sh --backup=false
+  Delete all old backups, no new one:    bin/env-scan.sh --backup=false --backup-purge=true
+  Delete all old backups, fresh one:     bin/env-scan.sh --backup-purge=true
+  Unlimited retention:                   bin/env-scan.sh --backup-keep=0
 EOF
 }

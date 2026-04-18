@@ -47,6 +47,10 @@ gs_es_parse_args() {
 		--quiet=*)                        _GS_ES_CFG[quiet]="${1#*=}";                        _GS_ES_CFG[quiet]="${_GS_ES_CFG[quiet],,}" ;;
 		--profile=*)                      _GS_ES_CFG[profile]="${1#*=}";                      _GS_ES_CFG[profile]="${_GS_ES_CFG[profile],,}" ;;
 		--dry-run)                        _GS_ES_CFG[dry_run]="true" ;;
+		--backup=*)                       _GS_ES_CFG[backup]="${1#*=}";                       _GS_ES_CFG[backup]="${_GS_ES_CFG[backup],,}" ;;
+		--backup-purge=*)                 _GS_ES_CFG[backup_purge]="${1#*=}";                 _GS_ES_CFG[backup_purge]="${_GS_ES_CFG[backup_purge],,}" ;;
+		--backup-keep=*)                  _GS_ES_CFG[backup_keep]="${1#*=}" ;;
+		--backup-suffix=*)                _GS_ES_CFG[backup_suffix]="${1#*=}" ;;
 		--help)
 			gs_es_show_help
 			exit 1
@@ -78,8 +82,10 @@ gs_es_parse_args() {
 		[exclude_explicit_empty]=true
 		[quiet]=false
 		[profile]=false
-		[sync_values]=false
+		[sync_values]=true
 		[dry_run]=false
+		[backup]=true
+		[backup_purge]=false
 	)
 	local _key
 	for _key in "${!_bool_defaults[@]}"; do
@@ -126,4 +132,6 @@ gs_es_parse_args() {
 		_GS_ES_CFG[exclude_local_pattern]="^${_GS_ES_CFG[scan_var_prefix]/\)/}LOCAL_)"
 	fi
 	[[ -z "${_GS_ES_CFG[source_merged_file]+set}" ]]         && _GS_ES_CFG[source_merged_file]="${_GS_ES_CFG[dir]}/.env.src.all.merged"
+	[[ -z "${_GS_ES_CFG[backup_keep]+set}" ]]               && _GS_ES_CFG[backup_keep]="10"
+	[[ -z "${_GS_ES_CFG[backup_suffix]+set}" ]]             && _GS_ES_CFG[backup_suffix]=".bak"
 }

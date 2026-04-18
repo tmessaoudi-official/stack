@@ -37,6 +37,7 @@ docker*.local.json
 local.*docker-bake.json
 
 Dockerfile*.local
+Dockerfile*.local.bak.*
 
 local.*Dockerfile
 local.*Makefile

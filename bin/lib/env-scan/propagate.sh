@@ -16,6 +16,9 @@
 [[ -n "${_GS_ES_PROPAGATE_SH_LOADED:-}" ]] && return 0
 readonly _GS_ES_PROPAGATE_SH_LOADED=1
 
+# shellcheck source=./core/backup.sh
+source "$(dirname "${BASH_SOURCE[0]}")/core/backup.sh"
+
 # ── gs_es_propagate_to_dockerfiles ───────────────────────────────────────────
 # Args:
 #   env_file          — source of canonical values (typically .env)
@@ -75,10 +78,15 @@ gs_es_propagate_to_dockerfiles() {
   local _total_values=0
   local _total_files=0
   local _dockerfile _arg_line _df_var _df_val _env_val _new_line
+  local _backup_enabled="${_GS_ES_CFG[backup]:-true}"
+  local _backup_suffix="${_GS_ES_CFG[backup_suffix]:-.bak}"
+  local _backup_ts="${_GS_ES_CFG[_backup_ts]:-}"
+  local _backup_dir="${_GS_ES_CFG[dir]:-}"
 
   while IFS= read -r _dockerfile; do
     local _file_changed=0
     local _file_values=0
+    local _file_backed_up=0
 
     while IFS= read -r _arg_line; do
       # Match lines of the form: ARG VAR=value
@@ -93,6 +101,17 @@ gs_es_propagate_to_dockerfiles() {
           if [[ "${_df_val}" != "${_env_val}" ]]; then
             echo " [propagate] ${_dockerfile}: ${_df_var}: '${_df_val}' → '${_env_val}'"
             if [[ "${dry_run}" != "true" ]]; then
+              # Back up gitignored Dockerfile once before first rewrite
+              if [[ "${_file_backed_up}" -eq 0 && "${_backup_enabled}" == "true" && -n "${_backup_ts}" ]]; then
+                _gs_es_backup_if_gitignored \
+                  "${_dockerfile}" \
+                  "${_backup_dir}" \
+                  "${_backup_ts}" \
+                  "${_backup_suffix}" \
+                  "false" \
+                  "${_GS_ES_CFG[quiet]:-false}"
+                _file_backed_up=1
+              fi
               # Rewrite the ARG line in-place
               sed -i "s|^ARG ${_df_var}=.*|ARG ${_df_var}=${_env_val}|" "${_dockerfile}"
             fi

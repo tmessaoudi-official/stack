@@ -13,7 +13,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/../reporting/report.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/missing.sh"
 
 # ── gs_es_process_file ───────────────────────────────────────────────────────────
-# Args: src_file  dest_file  count
+# Args: src_file  dest_file  count  dry_run
 # Reads from _GS_ES_CFG: destination_file_tmp_suffix, destination_file_merged_suffix,
 #                        strip_comments, remove_empty_lines, remove_trailing_spaces,
 #                        show_added_entries, check_missing, exclude_local_pattern,
@@ -21,29 +21,34 @@ source "$(dirname "${BASH_SOURCE[0]}")/missing.sh"
 #                        cleanup_tmp, debug, show_different_entries,
 #                        sync_values, scan_output_file,
 #                        dir, scan_path
+# When dry_run="true": all filesystem writes are suppressed; the function still
+# computes and reports what would change (added entries, differences, missing).
 gs_es_process_file() {
 	local src_file="${1}"
 	local dest_file="${2}"
 	local count="${3}"
+	local dry_run="${4:-false}"
 
 	local tmp_file
 	tmp_file="${dest_file}${_GS_ES_CFG[destination_file_tmp_suffix]}.${count}"
 	local merged_file
 	merged_file="${dest_file}${_GS_ES_CFG[destination_file_merged_suffix]}.${count}"
 
-	touch "${src_file}" "${dest_file}"
-	cp "${dest_file}" "${tmp_file}"
-	sed -i -e "\$a\\" "${tmp_file}"
-	cat "${src_file}" >> "${tmp_file}"
+	if [[ "${dry_run}" != "true" ]]; then
+		touch "${src_file}" "${dest_file}"
+		cp "${dest_file}" "${tmp_file}"
+		sed -i -e "\$a\\" "${tmp_file}"
+		cat "${src_file}" >> "${tmp_file}"
 
-	awk -F "=" '!seen[$1]++' "${tmp_file}" > "${merged_file}"
+		awk -F "=" '!seen[$1]++' "${tmp_file}" > "${merged_file}"
 
-	# P6: merge three sed -i passes into one
-	local _sed_args=()
-	[[ "${_GS_ES_CFG[strip_comments]}" = "true" ]]          && _sed_args+=(-e '/^\s*#/d')
-	[[ "${_GS_ES_CFG[remove_empty_lines]}" = "true" ]]      && _sed_args+=(-e '/^\s*$/d')
-	[[ "${_GS_ES_CFG[remove_trailing_spaces]}" = "true" ]]  && _sed_args+=(-e 's/[[:space:]]*$//')
-	[[ ${#_sed_args[@]} -gt 0 ]] && sed -i "${_sed_args[@]}" "${merged_file}"
+		# P6: merge three sed -i passes into one
+		local _sed_args=()
+		[[ "${_GS_ES_CFG[strip_comments]}" = "true" ]]         && _sed_args+=(-e '/^\s*#/d')
+		[[ "${_GS_ES_CFG[remove_empty_lines]}" = "true" ]]     && _sed_args+=(-e '/^\s*$/d')
+		[[ "${_GS_ES_CFG[remove_trailing_spaces]}" = "true" ]] && _sed_args+=(-e 's/[[:space:]]*$//')
+		[[ ${#_sed_args[@]} -gt 0 ]] && sed -i "${_sed_args[@]}" "${merged_file}"
+	fi
 
 	# Show added entries if enabled
 	[[ "true" = "${_GS_ES_CFG[show_added_entries]}" ]] &&
@@ -53,8 +58,10 @@ gs_es_process_file() {
 			"" \
 			"add"
 
-	# Overwrite destination with merged content
-	mv "${merged_file}" "${dest_file}"
+	# Overwrite destination with merged content (suppressed under dry-run)
+	if [[ "${dry_run}" != "true" ]]; then
+		mv "${merged_file}" "${dest_file}"
+	fi
 
 	# Show different/missing entries if enabled
 	gs_es_show_differences \

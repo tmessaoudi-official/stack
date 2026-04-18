@@ -57,7 +57,7 @@ gs_es_show_differences() {
 		fi
 	fi
 
-	if [[ -n "${different_entries}" && "true" = "${_GS_ES_CFG[sync_values]}" ]]; then
+	if [[ -n "${different_entries}" && "true" = "${_GS_ES_CFG[sync_values]}" && "${_GS_ES_CFG[dry_run]:-false}" != "true" ]]; then
 		awk -F "=" -v exclude_pattern="${_GS_ES_CFG[exclude_different_pattern]}" 'NR == FNR { source[$1] = $2; next } (exclude_pattern != "" && $1 ~ exclude_pattern) { print $0; next } ($1 in source) && ($2 != source[$1]) { print $1 "=" source[$1]; next } { print $0; next }' "${src_file}" "${dest_file}" >"${dest_file}.updated.tmp.${count}" && mv "${dest_file}.updated.tmp.${count}" "${dest_file}"
 		if [[ "true" = "${_GS_ES_CFG[debug]}" ]]; then
 			echo -e "\n ---- (gs_es_show_differences): ${dest_file} values updated to match with values from source ${src_file}\n"

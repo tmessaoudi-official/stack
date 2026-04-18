@@ -104,11 +104,11 @@ Scaffold for the replacement version fetcher. Not yet implemented — exits 0 wi
 
 ### bin/env-scan.sh
 
-7-phase pipeline: parse args → build source index → scan docker sources → detect conflicts → sync env files → **propagate to Dockerfiles** → cleanup.
+8-phase pipeline: parse args → build source index → scan docker sources → detect conflicts → **backup pre-flight** → sync env files → propagate to Dockerfiles (+ Dockerfile backup) → retention prune → cleanup.
 
 Propagation is automatic: any `ARG VAR=value` line in a Dockerfile whose value diverges from the canonical `.env` value is rewritten in-place. Vars with `${` in their `.env` value are skipped (expansion-dependent). Vars matching `_GS_ES_PATTERN_EXCLUDE_MULTIPLE_VALUES` are protected.
 
-**Key flags**: `--sync-values=true` (overwrite dest values from source), `--profile=true` (show timing), `--dry-run` (report only, no writes — propagation included)
+**Key flags**: `--sync-values=false` (preserve dest values that differ from source; default is `true` — values are overwritten), `--profile=true` (show timing), `--dry-run` (report only — suppresses both env file sync and Dockerfile propagation), `--backup=false` (skip backup this run), `--backup-keep=<N>` (keep N newest backups per file; 0 = unlimited; default 10), `--backup-purge=true` (delete all existing `<file>.bak.*` before run), `--backup-suffix=<str>` (suffix anchor; default `.bak`; full name: `<file><suffix>.<YYYYMMDD-HHMMSS>`)
 
 ### bin/migrate-annotations.sh
 
@@ -165,7 +165,7 @@ bin/env-update.sh --type=github --filter=NODE --dry-run
 bin/env-update.sh  # Apply auto-updates (also propagates to Dockerfiles via env-scan)
 
 # After updating versions in .env
-bin/env-scan.sh --sync-values=true   # Propagate to .env.local + rewrite ARG lines in Dockerfiles
+bin/env-scan.sh   # Propagate to .env.local + rewrite ARG lines in Dockerfiles (--sync-values=true by default)
 make down-n-rebuild-force-recreate
 
 # Env sync / audit

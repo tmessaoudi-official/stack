@@ -9,6 +9,8 @@ readonly _GS_gs_es_MAIN_SH_LOADED=1
 source "$(dirname "${BASH_SOURCE[0]}")/config/defaults.sh"
 # shellcheck source=./core/args.sh
 source "$(dirname "${BASH_SOURCE[0]}")/core/args.sh"
+# shellcheck source=./core/backup.sh
+source "$(dirname "${BASH_SOURCE[0]}")/core/backup.sh"
 # shellcheck source=./core/extract.sh
 source "$(dirname "${BASH_SOURCE[0]}")/core/extract.sh"
 # shellcheck source=./core/merge.sh
@@ -60,6 +62,38 @@ gs_es_main() {
 		"${_GS_ES_CFG[scan_path]}"
 	_gs_es_profile_end "Detect conflicting values"
 
+	# Phase 4.5: Backup pre-flight (purge + snapshot)
+	local _backup_ts
+	_backup_ts="$(date +%Y%m%d-%H%M%S)"
+	_GS_ES_CFG[_backup_ts]="${_backup_ts}"
+
+	if [[ "true" == "${_GS_ES_CFG[backup_purge]}" ]]; then
+		_gs_es_backup_purge_all \
+			"${_GS_ES_CFG[destination_files]}" \
+			"${_GS_ES_CFG[backup_suffix]}" \
+			"${_GS_ES_CFG[scan_path]}" \
+			"${_GS_ES_CFG[dir]}" \
+			"${_GS_ES_CFG[quiet]}"
+	fi
+
+	if [[ "true" == "${_GS_ES_CFG[backup]}" && "true" != "${_GS_ES_CFG[dry_run]}" ]]; then
+		local _bk_dest
+		for _bk_dest in ${_GS_ES_CFG[destination_files]//[\"\'\`]/}; do
+			_gs_es_backup_unconditional \
+				"${_bk_dest}" \
+				"${_backup_ts}" \
+				"${_GS_ES_CFG[backup_suffix]}" \
+				"false" \
+				"${_GS_ES_CFG[quiet]}"
+		done
+	elif [[ "true" == "${_GS_ES_CFG[backup]}" && "true" == "${_GS_ES_CFG[dry_run]}" ]]; then
+		local _bk_dest
+		for _bk_dest in ${_GS_ES_CFG[destination_files]//[\"\'\`]/}; do
+			[[ -f "${_bk_dest}" ]] || continue
+			echo " [backup] (dry-run) would back up ${_bk_dest} → ${_bk_dest}${_GS_ES_CFG[backup_suffix]}.${_backup_ts}"
+		done
+	fi
+
 	# Phase 5: Sync env files
 	local _count_src=0
 	local _count_dest=0
@@ -72,7 +106,8 @@ gs_es_main() {
 			gs_es_process_file \
 				"${_src_file}" \
 				"${_dest_file}" \
-				"${_count_src}_${_count_dest}"
+				"${_count_src}_${_count_dest}" \
+				"${_GS_ES_CFG[dry_run]}"
 		done
 	done
 	_gs_es_profile_end "Sync env files"
@@ -85,6 +120,18 @@ gs_es_main() {
 		"${_GS_ES_CFG[exclude_multiple_values_pattern]:-}" \
 		"${_GS_ES_CFG[dry_run]}"
 	_gs_es_profile_end "Propagate to Dockerfiles"
+
+	# Phase 6.5: Backup retention prune
+	if [[ "true" == "${_GS_ES_CFG[backup]}" && "true" != "${_GS_ES_CFG[dry_run]}" ]]; then
+		local _pr_dest
+		for _pr_dest in ${_GS_ES_CFG[destination_files]//[\"\'\`]/}; do
+			_gs_es_backup_prune \
+				"${_pr_dest}" \
+				"${_GS_ES_CFG[backup_suffix]}" \
+				"${_GS_ES_CFG[backup_keep]}" \
+				"${_GS_ES_CFG[quiet]}"
+		done
+	fi
 
 	# Phase 7: Cleanup
 	_gs_es_profile_start

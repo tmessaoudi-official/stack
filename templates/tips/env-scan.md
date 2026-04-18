@@ -9,8 +9,8 @@ or conflicting variables, and optionally syncs differing values.
 ## Quick Start
 
 ```bash
-bin/env-scan.sh                              # default: sync .env → .env.local
-bin/env-scan.sh --sync-values=true           # also overwrite differing values in .env.local
+bin/env-scan.sh                              # default: sync .env → .env.local (values overwritten)
+bin/env-scan.sh --sync-values=false          # preserve differing values in .env.local
 bin/env-scan.sh --check-missing=false        # skip missing-variable checks
 bin/env-scan.sh --quiet=true                 # suppress all informational output
 bin/env-scan.sh --profile=true               # show per-phase timing and memory
@@ -30,7 +30,7 @@ All options use `--key=value` form. Boolean options accept `true` or `false`.
 | `--source-files=VALUE` | `.env` | Space-separated list of source env files to read from |
 | `--destination-files=VALUE` | `.env.local` | Space-separated list of destination files to merge into |
 | `--dir=VALUE` | inferred from script path | Working directory; base for all relative paths |
-| `--sync-values=true\|false` | `false` | When `true`, overwrite destination values that differ from source |
+| `--sync-values=true\|false` | `true` | When `true`, overwrite destination values that differ from source |
 
 ### Output formatting
 
@@ -84,12 +84,22 @@ All options use `--key=value` form. Boolean options accept `true` or `false`.
 | `--source-merged-file=PATH` | `<dir>/.env.src.all.merged` | Path for the merged source index file |
 | `--cleanup-tmp=true\|false` | `true` | Delete all temp files after processing |
 
+### Backup
+
+| Option | Default | Description |
+|---|---|---|
+| `--backup=true\|false` | `true` | Create a timestamped backup of destination files and gitignored Dockerfiles before overwriting |
+| `--backup-keep=N` | `10` | Keep the N newest backups per file after each run; `0` = unlimited |
+| `--backup-purge=true\|false` | `false` | Delete ALL existing `<file>.bak.*` backups before the run |
+| `--backup-suffix=STR` | `.bak` | Suffix anchor; full backup name: `<file><suffix>.<YYYYMMDD-HHMMSS>` |
+
 ### Diagnostics
 
 | Option | Default | Description |
 |---|---|---|
 | `--debug=true\|false` | `false` | Enable verbose diagnostic messages |
 | `--profile=true\|false` | `false` | Print per-phase execution time and memory usage after run |
+| `--dry-run` | `false` | Report what would change but suppress all filesystem writes (env file sync, Dockerfile propagation, and backups) |
 | `--help` | — | Show usage and exit |
 
 ---
@@ -102,8 +112,11 @@ All options use `--key=value` form. Boolean options accept `true` or `false`.
 | 2. Build source index | All source files are merged into `.env.src.all.merged` (comments and empty lines stripped) |
 | 3. Scan docker sources | Every file under `--scan-path` is parsed in parallel for `GLOBAL_STACK_*` references. Results written to `.env.all.local` |
 | 4. Detect conflicting values | Flags any variable defined with more than one distinct non-empty value across source + scan output |
-| 5. Sync env files | For each source→destination pair: merge source into destination (destination wins on key conflicts), show added/different entries, check missing, optionally sync differing values |
-| 6. Cleanup | Remove temp files (unless `--cleanup-tmp=false`) |
+| 4.5. Backup pre-flight | If `--backup-purge=true`: delete all `<dest>.bak.*` (and gitignored Dockerfile backups). If `--backup=true`: snapshot each destination file to `<dest><suffix>.<YYYYMMDD-HHMMSS>`. **Skipped under `--dry-run`** (prints intent instead) |
+| 5. Sync env files | For each source→destination pair: merge source into destination (destination wins on key conflicts), show added/different entries, check missing, optionally sync differing values. **Suppressed under `--dry-run`** |
+| 6. Propagate to Dockerfiles | Any `ARG VAR=value` line in a Dockerfile whose value diverges from canonical `.env` is rewritten in-place. Gitignored Dockerfiles are backed up before first rewrite if `--backup=true`. **Suppressed under `--dry-run`** |
+| 6.5. Retention prune | For each backed-up destination file, remove oldest backups until only `--backup-keep` remain. No-op when `--backup-keep=0` or `--backup=false` |
+| 7. Cleanup | Remove temp files (unless `--cleanup-tmp=false`) |
 
 ---
 
@@ -131,11 +144,11 @@ The scanner recognises these forms of `GLOBAL_STACK_*` usage in source files:
 
 ## Merge Strategy
 
-Destination file wins on key conflicts: if `.env.local` already has `FOO=myvalue`
-and `.env` has `FOO=default`, the destination value is kept.
+By default (`--sync-values=true`), source wins on key conflicts: if `.env.local` already
+has `FOO=myvalue` and `.env` has `FOO=default`, the destination value is overwritten.
 
-With `--sync-values=true`, destination values that differ from source are overwritten
-to match source — useful for resetting `.env.local` to track `.env` defaults.
+With `--sync-values=false`, destination values that differ from source are preserved —
+useful when `.env.local` holds intentional machine-specific overrides.
 
 ---
 
@@ -155,11 +168,11 @@ Three checks run after each merge (unless `--check-missing=false`):
 ## Common Invocations
 
 ```bash
-# Standard first-time setup: sync .env → .env.local, detect gaps
+# Standard run: sync .env → .env.local, overwrite differing values, detect gaps
 bin/env-scan.sh
 
-# Reset .env.local to match .env exactly (overwrite all differing values)
-bin/env-scan.sh --sync-values=true
+# Preserve .env.local overrides (don't overwrite differing values)
+bin/env-scan.sh --sync-values=false
 
 # Sync two custom files without scanning Docker sources
 bin/env-scan.sh \
@@ -178,6 +191,17 @@ bin/env-scan.sh --profile=true
 
 # Suppress all output except errors
 bin/env-scan.sh --quiet=true
+
+# Preview what would change without writing any files (env sync + Dockerfile propagation)
+bin/env-scan.sh --dry-run
+
+# Backup control
+bin/env-scan.sh                              # default: back up .env.local, keep 10 newest
+bin/env-scan.sh --backup=false               # skip backup this run
+bin/env-scan.sh --backup-keep=0              # unlimited retention (never prune)
+bin/env-scan.sh --backup-purge=true          # delete all old backups then create fresh one
+bin/env-scan.sh --backup=false --backup-purge=true  # delete all old backups, no new one
+bin/env-scan.sh --backup-suffix=.snapshot    # use .snapshot.<ts> instead of .bak.<ts>
 ```
 
 ---
