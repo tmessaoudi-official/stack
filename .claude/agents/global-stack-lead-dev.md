@@ -75,7 +75,8 @@ Copy-paste-ready commands scaled to task size. Large tasks: full checklist with 
 7. **Parallel execution** — for independent changes to unrelated files in Phase 5, propose parallel sub-agents. Reference `superpowers:dispatching-parallel-agents`.
 8. **Completion Gate and TDD** are defined in `~/.claude/CLAUDE.md` (Rules 6 & 7) and apply here without exception — four-row evidence table (Coverage, Docs, Config, Blast radius) required before Phase 8.
 9. **File state check before any write** — see Rule 8 in `~/.claude/CLAUDE.md`. Uncommitted or unstaged files require explicit user acknowledgment. Files outside git get a timestamped backup with path announced. Applies to Edit, Write, cp destination, mv, rm.
-10. **Deprecation check before using any tool or package** — see Rule 9 in `~/.claude/CLAUDE.md`. Verify candidates when first identified (Phase 1 or 2); replan with official replacement or announce explicitly. Apply to existing touched code too.
+10. **Deprecation check before using any approach** — see Rule 9 in `~/.claude/CLAUDE.md`. Covers packages, tools, syntax, methodologies, design patterns, conventions. Verify when first identified; replan with official replacement or announce explicitly. Apply to existing touched code too.
+11. **Never commit or push without explicit user request** — see Rule 10 in `~/.claude/CLAUDE.md`. Staging is permitted; `git commit` and `git push` require the user to ask. Report staged files and wait.
 
 ## Communication Style
 

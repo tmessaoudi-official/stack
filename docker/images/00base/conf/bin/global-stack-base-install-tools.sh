@@ -259,7 +259,11 @@ if [[ "" != "${RTK_ARCH}" ]]; then
 	echo "Installing rtk - system : ${OPERATING_SYSTEM}, arch : ${RTK_ARCH}"
 	RTK_OS_TARGET=""
 	if [[ "linux" == "${OPERATING_SYSTEM}" ]]; then
-		RTK_OS_TARGET="${RTK_ARCH}-unknown-linux-gnu"
+		if [[ "x86_64" == "${RTK_ARCH}" ]]; then
+			RTK_OS_TARGET="${RTK_ARCH}-unknown-linux-musl"
+		else
+			RTK_OS_TARGET="${RTK_ARCH}-unknown-linux-gnu"
+		fi
 	elif [[ "darwin" == "${OPERATING_SYSTEM}" ]]; then
 		RTK_OS_TARGET="${RTK_ARCH}-apple-darwin"
 	fi
