@@ -517,6 +517,13 @@ if eval "${env_file_exists}"; then
 			echo "claude-code is latest '${GLOBAL_UNU_CLAUDE_CODE_VERSION}'"
 		fi
 	fi
+
+	if [[ "true" == "${GLOBAL_STACK_RTK_INIT:-false}" ]] \
+	  && command -v rtk >/dev/null 2>&1 \
+	  && command -v claude >/dev/null 2>&1; then
+		rtk telemetry disable
+		rtk init --agent claude --global --auto-patch
+	fi
 fi
 
 if [[ ! -f ~/.local/bin/docker-reclaim-disk-space-script.sh ]]; then

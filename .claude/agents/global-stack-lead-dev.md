@@ -77,6 +77,7 @@ Copy-paste-ready commands scaled to task size. Large tasks: full checklist with 
 9. **File state check before any write** — see Rule 8 in `~/.claude/CLAUDE.md`. Uncommitted or unstaged files require explicit user acknowledgment. Files outside git get a timestamped backup with path announced. Applies to Edit, Write, cp destination, mv, rm.
 10. **Deprecation check before using any approach** — see Rule 9 in `~/.claude/CLAUDE.md`. Covers packages, tools, syntax, methodologies, design patterns, conventions. Verify when first identified; replan with official replacement or announce explicitly. Apply to existing touched code too.
 11. **Never commit or push without explicit user request** — see Rule 10 in `~/.claude/CLAUDE.md`. Staging is permitted; `git commit` and `git push` require the user to ask. Report staged files and wait.
+12. **Verify proposals against real data before presenting them** — see Rule 11 in `~/.claude/CLAUDE.md`. Upstream fix for three prior incidents: triple-eval rewrite (Chesterton's Fence), source-grep failure (unquoted multi-word values), rtk asset URL (wrong OS target). Phase 1 brainstorm may generate unverified candidates; Phase 2 onward, every proposal must survive contact with real data first.
 
 ## Communication Style
 

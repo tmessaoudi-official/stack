@@ -36,11 +36,52 @@ gs_es_process_file() {
 
 	if [[ "${dry_run}" != "true" ]]; then
 		touch "${src_file}" "${dest_file}"
-		cp "${dest_file}" "${tmp_file}"
-		sed -i -e "\$a\\" "${tmp_file}"
-		cat "${src_file}" >> "${tmp_file}"
 
-		awk -F "=" '!seen[$1]++' "${tmp_file}" > "${merged_file}"
+		# Build associative array of dest values keyed by variable name
+		declare -A _gs_es_dest_vals=()
+		declare -A _gs_es_dest_emitted=()
+		while IFS= read -r _line || [[ -n "${_line}" ]]; do
+			# Only record KEY=value lines (skip blank lines and comments)
+			if [[ "${_line}" =~ ^([A-Za-z_][A-Za-z0-9_]*)= ]]; then
+				_gs_es_dest_vals["${BASH_REMATCH[1]}"]="${_line}"
+			fi
+		done < "${dest_file}"
+
+		# Walk src top-to-bottom, preserving source order
+		{
+			while IFS= read -r _line || [[ -n "${_line}" ]]; do
+				if [[ "${_line}" =~ ^([A-Za-z_][A-Za-z0-9_]*)= ]]; then
+					local _key="${BASH_REMATCH[1]}"
+					_gs_es_dest_emitted["${_key}"]=1
+					if [[ -v _gs_es_dest_vals["${_key}"] ]]; then
+						# Key exists in dest: emit the dest line (preserves dest value;
+						# sync_values=true will overwrite via report.sh after this step)
+						printf '%s\n' "${_gs_es_dest_vals[${_key}]}"
+					else
+						# New key from src: emit src line at this position
+						printf '%s\n' "${_line}"
+					fi
+				else
+					# Blank/comment line: emit verbatim (preserves @todo annotations)
+					printf '%s\n' "${_line}"
+				fi
+			done < "${src_file}"
+
+			# Append local-only dest keys (in dest but not in src) under a footer comment
+			local _has_local_only=false
+			while IFS= read -r _line || [[ -n "${_line}" ]]; do
+				if [[ "${_line}" =~ ^([A-Za-z_][A-Za-z0-9_]*)= ]]; then
+					local _dkey="${BASH_REMATCH[1]}"
+					if [[ -z "${_gs_es_dest_emitted[${_dkey}]:-}" ]]; then
+						if [[ "${_has_local_only}" = "false" ]]; then
+							printf '\n# --- local-only keys (not present in .env) ---\n'
+							_has_local_only=true
+						fi
+						printf '%s\n' "${_line}"
+					fi
+				fi
+			done < "${dest_file}"
+		} > "${merged_file}"
 
 		# P6: merge three sed -i passes into one
 		local _sed_args=()

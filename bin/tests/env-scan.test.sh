@@ -1257,6 +1257,71 @@ t "t20b: --help output contains v1.0.0" bash -c "
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
+# --- order-preserving merge tests ---
+# ═══════════════════════════════════════════════════════════════════════════
+section "21 — Order-preserving merge"
+
+t "new key from src appears at source-order position (not appended at end)" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t21a; mkdir -p \"\$D\"
+    # src has A, NEW, B in that order; dest has A and B (NEW is missing)
+    printf 'GLOBAL_STACK_A=a\nGLOBAL_STACK_NEW=newval\nGLOBAL_STACK_B=b\n' > \"\$D/.env\"
+    printf 'GLOBAL_STACK_A=a\nGLOBAL_STACK_B=b\n' > \"\$D/.env.local\"
+    bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=false \
+        --check-missing=false --show-added-entries=false --show-different-entries=false \
+        --strip-comments=false --remove-empty-lines=false 2>&1 >/dev/null
+    content=\$(cat \"\$D/.env.local\")
+    # A must appear before NEW, and NEW must appear before B
+    pos_a=\$(echo \"\$content\" | grep -n 'GLOBAL_STACK_A=' | cut -d: -f1)
+    pos_new=\$(echo \"\$content\" | grep -n 'GLOBAL_STACK_NEW=' | cut -d: -f1)
+    pos_b=\$(echo \"\$content\" | grep -n 'GLOBAL_STACK_B=' | cut -d: -f1)
+    [[ -n \"\$pos_a\" && -n \"\$pos_new\" && -n \"\$pos_b\" ]] || { echo \"Missing key in output\"; echo FAIL; exit 0; }
+    [[ \"\$pos_a\" -lt \"\$pos_new\" && \"\$pos_new\" -lt \"\$pos_b\" ]] && echo PASS || { echo \"Order wrong: A=\$pos_a NEW=\$pos_new B=\$pos_b\"; echo FAIL; }
+"
+
+t "local-only key (in dest but not in src) preserved in footer section" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t21b; mkdir -p \"\$D\"
+    # src has A only; dest has A and LOCAL_ONLY; strip-comments=false to see the footer marker
+    printf 'GLOBAL_STACK_A=a\n' > \"\$D/.env\"
+    printf 'GLOBAL_STACK_A=a\nGLOBAL_STACK_LOCAL_ONLY=local_value\n' > \"\$D/.env.local\"
+    bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=false \
+        --check-missing=false --show-added-entries=false --show-different-entries=false \
+        --strip-comments=false --remove-empty-lines=false 2>&1 >/dev/null
+    content=\$(cat \"\$D/.env.local\")
+    # LOCAL_ONLY must be present and must appear after the local-only section comment
+    echo \"\$content\" | grep -q 'GLOBAL_STACK_LOCAL_ONLY=local_value' || { echo \"LOCAL_ONLY key missing\"; echo FAIL; exit 0; }
+    pos_comment=\$(echo \"\$content\" | grep -n 'local-only keys' | cut -d: -f1)
+    pos_local=\$(echo \"\$content\" | grep -n 'GLOBAL_STACK_LOCAL_ONLY=' | cut -d: -f1)
+    [[ -n \"\$pos_comment\" && -n \"\$pos_local\" && \"\$pos_comment\" -lt \"\$pos_local\" ]] && echo PASS || { echo \"Footer comment/order wrong: comment=\$pos_comment local=\$pos_local\"; echo FAIL; }
+"
+
+t "@todo env-update comment stays immediately before its key after insertion" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t21c; mkdir -p \"\$D\"
+    # src has an annotated NEW key between A and B; dest has only A and B
+    # strip-comments=false to preserve the annotation comment in the output
+    printf 'GLOBAL_STACK_A=a\n# @todo env-update github:foo/bar v1.0\nGLOBAL_STACK_NEW=newval\nGLOBAL_STACK_B=b\n' > \"\$D/.env\"
+    printf 'GLOBAL_STACK_A=a\nGLOBAL_STACK_B=b\n' > \"\$D/.env.local\"
+    bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=false \
+        --check-missing=false --show-added-entries=false --show-different-entries=false \
+        --strip-comments=false --remove-empty-lines=false 2>&1 >/dev/null
+    content=\$(cat \"\$D/.env.local\")
+    # The @todo comment line must immediately precede GLOBAL_STACK_NEW=
+    pos_comment=\$(echo \"\$content\" | grep -n '@todo env-update' | cut -d: -f1)
+    pos_new=\$(echo \"\$content\" | grep -n 'GLOBAL_STACK_NEW=' | cut -d: -f1)
+    [[ -n \"\$pos_comment\" && -n \"\$pos_new\" ]] || { echo \"Comment or key missing\"; echo FAIL; exit 0; }
+    [[ \$(( pos_new - pos_comment )) -eq 1 ]] && echo PASS || { echo \"Comment not immediately before key: comment=\$pos_comment new=\$pos_new\"; echo FAIL; }
+"
+
+t "with --sync-values=false, common-key values from dest are preserved over src" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t21d; mkdir -p \"\$D\"
+    # src has FOO=src_value; dest has FOO=local_override; with sync-values=false dest wins
+    printf 'GLOBAL_STACK_FOO=src_value\n' > \"\$D/.env\"
+    printf 'GLOBAL_STACK_FOO=local_override\n' > \"\$D/.env.local\"
+    bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=false --sync-values=false \
+        --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
+    grep -q 'GLOBAL_STACK_FOO=local_override' \"\$D/.env.local\" && echo PASS || { echo \"Dest value was overwritten despite sync-values=false\"; echo FAIL; }
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section

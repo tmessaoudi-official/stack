@@ -151,6 +151,14 @@ has `FOO=myvalue` and `.env` has `FOO=default`, the destination value is overwri
 With `--sync-values=false`, destination values that differ from source are preserved —
 useful when `.env.local` holds intentional machine-specific overrides.
 
+New keys from `.env` are inserted at their **source-order position** in `.env.local`
+(next to their neighbours), not appended at the end. This keeps related variables
+together and preserves `# @todo env-update` annotation comments which appear on the
+line immediately before their corresponding key.
+
+Local-only keys (present in `.env.local` but not in `.env`) are preserved in a footer
+section under a `# --- local-only keys (not present in .env) ---` marker.
+
 ---
 
 ## Missing Variable Checks

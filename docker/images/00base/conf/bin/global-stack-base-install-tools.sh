@@ -281,6 +281,14 @@ if [[ "" != "${CLAUDE_CODE_ARCH}" && "" != "${OPERATING_SYSTEM}" && "" != "${GLO
 	sudo chmod a+x /usr/local/bin/claude
 fi
 
+if [[ "true" == "${GLOBAL_STACK_RTK_INIT:-false}" ]] \
+  && command -v rtk >/dev/null 2>&1 \
+  && command -v claude >/dev/null 2>&1; then
+	echo "Initializing rtk for Claude Code"
+	rtk telemetry disable
+	rtk init --agent claude --global --auto-patch
+fi
+
 echo "Updating/Installing yq"
 echo "https://github.com/mikefarah/yq/releases/download/${GLOBAL_STACK_YQ_VERSION}/yq_linux_amd64"
 curl -L https://github.com/mikefarah/yq/releases/download/${GLOBAL_STACK_YQ_VERSION}/yq_linux_amd64 -o /usr/local/bin/yq
