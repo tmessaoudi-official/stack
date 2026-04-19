@@ -311,7 +311,7 @@ Claude Code's configuration for this project lives in:
 
 ## Software Craftsmanship & Thinking Frameworks
 
-The `global-stack-lead-dev` agent applies 30+ mental models across 5 categories (thinking razors, engineering laws, debugging models, decision frameworks, creative thinking) plus structured protocols for debugging (triage→investigate→root-cause→hypothesis), confidence-gated code review (P0-P3 severity routing), and adversarial brainstorm filtering. It names frameworks being applied and explains the connection. See the agent definition for the full reference.
+The `global-stack-lead-dev` agent applies 30+ mental models — a Core Working Set of 12 always-active frameworks plus 5 Full Reference sections (thinking razors, engineering laws, debugging models, decision frameworks, creative thinking) — plus structured protocols for debugging (triage→investigate→root-cause→hypothesis), confidence-gated code review (P0-P3 severity routing), and adversarial brainstorm filtering. It names frameworks being applied and explains the connection. See the agent definition for the full reference.
 
 ## File Layout Quick Reference
 
