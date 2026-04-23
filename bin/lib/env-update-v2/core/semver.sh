@@ -50,6 +50,16 @@ _gs_eu2_semver_compare() {
 _gs_eu2_semver_delta() {
   local _a="${1#v}" _b="${2#v}"
   [[ -z "${_a}" || -z "${_b}" ]] && { echo "unknown"; return; }
+
+  # Codename-date style (e.g. ubuntu "resolute-20260108" → "resolute-20260413"):
+  # both strings start with an alpha char → extract prefix up to first hyphen.
+  # Same prefix (same codename) → patch.  Different prefix → major.
+  if [[ "${_a}" =~ ^[^0-9] && "${_b}" =~ ^[^0-9] ]]; then
+    local _ap="${_a%%-*}" _bp="${_b%%-*}"
+    [[ "${_ap}" == "${_bp}" ]] && { echo "patch"; return; }
+    echo "major"; return
+  fi
+
   local _am="${_a%%.*}" _bm="${_b%%.*}"
   [[ "${_am}" != "${_bm}" ]] && { echo "major"; return; }
   local _ar="${_a#*.}" _br="${_b#*.}"

@@ -43,6 +43,7 @@ SOPS_ARCH=""
 YAMLFMT_ARCH=""
 RTK_ARCH=""
 CLAUDE_CODE_ARCH=""
+YQ_ARCH=""
 
 if [[ "linux" == "${OPERATING_SYSTEM}" ]]; then
 	DIFFTASTIC_OPERATING_SYSTEM="unknown-${OPERATING_SYSTEM}-gnu"
@@ -59,10 +60,12 @@ if [[ "linux" == "${OPERATING_SYSTEM}" ]]; then
 		SHFMT_ARCH="arm64"
 		RTK_ARCH="aarch64"
 		CLAUDE_CODE_ARCH="arm64"
+		YQ_ARCH="arm64"
 		;;
 	"armv6l")
 		GITLEAKS_ARCH="armv6"
 		SHFMT_ARCH="arm"
+		YQ_ARCH="arm"
 		echo "Unsupported system/architecture hadolint/shell-check/sonar-scanner-cli/difftastic: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
 		;;
 	"armv6hf")
@@ -76,6 +79,7 @@ if [[ "linux" == "${OPERATING_SYSTEM}" ]]; then
 	"armv7l")
 		GITLEAKS_ARCH="armv7"
 		SHFMT_ARCH="arm"
+		YQ_ARCH="arm"
 		echo "Unsupported system/architecture hadolint/shell-check/sonar-scanner-cli/difftastic: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
 		;;
 	"riscv64")
@@ -95,15 +99,18 @@ if [[ "linux" == "${OPERATING_SYSTEM}" ]]; then
 		YAMLFMT_ARCH="${SYSTEM_ARCH}"
 		RTK_ARCH="x86_64"
 		CLAUDE_CODE_ARCH="x64"
+		YQ_ARCH="amd64"
 		;;
 	"i386")
 		GITLEAKS_ARCH="x32"
 		SHFMT_ARCH="386"
+		YQ_ARCH="386"
 		echo "Unsupported system/architecture hadolint/shell-check/sonar-scanner-cli/difftastic: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
 		;;
 	"i686")
 		GITLEAKS_ARCH="x32"
 		SHFMT_ARCH="386"
+		YQ_ARCH="386"
 		echo "Unsupported system/architecture hadolint/shell-check/sonar-scanner-cli/difftastic: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
 		;;
 	*)
@@ -126,6 +133,7 @@ if [[ "darwin" == "${OPERATING_SYSTEM}" ]]; then
 		SHFMT_ARCH="arm64"
 		RTK_ARCH="aarch64"
 		CLAUDE_CODE_ARCH="arm64"
+		YQ_ARCH="arm64"
 		echo "Unsupported system/architecture hadolint: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
 		;;
 	"x86_64")
@@ -139,6 +147,7 @@ if [[ "darwin" == "${OPERATING_SYSTEM}" ]]; then
 		YAMLFMT_ARCH="${SYSTEM_ARCH}"
 		RTK_ARCH="x86_64"
 		CLAUDE_CODE_ARCH="x64"
+		YQ_ARCH="amd64"
 		;;
 	*)
 		echo "Unsupported system/architecture hadolint/shell-check/gitleaks/sonar-scanner-cli/difftastic/shfmt: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
@@ -202,7 +211,7 @@ if [[ "" != "${OPERATING_SYSTEM}" ]]; then
 		sudo curl -L https://github.com/google/yamlfmt/releases/download/${GLOBAL_STACK_YAMLFMT_VERSION}/${YAMLFMT_ARCHIVE_NAME}.tar.gz -o /usr/local/bin/${YAMLFMT_ARCHIVE_NAME}.tar.gz
 		sudo mkdir -p /usr/local/bin/${YAMLFMT_ARCHIVE_NAME}
 		sudo tar -xf /usr/local/bin/${YAMLFMT_ARCHIVE_NAME}.tar.gz -C /usr/local/bin/${YAMLFMT_ARCHIVE_NAME}
-		sud cp /usr/local/bin/${YAMLFMT_ARCHIVE_NAME}/yamlfmt /usr/local/bin/yamlfmt
+		sudo cp /usr/local/bin/${YAMLFMT_ARCHIVE_NAME}/yamlfmt /usr/local/bin/yamlfmt
 		sudo rm -rf /usr/local/bin/${YAMLFMT_ARCHIVE_NAME} /usr/local/bin/${YAMLFMT_ARCHIVE_NAME}.tar.gz
 		sudo chmod a+x /usr/local/bin/yamlfmt
 	fi
@@ -281,15 +290,19 @@ if [[ "" != "${CLAUDE_CODE_ARCH}" && "" != "${OPERATING_SYSTEM}" && "" != "${GLO
 	sudo chmod a+x /usr/local/bin/claude
 fi
 
-if [[ "true" == "${GLOBAL_STACK_RTK_INIT:-false}" ]] \
+if [[ "true" == "${GLOBAL_STACK_RTK_INIT}" ]] \
   && command -v rtk >/dev/null 2>&1 \
   && command -v claude >/dev/null 2>&1; then
 	echo "Initializing rtk for Claude Code"
+	sudo mkdir -p "/home/${GLOBAL_STACK_DOCKER_USER_ID}/.claude"
+	sudo chown "${GLOBAL_STACK_DOCKER_USER_ID}":"${GLOBAL_STACK_DOCKER_GROUP_ID}" "/home/${GLOBAL_STACK_DOCKER_USER_ID}/.claude"
 	rtk telemetry disable
 	rtk init --agent claude --global --auto-patch
 fi
 
-echo "Updating/Installing yq"
-echo "https://github.com/mikefarah/yq/releases/download/${GLOBAL_STACK_YQ_VERSION}/yq_linux_amd64"
-curl -L https://github.com/mikefarah/yq/releases/download/${GLOBAL_STACK_YQ_VERSION}/yq_linux_amd64 -o /usr/local/bin/yq
-sudo chmod a+x /usr/local/bin/yq
+if [[ "" != "${YQ_ARCH}" && "" != "${OPERATING_SYSTEM}" ]]; then
+	echo "Installing yq - system : ${OPERATING_SYSTEM}, arch : ${YQ_ARCH}"
+	echo "https://github.com/mikefarah/yq/releases/download/${GLOBAL_STACK_YQ_VERSION}/yq_${OPERATING_SYSTEM}_${YQ_ARCH}"
+	sudo curl -L "https://github.com/mikefarah/yq/releases/download/${GLOBAL_STACK_YQ_VERSION}/yq_${OPERATING_SYSTEM}_${YQ_ARCH}" -o /usr/local/bin/yq
+	sudo chmod a+x /usr/local/bin/yq
+fi

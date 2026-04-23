@@ -1,9 +1,9 @@
 #!/bin/bash
 # main.sh — gs_es_main orchestration
 
-# Include guard
-[[ -n "${_GS_gs_es_MAIN_SH_LOADED:-}" ]] && return 0
-readonly _GS_gs_es_MAIN_SH_LOADED=1
+# Include guard — B4: fix name to follow _GS_ES_MODULENAME_SH_LOADED convention
+[[ -n "${_GS_ES_MAIN_SH_LOADED:-}" ]] && return 0
+readonly _GS_ES_MAIN_SH_LOADED=1
 
 # shellcheck source=./config/defaults.sh
 source "$(dirname "${BASH_SOURCE[0]}")/config/defaults.sh"
@@ -32,8 +32,13 @@ gs_es_main() {
 
 	# ── Session temp directory (infrastructure — not a profiled phase) ─────────
 	_GS_ES_SESSION_TMP="$(mktemp -d)"
-	# shellcheck disable=SC2064
-	trap "rm -rf '${_GS_ES_SESSION_TMP}'" EXIT
+	# A4: Wait for any background jobs before cleaning up temp dir,
+	# so extraction subprocesses don't race against rm -rf.
+	_gs_es_cleanup() {
+		wait 2>/dev/null || true
+		rm -rf "${_GS_ES_SESSION_TMP}"
+	}
+	trap '_gs_es_cleanup' EXIT
 
 	# Phase 2: Build source index
 	_gs_es_profile_start
@@ -64,7 +69,8 @@ gs_es_main() {
 
 	# Phase 4.5: Backup pre-flight (purge + snapshot)
 	local _backup_ts
-	_backup_ts="$(date +%Y%m%d-%H%M%S)"
+	# A3: Append PID to avoid timestamp collisions when two runs start in the same second
+	_backup_ts="$(date +%Y%m%d-%H%M%S)-$$"
 	_GS_ES_CFG[_backup_ts]="${_backup_ts}"
 
 	if [[ "true" == "${_GS_ES_CFG[backup_purge]}" ]]; then
@@ -79,12 +85,13 @@ gs_es_main() {
 	if [[ "true" == "${_GS_ES_CFG[backup]}" && "true" != "${_GS_ES_CFG[dry_run]}" ]]; then
 		local _bk_dest
 		for _bk_dest in ${_GS_ES_CFG[destination_files]//[\"\'\`]/}; do
+			# A5: abort if backup fails — do not overwrite without a safety copy
 			_gs_es_backup_unconditional \
 				"${_bk_dest}" \
 				"${_backup_ts}" \
 				"${_GS_ES_CFG[backup_suffix]}" \
 				"false" \
-				"${_GS_ES_CFG[quiet]}"
+				"${_GS_ES_CFG[quiet]}" || exit 1
 		done
 	elif [[ "true" == "${_GS_ES_CFG[backup]}" && "true" == "${_GS_ES_CFG[dry_run]}" ]]; then
 		local _bk_dest
@@ -144,4 +151,5 @@ gs_es_main() {
 
 	# ── Print profile report if requested ─────────────────────────────────────
 	[[ "true" = "${_GS_ES_CFG[profile]}" ]] && _gs_es_profile_report
+	return 0
 }

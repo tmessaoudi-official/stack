@@ -50,11 +50,16 @@ Options:
   --backup-keep=<N>                          Keep the N newest backups per file after each run; 0 = unlimited (default: 10)
   --backup-purge=<bool>                      Delete ALL existing <file>.bak.* backups before the run (default: false)
   --backup-suffix=<str>                      Suffix anchor for backup files; full name: <file><suffix>.<YYYYMMDD-HHMMSS> (default: .bak)
+  --prune-removed=<bool>                     Drop orphaned (local-only) vars from .env.local instead of keeping them (default: false)
+  --orphan-exclude-pattern=<regex>           ERE regex: suppress orphaned-var warnings for matching var names (default: "")
+  --orphan-quiet=<bool>                      Suppress ALL orphaned-var warnings; vars are still kept in .env.local (default: false)
 
 Examples:
   ./env-scan.sh --debug=true --dir=/stack/.env --show-added-entries=false
   ./env-scan.sh --source-files="file1.env file2.env" --destination-files="dest1.env dest2.env"
   ./env-scan.sh --scan-path=/config --sync-values=true
+  bin/env-scan.sh --orphan-exclude-pattern='GLOBAL_STACK_LOCAL_'  # silence machine-local vars
+  bin/env-scan.sh --orphan-quiet=true                              # silence all orphan warnings
 
 Description:
   This script processes environment variable files, performing operations like:

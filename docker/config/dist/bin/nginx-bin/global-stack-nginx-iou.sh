@@ -63,7 +63,7 @@ if [[ "${LATEST_NGINX_VERSION}" != "${CURRENT_NGINX_VERSION}" ]]; then
   mkdir -p \
     "${NGINX_PATH}/nginx-build"
 
-  wget -O "${NGINX_PATH}/nginx.tar.gz" "https://nginx.org/download/nginx-${LATEST_NGINX_VERSION}.tar.gz"
+  curl -fsSL -o "${NGINX_PATH}/nginx.tar.gz" "https://nginx.org/download/nginx-${LATEST_NGINX_VERSION}.tar.gz"
   tar -xzf "${NGINX_PATH}/nginx.tar.gz" --strip-components=1 -C "${NGINX_PATH}/nginx-build"
   
   cd "${NGINX_PATH}/nginx-build"

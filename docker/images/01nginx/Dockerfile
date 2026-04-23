@@ -28,7 +28,7 @@ ENV GLOBAL_STACK_NGINX_AUTOMAKE_VERSION="${GLOBAL_STACK_NGINX_AUTOMAKE_VERSION}"
 # If you add, remove, or update a package here, do the same in the other two.
 # @todo fix pin versions
 RUN shopt -s extdebug \
-    && [ "${GLOBAL_STACK_NGINX_AUTOMAKE_VERSION}" != "" ] && [ "${GLOBAL_STACK_NGINX_AUTOMAKE_MIRROR}" != "" ] && (wget ${GLOBAL_STACK_NGINX_AUTOMAKE_MIRROR}/automake-${GLOBAL_STACK_NGINX_AUTOMAKE_VERSION}.tar.gz && tar -xf automake-${GLOBAL_STACK_NGINX_AUTOMAKE_VERSION}.tar.gz && cd automake-${GLOBAL_STACK_NGINX_AUTOMAKE_VERSION} && ./configure --prefix=/opt/automake-${GLOBAL_STACK_NGINX_AUTOMAKE_VERSION} && make -j$(nproc) && make install && rm -rf automake-${GLOBAL_STACK_NGINX_AUTOMAKE_VERSION}) || echo -e "\n automake will not be installed" \
+    && { [ "${GLOBAL_STACK_NGINX_AUTOMAKE_VERSION}" != "" ] && [ "${GLOBAL_STACK_NGINX_AUTOMAKE_MIRROR}" != "" ] && (curl -fsSLO "${GLOBAL_STACK_NGINX_AUTOMAKE_MIRROR}/automake-${GLOBAL_STACK_NGINX_AUTOMAKE_VERSION}.tar.gz" && tar -xf automake-${GLOBAL_STACK_NGINX_AUTOMAKE_VERSION}.tar.gz && cd automake-${GLOBAL_STACK_NGINX_AUTOMAKE_VERSION} && ./configure --prefix=/opt/automake-${GLOBAL_STACK_NGINX_AUTOMAKE_VERSION} && make -j$(nproc) && make install && rm -rf automake-${GLOBAL_STACK_NGINX_AUTOMAKE_VERSION}) || echo -e "\n automake will not be installed"; } \
     && IFS=$'\n\t' \
     && apt-get -o Acquire::AllowInsecureRepositories=true update --allow-releaseinfo-change \
     && apt-get --allow-unauthenticated install -y --no-install-recommends --fix-missing \

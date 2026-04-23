@@ -25,7 +25,11 @@ _gs_es_backup_unconditional() {
     return 0
   fi
 
-  cp -- "${_file}" "${_dest}"
+  # A5: Check cp exit code — abort if backup fails (disk full, permissions, etc.)
+  if ! cp -a "${_file}" "${_dest}"; then
+    printf 'env-scan: backup failed for %s → %s (disk full?)\n' "${_file}" "${_dest}" >&2
+    return 1
+  fi
   [[ "${_quiet}" == "true" ]] || echo " [backup] ${_file} → ${_dest}"
 }
 

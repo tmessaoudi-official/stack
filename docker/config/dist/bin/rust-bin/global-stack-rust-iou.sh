@@ -27,7 +27,7 @@ if [ "${RUST_INIT_CURRENT_VERSION}" != "${RUST_INIT_LATEST_VERSION}" ]; then
   echo -e "\nInstalling/Updating rust-init from ${RUST_INIT_CURRENT_VERSION} to ${RUST_INIT_LATEST_VERSION}"
 
   rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN}/rustup.installer.sh"
-  wget https://raw.githubusercontent.com/rust-lang/rustup/${RUST_INIT_LATEST_VERSION}/rustup-init.sh -O "${GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN}/rustup.installer.sh"
+  curl -fsSL -o "${GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN}/rustup.installer.sh" "https://raw.githubusercontent.com/rust-lang/rustup/${RUST_INIT_LATEST_VERSION}/rustup-init.sh"
   chmod a+x "${GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN}/rustup.installer.sh"
   
   sed -i 's|local _url="${RUSTUP_UPDATE_ROOT}/dist/${_arch}/rustup-init${_ext}"|local _url="\$\{RUSTUP_UPDATE_ROOT\}/archive/${GLOBAL_STACK_RUSTUP_INIT_VERSION}/\$\{_arch\}/rustup-init\$\{_ext\}"|g' "${GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN}/rustup.installer.sh"

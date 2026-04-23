@@ -100,19 +100,21 @@ Parses `.env` annotations, fetches latest versions from 12 registries, auto-appl
 
 ### bin/env-update-v2.sh
 
-**v0.2.0 (Phase 2 — dockerhub fetcher + channel selection)** — parses `.env` annotations, fetches latest versions from Docker Hub, and streams a `[AUTO|HOLD|SKIP|ERROR]` report. No writes to `.env` yet.
+**v0.2.0 (Phase 2 — dockerhub fetcher + channel selection + apply)** — parses `.env` annotations, fetches latest versions from Docker Hub, streams a `[AUTO|HOLD|SKIP|ERROR]` report, and can apply AUTO decisions back to `.env`.
 
 **Key flags**:
 ```bash
 --version              # Print 0.2.0 and exit
 --check                # Fetch latest versions and stream report (network required)
+--apply                # Apply all AUTO decisions to .env; implies --check.
+                       # Creates timestamped backup before writing. Use with --dry-run to preview.
 --no-cache             # Bypass fetch cache
 --cache-ttl=<N>        # Cache TTL in seconds (default: 3600)
 --dump                 # Emit parsed records (default: text; see --format)
 --format=text|json     # Dump format (default: text)
 --filter=<regex>       # Only process records whose env_var matches regex
 --env-file=<path>      # Source file (default: /stack/.env)
---dry-run              # No-op; gates cache writes. Reserved for .env write phases.
+--dry-run              # No writes (gates cache, .env, and Dockerfile propagation)
 ```
 
 **Default (no flags)**: prints a parser summary — record count, per-type breakdown, hint to run `--check`.
@@ -225,7 +227,8 @@ make start-local-registry            # Start local TLS registry (port 5000)
 - `/recent` — quick context: recent commits, uncommitted changes, stack health
 - `/export-setup` — bundle config into a portable `.tar.gz`; `--scope project` (default) LLM-generalizes this project's CLAUDE.md + .claude/ into a rich template with ADAPT markers; `--scope global` exports `~/.claude/` as-is; `--scope all` produces both archives
 - `/import-setup` — install a bundle: Phase 0 detects existing `.claude/` (asks replace/manual-merge); bash installer runs; Phase 5 probes target project and fills ADAPT markers in-place
-- `/adapt` — probe a project directory and write a tailored Claude Code config
+- `/adapt` — post-import: explore the project deeply, fill all ADAPT markers in CLAUDE.md + .claude/ (from an imported bundle), then self-destruct; safe to re-run (idempotent if no markers remain)
+- `/sync-config` — detect and repair config drift: scans CLAUDE.md + .claude/ vs project reality (files, tools, commands, structure), presents a plan, waits for confirmation; supports `--check` (report only) and `--apply` (auto-fix without prompting)
 
 **Automatic hooks** (PostToolUse on Edit/Write):
 - `shell-check` — lints `.sh` files on every write
@@ -238,7 +241,7 @@ make start-local-registry            # Start local TLS registry (port 5000)
 ## Gotchas & Pitfalls
 
 - **Trailing `;` in `COMPOSE_FILE`** breaks Docker Compose silently — always check this after editing
-- **Port vars must end with `:`** when set (e.g. `42700:`) — omitting the colon causes Docker Compose to treat it as the container port only
+- **Port vars must end with `:`** when set (e.g. `42708:`) — compose uses `${VAR:-}PORT` so the value becomes the host half of `HOST:CONTAINER`; omitting the colon silently concatenates the port numbers (e.g. `427083306`)
 - **`00base` must always be in `COMPOSE_FILE`** — nearly everything depends on it being healthy
 - **Tier 02 required for tier 03**: if `03node22` is active, `02nvm` must be in `COMPOSE_FILE`; same for `02phpbrew`/`03php*`, `02sdkman`/`03java*`, etc.
 - **`${VAR}` expansion in `.env`**: variables must be defined before being referenced; Docker Compose and Make both expand them, but simple dotenv parsers do not

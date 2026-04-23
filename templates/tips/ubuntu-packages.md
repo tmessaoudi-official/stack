@@ -9,7 +9,7 @@ sudo curl -o /usr/share/keyrings/postgresql.asc --fail https://www.postgresql.or
 sudo sh -c 'echo "Types: deb\nTrusted: yes\nSigned-By: /usr/share/keyrings/postgresql.asc\nArch: $(dpkg --print-architecture)\nURIs: https://apt.postgresql.org/pub/repos/apt\nSuites: ${UBUNTU_CODENAME}-pgdg\nComponents: main" > /etc/apt/sources.list.d/pgdg.sources'
 sudo curl -fsSL 'https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xF911AB184317630C59970973E363C90F8F1B6217' | gpg --dearmor | sudo tee /usr/share/keyrings/git.gpg
 sudo echo -e "Types: deb\nTrusted: yes\nSigned-By: /usr/share/keyrings/git.gpg\nArch: $(dpkg --print-architecture)\nURIs: https://ppa.launchpadcontent.net/git-core/ppa/ubuntu\nSuites: $(lsb_release -cs)\nComponents: main" | sudo dd of=/etc/apt/sources.list.d/git.sources
-sudo wget -qO- https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor | sudo dd of=/usr/share/keyrings/google-chrome.gpg
+sudo curl -fsSL https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor | sudo dd of=/usr/share/keyrings/google-chrome.gpg
 sudo echo -e "Types: deb\nTrusted: yes\nSigned-By: /usr/share/keyrings/google-chrome.gpg\nArch: $(dpkg --print-architecture)\nURIs: http://dl.google.com/linux/chrome/deb/\nSuites: stable\nComponents: main" | sudo dd of=/etc/apt/sources.list.d/google-chrome.sources
 sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker.gpg
 sudo echo -e "Types: deb\nTrusted: yes\nSigned-By: /usr/share/keyrings/docker.gpg\nArch: $(dpkg --print-architecture)\nURIs: https://download.docker.com/linux/ubuntu\nSuites: ${UBUNTU_CODENAME}\nComponents: stable" | sudo tee /etc/apt/sources.list.d/docker.sources > /dev/null
@@ -203,7 +203,7 @@ sudo apt-get --allow-unauthenticated install -y --fix-missing \
     && sudo ln -s /usr/lib/x86_64-linux-gnu/liblber.so /usr/lib/liblber.so \
     && sudo mkdir /tmp/watcher-c \
     && cd /tmp/watcher-c \
-    && sudo wget -O watcher-${GLOBAL_STACK_FRANKENPHP_WATCHER_VERSION}.tar.gz https://api.github.com/repos/e-dant/watcher/tarball/${GLOBAL_STACK_FRANKENPHP_WATCHER_VERSION} \
+    && sudo curl -fsSL -o "watcher-${GLOBAL_STACK_FRANKENPHP_WATCHER_VERSION}.tar.gz" "https://api.github.com/repos/e-dant/watcher/tarball/${GLOBAL_STACK_FRANKENPHP_WATCHER_VERSION}" \
     && sudo tar -xf watcher-${GLOBAL_STACK_FRANKENPHP_WATCHER_VERSION}.tar.gz --strip-components 1 -C /tmp/watcher-c \
     && sudo rm -rf watcher-${GLOBAL_STACK_FRANKENPHP_WATCHER_VERSION}.tar.gz \
     && sudo cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \

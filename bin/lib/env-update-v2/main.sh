@@ -26,6 +26,8 @@ source "$(dirname "${BASH_SOURCE[0]}")/reporting/dump.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/reporting/summary.sh"
 # shellcheck source=./reporting/stream.sh
 source "$(dirname "${BASH_SOURCE[0]}")/reporting/stream.sh"
+# shellcheck source=./core/apply.sh
+source "$(dirname "${BASH_SOURCE[0]}")/core/apply.sh"
 
 _gs_eu2_run_check() {
   local _count _i _type
@@ -34,7 +36,17 @@ _gs_eu2_run_check() {
   # Propagate cache settings from CFG to env vars consumed by cache.sh
   _GS_EU2_CACHE_TTL="${_GS_EU2_CFG[cache_ttl]:-3600}"
 
+  local _n_auto=0 _n_hold=0 _n_skip=0 _n_error=0 _n_manual=0
+
   for (( _i = 0; _i < _count; _i++ )); do
+    local _env_var
+    _env_var="$(_gs_eu2_record_get "${_i}" env_var)"
+
+    # Progress indicator: show which record is being fetched (to stderr so it
+    # doesn't mix with structured stdout, and is visible even when piped)
+    printf '\r  [%d/%d] fetching %-55s' \
+      "$(( _i + 1 ))" "${_count}" "${_env_var:0:55}" >&2
+
     _type="$(_gs_eu2_record_get "${_i}" type)"
     case "${_type}" in
       dockerhub) _gs_eu2_fetch_dockerhub "${_i}" ;;
@@ -58,16 +70,65 @@ _gs_eu2_run_check() {
       _classified="$(_gs_eu2_classify_decision "${_cur}" "${_prop}" "${_override}" "${_manual}" "${_major}")"
       _gs_eu2_record_set "${_i}" decision "${_classified}"
     fi
+
+    # Annotate SKIP on a floating-reference current with a human-readable reason
+    if [[ "$(_gs_eu2_record_get "${_i}" decision)" == "SKIP" && \
+          "${_prop}" != "${_cur}" ]] && \
+       _gs_eu2_is_unversioned "${_cur}"; then
+      _gs_eu2_record_set "${_i}" error_message \
+        "floating reference (${_cur}) — pin manually to adopt proposed version"
+    fi
+
+    # Stream this record immediately — don't buffer until all fetches complete
+    local _decision _err _tag _change
+    _decision="$(_gs_eu2_record_get "${_i}" decision)"
+    _err="$(_gs_eu2_record_get "${_i}" error_message)"
+
+    case "${_decision}" in
+      AUTO)   _tag="[AUTO  ]"; (( ++_n_auto ))   || true ;;
+      HOLD)   _tag="[HOLD  ]"; (( ++_n_hold ))   || true ;;
+      SKIP)   _tag="[SKIP  ]"; (( ++_n_skip ))   || true ;;
+      ERROR)  _tag="[ERROR ]"; (( ++_n_error ))  || true ;;
+      MANUAL) _tag="[MANUAL]"; (( ++_n_manual )) || true ;;
+      *)      _tag="[SKIP  ]"; (( ++_n_skip ))   || true ;;
+    esac
+
+    _change=""
+    if [[ "${_decision}" == "SKIP" && -n "${_err}" ]]; then
+      _change="  (${_err})"
+    elif [[ -n "${_prop}" && "${_prop}" != "${_cur}" ]]; then
+      _change="  ${_cur} → ${_prop}"
+    elif [[ -n "${_err}" ]]; then
+      _change="  (${_err})"
+    elif [[ "${_decision}" == "SKIP" ]]; then
+      _change="  (up to date)"
+    fi
+
+    # Clear the progress line then print the result
+    printf '\r%-80s\r' "" >&2
+    printf '%s  %-60s%s\n' "${_tag}" "${_env_var}" "${_change}"
   done
 
-  _gs_eu2_stream_records
+  local _total=$(( _n_auto + _n_hold + _n_skip + _n_error + _n_manual ))
+  printf '%-80s\n' "──────────────────────────────────────────────────────────────────────────────"
+  printf '  Summary: %d AUTO, %d HOLD, %d MANUAL, %d SKIP, %d ERROR  (%d checked)\n' \
+    "${_n_auto}" "${_n_hold}" "${_n_manual}" "${_n_skip}" "${_n_error}" "${_total}"
 }
 
 _gs_eu2_main() {
   _gs_eu2_parse_args "${@}"
 
+  if [[ "${_GS_EU2_CFG[dump]}" == "true" && \
+        ( "${_GS_EU2_CFG[check]}" == "true" || "${_GS_EU2_CFG[apply]}" == "true" ) ]]; then
+    printf 'env-update-v2: --dump is mutually exclusive with --check and --apply\n' >&2
+    exit 1
+  fi
+
+  # --apply implies --check
+  [[ "${_GS_EU2_CFG[apply]}" == "true" ]] && _GS_EU2_CFG[check]="true"
+
   if [[ "true" == "${_GS_EU2_CFG[dry_run]}" ]]; then
-    printf 'env-update-v2: --dry-run active (Phase 2: gates cache writes; no .env writes yet)\n' >&2
+    printf 'env-update-v2: --dry-run active (no writes — cache, .env, and Dockerfile propagation all gated)\n' >&2
   fi
 
   local _env_file="${_GS_EU2_CFG[env_file]}"
@@ -82,6 +143,27 @@ _gs_eu2_main() {
     _gs_eu2_dump_records "${_GS_EU2_CFG[format]}"
   elif [[ "true" == "${_GS_EU2_CFG[check]}" ]]; then
     _gs_eu2_run_check
+
+    if [[ "${_GS_EU2_CFG[apply]}" == "true" ]]; then
+      printf '\n'
+      if [[ "${_GS_EU2_CFG[dry_run]}" == "true" ]]; then
+        printf 'Apply preview (--dry-run):\n'
+        _gs_eu2_apply_updates "${_env_file}" "true"
+      else
+        local _backup="${_env_file}.bak.$(date +%s)"
+        cp -a "${_env_file}" "${_backup}"
+        printf 'Backup: %s\n' "${_backup}" >&2
+        _gs_eu2_apply_updates "${_env_file}" "false"
+        local _env_scan
+        _env_scan="$(dirname "${BASH_SOURCE[0]}")/../../env-scan.sh"
+        if [[ -x "${_env_scan}" ]]; then
+          printf 'Running env-scan.sh to propagate changes...\n' >&2
+          bash "${_env_scan}" 2>&1 || true
+        else
+          printf 'Tip: run bin/env-scan.sh to propagate to .env.local and Dockerfiles\n' >&2
+        fi
+      fi
+    fi
   else
     _gs_eu2_print_summary "${_env_file}"
   fi

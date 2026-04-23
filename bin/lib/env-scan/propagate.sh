@@ -112,8 +112,21 @@ gs_es_propagate_to_dockerfiles() {
                   "${_GS_ES_CFG[quiet]:-false}"
                 _file_backed_up=1
               fi
+              # A1: Escape _env_val for |-delimited sed expression to prevent injection
+              local _escaped_val="${_env_val//\\/\\\\}"   # escape backslash first
+              _escaped_val="${_escaped_val//|/\\|}"        # escape pipe (our delimiter)
+              _escaped_val="${_escaped_val//&/\\&}"        # escape & (sed backreference)
+              # B3: Preserve original ARG quoting style
+              local _write_val
+              if [[ "${_df_val}" =~ ^\"(.*)\"$ ]]; then
+                _write_val="\"${_escaped_val}\""
+              elif [[ "${_df_val}" =~ ^\'(.*)\'$ ]]; then
+                _write_val="'${_escaped_val}'"
+              else
+                _write_val="${_escaped_val}"
+              fi
               # Rewrite the ARG line in-place
-              sed -i "s|^ARG ${_df_var}=.*|ARG ${_df_var}=${_env_val}|" "${_dockerfile}"
+              sed -i "s|^ARG ${_df_var}=.*|ARG ${_df_var}=${_write_val}|" "${_dockerfile}"
             fi
             ((_file_values++)) || true
             ((_total_values++)) || true

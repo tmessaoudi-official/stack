@@ -296,6 +296,32 @@ t "t03o: boolean markers (override, manual, propagate)" bash -c "
     echo PASS
 "
 
+t "t03p: order-agnostic — depends-on BEFORE TYPE:ID works" bash -c "
+    f=\${TMP_DIR}/t03p.env
+    printf '# @todo env-update (depends-on:GLOBAL_STACK_OTHER_VERSION:major) github:foo/bar 1.2.3\nGLOBAL_STACK_FOO_VERSION=1.2.3\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF 'depends_on: GLOBAL_STACK_OTHER_VERSION:major' || { echo \"depends_on not found with flag before TYPE:ID, got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'type: github' || { echo \"type not parsed correctly\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t03q: order-agnostic — multiple flags in any order" bash -c "
+    f=\${TMP_DIR}/t03q.env
+    printf '# @todo env-update (tag-suffix:alpine) (channel:rc) dockerhub:_/postgres:18 18.3\nGLOBAL_STACK_PG_VERSION=18.3\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF 'tag_suffix: alpine' || { echo \"tag_suffix not found\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'channel: rc' || { echo \"channel not found\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t03r: order-agnostic — flag AFTER version token" bash -c "
+    f=\${TMP_DIR}/t03r.env
+    printf '# @todo env-update github:foo/bar 1.2.3 (tag-strip-prefix:v)\nGLOBAL_STACK_FOO_VERSION=1.2.3\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF 'tag_strip_prefix: v' || { echo \"tag_strip_prefix not found when placed after version, got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Section 4 — Structured inline
 # ═══════════════════════════════════════════════════════════════════════════
@@ -434,10 +460,48 @@ t "t08b: json format — valid JSON parseable by jq" bash -c "
     echo PASS
 "
 
-t "t08c: --filter respected" bash -c "
+t "t08c: --filter by var name regex" bash -c "
     out=\$(bash '${ENV_UPDATE_V2}' --dump --filter='MYSQL' --env-file='${FIXTURES}/combined-real-world.env' 2>&1)
     echo \"\$out\" | grep -qF 'GLOBAL_STACK_IMAGE_MYSQL9_VERSION' || { echo \"mysql not in output\"; echo FAIL; exit 0; }
     echo \"\$out\" | grep -qF 'GLOBAL_STACK_FLUTTER3_VERSION' && { echo \"flutter should be filtered out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t08d: --filter=type:dockerhub keeps only dockerhub records" bash -c "
+    out=\$(bash '${ENV_UPDATE_V2}' --dump --filter='type:dockerhub' --env-file='${FIXTURES}/combined-real-world.env' 2>&1)
+    echo \"\$out\" | grep -qF 'GLOBAL_STACK_IMAGE_MYSQL9_VERSION' || { echo \"dockerhub record not found\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'GLOBAL_STACK_FLUTTER3_VERSION' && { echo \"github record should be filtered out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t08e: --filter=type:github keeps only github records" bash -c "
+    out=\$(bash '${ENV_UPDATE_V2}' --dump --filter='type:github' --env-file='${FIXTURES}/combined-real-world.env' 2>&1)
+    echo \"\$out\" | grep -qF 'GLOBAL_STACK_FLUTTER3_VERSION' || { echo \"github record not found\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'GLOBAL_STACK_IMAGE_MYSQL9_VERSION' && { echo \"dockerhub record should be filtered out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t08f: --format=invalid → non-zero exit with message" bash -c "
+    out=\$(bash '${ENV_UPDATE_V2}' --dump --format=invalid --env-file='${FIXTURES}/basic-dockerhub.env' 2>&1)
+    code=\$?
+    [[ \"\$code\" -ne 0 ]] || { echo \"expected non-zero exit, got 0\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qi 'format\|invalid' || { echo \"expected format/invalid in error, got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t08g: --cache-ttl=abc → non-zero exit with message" bash -c "
+    out=\$(bash '${ENV_UPDATE_V2}' --cache-ttl=abc --check --env-file='${FIXTURES}/basic-dockerhub.env' 2>&1)
+    code=\$?
+    [[ \"\$code\" -ne 0 ]] || { echo \"expected non-zero exit, got 0\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qi 'cache-ttl\|integer' || { echo \"expected cache-ttl/integer in error, got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t08h: --dump and --check together → non-zero exit with message" bash -c "
+    out=\$(bash '${ENV_UPDATE_V2}' --dump --check --env-file='${FIXTURES}/basic-dockerhub.env' 2>&1)
+    code=\$?
+    [[ \"\$code\" -ne 0 ]] || { echo \"expected non-zero exit, got 0\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qi 'exclusive\|mutually\|dump\|check' || { echo \"expected exclusivity message, got: \$out\"; echo FAIL; exit 0; }
     echo PASS
 "
 
@@ -597,6 +661,17 @@ t "t12e: is_prerelease detects rc, beta, alpha" bash -c "
     _gs_eu2_is_prerelease '2.3.0beta2'  || { echo 'beta not detected'; echo FAIL; exit 0; }
     _gs_eu2_is_prerelease '1.0.0alpha'  || { echo 'alpha not detected'; echo FAIL; exit 0; }
     _gs_eu2_is_prerelease '18.4'       && { echo 'stable wrongly flagged'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t12f: v-prefixed tags accepted by channel filter (B2)" bash -c "
+    source '/stack/bin/lib/env-update-v2/config/prerelease_markers.sh'
+    source '/stack/bin/lib/env-update-v2/core/semver.sh'
+    source '/stack/bin/lib/env-update-v2/core/channel.sh'
+    versions=\$'v0.29.0\nv0.28.0\nv0.27.0'
+    result=\$(_gs_eu2_channel_select_best \"\$versions\" '')
+    [[ -n \"\$result\" ]] || { echo 'all v-prefixed tags were dropped'; echo FAIL; exit 0; }
+    [[ \"\$result\" == 'v0.29.0' ]] || { echo \"got: \$result\"; echo FAIL; exit 0; }
     echo PASS
 "
 
@@ -788,6 +863,20 @@ t "t15f: rc channel uses rc tag" bash -c "
     echo PASS
 "
 
+t "t15g: version-prefix re-prepended after tag-strip-prefix (B3)" bash -c "
+    ${_DH_LIBS}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type             'dockerhub'
+    _gs_eu2_record_set \$idx identifier       'moby/buildkit'
+    _gs_eu2_record_set \$idx env_var          'GLOBAL_STACK_MOBY_BUILDKIT_VERSION'
+    _gs_eu2_record_set \$idx tag_strip_prefix 'v'
+    _gs_eu2_record_set \$idx version_prefix   'v'
+    _gs_eu2_fetch_dockerhub \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$val\" == v* ]] || { echo \"v-prefix not restored: got '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Section 16 — Decision classifier
 # ═══════════════════════════════════════════════════════════════════════════
@@ -827,6 +916,13 @@ t "t16d: override flag → MANUAL regardless of delta" bash -c "
     echo PASS
 "
 
+t "t16e: proposed older than current → SKIP (downgrade protection, B1)" bash -c "
+    ${_DC_LIBS}
+    result=\$(_gs_eu2_classify_decision '1.29.3' '1.2.5' '' '' '')
+    [[ \"\$result\" == 'SKIP' ]] || { echo \"downgrade not prevented: got \$result\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Section 17 — --check streaming output
 # ═══════════════════════════════════════════════════════════════════════════
@@ -859,6 +955,277 @@ t "t17c: --check summary line shows counts" bash -c "
     printf '# @todo env-update dockerhub:_/postgres 18.3\nGLOBAL_STACK_POSTGRES_VERSION=18.3\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
     echo \"\$out\" | grep -qE 'checked|Summary' || { echo \"no summary in output: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t17d: SKIP up-to-date includes reason in output (B4)" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/chk17d
+    f=\${TMP_DIR}/t17d.env
+    # fixture latest stable is 18.4-alpine3.23 — use same as current to get SKIP
+    printf '# @todo env-update dockerhub:_/postgres 18.4-alpine3.23\nGLOBAL_STACK_POSTGRES_VERSION=18.4-alpine3.23\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF 'up to date' || { echo \"no up-to-date reason: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 18 — Pagination + error handling (D6)
+# ═══════════════════════════════════════════════════════════════════════════
+section "18 — pagination and error handling"
+
+_DH_LIBS18="
+source '/stack/bin/lib/env-update-v2/config/defaults.sh'
+source '/stack/bin/lib/env-update-v2/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update-v2/core/records.sh'
+source '/stack/bin/lib/env-update-v2/core/semver.sh'
+source '/stack/bin/lib/env-update-v2/core/channel.sh'
+source '/stack/bin/lib/env-update-v2/core/tag_flags.sh'
+source '/stack/bin/lib/env-update-v2/core/cache.sh'
+source '/stack/bin/lib/env-update-v2/http/curl.sh'
+source '/stack/bin/lib/env-update-v2/fetchers/dockerhub.sh'
+export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+export _GS_EU2_CACHE_DIR=\${TMP_DIR}/dh18_cache
+"
+
+t "t18a: pagination — next=null terminates loop and returns tags" bash -c "
+    ${_DH_LIBS18}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'dockerhub'
+    _gs_eu2_record_set \$idx identifier '_/nginx'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_NGINX_VERSION'
+    _gs_eu2_fetch_dockerhub \$idx
+    decision=\$(_gs_eu2_record_get \$idx decision)
+    proposed=\$(_gs_eu2_record_get \$idx proposed_version)
+    # nginx fixture has 1.27.0-alpine, 1.26.0-alpine, 1.25.0-alpine with next=null
+    [[ \"\$decision\" != 'ERROR' ]] || { echo \"got ERROR: \$(_gs_eu2_record_get \$idx error_message)\"; echo FAIL; exit 0; }
+    [[ -n \"\$proposed\" ]] || { echo 'proposed_version empty'; echo FAIL; exit 0; }
+    [[ \"\$proposed\" =~ ^1[.] ]] || { echo \"unexpected proposed: \$proposed\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t18b: pagination — fetch_tags returns all tags from single page" bash -c "
+    ${_DH_LIBS18}
+    tags=\$(_gs_eu2_dh_fetch_tags 'library/nginx')
+    echo \"\$tags\" | grep -qF '1.27.0-alpine' || { echo 'tag 1.27.0-alpine not found'; echo FAIL; exit 0; }
+    echo \"\$tags\" | grep -qF '1.25.0-alpine' || { echo 'tag 1.25.0-alpine not found'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t18c: malformed JSON sets decision=ERROR (not SKIP)" bash -c "
+    ${_DH_LIBS18}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'dockerhub'
+    _gs_eu2_record_set \$idx identifier '_/malformed'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_MALFORMED_VERSION'
+    _gs_eu2_fetch_dockerhub \$idx 2>/dev/null || true
+    decision=\$(_gs_eu2_record_get \$idx decision)
+    # Malformed JSON fixture — fetcher should set ERROR, not SKIP
+    [[ \"\$decision\" == 'ERROR' ]] || { echo \"expected ERROR, got: \$decision\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t18d: missing fixture sets decision=ERROR (not SKIP)" bash -c "
+    ${_DH_LIBS18}
+    # Use an identifier that has no fixture file
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'dockerhub'
+    _gs_eu2_record_set \$idx identifier '_/no-fixture-image'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_NOFIXTURE_VERSION'
+    _gs_eu2_fetch_dockerhub \$idx 2>/dev/null || true
+    decision=\$(_gs_eu2_record_get \$idx decision)
+    [[ \"\$decision\" == 'ERROR' ]] || { echo \"expected ERROR, got: \$decision\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t18e: blank line between annotation and var — record still created (C2)" bash -c "
+    f=\${TMP_DIR}/t18e.env
+    printf '# @todo env-update dockerhub:_/nginx 1.26.0\n\nGLOBAL_STACK_NGINX_VERSION=1.26.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF 'env_var: GLOBAL_STACK_NGINX_VERSION' \
+        || { echo \"record not created with blank line: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t18f: major_hint with dot is treated as version not hint (D1)" bash -c "
+    f=\${TMP_DIR}/t18f.env
+    printf '# @todo env-update dockerhub:_/postgres:9.2 9.2.5\nGLOBAL_STACK_PG_VERSION=9.2.5\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1)
+    # \"9.2\" should NOT be treated as major_hint (dots rejected); identifier should be _/postgres:9.2
+    echo \"\$out\" | grep -qF 'major_hint:' && {
+        hint=\$(echo \"\$out\" | grep 'major_hint:' | sed 's/.*major_hint: //')
+        [[ \"\$hint\" =~ ^[[:space:]]*$ ]] || { echo \"9.2 accepted as major_hint: \$hint\"; echo FAIL; exit 0; }
+    }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 19 — C1 non-numeric fallback + unversioned check + --apply
+# ═══════════════════════════════════════════════════════════════════════════
+section "19 — non-numeric fallback, unversioned, --apply"
+
+_DH_LIBS19="
+source '/stack/bin/lib/env-update-v2/config/defaults.sh'
+source '/stack/bin/lib/env-update-v2/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update-v2/core/records.sh'
+source '/stack/bin/lib/env-update-v2/core/semver.sh'
+source '/stack/bin/lib/env-update-v2/core/channel.sh'
+source '/stack/bin/lib/env-update-v2/core/tag_flags.sh'
+source '/stack/bin/lib/env-update-v2/core/cache.sh'
+source '/stack/bin/lib/env-update-v2/http/curl.sh'
+source '/stack/bin/lib/env-update-v2/fetchers/dockerhub.sh'
+export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+export _GS_EU2_CACHE_DIR=\${TMP_DIR}/dh19_cache
+"
+
+t "t19a: channel_select_best falls back to sort-V for codename tags (C1)" bash -c "
+    source '/stack/bin/lib/env-update-v2/config/prerelease_markers.sh'
+    source '/stack/bin/lib/env-update-v2/core/semver.sh'
+    source '/stack/bin/lib/env-update-v2/core/channel.sh'
+    versions=\$'resolute-20260413\nresolute-20260108\nplucky-20260201\nlatest'
+    result=\$(_gs_eu2_channel_select_best \"\$versions\" '')
+    [[ \"\$result\" == 'resolute-20260413' ]] || { echo \"got: '\$result'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t19b: channel_select_best returns empty when only unversioned sentinels present" bash -c "
+    source '/stack/bin/lib/env-update-v2/config/prerelease_markers.sh'
+    source '/stack/bin/lib/env-update-v2/core/semver.sh'
+    source '/stack/bin/lib/env-update-v2/core/channel.sh'
+    versions=\$'latest\nedge'
+    result=\$(_gs_eu2_channel_select_best \"\$versions\" '')
+    [[ -z \"\$result\" ]] || { echo \"expected empty, got: '\$result'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t19c: dockerhub fetcher SKIP with 'no versioned tags' for all-unversioned image" bash -c "
+    ${_DH_LIBS19}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'dockerhub'
+    _gs_eu2_record_set \$idx identifier '_/only-latest-test'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_ORACLE_VERSION'
+    _gs_eu2_fetch_dockerhub \$idx
+    decision=\$(_gs_eu2_record_get \$idx decision)
+    msg=\$(_gs_eu2_record_get \$idx error_message)
+    [[ \"\$decision\" == 'SKIP' ]] || { echo \"expected SKIP, got: \$decision\"; echo FAIL; exit 0; }
+    [[ \"\$msg\" == *'no versioned tags'* ]] || { echo \"unexpected msg: \$msg\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t19d: dockerhub fetcher selects ubuntu codename tag via fallback (C1)" bash -c "
+    ${_DH_LIBS19}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'dockerhub'
+    _gs_eu2_record_set \$idx identifier '_/ubuntu-codename-test'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_UBUNTU_VERSION'
+    _gs_eu2_record_set \$idx tag_filter '^resolute-'
+    _gs_eu2_fetch_dockerhub \$idx
+    decision=\$(_gs_eu2_record_get \$idx decision)
+    proposed=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$decision\" != 'ERROR' ]] || { echo \"got ERROR: \$(_gs_eu2_record_get \$idx error_message)\"; echo FAIL; exit 0; }
+    [[ \"\$proposed\" == 'resolute-20260413' ]] || { echo \"got: '\$proposed'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t19e: moby/buildkit tag-filter excludes -ubuntu suffix (C2)" bash -c "
+    ${_DH_LIBS19}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type             'dockerhub'
+    _gs_eu2_record_set \$idx identifier       'moby/buildkit'
+    _gs_eu2_record_set \$idx env_var          'GLOBAL_STACK_MOBY_BUILDKIT_VERSION'
+    _gs_eu2_record_set \$idx tag_strip_prefix 'v'
+    _gs_eu2_record_set \$idx version_prefix   'v'
+    _gs_eu2_record_set \$idx tag_filter       '^v[0-9]+\.[0-9]+\.[0-9]+\$'
+    _gs_eu2_fetch_dockerhub \$idx
+    proposed=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$proposed\" == 'v0.29.0' ]] || { echo \"got: '\$proposed'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t19f: _gs_eu2_apply_updates dry-run shows DRY-RUN without modifying file" bash -c "
+    source '/stack/bin/lib/env-update-v2/config/defaults.sh'
+    source '/stack/bin/lib/env-update-v2/core/records.sh'
+    source '/stack/bin/lib/env-update-v2/core/apply.sh'
+    f=\${TMP_DIR}/t19f.env
+    printf 'GLOBAL_STACK_FOO_VERSION=1.0.0\n' > \"\$f\"
+    _gs_eu2_record_new; idx=\$_GS_EU2_LAST_IDX
+    _gs_eu2_record_set \$idx env_var          'GLOBAL_STACK_FOO_VERSION'
+    _gs_eu2_record_set \$idx current_version  '1.0.0'
+    _gs_eu2_record_set \$idx proposed_version '2.0.0'
+    _gs_eu2_record_set \$idx decision         'AUTO'
+    out=\$(_gs_eu2_apply_updates \"\$f\" 'true')
+    echo \"\$out\" | grep -qF 'DRY-RUN' || { echo \"DRY-RUN marker missing: \$out\"; echo FAIL; exit 0; }
+    grep -qF '1.0.0' \"\$f\" || { echo 'file was modified'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t19g: _gs_eu2_apply_updates rewrites AUTO var and preserves other lines" bash -c "
+    source '/stack/bin/lib/env-update-v2/config/defaults.sh'
+    source '/stack/bin/lib/env-update-v2/core/records.sh'
+    source '/stack/bin/lib/env-update-v2/core/apply.sh'
+    f=\${TMP_DIR}/t19g.env
+    printf '# comment\nGLOBAL_STACK_FOO_VERSION=1.0.0\nGLOBAL_STACK_BAR=unchanged\n' > \"\$f\"
+    _gs_eu2_record_new; idx=\$_GS_EU2_LAST_IDX
+    _gs_eu2_record_set \$idx env_var          'GLOBAL_STACK_FOO_VERSION'
+    _gs_eu2_record_set \$idx current_version  '1.0.0'
+    _gs_eu2_record_set \$idx proposed_version '2.0.0'
+    _gs_eu2_record_set \$idx decision         'AUTO'
+    _gs_eu2_apply_updates \"\$f\" 'false' > /dev/null
+    grep -qF 'GLOBAL_STACK_FOO_VERSION=2.0.0' \"\$f\" || { echo 'var not updated'; cat \"\$f\"; echo FAIL; exit 0; }
+    grep -qF 'GLOBAL_STACK_BAR=unchanged'     \"\$f\" || { echo 'other var changed'; echo FAIL; exit 0; }
+    grep -qF '# comment'                      \"\$f\" || { echo 'comment dropped'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 20 — codename delta + floating-reference SKIP
+# ═══════════════════════════════════════════════════════════════════════════
+section "20 — codename delta + floating-reference SKIP"
+
+_SD_LIBS="
+source '/stack/bin/lib/env-update-v2/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update-v2/core/semver.sh'
+"
+_DC_LIBS20="
+source '/stack/bin/lib/env-update-v2/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update-v2/core/semver.sh'
+source '/stack/bin/lib/env-update-v2/core/decide.sh'
+"
+
+t "t20a: semver_delta — same codename prefix → patch" bash -c "
+    ${_SD_LIBS}
+    result=\$(_gs_eu2_semver_delta 'resolute-20260108' 'resolute-20260413')
+    [[ \"\$result\" == 'patch' ]] || { echo \"got: \$result\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t20b: semver_delta — different codename prefix → major" bash -c "
+    ${_SD_LIBS}
+    result=\$(_gs_eu2_semver_delta 'plucky-20260201' 'resolute-20260413')
+    [[ \"\$result\" == 'major' ]] || { echo \"got: \$result\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t20c: semver_delta — numeric versions unaffected by codename fix" bash -c "
+    ${_SD_LIBS}
+    patch=\$(_gs_eu2_semver_delta '18.3' '18.4')
+    major=\$(_gs_eu2_semver_delta '17.5' '18.4')
+    [[ \"\$patch\" == 'minor' ]] || { echo \"patch test: got \$patch\"; echo FAIL; exit 0; }
+    [[ \"\$major\" == 'major' ]] || { echo \"major test: got \$major\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t20d: classify — same-codename ubuntu update → AUTO (not HOLD)" bash -c "
+    ${_DC_LIBS20}
+    result=\$(_gs_eu2_classify_decision 'resolute-20260108' 'resolute-20260413' '' '' '')
+    [[ \"\$result\" == 'AUTO' ]] || { echo \"got: \$result\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t20e: classify — unversioned current (nightly) → SKIP" bash -c "
+    ${_DC_LIBS20}
+    result=\$(_gs_eu2_classify_decision 'nightly' '2024.10.22-7ca5933' '' '' '')
+    [[ \"\$result\" == 'SKIP' ]] || { echo \"got: \$result\"; echo FAIL; exit 0; }
     echo PASS
 "
 

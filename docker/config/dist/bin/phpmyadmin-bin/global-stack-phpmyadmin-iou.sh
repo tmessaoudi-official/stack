@@ -32,7 +32,7 @@ if [ "${GLOBAL_STACK_PHPMYADMIN_VERSION}" != "${PHPMYADMIN_CURRENT_RELEASE}" ]; 
   cd "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin"
 
   if [[ "${GLOBAL_STACK_PHPMYADMIN_TYPE_VERSION}" == "release" ]]; then
-    wget "https://files.phpmyadmin.net/phpMyAdmin/${GLOBAL_STACK_PHPMYADMIN_VERSION}/phpMyAdmin-${GLOBAL_STACK_PHPMYADMIN_VERSION}-all-languages.zip" -O "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin/phpmyadmin${GLOBAL_STACK_PHPMYADMIN_VERSION}.zip"
+    curl -fsSL -o "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin/phpmyadmin${GLOBAL_STACK_PHPMYADMIN_VERSION}.zip" "https://files.phpmyadmin.net/phpMyAdmin/${GLOBAL_STACK_PHPMYADMIN_VERSION}/phpMyAdmin-${GLOBAL_STACK_PHPMYADMIN_VERSION}-all-languages.zip"
     unzip "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin/phpmyadmin${GLOBAL_STACK_PHPMYADMIN_VERSION}.zip"
     rsync -rav "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin/phpMyAdmin-${GLOBAL_STACK_PHPMYADMIN_VERSION}-all-languages/" "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin/"
   elif [[ "${GLOBAL_STACK_PHPMYADMIN_TYPE_VERSION}" == "branch" ]]; then

@@ -14,7 +14,9 @@ _gs_eu2_version_matches_channel() {
   local _q _IFS="${IFS}"; IFS=','
   for _q in ${_chan}; do
     _q="${_q,,}"
-    local _pat="(^|[-._[:digit:]])${_q}([[:digit:]._-]|\$)"
+    # D3: Use ([0-9]|$) as trailing anchor — prevents "rcx" from matching "rc"
+    # while still allowing rc1, rc2, rc.1, rc-1, etc.
+    local _pat="(^|[-._[:digit:]])${_q}([0-9]|\$)"
     [[ "${_ver}" =~ ${_pat} ]] && { IFS="${_IFS}"; return 0; }
   done
   IFS="${_IFS}"
@@ -42,7 +44,7 @@ _gs_eu2_channel_select_best() {
   local _stables=() _pres=() _v
   while IFS= read -r _v; do
     [[ -z "${_v}" ]] && continue
-    [[ "${_v}" =~ ^[0-9] ]] || continue
+    [[ "${_v}" =~ ^v?[0-9] ]] || continue
     if _gs_eu2_is_prerelease "${_v}"; then _pres+=("${_v}")
     else _stables+=("${_v}"); fi
   done <<< "${_all}"
@@ -50,6 +52,21 @@ _gs_eu2_channel_select_best() {
   local _hs="" _hp=""
   [[ ${#_stables[@]} -gt 0 ]] && _hs="$(printf '%s\n' "${_stables[@]}" | sort -V | tail -1)" || true
   [[ ${#_pres[@]}    -gt 0 ]] && _hp="$(printf '%s\n' "${_pres[@]}"    | sort -V | tail -1)" || true
+
+  # Non-numeric fallback: handle letter-starting tags (e.g. ubuntu codename "resolute-20260413").
+  # When no numeric/v-prefixed tags survive the loop, sort all non-unversioned tags with sort -V.
+  if [[ ${#_stables[@]} -eq 0 && ${#_pres[@]} -eq 0 ]]; then
+    local _fb=()
+    while IFS= read -r _v; do
+      [[ -z "${_v}" ]] && continue
+      _gs_eu2_is_unversioned "${_v}" && continue
+      _fb+=("${_v}")
+    done <<< "${_all}"
+    if [[ ${#_fb[@]} -gt 0 ]]; then
+      printf '%s\n' "$(printf '%s\n' "${_fb[@]}" | sort -V | tail -1)"
+    fi
+    return 0
+  fi
 
   # Default/stable channel
   if [[ -z "${_chan}" || "${_chan}" == "stable" ]]; then

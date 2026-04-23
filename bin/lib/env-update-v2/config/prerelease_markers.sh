@@ -5,7 +5,8 @@
 readonly _GS_EU2_PRERELEASE_MARKERS_SH_LOADED=1
 
 _GS_EU2_PRERELEASE_MARKERS=(
-  'alpha' 'beta' 'rc[0-9]*' 'preview' 'pre'
+  # D5: Use [0-9.]* to match both rc1 and rc.1 patterns
+  'alpha[0-9.]*' 'beta[0-9.]*' 'rc[0-9.]*' 'preview' 'pre'
   'nightly' 'edge' 'canary' 'snapshot' 'experimental' 'insiders'
   '\.dev' '-dev'
   '[0-9]a[0-9]' '[0-9]b[0-9]'

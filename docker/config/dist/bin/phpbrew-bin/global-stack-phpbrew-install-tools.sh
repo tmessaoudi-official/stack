@@ -50,7 +50,7 @@ if [[ -f "${ZEPHIR_LANG_PHAR_FILE}" && "${ZEPHIR_LANG_LATEST}" = "$(cat "${GLOBA
 else
     echo -e "\nInstalling ${ZEPHIR_LANG_PHAR_FILE}."
     echo -e "${ZEPHIR_LANG_LATEST}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew.zephir"
-    wget https://github.com/zephir-lang/zephir/releases/download/${ZEPHIR_LANG_LATEST}/zephir.phar
+    curl -fsSLO "https://github.com/zephir-lang/zephir/releases/download/${ZEPHIR_LANG_LATEST}/zephir.phar"
     mv zephir.phar "${ZEPHIR_LANG_PHAR_FILE}"
     chmod a+x "${ZEPHIR_LANG_PHAR_FILE}"
 fi
@@ -64,7 +64,7 @@ if [[ -f "${PHALCON_DEVTOOLS_PHAR_FILE}" && "${PHALCON_DEVTOOLS_LATEST}" = "$(ca
 else
     echo -e "\nInstalling ${PHALCON_DEVTOOLS_PHAR_FILE}."
     echo -e "${PHALCON_DEVTOOLS_LATEST}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew.phalcon"
-    wget https://github.com/phalcon/phalcon-devtools/releases/download/${PHALCON_DEVTOOLS_LATEST}/phalcon.phar
+    curl -fsSLO "https://github.com/phalcon/phalcon-devtools/releases/download/${PHALCON_DEVTOOLS_LATEST}/phalcon.phar"
     mv phalcon.phar "${PHALCON_DEVTOOLS_PHAR_FILE}"
     chmod a+x "${PHALCON_DEVTOOLS_PHAR_FILE}"
 fi
@@ -118,7 +118,7 @@ if [[ -f "${PICKLE_PHAR_FILE}" && "${PICKLE_LATEST}" = "$(cat "${GLOBAL_STACK_DO
 else
     echo -e "\nInstalling ${PICKLE_PHAR_FILE}."
     echo -e "${PICKLE_LATEST}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew.pickle"
-    wget https://github.com/FriendsOfPHP/pickle/releases/download/${PICKLE_LATEST}/pickle.phar
+    curl -fsSLO "https://github.com/FriendsOfPHP/pickle/releases/download/${PICKLE_LATEST}/pickle.phar"
     mv pickle.phar "${PICKLE_PHAR_FILE}"
     chmod a+x "${PICKLE_PHAR_FILE}"
 fi
@@ -131,7 +131,7 @@ if [[ -f "${PIE_PHAR_FILE}" && "${PIE_LATEST}" = "$(cat "${GLOBAL_STACK_DOCKER_T
 else
     echo -e "\nInstalling ${PIE_PHAR_FILE}."
     echo -e "${PIE_LATEST}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew.pie"
-    wget https://github.com/php/pie/releases/download/${PIE_LATEST}/pie.phar
+    curl -fsSLO "https://github.com/php/pie/releases/download/${PIE_LATEST}/pie.phar"
     mv pie.phar "${PIE_PHAR_FILE}"
     chmod a+x "${PIE_PHAR_FILE}"
 fi

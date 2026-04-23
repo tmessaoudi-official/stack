@@ -21,6 +21,10 @@ _gs_eu2_classify_decision() {
   # No proposed version → skip
   [[ -z "${_prop}" ]] && { echo "SKIP"; return 0; }
 
+  # Unversioned current (nightly/latest/edge/…): version comparison is meaningless.
+  # The proposed value is informational only; a pin change requires deliberate action.
+  if _gs_eu2_is_unversioned "${_cur}"; then echo "SKIP"; return 0; fi
+
   # Override or manual flags → MANUAL always
   if [[ "${_override}" == "true" || "${_manual}" == "true" ]]; then
     echo "MANUAL"; return 0
@@ -29,6 +33,18 @@ _gs_eu2_classify_decision() {
   # Same version → up to date, SKIP
   if [[ "${_cur}" == "${_prop}" ]]; then
     echo "SKIP"; return 0
+  fi
+
+  # Downgrade protection: if proposed sorts before current via sort -V, skip
+  # Use sort -V directly (not semver_compare) to avoid misclassifying platform
+  # suffixes like -alpine3.23 as pre-release markers.
+  local _cv="${_cur#v}" _pv="${_prop#v}"
+  if [[ "${_cv}" != "${_pv}" ]]; then
+    local _oldest
+    _oldest="$(printf '%s\n%s\n' "${_cv}" "${_pv}" | sort -V | head -1)"
+    if [[ "${_oldest}" == "${_pv}" ]]; then
+      echo "SKIP"; return 0
+    fi
   fi
 
   # Determine semver delta
@@ -40,8 +56,9 @@ _gs_eu2_classify_decision() {
     echo "HOLD"; return 0
   fi
 
-  # Major jump with pin but proposed escapes the pin → HOLD
-  if [[ -n "${_major_hint}" && ! "${_prop}" =~ ^${_major_hint}[.^-] ]]; then
+  # C3: Major jump with pin but proposed escapes the pin → HOLD
+  # Use ([.^-]|$) anchor to prevent "18" matching "180.x".
+  if [[ -n "${_major_hint}" && ! "${_prop}" =~ ^${_major_hint}([.^-]|$) ]]; then
     echo "HOLD"; return 0
   fi
 

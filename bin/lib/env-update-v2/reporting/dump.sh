@@ -46,7 +46,10 @@ _gs_eu2_dump_json() {
 _gs_eu2_dump_records() {
   local _format="${1:-text}"
   case "${_format}" in
+    text) _gs_eu2_dump_text ;;
     json) _gs_eu2_dump_json ;;
-    *)    _gs_eu2_dump_text ;;
+    *)
+      printf 'env-update-v2: unknown --format value: %q (valid: text, json)\n' "${_format}" >&2
+      exit 1 ;;
   esac
 }

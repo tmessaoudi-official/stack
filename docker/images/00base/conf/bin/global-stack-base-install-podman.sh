@@ -2,8 +2,8 @@
 
 # @todo check-updates
 sudo apt-get -o Acquire::AllowInsecureRepositories=true update --allow-releaseinfo-change
-curl -fsSL https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/${GLOBAL_STACK_PODMAN_CHANEL}/Release.key | sudo gpg --dearmor -o /usr/share/keyrings/podman.gpg
-echo -e "Types: deb\nTrusted: yes\nSigned-By: /usr/share/keyrings/podman.gpg\nArch: $(dpkg --print-architecture)\nURIs: https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/${GLOBAL_STACK_PODMAN_CHANEL}/\nSuites: /" | sudo tee /etc/apt/sources.list.d/podman.sources
+curl -fsSL https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/${GLOBAL_STACK_PODMAN_CHANNEL}/Release.key | sudo gpg --dearmor -o /usr/share/keyrings/podman.gpg
+echo -e "Types: deb\nTrusted: yes\nSigned-By: /usr/share/keyrings/podman.gpg\nArch: $(dpkg --print-architecture)\nURIs: https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/${GLOBAL_STACK_PODMAN_CHANNEL}/\nSuites: /" | sudo tee /etc/apt/sources.list.d/podman.sources
 sudo apt-get -o Acquire::AllowInsecureRepositories=true update --allow-releaseinfo-change
 sudo apt-get -y --no-install-recommends --fix-missing install podman
 

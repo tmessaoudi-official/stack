@@ -90,7 +90,7 @@ RUN apt-get -o Acquire::AllowInsecureRepositories=true update --allow-releaseinf
     && ln -s /usr/lib/x86_64-linux-gnu/liblber.so /usr/lib/liblber.so \
     && mkdir /tmp/watcher-c \
     && cd /tmp/watcher-c \
-    && wget -O watcher-${GLOBAL_STACK_FRANKENPHP_WATCHER_VERSION}.tar.gz https://api.github.com/repos/e-dant/watcher/tarball/${GLOBAL_STACK_FRANKENPHP_WATCHER_VERSION} \
+    && curl -fsSL -o "watcher-${GLOBAL_STACK_FRANKENPHP_WATCHER_VERSION}.tar.gz" "https://api.github.com/repos/e-dant/watcher/tarball/${GLOBAL_STACK_FRANKENPHP_WATCHER_VERSION}" \
     && tar -xf watcher-${GLOBAL_STACK_FRANKENPHP_WATCHER_VERSION}.tar.gz --strip-components 1 -C /tmp/watcher-c \
     && rm -rf watcher-${GLOBAL_STACK_FRANKENPHP_WATCHER_VERSION}.tar.gz \
     && cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \

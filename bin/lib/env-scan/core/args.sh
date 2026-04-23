@@ -49,8 +49,17 @@ gs_es_parse_args() {
 		--dry-run)                        _GS_ES_CFG[dry_run]="true" ;;
 		--backup=*)                       _GS_ES_CFG[backup]="${1#*=}";                       _GS_ES_CFG[backup]="${_GS_ES_CFG[backup],,}" ;;
 		--backup-purge=*)                 _GS_ES_CFG[backup_purge]="${1#*=}";                 _GS_ES_CFG[backup_purge]="${_GS_ES_CFG[backup_purge],,}" ;;
-		--backup-keep=*)                  _GS_ES_CFG[backup_keep]="${1#*=}" ;;
+		--backup-keep=*)
+			_GS_ES_CFG[backup_keep]="${1#*=}"
+			if [[ ! "${_GS_ES_CFG[backup_keep]}" =~ ^[0-9]+$ ]]; then
+				printf 'env-scan: --backup-keep requires a non-negative integer, got: %s\n' "${_GS_ES_CFG[backup_keep]}" >&2
+				exit 1
+			fi
+			;;
 		--backup-suffix=*)                _GS_ES_CFG[backup_suffix]="${1#*=}" ;;
+		--prune-removed=*)                _GS_ES_CFG[prune_removed]="${1#*=}";               _GS_ES_CFG[prune_removed]="${_GS_ES_CFG[prune_removed],,}" ;;
+		--orphan-exclude-pattern=*)       _GS_ES_CFG[orphan_exclude_pattern]="${1#*=}" ;;
+		--orphan-quiet=*)                 _GS_ES_CFG[orphan_quiet]="${1#*=}";                _GS_ES_CFG[orphan_quiet]="${_GS_ES_CFG[orphan_quiet],,}" ;;
 		--version)
 			printf '%s\n' "${_GS_ES_VERSION}"
 			exit 0
@@ -90,6 +99,8 @@ gs_es_parse_args() {
 		[dry_run]=false
 		[backup]=true
 		[backup_purge]=false
+		[prune_removed]=false
+		[orphan_quiet]=false
 	)
 	local _key
 	for _key in "${!_bool_defaults[@]}"; do
@@ -138,4 +149,5 @@ gs_es_parse_args() {
 	[[ -z "${_GS_ES_CFG[source_merged_file]+set}" ]]         && _GS_ES_CFG[source_merged_file]="${_GS_ES_CFG[dir]}/.env.src.all.merged"
 	[[ -z "${_GS_ES_CFG[backup_keep]+set}" ]]               && _GS_ES_CFG[backup_keep]="10"
 	[[ -z "${_GS_ES_CFG[backup_suffix]+set}" ]]             && _GS_ES_CFG[backup_suffix]=".bak"
+	[[ -z "${_GS_ES_CFG[orphan_exclude_pattern]+set}" ]]   && _GS_ES_CFG[orphan_exclude_pattern]="${_GS_ES_PATTERN_ORPHAN_EXCLUDE}"
 }

@@ -134,7 +134,7 @@ if [[ ! -d ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/bin ]]; then
 fi
 
 if [[ ! -f ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/bin/elasticmq-server-all.jar ]]; then
-  wget -O ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/bin/elasticmq-server-all.jar https://github.com/softwaremill/elasticmq/releases/download/${GLOBAL_STACK_SERVERLESS_FRAMEWORK_ELASTICMQ_VERSION}/elasticmq-server-all-$(echo ${GLOBAL_STACK_SERVERLESS_FRAMEWORK_ELASTICMQ_VERSION} | sed 's/v//').jar
+  curl -fsSL -o "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/bin/elasticmq-server-all.jar" "https://github.com/softwaremill/elasticmq/releases/download/${GLOBAL_STACK_SERVERLESS_FRAMEWORK_ELASTICMQ_VERSION}/elasticmq-server-all-$(echo "${GLOBAL_STACK_SERVERLESS_FRAMEWORK_ELASTICMQ_VERSION}" | sed 's/v//').jar"
 fi
 
 chmod a+x ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/bin/elasticmq-server-all.jar

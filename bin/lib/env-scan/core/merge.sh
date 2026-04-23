@@ -35,8 +35,19 @@ gs_es_process_file() {
 	merged_file="${dest_file}${_GS_ES_CFG[destination_file_merged_suffix]}.${count}"
 
 	if [[ "${dry_run}" != "true" ]]; then
-		touch "${src_file}" "${dest_file}"
+		# A6: Guard source file — must exist and be non-empty before proceeding
+		if [[ ! -f "${src_file}" ]] || [[ ! -s "${src_file}" ]]; then
+			printf 'env-scan: source file not found or empty: %s\n' "${src_file}" >&2
+			return 1
+		fi
+		if [[ ! -f "${dest_file}" ]]; then
+			printf 'env-scan: creating new destination file: %s\n' "${dest_file}" >&2
+			touch "${dest_file}"
+		fi
 
+		# A7: Unset associative arrays before (re)declaring to prevent bleed-through
+		# when gs_es_process_file is called multiple times in the same shell.
+		unset _gs_es_dest_vals _gs_es_dest_emitted
 		# Build associative array of dest values keyed by variable name
 		declare -A _gs_es_dest_vals=()
 		declare -A _gs_es_dest_emitted=()
@@ -67,12 +78,24 @@ gs_es_process_file() {
 				fi
 			done < "${src_file}"
 
-			# Append local-only dest keys (in dest but not in src) under a footer comment
+			# B1: Append local-only dest keys (in dest but not in src) under a footer comment.
+			# With --prune-removed=true, these orphaned keys are dropped with a warning.
 			local _has_local_only=false
+			local _prune_removed="${_GS_ES_CFG[prune_removed]:-false}"
 			while IFS= read -r _line || [[ -n "${_line}" ]]; do
 				if [[ "${_line}" =~ ^([A-Za-z_][A-Za-z0-9_]*)= ]]; then
 					local _dkey="${BASH_REMATCH[1]}"
 					if [[ -z "${_gs_es_dest_emitted[${_dkey}]:-}" ]]; then
+						if [[ "${_GS_ES_CFG[orphan_quiet]:-false}" != "true" ]]; then
+							local _orphan_exclude="${_GS_ES_CFG[orphan_exclude_pattern]:-}"
+							if [[ -z "${_orphan_exclude}" || ! "${_dkey}" =~ ${_orphan_exclude} ]]; then
+								printf 'env-scan: local-only var %s not in source (orphaned)\n' "${_dkey}" >&2
+							fi
+						fi
+						if [[ "${_prune_removed}" == "true" ]]; then
+							# Skip — effectively removing this key from .env.local
+							continue
+						fi
 						if [[ "${_has_local_only}" = "false" ]]; then
 							printf '\n# --- local-only keys (not present in .env) ---\n'
 							_has_local_only=true

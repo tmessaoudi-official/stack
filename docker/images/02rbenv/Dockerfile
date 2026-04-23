@@ -23,7 +23,7 @@ ENV GLOBAL_STACK_RBENV_LOCALE="${GLOBAL_STACK_RBENV_LOCALE}" \
     
 RUN shopt -s extdebug \
     && IFS=$'\n\t' \
-    && [ "true" = "${GLOBAL_STACK_RBENV_SET_LOCALE}" ] && global-stack-base-setup-locale.sh "${GLOBAL_STACK_RBENV_LOCALE}" || echo -e "\n Locale will not be set"
+    && { [ "true" = "${GLOBAL_STACK_RBENV_SET_LOCALE}" ] && global-stack-base-setup-locale.sh "${GLOBAL_STACK_RBENV_LOCALE}" || echo -e "\n Locale will not be set"; }
 
 USER "${GLOBAL_STACK_DOCKER_USER_ID}":"${GLOBAL_STACK_DOCKER_GROUP_ID}"
 

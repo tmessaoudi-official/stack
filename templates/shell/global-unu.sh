@@ -518,7 +518,7 @@ if eval "${env_file_exists}"; then
 		fi
 	fi
 
-	if [[ "true" == "${GLOBAL_STACK_RTK_INIT:-false}" ]] \
+	if [[ "true" == "${GLOBAL_STACK_RTK_INIT}" ]] \
 	  && command -v rtk >/dev/null 2>&1 \
 	  && command -v claude >/dev/null 2>&1; then
 		rtk telemetry disable

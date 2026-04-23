@@ -23,7 +23,7 @@ set -xeEu -o pipefail
 if [ "${NVM_LATEST_VERSION}" != "${NVM_CURRENT_VERSION}" ]; then
   echo -e "\nUpdating nvm from ${NVM_CURRENT_VERSION} to ${NVM_LATEST_VERSION}"
   rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN}/nvm.installer.sh"
-  wget "https://raw.githubusercontent.com/nvm-sh/nvm/${NVM_LATEST_VERSION}/install.sh" -O "${GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN}/nvm.installer.sh"
+  curl -fsSL -o "${GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN}/nvm.installer.sh" "https://raw.githubusercontent.com/nvm-sh/nvm/${NVM_LATEST_VERSION}/install.sh"
   chmod a+x "${GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN}/nvm.installer.sh"
   echo "${NVM_LATEST_VERSION}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/nvm"
 fi

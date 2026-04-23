@@ -31,6 +31,10 @@ _gs_eu2_cache_read() {
 }
 
 _gs_eu2_cache_write() {
+  # C4: Skip cache writes in dry-run mode — dry runs must not pollute the cache
+  if [[ "${_GS_EU2_CFG[dry_run]:-false}" == "true" ]]; then
+    return 0
+  fi
   local _key="${1}" _value="${2}"
   local _f
   _f="$(_gs_eu2_cache_key_to_file "${_key}")"

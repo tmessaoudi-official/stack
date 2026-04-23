@@ -1,5 +1,5 @@
 #!/bin/bash
-# parse.sh — annotation parser (state machine)
+# parse.sh — annotation parser (two-pass: hoist flags, then parse TYPE:ID/version)
 
 [[ -n "${_GS_EU2_PARSE_SH_LOADED:-}" ]] && return 0
 readonly _GS_EU2_PARSE_SH_LOADED=1
@@ -7,51 +7,95 @@ readonly _GS_EU2_PARSE_SH_LOADED=1
 # shellcheck source=./records.sh
 source "$(dirname "${BASH_SOURCE[0]}")/records.sh"
 
-# ── Extract balanced parenthesised flags from the start of a string ────────
-# Ported from v1's _gs_eu_extract_balanced_flags.
-# Sets two caller-scope vars (by nameref):
-#   $1 = flags_var  → flags joined by $'\x1f' (unit separator)
-#   $2 = remaining_var → rest of string after last extracted flag
-_gs_eu2_extract_balanced_flags() {
-  local -n _ebf_flags="${1}"
-  local -n _ebf_rem="${2}"
-  local _ebf_in="${3}"
+# ── Returns 0 if flag content is a recognised flag key ────────────────────
+_gs_eu2_is_recognized_flag() {
+  local _f="${1}" _name
+  [[ "${_f}" == *:* ]] && _name="${_f%%:*}" || _name="${_f}"
+  case "${_name}" in
+    override|manual|propagate|\
+    channel|skip|\
+    tag-filter|tag-exclude|tag-strip-prefix|tag-strip-suffix|\
+    tag-extract|tag-suffix|tag-replace|\
+    fetch-extract|fetch-json|\
+    url-probe|url-probe-depth|\
+    version-prefix|\
+    pecl-ref|depends-on) return 0 ;;
+    *) return 1 ;;
+  esac
+}
 
-  _ebf_flags=""
-  _ebf_rem="${_ebf_in}"
+# ── Hoist all recognised flag parens from anywhere in the string ───────────
+# Pass 1 of the two-pass parser.  Scans the entire input string; any balanced
+# (…) group whose key name is in the recognised-flag set is extracted into
+# _flags_var (joined by U+001F).  Non-flag parens (hints, compat notes) are
+# left in _cleaned_var.  One trailing space after each extracted flag is also
+# consumed to avoid double-space artifacts.
+#
+# Sets (by nameref):
+#   $1 = flags_var   → extracted flags joined by $'\x1f'
+#   $2 = cleaned_var → input with recognised flags removed, leading/trailing ws trimmed
+# $3 = input string
+_gs_eu2_hoist_all_flags() {
+  local -n _haf_flags="${1}"
+  local -n _haf_cleaned="${2}"
+  local _haf_in="${3}"
 
-  while true; do
-    local _ebf_trimmed="${_ebf_rem#"${_ebf_rem%%[! ]*}"}"
-    [[ "${_ebf_trimmed:0:1}" == "(" ]] || break
+  _haf_flags=""
+  local _haf_result="" _haf_len="${#_haf_in}" _haf_i=0
 
-    local _ebf_depth=0 _ebf_content="" _ebf_found=false
-    local _ebf_len="${#_ebf_trimmed}" _ebf_i _ebf_ch
-    for (( _ebf_i = 0; _ebf_i < _ebf_len; _ebf_i++ )); do
-      _ebf_ch="${_ebf_trimmed:${_ebf_i}:1}"
-      if [[ "${_ebf_ch}" == "(" ]]; then
-        (( ++_ebf_depth )) || true   # depth 0→1: pre-increment returns new value = 1
-        (( _ebf_depth > 1 )) && _ebf_content+="${_ebf_ch}"
-      elif [[ "${_ebf_ch}" == ")" ]]; then
-        (( --_ebf_depth )) || true   # depth 1→0: pre-decrement returns new value = 0
-        if (( _ebf_depth == 0 )); then
-          _ebf_found=true
-          local _ebf_after="${_ebf_trimmed:$(( _ebf_i + 1 ))}"
-          _ebf_after="${_ebf_after#"${_ebf_after%%[! ]*}"}"
-          _ebf_rem="${_ebf_after}"
+  while (( _haf_i < _haf_len )); do
+    local _haf_ch="${_haf_in:${_haf_i}:1}"
+
+    if [[ "${_haf_ch}" != "(" ]]; then
+      _haf_result+="${_haf_ch}"
+      (( ++_haf_i )) || true
+      continue
+    fi
+
+    # Found '(' — extract the balanced group
+    local _haf_depth=0 _haf_content="" _haf_found=false _haf_end=0 _haf_j
+    for (( _haf_j = _haf_i; _haf_j < _haf_len; _haf_j++ )); do
+      local _haf_c="${_haf_in:${_haf_j}:1}"
+      if   [[ "${_haf_c}" == "(" ]]; then
+        (( ++_haf_depth )) || true
+        (( _haf_depth > 1 )) && _haf_content+="${_haf_c}"
+      elif [[ "${_haf_c}" == ")" ]]; then
+        (( --_haf_depth )) || true
+        if (( _haf_depth == 0 )); then
+          _haf_found=true
+          _haf_end=$(( _haf_j + 1 ))
           break
         else
-          _ebf_content+="${_ebf_ch}"
+          _haf_content+="${_haf_c}"
         fi
       else
-        _ebf_content+="${_ebf_ch}"
+        _haf_content+="${_haf_c}"
       fi
     done
 
-    [[ "${_ebf_found}" == "true" ]] || break
-    _ebf_content="${_ebf_content%"${_ebf_content##*[! ]}"}"
-    [[ -n "${_ebf_flags}" ]] && _ebf_flags+=$'\x1f'
-    _ebf_flags+="${_ebf_content}"
+    if [[ "${_haf_found}" == "true" ]] && _gs_eu2_is_recognized_flag "${_haf_content}"; then
+      # Recognised flag — extract it
+      [[ -n "${_haf_flags}" ]] && _haf_flags+=$'\x1f'
+      _haf_flags+="${_haf_content}"
+      # Swallow one trailing space (flag separator) if present
+      if (( _haf_end < _haf_len )) && [[ "${_haf_in:${_haf_end}:1}" == " " ]]; then
+        (( ++_haf_end )) || true
+      fi
+      _haf_i="${_haf_end}"
+    elif [[ "${_haf_found}" == "true" ]]; then
+      # Not a recognised flag (hint or compat note) — keep the whole group
+      _haf_result+="(${_haf_content})"
+      _haf_i="${_haf_end}"
+    else
+      # Unbalanced paren — keep as-is
+      _haf_result+="${_haf_ch}"
+      (( ++_haf_i )) || true
+    fi
   done
+
+  # Trim leading and trailing whitespace
+  _haf_cleaned="${_haf_result#"${_haf_result%%[! ]*}"}"
+  _haf_cleaned="${_haf_cleaned%"${_haf_cleaned##*[! ]}"}"
 }
 
 # ── Validate and dispatch one flag token → record field ───────────────────
@@ -78,7 +122,7 @@ _gs_eu2_dispatch_flag() {
   case "${_name}" in
     channel|skip|tag-filter|tag-exclude|tag-strip-prefix|tag-strip-suffix|\
     tag-extract|tag-suffix|fetch-extract|fetch-json|url-probe|url-probe-depth|\
-    version-prefix)
+    version-prefix|pecl-ref)
       if [[ -z "${_val}" ]]; then
         printf 'env-update-v2: %s:%s: flag %q requires a non-empty value\n' \
           "${_env_file}" "${_lnum}" "${_name}" >&2
@@ -92,6 +136,13 @@ _gs_eu2_dispatch_flag() {
         exit 1
       fi
       ;;
+    depends-on)
+      if [[ -z "${_val}" || "${_val}" != *:* ]]; then
+        printf 'env-update-v2: %s:%s: malformed depends-on — expected VAR:constraint, got %q\n' \
+          "${_env_file}" "${_lnum}" "${_val:-<empty>}" >&2
+        exit 1
+      fi
+      ;;
     *)
       printf 'env-update-v2: %s:%s: unknown flag %q in annotation\n' \
         "${_env_file}" "${_lnum}" "${_name}" >&2
@@ -100,19 +151,22 @@ _gs_eu2_dispatch_flag() {
   esac
 
   case "${_name}" in
-    channel)           _gs_eu2_record_set "${_idx}" channel         "${_val}" ;;
-    skip)              _gs_eu2_record_set "${_idx}" skip_reason     "${_val}" ;;
-    tag-filter)        _gs_eu2_record_set "${_idx}" tag_filter      "${_val}" ;;
-    tag-exclude)       _gs_eu2_record_set "${_idx}" tag_exclude     "${_val}" ;;
+    channel)           _gs_eu2_record_set "${_idx}" channel          "${_val}" ;;
+    skip)              _gs_eu2_record_set "${_idx}" skip_reason      "${_val}" ;;
+    tag-filter)        _gs_eu2_record_set "${_idx}" tag_filter       "${_val}" ;;
+    tag-exclude)       _gs_eu2_record_set "${_idx}" tag_exclude      "${_val}" ;;
     tag-strip-prefix)  _gs_eu2_record_set "${_idx}" tag_strip_prefix "${_val}" ;;
     tag-strip-suffix)  _gs_eu2_record_set "${_idx}" tag_strip_suffix "${_val}" ;;
-    tag-extract)       _gs_eu2_record_set "${_idx}" tag_extract     "${_val}" ;;
-    tag-suffix)        _gs_eu2_record_set "${_idx}" tag_suffix      "${_val}" ;;
-    fetch-extract)     _gs_eu2_record_set "${_idx}" fetch_extract   "${_val}" ;;
-    fetch-json)        _gs_eu2_record_set "${_idx}" fetch_json      "${_val}" ;;
-    url-probe)         _gs_eu2_record_set "${_idx}" url_probe       "${_val}" ;;
-    url-probe-depth)   _gs_eu2_record_set "${_idx}" url_probe_depth "${_val}" ;;
-    version-prefix)    _gs_eu2_record_set "${_idx}" version_prefix  "${_val}" ;;
+    tag-extract)       _gs_eu2_record_set "${_idx}" tag_extract      "${_val}" ;;
+    tag-suffix)        _gs_eu2_record_set "${_idx}" tag_suffix       "${_val}" ;;
+    fetch-extract)     _gs_eu2_record_set "${_idx}" fetch_extract    "${_val}" ;;
+    fetch-json)        _gs_eu2_record_set "${_idx}" fetch_json       "${_val}" ;;
+    url-probe)         _gs_eu2_record_set "${_idx}" url_probe        "${_val}" ;;
+    url-probe-depth)   _gs_eu2_record_set "${_idx}" url_probe_depth  "${_val}" ;;
+    # D2: version_prefix stored; applied during fetch/compare in Phase 3
+    version-prefix)    _gs_eu2_record_set "${_idx}" version_prefix   "${_val}" ;;
+    pecl-ref)          _gs_eu2_record_set "${_idx}" pecl_ref         "${_val}" ;;
+    depends-on)        _gs_eu2_record_set "${_idx}" depends_on       "${_val}" ;;
     tag-replace)
       _gs_eu2_record_set "${_idx}" tag_replace_from "${_val%%:*}"
       _gs_eu2_record_set "${_idx}" tag_replace_to   "${_val#*:}"
@@ -130,7 +184,7 @@ _gs_eu2_parse_env_file() {
   local _pending_type="" _pending_identifier="" _pending_major_hint=""
   local _pending_flags="" _pending_version="" _pending_hint=""
   local _pending_git_url="" _pending_git_sha=""
-  local _pend_pecl="" _pend_dep="" _pend_urls=""
+  local _pend_urls=""
   local _line_number=0
 
   local _re_git_fallback
@@ -162,26 +216,37 @@ _gs_eu2_parse_env_file() {
       _pending_annotation="${_line}"
       _pending_type="" _pending_identifier="" _pending_major_hint=""
       _pending_flags="" _pending_version="" _pending_hint=""
-      _pend_pecl="" _pend_dep="" _pend_urls=""
+      _pend_urls=""
 
       local _content="${_line#*@todo env-update}"
       _content="${_content#"${_content%%[! ]*}"}"
 
-      local _flags_str="" _remaining=""
-      _gs_eu2_extract_balanced_flags _flags_str _remaining "${_content}"
+      # Pass 1: hoist all recognised flag parens (position-agnostic)
+      local _flags_str="" _content_clean=""
+      _gs_eu2_hoist_all_flags _flags_str _content_clean "${_content}"
 
-      # Parse TYPE:IDENTIFIER:MAJOR
+      # Pass 2: parse TYPE:IDENTIFIER[:MAJOR_HINT] from cleaned content
+      local _remaining=""
       local _type_token=""
-      if [[ "${_remaining}" =~ ^([a-z_-]+:[^[:space:]]+)[[:space:]](.*) ]]; then
+      if [[ "${_content_clean}" =~ ^([a-z_-]+:[^[:space:]]+)[[:space:]](.*) ]]; then
         _type_token="${BASH_REMATCH[1]}"
         _remaining="${BASH_REMATCH[2]}"
-      elif [[ "${_remaining}" =~ ^([a-z_-]+:[^[:space:]]+)$ ]]; then
+      elif [[ "${_content_clean}" =~ ^([a-z_-]+:[^[:space:]]+)$ ]]; then
         _type_token="${BASH_REMATCH[1]}"
         _remaining=""
       else
-        local _got="${_remaining%% *}"
-        printf 'env-update-v2: %s:%s: annotation has no TYPE:IDENTIFIER (got: %q)\n' \
-          "${_env_file}" "${_line_number}" "${_got:-<empty>}" >&2
+        # Detect unrecognised leading flag for a better error message
+        if [[ "${_content_clean:0:1}" == "(" ]]; then
+          local _bad_flag="${_content_clean#(}"
+          _bad_flag="${_bad_flag%%)*}"
+          _bad_flag="${_bad_flag%%:*}"
+          printf 'env-update-v2: %s:%s: unknown flag %q in annotation\n' \
+            "${_env_file}" "${_line_number}" "${_bad_flag}" >&2
+        else
+          local _got="${_content_clean%% *}"
+          printf 'env-update-v2: %s:%s: annotation has no TYPE:IDENTIFIER (got: %q)\n' \
+            "${_env_file}" "${_line_number}" "${_got:-<empty>}" >&2
+        fi
         exit 1
       fi
 
@@ -191,7 +256,8 @@ _gs_eu2_parse_env_file() {
       _pending_major_hint=""
       if [[ "${_type_rest}" == *:* ]]; then
         local _maybe_major="${_type_rest##*:}"
-        if [[ "${_maybe_major}" =~ ^[0-9][0-9.]*$ ]]; then
+        # D1: major_hint must be a plain integer — reject dot-containing values like "9.2"
+        if [[ "${_maybe_major}" =~ ^[0-9]+$ ]]; then
           _pending_major_hint="${_maybe_major}"
           _pending_identifier="${_type_rest%:*}"
         fi
@@ -199,31 +265,10 @@ _gs_eu2_parse_env_file() {
 
       _pending_flags="${_flags_str}"
 
-      # pecl-ref
-      local _re_pecl='\(pecl-ref:([^)]+)\)'
-      if [[ "${_remaining}" =~ ${_re_pecl} ]]; then
-        _pend_pecl="${BASH_REMATCH[1]}"
-        _remaining="${_remaining//${BASH_REMATCH[0]}/}"
-        _remaining="${_remaining#"${_remaining%%[! ]*}"}"
-        _remaining="${_remaining%"${_remaining##*[! ]}"}"
-      fi
+      # Trim leading whitespace from remaining
+      _remaining="${_remaining#"${_remaining%%[! ]*}"}"
 
-      # depends-on
-      local _re_depends='\(depends-on:([^)]+)\)'
-      if [[ "${_remaining}" =~ ${_re_depends} ]]; then
-        local _dep_val="${BASH_REMATCH[1]}"
-        if [[ "${_dep_val}" != *:* ]]; then
-          printf 'env-update-v2: %s:%s: malformed depends-on — expected VAR:constraint, got %q\n' \
-            "${_env_file}" "${_line_number}" "${_dep_val}" >&2
-          exit 1
-        fi
-        _pend_dep="${_dep_val}"
-        _remaining="${_remaining//${BASH_REMATCH[0]}/}"
-        _remaining="${_remaining#"${_remaining%%[! ]*}"}"
-        _remaining="${_remaining%"${_remaining##*[! ]}"}"
-      fi
-
-      # urls:
+      # urls: keyword (not a paren flag — handled separately)
       if [[ " ${_remaining} " =~ [[:space:]]urls:[[:space:]] ]]; then
         local _before_urls="${_remaining%%urls:*}"
         local _after_urls="${_remaining#*urls:}"
@@ -242,7 +287,7 @@ _gs_eu2_parse_env_file() {
         _remaining="${_remaining%"${_remaining##*[! ]}"}"
       fi
 
-      # hint: trailing (text) parenthetical
+      # hint: trailing (text) parenthetical — non-flag, may contain spaces
       local _re_hint='^(.*)[[:space:]][(]([^)]+)[)][[:space:]]*$'
       if [[ "${_remaining}" =~ ${_re_hint} ]]; then
         _pending_hint="${BASH_REMATCH[2]}"
@@ -257,12 +302,11 @@ _gs_eu2_parse_env_file() {
 
     # Variable assignment line
     if [[ "${_state}" == "AWAITING_VARIABLE" ]]; then
+      # C2: blank lines and comment lines keep the AWAITING_VARIABLE state
       if [[ "${_line}" =~ ^[[:space:]]*# ]]; then
         continue
       fi
       if [[ -z "${_line}" ]]; then
-        _state="IDLE"
-        _pending_git_url="" _pending_git_sha=""
         continue
       fi
 
@@ -270,10 +314,20 @@ _gs_eu2_parse_env_file() {
         local _var_name="${BASH_REMATCH[1]}"
         local _var_value="${BASH_REMATCH[2]}"
 
-        if [[ -n "${_filter}" && ! "${_var_name}" =~ ${_filter} ]]; then
-          _state="IDLE"
-          _pending_git_url="" _pending_git_sha=""
-          continue
+        # Filter: by type prefix (type:dockerhub) or var-name regex (current behaviour)
+        if [[ -n "${_filter}" ]]; then
+          if [[ "${_filter}" == type:* ]]; then
+            local _filter_type="${_filter#type:}"
+            if [[ "${_pending_type}" != "${_filter_type}" ]]; then
+              _state="IDLE"
+              _pending_git_url="" _pending_git_sha=""
+              continue
+            fi
+          elif [[ ! "${_var_name}" =~ ${_filter} ]]; then
+            _state="IDLE"
+            _pending_git_url="" _pending_git_sha=""
+            continue
+          fi
         fi
 
         local _final_version="${_pending_version}"
@@ -292,11 +346,9 @@ _gs_eu2_parse_env_file() {
         _gs_eu2_record_set "${_idx}" raw_annotation   "${_pending_annotation}"
         _gs_eu2_record_set "${_idx}" git_fallback_url "${_pending_git_url}"
         _gs_eu2_record_set "${_idx}" git_fallback_sha "${_pending_git_sha}"
-        _gs_eu2_record_set "${_idx}" pecl_ref         "${_pend_pecl}"
-        _gs_eu2_record_set "${_idx}" depends_on       "${_pend_dep}"
         _gs_eu2_record_set "${_idx}" urls             "${_pend_urls}"
 
-        # Dispatch inline flags
+        # Dispatch all hoisted flags (position-agnostic)
         if [[ -n "${_pending_flags}" ]]; then
           local _old_ifs="${IFS}"
           IFS=$'\x1f'
@@ -308,6 +360,12 @@ _gs_eu2_parse_env_file() {
           IFS="${_old_ifs}"
         fi
 
+        _state="IDLE"
+        _pending_git_url="" _pending_git_sha=""
+      else
+        # C2: non-blank non-comment non-assignment line — annotation not followed by var
+        printf 'env-update-v2: %s:%d: annotation not followed by variable assignment (got: %s)\n' \
+          "${_env_file}" "${_line_number}" "${_line}" >&2
         _state="IDLE"
         _pending_git_url="" _pending_git_sha=""
       fi

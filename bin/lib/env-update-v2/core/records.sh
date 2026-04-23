@@ -9,11 +9,13 @@ _GS_EU2_LAST_IDX=0
 
 # Canonical field list — single source of truth.
 # Adding a new field: add one name here + one dispatch line in parse.sh.
+# version_prefix: re-prepended to proposed_version in dockerhub.sh after tag-strip-prefix removes it.
 _gs_eu2_record_fields() {
   printf '%s\n' \
     env_var current_version type identifier major_hint \
     override manual propagate \
-    channel skip_reason version_prefix \
+    channel skip_reason \
+    version_prefix \
     tag_filter tag_exclude tag_strip_prefix tag_strip_suffix \
     tag_extract tag_replace_from tag_replace_to tag_suffix \
     fetch_extract fetch_json \

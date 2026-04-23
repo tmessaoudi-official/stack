@@ -21,10 +21,12 @@ Options:
   --dump                  Emit parsed records to stdout
   --format=<text|json>    Dump format (default: text)
   --check                 Fetch latest versions and stream [AUTO|HOLD|SKIP|ERROR] report
+  --apply                 Apply all AUTO decisions to the env file; implies --check.
+                          Creates a timestamped .env backup before writing.
+                          Use with --dry-run to preview without writing.
   --no-cache              Bypass the fetch cache
   --cache-ttl=<seconds>   Cache TTL in seconds (default: 3600)
-  --dry-run               No-op placeholder; Phase 2 gates cache writes. Reserved for
-                          future phases that will gate .env writes.
+  --dry-run               No writes (gates cache, .env, and Dockerfile propagation).
 
 Default (no flags): print a parser summary with per-type breakdown and hints.
 
@@ -38,5 +40,7 @@ Examples:
   bin/env-update-v2.sh --check --filter=POSTGRES      # fetch only POSTGRES* vars
   bin/env-update-v2.sh --check --no-cache             # bypass cache
   bin/env-update-v2.sh --dump --format=json | jq .    # structured record dump
+  bin/env-update-v2.sh --check --apply                # fetch + apply all AUTO updates
+  bin/env-update-v2.sh --check --apply --dry-run      # preview what would be applied
 EOF
 }

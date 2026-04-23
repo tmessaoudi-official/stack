@@ -27,5 +27,29 @@ _gs_eu2_http_get() {
     return 1
   fi
 
-  curl --silent --fail --max-time 15 --location "${_url}"
+  # D4: Add retry logic and explicit User-Agent; detect HTTP 429 (rate-limit) specifically.
+  local _body_tmp
+  _body_tmp="$(mktemp)"
+  local _http_status _curl_exit
+  _http_status="$(curl --silent --max-time 15 --location \
+    --retry 3 --retry-delay 2 \
+    -H "User-Agent: global-stack-env-update-v2/0.2.0" \
+    -w "%{http_code}" \
+    -o "${_body_tmp}" \
+    "${_url}" 2>/dev/null)"
+  _curl_exit=$?
+
+  if [[ "${_http_status}" == "429" ]]; then
+    printf 'env-update-v2: rate-limited by %s (HTTP 429) — try again later\n' "${_url}" >&2
+    rm -f "${_body_tmp}"
+    return 1
+  fi
+
+  if [[ "${_curl_exit}" -ne 0 || "${_http_status}" -ge 400 ]] 2>/dev/null; then
+    rm -f "${_body_tmp}"
+    return 1
+  fi
+
+  cat "${_body_tmp}"
+  rm -f "${_body_tmp}"
 }

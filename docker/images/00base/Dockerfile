@@ -20,7 +20,6 @@ ARG GLOBAL_STACK_DOCKER_WORKDIR
 ARG GLOBAL_STACK_DOCKER_TOOLS_PATH
 ARG GLOBAL_STACK_DOCKER_USER_UID
 ARG GLOBAL_STACK_DOCKER_USER_ID
-ARG GLOBAL_STACK_DOCKER_PASSWORD
 ARG GLOBAL_STACK_DOCKER_GROUP_UID
 ARG GLOBAL_STACK_DOCKER_GROUP_ID
 ARG GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN
@@ -54,7 +53,7 @@ ARG GLOBAL_STACK_DOCKER_COMPOSE_V2_VERSION
 ARG GLOBAL_STACK_DOCKER_BUILDX_VERSION
 ARG GLOBAL_STACK_MKCERT_VERSION
 ARG GLOBAL_STACK_PODMAN_COMPOSE_VERSION
-ARG GLOBAL_STACK_PODMAN_CHANEL
+ARG GLOBAL_STACK_PODMAN_CHANNEL
 ARG GLOBAL_STACK_BASE_INSTALL_TOOLS
 ARG GLOBAL_STACK_SONAR_SCANNER_CLI_VERSION
 ARG GLOBAL_STACK_HADOLINT_VERSION
@@ -97,7 +96,6 @@ ENV DEBIAN_FRONTEND="noninteractive" \
     GLOBAL_STACK_DOCKER_TOOLS_PATH="${GLOBAL_STACK_DOCKER_TOOLS_PATH}" \
     GLOBAL_STACK_DOCKER_USER_UID="${GLOBAL_STACK_DOCKER_USER_UID}" \
     GLOBAL_STACK_DOCKER_USER_ID="${GLOBAL_STACK_DOCKER_USER_ID}" \
-    GLOBAL_STACK_DOCKER_PASSWORD="${GLOBAL_STACK_DOCKER_PASSWORD}" \
     GLOBAL_STACK_DOCKER_GROUP_UID="${GLOBAL_STACK_DOCKER_GROUP_UID}" \
     GLOBAL_STACK_DOCKER_GROUP_ID="${GLOBAL_STACK_DOCKER_GROUP_ID}" \
     GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN="${GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN}" \
@@ -130,7 +128,7 @@ ENV DEBIAN_FRONTEND="noninteractive" \
     GLOBAL_STACK_PODMAN_COMPOSE_VERSION="${GLOBAL_STACK_PODMAN_COMPOSE_VERSION}" \
     GLOBAL_STACK_INSTALL_GITLAB_RUNNER="${GLOBAL_STACK_INSTALL_GITLAB_RUNNER}" \
     GLOBAL_STACK_INSTALL_PODMAN="${GLOBAL_STACK_INSTALL_PODMAN}" \
-    GLOBAL_STACK_PODMAN_CHANEL="${GLOBAL_STACK_PODMAN_CHANEL}" \
+    GLOBAL_STACK_PODMAN_CHANNEL="${GLOBAL_STACK_PODMAN_CHANNEL}" \
     GLOBAL_STACK_BASE_INSTALL_TOOLS="${GLOBAL_STACK_BASE_INSTALL_TOOLS}" \
     GLOBAL_STACK_SONAR_SCANNER_CLI_VERSION="${GLOBAL_STACK_SONAR_SCANNER_CLI_VERSION}" \
     GLOBAL_STACK_HADOLINT_VERSION="${GLOBAL_STACK_HADOLINT_VERSION}" \
@@ -170,8 +168,10 @@ COPY docker/images/00base/conf/bin/ /usr/local/bin/
 # && sed -i "s|current_dist|wanted_dist|g" /etc/apt/sources.list \
 # && sed -i "s|current_dist|wanted_dist|g" /etc/apt/sources.list.d/ubuntu.sources \
 # @todo fix pin versions
-RUN shopt -s extdebug \
+RUN --mount=type=secret,id=global_stack_secret_docker_password \
+    shopt -s extdebug \
     && IFS=$'\n\t' \
+    && GLOBAL_STACK_DOCKER_PASSWORD=$(cat /run/secrets/global_stack_secret_docker_password) \
     && [ "${GLOBAL_STACK_DOCKER_USER_UID}" = "" ] || [ "${GLOBAL_STACK_DOCKER_USER_ID}" = "" ] || [ "${GLOBAL_STACK_DOCKER_PASSWORD}" = "" ] || [ "${GLOBAL_STACK_DOCKER_GROUP_UID}" = "" ] || [ "${GLOBAL_STACK_DOCKER_GROUP_ID}" = "" ] && exit 1 || echo -e "\n Seems like everything is set !" \
     && mkdir -p /usr/share/zoneinfo/"${GLOBAL_STACK_TIMEZONE}" \
     && echo "${GLOBAL_STACK_TIMEZONE}" > /etc/timezone \
@@ -194,9 +194,7 @@ RUN shopt -s extdebug \
     fontforge \
     ttfautohint \
     zlib1g-dev \
-    libpcre3-dev \
     libpcre2-8-0 \
-    libpcre3 \
     g++ \
     aptitude \
     jq \
@@ -263,7 +261,7 @@ RUN shopt -s extdebug \
     && sh -c 'echo "Types: deb\nTrusted: yes\nSigned-By: /usr/share/keyrings/postgresql.asc\nArch: $(dpkg --print-architecture)\nURIs: https://apt.postgresql.org/pub/repos/apt\nSuites: resolute-pgdg\nComponents: main" > /etc/apt/sources.list.d/pgdg.sources' \
     && curl -fsSL 'https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xF911AB184317630C59970973E363C90F8F1B6217' | gpg --dearmor | tee /usr/share/keyrings/git.gpg \
     && echo -e "Types: deb\nTrusted: yes\nSigned-By: /usr/share/keyrings/git.gpg\nArch: $(dpkg --print-architecture)\nURIs: https://ppa.launchpadcontent.net/git-core/ppa/ubuntu\nSuites: $(lsb_release -cs)\nComponents: main" | dd of=/etc/apt/sources.list.d/git.sources \
-    && wget -qO- https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor | dd of=/usr/share/keyrings/google-chrome.gpg \
+    && curl -fsSL https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor | dd of=/usr/share/keyrings/google-chrome.gpg \
     && echo -e "Types: deb\nTrusted: yes\nSigned-By: /usr/share/keyrings/google-chrome.gpg\nArch: $(dpkg --print-architecture)\nURIs: http://dl.google.com/linux/chrome/deb/\nSuites: stable\nComponents: main" | dd of=/etc/apt/sources.list.d/google-chrome.sources \
     && apt-get -o Acquire::AllowInsecureRepositories=true update --allow-releaseinfo-change \
     && apt-get --allow-unauthenticated install -y --no-install-recommends --fix-missing \
@@ -280,7 +278,7 @@ RUN shopt -s extdebug \
     libcjose-dev \
     libjansson-dev \
     && rm -rf /etc/apt/sources.list.d/google-chrome.list \
-    && [ "${GLOBAL_STACK_WKHTMLTOPDF_VERSION}" != "" ] && [ "${GLOBAL_STACK_WKHTMLTOPDF_DISTRO}" != "" ] && (wget https://github.com/wkhtmltopdf/packaging/releases/download/${GLOBAL_STACK_WKHTMLTOPDF_VERSION}/wkhtmltox_${GLOBAL_STACK_WKHTMLTOPDF_VERSION}.${GLOBAL_STACK_WKHTMLTOPDF_DISTRO}_amd64.deb && apt-get --allow-unauthenticated install -y --no-install-recommends --fix-missing ./wkhtmltox_${GLOBAL_STACK_WKHTMLTOPDF_VERSION}.${GLOBAL_STACK_WKHTMLTOPDF_DISTRO}_amd64.deb && rm wkhtmltox_${GLOBAL_STACK_WKHTMLTOPDF_VERSION}.${GLOBAL_STACK_WKHTMLTOPDF_DISTRO}_amd64.deb) || echo -e "\n wkhtmltopdf will not be installed" \
+    && { [ "${GLOBAL_STACK_WKHTMLTOPDF_VERSION}" != "" ] && [ "${GLOBAL_STACK_WKHTMLTOPDF_DISTRO}" != "" ] && (curl -fsSLO "https://github.com/wkhtmltopdf/packaging/releases/download/${GLOBAL_STACK_WKHTMLTOPDF_VERSION}/wkhtmltox_${GLOBAL_STACK_WKHTMLTOPDF_VERSION}.${GLOBAL_STACK_WKHTMLTOPDF_DISTRO}_amd64.deb" && apt-get --allow-unauthenticated install -y --no-install-recommends --fix-missing ./wkhtmltox_${GLOBAL_STACK_WKHTMLTOPDF_VERSION}.${GLOBAL_STACK_WKHTMLTOPDF_DISTRO}_amd64.deb && rm wkhtmltox_${GLOBAL_STACK_WKHTMLTOPDF_VERSION}.${GLOBAL_STACK_WKHTMLTOPDF_DISTRO}_amd64.deb) || echo -e "\n wkhtmltopdf will not be installed"; } \
     && usermod -u 1001 ubuntu \
     && (find / -user 1000 -exec chown -h 1001 {} \; 2>/dev/null || true) \
     && groupmod -g 1001 ubuntu \
@@ -296,24 +294,20 @@ RUN shopt -s extdebug \
     && shopt -s extdebug \
     && IFS=$'\n\t' \
     && find /usr/local/bin -type f -exec chmod a+x {} \; \
-    && [ "${GLOBAL_STACK_DOCKER_IN_DOCKER}" = "true" ] && global-stack-base-install-docker-in-docker.sh || echo -e "\n Docker In Docker will not be installed" \
-    && [ "${GLOBAL_STACK_INSTALL_GITLAB_RUNNER}" = "true" ] && global-stack-base-install-gitlab-runner.sh || echo -e "\n Gitlab runner will not be installed" \
-    && [ "${GLOBAL_STACK_INSTALL_PODMAN}" = "true" ] && global-stack-base-install-podman.sh || echo -e "\n Podman will not be installed" \
-    && [ "${GLOBAL_STACK_INSTALL_ANSIBLE}" = "true" ] && global-stack-base-install-ansible.sh || echo -e "\n Ansible will not be installed" \
-    && [ "${GLOBAL_STACK_BASE_INSTALL_TOOLS}" = "true" ] && global-stack-base-install-tools.sh || echo -e "\n Tools will not be installed" \
+    && { [ "${GLOBAL_STACK_DOCKER_IN_DOCKER}" = "true" ] && global-stack-base-install-docker-in-docker.sh || echo -e "\n Docker In Docker will not be installed"; } \
+    && { [ "${GLOBAL_STACK_INSTALL_GITLAB_RUNNER}" = "true" ] && global-stack-base-install-gitlab-runner.sh || echo -e "\n Gitlab runner will not be installed"; } \
+    && { [ "${GLOBAL_STACK_INSTALL_PODMAN}" = "true" ] && global-stack-base-install-podman.sh || echo -e "\n Podman will not be installed"; } \
+    && { [ "${GLOBAL_STACK_INSTALL_ANSIBLE}" = "true" ] && global-stack-base-install-ansible.sh || echo -e "\n Ansible will not be installed"; } \
+    && { [ "${GLOBAL_STACK_BASE_INSTALL_TOOLS}" = "true" ] && global-stack-base-install-tools.sh || echo -e "\n Tools will not be installed"; } \
     && global-stack-base-install-mkcert.sh \
+    && mkcert -CAROOT ${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/caroot -install \
     && apt-get clean -y \
     && rm -rf /var/lib/apt/lists/* \
     && rm -rf /etc/apt/apt.conf.d/docker-clean \
     && mkdir -p ${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/caroot \
     && chmod -R a+rwx ${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/caroot \
-    && [ "${GLOBAL_STACK_UNU}" = "true" ] && global-stack-base-unu.sh || echo -e "\n Will not upgrade the distribution"
+    && { [ "${GLOBAL_STACK_UNU}" = "true" ] && global-stack-base-unu.sh || echo -e "\n Will not upgrade the distribution"; }
 
 USER "${GLOBAL_STACK_DOCKER_USER_ID}":"${GLOBAL_STACK_DOCKER_GROUP_ID}"
-
-RUN mkcert -CAROOT ${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/caroot -install \
-    && shopt -s extdebug \
-    && IFS=$'\n\t' \
-    && eval "$(ssh-agent -s)"
 
 CMD ["global-stack-base-sync-bin-n-exec.sh", "global-stack-base-start.sh"]

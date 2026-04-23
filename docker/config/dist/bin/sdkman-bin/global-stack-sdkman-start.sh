@@ -71,7 +71,7 @@ SDK_CURRENT_VERSION=$([[ -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/sdkman" 
 
 if [ "${SDK_LATEST_VERSION}" != "${SDK_CURRENT_VERSION}" ]; then
   rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN}/sdkman.installer.sh"
-  #wget "https://get.sdkman.io" -O "${GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN}/sdkman.installer.sh"
+  #curl -fsSL -o "${GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN}/sdkman.installer.sh" "https://get.sdkman.io"
   cp ${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/conf/sdkman/bin/sdkman.installer.sh "${GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN}"/sdkman.installer.sh
 
   echo "${SDK_LATEST_VERSION}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/sdkman"
