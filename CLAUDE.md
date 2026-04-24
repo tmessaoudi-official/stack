@@ -117,6 +117,8 @@ Parses `.env` annotations, fetches latest versions from 12 registries, auto-appl
 --dry-run              # No writes (gates cache, .env, and Dockerfile propagation)
 ```
 
+**⚠️ Safety rule**: Always run `--dry-run` before `--apply` in the same session. Never run `--apply` cold — treat it as an ask-tier operation requiring prior `--dry-run` review regardless of what the permission system allows. This rule exists because today's incident (2026-04-23) was caused by running `--apply` without a prior dry-run review.
+
 **Default (no flags)**: prints a parser summary — record count, per-type breakdown, hint to run `--check`.
 
 **Fetcher scope**: `dockerhub` only in Phase 2. All other types (`github`, `npm`, `pecl`, etc.) show `[SKIP]` — Phase 3+.
@@ -225,10 +227,11 @@ make start-local-registry            # Start local TLS registry (port 5000)
 - `/env-diff` — show divergences between `.env` and `.env.local`
 - `/service-info <name>` — deep-dive on one service (compose, Dockerfile, startup, health, ports, versions)
 - `/recent` — quick context: recent commits, uncommitted changes, stack health
-- `/export-setup` — bundle config into a portable `.tar.gz`; `--scope project` (default) LLM-generalizes this project's CLAUDE.md + .claude/ into a rich template with ADAPT markers; `--scope global` exports `~/.claude/` as-is; `--scope all` produces both archives
-- `/import-setup` — install a bundle: Phase 0 detects existing `.claude/` (asks replace/manual-merge); bash installer runs; Phase 5 probes target project and fills ADAPT markers in-place
-- `/adapt` — post-import: explore the project deeply, fill all ADAPT markers in CLAUDE.md + .claude/ (from an imported bundle), then self-destruct; safe to re-run (idempotent if no markers remain)
+- `/export-setup` — *(global command — works in any project)* bundle config into a portable `.tar.gz`; `--scope project` (default) LLM-generalizes this project's CLAUDE.md + .claude/ into a rich template with ADAPT markers; `--scope global` exports `~/.claude/` as-is; `--scope all` produces both archives
+- `/import-setup` — *(global command — works in any project)* install a bundle: Phase 0 detects existing `.claude/` (asks replace/manual-merge); bash installer runs; Phase 5 probes target project and fills ADAPT markers in-place
+- `/post-import` — *(global command)* explore the project deeply and fill all ADAPT markers in CLAUDE.md + .claude/ (from an imported bundle); safe to re-run (idempotent if no markers remain)
 - `/sync-config` — detect and repair config drift: scans CLAUDE.md + .claude/ vs project reality (files, tools, commands, structure), presents a plan, waits for confirmation; supports `--check` (report only) and `--apply` (auto-fix without prompting)
+- `/new-service <name> [--parent <image>] [--runtime <name>] [--port <n>]` — scaffold a new service (Dockerfile, compose, startup script, printed `.env` + Makefile lines); args-first with interactive fallback
 
 **Automatic hooks** (PostToolUse on Edit/Write):
 - `shell-check` — lints `.sh` files on every write
@@ -256,6 +259,7 @@ make start-local-registry            # Start local TLS registry (port 5000)
 - **`tools/versions/` markers** control reinstall — deleting a marker forces full reinstall of that runtime even without `GLOBAL_STACK_RELOAD_*=true`
 - **`docker-bake.local.json` is generated, not tracked** — if it's stale after env changes, run `make generate-buildx` to regenerate. Stale bake file = wrong build config
 - **BuildKit cache can go stale** — if builds fail with mysterious layer errors, `docker buildx prune` is the escape hatch
+- **Bash-written files bypass all PostToolUse hooks** — linting (shell-check, hadolint, yamllint), formatting (shfmt), and backup only fire on `Edit`/`Write` tool calls. Files written via `cat >`, heredocs, `sed -i`, or other Bash redirects are invisible to hooks. Always use the `Write` or `Edit` tool when hook coverage matters.
 
 ## Credentials & Stateful Data
 
