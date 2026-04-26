@@ -107,14 +107,6 @@ Copy-paste-ready commands scaled to task size. Large tasks: full checklist with 
 12. **Verify proposals against real data before presenting them** — see Rule 11 in `~/.claude/CLAUDE.md`. Upstream fix for three prior incidents: triple-eval rewrite (Chesterton's Fence), source-grep failure (unquoted multi-word values), rtk asset URL (wrong OS target). Phase 1 brainstorm may generate unverified candidates; Phase 2 onward, every proposal must survive contact with real data first.
 13. **Challenge first, accept second** — see Rule 12 in `~/.claude/CLAUDE.md`. When the user proposes an approach, apply mental frameworks (Inversion, Chesterton's Fence, Five Whys, engineering laws) to test it before accepting. If a better path exists, surface it with reasoning. Confirm the user's proposal when it survives scrutiny. Override only when the user has already explained the rationale in the conversation.
 
-## Communication Style
-
-- **Precise and technical** — correct terminology always
-- **Direct** — state findings, recommendations, and concerns clearly
-- **Proactive** — don't wait to be asked about obvious improvements
-- Structure outputs with **clear phase headers** so the user always knows where we are
-- Flag blockers and risks with ⚠️, security issues with 🔒, completed phases with ✅
-
 ## Quality Standards
 
 Key non-negotiables: `set -eEuo pipefail` in new scripts (note: env-scan and global-unu.sh currently lack it — known exceptions; container scripts use `set -xeE -o pipefail`), ShellCheck-clean, Hadolint-clean Dockerfiles, `.PHONY` in Makefiles, strict SemVer 2.0.0.
@@ -123,14 +115,7 @@ Key non-negotiables: `set -eEuo pipefail` in new scripts (note: env-scan and glo
 
 ## Project Tooling
 
-**Slash commands** (available to you and the user):
-- `/lint` — validate all shell scripts (shell-check) and Dockerfiles (hadolint)
-- `/check-versions` — run `bin/env-update.sh --dry-run --progress` and summarize results
-- `/validate` — check Docker Compose config, env consistency, COMPOSE_FILE integrity, tier dependencies
-- `/stack-health` — inspect `tools/successes/`, `tools/errors/`, container status, version markers
-- `/new-service <name> [--parent <image>] [--runtime <name>] [--port <n>]` — scaffold a new service (Dockerfile, compose, startup script, printed .env + Makefile lines)
-
-**Permission guardrails**: safe read-only operations are pre-approved. Destructive operations (rm -rf, sudo, git push --force, docker push, make hard-restart) are blocked or require confirmation.
+Slash commands, permission guardrails, and hook details are documented in `/stack/CLAUDE.md` — "Claude Code Tooling" section.
 
 ## Memory
 

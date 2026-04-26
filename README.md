@@ -11,7 +11,7 @@ base should always be present within DOCKER_COMPOSE in env or env.local (many ot
 
 If you are using any node image you should include nvm within DOCKER_COMPOSE in env or env.local
 
-If you are using any node image you should include phpbrew within DOCKER_COMPOSE in env or env.local
+If you are using any php image you should include phpbrew within DOCKER_COMPOSE in env or env.local
 
 # Ssh files
 Put your id_rsa and id_rsa.pub and known_hosts in docker/config/root/.ssh/ ,
@@ -19,11 +19,11 @@ php dockers will install git and add your identity so you may use git inside doc
 
 # Apache/Nginx
 ## Virtual hosts
-Put all your virtual hosts conf files in docker/images/01httpd/conf/sites-available or docker/images/01nginx/conf/sites-available
+Put all your virtual hosts conf files in docker/config/dist/conf/httpd-conf/sites-available or docker/config/dist/conf/nginx-conf/sites-available
 all the files in there will be activated except
 example.*
 ## Confs
-Put all your conf files in docker/images/01httpd/conf/conf-available or docker/images/01nginx/conf/conf-available
+Put all your conf files in docker/config/dist/conf/httpd-conf/conf-available
 all the files in there will be activated
 
 # Docker containers shared Executables

@@ -70,62 +70,21 @@ Every version variable in `.env` is annotated for automated checking:
 GLOBAL_STACK_POSTGRES18_VERSION=18.3-alpine3.23
 ```
 
-**Fetcher types**: `dockerhub`, `github`, `codeberg`, `npm`, `pecl`, `pecl-git`, `sdkman`, `sdkmanager`, `pypi`, `quay`, `rubygems`, `url`
-
-**Common flags**: `(propagate)` — update all occurrences; `(override)` — always report, never auto-apply; `(skip:REASON)`; `(channel:rc|beta|nightly)`; `(tag-filter:REGEX)`; `(tag-exclude:REGEX)`; `(tag-strip-prefix:STR)`; `(tag-extract:REGEX)`; `(tag-suffix:STR)` — match tags ending with suffix; `(depends-on:VAR:constraint)`; `(version-prefix:v)`; `(fetch-extract:PERL_REGEX)`; `(fetch-json:JQ_PATH)`; `(stable-only)`
-
-See `templates/tips/env-update.md` for full annotation reference.
+See `templates/tips/env-update.md` for the full fetcher-type and flag reference.
 
 ## Key Scripts
 
 ### bin/env-update.sh
 
-**DEPRECATED** — use `bin/env-update-v2.sh` for new workflows. Preserved for reference and backward compatibility until `env-update-v2.sh` reaches feature parity.
-
-Parses `.env` annotations, fetches latest versions from 12 registries, auto-applies safe updates. Note: propagation of fetched values to Dockerfiles is now handled automatically by `bin/env-scan.sh`.
-
-**Decision outcomes**: `[AUTO]` auto-applied; `[MANUAL]` requires human review; `[HOLD]` pre-release vs stable; `[SKIP]` no change/unversioned; `[UBUNTU]` codename alignment needed
-
-**Key flags**:
-```bash
---dry-run            # Preview only, no files modified
---offline            # Use cache only, no network
---progress           # Show fetch indicator
---filter=<pattern>   # Only process matching vars (bash regex)
---type=<types>       # Comma-separated fetcher types
---no-auto-apply      # Report all, apply nothing
---show-ok            # Include up-to-date entries
---cache-ttl=<sec>    # Default 3600
-```
+**DEPRECATED** — use `bin/env-update-v2.sh`. Preserved until v2 reaches feature parity with all fetcher types. Key flags: `--dry-run`, `--offline`, `--progress`, `--filter=<pattern>`, `--type=<types>`, `--no-auto-apply`, `--show-ok`, `--cache-ttl=<sec>`.
 
 ### bin/env-update-v2.sh
 
 **v0.2.0 (Phase 2 — dockerhub fetcher + channel selection + apply)** — parses `.env` annotations, fetches latest versions from Docker Hub, streams a `[AUTO|HOLD|SKIP|ERROR]` report, and can apply AUTO decisions back to `.env`.
 
-**Key flags**:
-```bash
---version              # Print 0.2.0 and exit
---check                # Fetch latest versions and stream report (network required)
---apply                # Apply all AUTO decisions to .env; implies --check.
-                       # Creates timestamped backup before writing. Use with --dry-run to preview.
---no-cache             # Bypass fetch cache
---cache-ttl=<N>        # Cache TTL in seconds (default: 3600)
---dump                 # Emit parsed records (default: text; see --format)
---format=text|json     # Dump format (default: text)
---filter=<regex>       # Only process records whose env_var matches regex
---env-file=<path>      # Source file (default: /stack/.env)
---dry-run              # No writes (gates cache, .env, and Dockerfile propagation)
-```
+**Key flags**: `--check` (fetch + report), `--apply` (apply AUTO decisions; implies `--check`), `--dry-run` (no writes), `--filter=<regex>`, `--no-cache`, `--format=text|json`, `--dump`, `--env-file=<path>`, `--cache-ttl=<N>`
 
-**⚠️ Safety rule**: Always run `--dry-run` before `--apply` in the same session. Never run `--apply` cold — treat it as an ask-tier operation requiring prior `--dry-run` review regardless of what the permission system allows. This rule exists because today's incident (2026-04-23) was caused by running `--apply` without a prior dry-run review.
-
-**Default (no flags)**: prints a parser summary — record count, per-type breakdown, hint to run `--check`.
-
-**Fetcher scope**: `dockerhub` only in Phase 2. All other types (`github`, `npm`, `pecl`, etc.) show `[SKIP]` — Phase 3+.
-
-**Record model**: 31 fields per record — 28 parser fields + `proposed_version`, `decision`, `error_message` added in Phase 2. Indexed field vars `_GS_EU2_REC_${i}_${field}`. Canonical list in `_gs_eu2_record_fields()` is single source of truth.
-
-**Error policy**: parser failures exit non-zero with `env-update-v2: <file>:<line>: <reason>`. Fetch errors set `decision=ERROR` and continue — they do not abort.
+**⚠️ Safety rule**: Always run `--dry-run` before `--apply` in the same session. Never run `--apply` cold — ask-tier operation. (Incident 2026-04-23: ran `--apply` without prior dry-run.)
 
 **Full reference**: `templates/tips/env-update-v2.md`
 
@@ -221,16 +180,19 @@ make start-local-registry            # Start local TLS registry (port 5000)
 **Slash commands** (type `/command` in any session):
 - `/lint` — shell-check all scripts + hadolint all Dockerfiles
 - `/fmt` — format shell scripts (`shfmt`) and YAML files (`yamlfmt`); supports `--check`, `--sh`, `--yaml`
-- `/check-versions` — `bin/env-update.sh --dry-run` with summary
+- `/check-versions` — v2 `--check` (dockerhub) + legacy v1 `--dry-run` (github/npm/pecl/…) with combined summary; v1 used until v2 Phase 3+ covers all fetcher types
 - `/validate` — compose config + env consistency + COMPOSE_FILE + tier deps
 - `/stack-health` — health markers, container status, version markers
 - `/env-diff` — show divergences between `.env` and `.env.local`
 - `/service-info <name>` — deep-dive on one service (compose, Dockerfile, startup, health, ports, versions)
 - `/recent` — quick context: recent commits, uncommitted changes, stack health
-- `/export-setup` — *(global command — works in any project)* bundle config into a portable `.tar.gz`; `--scope project` (default) LLM-generalizes this project's CLAUDE.md + .claude/ into a rich template with ADAPT markers; `--scope global` exports `~/.claude/` as-is; `--scope all` produces both archives
-- `/import-setup` — *(global command — works in any project)* install a bundle: Phase 0 detects existing `.claude/` (asks replace/manual-merge); bash installer runs; Phase 5 probes target project and fills ADAPT markers in-place
-- `/post-import` — *(global command)* explore the project deeply and fill all ADAPT markers in CLAUDE.md + .claude/ (from an imported bundle); safe to re-run (idempotent if no markers remain)
-- `/sync-config` — detect and repair config drift: scans CLAUDE.md + .claude/ vs project reality (files, tools, commands, structure), presents a plan, waits for confirmation; supports `--check` (report only) and `--apply` (auto-fix without prompting)
+- `/bundle` — *(global command — works in any project)* bundle config into a portable `.tar.gz`; `--scope project` (default) LLM-generalizes this project's CLAUDE.md + .claude/ into a rich template with ADAPT markers; `--scope global` exports `~/.claude/` as-is; `--scope all` produces both archives
+- `/install` — *(global command — works in any project)* install a bundle: Phase 0 detects existing `.claude/` (asks replace/manual-merge); bash installer runs; Phase 5 probes target project and fills ADAPT markers in-place
+- `/adapt-project` — *(global command)* explore the project deeply and fill all ADAPT markers in CLAUDE.md + .claude/ (from an imported bundle); safe to re-run (idempotent if no markers remain)
+- `/repair` — detect and repair config drift: scans CLAUDE.md + .claude/ vs project reality (files, tools, commands, structure), presents a plan, waits for confirmation; supports `--check` (report only) and `--apply` (auto-fix without prompting)
+- `/sleuth` — *(global command)* behavioral bug hunter: 10 parallel agents hunt silent failures, logic traps, contract violations, cross-component inconsistencies; confidence-scored report, never auto-fixes
+- `/gaps` — *(global command)* incompleteness detector: finds TODO markers, stubs, partial features, promised-but-missing code, template placeholders; prioritized roadmap, never auto-applies
+- `/mega-analysis` — *(global command)* full pipeline in one command: repair → audit → inspect × 2 → sleuth × 2 → gaps × 2 → inspect --vision × 2 → retrospective → handoff; versioned delta report at `~/.claude/projects/meta-reports/YYYY-MM-DD/full-analysis[-runN].md`; `--quick` ~30 min, default ~2 hr
 - `/new-service <name> [--parent <image>] [--runtime <name>] [--port <n>]` — scaffold a new service (Dockerfile, compose, startup script, printed `.env` + Makefile lines); args-first with interactive fallback
 
 **Automatic hooks** (PostToolUse on Edit/Write):
@@ -313,7 +275,7 @@ Claude Code's configuration for this project lives in:
   shfmt-on-write.sh                      # Check shell formatting on write
 .claude/commands/                        # Slash command definitions
   lint.md  fmt.md  check-versions.md  validate.md
-  stack-health.md  env-diff.md  service-info.md  recent.md
+  stack-health.md  env-diff.md  service-info.md  recent.md  new-service.md
 ```
 
 ## Software Craftsmanship & Thinking Frameworks
@@ -327,7 +289,8 @@ The `global-stack-lead-dev` agent applies 30+ mental models — a Core Working S
 .env.local                           # Active machine config (gitignored)
 Makefile                             # Primary build automation
 local.Makefile                       # Machine-specific Makefile extensions
-bin/env-update.sh                    # Automated version checker entry point
+bin/env-update.sh                    # Automated version checker entry point (DEPRECATED)
+bin/env-update-v2.sh                 # Version checker v2 entry point (recommended)
 bin/env-scan.sh                      # Env sync tool entry point
 bin/migrate-annotations.sh           # One-shot annotation migration
 bin/lib/env-update/                  # Modular env-update library

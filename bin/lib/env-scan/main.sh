@@ -1,5 +1,6 @@
 #!/bin/bash
 # main.sh — gs_es_main orchestration
+set -eEuo pipefail
 
 # Include guard — B4: fix name to follow _GS_ES_MODULENAME_SH_LOADED convention
 [[ -n "${_GS_ES_MAIN_SH_LOADED:-}" ]] && return 0
@@ -31,7 +32,7 @@ gs_es_main() {
 	_gs_es_profile_end "Parse args"
 
 	# ── Session temp directory (infrastructure — not a profiled phase) ─────────
-	_GS_ES_SESSION_TMP="$(mktemp -d)"
+	_GS_ES_SESSION_TMP="$(mktemp -d)" || { printf 'env-scan: mktemp failed\n' >&2; exit 1; }
 	# A4: Wait for any background jobs before cleaning up temp dir,
 	# so extraction subprocesses don't race against rm -rf.
 	_gs_es_cleanup() {
@@ -107,9 +108,9 @@ gs_es_main() {
 	local _dest_file
 	_gs_es_profile_start
 	for _src_file in ${_GS_ES_CFG[source_files]//[\"\'\`]/}; do
-		((_count_src++))
+		(( ++_count_src ))
 		for _dest_file in ${_GS_ES_CFG[destination_files]//[\"\'\`]/}; do
-			((_count_dest++))
+			(( ++_count_dest ))
 			gs_es_process_file \
 				"${_src_file}" \
 				"${_dest_file}" \
@@ -125,7 +126,7 @@ gs_es_main() {
 		"${_GS_ES_CFG[source_files]}" \
 		"${_GS_ES_CFG[scan_path]}" \
 		"${_GS_ES_CFG[exclude_multiple_values_pattern]:-}" \
-		"${_GS_ES_CFG[dry_run]}"
+		"${_GS_ES_CFG[dry_run]}" || return 1
 	_gs_es_profile_end "Propagate to Dockerfiles"
 
 	# Phase 6.5: Backup retention prune

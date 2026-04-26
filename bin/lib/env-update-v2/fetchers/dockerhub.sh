@@ -103,7 +103,7 @@ _gs_eu2_fetch_dockerhub() {
   # Apply tag-suffix filter first (before full tag_flags pipeline)
   local _tags="${_raw_tags}"
   if [[ -n "${_tag_suffix}" ]]; then
-    _tags="$(printf '%s\n' "${_tags}" | grep -F -- "${_tag_suffix}" || true)"
+    _tags="$(printf '%s\n' "${_tags}" | grep -E -- "$(printf '%s' "${_tag_suffix}" | sed 's/[.[\*^$()+?{}|]/\\&/g')\$" || true)"
   fi
 
   # Apply full tag flags pipeline

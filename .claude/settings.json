@@ -13,9 +13,18 @@
       "Bash(bin/tests/env-update-v2.test.sh)"
     ],
     "deny": [
-      "Bash(make hard-restart)"
+      "Bash(make hard-restart)",
+      "Read(/stack/docker/data/**)",
+      "Read(/stack/docker/storage/**)",
+      "Read(/stack/var/**)"
     ],
     "ask": [
+      "Bash(make up)",
+      "Bash(make down)",
+      "Bash(make down-n-up)",
+      "Bash(make down-n-rebuild-force-recreate)",
+      "Bash(make restart-*)",
+      "Bash(make start-local-registry)",
       "Bash(bin/env-update.sh)",
       "Bash(bin/env-scan.sh)",
       "Bash(bin/env-update-v2.sh)",

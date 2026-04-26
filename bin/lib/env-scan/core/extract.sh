@@ -16,6 +16,8 @@ gs_es_detect_multiple_defaults() {
 	local input_file="${1}"
 	local current_file="${2}"
 
+	[[ -f "${input_file}" ]] || return 0
+
 	local input_file_merge
 	input_file_merge="${input_file}.src.all.merged"
 
@@ -83,7 +85,7 @@ gs_es_detect_multiple_defaults() {
 	}' "${input_file_merge}.expanded")
 
 	if [[ -n "${_GS_ES_CFG[exclude_multiple_values_pattern]}" && -n "${multiple_default_values}" ]]; then
-		multiple_default_values=$(echo "${multiple_default_values}" | grep -vE "${_GS_ES_CFG[exclude_multiple_values_pattern]}")
+		multiple_default_values=$(echo "${multiple_default_values}" | grep -vE "${_GS_ES_CFG[exclude_multiple_values_pattern]}" || true)
 	fi
 
 	if [[ -n "${multiple_default_values}" ]]; then
@@ -236,7 +238,7 @@ gs_es_search_and_extract() {
 			print
 		}' |
 		if [[ -n "${_GS_ES_CFG[scan_exclude_pattern]}" ]]; then
-			grep -vE "${_GS_ES_CFG[scan_exclude_pattern]}"
+			grep -vE "${_GS_ES_CFG[scan_exclude_pattern]}" || true
 		else
 			cat
 		fi | tee -a "${_out_file}" >/dev/null
@@ -264,7 +266,7 @@ _gs_es_run_extraction() {
 		local -a pids=()
 
 		while IFS= read -r _file; do
-			((count++))
+			(( ++count ))
 			gs_es_search_and_extract "${_file}" "${count}" &
 			pids+=($!)
 		done < <(find "${_GS_ES_CFG[scan_path]}" -type f)
@@ -273,7 +275,7 @@ _gs_es_run_extraction() {
 		local failed=0
 		local pid
 		for pid in "${pids[@]}"; do
-			wait "${pid}" || ((failed++))
+			wait "${pid}" || (( ++failed ))
 		done
 		[[ "${failed}" -eq 0 ]] || { echo "gs_es_search_and_extract: ${failed} background job(s) failed" >&2; exit 1; }
 	else

@@ -69,6 +69,16 @@ _gs_eu_derive_runtime() {
   esac
 }
 
+# Reject version strings containing shell metacharacters before they are
+# interpolated into eval'd command strings.
+_gs_eu_validate_version_string() {
+  local version="${1}"
+  [[ "${version}" =~ ^[0-9a-zA-Z._+\-]+$ ]] || {
+    _gs_eu_log_warn "runtime" "" "unsafe version string rejected: '${version}'"
+    return 1
+  }
+}
+
 # Given a "TYPE:VERSION" runtime string, return shell commands that activate
 # that runtime. The caller will eval these commands in a subshell before
 # running the CLI tool.
@@ -80,6 +90,7 @@ _gs_eu_cli_setup_commands() {
   local runtime_type="${1}"
   local type="${runtime_type%%:*}"
   local version="${runtime_type#*:}"
+  _gs_eu_validate_version_string "${version}" || return 1
 
   case "${type}" in
     node)

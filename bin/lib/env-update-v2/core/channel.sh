@@ -68,11 +68,10 @@ _gs_eu2_channel_select_best() {
     return 0
   fi
 
-  # Default/stable channel
+  # Default/stable channel: never fall back to prerelease — return nothing if no stable exists
   if [[ -z "${_chan}" || "${_chan}" == "stable" ]]; then
-    local _p="${_hs:-${_hp}}"
-    [[ -z "${_p}" ]] && return 0
-    printf '%s\n' "${_p}"
+    [[ -z "${_hs}" ]] && return 0
+    printf '%s\n' "${_hs}"
     return 0
   fi
 

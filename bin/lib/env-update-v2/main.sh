@@ -50,9 +50,15 @@ _gs_eu2_run_check() {
     _type="$(_gs_eu2_record_get "${_i}" type)"
     case "${_type}" in
       dockerhub) _gs_eu2_fetch_dockerhub "${_i}" ;;
+      # TODO(Phase 3): implement remaining fetchers — entry counts from .env as of 2026-04-26:
+      #   pecl-git   (100)  github  (73)  npm      (55)
+      #   pypi        (24)  sdkman  (19)  url       (8)
+      #   sdkmanager   (5)  rubygems (4)  quay      (1)  codeberg (1)
+      # Each needs a fetchers/<type>.sh + a case arm here.
+      # Until then, non-dockerhub records fall through to SKIP below.
       *)
         _gs_eu2_record_set "${_i}" decision      "SKIP"
-        _gs_eu2_record_set "${_i}" error_message "fetcher '${_type}' not yet implemented (Phase 2 supports dockerhub only)"
+        _gs_eu2_record_set "${_i}" error_message "fetcher '${_type}' not yet implemented (Phase 2 supports dockerhub only; see Phase 3 TODO above)"
         ;;
     esac
 
@@ -158,7 +164,7 @@ _gs_eu2_main() {
         _env_scan="$(dirname "${BASH_SOURCE[0]}")/../../env-scan.sh"
         if [[ -x "${_env_scan}" ]]; then
           printf 'Running env-scan.sh to propagate changes...\n' >&2
-          bash "${_env_scan}" 2>&1 || true
+          bash "${_env_scan}" 2>&1 || printf 'WARNING: env-scan failed — .env updated but .env.local and Dockerfiles may be stale. Run bin/env-scan.sh manually.\n' >&2
         else
           printf 'Tip: run bin/env-scan.sh to propagate to .env.local and Dockerfiles\n' >&2
         fi

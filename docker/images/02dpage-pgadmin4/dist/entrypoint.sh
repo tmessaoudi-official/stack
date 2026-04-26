@@ -68,11 +68,8 @@ DEFAULT_BINARY_PATHS = {
 }
 EOF
 
-    # This is a bit kludgy, but necessary as the container uses BusyBox/ash as
-    # it's shell and not bash which would allow a much cleaner implementation
     for var in $(env | grep "^PGADMIN_CONFIG_" | cut -d "=" -f 1); do
-        # Get the raw value
-        val=$(eval "echo \"\$$var\"")
+        val="${!var}"
         # This normalization step is what makes 'true', 'True'
         case "$(echo "$val" | tr '[:upper:]' '[:lower:]')" in
             true)  val="True" ;;

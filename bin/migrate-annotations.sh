@@ -11,6 +11,7 @@
 #   --help
 
 set -eEuo pipefail
+trap 'printf "migrate-annotations: error in %s at line %d: %s\n" "${BASH_SOURCE[0]}" "${LINENO}" "${BASH_COMMAND}" >&2' ERR
 
 # --------------------------------------------------------------------------
 # Script location

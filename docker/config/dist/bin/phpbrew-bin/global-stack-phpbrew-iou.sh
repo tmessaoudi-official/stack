@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -xeE
+set -xeE -o pipefail
 shopt -s extdebug
 IFS=$'\n\t'
 trap 'stackCatch ${?} ${LINENO} "${BASH_COMMAND}"' EXIT ERR PIPE SIGPIPE SIGHUP
@@ -15,8 +15,6 @@ stackCatch() {
 }
 
 # PHPBREW_LATEST_VERSION=$(curl --silent https://api.github.com/repos/phpbrew/phpbrew/releases/latest | jq .name -r | sed "s/Release //g" )
-
-set -xeE -o pipefail
 
 if [ ! -d "${PHPBREW_SRC}/.git" ]; then
 	sudo chmod -R a+rwx "${PHPBREW_SRC}"

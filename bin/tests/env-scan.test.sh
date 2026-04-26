@@ -1084,7 +1084,7 @@ t "t19a: default run creates .env.local.bak.<ts> with pre-run content" bash -c "
     bak=\$(ls \"\$D/.env.local.bak\".* 2>/dev/null | head -1)
     [[ -n \"\$bak\" ]] || { echo 'no .bak.* file created'; echo FAIL; exit 0; }
     ts=\$(basename \"\$bak\" | sed 's/.*\\.bak\\.//')
-    [[ \"\$ts\" =~ ^[0-9]{8}-[0-9]{6}\$ ]] || { echo \"timestamp format wrong: \$ts\"; echo FAIL; exit 0; }
+    [[ \"\$ts\" =~ ^[0-9]{8}-[0-9]{6}-[0-9]+\$ ]] || { echo \"timestamp format wrong: \$ts\"; echo FAIL; exit 0; }
     content=\$(cat \"\$bak\")
     [[ \"\$content\" == 'GLOBAL_STACK_T19A=original' ]] || { echo \"bak content wrong: \$content\"; echo FAIL; exit 0; }
     echo PASS

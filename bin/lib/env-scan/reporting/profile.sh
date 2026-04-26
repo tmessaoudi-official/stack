@@ -61,7 +61,7 @@ _gs_es_profile_end() {
     _GS_ES_PROFILE_PHASES+=("${_name}")
     _GS_ES_PROFILE_DURATIONS_MS+=("${_dur}")
     _GS_ES_PROFILE_MEM_DELTAS_KB+=("${_delta}")
-    [[ ${_end_kb} -gt ${_GS_ES_PROFILE_PEAK_KB} ]] && _GS_ES_PROFILE_PEAK_KB=${_end_kb}
+    if [[ ${_end_kb} -gt ${_GS_ES_PROFILE_PEAK_KB} ]]; then _GS_ES_PROFILE_PEAK_KB=${_end_kb}; fi
 }
 
 # ── Format helpers ────────────────────────────────────────────────────────────
@@ -91,7 +91,7 @@ _gs_es_fmt_mem() {
     fi
     local mb_int=$(( abs_kb / 1024 ))
     local mb_frac=$(( (abs_kb % 1024) * 10 / 1024 ))
-    [[ ${kb} -lt 0 ]] && sign="${minus_sign}"
+    if [[ ${kb} -lt 0 ]]; then sign="${minus_sign}"; fi
     printf "%s%d.%d MB" "${sign}" "${mb_int}" "${mb_frac}"
 }
 
@@ -132,14 +132,14 @@ _gs_es_profile_report() {
 
         # Duration color
         local _dur_color="${GREEN}"
-        (( _ms >= 200 && _ms < 1000 )) && _dur_color="${YELLOW}"
-        (( _ms >= 1000 ))               && _dur_color="${RED}"
+        if (( _ms >= 200 && _ms < 1000 )); then _dur_color="${YELLOW}"; fi
+        if (( _ms >= 1000 ));              then _dur_color="${RED}";    fi
 
         # Memory color
         local _abs_kb=$(( _kb < 0 ? -_kb : _kb ))
         local _mem_color="${DIM}"
-        (( _kb > 1024 ))          && _mem_color="${YELLOW}"
-        (( _kb < 0 && _abs_kb >= 100 )) && _mem_color="${DIMCYAN}"
+        if (( _kb > 1024 ));               then _mem_color="${YELLOW}";  fi
+        if (( _kb < 0 && _abs_kb >= 100 )); then _mem_color="${DIMCYAN}"; fi
 
         local _dur_str
         _dur_str=$(_gs_es_fmt_duration "${_ms}")

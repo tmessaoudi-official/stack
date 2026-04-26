@@ -1230,6 +1230,137 @@ t "t20e: classify — unversioned current (nightly) → SKIP" bash -c "
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Section 21 — _gs_eu2_hoist_all_flags unit tests
+# ═══════════════════════════════════════════════════════════════════════════
+section "21 — hoist_all_flags"
+
+_HOIST_LIBS="
+source '/stack/bin/lib/env-update-v2/core/parse.sh'
+"
+
+t "t21a: single recognized flag extracted, rest cleaned" bash -c "
+    ${_HOIST_LIBS}
+    flags=''; cleaned=''
+    _gs_eu2_hoist_all_flags flags cleaned '(propagate) dockerhub:nginx 1.25'
+    [[ \"\$flags\"   == 'propagate' ]] || { echo \"flags wrong: \$flags\";   echo FAIL; exit 0; }
+    [[ \"\$cleaned\" == 'dockerhub:nginx 1.25' ]] || { echo \"cleaned wrong: \$cleaned\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t21b: flag with value extracted correctly" bash -c "
+    ${_HOIST_LIBS}
+    flags=''; cleaned=''
+    _gs_eu2_hoist_all_flags flags cleaned '(channel:rc) github:foo/bar 3.0'
+    [[ \"\$flags\"   == 'channel:rc' ]] || { echo \"flags wrong: \$flags\";   echo FAIL; exit 0; }
+    [[ \"\$cleaned\" == 'github:foo/bar 3.0' ]] || { echo \"cleaned wrong: \$cleaned\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t21c: multiple recognized flags joined by US (0x1f)" bash -c "
+    ${_HOIST_LIBS}
+    flags=''; cleaned=''
+    _gs_eu2_hoist_all_flags flags cleaned '(propagate) (override) dockerhub:nginx 1.25'
+    IFS=\$'\\x1f' read -ra parts <<< \"\$flags\"
+    [[ \"\${parts[0]}\" == 'propagate' ]] || { echo \"part0 wrong: \${parts[0]}\"; echo FAIL; exit 0; }
+    [[ \"\${parts[1]}\" == 'override'  ]] || { echo \"part1 wrong: \${parts[1]}\"; echo FAIL; exit 0; }
+    [[ \"\$cleaned\" == 'dockerhub:nginx 1.25' ]] || { echo \"cleaned wrong: \$cleaned\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t21d: unrecognized paren kept in cleaned" bash -c "
+    ${_HOIST_LIBS}
+    flags=''; cleaned=''
+    _gs_eu2_hoist_all_flags flags cleaned '(some-hint) dockerhub:nginx 1.25'
+    [[ -z \"\$flags\" ]] || { echo \"flags should be empty: \$flags\"; echo FAIL; exit 0; }
+    [[ \"\$cleaned\" == '(some-hint) dockerhub:nginx 1.25' ]] || { echo \"cleaned wrong: \$cleaned\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t21e: recognized flag at end of string, trailing space consumed" bash -c "
+    ${_HOIST_LIBS}
+    flags=''; cleaned=''
+    _gs_eu2_hoist_all_flags flags cleaned 'dockerhub:nginx 1.25 (propagate)'
+    [[ \"\$flags\"   == 'propagate' ]] || { echo \"flags wrong: \$flags\";   echo FAIL; exit 0; }
+    [[ \"\$cleaned\" == 'dockerhub:nginx 1.25' ]] || { echo \"cleaned wrong: \$cleaned\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t21f: skip flag with reason kept intact" bash -c "
+    ${_HOIST_LIBS}
+    flags=''; cleaned=''
+    _gs_eu2_hoist_all_flags flags cleaned '(skip:pinned) dockerhub:nginx 1.25'
+    [[ \"\$flags\"   == 'skip:pinned' ]] || { echo \"flags wrong: \$flags\";   echo FAIL; exit 0; }
+    [[ \"\$cleaned\" == 'dockerhub:nginx 1.25' ]] || { echo \"cleaned wrong: \$cleaned\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t21g: unbalanced paren kept as-is" bash -c "
+    ${_HOIST_LIBS}
+    flags=''; cleaned=''
+    _gs_eu2_hoist_all_flags flags cleaned 'docker(hub:nginx 1.25'
+    [[ -z \"\$flags\" ]] || { echo \"flags should be empty: \$flags\"; echo FAIL; exit 0; }
+    [[ \"\$cleaned\" == 'docker(hub:nginx 1.25' ]] || { echo \"cleaned wrong: \$cleaned\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t21h: empty input produces empty flags and cleaned" bash -c "
+    ${_HOIST_LIBS}
+    flags=''; cleaned=''
+    _gs_eu2_hoist_all_flags flags cleaned ''
+    [[ -z \"\$flags\"   ]] || { echo \"flags not empty: \$flags\";   echo FAIL; exit 0; }
+    [[ -z \"\$cleaned\" ]] || { echo \"cleaned not empty: \$cleaned\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t21i: tag-filter flag with regex value extracted" bash -c "
+    ${_HOIST_LIBS}
+    flags=''; cleaned=''
+    _gs_eu2_hoist_all_flags flags cleaned '(tag-filter:^[0-9]) dockerhub:foo 1.0'
+    [[ \"\$flags\"   == 'tag-filter:^[0-9]' ]] || { echo \"flags wrong: \$flags\";   echo FAIL; exit 0; }
+    [[ \"\$cleaned\" == 'dockerhub:foo 1.0' ]] || { echo \"cleaned wrong: \$cleaned\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t21j: mixed recognized + unrecognized flags, order preserved" bash -c "
+    ${_HOIST_LIBS}
+    flags=''; cleaned=''
+    _gs_eu2_hoist_all_flags flags cleaned '(propagate) (note: internal) (override) dockerhub:bar 2.0'
+    IFS=\$'\\x1f' read -ra parts <<< \"\$flags\"
+    [[ \"\${parts[0]}\" == 'propagate' ]] || { echo \"part0 wrong: \${parts[0]}\"; echo FAIL; exit 0; }
+    [[ \"\${parts[1]}\" == 'override'  ]] || { echo \"part1 wrong: \${parts[1]}\"; echo FAIL; exit 0; }
+    [[ \"\$cleaned\" == '(note: internal) dockerhub:bar 2.0' ]] || { echo \"cleaned wrong: \$cleaned\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 22 — tag-suffix anchor (end-of-string, not substring match)
+# ═══════════════════════════════════════════════════════════════════════════
+section "22 — tag-suffix end-anchor"
+
+# Helper: test tag-suffix end-anchor grep — writes a temp script to avoid heredoc escaping issues
+_TS_SCRIPT="$(mktemp /tmp/ts_helper.XXXXXX.sh)"
+cat > "${_TS_SCRIPT}" << 'TSEOF'
+#!/usr/bin/env bash
+# Usage: script.sh <suffix> <tag> <expect_match|expect_nomatch>
+suffix="$1"; tag="$2"; expect="$3"
+pat="$(printf '%s' "${suffix}" | sed 's/[.[\*^$()+?{}|]/\\&/g')"
+matched="$(printf '%s\n' "${tag}" | grep -E -- "${pat}\$" || true)"
+if [[ "${expect}" == "expect_match" ]]; then
+  [[ -n "${matched}" ]] || { echo "expected match for '${tag}' with suffix '${suffix}', got no match"; echo FAIL; exit 0; }
+else
+  [[ -z "${matched}" ]] || { echo "expected no match for '${tag}' with suffix '${suffix}', but matched: ${matched}"; echo FAIL; exit 0; }
+fi
+echo PASS
+TSEOF
+chmod +x "${_TS_SCRIPT}"
+
+t "t22a: tag ending with suffix passes" bash "${_TS_SCRIPT}" '-alpine3.23' '18.3-alpine3.23' 'expect_match'
+t "t22b: tag with suffix in middle (not at end) is excluded" bash "${_TS_SCRIPT}" '-alpine3.23' '18.3-alpine3.23-rc1' 'expect_nomatch'
+t "t22c: suffix dot is escaped (no any-char match)" bash "${_TS_SCRIPT}" '-alpine3.23' '18.3-alpineX.23' 'expect_nomatch'
+t "t22d: suffix match with oraclelinux passes at end" bash "${_TS_SCRIPT}" '-oraclelinux9' '9.0-oraclelinux9' 'expect_match'
+t "t22e: suffix mid-tag not matched" bash "${_TS_SCRIPT}" '-oraclelinux9' '9.0-oraclelinux9-beta' 'expect_nomatch'
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section

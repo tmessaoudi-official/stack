@@ -24,14 +24,18 @@ gs_es_check_missing_variables() {
 	local _extracted_vars_file="${_GS_ES_SESSION_TMP}/${txt_file_name}_extracted_vars.txt"
 	local _vars_file="${_GS_ES_SESSION_TMP}/${txt_file_name}_vars.txt"
 
-	cut -d'=' -f1 "${_GS_ES_CFG[scan_output_file]}" | LC_ALL=C sort -u > "${_extracted_vars_file}"
+	if [[ -f "${_GS_ES_CFG[scan_output_file]}" ]]; then
+		cut -d'=' -f1 "${_GS_ES_CFG[scan_output_file]}" | LC_ALL=C sort -u > "${_extracted_vars_file}"
+	else
+		> "${_extracted_vars_file}"
+	fi
 	cut -d'=' -f1 "${target_file}" | LC_ALL=C sort -u > "${_vars_file}"
 
 	local missing_variables
 	if [[ "true" = "${reverse_checking}" ]]; then
-		missing_variables=$(LC_ALL=C comm -23 "${_vars_file}" "${_extracted_vars_file}" | if [[ -n "${exclude_pattern}" ]]; then grep -vE "${exclude_pattern}"; else cat; fi)
+		missing_variables=$(LC_ALL=C comm -23 "${_vars_file}" "${_extracted_vars_file}" | { if [[ -n "${exclude_pattern}" ]]; then grep -vE "${exclude_pattern}" || true; else cat; fi; })
 	else
-		missing_variables=$(LC_ALL=C comm -23 "${_extracted_vars_file}" "${_vars_file}" | if [[ -n "${exclude_pattern}" ]]; then grep -vE "${exclude_pattern}"; else cat; fi)
+		missing_variables=$(LC_ALL=C comm -23 "${_extracted_vars_file}" "${_vars_file}" | { if [[ -n "${exclude_pattern}" ]]; then grep -vE "${exclude_pattern}" || true; else cat; fi; })
 	fi
 
 	if [[ -n "${missing_variables}" ]]; then

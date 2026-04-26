@@ -41,8 +41,8 @@ gs_es_propagate_to_dockerfiles() {
   fi
 
   if [[ ! -d "${docker_search_root}" ]]; then
-    echo " ---- (gs_es_propagate_to_dockerfiles): docker search root not found: ${docker_search_root}" >&2
-    return 1
+    echo " ---- (gs_es_propagate_to_dockerfiles): docker search root not found: ${docker_search_root} (skipping)" >&2
+    return 0
   fi
 
   # ── Build env map: VAR → value (skip comments, empty, expansion-dependent) ─

@@ -1,5 +1,6 @@
 #!/bin/bash
-# set -euo pipefail
+set -eEuo pipefail
+trap 'printf "env-scan: error in %s at line %d: %s\n" "${BASH_SOURCE[0]}" "${LINENO}" "${BASH_COMMAND}" >&2' ERR
 
 _GS_ES_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/env-scan"
 source "${_GS_ES_LIB_DIR}/config/defaults.sh"

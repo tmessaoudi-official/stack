@@ -3,8 +3,18 @@
 # DEPRECATED — bin/env-update.sh
 # Use bin/env-update-v2.sh for new version-fetch workflows.
 # Propagation of values to Dockerfiles is now handled by bin/env-scan.sh.
-# This file is preserved for reference and backward compatibility.
-# Remove after bin/env-update-v2.sh reaches feature parity.
+#
+# REMOVAL CONDITION: safe to remove when env-update-v2.sh implements all
+# fetcher types currently used in .env:
+#
+#   Phase 2 (done): dockerhub (18 entries)
+#   Phase 3+ (pending):
+#     pecl-git   (100)   github   (73)   npm      (55)
+#     pypi       (24)    sdkman   (19)   url       (8)
+#     sdkmanager  (5)    rubygems  (4)   quay      (1)   codeberg (1)
+#
+# Until then this file remains the authoritative checker for non-dockerhub
+# types and is still called by /check-versions for those fetcher types.
 # =============================================================================
 #
 # env-update.sh — Automated version update checker for Global Stack.
@@ -30,6 +40,7 @@
 #   --help
 
 set -eEuo pipefail
+trap 'printf "env-update: error in %s at line %d: %s\n" "${BASH_SOURCE[0]}" "${LINENO}" "${BASH_COMMAND}" >&2' ERR
 
 # --------------------------------------------------------------------------
 # Script location & library root
@@ -126,6 +137,7 @@ _GS_EU_SHOW_DATES="false"
 _GS_EU_SHOW_PROGRESS="false"
 _GS_EU_RELEASE_DATE_FILE="/tmp/env-update-${_GS_EU_TIMESTAMP}.release-date"
 export _GS_EU_RELEASE_DATE_FILE
+trap 'rm -f /tmp/env-update-'"${_GS_EU_TIMESTAMP}"'.*' EXIT
 # GLOBAL_STACK_GITHUB_TOKEN (from .env.local) takes precedence over bare GITHUB_TOKEN
 GITHUB_TOKEN="${GLOBAL_STACK_GITHUB_TOKEN:-${GITHUB_TOKEN:-}}"
 
