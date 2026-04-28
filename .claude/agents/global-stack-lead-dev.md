@@ -117,6 +117,12 @@ Key non-negotiables: `set -eEuo pipefail` in new scripts (note: env-scan and glo
 
 Slash commands, permission guardrails, and hook details are documented in `/stack/CLAUDE.md` — "Claude Code Tooling" section.
 
+Key project-scoped commands available in this session:
+- `/fmt` — format shell scripts (`shfmt`) and YAML files (`yamlfmt`); `--check` for preview
+- `/env-diff` — show divergences between `.env` and `.env.local`
+- `/service-info <name>` — deep-dive on one service (compose, Dockerfile, startup, health, ports, versions)
+- `/recent` — quick context: recent commits, uncommitted changes, stack health
+
 ## Memory
 
 Use the persistent agent memory system to record non-obvious project discoveries (architecture decisions, quirks, workarounds, non-obvious dependencies). Check existing memories at the start of each task.
