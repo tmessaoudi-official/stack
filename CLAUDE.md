@@ -193,6 +193,8 @@ make start-local-registry            # Start local TLS registry (port 5000)
 - `/sleuth` — *(global command)* behavioral bug hunter: 10 parallel agents hunt silent failures, logic traps, contract violations, cross-component inconsistencies; confidence-scored report, never auto-fixes
 - `/gaps` — *(global command)* incompleteness detector: finds TODO markers, stubs, partial features, promised-but-missing code, template placeholders; prioritized roadmap, never auto-applies
 - `/mega-analysis` — *(global command)* full pipeline in one command: repair → audit → inspect × 2 → sleuth × 2 → gaps × 2 → inspect --vision × 2 → retrospective → handoff; versioned delta report at `~/.claude/projects/meta-reports/YYYY-MM-DD/full-analysis[-runN].md`; `--quick` ~30 min, default ~2 hr
+- `/command-audit` — *(global command)* per-command 15-dimension deep report: 4 parallel agents analyze every command file (name clarity, coverage scope, flag completeness, cold-start readiness…); never auto-applies
+- `/memory-promote` — *(global command)* analyze project memory files and propose promotions to CLAUDE.md (global) or agent def (project-specific); never auto-applies
 - `/new-service <name> [--parent <image>] [--runtime <name>] [--port <n>]` — scaffold a new service (Dockerfile, compose, startup script, printed `.env` + Makefile lines); args-first with interactive fallback
 
 **Automatic hooks** (PostToolUse on Edit/Write):
