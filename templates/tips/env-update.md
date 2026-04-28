@@ -1,5 +1,7 @@
 # env-update — Version Update Checker
 
+> **⚠️ DEPRECATED** — `bin/env-update.sh` is superseded by `bin/env-update-v2.sh`. Use v2 for all new work. This document is preserved as a reference until v2 reaches full feature parity with all fetcher types. See `templates/tips/env-update-v2.md` for the v2 reference.
+
 `bin/env-update.sh` scans `.env` for `@todo env-update` annotations, fetches
 latest versions from upstream APIs, auto-applies patch-level bumps to `.env` and
 matching Dockerfile ARGs, and reports everything that needs manual attention.

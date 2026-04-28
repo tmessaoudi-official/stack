@@ -46,25 +46,13 @@ Handle everything else directly — sub-agents add overhead; spawn only when par
 - Scan `tools/errors/` for active failure markers
 - **Output**: brief context summary or "clean state, no conflicts"
 
-### Phase 1: BRAINSTORM (Initial)
-Explore broadly — unknowns, risks, edge cases, hidden complexity. Generate multiple approaches without filtering. Surface what isn't being asked but should be.
-
-### Phase 2: UNDERSTAND
-Fill gaps via targeted questions + code reads. Trace execution paths, map dependencies. For bug fixes apply the structured debugging protocol (Triage → Investigate → Root Cause → Falsifiable Hypothesis). For broad exploration propose parallel Explore subagents rather than sequential file reads.
-
-### Phase 3L (Medium) / Phase 3 (Large)
-**3L**: Apply only the adversarial filter: "What's the worst failure mode of my planned approach?" Surface and adjust if it doesn't survive.
-**Full 3**: Narrow to 2-4 concrete approaches, adversarial-filter each, recommend one with justification. Proactively surface improvements beyond the stated scope.
-
 ### Phase 4: PLAN
-Exact file paths, ordered steps, acceptance criteria, risk mitigation, rollback procedure. For shell script edits involving block nesting: include an indentation diagram showing opening/closing brace structure to prevent misplaced `fi`/`done`/`}`.
-
-Apply the plan gate from the Task Categorization Protocol (global `~/.claude/CLAUDE.md`): Small → state + act, Medium → 3-5 bullet plan + wait for "go", Large → hard stop.
+For shell script edits involving block nesting: include an indentation diagram showing opening/closing brace structure to prevent misplaced `fi`/`done`/`}`.
 
 **Subagent plan surfacing**: emit the plan as readable plaintext in the conversation before Phase 5. The parent must relay it to the user and receive explicit approval. A plan visible only inside the subagent is not an approved plan.
 
 ### Phase 5: IMPLEMENT
-Before writing code invoke `superpowers:test-driven-development`. Apply expert craftsmanship: ShellCheck-clean scripts, Hadolint-clean Dockerfiles, idempotent operations, `set -eEuo pipefail` in new scripts, proper PATH handling. Surface unexpected discoveries immediately.
+Apply expert craftsmanship: ShellCheck-clean scripts, Hadolint-clean Dockerfiles, idempotent operations, `set -eEuo pipefail` in new scripts, proper PATH handling. Surface unexpected discoveries immediately.
 
 ### Phase 6: SECOND SWEEP
 Confidence-gated review — P0 (fix before done), P1 (fix now, explain), P2 (mention, fix if trivial), P3 (skip unless asked). Check: correctness, regressions, secrets, security, side effects, quality (ShellCheck, Hadolint). Verify block nesting (`bash -n`) after any shell edits.
@@ -80,12 +68,7 @@ Confidence-gated review — P0 (fix before done), P1 (fix now, explain), P2 (men
 8. **Idempotency**: re-running the same operation produces identical output — verify for any script that modifies state
 
 ### Phase 7: UPDATE ARTIFACTS
-Update **only existing** artifacts: `templates/tips/*.md`, `bin/tests/*.test.sh`, agent memory, `CLAUDE.md` (only if frequently-used patterns changed — keep it lean).
-
-### Phase 8: VERIFICATION GUIDE
-Copy-paste-ready commands scaled to task size. Large tasks: full checklist with expected output, edge cases, negative tests, rollback instructions.
-
-**Learning capture** (Medium/Large only): after verification, ask — *"What non-obvious /stack fact did this task reveal?"* If non-trivial (hidden dep, workaround, behavioral quirk, naming surprise), write to agent memory before closing. Skip silently if routine.
+Update only: `templates/tips/*.md`, `bin/tests/*.test.sh`, agent memory, `CLAUDE.md`.
 
 ---
 
@@ -98,12 +81,7 @@ Copy-paste-ready commands scaled to task size. Large tasks: full checklist with 
 5. **Abort when needed** — if any phase reveals the task is unsafe or fundamentally wrong, STOP and explain.
 6. **Protected artifacts** — never propose deletion of: `.env`, `.env.local`, `Makefile`, root `docker-compose.yaml`, `CLAUDE.md`, any file under `docker/images/*/`, `.claude/hooks/*`, `.claude/settings.json`, `.claude/commands/*`, `.claude/agents/*`, or `~/.claude/agents/*` without explicit user request.
 7. **Parallel execution** — for independent changes to unrelated files in Phase 5, propose parallel sub-agents. Reference `superpowers:dispatching-parallel-agents`.
-8. **Completion Gate and TDD** are defined in `~/.claude/CLAUDE.md` (Rules 6 & 7) and apply here without exception — four-row evidence table (Coverage, Docs, Config, Blast radius) required before Phase 8.
-9. **File state check before any write** — see Rule 8 in `~/.claude/CLAUDE.md`. Uncommitted or unstaged files require explicit user acknowledgment. Files outside git get a timestamped backup with path announced. Applies to Edit, Write, cp destination, mv, rm.
-10. **Deprecation check before using any approach** — see Rule 9 in `~/.claude/CLAUDE.md`. Covers packages, tools, syntax, methodologies, design patterns, conventions. Verify when first identified; replan with official replacement or announce explicitly. Apply to existing touched code too.
-11. **Never commit or push without explicit user request** — see Rule 10 in `~/.claude/CLAUDE.md`. Staging is permitted; `git commit` and `git push` require the user to ask. Report staged files and wait.
-12. **Verify proposals against real data before presenting them** — see Rule 11 in `~/.claude/CLAUDE.md`. Upstream fix for three prior incidents: triple-eval rewrite (Chesterton's Fence), source-grep failure (unquoted multi-word values), rtk asset URL (wrong OS target). Phase 1 brainstorm may generate unverified candidates; Phase 2 onward, every proposal must survive contact with real data first.
-13. **Challenge first, accept second** — see Rule 12 in `~/.claude/CLAUDE.md`. When the user proposes an approach, apply mental frameworks (Inversion, Chesterton's Fence, Five Whys, engineering laws) to test it before accepting. If a better path exists, surface it with reasoning. Confirm the user's proposal when it survives scrutiny. Override only when the user has already explained the rationale in the conversation.
+8. **Global rules 6-13 from `~/.claude/CLAUDE.md` apply without exception.** Key reminders: Completion Gate (Rule 6) four-row evidence table before Phase 8; TDD (Rule 7) — for infra changes use `bash -n`/`docker compose config` as the failing-then-passing check; verify proposals against real data before presenting (Rule 11) — three prior /stack incidents: triple-eval rewrite, unquoted multi-word grep failure, rtk asset URL wrong OS target.
 
 ## Quality Standards
 

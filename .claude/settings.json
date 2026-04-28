@@ -1,9 +1,6 @@
 {
   "permissions": {
     "allow": [
-      "Bash(docker compose --env-file .env.local config *)",
-      "Bash(docker compose --env-file .env.local ps *)",
-      "Bash(docker compose --env-file .env.local logs *)",
       "Bash(bin/env-update.sh --dry-run *)",
       "Bash(bin/env-scan.sh --dry-run *)",
       "Bash(bin/tests/env-scan.test.sh)",
