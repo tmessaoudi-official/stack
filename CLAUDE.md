@@ -192,7 +192,7 @@ make start-local-registry            # Start local TLS registry (port 5000)
 - `/repair` — detect and repair config drift: scans CLAUDE.md + .claude/ vs project reality (files, tools, commands, structure), presents a plan, waits for confirmation; supports `--check` (report only) and `--apply` (auto-fix without prompting)
 - `/sleuth` — *(global command)* behavioral bug hunter: 10 parallel agents hunt silent failures, logic traps, contract violations, cross-component inconsistencies; confidence-scored report, never auto-fixes
 - `/gaps` — *(global command)* incompleteness detector: finds TODO markers, stubs, partial features, promised-but-missing code, template placeholders; prioritized roadmap, never auto-applies
-- `/mega-analysis` — *(global command)* full pipeline in one command: repair → audit → inspect × 2 → sleuth × 2 → gaps × 2 → inspect --vision × 2 → retrospective → handoff; versioned delta report at `~/.claude/projects/meta-reports/YYYY-MM-DD/full-analysis[-runN].md`; `--quick` ~30 min, default ~2 hr
+- `/mega-analysis` — *(global command)* full pipeline in one command: repair → audit → command-audit → inspect × 2 → sleuth × 2 → gaps × 2 → inspect --vision × 2 → retrospective → memory-promote → handoff; versioned delta report at `~/.claude/projects/meta-reports/YYYY-MM-DD/full-analysis[-runN].md`; `--quick` ~30 min, default ~2 hr
 - `/command-audit` — *(global command)* per-command 15-dimension deep report: 4 parallel agents analyze every command file (name clarity, coverage scope, flag completeness, cold-start readiness…); never auto-applies
 - `/memory-promote` — *(global command)* analyze project memory files and propose promotions to CLAUDE.md (global) or agent def (project-specific); never auto-applies
 - `/new-service <name> [--parent <image>] [--runtime <name>] [--port <n>]` — scaffold a new service (Dockerfile, compose, startup script, printed `.env` + Makefile lines); args-first with interactive fallback
@@ -202,6 +202,9 @@ make start-local-registry            # Start local TLS registry (port 5000)
 - `hadolint` — lints `Dockerfile*` files on every write
 - `yamllint` — validates `.yaml`/`.yml` files on every write
 - `shfmt` — checks shell formatting on `.sh` writes (reports diff, doesn't auto-fix)
+
+**Automatic hooks** (SubagentStop):
+- `subagent-stop-reminder` — fires when a subagent completes; reminds parent to verify Phase 7/8
 
 **Permission rules** (`.claude/settings.json`): safe read-only operations pre-approved (including `docker compose ps/logs`, `shfmt`, `yamlfmt`, `yamllint`, `yq`, `diff`); destructive operations (`rm -rf`, `sudo`, `git push --force`, `docker push`, `make hard-restart`, `docker system prune`, `docker volume rm`, `docker rmi`, `git clean`, `chmod 777`) blocked.
 
@@ -270,11 +273,12 @@ Claude Code's configuration for this project lives in:
 /stack/.claude/agents/global-stack-lead-dev.md  # /stack infrastructure agent definition (project-scoped)
 .claude/settings.json                    # Project permissions, hooks
 .claude/settings.local.json              # Local UI preferences (gitignored)
-.claude/hooks/                           # PostToolUse hook scripts
+.claude/hooks/                           # PostToolUse + SubagentStop hook scripts
   shellcheck-on-write.sh                 # Lint .sh files on write
   hadolint-on-write.sh                   # Lint Dockerfiles on write
   yamllint-on-write.sh                   # Validate YAML on write
   shfmt-on-write.sh                      # Check shell formatting on write
+  subagent-stop-reminder.sh              # SubagentStop: remind parent to verify Phase 7/8
 .claude/commands/                        # Slash command definitions
   lint.md  fmt.md  check-versions.md  validate.md
   stack-health.md  env-diff.md  service-info.md  recent.md  new-service.md
