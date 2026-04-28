@@ -4,7 +4,7 @@ Validate the Docker Compose configuration and environment consistency.
 1. **Compose validation**: `docker compose --env-file .env.local config --quiet` — check for syntax errors
 2. **Env sync check**: `bin/env-scan.sh --dry-run` — check for missing or divergent variables between .env and .env.local
 3. **COMPOSE_FILE integrity**: Read `COMPOSE_FILE` from `.env.local`, verify:
-   - No trailing semicolon
+   - No trailing semicolon — run: `grep -qE 'COMPOSE_FILE=.*;[[:space:]]*$' .env.local && echo "[ERROR] COMPOSE_FILE has trailing semicolon — will break Docker Compose silently" || echo "[OK] No trailing semicolon"` (a trailing `;` silently adds an empty path entry; Docker Compose accepts the config but fails at runtime)
    - All referenced compose files exist on disk
    - `00base` compose file is included
 4. **Tier dependency check**: For each active `03*` service, verify its corresponding `02*` tier manager is also in COMPOSE_FILE

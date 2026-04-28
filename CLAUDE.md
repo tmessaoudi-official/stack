@@ -104,7 +104,7 @@ One-shot migration from legacy URL-based annotations to `TYPE:IDENTIFIER` format
 
 ## Shell Coding Conventions
 
-`bin/env-update.sh` and its library use `set -eEuo pipefail`; `bin/env-scan.sh` does not (strict mode is commented out). Container startup scripts use `set -xeE -o pipefail` (debug tracing, no `-u`). When writing new scripts, use `set -eEuo pipefail`. Follow these patterns:
+`bin/env-update.sh` and its library use `set -eEuo pipefail`; `bin/env-scan.sh` also uses `set -eEuo pipefail` (added after the initial release to harden the entry point). Container startup scripts use `set -xeE -o pipefail` (debug tracing, no `-u`). When writing new scripts, use `set -eEuo pipefail`. Follow these patterns:
 
 - **Variable prefixes**: `_GS_EU_` for env-update, `_GS_ES_` for env-scan
 - **Include guards** (every lib file):

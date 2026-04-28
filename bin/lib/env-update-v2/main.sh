@@ -133,6 +133,27 @@ _gs_eu2_main() {
   # --apply implies --check
   [[ "${_GS_EU2_CFG[apply]}" == "true" ]] && _GS_EU2_CFG[check]="true"
 
+  # Safety guard: --apply (without --dry-run) requires a recent --dry-run in the same session.
+  # This prevents the 2026-04-23 incident class (running --apply cold without previewing changes).
+  # Marker file: ${_GS_EU2_CACHE_DIR}/last-dry-run-ts (written after every successful --dry-run check)
+  if [[ "${_GS_EU2_CFG[apply]}" == "true" && "${_GS_EU2_CFG[dry_run]}" != "true" ]]; then
+    local _dry_run_marker="${_GS_EU2_CACHE_DIR:-/tmp/global-stack-env-update-v2-cache}/last-dry-run-ts"
+    local _guard_ok=false
+    if [[ -f "${_dry_run_marker}" ]]; then
+      local _now _mtime _age
+      _now="$(date +%s)"
+      _mtime="$(stat -c %Y "${_dry_run_marker}" 2>/dev/null \
+        || stat -f %m "${_dry_run_marker}" 2>/dev/null \
+        || printf '0')"
+      _age=$(( _now - _mtime ))
+      (( _age < 1800 )) && _guard_ok=true
+    fi
+    if [[ "${_guard_ok}" != "true" ]]; then
+      printf '[WARN] --apply requires a recent --dry-run (within 30 min). Run with --dry-run first.\n' >&2
+      exit 1
+    fi
+  fi
+
   if [[ "true" == "${_GS_EU2_CFG[dry_run]}" ]]; then
     printf 'env-update-v2: --dry-run active (no writes — cache, .env, and Dockerfile propagation all gated)\n' >&2
   fi
@@ -149,6 +170,14 @@ _gs_eu2_main() {
     _gs_eu2_dump_records "${_GS_EU2_CFG[format]}"
   elif [[ "true" == "${_GS_EU2_CFG[check]}" ]]; then
     _gs_eu2_run_check
+
+    # After a successful dry-run check, write the timestamp marker so a subsequent
+    # --apply knows a recent preview was done (incident prevention: 2026-04-23).
+    if [[ "${_GS_EU2_CFG[dry_run]}" == "true" ]]; then
+      local _dry_run_marker="${_GS_EU2_CACHE_DIR:-/tmp/global-stack-env-update-v2-cache}/last-dry-run-ts"
+      mkdir -p "$(dirname "${_dry_run_marker}")"
+      date +%s > "${_dry_run_marker}"
+    fi
 
     if [[ "${_GS_EU2_CFG[apply]}" == "true" ]]; then
       printf '\n'
