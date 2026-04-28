@@ -100,7 +100,7 @@ SOPS_OPERATING_SYSTEM=""
 DOCKER_COMPOSE_ARCH=""
 DOCKER_BUILDX_ARCH=""
 HADOLINT_ARCH=""
-SHELL_CHECK_ARCH=""
+SHELLCHECK_ARCH=""
 GITLEAKS_ARCH=""
 SONAR_SCANNER_CLI_ARCH=""
 DIFFTASTIC_ARCH=""
@@ -122,7 +122,7 @@ if [[ "linux" == "${OPERATING_SYSTEM}" ]]; then
 		DOCKER_COMPOSE_ARCH="${SYSTEM_ARCH}"
 		DOCKER_BUILDX_ARCH="arm64"
 		HADOLINT_ARCH="arm64"
-		SHELL_CHECK_ARCH="${SYSTEM_ARCH}"
+		SHELLCHECK_ARCH="${SYSTEM_ARCH}"
 		GITLEAKS_ARCH="arm64"
 		SONAR_SCANNER_CLI_ARCH="${SYSTEM_ARCH}"
 		DIFFTASTIC_ARCH="${SYSTEM_ARCH}"
@@ -135,14 +135,14 @@ if [[ "linux" == "${OPERATING_SYSTEM}" ]]; then
 		DOCKER_BUILDX_ARCH="arm-v6"
 		GITLEAKS_ARCH="armv6"
 		SHFMT_ARCH="arm"
-		echo "Unsupported system/architecture hadolint/shell-check/sonar-scanner-cli/difftastic: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
+		echo "Unsupported system/architecture hadolint/shellcheck/sonar-scanner-cli/difftastic: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
 		;;
 	"armv6hf")
-		SHELL_CHECK_ARCH="${SYSTEM_ARCH}"
+		SHELLCHECK_ARCH="${SYSTEM_ARCH}"
 		echo "Unsupported system/architecture (docker compose)/(docker buildx)/hadolint/gitleaks/sonar-scanner-cli/difftastic/shfmt: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
 		;;
 	"armv6lhf")
-		SHELL_CHECK_ARCH="armv6hf"
+		SHELLCHECK_ARCH="armv6hf"
 		echo "Unsupported system/architecture (docker compose)/(docker buildx)/hadolint/gitleaks/sonar-scanner-cli/difftastic/shfmt: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
 		;;
 	"armv7l")
@@ -150,29 +150,29 @@ if [[ "linux" == "${OPERATING_SYSTEM}" ]]; then
 		DOCKER_BUILDX_ARCH="arm-v7"
 		GITLEAKS_ARCH="armv7"
 		SHFMT_ARCH="arm"
-		echo "Unsupported system/architecture hadolint/shell-check/sonar-scanner-cli/difftastic: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
+		echo "Unsupported system/architecture hadolint/shellcheck/sonar-scanner-cli/difftastic: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
 		;;
 	"ppc64le")
 		DOCKER_COMPOSE_ARCH="${SYSTEM_ARCH}"
 		DOCKER_BUILDX_ARCH="${SYSTEM_ARCH}"
-		echo "Unsupported system/architecture hadolint/shell-check/gitleaks/sonar-scanner-cli/difftastic/shfmt: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
+		echo "Unsupported system/architecture hadolint/shellcheck/gitleaks/sonar-scanner-cli/difftastic/shfmt: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
 		;;
 	"riscv64")
 		DOCKER_COMPOSE_ARCH="${SYSTEM_ARCH}"
 		DOCKER_BUILDX_ARCH="${SYSTEM_ARCH}"
-		SHELL_CHECK_ARCH="${SYSTEM_ARCH}"
+		SHELLCHECK_ARCH="${SYSTEM_ARCH}"
 		echo "Unsupported system/architecture hadolint/gitleaks/sonar-scanner-cli/difftastic/shfmt: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
 		;;
 	"s390x")
 		DOCKER_COMPOSE_ARCH="${SYSTEM_ARCH}"
 		DOCKER_BUILDX_ARCH="${SYSTEM_ARCH}"
-		echo "Unsupported system/architecture hadolint/shell-check/gitleaks/sonar-scanner-cli/difftastic/shfmt: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
+		echo "Unsupported system/architecture hadolint/shellcheck/gitleaks/sonar-scanner-cli/difftastic/shfmt: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
 		;;
 	"x86_64")
 		DOCKER_COMPOSE_ARCH="${SYSTEM_ARCH}"
 		DOCKER_BUILDX_ARCH="amd64"
 		HADOLINT_ARCH="${SYSTEM_ARCH}"
-		SHELL_CHECK_ARCH="${SYSTEM_ARCH}"
+		SHELLCHECK_ARCH="${SYSTEM_ARCH}"
 		GITLEAKS_ARCH="x64"
 		SONAR_SCANNER_CLI_ARCH="x64"
 		DIFFTASTIC_ARCH="${SYSTEM_ARCH}"
@@ -187,15 +187,15 @@ if [[ "linux" == "${OPERATING_SYSTEM}" ]]; then
 	"i386")
 		GITLEAKS_ARCH="x32"
 		SHFMT_ARCH="386"
-		echo "Unsupported system/architecture (docker compose)/(docker buildx)/hadolint/shell-check/sonar-scanner-cli/difftastic: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
+		echo "Unsupported system/architecture (docker compose)/(docker buildx)/hadolint/shellcheck/sonar-scanner-cli/difftastic: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
 		;;
 	"i686")
 		GITLEAKS_ARCH="x32"
 		SHFMT_ARCH="386"
-		echo "Unsupported system/architecture (docker compose)/(docker buildx)/hadolint/shell-check/sonar-scanner-cli/difftastic: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
+		echo "Unsupported system/architecture (docker compose)/(docker buildx)/hadolint/shellcheck/sonar-scanner-cli/difftastic: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
 		;;
 	*)
-		echo "Unsupported system/architecture (docker compose)/(docker buildx)/hadolint/shell-check/gitleaks/sonar-scanner-cli/difftastic/shfmt: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
+		echo "Unsupported system/architecture (docker compose)/(docker buildx)/hadolint/shellcheck/gitleaks/sonar-scanner-cli/difftastic/shfmt: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
 		;;
 	esac
 fi
@@ -209,7 +209,7 @@ if [[ "darwin" == "${OPERATING_SYSTEM}" ]]; then
 	"aarch64")
 		DOCKER_COMPOSE_ARCH="${SYSTEM_ARCH}"
 		DOCKER_BUILDX_ARCH="arm64"
-		SHELL_CHECK_ARCH="${SYSTEM_ARCH}"
+		SHELLCHECK_ARCH="${SYSTEM_ARCH}"
 		GITLEAKS_ARCH="arm64"
 		SONAR_SCANNER_CLI_ARCH="${SYSTEM_ARCH}"
 		DIFFTASTIC_ARCH="${SYSTEM_ARCH}"
@@ -222,7 +222,7 @@ if [[ "darwin" == "${OPERATING_SYSTEM}" ]]; then
 		DOCKER_COMPOSE_ARCH="${SYSTEM_ARCH}"
 		DOCKER_BUILDX_ARCH="amd64"
 		HADOLINT_ARCH="${SYSTEM_ARCH}"
-		SHELL_CHECK_ARCH="${SYSTEM_ARCH}"
+		SHELLCHECK_ARCH="${SYSTEM_ARCH}"
 		GITLEAKS_ARCH="x64"
 		SONAR_SCANNER_CLI_ARCH="x64"
 		DIFFTASTIC_ARCH="${SYSTEM_ARCH}"
@@ -235,7 +235,7 @@ if [[ "darwin" == "${OPERATING_SYSTEM}" ]]; then
 		YQ_ARCH="amd64"
 		;;
 	*)
-		echo "Unsupported system/architecture (docker compose)/(docker buildx)/hadolint/shell-check/gitleaks/sonar-scanner-cli/difftastic/shfmt: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
+		echo "Unsupported system/architecture (docker compose)/(docker buildx)/hadolint/shellcheck/gitleaks/sonar-scanner-cli/difftastic/shfmt: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
 		;;
 	esac
 fi
@@ -296,20 +296,20 @@ if eval "${env_file_exists}"; then
 			fi
 		fi
 
-		if [[ "" != "${SHELL_CHECK_ARCH}" && -n "${GLOBAL_STACK_SHELL_CHECK_VERSION}" && "" != "${GLOBAL_STACK_SHELL_CHECK_VERSION}" ]]; then
-			if [ -f ~/.local/bin/shell-check ]; then GLOBAL_UNU_SHELL_CHECK_VERSION="$(shell-check --version | grep 'version: ' | sed 's/version: /v/')"; else GLOBAL_UNU_SHELL_CHECK_VERSION=0; fi
-			# GLOBAL_UNU_SHELL_CHECK_LATEST=$(curl --silent https://api.github.com/repos/koalaman/shellcheck/releases/latest | jq .name -r | sed 's/Stable version /v/')
-			GLOBAL_UNU_SHELL_CHECK_LATEST=${GLOBAL_STACK_SHELL_CHECK_VERSION}
-			if [ "${GLOBAL_UNU_SHELL_CHECK_VERSION}" != "${GLOBAL_UNU_SHELL_CHECK_LATEST}" ]; then
-				echo "Updating/Installing shell-check - ${OPERATING_SYSTEM}, arch : ${SHELL_CHECK_ARCH} https://github.com/koalaman/shellcheck/releases/download/${GLOBAL_UNU_SHELL_CHECK_LATEST}/shellcheck-${GLOBAL_UNU_SHELL_CHECK_LATEST}.${OPERATING_SYSTEM}.${SHELL_CHECK_ARCH}.tar.xz"
-				curl -L https://github.com/koalaman/shellcheck/releases/download/${GLOBAL_UNU_SHELL_CHECK_LATEST}/shellcheck-${GLOBAL_UNU_SHELL_CHECK_LATEST}.${OPERATING_SYSTEM}.${SHELL_CHECK_ARCH}.tar.xz -o ~/.local/bin/shell-check-"${GLOBAL_UNU_SHELL_CHECK_LATEST}".tar.xz
-				mkdir -p ~/.local/bin/shell-check-${GLOBAL_UNU_SHELL_CHECK_LATEST}
-				tar -xf ~/.local/bin/shell-check-${GLOBAL_UNU_SHELL_CHECK_LATEST}.tar.xz -C ~/.local/bin/shell-check-${GLOBAL_UNU_SHELL_CHECK_LATEST}
-				mv ~/.local/bin/shell-check-${GLOBAL_UNU_SHELL_CHECK_LATEST}/shellcheck-${GLOBAL_UNU_SHELL_CHECK_LATEST}/shellcheck ~/.local/bin/shell-check
-				rm -rf ~/.local/bin/shell-check-${GLOBAL_UNU_SHELL_CHECK_LATEST}*
-				chmod a+rwx ~/.local/bin/shell-check
+		if [[ "" != "${SHELLCHECK_ARCH}" && -n "${GLOBAL_STACK_SHELLCHECK_VERSION}" && "" != "${GLOBAL_STACK_SHELLCHECK_VERSION}" ]]; then
+			if [ -f ~/.local/bin/shellcheck ]; then GLOBAL_UNU_SHELLCHECK_VERSION="$(shellcheck --version | grep 'version: ' | sed 's/version: /v/')"; else GLOBAL_UNU_SHELLCHECK_VERSION=0; fi
+			# GLOBAL_UNU_SHELLCHECK_LATEST=$(curl --silent https://api.github.com/repos/koalaman/shellcheck/releases/latest | jq .name -r | sed 's/Stable version /v/')
+			GLOBAL_UNU_SHELLCHECK_LATEST=${GLOBAL_STACK_SHELLCHECK_VERSION}
+			if [ "${GLOBAL_UNU_SHELLCHECK_VERSION}" != "${GLOBAL_UNU_SHELLCHECK_LATEST}" ]; then
+				echo "Updating/Installing shellcheck - ${OPERATING_SYSTEM}, arch : ${SHELLCHECK_ARCH} https://github.com/koalaman/shellcheck/releases/download/${GLOBAL_UNU_SHELLCHECK_LATEST}/shellcheck-${GLOBAL_UNU_SHELLCHECK_LATEST}.${OPERATING_SYSTEM}.${SHELLCHECK_ARCH}.tar.xz"
+				curl -L https://github.com/koalaman/shellcheck/releases/download/${GLOBAL_UNU_SHELLCHECK_LATEST}/shellcheck-${GLOBAL_UNU_SHELLCHECK_LATEST}.${OPERATING_SYSTEM}.${SHELLCHECK_ARCH}.tar.xz -o ~/.local/bin/shellcheck-"${GLOBAL_UNU_SHELLCHECK_LATEST}".tar.xz
+				mkdir -p ~/.local/bin/shellcheck-${GLOBAL_UNU_SHELLCHECK_LATEST}
+				tar -xf ~/.local/bin/shellcheck-${GLOBAL_UNU_SHELLCHECK_LATEST}.tar.xz -C ~/.local/bin/shellcheck-${GLOBAL_UNU_SHELLCHECK_LATEST}
+				mv ~/.local/bin/shellcheck-${GLOBAL_UNU_SHELLCHECK_LATEST}/shellcheck-${GLOBAL_UNU_SHELLCHECK_LATEST}/shellcheck ~/.local/bin/shellcheck
+				rm -rf ~/.local/bin/shellcheck-${GLOBAL_UNU_SHELLCHECK_LATEST}*
+				chmod a+rwx ~/.local/bin/shellcheck
 			else
-				echo "shell-check is latest '${GLOBAL_UNU_SHELL_CHECK_LATEST}'"
+				echo "shellcheck is latest '${GLOBAL_UNU_SHELLCHECK_LATEST}'"
 			fi
 		fi
 
@@ -503,18 +503,25 @@ if eval "${env_file_exists}"; then
 		fi
 	fi
 
+	_gs_semver_lt() {
+		local v1="${1#v}" v2="${2#v}"
+		[[ "$v1" == "$v2" ]] && return 1
+		[[ "$(printf '%s\n%s\n' "$v1" "$v2" | sort -V | head -1)" == "$v1" ]]
+	}
+
 	if [[ -n "${GLOBAL_STACK_CLAUDE_CODE_VERSION}" && "" != "${GLOBAL_STACK_CLAUDE_CODE_VERSION}" ]]; then
 		if command -v claude &>/dev/null; then
 			GLOBAL_UNU_CLAUDE_CODE_VERSION="$(claude --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+			GLOBAL_UNU_CLAUDE_CODE_VERSION="${GLOBAL_UNU_CLAUDE_CODE_VERSION:-0}"
 		else
-			GLOBAL_UNU_CLAUDE_CODE_VERSION=0
+			GLOBAL_UNU_CLAUDE_CODE_VERSION="0"
 		fi
-		GLOBAL_UNU_CLAUDE_CODE_LATEST="${GLOBAL_STACK_CLAUDE_CODE_VERSION}"
-		if [[ "${GLOBAL_UNU_CLAUDE_CODE_LATEST}" != "${GLOBAL_UNU_CLAUDE_CODE_VERSION}" ]]; then
-			echo "Updating/Installing claude-code ${GLOBAL_UNU_CLAUDE_CODE_LATEST}"
+		GLOBAL_UNU_CLAUDE_CODE_TARGET="${GLOBAL_STACK_CLAUDE_CODE_VERSION#v}"
+		if _gs_semver_lt "${GLOBAL_UNU_CLAUDE_CODE_VERSION}" "${GLOBAL_UNU_CLAUDE_CODE_TARGET}"; then
+			echo "Installing/Updating claude-code ${GLOBAL_UNU_CLAUDE_CODE_VERSION} → ${GLOBAL_UNU_CLAUDE_CODE_TARGET}"
 			curl -sSL https://claude.ai/install.sh | bash -s -- "${GLOBAL_STACK_CLAUDE_CODE_VERSION}"
 		else
-			echo "claude-code is latest '${GLOBAL_UNU_CLAUDE_CODE_VERSION}'"
+			echo "claude-code ${GLOBAL_UNU_CLAUDE_CODE_VERSION} is current or newer than target ${GLOBAL_UNU_CLAUDE_CODE_TARGET}, skipping"
 		fi
 	fi
 

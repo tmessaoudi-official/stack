@@ -3,7 +3,7 @@ Find and validate all shell scripts and Dockerfiles in this project for quality 
 ## Shell Scripts
 1. Find all `.sh` files under `bin/`: `find bin -name "*.sh" -type f`
 2. Run `bash -n` syntax check on each file
-3. Run `shell-check -x -S warning` on each file
+3. Run `shellcheck -x -S warning` on each file
 4. Report results grouped by file, with severity
 
 ## Dockerfiles

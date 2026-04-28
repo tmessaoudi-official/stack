@@ -168,7 +168,7 @@ make start-local-registry            # Start local TLS registry (port 5000)
 
 - **env-scan tests**: `bash bin/tests/env-scan.test.sh` — custom harness with `assert_equals`, `assert_contains`, `assert_not_contains`, `assert_file_exists`
 - **env-update**: no automated tests — verify with `--dry-run --filter=<VAR>` and `--offline` for cache-only testing
-- **Shell scripts**: `shell-check <file>` (binary is `shell-check`, not `shellcheck`) and `shfmt -d -i 2 -ci -bn <file>` (diff mode)
+- **Shell scripts**: `shellcheck <file>` and `shfmt -d -i 2 -ci -bn <file>` (diff mode)
 - **YAML files**: `yamllint -d relaxed <file>` and `yamlfmt -dry <file>` (dry-run mode)
 - **Formatting**: `/fmt --check` to preview all formatting changes, `/fmt` to apply them
 - **Compose validation**: `docker compose --env-file .env.local config` or `make generate-buildx`
@@ -178,7 +178,7 @@ make start-local-registry            # Start local TLS registry (port 5000)
 ## Claude Code Tooling
 
 **Slash commands** (type `/command` in any session):
-- `/lint` — shell-check all scripts + hadolint all Dockerfiles
+- `/lint` — shellcheck all scripts + hadolint all Dockerfiles
 - `/fmt` — format shell scripts (`shfmt`) and YAML files (`yamlfmt`); supports `--check`, `--sh`, `--yaml`
 - `/check-versions` — v2 `--check` (dockerhub) + legacy v1 `--dry-run` (github/npm/pecl/…) with combined summary; v1 used until v2 Phase 3+ covers all fetcher types
 - `/validate` — compose config + env consistency + COMPOSE_FILE + tier deps
@@ -196,7 +196,7 @@ make start-local-registry            # Start local TLS registry (port 5000)
 - `/new-service <name> [--parent <image>] [--runtime <name>] [--port <n>]` — scaffold a new service (Dockerfile, compose, startup script, printed `.env` + Makefile lines); args-first with interactive fallback
 
 **Automatic hooks** (PostToolUse on Edit/Write):
-- `shell-check` — lints `.sh` files on every write
+- `shellcheck` — lints `.sh` files on every write
 - `hadolint` — lints `Dockerfile*` files on every write
 - `yamllint` — validates `.yaml`/`.yml` files on every write
 - `shfmt` — checks shell formatting on `.sh` writes (reports diff, doesn't auto-fix)
@@ -221,7 +221,7 @@ make start-local-registry            # Start local TLS registry (port 5000)
 - **`tools/versions/` markers** control reinstall — deleting a marker forces full reinstall of that runtime even without `GLOBAL_STACK_RELOAD_*=true`
 - **`docker-bake.local.json` is generated, not tracked** — if it's stale after env changes, run `make generate-buildx` to regenerate. Stale bake file = wrong build config
 - **BuildKit cache can go stale** — if builds fail with mysterious layer errors, `docker buildx prune` is the escape hatch
-- **Bash-written files bypass all PostToolUse hooks** — linting (shell-check, hadolint, yamllint), formatting (shfmt), and backup only fire on `Edit`/`Write` tool calls. Files written via `cat >`, heredocs, `sed -i`, or other Bash redirects are invisible to hooks. Always use the `Write` or `Edit` tool when hook coverage matters.
+- **Bash-written files bypass all PostToolUse hooks** — linting (shellcheck, hadolint, yamllint), formatting (shfmt), and backup only fire on `Edit`/`Write` tool calls. Files written via `cat >`, heredocs, `sed -i`, or other Bash redirects are invisible to hooks. Always use the `Write` or `Edit` tool when hook coverage matters.
 
 ## Credentials & Stateful Data
 

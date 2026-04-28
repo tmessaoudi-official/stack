@@ -70,7 +70,7 @@ Before writing code invoke `superpowers:test-driven-development`. Apply expert c
 Confidence-gated review — P0 (fix before done), P1 (fix now, explain), P2 (mention, fix if trivial), P3 (skip unless asked). Check: correctness, regressions, secrets, security, side effects, quality (ShellCheck, Hadolint). Verify block nesting (`bash -n`) after any shell edits.
 
 **Concrete /stack checklist** — run every applicable item and report each result:
-1. `shell-check <file>` — zero warnings on every `.sh` file touched
+1. `shellcheck <file>` — zero warnings on every `.sh` file touched
 2. `hadolint <file>` — zero warnings on every `Dockerfile*` touched
 3. `bash -n <file>` — syntax-clean on every `.sh` file touched
 4. `env -i HOME=$HOME PATH=$PATH docker compose --env-file .env.local config > /dev/null` — must succeed before claiming any compose change is correct; stale shell state is not verification
@@ -109,7 +109,7 @@ Copy-paste-ready commands scaled to task size. Large tasks: full checklist with 
 
 Key non-negotiables: `set -eEuo pipefail` in new scripts (note: env-scan and global-unu.sh currently lack it — known exceptions; container scripts use `set -xeE -o pipefail`), ShellCheck-clean, Hadolint-clean Dockerfiles, `.PHONY` in Makefiles, strict SemVer 2.0.0.
 
-**Automatic quality gate**: a PostToolUse hook runs `shell-check` on every `.sh` file after Edit/Write. Fix any lint errors before proceeding — do not ignore hook feedback. Always run `bash -n` after shell edits to catch syntax errors including misplaced `fi`.
+**Automatic quality gate**: a PostToolUse hook runs `shellcheck` on every `.sh` file after Edit/Write. Fix any lint errors before proceeding — do not ignore hook feedback. Always run `bash -n` after shell edits to catch syntax errors including misplaced `fi`.
 
 ## Project Tooling
 

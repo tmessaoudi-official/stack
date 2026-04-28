@@ -32,7 +32,7 @@ BAT_OPERATING_SYSTEM=""
 SOPS_OPERATING_SYSTEM=""
 
 HADOLINT_ARCH=""
-SHELL_CHECK_ARCH=""
+SHELLCHECK_ARCH=""
 GITLEAKS_ARCH=""
 SONAR_SCANNER_CLI_ARCH=""
 DIFFTASTIC_ARCH=""
@@ -53,7 +53,7 @@ if [[ "linux" == "${OPERATING_SYSTEM}" ]]; then
 	case "${SYSTEM_ARCH}" in
 	"aarch64")
 		HADOLINT_ARCH="arm64"
-		SHELL_CHECK_ARCH="${SYSTEM_ARCH}"
+		SHELLCHECK_ARCH="${SYSTEM_ARCH}"
 		GITLEAKS_ARCH="arm64"
 		SONAR_SCANNER_CLI_ARCH="${SYSTEM_ARCH}"
 		DIFFTASTIC_ARCH="${SYSTEM_ARCH}"
@@ -66,29 +66,29 @@ if [[ "linux" == "${OPERATING_SYSTEM}" ]]; then
 		GITLEAKS_ARCH="armv6"
 		SHFMT_ARCH="arm"
 		YQ_ARCH="arm"
-		echo "Unsupported system/architecture hadolint/shell-check/sonar-scanner-cli/difftastic: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
+		echo "Unsupported system/architecture hadolint/shellcheck/sonar-scanner-cli/difftastic: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
 		;;
 	"armv6hf")
-		SHELL_CHECK_ARCH="${SYSTEM_ARCH}"
+		SHELLCHECK_ARCH="${SYSTEM_ARCH}"
 		echo "Unsupported system/architecture hadolint/gitleaks/sonar-scanner-cli/difftastic/shfmt: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
 		;;
 	"armv6lhf")
-		SHELL_CHECK_ARCH="armv6hf"
+		SHELLCHECK_ARCH="armv6hf"
 		echo "Unsupported system/architecture hadolint/gitleaks/sonar-scanner-cli/difftastic/shfmt: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
 		;;
 	"armv7l")
 		GITLEAKS_ARCH="armv7"
 		SHFMT_ARCH="arm"
 		YQ_ARCH="arm"
-		echo "Unsupported system/architecture hadolint/shell-check/sonar-scanner-cli/difftastic: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
+		echo "Unsupported system/architecture hadolint/shellcheck/sonar-scanner-cli/difftastic: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
 		;;
 	"riscv64")
-		SHELL_CHECK_ARCH="${SYSTEM_ARCH}"
+		SHELLCHECK_ARCH="${SYSTEM_ARCH}"
 		echo "Unsupported system/architecture hadolint/gitleaks/sonar-scanner-cli/difftastic/shfmt: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
 		;;
 	"x86_64")
 		HADOLINT_ARCH="${SYSTEM_ARCH}"
-		SHELL_CHECK_ARCH="${SYSTEM_ARCH}"
+		SHELLCHECK_ARCH="${SYSTEM_ARCH}"
 		GITLEAKS_ARCH="x64"
 		SONAR_SCANNER_CLI_ARCH="x64"
 		DIFFTASTIC_ARCH="${SYSTEM_ARCH}"
@@ -105,16 +105,16 @@ if [[ "linux" == "${OPERATING_SYSTEM}" ]]; then
 		GITLEAKS_ARCH="x32"
 		SHFMT_ARCH="386"
 		YQ_ARCH="386"
-		echo "Unsupported system/architecture hadolint/shell-check/sonar-scanner-cli/difftastic: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
+		echo "Unsupported system/architecture hadolint/shellcheck/sonar-scanner-cli/difftastic: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
 		;;
 	"i686")
 		GITLEAKS_ARCH="x32"
 		SHFMT_ARCH="386"
 		YQ_ARCH="386"
-		echo "Unsupported system/architecture hadolint/shell-check/sonar-scanner-cli/difftastic: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
+		echo "Unsupported system/architecture hadolint/shellcheck/sonar-scanner-cli/difftastic: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
 		;;
 	*)
-		echo "Unsupported system/architecture hadolint/shell-check/gitleaks/sonar-scanner-cli/difftastic/shfmt: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
+		echo "Unsupported system/architecture hadolint/shellcheck/gitleaks/sonar-scanner-cli/difftastic/shfmt: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
 		;;
 	esac
 fi
@@ -126,7 +126,7 @@ if [[ "darwin" == "${OPERATING_SYSTEM}" ]]; then
 	SOPS_OPERATING_SYSTEM="${OPERATING_SYSTEM}"
 	case "${SYSTEM_ARCH}" in
 	"aarch64")
-		SHELL_CHECK_ARCH="${SYSTEM_ARCH}"
+		SHELLCHECK_ARCH="${SYSTEM_ARCH}"
 		GITLEAKS_ARCH="arm64"
 		SONAR_SCANNER_CLI_ARCH="${SYSTEM_ARCH}"
 		DIFFTASTIC_ARCH="${SYSTEM_ARCH}"
@@ -138,7 +138,7 @@ if [[ "darwin" == "${OPERATING_SYSTEM}" ]]; then
 		;;
 	"x86_64")
 		HADOLINT_ARCH="${SYSTEM_ARCH}"
-		SHELL_CHECK_ARCH="${SYSTEM_ARCH}"
+		SHELLCHECK_ARCH="${SYSTEM_ARCH}"
 		GITLEAKS_ARCH="x64"
 		SONAR_SCANNER_CLI_ARCH="x64"
 		DIFFTASTIC_ARCH="${SYSTEM_ARCH}"
@@ -150,7 +150,7 @@ if [[ "darwin" == "${OPERATING_SYSTEM}" ]]; then
 		YQ_ARCH="amd64"
 		;;
 	*)
-		echo "Unsupported system/architecture hadolint/shell-check/gitleaks/sonar-scanner-cli/difftastic/shfmt: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
+		echo "Unsupported system/architecture hadolint/shellcheck/gitleaks/sonar-scanner-cli/difftastic/shfmt: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
 		;;
 	esac
 fi
@@ -163,15 +163,15 @@ if [[ "" != "${OPERATING_SYSTEM}" ]]; then
 		sudo chmod a+rwx /usr/local/bin/hadolint
 	fi
 
-	if [[ "" != "${SHELL_CHECK_ARCH}" ]]; then
-		echo "Installing shell-check - system : ${OPERATING_SYSTEM}, arch : ${SHELL_CHECK_ARCH}"
-		# GLOBAL_STACK_SHELL_CHECK_VERSION="$(curl --silent https://github.com/koalaman/shellcheck/releases/latest | jq .name -r)"
-		sudo curl -L https://github.com/koalaman/shellcheck/releases/download/${GLOBAL_STACK_SHELL_CHECK_VERSION}/shellcheck-${GLOBAL_STACK_SHELL_CHECK_VERSION}.${OPERATING_SYSTEM}.${SHELL_CHECK_ARCH}.tar.xz -o /usr/local/bin/shell-check-"${GLOBAL_STACK_SHELL_CHECK_VERSION}".tar.xz
-		sudo mkdir -p /usr/local/bin/shell-check-${GLOBAL_STACK_SHELL_CHECK_VERSION}
-		sudo tar -xf /usr/local/bin/shell-check-${GLOBAL_STACK_SHELL_CHECK_VERSION}.tar.xz -C /usr/local/bin/shell-check-${GLOBAL_STACK_SHELL_CHECK_VERSION}
-		sudo mv /usr/local/bin/shell-check-${GLOBAL_STACK_SHELL_CHECK_VERSION}/shellcheck-${GLOBAL_STACK_SHELL_CHECK_VERSION}/shellcheck /usr/local/bin/shell-check
-		sudo rm -rf /usr/local/bin/shell-check-${GLOBAL_STACK_SHELL_CHECK_VERSION}*
-		sudo chmod a+rwx /usr/local/bin/shell-check
+	if [[ "" != "${SHELLCHECK_ARCH}" ]]; then
+		echo "Installing shellcheck - system : ${OPERATING_SYSTEM}, arch : ${SHELLCHECK_ARCH}"
+		# GLOBAL_STACK_SHELLCHECK_VERSION="$(curl --silent https://github.com/koalaman/shellcheck/releases/latest | jq .name -r)"
+		sudo curl -L https://github.com/koalaman/shellcheck/releases/download/${GLOBAL_STACK_SHELLCHECK_VERSION}/shellcheck-${GLOBAL_STACK_SHELLCHECK_VERSION}.${OPERATING_SYSTEM}.${SHELLCHECK_ARCH}.tar.xz -o /usr/local/bin/shellcheck-"${GLOBAL_STACK_SHELLCHECK_VERSION}".tar.xz
+		sudo mkdir -p /usr/local/bin/shellcheck-${GLOBAL_STACK_SHELLCHECK_VERSION}
+		sudo tar -xf /usr/local/bin/shellcheck-${GLOBAL_STACK_SHELLCHECK_VERSION}.tar.xz -C /usr/local/bin/shellcheck-${GLOBAL_STACK_SHELLCHECK_VERSION}
+		sudo mv /usr/local/bin/shellcheck-${GLOBAL_STACK_SHELLCHECK_VERSION}/shellcheck-${GLOBAL_STACK_SHELLCHECK_VERSION}/shellcheck /usr/local/bin/shellcheck
+		sudo rm -rf /usr/local/bin/shellcheck-${GLOBAL_STACK_SHELLCHECK_VERSION}*
+		sudo chmod a+rwx /usr/local/bin/shellcheck
 	fi
 
 	if [[ "" != "${GITLEAKS_ARCH}" ]]; then
