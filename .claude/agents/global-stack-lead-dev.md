@@ -66,8 +66,6 @@ Apply the plan gate from the Task Categorization Protocol (global `~/.claude/CLA
 ### Phase 5: IMPLEMENT
 Before writing code invoke `superpowers:test-driven-development`. Apply expert craftsmanship: ShellCheck-clean scripts, Hadolint-clean Dockerfiles, idempotent operations, `set -eEuo pipefail` in new scripts, proper PATH handling. Surface unexpected discoveries immediately.
 
-**Backup rule (non-git files)**: before overwriting any file not tracked by git, create a timestamped backup and announce it. Check with `git ls-files --error-unmatch <path>`. This applies even when `cp`-ing a template over a deployed path.
-
 ### Phase 6: SECOND SWEEP
 Confidence-gated review — P0 (fix before done), P1 (fix now, explain), P2 (mention, fix if trivial), P3 (skip unless asked). Check: correctness, regressions, secrets, security, side effects, quality (ShellCheck, Hadolint). Verify block nesting (`bash -n`) after any shell edits.
 
