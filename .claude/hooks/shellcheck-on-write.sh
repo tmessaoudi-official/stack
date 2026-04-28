@@ -3,6 +3,8 @@
 # Receives tool call JSON on stdin, outputs system message if lint errors found.
 set -euo pipefail
 
+command -v jq &>/dev/null || exit 0
+
 INPUT=$(cat)
 FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty')
 

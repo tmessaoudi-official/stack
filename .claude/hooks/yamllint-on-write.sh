@@ -2,6 +2,8 @@
 # PostToolUse hook: runs yamllint on YAML files after Edit/Write
 set -euo pipefail
 
+command -v jq &>/dev/null || exit 0
+
 INPUT=$(cat)
 FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty')
 
