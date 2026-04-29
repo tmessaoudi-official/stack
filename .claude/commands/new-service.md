@@ -80,7 +80,7 @@ ARG GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS=local-global-stack-registry.local
 # shellcheck disable=SC2086
 FROM ${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}:${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_PORT_5000}/local_global_stack_<PARENT_SLUG>:${GLOBAL_STACK_VERSION}
 
-LABEL maintainer="Takieddine Messaoudi <takieddine.messaoudi.official@gmail.com>" \
+LABEL maintainer="${GLOBAL_STACK_DOCKER_USER_ID}" \
       info="local_global_stack"
 
 USER root
