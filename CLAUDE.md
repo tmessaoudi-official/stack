@@ -76,11 +76,11 @@ See `templates/tips/env-update.md` for the full fetcher-type and flag reference.
 
 ### bin/env-update.sh
 
-**DEPRECATED** — use `bin/env-update-v2.sh`. Preserved until v2 reaches feature parity with all fetcher types. Key flags: `--dry-run`, `--offline`, `--progress`, `--filter=<pattern>`, `--type=<types>`, `--no-auto-apply`, `--show-ok`, `--cache-ttl=<sec>`.
+**DEPRECATED** — use `bin/env-update-v2.sh`. v2 now covers all fetcher types; v1 is preserved for reference only. Key flags: `--dry-run`, `--offline`, `--progress`, `--filter=<pattern>`, `--type=<types>`, `--no-auto-apply`, `--show-ok`, `--cache-ttl=<sec>`.
 
 ### bin/env-update-v2.sh
 
-**v0.2.0 (Phase 2 — dockerhub fetcher + channel selection + apply)** — parses `.env` annotations, fetches latest versions from Docker Hub, streams a `[AUTO|HOLD|SKIP|ERROR]` report, and can apply AUTO decisions back to `.env`.
+**v0.3.0 (Phase 3 complete — all fetcher types)** — parses `.env` annotations, fetches latest versions across all 12 source types (dockerhub, github, npm, pecl, pecl-git, pypi, quay, rubygems, sdkman, sdkmanager, url, codeberg), streams a `[AUTO|HOLD|SKIP|ERROR]` report, and can apply AUTO decisions back to `.env`.
 
 **Key flags**: `--check` (fetch + report), `--apply` (apply AUTO decisions; implies `--check`), `--dry-run` (no writes), `--filter=<regex>`, `--no-cache`, `--format=text|json`, `--dump`, `--env-file=<path>`, `--cache-ttl=<N>`
 
@@ -145,10 +145,10 @@ make login-03node24                  # Shell into a container
 make log-follow-03node24             # Tail container logs
 make restart-03node24                # Restart one service
 
-# Version updates (safe preview first) — env-update.sh is deprecated; use until v2 is ready
-bin/env-update.sh --dry-run --progress
-bin/env-update.sh --type=github --filter=NODE --dry-run
-bin/env-update.sh  # Apply auto-updates (also propagates to Dockerfiles via env-scan)
+# Version updates (safe preview first) — use v2; env-update.sh is deprecated
+bin/env-update-v2.sh --check                         # preview all types
+bin/env-update-v2.sh --filter=NODE --check           # only Node-related
+bin/env-update-v2.sh --apply                         # apply AUTO decisions (run --check first!)
 
 # After updating versions in .env
 bin/env-scan.sh   # Propagate to .env.local + rewrite ARG lines in Dockerfiles (--sync-values=true by default)
@@ -180,7 +180,7 @@ make start-local-registry            # Start local TLS registry (port 5000)
 **Slash commands** (type `/command` in any session):
 - `/lint` — shellcheck all scripts + hadolint all Dockerfiles
 - `/fmt` — format shell scripts (`shfmt`) and YAML files (`yamlfmt`); supports `--check`, `--sh`, `--yaml`
-- `/check-versions` — v2 `--check` (dockerhub) + legacy v1 `--dry-run` (github/npm/pecl/…) with combined summary; v1 used until v2 Phase 3+ covers all fetcher types
+- `/check-versions` — v2 `--check` across all fetcher types (dockerhub, github, npm, pecl, pecl-git, pypi, quay, rubygems, sdkman, sdkmanager, url, codeberg); no v1 fallback
 - `/validate` — compose config + env consistency + COMPOSE_FILE + tier deps
 - `/stack-health` — health markers, container status, version markers
 - `/env-diff` — show divergences between `.env` and `.env.local`
