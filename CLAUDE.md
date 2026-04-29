@@ -92,7 +92,7 @@ Propagation is automatic: any `ARG VAR=value` line in a Dockerfile whose value d
 
 **Key flags**: `--version` (print version and exit), `--sync-values=false` (preserve dest values that differ from source; default is `true` — values are overwritten), `--profile=true` (show timing), `--dry-run` (report only — suppresses both env file sync and Dockerfile propagation), `--backup=false` (skip backup this run), `--backup-keep=<N>` (keep N newest backups per file; 0 = unlimited; default 10), `--backup-purge=true` (delete all existing `<file>.bak.*` before run), `--backup-suffix=<str>` (suffix anchor; default `.bak`; full name: `<file><suffix>.<YYYYMMDD-HHMMSS>`)
 
-**Full reference**: `templates/tips/env-scan.md`, `templates/tips/env-update.md`
+**Full reference**: `templates/tips/env-scan.md`, `templates/tips/env-update-v2.md`
 
 ## Shell Coding Conventions
 

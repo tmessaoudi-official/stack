@@ -17,17 +17,15 @@ The global reasoning framework from `~/.claude/CLAUDE.md` (full library in `~/.c
 
 **Name each framework when applying it** — e.g. "Applying Chesterton's Fence: before removing this ARG, let's understand why it was added." This is non-negotiable.
 
-## The Mandatory 8-Phase Workflow
+## Task Sizing — /stack Context
 
-For **every** request follow the phase sequence for the task size. No skipping within a tier.
+Follows the global 8-phase workflow from `~/.claude/CLAUDE.md`. /stack examples by tier:
+- **Small**: typo, config tweak, single version bump in `.env`
+- **Medium**: bug fix, small feature, script enhancement, single-service Dockerfile change
+- **Large**: new service scaffold, major env-update/env-scan refactor, new tool integration
 
-| Size | Examples | Phases |
-|------|----------|--------|
-| **Small** (< 5 lines, single file, obvious fix) | Typo, config tweak, single version bump | 5 → 6 → 8 |
-| **Medium** (5-50 lines, 1-3 files, clear approach) | Bug fix, small feature, script enhancement | 0 → 1 → 2 → 3L → 4 → 5 → 6 → 7 → 8 |
-| **Large** (50+ lines, multiple files, design decisions) | New service, major refactor, new tool integration | All phases 0-8 |
+For Medium: brief plan then proceed unless destructive. For Large: HARD STOP, wait for explicit "go".
 
-When in doubt treat as **Medium**. "Just do it" drops to Small. For Medium: brief plan then proceed unless destructive. For Large: HARD STOP, wait for explicit "go".
 
 ### When to spawn sub-agents
 
@@ -72,16 +70,20 @@ Update only: `templates/tips/*.md`, `bin/tests/*.test.sh`, agent memory, `CLAUDE
 
 ---
 
-## Core Operating Rules
+## /stack-Specific Operating Rules
 
-1. **Always propose better approaches** — surface superior solutions clearly, let the user choose.
-2. **Security is non-negotiable** — flag credential exposure or security degradation immediately, even if tangential.
-3. **Idempotency by default** — all scripts, Makefiles, and Docker operations must be safe to run multiple times.
-4. **Propose sub-agents proactively** — if a specialized agent would improve quality, suggest it.
-5. **Abort when needed** — if any phase reveals the task is unsafe or fundamentally wrong, STOP and explain.
-6. **Protected artifacts** — never propose deletion of: `.env`, `.env.local`, `Makefile`, root `docker-compose.yaml`, `CLAUDE.md`, any file under `docker/images/*/`, `.claude/hooks/*`, `.claude/settings.json`, `.claude/commands/*`, `.claude/agents/*`, or `~/.claude/agents/*` without explicit user request.
-7. **Parallel execution** — for independent changes to unrelated files in Phase 5, propose parallel sub-agents. Reference `superpowers:dispatching-parallel-agents`.
-8. **Global rules 6-13 from `~/.claude/CLAUDE.md` apply without exception.** Key reminders: Completion Gate (Rule 6) four-row evidence table before Phase 8; TDD (Rule 7) — for infra changes use `bash -n`/`docker compose config` as the failing-then-passing check; verify proposals against real data before presenting (Rule 11) — three prior /stack incidents: triple-eval rewrite, unquoted multi-word grep failure, rtk asset URL wrong OS target.
+Global rules 1–13 from `~/.claude/CLAUDE.md` apply without exception, including: Completion Gate (Rule 6) four-row evidence table before Phase 8; TDD (Rule 7) — for infra use `bash -n`/`docker compose config` as the
+failing-then-passing check; verify proposals against real data (Rule 11) — three prior /stack incidents: triple-eval rewrite, unquoted multi-word grep failure, rtk asset URL wrong OS target.
+
+/stack additions and overrides:
+
+1. **Idempotency by default** — all scripts, Makefiles, and Docker operations must be safe to run multiple times.
+2. **Propose parallel sub-agents proactively** — for independent changes in Phase 5. Reference `superpowers:dispatching-parallel-agents`.
+3. **Protected artifacts** — never propose deletion of: `.env`, `.env.local`, `Makefile`, root `docker-compose.yaml`, `CLAUDE.md`, any file under `docker/images/*/`, `.claude/hooks/*`, `.claude/settings.json`, `.claude/commands/*`,
+  `.claude/agents/*`, or `~/.claude/agents/*` without explicit user request.
+4. **Commit autonomously when work is ready** — commit staged changes directly without requesting confirmation. The user has established this preference across many sessions; it overrides global Rule 10's default for /stack. Report
+  what was committed after the fact. If the auto-mode hook blocks `git commit` despite apparent authorization, present the exact commit command for manual execution rather than retrying.
+
 
 ## Quality Standards
 
