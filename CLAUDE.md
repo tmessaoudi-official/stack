@@ -92,11 +92,7 @@ Propagation is automatic: any `ARG VAR=value` line in a Dockerfile whose value d
 
 **Key flags**: `--version` (print version and exit), `--sync-values=false` (preserve dest values that differ from source; default is `true` — values are overwritten), `--profile=true` (show timing), `--dry-run` (report only — suppresses both env file sync and Dockerfile propagation), `--backup=false` (skip backup this run), `--backup-keep=<N>` (keep N newest backups per file; 0 = unlimited; default 10), `--backup-purge=true` (delete all existing `<file>.bak.*` before run), `--backup-suffix=<str>` (suffix anchor; default `.bak`; full name: `<file><suffix>.<YYYYMMDD-HHMMSS>`)
 
-### bin/migrate-annotations.sh
-
-One-shot migration from legacy URL-based annotations to `TYPE:IDENTIFIER` format. Should not need re-running.
-
-**Full reference**: `templates/tips/env-scan.md`
+**Full reference**: `templates/tips/env-scan.md`, `templates/tips/env-update.md`
 
 ## Shell Coding Conventions
 
@@ -294,10 +290,6 @@ Makefile                             # Primary build automation
 local.Makefile                       # Machine-specific Makefile extensions
 bin/env-update-v2.sh                 # Version checker entry point (all 12 fetcher types)
 bin/env-scan.sh                      # Env sync tool entry point
-bin/migrate-annotations.sh           # One-shot annotation migration (legacy url: → TYPE:ID)
-bin/lib/env-update/                  # Partial v1 lib — keep-set used by migrate-annotations.sh
-  config/   codename_map, type_map
-  core/     report
 bin/lib/env-update-v2/               # Modular env-update-v2 library
   config/   prerelease_markers, type_map
   core/     apply, args, cache, channel, decide, parse, records, semver, tag_flags, ubuntu
