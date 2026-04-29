@@ -16,8 +16,12 @@ source "$(dirname "${BASH_SOURCE[0]}")/core/parse.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/core/cache.sh"
 # shellcheck source=./core/decide.sh
 source "$(dirname "${BASH_SOURCE[0]}")/core/decide.sh"
+# shellcheck source=./fetchers/codeberg.sh
+source "$(dirname "${BASH_SOURCE[0]}")/fetchers/codeberg.sh"
 # shellcheck source=./fetchers/dockerhub.sh
 source "$(dirname "${BASH_SOURCE[0]}")/fetchers/dockerhub.sh"
+# shellcheck source=./fetchers/quay.sh
+source "$(dirname "${BASH_SOURCE[0]}")/fetchers/quay.sh"
 # shellcheck source=./reporting/help.sh
 source "$(dirname "${BASH_SOURCE[0]}")/reporting/help.sh"
 # shellcheck source=./reporting/dump.sh
@@ -49,16 +53,18 @@ _gs_eu2_run_check() {
 
     _type="$(_gs_eu2_record_get "${_i}" type)"
     case "${_type}" in
+      codeberg)  _gs_eu2_fetch_codeberg  "${_i}" ;;
       dockerhub) _gs_eu2_fetch_dockerhub "${_i}" ;;
-      # TODO(Phase 3): implement remaining fetchers — entry counts from .env as of 2026-04-26:
+      quay)      _gs_eu2_fetch_quay      "${_i}" ;;
+      # TODO(Phase 3b+): implement remaining fetchers — entry counts from .env as of 2026-04-26:
       #   pecl-git   (100)  github  (73)  npm      (55)
       #   pypi        (24)  sdkman  (19)  url       (8)
-      #   sdkmanager   (5)  rubygems (4)  quay      (1)  codeberg (1)
-      # Each needs a fetchers/<type>.sh + a case arm here.
-      # Until then, non-dockerhub records fall through to SKIP below.
+      #   sdkmanager   (5)  rubygems (4)
+      # Phase 3a implemented: codeberg (1), quay (1) — see fetchers/codeberg.sh + fetchers/quay.sh
+      # Each remaining type needs a fetchers/<type>.sh + a case arm here.
       *)
         _gs_eu2_record_set "${_i}" decision      "SKIP"
-        _gs_eu2_record_set "${_i}" error_message "fetcher '${_type}' not yet implemented (Phase 2 supports dockerhub only; see Phase 3 TODO above)"
+        _gs_eu2_record_set "${_i}" error_message "fetcher '${_type}' not yet implemented (Phase 3a added codeberg+quay; see Phase 3b TODO above)"
         ;;
     esac
 

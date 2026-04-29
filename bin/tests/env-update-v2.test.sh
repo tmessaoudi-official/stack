@@ -1518,6 +1518,218 @@ t "t25d: full pipeline HOLD for major-pin escape (end-to-end, no fetcher HOLD in
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Section 26 — codeberg fetcher
+# ═══════════════════════════════════════════════════════════════════════════
+section "26 — codeberg fetcher"
+
+_CB_LIBS="
+source '/stack/bin/lib/env-update-v2/config/defaults.sh'
+source '/stack/bin/lib/env-update-v2/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update-v2/core/records.sh'
+source '/stack/bin/lib/env-update-v2/core/semver.sh'
+source '/stack/bin/lib/env-update-v2/core/channel.sh'
+source '/stack/bin/lib/env-update-v2/core/tag_flags.sh'
+source '/stack/bin/lib/env-update-v2/core/cache.sh'
+source '/stack/bin/lib/env-update-v2/http/curl.sh'
+source '/stack/bin/lib/env-update-v2/fetchers/codeberg.sh'
+export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+export _GS_EU2_CACHE_DIR=\${TMP_DIR}/cb_cache
+"
+
+t "t26a: happy path — latest stable release returned as proposed_version" bash -c "
+    ${_CB_LIBS}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'codeberg'
+    _gs_eu2_record_set \$idx identifier 'mergiraf/mergiraf'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_MERGIRAF_VERSION'
+    _gs_eu2_fetch_codeberg \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    # fixture contains v0.20.0 as latest release
+    [[ \"\$val\" == 'v0.20.0' ]] || { echo \"got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t26b: tag-strip-prefix strips 'v' when set" bash -c "
+    ${_CB_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/cb_b_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type             'codeberg'
+    _gs_eu2_record_set \$idx identifier       'mergiraf/mergiraf'
+    _gs_eu2_record_set \$idx env_var          'GLOBAL_STACK_MERGIRAF_VERSION'
+    _gs_eu2_record_set \$idx tag_strip_prefix 'v'
+    _gs_eu2_fetch_codeberg \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    # v0.20.0 with strip-prefix v → 0.20.0
+    [[ \"\$val\" == '0.20.0' ]] || { echo \"got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t26c: rc channel picks pre-release tag from fixture" bash -c "
+    ${_CB_LIBS}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'codeberg'
+    _gs_eu2_record_set \$idx identifier 'mergiraf/mergiraf'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_MERGIRAF_VERSION'
+    _gs_eu2_record_set \$idx channel    'rc'
+    _gs_eu2_fetch_codeberg \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    # fixture has v0.21.0-rc1 — rc channel should pick it or fall back to stable
+    [[ -n \"\$val\" ]] || { echo 'proposed_version is empty'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t26d: HTTP failure sets decision=ERROR, error_message set" bash -c "
+    ${_CB_LIBS}
+    unset _GS_EU2_HTTP_FIXTURE_DIR
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/cb_d_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'codeberg'
+    _gs_eu2_record_set \$idx identifier 'no-such-owner/no-such-repo'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_XYZZY_VERSION'
+    _gs_eu2_fetch_codeberg \$idx 2>/dev/null || true
+    decision=\$(_gs_eu2_record_get \$idx decision)
+    err=\$(_gs_eu2_record_get \$idx error_message)
+    [[ \"\$decision\" == 'ERROR' ]] || { echo \"expected ERROR, got: '\$decision'\"; echo FAIL; exit 0; }
+    [[ -n \"\$err\" ]] || { echo 'error_message is empty'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t26e: empty releases falls back to tags endpoint" bash -c "
+    ${_CB_LIBS}
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/cb_e_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'codeberg'
+    _gs_eu2_record_set \$idx identifier 'testorg/tags-only'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_TAGSONLY_VERSION'
+    _gs_eu2_fetch_codeberg \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    # releases fixture is empty array; tags fixture has 1.5.0
+    [[ \"\$val\" == '1.5.0' ]] || { echo \"got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t26f: fetcher leaves decision empty on success path" bash -c "
+    ${_CB_LIBS}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'codeberg'
+    _gs_eu2_record_set \$idx identifier 'mergiraf/mergiraf'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_MERGIRAF_VERSION'
+    _gs_eu2_fetch_codeberg \$idx
+    decision=\$(_gs_eu2_record_get \$idx decision)
+    proposed=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ -n \"\$proposed\" ]] || { echo 'proposed_version is empty'; echo FAIL; exit 0; }
+    [[ -z \"\$decision\" ]] || { echo \"fetcher set decision: '\$decision' (should be empty)\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 27 — quay fetcher
+# ═══════════════════════════════════════════════════════════════════════════
+section "27 — quay fetcher"
+
+_QY_LIBS="
+source '/stack/bin/lib/env-update-v2/config/defaults.sh'
+source '/stack/bin/lib/env-update-v2/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update-v2/core/records.sh'
+source '/stack/bin/lib/env-update-v2/core/semver.sh'
+source '/stack/bin/lib/env-update-v2/core/channel.sh'
+source '/stack/bin/lib/env-update-v2/core/tag_flags.sh'
+source '/stack/bin/lib/env-update-v2/core/cache.sh'
+source '/stack/bin/lib/env-update-v2/http/curl.sh'
+source '/stack/bin/lib/env-update-v2/fetchers/quay.sh'
+export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+export _GS_EU2_CACHE_DIR=\${TMP_DIR}/qy_cache
+"
+
+t "t27a: happy path — latest stable tag returned as proposed_version" bash -c "
+    ${_QY_LIBS}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'quay'
+    _gs_eu2_record_set \$idx identifier 'keycloak/keycloak'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_IMAGE_KEYCLOAK_KEYCLOAK_VERSION'
+    _gs_eu2_fetch_quay \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    # fixture has 26.6.0 as latest stable
+    [[ \"\$val\" == '26.6.0' ]] || { echo \"got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t27b: tag-exclude filters out unwanted tags" bash -c "
+    ${_QY_LIBS}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type        'quay'
+    _gs_eu2_record_set \$idx identifier  'keycloak/keycloak'
+    _gs_eu2_record_set \$idx env_var     'GLOBAL_STACK_IMAGE_KEYCLOAK_KEYCLOAK_VERSION'
+    _gs_eu2_record_set \$idx tag_exclude '-legacy'
+    _gs_eu2_fetch_quay \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    # fixture has 26.5.5-0-legacy which should be excluded; 26.6.0 remains
+    [[ \"\$val\" != *'-legacy'* ]] || { echo \"legacy tag not excluded: '\$val'\"; echo FAIL; exit 0; }
+    [[ -n \"\$val\" ]] || { echo 'proposed_version is empty'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t27c: beta channel picks pre-release tag" bash -c "
+    ${_QY_LIBS}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'quay'
+    _gs_eu2_record_set \$idx identifier 'keycloak/keycloak'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_IMAGE_KEYCLOAK_KEYCLOAK_VERSION'
+    _gs_eu2_record_set \$idx channel    'beta'
+    _gs_eu2_fetch_quay \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    # fixture has 27.0.0-beta.1 — beta channel should pick it or fall back to stable
+    [[ -n \"\$val\" ]] || { echo 'proposed_version is empty'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t27d: HTTP failure sets decision=ERROR, error_message set" bash -c "
+    ${_QY_LIBS}
+    unset _GS_EU2_HTTP_FIXTURE_DIR
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/qy_d_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'quay'
+    _gs_eu2_record_set \$idx identifier 'no-such-org/no-such-image'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_XYZZY_VERSION'
+    _gs_eu2_fetch_quay \$idx 2>/dev/null || true
+    decision=\$(_gs_eu2_record_get \$idx decision)
+    err=\$(_gs_eu2_record_get \$idx error_message)
+    [[ \"\$decision\" == 'ERROR' ]] || { echo \"expected ERROR, got: '\$decision'\"; echo FAIL; exit 0; }
+    [[ -n \"\$err\" ]] || { echo 'error_message is empty'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t27e: empty tags array returns empty proposed_version (decision set by decide.sh later)" bash -c "
+    ${_QY_LIBS}
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/qy_e_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'quay'
+    _gs_eu2_record_set \$idx identifier 'testorg/empty-repo'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_EMPTY_VERSION'
+    _gs_eu2_fetch_quay \$idx
+    decision=\$(_gs_eu2_record_get \$idx decision)
+    [[ \"\$decision\" == 'ERROR' || \"\$decision\" == 'SKIP' || -z \"\$decision\" ]] \
+        || { echo \"unexpected decision: '\$decision'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t27f: fetcher leaves decision empty on success path" bash -c "
+    ${_QY_LIBS}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'quay'
+    _gs_eu2_record_set \$idx identifier 'keycloak/keycloak'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_IMAGE_KEYCLOAK_KEYCLOAK_VERSION'
+    _gs_eu2_fetch_quay \$idx
+    decision=\$(_gs_eu2_record_get \$idx decision)
+    proposed=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ -n \"\$proposed\" ]] || { echo 'proposed_version is empty'; echo FAIL; exit 0; }
+    [[ -z \"\$decision\" ]] || { echo \"fetcher set decision: '\$decision' (should be empty)\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section
