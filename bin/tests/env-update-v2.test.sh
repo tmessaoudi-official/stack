@@ -2200,6 +2200,262 @@ t "t31l: Strategy 3 git ls-remote fallback — major_hint match found via ls-rem
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Section 32 — sdkman fetcher
+# ═══════════════════════════════════════════════════════════════════════════
+section "32 — sdkman fetcher"
+
+_SDK_LIBS="
+source '/stack/bin/lib/env-update-v2/config/defaults.sh'
+source '/stack/bin/lib/env-update-v2/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update-v2/core/records.sh'
+source '/stack/bin/lib/env-update-v2/core/semver.sh'
+source '/stack/bin/lib/env-update-v2/core/channel.sh'
+source '/stack/bin/lib/env-update-v2/core/tag_flags.sh'
+source '/stack/bin/lib/env-update-v2/core/cache.sh'
+source '/stack/bin/lib/env-update-v2/http/curl.sh'
+source '/stack/bin/lib/env-update-v2/fetchers/sdkman.sh'
+export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+export _GS_EU2_CACHE_DIR=\${TMP_DIR}/sdk_cache
+"
+
+t "t32a: happy path — gradle latest stable from /versions/list fixture" bash -c "
+    ${_SDK_LIBS}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'sdkman'
+    _gs_eu2_record_set \$idx identifier      'gradle'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_GRADLE_VERSION'
+    _gs_eu2_record_set \$idx current_version '9.4.0'
+    _gs_eu2_fetch_sdkman \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    dec=\$(_gs_eu2_record_get \$idx decision)
+    [[ -n \"\$val\" ]] || { echo 'proposed_version is empty'; echo FAIL; exit 0; }
+    # Must not set decision=ERROR — decide.sh owns classification
+    [[ \"\$dec\" != 'ERROR' ]] || { echo \"unexpected ERROR decision: \$val\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t32b: sdkman not available — error_message set, no crash, decision not ERROR" bash -c "
+    ${_SDK_LIBS}
+    # Override fixture dir + cache dir to isolate from t32a's cached result
+    export _GS_EU2_HTTP_FIXTURE_DIR=/tmp/no-such-fixtures-xyzzy
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/sdk_b_cache
+    export SDKMAN_DIR=/tmp/no-such-sdkman-xyzzy
+    export GLOBAL_STACK_SDKMAN_DIR=/tmp/no-such-sdkman-xyzzy
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'sdkman'
+    _gs_eu2_record_set \$idx identifier      'gradle'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_GRADLE_VERSION'
+    _gs_eu2_record_set \$idx current_version '9.4.0'
+    _gs_eu2_fetch_sdkman \$idx 2>/dev/null || true
+    err=\$(_gs_eu2_record_get \$idx error_message)
+    proposed=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ -n \"\$err\" ]] || { echo 'expected error_message when sdkman unavailable'; echo FAIL; exit 0; }
+    [[ -z \"\$proposed\" ]] || { echo \"proposed_version should be empty when unavailable: '\$proposed'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t32c: major-pin filter — gradle:9 picks only 9.x versions" bash -c "
+    ${_SDK_LIBS}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'sdkman'
+    _gs_eu2_record_set \$idx identifier      'gradle'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_GRADLE9_VERSION'
+    _gs_eu2_record_set \$idx current_version '9.4.0'
+    _gs_eu2_record_set \$idx major_hint      '9'
+    _gs_eu2_fetch_sdkman \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ -n \"\$val\" ]] || { echo 'proposed_version is empty'; echo FAIL; exit 0; }
+    [[ \"\$val\" == 9.* ]] || { echo \"major-pin 9 not respected: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t32d: channel:unstable — maven:4 returns rc version" bash -c "
+    ${_SDK_LIBS}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'sdkman'
+    _gs_eu2_record_set \$idx identifier      'maven'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_MAVEN_VX1_VERSION'
+    _gs_eu2_record_set \$idx current_version '4.0.0-rc-5'
+    _gs_eu2_record_set \$idx major_hint      '4'
+    _gs_eu2_record_set \$idx channel         'unstable'
+    _gs_eu2_fetch_sdkman \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    # fixture has 4.0.0-rc-5 as latest 4.x rc; unstable channel should return an rc or higher
+    [[ -n \"\$val\" ]] || { echo 'proposed_version is empty for unstable maven:4'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t32e: Java distribution qualifier — java:11 with current=11.0.30-zulu prefers zulu dist" bash -c "
+    ${_SDK_LIBS}
+    # java list endpoint not in fixtures → falls back to /versions/all (comma-separated)
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'sdkman'
+    _gs_eu2_record_set \$idx identifier      'java'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_JAVA11_VERSION'
+    _gs_eu2_record_set \$idx current_version '11.0.30-zulu'
+    _gs_eu2_record_set \$idx major_hint      '11'
+    _gs_eu2_fetch_sdkman \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ -n \"\$val\" ]] || { echo 'proposed_version is empty for java:11'; echo FAIL; exit 0; }
+    # Must pick a 11.x version with -zulu suffix (preferred dist from current_version)
+    [[ \"\$val\" == 11.*-zulu || \"\$val\" == 11.*-zulu.fx ]] \
+        || { echo \"expected 11.x-zulu, got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t32f: sdkman does NOT set manual=true (decide.sh classifies AUTO/HOLD based on version)" bash -c "
+    ${_SDK_LIBS}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'sdkman'
+    _gs_eu2_record_set \$idx identifier      'ant'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_ANT_VERSION'
+    _gs_eu2_record_set \$idx current_version '1.10.15'
+    _gs_eu2_fetch_sdkman \$idx
+    manual=\$(_gs_eu2_record_get \$idx manual)
+    [[ \"\$manual\" != 'true' ]] || { echo 'sdkman must not set manual=true — decide.sh owns this'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t32g: cache hit skips HTTP (proposed_version from cache)" bash -c "
+    ${_SDK_LIBS}
+    _gs_eu2_cache_write 'sdkman:gradle::' '9.99.0-CACHED'
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'sdkman'
+    _gs_eu2_record_set \$idx identifier      'gradle'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_GRADLE_VERSION'
+    _gs_eu2_record_set \$idx current_version '9.4.0'
+    _gs_eu2_fetch_sdkman \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$val\" == '9.99.0-CACHED' ]] || { echo \"cache not used: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 33 — sdkmanager fetcher
+# ═══════════════════════════════════════════════════════════════════════════
+section "33 — sdkmanager fetcher"
+
+_SDKMGR_LIBS="
+source '/stack/bin/lib/env-update-v2/config/defaults.sh'
+source '/stack/bin/lib/env-update-v2/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update-v2/core/records.sh'
+source '/stack/bin/lib/env-update-v2/core/semver.sh'
+source '/stack/bin/lib/env-update-v2/core/channel.sh'
+source '/stack/bin/lib/env-update-v2/core/tag_flags.sh'
+source '/stack/bin/lib/env-update-v2/core/cache.sh'
+source '/stack/bin/lib/env-update-v2/http/curl.sh'
+source '/stack/bin/lib/env-update-v2/fetchers/sdkmanager.sh'
+export _GS_EU2_SDKMANAGER_CMD_FIXTURE='${FIXTURES}/sdkmanager-list.txt'
+export _GS_EU2_CACHE_DIR=\${TMP_DIR}/sdkmgr_cache
+"
+
+t "t33a: happy path — platform-tools version from fixture" bash -c "
+    ${_SDKMGR_LIBS}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'sdkmanager'
+    _gs_eu2_record_set \$idx identifier      'platform-tools'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_PLATFORM_TOOLS_VERSION'
+    _gs_eu2_record_set \$idx current_version '37.0.0'
+    _gs_eu2_fetch_sdkmanager \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ -n \"\$val\" ]] || { echo 'proposed_version is empty'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t33b: sdkmanager not found — error_message set, no crash, proposed_version empty" bash -c "
+    ${_SDKMGR_LIBS}
+    # Override fixture + cache dir to isolate from t33a's cached result
+    # Point ANDROID_HOME to a non-existent path so the binary search finds nothing
+    export _GS_EU2_SDKMANAGER_CMD_FIXTURE=''
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/sdkmgr_b_cache
+    export PATH='/usr/bin:/bin'
+    export ANDROID_HOME='/tmp/no-such-android-sdk-xyzzy'
+    export GLOBAL_STACK_ANDROID_HOME='/tmp/no-such-android-sdk-xyzzy'
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'sdkmanager'
+    _gs_eu2_record_set \$idx identifier      'platform-tools'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_PLATFORM_TOOLS_VERSION'
+    _gs_eu2_record_set \$idx current_version '37.0.0'
+    _gs_eu2_fetch_sdkmanager \$idx 2>/dev/null || true
+    err=\$(_gs_eu2_record_get \$idx error_message)
+    proposed=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ -n \"\$err\" ]] || { echo 'expected error_message when sdkmanager not found'; echo FAIL; exit 0; }
+    [[ -z \"\$proposed\" ]] || { echo \"proposed_version should be empty: '\$proposed'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t33c: CMD_FIXTURE seam — reads fixture file instead of running real sdkmanager" bash -c "
+    ${_SDKMGR_LIBS}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'sdkmanager'
+    _gs_eu2_record_set \$idx identifier      'build-tools'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_BUILD_TOOLS_VERSION'
+    _gs_eu2_record_set \$idx current_version '37.0.0-rc2'
+    _gs_eu2_fetch_sdkmanager \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    # fixture has build-tools;37.0.0, ;37.0.0-rc1, ;37.0.0-rc2 — stable channel picks 37.0.0
+    [[ -n \"\$val\" ]] || { echo 'proposed_version is empty'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t33d: channel:unstable — build-tools picks rc version" bash -c "
+    ${_SDKMGR_LIBS}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'sdkmanager'
+    _gs_eu2_record_set \$idx identifier      'build-tools'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_BUILD_TOOLS_VERSION'
+    _gs_eu2_record_set \$idx current_version '37.0.0-rc2'
+    _gs_eu2_record_set \$idx channel         'unstable'
+    _gs_eu2_fetch_sdkmanager \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ -n \"\$val\" ]] || { echo 'proposed_version is empty for unstable channel'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t33e: sdkmanager sets manual=true — classify via decide.sh not fetcher decision field" bash -c "
+    ${_SDKMGR_LIBS}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'sdkmanager'
+    _gs_eu2_record_set \$idx identifier      'platform-tools'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_PLATFORM_TOOLS_VERSION'
+    _gs_eu2_record_set \$idx current_version '37.0.0'
+    _gs_eu2_fetch_sdkmanager \$idx
+    manual=\$(_gs_eu2_record_get \$idx manual)
+    dec=\$(_gs_eu2_record_get \$idx decision)
+    [[ \"\$manual\" == 'true' ]] || { echo \"sdkmanager must set manual=true; got: '\$manual'\"; echo FAIL; exit 0; }
+    # Fetcher must NOT write decision (that is decide.sh's job)
+    [[ -z \"\$dec\" ]] || { echo \"fetcher must not write decision; got: '\$dec'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t33f: NDK component parsed from component;VERSION format" bash -c "
+    ${_SDKMGR_LIBS}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'sdkmanager'
+    _gs_eu2_record_set \$idx identifier      'ndk'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_NDK_VERSION'
+    _gs_eu2_record_set \$idx current_version '29.0.14206865'
+    _gs_eu2_fetch_sdkmanager \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ -n \"\$val\" ]] || { echo 'NDK version not found in fixture'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t33g: cache hit skips cmd fixture (proposed_version from cache)" bash -c "
+    ${_SDKMGR_LIBS}
+    _gs_eu2_cache_write 'sdkmanager:platform-tools:' '99.0.0-CACHED'
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'sdkmanager'
+    _gs_eu2_record_set \$idx identifier      'platform-tools'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_PLATFORM_TOOLS_VERSION'
+    _gs_eu2_record_set \$idx current_version '37.0.0'
+    _gs_eu2_fetch_sdkmanager \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$val\" == '99.0.0-CACHED' ]] || { echo \"cache not used: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section

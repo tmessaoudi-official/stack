@@ -1,0 +1,26 @@
+Installed packages:
+  Path                          | Version      | Description
+  -------                       | -------      | -------
+  build-tools;37.0.0            | 37.0.0       | Android SDK Build-Tools 37
+  cmdline-tools;20.0            | 20.0         | Android SDK Command-line Tools
+  ndk;29.0.14206865             | 29.0.14206865| NDK (Side by side)
+  platform-tools                | 37.0.0       | Android SDK Platform-Tools
+
+Available Packages:
+  Path                               | Version          | Description
+  -------                            | -------          | -------
+  build-tools;35.0.0                 | 35.0.0           | Android SDK Build-Tools 35
+  build-tools;35.0.0-rc1             | 35.0.0-rc1       | Android SDK Build-Tools 35 (rc1)
+  build-tools;36.0.0                 | 36.0.0           | Android SDK Build-Tools 36
+  build-tools;36.0.0-rc1             | 36.0.0-rc1       | Android SDK Build-Tools 36 (rc1)
+  build-tools;36.0.0-rc2             | 36.0.0-rc2       | Android SDK Build-Tools 36 (rc2)
+  build-tools;37.0.0                 | 37.0.0           | Android SDK Build-Tools 37
+  build-tools;37.0.0-rc1             | 37.0.0-rc1       | Android SDK Build-Tools 37 (rc1)
+  build-tools;37.0.0-rc2             | 37.0.0-rc2       | Android SDK Build-Tools 37 (rc2)
+  cmdline-tools;20.0                 | 20.0             | Android SDK Command-line Tools
+  cmdline-tools;21.0                 | 21.0             | Android SDK Command-line Tools
+  ndk;27.2.12479018                  | 27.2.12479018    | NDK (Side by side)
+  ndk;28.0.13004108                  | 28.0.13004108    | NDK (Side by side)
+  ndk;29.0.14206865                  | 29.0.14206865    | NDK (Side by side)
+  ndk-bundle                         | 22.1.7171670     | NDK
+  platform-tools                     | 37.0.0           | Android SDK Platform-Tools
