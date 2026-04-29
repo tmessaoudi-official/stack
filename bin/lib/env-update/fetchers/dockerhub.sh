@@ -76,7 +76,7 @@ _gs_eu_dockerhub_fetch_latest() {
   local image="${raw_identifier##*/}"
 
   # Build a cache key that accounts for all discriminators
-  local cache_key="dockerhub:${raw_identifier}:${tag_suffix}:${major_pin}:${tag_filter}:${tag_exclude}:${tag_extract}:${tag_replace_from}:${channel}"
+  local cache_key="dockerhub:${raw_identifier}:${tag_suffix}:${major_pin}:${tag_filter}:${tag_exclude}:${tag_strip_prefix}:${tag_strip_suffix}:${tag_extract}:${tag_replace_from}:${channel}"
 
   # Cache check
   if [[ "${offline}" != "true" && "${no_cache}" != "true" ]]; then
