@@ -87,6 +87,9 @@ _gs_eu_github_fetch_latest() {
   local channel="${13:-}"
   local version_prefix="${14:-}"
 
+  local _gfl_temps=()
+  trap 'rm -f "${_gfl_temps[@]}" 2>/dev/null || true' RETURN
+
   # Derive mode from channel
   local stable_only="true"
   local pre_release="false"
@@ -128,6 +131,7 @@ _gs_eu_github_fetch_latest() {
     # --- RELEASES-FIRST for major-pin ---
     local _mp_rel_tmp
     _mp_rel_tmp="$(mktemp)"
+    _gfl_temps+=("${_mp_rel_tmp}")
     local _mp_rel_code
     _mp_rel_code="$(curl --silent --location --max-time 10 --retry 2 \
       "${auth_args[@]}" \
@@ -198,6 +202,7 @@ _gs_eu_github_fetch_latest() {
       local tags_url="https://api.github.com/repos/${identifier}/tags?per_page=100&page=${page}"
       local tmp_file
       tmp_file="$(mktemp)"
+      _gfl_temps+=("${tmp_file}")
       local http_code
       http_code="$(curl --silent --location --max-time 10 --retry 2 \
         "${auth_args[@]}" \
@@ -441,6 +446,7 @@ _gs_eu_github_fetch_latest() {
       local tags_url_fl="https://api.github.com/repos/${identifier}/tags?per_page=100&page=${page_fl}"
       local tmp_file_fl
       tmp_file_fl="$(mktemp)"
+      _gfl_temps+=("${tmp_file_fl}")
       local http_code_fl
       http_code_fl="$(curl --silent --location --max-time 10 --retry 2 \
         "${auth_args[@]}" \
@@ -551,6 +557,7 @@ _gs_eu_github_fetch_latest() {
   local releases_url="https://api.github.com/repos/${identifier}/releases?per_page=100"
   local tmp_file
   tmp_file="$(mktemp)"
+  _gfl_temps+=("${tmp_file}")
   local http_code
   http_code="$(curl --silent --location --max-time 10 --retry 2 \
     "${auth_args[@]}" \
@@ -620,6 +627,7 @@ _gs_eu_github_fetch_latest() {
         # a corresponding GitHub release. If tags have a newer strict semver, prefer it.
         local _xc_tmp
         _xc_tmp="$(mktemp)"
+        _gfl_temps+=("${_xc_tmp}")
         local _xc_code
         _xc_code="$(curl --silent --location --max-time 10 --retry 2 \
           "${auth_args[@]}" \
@@ -703,6 +711,7 @@ _gs_eu_github_fetch_latest() {
   # Fall back to tags API
   local tags_url="https://api.github.com/repos/${identifier}/tags?per_page=50"
   tmp_file="$(mktemp)"
+  _gfl_temps+=("${tmp_file}")
   http_code="$(curl --silent --location --max-time 10 --retry 2 \
     "${auth_args[@]}" \
     -H "Accept: application/vnd.github+json" \
