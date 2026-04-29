@@ -31,7 +31,7 @@ tools contains list of executables
 npm, yarn, composer, symfony installer and cli, deployer
 you can add to them they will be available in your containers 
 # Phpmyadmin
-docker/images/04phpmyadmin/etc/phpmyadmin/config.user.inc.php container the default server (docker image)
+docker/config/dist/conf/phpmyadmin/config.user.inc.php contains the default server (docker image)
 you add to it or change to load new local/distant servers
 # PGadmin (postgres)
 create folder if not exists : docker/data/postgres/xx
