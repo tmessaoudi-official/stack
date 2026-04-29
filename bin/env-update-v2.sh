@@ -12,6 +12,7 @@
 set -eEuo pipefail
 trap 'printf "env-update-v2: error in %s at line %d: %s\n" "${BASH_SOURCE[0]}" "${LINENO}" "${BASH_COMMAND}" >&2' ERR
 
+# shellcheck disable=SC1091
 # shellcheck source=./lib/env-update-v2/main.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib/env-update-v2/main.sh"
 

@@ -1,4 +1,5 @@
 #!/bin/bash
+# shellcheck disable=SC1091
 set -eEuo pipefail
 trap 'printf "env-scan: error in %s at line %d: %s\n" "${BASH_SOURCE[0]}" "${LINENO}" "${BASH_COMMAND}" >&2' ERR
 

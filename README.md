@@ -7,11 +7,11 @@ Dockerized local development environment
 
 # Important 
 
-base should always be present within DOCKER_COMPOSE in env or env.local (many other images are based on it)
+base should always be present within COMPOSE_FILE in .env or .env.local (many other images are based on it)
 
-If you are using any node image you should include nvm within DOCKER_COMPOSE in env or env.local
+If you are using any node image you should include nvm within COMPOSE_FILE in .env or .env.local
 
-If you are using any php image you should include phpbrew within DOCKER_COMPOSE in env or env.local
+If you are using any php image you should include phpbrew within COMPOSE_FILE in .env or .env.local
 
 # Ssh files
 Put your id_rsa and id_rsa.pub and known_hosts in docker/config/root/.ssh/ ,
