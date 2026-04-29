@@ -5,9 +5,31 @@
 # that directory. File name is derived from the URL by sanitizing non-alnum
 # chars to underscores (same scheme as cache key sanitization).
 # This is the single seam that makes all fetchers deterministically testable.
+#
+# Pagination disambiguation: when the URL contains a "page=N" query param,
+# the fixture filename includes "_page_N" as a suffix so that page=1 and page=2
+# map to distinct fixture files.  Without this, stripping the query string
+# collapses both URLs to the same path.
 
 [[ -n "${_GS_EU2_CURL_SH_LOADED:-}" ]] && return 0
 readonly _GS_EU2_CURL_SH_LOADED=1
+
+# _gs_eu2_fixture_path URL
+# Derive the fixture filename from a URL.  Shared by _gs_eu2_http_get and
+# _gs_eu2_http_get_auth so the logic stays in exactly one place.
+_gs_eu2_fixture_path() {
+  local _url="${1}"
+  local _noquery="${_url%%\?*}"                       # strip query string
+  local _safe="${_noquery//[^a-zA-Z0-9._-]/_}"
+  _safe="${_safe#https___}"                           # strip leading protocol
+  local _qs="${_url#*\?}"
+  if [[ "${_qs}" != "${_url}" ]]; then
+    local _page
+    _page="$(printf '%s' "${_qs}" | grep -oE '(^|[&])page=[0-9]+' | grep -oE 'page=[0-9]+' | head -1 || true)"
+    [[ -n "${_page}" ]] && _safe="${_safe}_${_page/=/_}"
+  fi
+  printf '%s' "${_safe}"
+}
 
 # Fetch URL contents. Returns 0 on success, 1 on failure.
 # Stdout: response body. Stderr: error message on failure.
@@ -15,9 +37,8 @@ _gs_eu2_http_get() {
   local _url="${1}"
 
   if [[ -n "${_GS_EU2_HTTP_FIXTURE_DIR:-}" ]]; then
-    local _noquery="${_url%%\?*}"            # strip query string
-    local _safe="${_noquery//[^a-zA-Z0-9._-]/_}"
-    _safe="${_safe#https___}"               # strip leading protocol
+    local _safe
+    _safe="$(_gs_eu2_fixture_path "${_url}")"
     local _f="${_GS_EU2_HTTP_FIXTURE_DIR}/${_safe}"
     if [[ -f "${_f}" ]]; then
       cat "${_f}"
@@ -69,9 +90,8 @@ _gs_eu2_http_get_auth() {
 
   # Fixture seam: same path derivation as _gs_eu2_http_get (token not part of path)
   if [[ -n "${_GS_EU2_HTTP_FIXTURE_DIR:-}" ]]; then
-    local _noquery="${_url%%\?*}"
-    local _safe="${_noquery//[^a-zA-Z0-9._-]/_}"
-    _safe="${_safe#https___}"
+    local _safe
+    _safe="$(_gs_eu2_fixture_path "${_url}")"
     local _f="${_GS_EU2_HTTP_FIXTURE_DIR}/${_safe}"
     if [[ -f "${_f}" ]]; then
       cat "${_f}"

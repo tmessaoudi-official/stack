@@ -2009,6 +2009,197 @@ t "t30e: fetcher leaves decision empty on success path" bash -c "
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Section 31 — github fetcher
+# ═══════════════════════════════════════════════════════════════════════════
+section "31 — github fetcher"
+
+_GH_LIBS="
+source '/stack/bin/lib/env-update-v2/config/defaults.sh'
+source '/stack/bin/lib/env-update-v2/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update-v2/core/records.sh'
+source '/stack/bin/lib/env-update-v2/core/semver.sh'
+source '/stack/bin/lib/env-update-v2/core/channel.sh'
+source '/stack/bin/lib/env-update-v2/core/tag_flags.sh'
+source '/stack/bin/lib/env-update-v2/core/cache.sh'
+source '/stack/bin/lib/env-update-v2/http/curl.sh'
+source '/stack/bin/lib/env-update-v2/fetchers/github.sh'
+export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+export _GS_EU2_CACHE_DIR=\${TMP_DIR}/gh_cache
+"
+
+t "t31a: happy path via releases API — stable tag returned as proposed_version" bash -c "
+    ${_GH_LIBS}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'github'
+    _gs_eu2_record_set \$idx identifier 'testowner/testrepo'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_TESTREPO_VERSION'
+    _gs_eu2_record_set \$idx tag_strip_prefix 'v'
+    _gs_eu2_fetch_github \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$val\" == '2.5.0' ]] || { echo \"expected 2.5.0, got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t31b: empty releases falls back to tags API — proposed_version from tags" bash -c "
+    ${_GH_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/gh_b_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'github'
+    _gs_eu2_record_set \$idx identifier 'testowner/tags-only-repo'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_TAGS_ONLY_VERSION'
+    _gs_eu2_fetch_github \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ -n \"\$val\" ]] || { echo 'proposed_version is empty'; echo FAIL; exit 0; }
+    # fixture has 3.1.0, 3.0.2, 3.0.1, 3.0.0 — latest stable is 3.1.0
+    [[ \"\$val\" == '3.1.0' ]] || { echo \"expected 3.1.0, got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t31c: major_hint pins results to matching major version" bash -c "
+    ${_GH_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/gh_c_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'github'
+    _gs_eu2_record_set \$idx identifier 'testowner/majorpin-repo'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_MAJORPIN_VERSION'
+    _gs_eu2_record_set \$idx major_hint '3'
+    _gs_eu2_record_set \$idx tag_strip_prefix 'v'
+    _gs_eu2_fetch_github \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    # fixture: v4.0.0, v3.5.1, v3.4.0 — major_hint=3 → must pick 3.5.1, not 4.0.0
+    [[ \"\$val\" == '3.5.1' ]] || { echo \"expected 3.5.1, got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t31d: pre-release sets alt_version hint; proposed_version is stable" bash -c "
+    ${_GH_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/gh_d_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'github'
+    _gs_eu2_record_set \$idx identifier 'testowner/prerelease-repo'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_PRERELEASE_VERSION'
+    _gs_eu2_record_set \$idx tag_strip_prefix 'v'
+    _gs_eu2_fetch_github \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    alt=\$(_gs_eu2_record_get \$idx alt_version)
+    # fixture: v1.9.0-rc2 (prerelease), v1.8.5, v1.8.4 — stable channel → 1.8.5
+    [[ \"\$val\" == '1.8.5' ]] || { echo \"expected proposed=1.8.5, got: '\$val'\"; echo FAIL; exit 0; }
+    # alt_version should mention the rc
+    [[ -n \"\$alt\" ]] || { echo 'alt_version not set for available pre-release'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t31e: draft releases are excluded from candidate set" bash -c "
+    ${_GH_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/gh_e_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'github'
+    _gs_eu2_record_set \$idx identifier 'testowner/draft-repo'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_DRAFT_VERSION'
+    _gs_eu2_record_set \$idx tag_strip_prefix 'v'
+    _gs_eu2_fetch_github \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    # fixture: v5.0.0 (draft), v4.9.1, v4.9.0 — draft must be excluded → 4.9.1
+    [[ \"\$val\" == '4.9.1' ]] || { echo \"expected 4.9.1, got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t31f: tag_strip_prefix 'v' leaves version without prefix" bash -c "
+    ${_GH_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/gh_f_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'github'
+    _gs_eu2_record_set \$idx identifier 'testowner/vprefix-repo'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_VPREFIX_VERSION'
+    _gs_eu2_record_set \$idx tag_strip_prefix 'v'
+    _gs_eu2_fetch_github \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$val\" == '1.2.3' ]] || { echo \"expected 1.2.3 (no v prefix), got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t31g: tags pagination — fetches page 2 when page 1 is full (100 items)" bash -c "
+    ${_GH_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/gh_g_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'github'
+    _gs_eu2_record_set \$idx identifier 'testowner/paginated-repo'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_PAGINATED_VERSION'
+    _gs_eu2_fetch_github \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    # page1 has 1.99.0..1.0.0 (100 items, all 1.x), page2 has 2.5.0, 0.9.0, 0.8.0
+    # highest stable is 2.5.0 — ONLY reachable by fetching page 2
+    [[ \"\$val\" == '2.5.0' ]] || { echo \"expected 2.5.0 (from page 2), got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t31h: HTTP failure sets decision=ERROR with error_message" bash -c "
+    ${_GH_LIBS}
+    unset _GS_EU2_HTTP_FIXTURE_DIR
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/gh_h_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'github'
+    _gs_eu2_record_set \$idx identifier 'no-such-owner/no-such-repo-xyzzy'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_XYZZY_VERSION'
+    _gs_eu2_fetch_github \$idx 2>/dev/null || true
+    decision=\$(_gs_eu2_record_get \$idx decision)
+    err=\$(_gs_eu2_record_get \$idx error_message)
+    [[ \"\$decision\" == 'ERROR' ]] || { echo \"expected ERROR, got: '\$decision'\"; echo FAIL; exit 0; }
+    [[ -n \"\$err\" ]] || { echo 'error_message is empty'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t31i: commit sha helper returns 40-char SHA from fixture" bash -c "
+    ${_GH_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/gh_i_cache
+    sha=\$(_gs_eu2_github_get_commit_sha 'testowner/commit-repo' 'main')
+    [[ \"\${#sha}\" -ge 7 ]] || { echo \"SHA too short: '\$sha'\"; echo FAIL; exit 0; }
+    [[ \"\$sha\" =~ ^[0-9a-f]+\$ ]] || { echo \"SHA not hex: '\$sha'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t31j: fetcher leaves decision empty on success path" bash -c "
+    ${_GH_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/gh_j_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'github'
+    _gs_eu2_record_set \$idx identifier 'testowner/testrepo'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_TESTREPO_VERSION'
+    _gs_eu2_record_set \$idx tag_strip_prefix 'v'
+    _gs_eu2_fetch_github \$idx
+    decision=\$(_gs_eu2_record_get \$idx decision)
+    proposed=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ -n \"\$proposed\" ]] || { echo 'proposed_version is empty'; echo FAIL; exit 0; }
+    [[ -z \"\$decision\" ]] || { echo \"fetcher set decision: '\$decision' (should be empty)\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t31k: commit_date helper returns YYYY-MM-DD for a given SHA" bash -c "
+    ${_GH_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/gh_k_cache
+    date=\$(_gs_eu2_github_get_commit_date 'testowner/commit-repo' 'abc1234def5678901234567890123456789012ab')
+    [[ \"\$date\" == '2026-03-15' ]] || { echo \"expected 2026-03-15, got: '\$date'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t31l: Strategy 3 git ls-remote fallback — major_hint match found via ls-remote" bash -c "
+    ${_GH_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/gh_l_cache
+    export _GS_EU2_GIT_LS_REMOTE_FIXTURE='${FIXTURES}/git-ls-remote-lsr-repo.txt'
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'github'
+    _gs_eu2_record_set \$idx identifier 'testowner/lsr-repo'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_LSR_VERSION'
+    _gs_eu2_record_set \$idx major_hint '2'
+    _gs_eu2_fetch_github \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    # releases=[]; tags page1 has only 1.x versions (no 2.x match);
+    # ls-remote fixture has 2.0.0, 2.1.0, 2.1.1 — Strategy 3 picks 2.1.1
+    [[ \"\$val\" == '2.1.1' ]] || { echo \"expected 2.1.1 from ls-remote, got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section

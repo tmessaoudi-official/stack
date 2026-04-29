@@ -16,6 +16,8 @@ source "$(dirname "${BASH_SOURCE[0]}")/core/parse.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/core/cache.sh"
 # shellcheck source=./core/decide.sh
 source "$(dirname "${BASH_SOURCE[0]}")/core/decide.sh"
+# shellcheck source=./fetchers/github.sh
+source "$(dirname "${BASH_SOURCE[0]}")/fetchers/github.sh"
 # shellcheck source=./fetchers/codeberg.sh
 source "$(dirname "${BASH_SOURCE[0]}")/fetchers/codeberg.sh"
 # shellcheck source=./fetchers/dockerhub.sh
@@ -61,20 +63,20 @@ _gs_eu2_run_check() {
     case "${_type}" in
       codeberg)  _gs_eu2_fetch_codeberg  "${_i}" ;;
       dockerhub) _gs_eu2_fetch_dockerhub "${_i}" ;;
+      github)    _gs_eu2_fetch_github    "${_i}" ;;
       quay)      _gs_eu2_fetch_quay      "${_i}" ;;
       npm)       _gs_eu2_fetch_npm       "${_i}" ;;
       pypi)      _gs_eu2_fetch_pypi      "${_i}" ;;
       rubygems)  _gs_eu2_fetch_rubygems  "${_i}" ;;
-      # TODO(Phase 3c+): implement remaining fetchers — entry counts from .env as of 2026-04-26:
-      #   pecl-git   (100)  github  (73)
-      #   sdkman      (19)  url      (8)
-      #   sdkmanager   (5)
+      # TODO(Phase 3d+): implement remaining fetchers — entry counts from .env as of 2026-04-26:
+      #   pecl-git (100)  sdkman (19)  url (8)  sdkmanager (5)
       # Phase 3a implemented: codeberg (1), quay (1) — see fetchers/codeberg.sh + fetchers/quay.sh
       # Phase 3b implemented: npm (55), pypi (24), rubygems (4) — see fetchers/{npm,pypi,rubygems}.sh
+      # Phase 3c implemented: github (73) — see fetchers/github.sh
       # Each remaining type needs a fetchers/<type>.sh + a case arm here.
       *)
         _gs_eu2_record_set "${_i}" decision      "SKIP"
-        _gs_eu2_record_set "${_i}" error_message "fetcher '${_type}' not yet implemented (Phase 3a added codeberg+quay; see Phase 3b TODO above)"
+        _gs_eu2_record_set "${_i}" error_message "fetcher '${_type}' not yet implemented (Phase 3c added github; see Phase 3d TODO above)"
         ;;
     esac
 
@@ -201,7 +203,8 @@ _gs_eu2_main() {
         printf 'Apply preview (--dry-run):\n'
         _gs_eu2_apply_updates "${_env_file}" "true"
       else
-        local _backup="${_env_file}.bak.$(date +%s)"
+        local _backup
+        _backup="${_env_file}.bak.$(date +%s)"
         cp -a "${_env_file}" "${_backup}"
         printf 'Backup: %s\n' "${_backup}" >&2
         _gs_eu2_apply_updates "${_env_file}" "false"

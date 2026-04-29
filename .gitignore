@@ -14,7 +14,6 @@
 /.idea
 /.vscode
 /.remember
-/CLAUDE.md
 
 /.env.local*
 /.env.*local*
@@ -61,6 +60,7 @@ local.01postgres15, local.03flutter3-35-4, local.03node10, local.05stable varian
 /docker/config/dist/conf/*.local/*
 /docker/config/dist/conf/**/*.local.*
 
+.claude/worktrees
 !/var/.gitkeep
 /var
 !/projects/.claude/

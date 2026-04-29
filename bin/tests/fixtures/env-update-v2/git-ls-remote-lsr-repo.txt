@@ -1,0 +1,8 @@
+a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2	refs/tags/2.0.0
+b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3	refs/tags/2.0.0^{}
+c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4	refs/tags/2.1.0
+d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5	refs/tags/2.1.0^{}
+e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6	refs/tags/2.1.1
+f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1	refs/tags/2.1.1^{}
+1a2b3c4d5e6f1a2b3c4d5e6f1a2b3c4d5e6f1a2b	refs/tags/1.9.0
+2b3c4d5e6f1a2b3c4d5e6f1a2b3c4d5e6f1a2b3c	refs/tags/1.9.0^{}
