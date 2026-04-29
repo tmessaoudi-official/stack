@@ -1,0 +1,8 @@
+<!DOCTYPE html>
+<html><head><title>kubic containers unstable xUbuntu 24.04</title></head>
+<body>
+<h1>unstable/xUbuntu_24.04</h1>
+<p>This repository contains Podman unstable packages for Ubuntu 24.04 (Noble).</p>
+<a href="Packages">Packages</a>
+<a href="Release">Release</a>
+</body></html>

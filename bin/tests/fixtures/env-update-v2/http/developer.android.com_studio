@@ -1,0 +1,10 @@
+<!DOCTYPE html>
+<html>
+<head><title>Android Studio</title></head>
+<body>
+<p>Download Android SDK Command Line Tools</p>
+<a href="https://dl.google.com/android/repository/commandlinetools-linux-14820900_latest.zip">commandlinetools-linux-14820900_latest.zip</a>
+<p>Also available: commandlinetools-linux-14742923_latest.zip (previous)</p>
+<p>commandlinetools-linux-11076708_latest.zip (older)</p>
+</body>
+</html>

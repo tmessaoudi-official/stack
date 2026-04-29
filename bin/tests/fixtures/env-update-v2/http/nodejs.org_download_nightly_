@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html>
+<head><title>Node.js nightly builds</title></head>
+<body>
+<h1>Node.js nightly builds</h1>
+<a href="v26.0.0-nightly20260314abc1234ef/">v26.0.0-nightly20260314abc1234ef/</a>
+<a href="v26.0.0-nightly20260313def5678ab/">v26.0.0-nightly20260313def5678ab/</a>
+<a href="v25.0.0-nightly20260101aaa0000bb/">v25.0.0-nightly20260101aaa0000bb/</a>
+<a href="v24.0.0-nightly20251201bbb1111cc/">v24.0.0-nightly20251201bbb1111cc/</a>
+<a href="latest/">latest/</a>
+<a href="../">../</a>
+</body>
+</html>

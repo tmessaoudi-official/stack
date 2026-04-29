@@ -1,0 +1,8 @@
+<!DOCTYPE html>
+<html>
+<head><title>Zephir Language</title></head>
+<body>
+<p>Zephir is a compiled language for PHP extensions.</p>
+<p>Current version: 0.18.0. No structured version API available.</p>
+</body>
+</html>

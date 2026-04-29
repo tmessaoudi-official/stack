@@ -2682,6 +2682,235 @@ t "t36d: newer date-sha → AUTO (classify_decision integration)" bash -c "
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Section 37 — url fetcher (Phase 3f)
+# ═══════════════════════════════════════════════════════════════════════════
+section "37 — url fetcher"
+
+_URL_LIBS="
+source '/stack/bin/lib/env-update-v2/config/defaults.sh'
+source '/stack/bin/lib/env-update-v2/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update-v2/core/records.sh'
+source '/stack/bin/lib/env-update-v2/core/semver.sh'
+source '/stack/bin/lib/env-update-v2/core/channel.sh'
+source '/stack/bin/lib/env-update-v2/core/tag_flags.sh'
+source '/stack/bin/lib/env-update-v2/core/cache.sh'
+source '/stack/bin/lib/env-update-v2/core/ubuntu.sh'
+source '/stack/bin/lib/env-update-v2/http/curl.sh'
+source '/stack/bin/lib/env-update-v2/fetchers/github.sh'
+source '/stack/bin/lib/env-update-v2/fetchers/url.sh'
+export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+export _GS_EU2_CACHE_DIR=\"\${TMP_DIR}/url_cache\"
+"
+
+# ── ubuntu.sh helpers ─────────────────────────────────────────────────────
+
+t "t37a: _gs_eu2_ubuntu_codename_list — returns ordered list oldest→newest" bash -c "
+    ${_URL_LIBS}
+    list=\$(_gs_eu2_ubuntu_codename_list)
+    first=\$(printf '%s\n' \"\$list\" | head -1)
+    last=\$(printf '%s\n' \"\$list\" | tail -1)
+    [[ \"\$first\" == 'xenial' ]] || { echo \"expected first=xenial, got: '\$first'\"; echo FAIL; exit 0; }
+    [[ \"\$last\" == 'resolute' ]] || { echo \"expected last=resolute, got: '\$last'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t37b: _gs_eu2_ubuntu_codename_to_version — noble → 24.04" bash -c "
+    ${_URL_LIBS}
+    ver=\$(_gs_eu2_ubuntu_codename_to_version 'noble')
+    [[ \"\$ver\" == '24.04' ]] || { echo \"expected 24.04, got: '\$ver'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t37c: _gs_eu2_ubuntu_codename_to_version — jammy → 22.04" bash -c "
+    ${_URL_LIBS}
+    ver=\$(_gs_eu2_ubuntu_codename_to_version 'jammy')
+    [[ \"\$ver\" == '22.04' ]] || { echo \"expected 22.04, got: '\$ver'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t37d: _gs_eu2_ubuntu_version_to_codename — 24.04 → noble" bash -c "
+    ${_URL_LIBS}
+    cn=\$(_gs_eu2_ubuntu_version_to_codename '24.04')
+    [[ \"\$cn\" == 'noble' ]] || { echo \"expected noble, got: '\$cn'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ── Tier 1 (fetch-extract) ────────────────────────────────────────────────
+
+t "t37e: fetch-extract — perl regex extracts highest match from body (Android SDK)" bash -c "
+    ${_URL_LIBS}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type          'url'
+    _gs_eu2_record_set \$idx identifier    'https://developer.android.com/studio'
+    _gs_eu2_record_set \$idx fetch_extract 'commandlinetools-linux-([0-9]+)_latest\\.zip'
+    _gs_eu2_record_set \$idx current_version '14742923'
+    _gs_eu2_record_set \$idx env_var       'GLOBAL_STACK_ANDROID_SDK_URL'
+    _gs_eu2_fetch_url \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$val\" == '14820900' ]] || { echo \"expected 14820900, got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t37f: fetch-extract — extracts version from directory listing (automake)" bash -c "
+    ${_URL_LIBS}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type          'url'
+    _gs_eu2_record_set \$idx identifier    'https://mirror.ibcp.fr/pub/gnu/automake/'
+    _gs_eu2_record_set \$idx fetch_extract 'automake-([0-9\\.]+)\\.tar\\.gz'
+    _gs_eu2_record_set \$idx current_version '1.18.1'
+    _gs_eu2_record_set \$idx env_var       'GLOBAL_STACK_NGINX_AUTOMAKE_VERSION'
+    _gs_eu2_fetch_url \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$val\" == '1.18.1' ]] || { echo \"expected 1.18.1, got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ── Tier 2 (fetch-json) ───────────────────────────────────────────────────
+
+t "t37g: fetch-json — jq path extracts version from JSON body" bash -c "
+    ${_URL_LIBS}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type          'url'
+    _gs_eu2_record_set \$idx identifier    'https://api.test-fetch-json.example.com/version'
+    _gs_eu2_record_set \$idx fetch_json    '.version'
+    _gs_eu2_record_set \$idx current_version '3.4.0'
+    _gs_eu2_record_set \$idx env_var       'GLOBAL_STACK_TEST_JSON_VERSION'
+    _gs_eu2_fetch_url \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$val\" == '3.5.2' ]] || { echo \"expected 3.5.2, got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ── Tier 3 (GitHub redirect via urls:) ───────────────────────────────────
+
+t "t37h: GitHub redirect — uses urls: field to fetch via GitHub API (zephir)" bash -c "
+    ${_URL_LIBS}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type          'url'
+    _gs_eu2_record_set \$idx identifier    'https://zephir-lang.com/en'
+    _gs_eu2_record_set \$idx urls          'https://github.com/zephir-lang/zephir/releases'
+    _gs_eu2_record_set \$idx current_version '0.19.0'
+    _gs_eu2_record_set \$idx env_var       'GLOBAL_STACK_ZEPHIR_LANG_VERSION'
+    _gs_eu2_fetch_url \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$val\" == '0.19.0' ]] || { echo \"expected 0.19.0, got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ── Tier 4 (directory listing) ────────────────────────────────────────────
+
+t "t37i: dir-listing — extracts versioned hrefs from SVN tags index (apr-util)" bash -c "
+    ${_URL_LIBS}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type           'url'
+    _gs_eu2_record_set \$idx identifier     'https://svn.apache.org/repos/asf/apr/apr-util/tags/'
+    _gs_eu2_record_set \$idx version_prefix 'tags/'
+    _gs_eu2_record_set \$idx current_version 'tags/1.6.3'
+    _gs_eu2_record_set \$idx env_var        'GLOBAL_STACK_HTTPD_APR_UTIL_VERSION'
+    _gs_eu2_fetch_url \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$val\" == 'tags/1.6.3' ]] || { echo \"expected tags/1.6.3, got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t37j: dir-listing — extracts version from Apache httpd SVN tags" bash -c "
+    ${_URL_LIBS}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type           'url'
+    _gs_eu2_record_set \$idx identifier     'https://svn.apache.org/repos/asf/httpd/httpd/tags/'
+    _gs_eu2_record_set \$idx version_prefix 'tags/'
+    _gs_eu2_record_set \$idx current_version 'tags/2.4.66'
+    _gs_eu2_record_set \$idx env_var        'GLOBAL_STACK_HTTPD_VERSION'
+    _gs_eu2_fetch_url \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$val\" == 'tags/2.4.66' ]] || { echo \"expected tags/2.4.66, got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t37k: dir-listing channel:nightly — extracts latest nightly entry" bash -c "
+    ${_URL_LIBS}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type           'url'
+    _gs_eu2_record_set \$idx identifier     'https://nodejs.org/download/nightly/'
+    _gs_eu2_record_set \$idx channel        'nightly'
+    _gs_eu2_record_set \$idx current_version 'v26.0.0-nightly20260314abc1234ef'
+    _gs_eu2_record_set \$idx env_var        'GLOBAL_STACK_NODEEDGE_VERSION'
+    _gs_eu2_fetch_url \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$val\" == 'v26.0.0-nightly20260314abc1234ef' ]] || { echo \"expected v26.0.0-nightly20260314abc1234ef, got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ── Tier 5 (url-probe) ────────────────────────────────────────────────────
+
+t "t37l: url-probe — finds first matching codename path (kubic unstable noble)" bash -c "
+    ${_URL_LIBS}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type           'url'
+    _gs_eu2_record_set \$idx identifier     'https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/'
+    _gs_eu2_record_set \$idx url_probe      'stable/xUbuntu_{codename-version},unstable/xUbuntu_{codename-version}'
+    _gs_eu2_record_set \$idx current_version 'unstable/xUbuntu_24.04'
+    _gs_eu2_record_set \$idx env_var        'GLOBAL_STACK_PODMAN_CHANNEL'
+    _gs_eu2_fetch_url \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    # stable hits for 24.04, so proposed should be stable/xUbuntu_24.04
+    [[ \"\$val\" == 'stable/xUbuntu_24.04' ]] || { echo \"expected stable/xUbuntu_24.04, got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ── Error handling ────────────────────────────────────────────────────────
+
+t "t37m: HTTP error — error_message set, no crash" bash -c "
+    ${_URL_LIBS}
+    unset _GS_EU2_HTTP_FIXTURE_DIR
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type          'url'
+    _gs_eu2_record_set \$idx identifier    'https://this-url-does-not-exist-at-all.invalid/noop'
+    _gs_eu2_record_set \$idx current_version '1.0.0'
+    _gs_eu2_record_set \$idx env_var       'GLOBAL_STACK_TEST_VERSION'
+    _gs_eu2_fetch_url \$idx 2>/dev/null || true
+    err=\$(_gs_eu2_record_get \$idx error_message)
+    [[ -n \"\$err\" ]] || { echo 'error_message is empty after HTTP failure'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t37n: no strategy matches — error_message set with 'no extraction strategy matched'" bash -c "
+    ${_URL_LIBS}
+    # Use a fresh cache dir so t37h's cached zephir result doesn't leak here
+    export _GS_EU2_CACHE_DIR=\"\${TMP_DIR}/url_cache_n\"
+    # zephir-lang.com/en: no fetch_extract, no fetch_json, no urls, no url_probe,
+    # no channel:nightly, not an svn.apache.org / /pub/gnu/ URL → no dir-listing
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type          'url'
+    _gs_eu2_record_set \$idx identifier    'https://zephir-lang.com/en'
+    _gs_eu2_record_set \$idx current_version '0.19.0'
+    _gs_eu2_record_set \$idx env_var       'GLOBAL_STACK_ZEPHIR_LANG_VERSION'
+    _gs_eu2_fetch_url \$idx 2>/dev/null || true
+    err=\$(_gs_eu2_record_get \$idx error_message)
+    [[ -n \"\$err\" ]] || { echo 'error_message is empty when no strategy matches'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 38 — url fetcher integration (end-to-end via --check)
+# ═══════════════════════════════════════════════════════════════════════════
+section "38 — url fetcher integration"
+
+t "t38a: url type parsed and fetched — fetch-extract entry produces proposed_version" bash -c "
+    f=\${TMP_DIR}/t38a.env
+    printf '# @todo env-update (fetch-extract:commandlinetools-linux-([0-9]+)_latest\\.zip) url:https://developer.android.com/studio 14742923\nGLOBAL_STACK_ANDROID_SDK_URL=14742923\n' > \"\$f\"
+    out=\$(export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'; export _GS_EU2_CACHE_DIR=\"\${TMP_DIR}/t38a_cache\"; bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null)
+    echo \"\$out\" | grep -qE 'AUTO|SKIP|HOLD' || { echo \"no decision output; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t38b: url type not-implemented SKIP count is 0 — all url entries dispatch" bash -c "
+    out=\$(export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'; export _GS_EU2_CACHE_DIR=\"\${TMP_DIR}/t38b_cache\"; bash '${ENV_UPDATE_V2}' --check --dry-run --env-file='/stack/.env' --filter='ANDROID_SDK_URL|HTTPD_APR_UTIL|HTTPD_APR_VERSION|HTTPD_VERSION|PODMAN_CHANNEL|NGINX_AUTOMAKE|ZEPHIR|NODEEDGE' 2>/dev/null || true)
+    echo \"\$out\" | grep -qE 'not yet implemented' && { echo \"some url entries still hit not-implemented SKIP\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section
