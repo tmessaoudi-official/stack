@@ -39,7 +39,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/../http/curl.sh"
 # _gs_eu2_github_api_get URL [token]
 # Authenticated GET helper (falls through to unauthenticated when token is empty).
 _gs_eu2_github_api_get() {
-  local _url="${1}" _tok="${2:-${GITHUB_TOKEN:-}}"
+  local _url="${1}" _tok="${2:-${GITHUB_TOKEN:-${GLOBAL_STACK_GITHUB_TOKEN:-}}}"
   if [[ -n "${_tok}" ]]; then
     _gs_eu2_http_get_auth "${_url}" "${_tok}"
   else
@@ -57,7 +57,7 @@ _gs_eu2_github_ls_remote() {
     cat "${_GS_EU2_GIT_LS_REMOTE_FIXTURE}"
     return
   fi
-  local _tok="${GITHUB_TOKEN:-}"
+  local _tok="${GITHUB_TOKEN:-${GLOBAL_STACK_GITHUB_TOKEN:-}}"
   local _url="https://github.com/${_repo}.git"
   if [[ -n "${_tok}" ]]; then
     git ls-remote "https://x-access-token:${_tok}@github.com/${_repo}.git" 'refs/tags/*' 2>/dev/null || true
@@ -134,7 +134,7 @@ _gs_eu2_fetch_github() {
   _major_hint="$(_gs_eu2_record_get "${_idx}" major_hint)"
   _no_cache="${_GS_EU2_CFG[no_cache]:-false}"
 
-  local _tok="${GITHUB_TOKEN:-}"
+  local _tok="${GITHUB_TOKEN:-${GLOBAL_STACK_GITHUB_TOKEN:-}}"
 
   # Build cache key
   local _cache_key="github:${_identifier}:${_major_hint}:${_channel}"
@@ -156,7 +156,7 @@ _gs_eu2_fetch_github() {
   else
     # Releases API failed entirely (HTTP error, auth, etc.)
     local _hint=""
-    [[ -z "${_tok}" ]] && _hint=" (set GITHUB_TOKEN to avoid rate limits)"
+    [[ -z "${_tok}" ]] && _hint=" (set GITHUB_TOKEN or GLOBAL_STACK_GITHUB_TOKEN to avoid rate limits)"
     _gs_eu2_record_set "${_idx}" decision      "ERROR"
     _gs_eu2_record_set "${_idx}" error_message "fetch failed for github:${_identifier}${_hint}"
     return 0
@@ -175,7 +175,7 @@ _gs_eu2_fetch_github() {
 
   if [[ -z "$(printf '%s\n' "${_raw_tags}" | grep -v '^$' || true)" ]]; then
     local _hint=""
-    [[ -z "${_tok}" ]] && _hint=" (set GITHUB_TOKEN to avoid rate limits)"
+    [[ -z "${_tok}" ]] && _hint=" (set GITHUB_TOKEN or GLOBAL_STACK_GITHUB_TOKEN to avoid rate limits)"
     _gs_eu2_record_set "${_idx}" decision      "ERROR"
     _gs_eu2_record_set "${_idx}" error_message "no tags or releases found for github:${_identifier}${_hint}"
     return 0

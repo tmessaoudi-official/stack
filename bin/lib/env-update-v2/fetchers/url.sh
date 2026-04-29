@@ -127,7 +127,7 @@ _gs_eu2_fetch_url() {
   # to avoid double-writing the record.
   # ────────────────────────────────────────────────────────────────────────
   if [[ -n "${_urls}" ]]; then
-    local _tok="${GITHUB_TOKEN:-}"
+    local _tok="${GITHUB_TOKEN:-${GLOBAL_STACK_GITHUB_TOKEN:-}}"
     local _ref_url
     for _ref_url in ${_urls}; do
       if [[ "${_ref_url}" =~ github\.com/([^/]+)/([^/[:space:]]+) ]]; then

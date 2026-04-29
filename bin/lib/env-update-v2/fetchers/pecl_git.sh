@@ -109,7 +109,7 @@ _gs_eu2_fetch_pecl_git() {
 
   if [[ -z "${_sha}" ]]; then
     local _hint=""
-    [[ -z "${GITHUB_TOKEN:-}" ]] && _hint=" (set GITHUB_TOKEN to avoid rate limits)"
+    [[ -z "${GITHUB_TOKEN:-${GLOBAL_STACK_GITHUB_TOKEN:-}}" ]] && _hint=" (set GITHUB_TOKEN or GLOBAL_STACK_GITHUB_TOKEN to avoid rate limits)"
     _gs_eu2_record_set "${_idx}" decision      "ERROR"
     _gs_eu2_record_set "${_idx}" error_message "pecl-git: GitHub SHA fetch failed for '${_owner_repo}'${_hint}"
     return 0
