@@ -1,0 +1,13 @@
+{
+  "info": {
+    "name": "flask",
+    "version": "3.1.1"
+  },
+  "releases": {
+    "3.0.0": [{"yanked": false}],
+    "3.1.0": [{"yanked": false}],
+    "3.1.1": [{"yanked": false}],
+    "3.1.2rc1": [{"yanked": false}],
+    "3.1.99.yanked": [{"yanked": true}]
+  }
+}

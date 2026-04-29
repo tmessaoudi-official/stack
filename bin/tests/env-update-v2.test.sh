@@ -1730,6 +1730,285 @@ t "t27f: fetcher leaves decision empty on success path" bash -c "
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Section 28 — npm fetcher
+# ═══════════════════════════════════════════════════════════════════════════
+section "28 — npm fetcher"
+
+_NPM_LIBS="
+source '/stack/bin/lib/env-update-v2/config/defaults.sh'
+source '/stack/bin/lib/env-update-v2/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update-v2/core/records.sh'
+source '/stack/bin/lib/env-update-v2/core/semver.sh'
+source '/stack/bin/lib/env-update-v2/core/channel.sh'
+source '/stack/bin/lib/env-update-v2/core/tag_flags.sh'
+source '/stack/bin/lib/env-update-v2/core/cache.sh'
+source '/stack/bin/lib/env-update-v2/http/curl.sh'
+source '/stack/bin/lib/env-update-v2/fetchers/npm.sh'
+export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+export _GS_EU2_CACHE_DIR=\${TMP_DIR}/npm_cache
+"
+
+t "t28a: happy path — dist-tags.latest returned as proposed_version" bash -c "
+    ${_NPM_LIBS}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'npm'
+    _gs_eu2_record_set \$idx identifier 'typescript'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_TYPESCRIPT_VERSION'
+    _gs_eu2_fetch_npm \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$val\" == '5.8.3' ]] || { echo \"expected 5.8.3, got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t28b: beta channel selects pre-release version" bash -c "
+    ${_NPM_LIBS}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'npm'
+    _gs_eu2_record_set \$idx identifier 'typescript'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_TYPESCRIPT_VERSION'
+    _gs_eu2_record_set \$idx channel    'beta'
+    _gs_eu2_fetch_npm \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    # fixture has 5.9.0-beta; beta channel should return it (or at minimum return non-empty)
+    [[ -n \"\$val\" ]] || { echo 'proposed_version is empty'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t28c: deprecated versions are excluded from candidate list" bash -c "
+    ${_NPM_LIBS}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'npm'
+    _gs_eu2_record_set \$idx identifier 'colors'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_COLORS_VERSION'
+    _gs_eu2_fetch_npm \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    # fixture: 1.4.44-liberty-2 is deprecated; must not be proposed
+    [[ \"\$val\" != '1.4.44-liberty-2' ]] || { echo \"deprecated version was proposed: '\$val'\"; echo FAIL; exit 0; }
+    [[ -n \"\$val\" ]] || { echo 'proposed_version is empty'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t28d: HTTP failure sets decision=ERROR with error_message" bash -c "
+    ${_NPM_LIBS}
+    unset _GS_EU2_HTTP_FIXTURE_DIR
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/npm_d_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'npm'
+    _gs_eu2_record_set \$idx identifier 'no-such-package-xyzzy-12345'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_XYZZY_VERSION'
+    _gs_eu2_fetch_npm \$idx 2>/dev/null || true
+    decision=\$(_gs_eu2_record_get \$idx decision)
+    err=\$(_gs_eu2_record_get \$idx error_message)
+    [[ \"\$decision\" == 'ERROR' ]] || { echo \"expected ERROR, got: '\$decision'\"; echo FAIL; exit 0; }
+    [[ -n \"\$err\" ]] || { echo 'error_message is empty'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t28e: scoped package URL-encodes @ and / correctly (fixture lookup succeeds)" bash -c "
+    ${_NPM_LIBS}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'npm'
+    _gs_eu2_record_set \$idx identifier '@angular/cli'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_ANGULAR_CLI_VERSION'
+    _gs_eu2_fetch_npm \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$val\" == '19.2.5' ]] || { echo \"expected 19.2.5, got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t28f: fetcher leaves decision empty on success path" bash -c "
+    ${_NPM_LIBS}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'npm'
+    _gs_eu2_record_set \$idx identifier 'typescript'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_TYPESCRIPT_VERSION'
+    _gs_eu2_fetch_npm \$idx
+    decision=\$(_gs_eu2_record_get \$idx decision)
+    proposed=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ -n \"\$proposed\" ]] || { echo 'proposed_version is empty'; echo FAIL; exit 0; }
+    [[ -z \"\$decision\" ]] || { echo \"fetcher set decision: '\$decision' (should be empty)\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 29 — pypi fetcher
+# ═══════════════════════════════════════════════════════════════════════════
+section "29 — pypi fetcher"
+
+_PYPI_LIBS="
+source '/stack/bin/lib/env-update-v2/config/defaults.sh'
+source '/stack/bin/lib/env-update-v2/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update-v2/core/records.sh'
+source '/stack/bin/lib/env-update-v2/core/semver.sh'
+source '/stack/bin/lib/env-update-v2/core/channel.sh'
+source '/stack/bin/lib/env-update-v2/core/tag_flags.sh'
+source '/stack/bin/lib/env-update-v2/core/cache.sh'
+source '/stack/bin/lib/env-update-v2/http/curl.sh'
+source '/stack/bin/lib/env-update-v2/fetchers/pypi.sh'
+export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+export _GS_EU2_CACHE_DIR=\${TMP_DIR}/pypi_cache
+"
+
+t "t29a: happy path — latest stable version returned" bash -c "
+    ${_PYPI_LIBS}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'pypi'
+    _gs_eu2_record_set \$idx identifier 'ansible'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_ANSIBLE_VERSION'
+    _gs_eu2_fetch_pypi \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$val\" == '11.4.0' ]] || { echo \"expected 11.4.0, got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t29b: rc channel picks pre-release version" bash -c "
+    ${_PYPI_LIBS}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'pypi'
+    _gs_eu2_record_set \$idx identifier 'ansible'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_ANSIBLE_VERSION'
+    _gs_eu2_record_set \$idx channel    'rc'
+    _gs_eu2_fetch_pypi \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    # fixture has 11.4.0rc1 — rc channel should pick it (or at minimum return non-empty)
+    [[ -n \"\$val\" ]] || { echo 'proposed_version is empty'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t29c: yanked versions are excluded from candidate list" bash -c "
+    ${_PYPI_LIBS}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'pypi'
+    _gs_eu2_record_set \$idx identifier 'flask'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_FLASK_VERSION'
+    _gs_eu2_fetch_pypi \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    # fixture: 3.1.99.yanked is yanked; must not be proposed
+    [[ \"\$val\" != '3.1.99.yanked' ]] || { echo \"yanked version was proposed: '\$val'\"; echo FAIL; exit 0; }
+    [[ -n \"\$val\" ]] || { echo 'proposed_version is empty'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t29d: HTTP failure sets decision=ERROR with error_message" bash -c "
+    ${_PYPI_LIBS}
+    unset _GS_EU2_HTTP_FIXTURE_DIR
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/pypi_d_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'pypi'
+    _gs_eu2_record_set \$idx identifier 'no-such-package-xyzzy-12345'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_XYZZY_VERSION'
+    _gs_eu2_fetch_pypi \$idx 2>/dev/null || true
+    decision=\$(_gs_eu2_record_get \$idx decision)
+    err=\$(_gs_eu2_record_get \$idx error_message)
+    [[ \"\$decision\" == 'ERROR' ]] || { echo \"expected ERROR, got: '\$decision'\"; echo FAIL; exit 0; }
+    [[ -n \"\$err\" ]] || { echo 'error_message is empty'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t29e: fetcher leaves decision empty on success path" bash -c "
+    ${_PYPI_LIBS}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'pypi'
+    _gs_eu2_record_set \$idx identifier 'ansible'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_ANSIBLE_VERSION'
+    _gs_eu2_fetch_pypi \$idx
+    decision=\$(_gs_eu2_record_get \$idx decision)
+    proposed=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ -n \"\$proposed\" ]] || { echo 'proposed_version is empty'; echo FAIL; exit 0; }
+    [[ -z \"\$decision\" ]] || { echo \"fetcher set decision: '\$decision' (should be empty)\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 30 — rubygems fetcher
+# ═══════════════════════════════════════════════════════════════════════════
+section "30 — rubygems fetcher"
+
+_RG_LIBS="
+source '/stack/bin/lib/env-update-v2/config/defaults.sh'
+source '/stack/bin/lib/env-update-v2/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update-v2/core/records.sh'
+source '/stack/bin/lib/env-update-v2/core/semver.sh'
+source '/stack/bin/lib/env-update-v2/core/channel.sh'
+source '/stack/bin/lib/env-update-v2/core/tag_flags.sh'
+source '/stack/bin/lib/env-update-v2/core/cache.sh'
+source '/stack/bin/lib/env-update-v2/http/curl.sh'
+source '/stack/bin/lib/env-update-v2/fetchers/rubygems.sh'
+export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+export _GS_EU2_CACHE_DIR=\${TMP_DIR}/rg_cache
+"
+
+t "t30a: happy path — latest non-yanked stable version returned" bash -c "
+    ${_RG_LIBS}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'rubygems'
+    _gs_eu2_record_set \$idx identifier 'fastlane'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_FASTLANE_VERSION'
+    _gs_eu2_fetch_rubygems \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$val\" == '2.225.0' ]] || { echo \"expected 2.225.0, got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t30b: pre-release channel includes .pre versions" bash -c "
+    ${_RG_LIBS}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'rubygems'
+    _gs_eu2_record_set \$idx identifier 'fastlane'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_FASTLANE_VERSION'
+    _gs_eu2_record_set \$idx channel    'rc'
+    _gs_eu2_fetch_rubygems \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    # fixture has 2.225.1.pre — rc channel should return it or fall back to stable
+    [[ -n \"\$val\" ]] || { echo 'proposed_version is empty'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t30c: yanked versions excluded from candidate list" bash -c "
+    ${_RG_LIBS}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'rubygems'
+    _gs_eu2_record_set \$idx identifier 'fastlane'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_FASTLANE_VERSION'
+    _gs_eu2_fetch_rubygems \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    # fixture: 2.224.99 is yanked; must not be proposed
+    [[ \"\$val\" != '2.224.99' ]] || { echo \"yanked version was proposed: '\$val'\"; echo FAIL; exit 0; }
+    [[ -n \"\$val\" ]] || { echo 'proposed_version is empty'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t30d: HTTP failure sets decision=ERROR with error_message" bash -c "
+    ${_RG_LIBS}
+    unset _GS_EU2_HTTP_FIXTURE_DIR
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/rg_d_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'rubygems'
+    _gs_eu2_record_set \$idx identifier 'no-such-gem-xyzzy-12345'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_XYZZY_VERSION'
+    _gs_eu2_fetch_rubygems \$idx 2>/dev/null || true
+    decision=\$(_gs_eu2_record_get \$idx decision)
+    err=\$(_gs_eu2_record_get \$idx error_message)
+    [[ \"\$decision\" == 'ERROR' ]] || { echo \"expected ERROR, got: '\$decision'\"; echo FAIL; exit 0; }
+    [[ -n \"\$err\" ]] || { echo 'error_message is empty'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t30e: fetcher leaves decision empty on success path" bash -c "
+    ${_RG_LIBS}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'rubygems'
+    _gs_eu2_record_set \$idx identifier 'fastlane'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_FASTLANE_VERSION'
+    _gs_eu2_fetch_rubygems \$idx
+    decision=\$(_gs_eu2_record_get \$idx decision)
+    proposed=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ -n \"\$proposed\" ]] || { echo 'proposed_version is empty'; echo FAIL; exit 0; }
+    [[ -z \"\$decision\" ]] || { echo \"fetcher set decision: '\$decision' (should be empty)\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section

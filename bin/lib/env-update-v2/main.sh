@@ -22,6 +22,12 @@ source "$(dirname "${BASH_SOURCE[0]}")/fetchers/codeberg.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/fetchers/dockerhub.sh"
 # shellcheck source=./fetchers/quay.sh
 source "$(dirname "${BASH_SOURCE[0]}")/fetchers/quay.sh"
+# shellcheck source=./fetchers/npm.sh
+source "$(dirname "${BASH_SOURCE[0]}")/fetchers/npm.sh"
+# shellcheck source=./fetchers/pypi.sh
+source "$(dirname "${BASH_SOURCE[0]}")/fetchers/pypi.sh"
+# shellcheck source=./fetchers/rubygems.sh
+source "$(dirname "${BASH_SOURCE[0]}")/fetchers/rubygems.sh"
 # shellcheck source=./reporting/help.sh
 source "$(dirname "${BASH_SOURCE[0]}")/reporting/help.sh"
 # shellcheck source=./reporting/dump.sh
@@ -56,11 +62,15 @@ _gs_eu2_run_check() {
       codeberg)  _gs_eu2_fetch_codeberg  "${_i}" ;;
       dockerhub) _gs_eu2_fetch_dockerhub "${_i}" ;;
       quay)      _gs_eu2_fetch_quay      "${_i}" ;;
-      # TODO(Phase 3b+): implement remaining fetchers — entry counts from .env as of 2026-04-26:
-      #   pecl-git   (100)  github  (73)  npm      (55)
-      #   pypi        (24)  sdkman  (19)  url       (8)
-      #   sdkmanager   (5)  rubygems (4)
+      npm)       _gs_eu2_fetch_npm       "${_i}" ;;
+      pypi)      _gs_eu2_fetch_pypi      "${_i}" ;;
+      rubygems)  _gs_eu2_fetch_rubygems  "${_i}" ;;
+      # TODO(Phase 3c+): implement remaining fetchers — entry counts from .env as of 2026-04-26:
+      #   pecl-git   (100)  github  (73)
+      #   sdkman      (19)  url      (8)
+      #   sdkmanager   (5)
       # Phase 3a implemented: codeberg (1), quay (1) — see fetchers/codeberg.sh + fetchers/quay.sh
+      # Phase 3b implemented: npm (55), pypi (24), rubygems (4) — see fetchers/{npm,pypi,rubygems}.sh
       # Each remaining type needs a fetchers/<type>.sh + a case arm here.
       *)
         _gs_eu2_record_set "${_i}" decision      "SKIP"
