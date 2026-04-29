@@ -81,7 +81,7 @@ _gs_eu2_fetch_dockerhub() {
     local _cached
     if _cached="$(_gs_eu2_cache_read "${_cache_key}")" && [[ -n "${_cached}" ]]; then
       _gs_eu2_record_set "${_idx}" proposed_version "${_cached}"
-      _gs_eu2_record_set "${_idx}" decision         "AUTO"
+      # decision intentionally not set here — decide.sh (via main.sh) owns classification
       return 0
     fi
   fi
@@ -149,16 +149,8 @@ _gs_eu2_fetch_dockerhub() {
   _vp="$(_gs_eu2_record_get "${_idx}" version_prefix)"
   [[ -n "${_vp}" ]] && _proposed="${_vp}${_proposed}"
 
-  # Write result
+  # Write result — proposed_version only; decision left empty for decide.sh (via main.sh)
   _gs_eu2_record_set "${_idx}" proposed_version "${_proposed}"
-
-  # C3: Classify decision: if major_hint set and proposed has different major → HOLD
-  # Use ([.^-]|$) anchor to prevent "18" matching "180.x".
-  if [[ -n "${_major_hint}" && ! "${_proposed}" =~ ^${_major_hint}([.^-]|$) ]]; then
-    _gs_eu2_record_set "${_idx}" decision "HOLD"
-  else
-    _gs_eu2_record_set "${_idx}" decision "AUTO"
-  fi
 
   # Cache the result
   [[ "${_no_cache}" != "true" ]] && _gs_eu2_cache_write "${_cache_key}" "${_proposed}"

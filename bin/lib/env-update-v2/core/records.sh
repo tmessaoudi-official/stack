@@ -23,7 +23,7 @@ _gs_eu2_record_fields() {
     pecl_ref depends_on urls \
     git_fallback_url git_fallback_sha \
     hint line_number raw_annotation \
-    proposed_version decision error_message
+    proposed_version decision error_message alt_version
 }
 
 # Allocate next record index.

@@ -1361,6 +1361,163 @@ t "t22d: suffix match with oraclelinux passes at end" bash "${_TS_SCRIPT}" '-ora
 t "t22e: suffix mid-tag not matched" bash "${_TS_SCRIPT}" '-oraclelinux9' '9.0-oraclelinux9-beta' 'expect_nomatch'
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Section 23 — alt_version record field (Fix 1)
+# ═══════════════════════════════════════════════════════════════════════════
+section "23 — alt_version record field"
+
+t "t23a: alt_version set and read back via record accessor" bash -c "
+    source '/stack/bin/lib/env-update-v2/core/records.sh'
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx alt_version 'v2.0.0 (latest stable)'
+    val=\$(_gs_eu2_record_get \$idx alt_version)
+    [[ \"\$val\" == 'v2.0.0 (latest stable)' ]] || { echo \"got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t23b: alt_version appears in --dump output" bash -c "
+    f=\${TMP_DIR}/t23b.env
+    printf '# @todo env-update dockerhub:_/postgres 18\nGLOBAL_STACK_PG_VERSION=18.3\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF 'alt_version' || { echo \"alt_version not in dump output\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t23c: alt_version defaults to empty string when not set" bash -c "
+    source '/stack/bin/lib/env-update-v2/core/records.sh'
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    val=\$(_gs_eu2_record_get \$idx alt_version)
+    [[ -z \"\$val\" ]] || { echo \"expected empty, got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 24 — _gs_eu2_http_get_auth (Fix 2)
+# ═══════════════════════════════════════════════════════════════════════════
+section "24 — http_get_auth"
+
+t "t24a: auth function exists and accepts (url, token) signature" bash -c "
+    source '/stack/bin/lib/env-update-v2/http/curl.sh'
+    declare -f _gs_eu2_http_get_auth >/dev/null 2>&1 || { echo 'function not found'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t24b: empty token delegates to plain http_get (fixture path identical)" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    source '/stack/bin/lib/env-update-v2/http/curl.sh'
+    # Same fixture as t14a — empty token must hit same file
+    out=\$(_gs_eu2_http_get_auth 'https://test.example/fixture-test?foo=bar' '' 2>&1)
+    echo \"\$out\" | grep -qF '1.2.3' || { echo \"fixture content missing: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t24c: fixture injection works identically with non-empty token (no auth header sent to fixture)" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    source '/stack/bin/lib/env-update-v2/http/curl.sh'
+    # Fixture path is determined by URL only — token should not affect fixture lookup
+    out=\$(_gs_eu2_http_get_auth 'https://test.example/fixture-test?foo=bar' 'my-secret-token' 2>&1)
+    echo \"\$out\" | grep -qF '1.2.3' || { echo \"fixture content missing with token: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t24d: missing fixture returns non-zero with auth token (same as without token)" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    source '/stack/bin/lib/env-update-v2/http/curl.sh'
+    _gs_eu2_http_get_auth 'https://example.com/no-such-fixture' 'tok' >/dev/null 2>&1 \
+        && { echo 'expected non-zero exit'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 25 — dockerhub HOLD decision comes from decide.sh, not fetcher (Fix 3)
+# ═══════════════════════════════════════════════════════════════════════════
+section "25 — dockerhub HOLD from pipeline not fetcher"
+
+_DH_LIBS25="
+source '/stack/bin/lib/env-update-v2/config/defaults.sh'
+source '/stack/bin/lib/env-update-v2/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update-v2/core/records.sh'
+source '/stack/bin/lib/env-update-v2/core/semver.sh'
+source '/stack/bin/lib/env-update-v2/core/channel.sh'
+source '/stack/bin/lib/env-update-v2/core/tag_flags.sh'
+source '/stack/bin/lib/env-update-v2/core/cache.sh'
+source '/stack/bin/lib/env-update-v2/http/curl.sh'
+source '/stack/bin/lib/env-update-v2/fetchers/dockerhub.sh'
+export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+export _GS_EU2_CACHE_DIR=\${TMP_DIR}/dh25_cache
+"
+
+t "t25a: fetcher leaves decision empty on success path (no AUTO/HOLD set by fetcher)" bash -c "
+    ${_DH_LIBS25}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'dockerhub'
+    _gs_eu2_record_set \$idx identifier '_/postgres'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_POSTGRES18_VERSION'
+    # No major_hint — fetcher success path should NOT set decision
+    _gs_eu2_fetch_dockerhub \$idx
+    decision=\$(_gs_eu2_record_get \$idx decision)
+    proposed=\$(_gs_eu2_record_get \$idx proposed_version)
+    # proposed_version must be set (fetcher did its job)
+    [[ -n \"\$proposed\" ]] || { echo 'proposed_version is empty'; echo FAIL; exit 0; }
+    # decision must be empty — fetcher must NOT set AUTO/HOLD on success path
+    [[ -z \"\$decision\" ]] || { echo \"fetcher set decision: '\$decision' (should be empty)\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t25b: cache hit path also leaves decision empty (not AUTO)" bash -c "
+    ${_DH_LIBS25}
+    # Prime the cache first
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'dockerhub'
+    _gs_eu2_record_set \$idx identifier '_/postgres'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_POSTGRES18_VERSION'
+    _gs_eu2_fetch_dockerhub \$idx
+    proposed_first=\$(_gs_eu2_record_get \$idx proposed_version)
+    # Second call — should hit cache
+    _gs_eu2_record_new; idx2=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx2 type       'dockerhub'
+    _gs_eu2_record_set \$idx2 identifier '_/postgres'
+    _gs_eu2_record_set \$idx2 env_var    'GLOBAL_STACK_POSTGRES18_VERSION_2'
+    _gs_eu2_fetch_dockerhub \$idx2
+    decision2=\$(_gs_eu2_record_get \$idx2 decision)
+    proposed2=\$(_gs_eu2_record_get \$idx2 proposed_version)
+    [[ -n \"\$proposed2\" ]] || { echo 'cache miss — proposed empty'; echo FAIL; exit 0; }
+    [[ -z \"\$decision2\" ]] || { echo \"cache hit set decision: '\$decision2' (should be empty)\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t25c: pipeline (classify_decision) produces HOLD when major constraint would escape pin" bash -c "
+    source '/stack/bin/lib/env-update-v2/core/records.sh'
+    source '/stack/bin/lib/env-update-v2/core/semver.sh'
+    source '/stack/bin/lib/env-update-v2/core/decide.sh'
+    # major_hint=17 but proposed=18.4 → HOLD
+    result=\$(_gs_eu2_classify_decision '17.5' '18.4' '' '' '17')
+    [[ \"\$result\" == 'HOLD' ]] || { echo \"expected HOLD, got: \$result\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t25d: full pipeline HOLD for major-pin escape (end-to-end, no fetcher HOLD involved)" bash -c "
+    source '/stack/bin/lib/env-update-v2/config/defaults.sh'
+    source '/stack/bin/lib/env-update-v2/core/records.sh'
+    source '/stack/bin/lib/env-update-v2/core/semver.sh'
+    source '/stack/bin/lib/env-update-v2/core/decide.sh'
+    # Simulate what main.sh does: fetcher sets proposed only, then classify runs
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx current_version '17.5'
+    _gs_eu2_record_set \$idx proposed_version '18.4'
+    _gs_eu2_record_set \$idx major_hint '17'
+    cur=\$(_gs_eu2_record_get \$idx current_version)
+    prop=\$(_gs_eu2_record_get \$idx proposed_version)
+    override=\$(_gs_eu2_record_get \$idx override)
+    manual=\$(_gs_eu2_record_get \$idx manual)
+    major=\$(_gs_eu2_record_get \$idx major_hint)
+    classified=\$(_gs_eu2_classify_decision \"\$cur\" \"\$prop\" \"\$override\" \"\$manual\" \"\$major\")
+    _gs_eu2_record_set \$idx decision \"\$classified\"
+    decision=\$(_gs_eu2_record_get \$idx decision)
+    [[ \"\$decision\" == 'HOLD' ]] || { echo \"expected HOLD, got: \$decision\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section
