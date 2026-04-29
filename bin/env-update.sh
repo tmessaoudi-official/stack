@@ -1,9 +1,10 @@
 #!/bin/bash
 # =============================================================================
 # DEPRECATED — bin/env-update.sh
-# For dockerhub fetches use bin/env-update-v2.sh; all other fetcher types
-# (github, npm, pecl, pypi, sdkman, url, etc.) still require this script
-# until env-update-v2.sh Phase 3+ is complete (see REMOVAL CONDITION below).
+# For dockerhub fetches use bin/env-update-v2.sh. All other fetcher types
+# (github, npm, pecl, pecl-git, pypi, rubygems, sdkman, sdkmanager, codeberg,
+# quay, url) still require this script until env-update-v2.sh Phase 3+ is
+# complete (see REMOVAL CONDITION below).
 # Propagation of values to Dockerfiles is now handled by bin/env-scan.sh.
 #
 # REMOVAL CONDITION: safe to remove when env-update-v2.sh implements all
