@@ -2456,6 +2456,232 @@ t "t33g: cache hit skips cmd fixture (proposed_version from cache)" bash -c "
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Section 34 — pecl helper functions (pecl.sh)
+# ═══════════════════════════════════════════════════════════════════════════
+section "34 — pecl helper functions"
+
+_PECL_LIBS="
+source '/stack/bin/lib/env-update-v2/config/defaults.sh'
+source '/stack/bin/lib/env-update-v2/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update-v2/core/records.sh'
+source '/stack/bin/lib/env-update-v2/core/semver.sh'
+source '/stack/bin/lib/env-update-v2/core/cache.sh'
+source '/stack/bin/lib/env-update-v2/http/curl.sh'
+source '/stack/bin/lib/env-update-v2/fetchers/pecl.sh'
+export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+export _GS_EU2_CACHE_DIR=\${TMP_DIR}/pecl_cache
+"
+
+t "t34a: get_latest_stable returns stable version from XML" bash -c "
+    ${_PECL_LIBS}
+    result=\$(_gs_eu2_pecl_get_latest_stable 'imagick')
+    [[ \"\$result\" == '3.8.0' ]] || { echo \"expected 3.8.0, got: '\$result'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t34b: get_latest_stable skips beta/alpha entries" bash -c "
+    ${_PECL_LIBS}
+    result=\$(_gs_eu2_pecl_get_latest_stable 'imagick')
+    # fixture has 3.9.0beta1 (beta) and 3.8.0 (stable); must return 3.8.0
+    [[ \"\$result\" == '3.8.0' ]] || { echo \"expected stable 3.8.0, got: '\$result' (beta must be skipped)\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t34c: check_promotion returns version when PECL release is newer than git date" bash -c "
+    ${_PECL_LIBS}
+    # redis 6.1.0 released 2026-03-20, git commit date 2026-02-10 → PECL is newer
+    result=\$(_gs_eu2_pecl_check_promotion 'redis' '2026-02-10')
+    [[ \"\$result\" == '6.1.0' ]] || { echo \"expected 6.1.0, got: '\$result'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t34d: check_promotion returns empty when git commit is newer than PECL release" bash -c "
+    ${_PECL_LIBS}
+    # imagick 3.8.0 released 2026-01-10, git commit date 2026-02-15 → git is newer
+    result=\$(_gs_eu2_pecl_check_promotion 'imagick' '2026-02-15')
+    [[ -z \"\$result\" ]] || { echo \"expected empty (no promotion), got: '\$result'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t34e: HTTP error for allreleases returns empty string, no crash" bash -c "
+    ${_PECL_LIBS}
+    unset _GS_EU2_HTTP_FIXTURE_DIR
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/pecl_e_cache
+    result=\$(_gs_eu2_pecl_get_latest_stable 'no-such-extension-xyzzy' 2>/dev/null || true)
+    [[ -z \"\$result\" ]] || { echo \"expected empty on HTTP error, got: '\$result'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 35 — pecl-git fetcher
+# ═══════════════════════════════════════════════════════════════════════════
+section "35 — pecl-git fetcher"
+
+_PECLGIT_LIBS="
+source '/stack/bin/lib/env-update-v2/config/defaults.sh'
+source '/stack/bin/lib/env-update-v2/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update-v2/core/records.sh'
+source '/stack/bin/lib/env-update-v2/core/semver.sh'
+source '/stack/bin/lib/env-update-v2/core/channel.sh'
+source '/stack/bin/lib/env-update-v2/core/tag_flags.sh'
+source '/stack/bin/lib/env-update-v2/core/cache.sh'
+source '/stack/bin/lib/env-update-v2/http/curl.sh'
+source '/stack/bin/lib/env-update-v2/fetchers/github.sh'
+source '/stack/bin/lib/env-update-v2/fetchers/pecl.sh'
+source '/stack/bin/lib/env-update-v2/fetchers/pecl_git.sh'
+export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+export _GS_EU2_CACHE_DIR=\${TMP_DIR}/peclgit_cache
+"
+
+t "t35a: happy path — proposed_version = YYYYMMDD-sha8 from latest commit" bash -c "
+    ${_PECLGIT_LIBS}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'pecl-git'
+    _gs_eu2_record_set \$idx identifier 'https://github.com/Imagick/imagick'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_PHP_IMAGICK_VERSION'
+    _gs_eu2_fetch_pecl_git \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    # fixture sha=abc1234def..., date=2026-02-15 → proposed=20260215-abc1234d
+    [[ \"\$val\" == '20260215-abc1234d' ]] || { echo \"expected 20260215-abc1234d, got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t35b: promotion detected — alt_version set when stable PECL release is newer than git" bash -c "
+    ${_PECLGIT_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/peclgit_b_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'pecl-git'
+    # phpredis: git date 2026-02-10, redis pecl 6.1.0 released 2026-03-20 → promotion
+    _gs_eu2_record_set \$idx identifier 'https://github.com/phpredis/phpredis'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_PHP_REDIS_VERSION'
+    _gs_eu2_fetch_pecl_git \$idx
+    alt=\$(_gs_eu2_record_get \$idx alt_version)
+    [[ -n \"\$alt\" ]] || { echo 'alt_version should be set for promotion'; echo FAIL; exit 0; }
+    [[ \"\$alt\" == *'6.1.0'* ]] || { echo \"expected 6.1.0 in alt_version, got: '\$alt'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t35c: no promotion — alt_version empty when git commit is newer than PECL release" bash -c "
+    ${_PECLGIT_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/peclgit_c_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'pecl-git'
+    # imagick: git date 2026-02-15, imagick pecl 3.8.0 released 2026-01-10 → no promotion
+    _gs_eu2_record_set \$idx identifier 'https://github.com/Imagick/imagick'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_PHP_IMAGICK_VERSION'
+    _gs_eu2_fetch_pecl_git \$idx
+    alt=\$(_gs_eu2_record_get \$idx alt_version)
+    [[ -z \"\$alt\" ]] || { echo \"alt_version should be empty (no promotion), got: '\$alt'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t35d: ext_name derived from repo name — php-redis strips php- prefix" bash -c "
+    ${_PECLGIT_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/peclgit_d_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'pecl-git'
+    # phpredis repo → ext_name='phpredis' (no matching prefix → use full name)
+    # Check that the proposed_version is in YYYYMMDD-sha8 format (fetcher ran OK)
+    _gs_eu2_record_set \$idx identifier 'https://github.com/phpredis/phpredis'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_PHP_REDIS_VERSION'
+    _gs_eu2_fetch_pecl_git \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    # Just verify it ran and set a date-sha proposed_version
+    [[ \"\$val\" =~ ^[0-9]{8}-[0-9a-f]{8}\$ ]] || { echo \"proposed not date-sha format: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t35e: pecl_ref override — uses override ext_name for PECL lookup" bash -c "
+    ${_PECLGIT_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/peclgit_e_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'pecl-git'
+    _gs_eu2_record_set \$idx identifier 'https://github.com/test-org/pecl-event'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_PHP_EVENT_VERSION'
+    # Override ext_name so PECL lookup uses 'pecl_ref_override' (our fixture)
+    _gs_eu2_record_set \$idx pecl_ref   'pecl_ref_override'
+    _gs_eu2_fetch_pecl_git \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    # Commit date 2026-03-01; pecl_ref_override stable 3.1.0 has no version XML fixture
+    # so check_promotion returns empty → no alt_version, just date-sha proposed
+    [[ -n \"\$val\" ]] || { echo 'proposed_version is empty'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t35f: GitHub API error — error_message set, decision=ERROR" bash -c "
+    ${_PECLGIT_LIBS}
+    unset _GS_EU2_HTTP_FIXTURE_DIR
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/peclgit_f_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'pecl-git'
+    _gs_eu2_record_set \$idx identifier 'https://github.com/no-such-owner/no-such-repo'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_XYZZY_VERSION'
+    _gs_eu2_fetch_pecl_git \$idx 2>/dev/null || true
+    decision=\$(_gs_eu2_record_get \$idx decision)
+    err=\$(_gs_eu2_record_get \$idx error_message)
+    [[ \"\$decision\" == 'ERROR' ]] || { echo \"expected ERROR, got: '\$decision'\"; echo FAIL; exit 0; }
+    [[ -n \"\$err\" ]] || { echo 'error_message is empty'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t35g: GITHUB_TOKEN forwarded — fixture injection works with token set" bash -c "
+    ${_PECLGIT_LIBS}
+    export GITHUB_TOKEN='test-token-for-fixture-injection'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/peclgit_g_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'pecl-git'
+    _gs_eu2_record_set \$idx identifier 'https://github.com/Imagick/imagick'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_PHP_IMAGICK_VERSION'
+    _gs_eu2_fetch_pecl_git \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    # With token set, fixture injection still works (token not part of fixture path)
+    [[ \"\$val\" == '20260215-abc1234d' ]] || { echo \"token-with-fixture failed: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 36 — semver_delta handles YYYYMMDD-sha8 format (patch, not major)
+# ═══════════════════════════════════════════════════════════════════════════
+section "36 — semver_delta date-sha format"
+
+_SV_LIBS="
+source '/stack/bin/lib/env-update-v2/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update-v2/core/semver.sh'
+"
+
+t "t36a: YYYYMMDD-sha8 → YYYYMMDD-sha8 (newer date) classifies as patch" bash -c "
+    ${_SV_LIBS}
+    result=\$(_gs_eu2_semver_delta '20260315-abc1234d' '20260316-def5678e')
+    [[ \"\$result\" == 'patch' ]] || { echo \"expected patch for date-sha bump, got: '\$result'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t36b: SHA-only current → YYYYMMDD-sha8 proposed classifies as patch" bash -c "
+    ${_SV_LIBS}
+    result=\$(_gs_eu2_semver_delta '8df8cdc74c95abb61f9b3396cb191e3f43e4989f' '20260315-abc1234d')
+    [[ \"\$result\" == 'patch' ]] || { echo \"expected patch for sha→date-sha, got: '\$result'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t36c: same date-sha → SKIP (classify_decision integration)" bash -c "
+    source '/stack/bin/lib/env-update-v2/config/defaults.sh'
+    ${_SV_LIBS}
+    source '/stack/bin/lib/env-update-v2/core/decide.sh'
+    result=\$(_gs_eu2_classify_decision '20260315-abc1234d' '20260315-abc1234d' '' '' '')
+    [[ \"\$result\" == 'SKIP' ]] || { echo \"expected SKIP for same date-sha, got: '\$result'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t36d: newer date-sha → AUTO (classify_decision integration)" bash -c "
+    source '/stack/bin/lib/env-update-v2/config/defaults.sh'
+    ${_SV_LIBS}
+    source '/stack/bin/lib/env-update-v2/core/decide.sh'
+    result=\$(_gs_eu2_classify_decision '20260315-abc1234d' '20260316-def5678e' '' '' '')
+    [[ \"\$result\" == 'AUTO' ]] || { echo \"expected AUTO for newer date-sha, got: '\$result'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section

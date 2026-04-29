@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<r xmlns="http://pear.php.net/dtd/rest.release" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://pear.php.net/dtd/rest.release http://pear.php.net/dtd/rest.release.xsd">
+ <p>redis</p>
+ <c>pecl.php.net</c>
+ <v>6.1.0</v>
+ <st>stable</st>
+ <da>2026-03-20 00:00:00</da>
+ <n>New features</n>
+ <f>234567</f>
+ <g>https://pecl.php.net/get/redis-6.1.0</g>
+ <xw><d><dep><name>php</name><min>7.4.0</min></dep></d></xw>
+</r>

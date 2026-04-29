@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<r xmlns="http://pear.php.net/dtd/rest.release" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://pear.php.net/dtd/rest.release http://pear.php.net/dtd/rest.release.xsd">
+ <p>imagick</p>
+ <c>pecl.php.net</c>
+ <v>3.8.0</v>
+ <st>stable</st>
+ <da>2026-01-10 00:00:00</da>
+ <n>Improved performance</n>
+ <f>134567</f>
+ <g>https://pecl.php.net/get/imagick-3.8.0</g>
+ <xw><d><dep><name>php</name><min>8.0.0</min></dep></d></xw>
+</r>

@@ -60,6 +60,16 @@ _gs_eu2_semver_delta() {
     echo "major"; return
   fi
 
+  # Date-SHA style used by pecl-git: YYYYMMDD-<sha8>  or full 40-char SHA.
+  # Either operand matching means we are in commit-tracking mode — treat all
+  # changes as patch so decide.sh emits AUTO instead of HOLD.
+  local _date_sha_re='^[0-9]{8}-[0-9a-f]{8}$'
+  local _sha40_re='^[0-9a-f]{40}$'
+  if [[ "${_a}" =~ ${_date_sha_re} || "${_b}" =~ ${_date_sha_re} \
+     || "${_a}" =~ ${_sha40_re}    || "${_b}" =~ ${_sha40_re} ]]; then
+    echo "patch"; return
+  fi
+
   local _am="${_a%%.*}" _bm="${_b%%.*}"
   [[ "${_am}" != "${_bm}" ]] && { echo "major"; return; }
   local _ar="${_a#*.}" _br="${_b#*.}"

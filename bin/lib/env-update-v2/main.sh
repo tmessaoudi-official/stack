@@ -34,6 +34,10 @@ source "$(dirname "${BASH_SOURCE[0]}")/fetchers/rubygems.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/fetchers/sdkman.sh"
 # shellcheck source=./fetchers/sdkmanager.sh
 source "$(dirname "${BASH_SOURCE[0]}")/fetchers/sdkmanager.sh"
+# shellcheck source=./fetchers/pecl.sh
+source "$(dirname "${BASH_SOURCE[0]}")/fetchers/pecl.sh"
+# shellcheck source=./fetchers/pecl_git.sh
+source "$(dirname "${BASH_SOURCE[0]}")/fetchers/pecl_git.sh"
 # shellcheck source=./reporting/help.sh
 source "$(dirname "${BASH_SOURCE[0]}")/reporting/help.sh"
 # shellcheck source=./reporting/dump.sh
@@ -74,11 +78,13 @@ _gs_eu2_run_check() {
       rubygems)   _gs_eu2_fetch_rubygems   "${_i}" ;;
       sdkman)     _gs_eu2_fetch_sdkman     "${_i}" ;;
       sdkmanager) _gs_eu2_fetch_sdkmanager "${_i}" ;;
+      pecl-git)   _gs_eu2_fetch_pecl_git   "${_i}" ;;
       # TODO(Phase 3f+): implement remaining fetchers — entry counts from .env as of 2026-04-26:
-      #   pecl-git (100)  url (8)
+      #   url (8)
       # Phase 3a implemented: codeberg (1), quay (1) — see fetchers/codeberg.sh + fetchers/quay.sh
       # Phase 3b implemented: npm (55), pypi (24), rubygems (4) — see fetchers/{npm,pypi,rubygems}.sh
       # Phase 3c implemented: github (73) — see fetchers/github.sh
+      # Phase 3d implemented: pecl-git (100) — see fetchers/pecl.sh + fetchers/pecl_git.sh
       # Phase 3e implemented: sdkman (19), sdkmanager (5) — see fetchers/{sdkman,sdkmanager}.sh
       # Each remaining type needs a fetchers/<type>.sh + a case arm here.
       *)
