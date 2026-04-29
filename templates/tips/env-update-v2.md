@@ -1,8 +1,9 @@
 # env-update-v2 v0.2.0 — Phase 2: dockerhub fetcher + channel selection
 
-`bin/env-update-v2.sh` is the greenfield replacement for `bin/env-update.sh`.
-Phase 2 adds the first fetcher (dockerhub), channel selection, tag-flag pipeline,
-a flat-file cache, and useful default output. No writes to `.env` yet.
+`bin/env-update-v2.sh` is the version checker for Global Stack — covering all 12 fetcher
+types (dockerhub, github, npm, pecl, pecl-git, pypi, quay, rubygems, sdkman, sdkmanager,
+url, codeberg), with channel selection, tag-flag pipeline, flat-file cache, and
+`--apply` support for auto-updating `.env`.
 
 ---
 

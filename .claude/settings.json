@@ -1,7 +1,6 @@
 {
   "permissions": {
     "allow": [
-      "Bash(bin/env-update.sh --dry-run *)",
       "Bash(bin/env-scan.sh --dry-run *)",
       "Bash(bin/tests/env-scan.test.sh)",
       "Bash(bin/env-update-v2.sh --version)",
@@ -22,7 +21,6 @@
       "Bash(make down-n-rebuild-force-recreate)",
       "Bash(make restart-*)",
       "Bash(make start-local-registry)",
-      "Bash(bin/env-update.sh)",
       "Bash(bin/env-scan.sh)",
       "Bash(bin/env-update-v2.sh)",
       "Bash(bin/env-update-v2.sh --check *)",

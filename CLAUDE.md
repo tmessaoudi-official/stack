@@ -70,13 +70,9 @@ Every version variable in `.env` is annotated for automated checking:
 GLOBAL_STACK_POSTGRES18_VERSION=18.3-alpine3.23
 ```
 
-See `templates/tips/env-update.md` for the full fetcher-type and flag reference.
+See `templates/tips/env-update-v2.md` for the full fetcher-type and flag reference.
 
 ## Key Scripts
-
-### bin/env-update.sh
-
-**DEPRECATED** — use `bin/env-update-v2.sh`. v2 now covers all fetcher types; v1 is preserved for reference only. Key flags: `--dry-run`, `--offline`, `--progress`, `--filter=<pattern>`, `--type=<types>`, `--no-auto-apply`, `--show-ok`, `--cache-ttl=<sec>`.
 
 ### bin/env-update-v2.sh
 
@@ -100,23 +96,23 @@ Propagation is automatic: any `ARG VAR=value` line in a Dockerfile whose value d
 
 One-shot migration from legacy URL-based annotations to `TYPE:IDENTIFIER` format. Should not need re-running.
 
-**Full reference**: `templates/tips/env-scan.md`, `templates/tips/env-update.md`
+**Full reference**: `templates/tips/env-scan.md`
 
 ## Shell Coding Conventions
 
-`bin/env-update.sh` and its library use `set -eEuo pipefail`; `bin/env-scan.sh` also uses `set -eEuo pipefail` (added after the initial release to harden the entry point). Container startup scripts use `set -xeE -o pipefail` (debug tracing, no `-u`). When writing new scripts, use `set -eEuo pipefail`. Follow these patterns:
+`bin/env-update-v2.sh` and its library use `set -eEuo pipefail`; `bin/env-scan.sh` also uses `set -eEuo pipefail` (added after the initial release to harden the entry point). Container startup scripts use `set -xeE -o pipefail` (debug tracing, no `-u`). When writing new scripts, use `set -eEuo pipefail`. Follow these patterns:
 
-- **Variable prefixes**: `_GS_EU_` for env-update, `_GS_ES_` for env-scan
+- **Variable prefixes**: `_GS_EU2_` for env-update-v2, `_GS_ES_` for env-scan
 - **Include guards** (every lib file):
   ```bash
-  [[ -n "${_GS_EU_MODULENAME_SH_LOADED:-}" ]] && return 0
-  readonly _GS_EU_MODULENAME_SH_LOADED=1
+  [[ -n "${_GS_EU2_MODULENAME_SH_LOADED:-}" ]] && return 0
+  readonly _GS_EU2_MODULENAME_SH_LOADED=1
   ```
-- **Error propagation across subshells**: write to temp files (`_GS_EU_FETCH_ERROR_FILE`), read back in parent — stdout is reserved for return values
+- **Error propagation across subshells**: write to temp files, read back in parent — stdout is reserved for return values
 - **Sentinel return values**: `__hold_newer_major__:...`, `__pecl_promotion__:ext:ver`, `__codename_upgrade_hint__:...` signal complex decisions from fetcher to caller
-- **Parallel arrays** instead of objects (bash limitation): `_GS_EU_RECORDS_ENV_VAR[i]`, `_GS_EU_RECORDS_TYPE[i]` indexed by `_GS_EU_RECORD_COUNT`
-- **Function naming**: `_gs_eu_<module>_<action>` for env-update; `es_<action>` or `_gs_es_<action>` for env-scan
-- **CLI-first with API fallback**: `_gs_eu_cli_with_fallback fn_cli fn_api` — activates the correct runtime (nvm/pyenv/rbenv), tries CLI in subshell, falls back to API
+- **Parallel arrays** instead of objects (bash limitation): records indexed by count
+- **Function naming**: `_gs_eu2_<module>_<action>` for env-update-v2; `es_<action>` or `_gs_es_<action>` for env-scan
+- **CLI-first with API fallback**: activates the correct runtime (nvm/pyenv/rbenv), tries CLI in subshell, falls back to API
 - **NO_COLOR** support per no-color.org; color only when `stdout` is a terminal
 - **Dependencies**: `bash 4.3+`, `curl`, `jq`, `perl`, `sort -V` (GNU coreutils), `sed`, `awk`, `grep`
 
@@ -145,7 +141,7 @@ make login-03node24                  # Shell into a container
 make log-follow-03node24             # Tail container logs
 make restart-03node24                # Restart one service
 
-# Version updates (safe preview first) — use v2; env-update.sh is deprecated
+# Version updates (safe preview first)
 bin/env-update-v2.sh --check                         # preview all types
 bin/env-update-v2.sh --filter=NODE --check           # only Node-related
 bin/env-update-v2.sh --apply                         # apply AUTO decisions (run --check first!)
@@ -296,13 +292,15 @@ The `global-stack-lead-dev` agent applies 30+ mental models — a Core Working S
 .env.local                           # Active machine config (gitignored)
 Makefile                             # Primary build automation
 local.Makefile                       # Machine-specific Makefile extensions
-bin/env-update.sh                    # Automated version checker entry point (DEPRECATED)
-bin/env-update-v2.sh                 # Version checker v2 entry point (recommended)
+bin/env-update-v2.sh                 # Version checker entry point (all 12 fetcher types)
 bin/env-scan.sh                      # Env sync tool entry point
-bin/migrate-annotations.sh           # One-shot annotation migration
-bin/lib/env-update/                  # Modular env-update library
-  config/   codename_map, prerelease_markers, type_map
-  core/     cache, channel, diff, dockerfile, parse, report, runtime, tag_flags, ubuntu
+bin/migrate-annotations.sh           # One-shot annotation migration (legacy url: → TYPE:ID)
+bin/lib/env-update/                  # Partial v1 lib — keep-set used by migrate-annotations.sh
+  config/   codename_map, type_map
+  core/     report
+bin/lib/env-update-v2/               # Modular env-update-v2 library
+  config/   prerelease_markers, type_map
+  core/     apply, args, cache, channel, decide, parse, records, semver, tag_flags, ubuntu
   fetchers/ codeberg, dockerhub, github, npm, pecl, pecl_git, pypi, quay, rubygems, sdkman, sdkmanager, url
 bin/lib/env-scan/                    # Modular env-scan library
 bin/tests/env-scan.test.sh           # Test suite (custom harness)
