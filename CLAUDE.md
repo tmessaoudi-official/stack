@@ -220,6 +220,7 @@ make start-local-registry            # Start local TLS registry (port 5000)
 - **BuildKit cache can go stale** — if builds fail with mysterious layer errors, `docker buildx prune` is the escape hatch
 - **Bash-written files bypass all PostToolUse hooks** — linting (shellcheck, hadolint, yamllint), formatting (shfmt), and backup only fire on `Edit`/`Write` tool calls. Files written via `cat >`, heredocs, `sed -i`, or other Bash redirects are invisible to hooks. Always use the `Write` or `Edit` tool when hook coverage matters.
 - **`core.fileMode=false` in `/stack/`** — git ignores all file permission changes; `chmod` edits take effect on disk but are never staged or committed. For permission fixes, note the change explicitly in the commit message of whatever else touches the file; do not expect `git diff` or `git status` to show the mode delta.
+- **Auto-commit in /stack sessions** — commits may be made autonomously when staged changes are ready and tests pass; explicit confirmation not required (user preference for this project; overrides global Rule 10). Use descriptive commit messages following the existing style (`feat:`, `fix:`, `docs:` prefix). If `git commit` is blocked by a hook despite user authorization, present the exact command for manual execution rather than retrying.
 
 ## Credentials & Stateful Data
 
