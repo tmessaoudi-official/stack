@@ -52,5 +52,10 @@ _gs_eu2_parse_args() {
   [[ -z "${_GS_EU2_CFG[no_cache]+set}" ]]  && _GS_EU2_CFG[no_cache]="false"
   [[ -z "${_GS_EU2_CFG[apply]+set}" ]]    && _GS_EU2_CFG[apply]="false"
   [[ -z "${_GS_EU2_CFG[cache_ttl]+set}" ]] && _GS_EU2_CFG[cache_ttl]="3600"
+
+  if [[ "${_GS_EU2_CFG[dry_run]}" == "true" && "${_GS_EU2_CFG[apply]}" == "true" ]]; then
+    printf 'env-update-v2: --dry-run and --apply are mutually exclusive\n' >&2
+    exit 1
+  fi
   return 0
 }
