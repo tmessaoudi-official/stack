@@ -60,7 +60,15 @@ _gs_eu2_github_ls_remote() {
   local _tok="${GITHUB_TOKEN:-${GLOBAL_STACK_GITHUB_TOKEN:-}}"
   local _url="https://github.com/${_repo}.git"
   if [[ -n "${_tok}" ]]; then
-    git ls-remote "https://x-access-token:${_tok}@github.com/${_repo}.git" 'refs/tags/*' 2>/dev/null || true
+    # Use GIT_ASKPASS to supply the token out-of-band — avoids token in process
+    # list (ps auxww), shell history, and CI logs.
+    local _askpass
+    _askpass="$(mktemp)"
+    printf '#!/bin/sh\necho "%s"\n' "${_tok}" > "${_askpass}"
+    chmod 700 "${_askpass}"
+    GIT_ASKPASS="${_askpass}" git ls-remote \
+      "https://x-access-token@github.com/${_repo}.git" 'refs/tags/*' 2>/dev/null || true
+    rm -f "${_askpass}"
   else
     git ls-remote "${_url}" 'refs/tags/*' 2>/dev/null || true
   fi

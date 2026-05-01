@@ -219,7 +219,10 @@ _gs_eu2_main() {
       else
         local _backup
         _backup="${_env_file}.bak.$(date +%s)"
-        cp -a "${_env_file}" "${_backup}"
+        if ! cp -a "${_env_file}" "${_backup}"; then
+          printf 'env-update: backup failed (%s) — aborting apply to protect source file\n' "${_backup}" >&2
+          return 1
+        fi
         printf 'Backup: %s\n' "${_backup}" >&2
         _gs_eu2_apply_updates "${_env_file}" "false"
         local _env_scan

@@ -53,7 +53,7 @@ _gs_eu2_http_get() {
   _body_tmp="$(mktemp)"
   local _attempt _http_status _curl_exit
   for _attempt in 1 2 3; do
-    _http_status="$(curl --silent --max-time 15 --location \
+    _http_status="$(curl --silent --max-time 15 --connect-timeout 5 --location \
       --retry 3 --retry-delay 2 \
       -H "User-Agent: global-stack-env-update/2.0.0" \
       -w "%{http_code}" \
@@ -112,7 +112,7 @@ _gs_eu2_http_get_auth() {
   _body_tmp="$(mktemp)"
   local _attempt _http_status _curl_exit
   for _attempt in 1 2 3; do
-    _http_status="$(curl --silent --max-time 15 --location \
+    _http_status="$(curl --silent --max-time 15 --connect-timeout 5 --location \
       --retry 3 --retry-delay 2 \
       -H "User-Agent: global-stack-env-update/2.0.0" \
       -H "Authorization: Bearer ${_token}" \
