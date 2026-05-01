@@ -85,6 +85,7 @@ fi
 echo "${GLOBAL_STACK_PHPMYADMIN_VERSION}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpmyadmin"
 
 chmod 0444 "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin/config."*
+chmod 0640 "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin/config.secret.inc.php"
 
 global-stack-base-init-mkcert.sh
 
