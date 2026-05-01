@@ -70,19 +70,19 @@ Every version variable in `.env` is annotated for automated checking:
 GLOBAL_STACK_POSTGRES18_VERSION=18.3-alpine3.23
 ```
 
-See `templates/tips/env-update-v2.md` for the full fetcher-type and flag reference.
+See `templates/tips/env-update.md` for the full fetcher-type and flag reference.
 
 ## Key Scripts
 
-### bin/env-update-v2.sh
+### bin/env-update.sh
 
-**v0.3.0 (Phase 3 complete — all fetcher types)** — parses `.env` annotations, fetches latest versions across all 12 source types (dockerhub, github, npm, pecl, pecl-git, pypi, quay, rubygems, sdkman, sdkmanager, url, codeberg), streams a `[AUTO|HOLD|SKIP|ERROR]` report, and can apply AUTO decisions back to `.env`.
+**v2.0.0 (all fetcher types)** — parses `.env` annotations, fetches latest versions across all 12 source types (dockerhub, github, npm, pecl, pecl-git, pypi, quay, rubygems, sdkman, sdkmanager, url, codeberg), streams a `[AUTO|HOLD|SKIP|ERROR]` report, and can apply AUTO decisions back to `.env`.
 
 **Key flags**: `--check` (fetch + report), `--apply` (apply AUTO decisions; implies `--check`), `--dry-run` (no writes), `--filter=<regex>`, `--no-cache`, `--format=text|json`, `--dump`, `--env-file=<path>`, `--cache-ttl=<N>`
 
 **⚠️ Safety rule**: Always run `--dry-run` before `--apply` in the same session. Never run `--apply` cold — ask-tier operation. (Incident 2026-04-23: ran `--apply` without prior dry-run.)
 
-**Full reference**: `templates/tips/env-update-v2.md`
+**Full reference**: `templates/tips/env-update.md`
 
 ### bin/env-scan.sh
 
@@ -92,13 +92,13 @@ Propagation is automatic: any `ARG VAR=value` line in a Dockerfile whose value d
 
 **Key flags**: `--version` (print version and exit), `--sync-values=false` (preserve dest values that differ from source; default is `true` — values are overwritten), `--profile=true` (show timing), `--dry-run` (report only — suppresses both env file sync and Dockerfile propagation), `--backup=false` (skip backup this run), `--backup-keep=<N>` (keep N newest backups per file; 0 = unlimited; default 10), `--backup-purge=true` (delete all existing `<file>.bak.*` before run), `--backup-suffix=<str>` (suffix anchor; default `.bak`; full name: `<file><suffix>.<YYYYMMDD-HHMMSS>`)
 
-**Full reference**: `templates/tips/env-scan.md`, `templates/tips/env-update-v2.md`
+**Full reference**: `templates/tips/env-scan.md`, `templates/tips/env-update.md`
 
 ## Shell Coding Conventions
 
-`bin/env-update-v2.sh` and its library use `set -eEuo pipefail`; `bin/env-scan.sh` also uses `set -eEuo pipefail` (added after the initial release to harden the entry point). Container startup scripts use `set -xeE -o pipefail` (debug tracing, no `-u`). When writing new scripts, use `set -eEuo pipefail`. Follow these patterns:
+`bin/env-update.sh` and its library use `set -eEuo pipefail`; `bin/env-scan.sh` also uses `set -eEuo pipefail` (added after the initial release to harden the entry point). Container startup scripts use `set -xeE -o pipefail` (debug tracing, no `-u`). When writing new scripts, use `set -eEuo pipefail`. Follow these patterns:
 
-- **Variable prefixes**: `_GS_EU2_` for env-update-v2, `_GS_ES_` for env-scan
+- **Variable prefixes**: `_GS_EU2_` for env-update, `_GS_ES_` for env-scan
 - **Include guards** (every lib file):
   ```bash
   [[ -n "${_GS_EU2_MODULENAME_SH_LOADED:-}" ]] && return 0
@@ -107,7 +107,7 @@ Propagation is automatic: any `ARG VAR=value` line in a Dockerfile whose value d
 - **Error propagation across subshells**: write to temp files, read back in parent — stdout is reserved for return values
 - **Sentinel return values**: `__hold_newer_major__:...`, `__pecl_promotion__:ext:ver`, `__codename_upgrade_hint__:...` signal complex decisions from fetcher to caller
 - **Parallel arrays** instead of objects (bash limitation): records indexed by count
-- **Function naming**: `_gs_eu2_<module>_<action>` for env-update-v2; `es_<action>` or `_gs_es_<action>` for env-scan
+- **Function naming**: `_gs_eu2_<module>_<action>` for env-update; `es_<action>` or `_gs_es_<action>` for env-scan
 - **CLI-first with API fallback**: activates the correct runtime (nvm/pyenv/rbenv), tries CLI in subshell, falls back to API
 - **NO_COLOR** support per no-color.org; color only when `stdout` is a terminal
 - **Dependencies**: `bash 4.3+`, `curl`, `jq`, `perl`, `sort -V` (GNU coreutils), `sed`, `awk`, `grep`
@@ -138,9 +138,9 @@ make log-follow-03node24             # Tail container logs
 make restart-03node24                # Restart one service
 
 # Version updates (safe preview first)
-bin/env-update-v2.sh --check                         # preview all types
-bin/env-update-v2.sh --filter=NODE --check           # only Node-related
-bin/env-update-v2.sh --apply                         # apply AUTO decisions (run --check first!)
+bin/env-update.sh --check                         # preview all types
+bin/env-update.sh --filter=NODE --check           # only Node-related
+bin/env-update.sh --apply                         # apply AUTO decisions (run --check first!)
 
 # After updating versions in .env
 bin/env-scan.sh   # Propagate to .env.local + rewrite ARG lines in Dockerfiles (--sync-values=true by default)
@@ -289,9 +289,9 @@ The `global-stack-lead-dev` agent applies 30+ mental models — a Core Working S
 .env.local                           # Active machine config (gitignored)
 Makefile                             # Primary build automation
 local.Makefile                       # Machine-specific Makefile extensions
-bin/env-update-v2.sh                 # Version checker entry point (all 12 fetcher types)
+bin/env-update.sh                 # Version checker entry point (all 12 fetcher types)
 bin/env-scan.sh                      # Env sync tool entry point
-bin/lib/env-update-v2/               # Modular env-update-v2 library
+bin/lib/env-update/               # Modular env-update library
   config/   prerelease_markers, type_map
   core/     apply, args, cache, channel, decide, parse, records, semver, tag_flags, ubuntu
   fetchers/ codeberg, dockerhub, github, npm, pecl, pecl_git, pypi, quay, rubygems, sdkman, sdkmanager, url

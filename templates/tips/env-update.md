@@ -1,6 +1,6 @@
-# env-update-v2 v0.2.0 — Phase 2: dockerhub fetcher + channel selection
+# env-update v2.0.0 — annotation parser + version checker (12 fetcher types)
 
-`bin/env-update-v2.sh` is the version checker for Global Stack — covering all 12 fetcher
+`bin/env-update.sh` is the version checker for Global Stack — covering all 12 fetcher
 types (dockerhub, github, npm, pecl, pecl-git, pypi, quay, rubygems, sdkman, sdkmanager,
 url, codeberg), with channel selection, tag-flag pipeline, flat-file cache, and
 `--apply` support for auto-updating `.env`.
@@ -10,14 +10,14 @@ url, codeberg), with channel selection, tag-flag pipeline, flat-file cache, and
 ## Quick Start
 
 ```bash
-bin/env-update-v2.sh --version                         # print 0.2.0 and exit
-bin/env-update-v2.sh                                   # parser summary (no network)
-bin/env-update-v2.sh --check                           # fetch all, stream report
-bin/env-update-v2.sh --check --filter=POSTGRES         # only POSTGRES* vars
-bin/env-update-v2.sh --check --no-cache                # bypass cache
-bin/env-update-v2.sh --dump                            # parse /stack/.env, print all records
-bin/env-update-v2.sh --dump --format=json | jq .       # JSON output
-bin/env-update-v2.sh --dump --env-file=path/to/.env    # custom source file
+bin/env-update.sh --version                         # print 2.0.0 and exit
+bin/env-update.sh                                   # parser summary (no network)
+bin/env-update.sh --check                           # fetch all, stream report
+bin/env-update.sh --check --filter=POSTGRES         # only POSTGRES* vars
+bin/env-update.sh --check --no-cache                # bypass cache
+bin/env-update.sh --dump                            # parse /stack/.env, print all records
+bin/env-update.sh --dump --format=json | jq .       # JSON output
+bin/env-update.sh --dump --env-file=path/to/.env    # custom source file
 ```
 
 ---
@@ -26,7 +26,7 @@ bin/env-update-v2.sh --dump --env-file=path/to/.env    # custom source file
 
 | Option                | Description                                                    |
 | --------------------- | -------------------------------------------------------------- |
-| `--version`           | Print `0.2.0` and exit 0                                      |
+| `--version`           | Print `2.0.0` and exit 0                                      |
 | `--help`              | Show usage text                                                |
 | `--check`             | Fetch latest versions and stream `[AUTO\|HOLD\|SKIP\|ERROR]` report |
 | `--no-cache`          | Bypass the fetch cache                                         |
@@ -42,7 +42,7 @@ bin/env-update-v2.sh --dump --env-file=path/to/.env    # custom source file
 ## Default output (no flags)
 
 ```
-env-update-v2 v0.2.0 — parsed /stack/.env
+env-update v2.0.0 — parsed /stack/.env
 
   73 annotated variables across 8 fetcher types:
     dockerhub     21   github        34   npm            8
@@ -73,18 +73,17 @@ Decision tags:
 
 ---
 
-## Phase 2 fetcher scope
+## Fetcher scope
 
-**Implemented**: `dockerhub` — full tag-flag pipeline, channel selection, major-pin, flat-file cache.
-
-**Not yet implemented** (show `[SKIP]` with note): `github`, `npm`, `pecl`, `pecl-git`,
-`pypi`, `quay`, `rubygems`, `sdkman`, `sdkmanager`, `url`, `codeberg`. These are Phase 3+.
+**Implemented (all 12 types)**: `dockerhub`, `github`, `npm`, `pecl`, `pecl-git`, `pypi`,
+`quay`, `rubygems`, `sdkman`, `sdkmanager`, `url`, `codeberg` — all with full tag-flag
+pipeline, channel selection, major-pin support, and flat-file cache.
 
 ---
 
 ## Cache
 
-Flat-file cache at `_GS_EU2_CACHE_DIR` (default: `/tmp/global-stack-env-update-v2-cache`).
+Flat-file cache at `_GS_EU2_CACHE_DIR` (default: `/tmp/global-stack-env-update-cache`).
 One `.cache` file per key. TTL: `_GS_EU2_CACHE_TTL` seconds (default 3600).
 
 ```bash
@@ -174,7 +173,7 @@ Stored as `git_fallback_url` + `git_fallback_sha`.
 Parser exits non-zero immediately with a message on:
 
 ```
-env-update-v2: <path>:<line>: <specific reason>
+env-update: <path>:<line>: <specific reason>
 ```
 
 Triggered by: unknown flag name, empty required value, malformed `depends-on`
@@ -188,8 +187,8 @@ Fetch errors (network, parse) set `decision=ERROR` and continue — they do not 
 ## Architecture
 
 ```
-bin/env-update-v2.sh                → entry point (sources main.sh)
-bin/lib/env-update-v2/
+bin/env-update.sh                → entry point (sources main.sh)
+bin/lib/env-update/
 ├── config/
 │   ├── defaults.sh                 → _GS_EU2_CFG + VERSION + env-var overrides
 │   └── prerelease_markers.sh       → pre-release detection regex fragments
@@ -203,7 +202,18 @@ bin/lib/env-update-v2/
 │   ├── cache.sh                    → flat-file TTL cache (read/write/invalidate)
 │   └── decide.sh                   → classify fetch result → AUTO/HOLD/MANUAL/SKIP
 ├── fetchers/
-│   └── dockerhub.sh                → Docker Hub fetcher (record-index contract)
+│   ├── dockerhub.sh                → Docker Hub fetcher
+│   ├── github.sh                   → GitHub releases/tags fetcher
+│   ├── npm.sh                      → npm registry fetcher
+│   ├── pecl.sh                     → PECL fetcher
+│   ├── pecl_git.sh                 → PECL git-tag fetcher
+│   ├── pypi.sh                     → PyPI fetcher
+│   ├── quay.sh                     → Quay.io fetcher
+│   ├── rubygems.sh                 → RubyGems fetcher
+│   ├── sdkman.sh                   → SDKMAN fetcher
+│   ├── sdkmanager.sh               → sdkmanager fetcher
+│   ├── url.sh                      → URL probe fetcher
+│   └── codeberg.sh                 → Codeberg fetcher
 ├── http/
 │   └── curl.sh                     → HTTP GET wrapper + fixture injection seam
 ├── reporting/
@@ -212,8 +222,8 @@ bin/lib/env-update-v2/
 │   ├── summary.sh                  → default no-flags parser summary
 │   └── stream.sh                   → streaming [TAG] per-record output + summary
 └── main.sh                         → orchestration
-bin/tests/env-update-v2.test.sh     → 74 tests (17 sections)
-bin/tests/fixtures/env-update-v2/   → synthetic .env fixtures + HTTP fixtures
+bin/tests/env-update.test.sh        → test suite
+bin/tests/fixtures/env-update/      → synthetic .env fixtures + HTTP fixtures
   http/                             → fixture JSON files for fetcher tests
 ```
 
@@ -229,7 +239,7 @@ _gs_eu2_record_fields           # canonical field list (single source of truth)
 
 ### Adding a new fetcher
 
-1. Create `bin/lib/env-update-v2/fetchers/<type>.sh`
+1. Create `bin/lib/env-update/fetchers/<type>.sh` (all 12 types already exist)
 2. Implement `_gs_eu2_fetch_<type>() { local _idx="${1}"; ... }` — reads from record, writes `proposed_version` + `decision` + `error_message` back
 3. Add a `case` arm in `_gs_eu2_run_check()` in `main.sh`
 4. Write tests (mock HTTP via `_GS_EU2_HTTP_FIXTURE_DIR`)

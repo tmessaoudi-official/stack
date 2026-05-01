@@ -31,12 +31,12 @@ _gs_eu2_parse_args() {
       --cache-ttl=*)
         local _ttl="${1#*=}"
         if [[ ! "${_ttl}" =~ ^[0-9]+$ ]]; then
-          printf 'env-update-v2: --cache-ttl requires a positive integer, got: %q\n' "${_ttl}" >&2
+          printf 'env-update: --cache-ttl requires a positive integer, got: %q\n' "${_ttl}" >&2
           exit 1
         fi
         _GS_EU2_CFG[cache_ttl]="${_ttl}" ;;
       *)
-        printf 'env-update-v2: unknown option: %s\n' "${1}" >&2
+        printf 'env-update: unknown option: %s\n' "${1}" >&2
         exit 1
         ;;
     esac
@@ -54,7 +54,7 @@ _gs_eu2_parse_args() {
   [[ -z "${_GS_EU2_CFG[cache_ttl]+set}" ]] && _GS_EU2_CFG[cache_ttl]="3600"
 
   if [[ "${_GS_EU2_CFG[dry_run]}" == "true" && "${_GS_EU2_CFG[apply]}" == "true" ]]; then
-    printf 'env-update-v2: --dry-run and --apply are mutually exclusive\n' >&2
+    printf 'env-update: --dry-run and --apply are mutually exclusive\n' >&2
     exit 1
   fi
   return 0

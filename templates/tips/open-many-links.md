@@ -203,14 +203,14 @@ echo "quarkus";    sdk list quarkus    | grep ""
 echo "spark";      sdk list spark      | grep ""
 echo "java";       sdk list java       | grep ""
 
-bin/env-update-v2.sh --check --no-cache
+bin/env-update.sh --check --no-cache
 ```
 
 ---
 
 # Notes on annotation flags
 
-- `(channel:nightly)` — vars tracked as nightly builds. env-update-v2.sh uses lexicographic comparison (date-suffixed). The fetcher uses `url:` type with `channel:nightly` to scrape directory listings.
+- `(channel:nightly)` — vars tracked as nightly builds. env-update.sh uses lexicographic comparison (date-suffixed). The fetcher uses `url:` type with `channel:nightly` to scrape directory listings.
 - `(tag-filter:REGEX)` / `(tag-strip-prefix:PREFIX)` — used for repos with non-standard tag formats (e.g. `go1.26.1` → filter `^go[0-9]`, strip `go`).
 - `{VAR:format}` in `urls:` fields — resolved against `.env` values when opening supplemental links. Supports `:major` and `:major.minor` format specifiers.
 

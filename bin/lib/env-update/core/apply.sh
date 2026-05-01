@@ -12,7 +12,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/records.sh"
 _gs_eu2_apply_single() {
   local _file="${1}" _var="${2}" _new="${3}"
   local _tmp
-  _tmp="$(mktemp)" || { printf 'env-update-v2/apply: mktemp failed\n' >&2; return 1; }
+  _tmp="$(mktemp)" || { printf 'env-update/apply: mktemp failed\n' >&2; return 1; }
   awk -v var="${_var}" -v newval="${_new}" '
     /^[[:space:]]*#/ { print; next }
     index($0, var "=") == 1 { print var "=" newval; next }

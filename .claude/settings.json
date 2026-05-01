@@ -3,10 +3,10 @@
     "allow": [
       "Bash(bin/env-scan.sh --dry-run *)",
       "Bash(bin/tests/env-scan.test.sh)",
-      "Bash(bin/env-update-v2.sh --version)",
-      "Bash(bin/env-update-v2.sh --dry-run *)",
-      "Bash(bin/env-update-v2.sh --dump *)",
-      "Bash(bin/tests/env-update-v2.test.sh)"
+      "Bash(bin/env-update.sh --version)",
+      "Bash(bin/env-update.sh --dry-run *)",
+      "Bash(bin/env-update.sh --dump *)",
+      "Bash(bin/tests/env-update.test.sh)"
     ],
     "deny": [
       "Bash(make hard-restart)",
@@ -22,9 +22,9 @@
       "Bash(make restart-*)",
       "Bash(make start-local-registry)",
       "Bash(bin/env-scan.sh)",
-      "Bash(bin/env-update-v2.sh)",
-      "Bash(bin/env-update-v2.sh --check *)",
-      "Bash(bin/env-update-v2.sh --apply *)"
+      "Bash(bin/env-update.sh)",
+      "Bash(bin/env-update.sh --check *)",
+      "Bash(bin/env-update.sh --apply *)"
     ]
   },
   "hooks": {

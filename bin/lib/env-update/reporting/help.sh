@@ -9,9 +9,9 @@ source "$(dirname "${BASH_SOURCE[0]}")/../config/defaults.sh"
 
 _gs_eu2_show_help() {
   cat << EOF
-bin/env-update-v2.sh v${_GS_EU2_VERSION} — annotation parser + dockerhub version checker
+bin/env-update.sh v${_GS_EU2_VERSION} — annotation parser + version checker (12 fetcher types)
 
-Usage: env-update-v2.sh [OPTIONS]
+Usage: env-update.sh [OPTIONS]
 
 Options:
   --version               Print version and exit
@@ -30,17 +30,16 @@ Options:
 
 Default (no flags): print a parser summary with per-type breakdown and hints.
 
-Phase 2 fetcher support: dockerhub only.
-Remaining fetchers (github, npm, pecl, pypi, quay, rubygems, sdkman, url) are
-planned for Phase 3+. Non-dockerhub records show [SKIP] with an informational note.
+Fetcher types: dockerhub, github, npm, pecl, pecl-git, pypi, quay, rubygems,
+sdkman, sdkmanager, url, codeberg.
 
 Examples:
-  bin/env-update-v2.sh                                # parser summary (no network)
-  bin/env-update-v2.sh --check                        # fetch all, stream report
-  bin/env-update-v2.sh --check --filter=POSTGRES      # fetch only POSTGRES* vars
-  bin/env-update-v2.sh --check --no-cache             # bypass cache
-  bin/env-update-v2.sh --dump --format=json | jq .    # structured record dump
-  bin/env-update-v2.sh --check --apply                # fetch + apply all AUTO updates
-  bin/env-update-v2.sh --check --apply --dry-run      # preview what would be applied
+  bin/env-update.sh                                # parser summary (no network)
+  bin/env-update.sh --check                        # fetch all, stream report
+  bin/env-update.sh --check --filter=POSTGRES      # fetch only POSTGRES* vars
+  bin/env-update.sh --check --no-cache             # bypass cache
+  bin/env-update.sh --dump --format=json | jq .    # structured record dump
+  bin/env-update.sh --check --apply                # fetch + apply all AUTO updates
+  bin/env-update.sh --check --apply --dry-run      # preview what would be applied
 EOF
 }

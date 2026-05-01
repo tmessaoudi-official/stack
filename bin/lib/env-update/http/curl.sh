@@ -44,7 +44,7 @@ _gs_eu2_http_get() {
       cat "${_f}"
       return 0
     fi
-    printf 'env-update-v2: HTTP fixture not found: %s\n' "${_f}" >&2
+    printf 'env-update: HTTP fixture not found: %s\n' "${_f}" >&2
     return 1
   fi
 
@@ -55,20 +55,20 @@ _gs_eu2_http_get() {
   for _attempt in 1 2 3; do
     _http_status="$(curl --silent --max-time 15 --location \
       --retry 3 --retry-delay 2 \
-      -H "User-Agent: global-stack-env-update-v2/0.2.0" \
+      -H "User-Agent: global-stack-env-update/2.0.0" \
       -w "%{http_code}" \
       -o "${_body_tmp}" \
       "${_url}" 2>/dev/null)"
     _curl_exit=$?
     [[ "${_http_status}" != "429" ]] && break
     [[ $_attempt -lt 3 ]] && {
-      printf 'env-update-v2: rate-limited (HTTP 429), retry %d/3 in %ds\n' "$_attempt" "$((_attempt * 5))" >&2
+      printf 'env-update: rate-limited (HTTP 429), retry %d/3 in %ds\n' "$_attempt" "$((_attempt * 5))" >&2
       sleep $((_attempt * 5))
     }
   done
 
   if [[ "${_http_status}" == "429" ]]; then
-    printf 'env-update-v2: rate-limited by %s after 3 attempts — try again later\n' "${_url}" >&2
+    printf 'env-update: rate-limited by %s after 3 attempts — try again later\n' "${_url}" >&2
     rm -f "${_body_tmp}"
     return 1
   fi
@@ -104,7 +104,7 @@ _gs_eu2_http_get_auth() {
       cat "${_f}"
       return 0
     fi
-    printf 'env-update-v2: HTTP fixture not found: %s\n' "${_f}" >&2
+    printf 'env-update: HTTP fixture not found: %s\n' "${_f}" >&2
     return 1
   fi
 
@@ -114,7 +114,7 @@ _gs_eu2_http_get_auth() {
   for _attempt in 1 2 3; do
     _http_status="$(curl --silent --max-time 15 --location \
       --retry 3 --retry-delay 2 \
-      -H "User-Agent: global-stack-env-update-v2/0.2.0" \
+      -H "User-Agent: global-stack-env-update/2.0.0" \
       -H "Authorization: Bearer ${_token}" \
       -w "%{http_code}" \
       -o "${_body_tmp}" \
@@ -122,13 +122,13 @@ _gs_eu2_http_get_auth() {
     _curl_exit=$?
     [[ "${_http_status}" != "429" ]] && break
     [[ $_attempt -lt 3 ]] && {
-      printf 'env-update-v2: rate-limited (HTTP 429), retry %d/3 in %ds\n' "$_attempt" "$((_attempt * 5))" >&2
+      printf 'env-update: rate-limited (HTTP 429), retry %d/3 in %ds\n' "$_attempt" "$((_attempt * 5))" >&2
       sleep $((_attempt * 5))
     }
   done
 
   if [[ "${_http_status}" == "429" ]]; then
-    printf 'env-update-v2: rate-limited by %s after 3 attempts — try again later\n' "${_url}" >&2
+    printf 'env-update: rate-limited by %s after 3 attempts — try again later\n' "${_url}" >&2
     rm -f "${_body_tmp}"
     return 1
   fi

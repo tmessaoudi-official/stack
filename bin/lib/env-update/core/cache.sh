@@ -7,7 +7,7 @@ readonly _GS_EU2_CACHE_SH_LOADED=1
 # shellcheck source=./../config/defaults.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../config/defaults.sh"
 
-_GS_EU2_CACHE_DIR="${_GS_EU2_CACHE_DIR:-/tmp/global-stack-env-update-v2-cache}"
+_GS_EU2_CACHE_DIR="${_GS_EU2_CACHE_DIR:-/tmp/global-stack-env-update-cache}"
 _GS_EU2_CACHE_TTL="${_GS_EU2_CACHE_TTL:-3600}"
 
 _gs_eu2_cache_key_to_file() {

@@ -158,7 +158,7 @@ _gs_eu2_main() {
 
   if [[ "${_GS_EU2_CFG[dump]}" == "true" && \
         ( "${_GS_EU2_CFG[check]}" == "true" || "${_GS_EU2_CFG[apply]}" == "true" ) ]]; then
-    printf 'env-update-v2: --dump is mutually exclusive with --check and --apply\n' >&2
+    printf 'env-update: --dump is mutually exclusive with --check and --apply\n' >&2
     exit 1
   fi
 
@@ -169,7 +169,7 @@ _gs_eu2_main() {
   # This prevents the 2026-04-23 incident class (running --apply cold without previewing changes).
   # Marker file: ${_GS_EU2_CACHE_DIR}/last-dry-run-ts (written after every successful --dry-run check)
   if [[ "${_GS_EU2_CFG[apply]}" == "true" && "${_GS_EU2_CFG[dry_run]}" != "true" ]]; then
-    local _dry_run_marker="${_GS_EU2_CACHE_DIR:-/tmp/global-stack-env-update-v2-cache}/last-dry-run-ts"
+    local _dry_run_marker="${_GS_EU2_CACHE_DIR:-/tmp/global-stack-env-update-cache}/last-dry-run-ts"
     local _guard_ok=false
     if [[ -f "${_dry_run_marker}" ]]; then
       local _now _mtime _age
@@ -187,12 +187,12 @@ _gs_eu2_main() {
   fi
 
   if [[ "true" == "${_GS_EU2_CFG[dry_run]}" ]]; then
-    printf 'env-update-v2: --dry-run active (no writes — cache, .env, and Dockerfile propagation all gated)\n' >&2
+    printf 'env-update: --dry-run active (no writes — cache, .env, and Dockerfile propagation all gated)\n' >&2
   fi
 
   local _env_file="${_GS_EU2_CFG[env_file]}"
   if [[ ! -f "${_env_file}" ]]; then
-    printf 'env-update-v2: env file not found: %s\n' "${_env_file}" >&2
+    printf 'env-update: env file not found: %s\n' "${_env_file}" >&2
     exit 1
   fi
 
@@ -206,7 +206,7 @@ _gs_eu2_main() {
     # After a successful dry-run check, write the timestamp marker so a subsequent
     # --apply knows a recent preview was done (incident prevention: 2026-04-23).
     if [[ "${_GS_EU2_CFG[dry_run]}" == "true" ]]; then
-      local _dry_run_marker="${_GS_EU2_CACHE_DIR:-/tmp/global-stack-env-update-v2-cache}/last-dry-run-ts"
+      local _dry_run_marker="${_GS_EU2_CACHE_DIR:-/tmp/global-stack-env-update-cache}/last-dry-run-ts"
       mkdir -p "$(dirname "${_dry_run_marker}")"
       date +%s > "${_dry_run_marker}"
     fi

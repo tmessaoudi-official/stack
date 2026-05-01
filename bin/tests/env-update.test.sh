@@ -1,12 +1,12 @@
 #!/bin/bash
-# Test suite for env-update-v2.sh
-# Run: bash bin/tests/env-update-v2.test.sh
+# Test suite for env-update.sh
+# Run: bash bin/tests/env-update.test.sh
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ENV_UPDATE_V2="${SCRIPT_DIR}/../env-update-v2.sh"
-FIXTURES="${SCRIPT_DIR}/fixtures/env-update-v2"
+ENV_UPDATE_V2="${SCRIPT_DIR}/../env-update.sh"
+FIXTURES="${SCRIPT_DIR}/fixtures/env-update"
 TMP_DIR="$(mktemp -d)"
 export TMP_DIR
 trap 'rm -rf "${TMP_DIR}"' EXIT
@@ -104,7 +104,7 @@ make_env() { mkdir -p "$(dirname "$1")"; printf '%s\n' "$2" > "$1"; }
 
 # ═══════════════════════════════════════════════════════════════════════════
 echo ""
-printf "${C_BOLD}  env-update-v2.sh — test suite${C_RESET}\n"
+printf "${C_BOLD}  env-update.sh — test suite${C_RESET}\n"
 printf "  script   : %s\n" "${ENV_UPDATE_V2}"
 printf "  fixtures : %s\n" "${FIXTURES}"
 echo ""
@@ -567,7 +567,7 @@ section "11 — cache layer"
 
 t "t11a: cache write then read returns same value" bash -c "
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/cache11a
-    source '/stack/bin/lib/env-update-v2/core/cache.sh'
+    source '/stack/bin/lib/env-update/core/cache.sh'
     _gs_eu2_cache_write 'dockerhub:_/postgres:18' '18.4-alpine3.23'
     val=\$(_gs_eu2_cache_read 'dockerhub:_/postgres:18')
     [[ \"\$val\" == '18.4-alpine3.23' ]] || { echo \"got: \$val\"; echo FAIL; exit 0; }
@@ -576,7 +576,7 @@ t "t11a: cache write then read returns same value" bash -c "
 
 t "t11b: cache miss returns non-zero" bash -c "
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/cache11b
-    source '/stack/bin/lib/env-update-v2/core/cache.sh'
+    source '/stack/bin/lib/env-update/core/cache.sh'
     _gs_eu2_cache_read 'dockerhub:_/postgres:18' >/dev/null 2>&1 && { echo FAIL; exit 0; }
     echo PASS
 "
@@ -584,7 +584,7 @@ t "t11b: cache miss returns non-zero" bash -c "
 t "t11c: cache expired returns non-zero" bash -c "
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/cache11c
     export _GS_EU2_CACHE_TTL=0
-    source '/stack/bin/lib/env-update-v2/core/cache.sh'
+    source '/stack/bin/lib/env-update/core/cache.sh'
     _gs_eu2_cache_write 'key:v1' 'somevalue'
     # TTL=0: any age is expired
     sleep 1
@@ -594,7 +594,7 @@ t "t11c: cache expired returns non-zero" bash -c "
 
 t "t11d: cache_key sanitizes colons and slashes" bash -c "
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/cache11d
-    source '/stack/bin/lib/env-update-v2/core/cache.sh'
+    source '/stack/bin/lib/env-update/core/cache.sh'
     f=\$(_gs_eu2_cache_key_to_file 'dockerhub:_/postgres:18:stable')
     [[ \"\$f\" == *'dockerhub__'* ]] || { echo \"colon not replaced: \$f\"; echo FAIL; exit 0; }
     [[ \"\$f\" != *':'* ]] || { echo \"raw colon in path: \$f\"; echo FAIL; exit 0; }
@@ -607,16 +607,16 @@ t "t11d: cache_key sanitizes colons and slashes" bash -c "
 section "12 — channel selection"
 
 _ch_src() {
-  source '/stack/bin/lib/env-update-v2/config/prerelease_markers.sh'
-  source '/stack/bin/lib/env-update-v2/core/semver.sh'
-  source '/stack/bin/lib/env-update-v2/core/channel.sh'
+  source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+  source '/stack/bin/lib/env-update/core/semver.sh'
+  source '/stack/bin/lib/env-update/core/channel.sh'
 }
 
 t "t12a: stable channel picks highest stable, ignores rc" bash -c "
     $(_ch_src 2>/dev/null; echo 'true') || true
-    source '/stack/bin/lib/env-update-v2/config/prerelease_markers.sh'
-    source '/stack/bin/lib/env-update-v2/core/semver.sh'
-    source '/stack/bin/lib/env-update-v2/core/channel.sh'
+    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+    source '/stack/bin/lib/env-update/core/semver.sh'
+    source '/stack/bin/lib/env-update/core/channel.sh'
     versions=\$'18.3\n18.4-rc1\n18.4\n18.5-beta1'
     result=\$(_gs_eu2_channel_select_best \"\$versions\" 'stable')
     [[ \"\$result\" == '18.4' ]] || { echo \"got: \$result\"; echo FAIL; exit 0; }
@@ -624,9 +624,9 @@ t "t12a: stable channel picks highest stable, ignores rc" bash -c "
 "
 
 t "t12b: rc channel picks highest rc tag" bash -c "
-    source '/stack/bin/lib/env-update-v2/config/prerelease_markers.sh'
-    source '/stack/bin/lib/env-update-v2/core/semver.sh'
-    source '/stack/bin/lib/env-update-v2/core/channel.sh'
+    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+    source '/stack/bin/lib/env-update/core/semver.sh'
+    source '/stack/bin/lib/env-update/core/channel.sh'
     versions=\$'18.3\n18.4-rc1\n18.4-rc2\n18.5-beta1'
     result=\$(_gs_eu2_channel_select_best \"\$versions\" 'rc')
     [[ \"\$result\" == '18.4-rc2' ]] || { echo \"got: \$result\"; echo FAIL; exit 0; }
@@ -634,9 +634,9 @@ t "t12b: rc channel picks highest rc tag" bash -c "
 "
 
 t "t12c: empty channel defaults to stable" bash -c "
-    source '/stack/bin/lib/env-update-v2/config/prerelease_markers.sh'
-    source '/stack/bin/lib/env-update-v2/core/semver.sh'
-    source '/stack/bin/lib/env-update-v2/core/channel.sh'
+    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+    source '/stack/bin/lib/env-update/core/semver.sh'
+    source '/stack/bin/lib/env-update/core/channel.sh'
     versions=\$'18.3\n18.4-rc1\n18.4'
     result=\$(_gs_eu2_channel_select_best \"\$versions\" '')
     [[ \"\$result\" == '18.4' ]] || { echo \"got: \$result\"; echo FAIL; exit 0; }
@@ -644,9 +644,9 @@ t "t12c: empty channel defaults to stable" bash -c "
 "
 
 t "t12d: unstable channel picks highest pre-release" bash -c "
-    source '/stack/bin/lib/env-update-v2/config/prerelease_markers.sh'
-    source '/stack/bin/lib/env-update-v2/core/semver.sh'
-    source '/stack/bin/lib/env-update-v2/core/channel.sh'
+    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+    source '/stack/bin/lib/env-update/core/semver.sh'
+    source '/stack/bin/lib/env-update/core/channel.sh'
     versions=\$'18.3\n18.4\n18.5-rc1\n18.5-beta2'
     result=\$(_gs_eu2_channel_select_best \"\$versions\" 'unstable')
     # highest pre-release by sort -V
@@ -655,8 +655,8 @@ t "t12d: unstable channel picks highest pre-release" bash -c "
 "
 
 t "t12e: is_prerelease detects rc, beta, alpha" bash -c "
-    source '/stack/bin/lib/env-update-v2/config/prerelease_markers.sh'
-    source '/stack/bin/lib/env-update-v2/core/semver.sh'
+    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+    source '/stack/bin/lib/env-update/core/semver.sh'
     _gs_eu2_is_prerelease '1.0.0-rc1'   || { echo 'rc1 not detected'; echo FAIL; exit 0; }
     _gs_eu2_is_prerelease '2.3.0beta2'  || { echo 'beta not detected'; echo FAIL; exit 0; }
     _gs_eu2_is_prerelease '1.0.0alpha'  || { echo 'alpha not detected'; echo FAIL; exit 0; }
@@ -665,9 +665,9 @@ t "t12e: is_prerelease detects rc, beta, alpha" bash -c "
 "
 
 t "t12f: v-prefixed tags accepted by channel filter (B2)" bash -c "
-    source '/stack/bin/lib/env-update-v2/config/prerelease_markers.sh'
-    source '/stack/bin/lib/env-update-v2/core/semver.sh'
-    source '/stack/bin/lib/env-update-v2/core/channel.sh'
+    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+    source '/stack/bin/lib/env-update/core/semver.sh'
+    source '/stack/bin/lib/env-update/core/channel.sh'
     versions=\$'v0.29.0\nv0.28.0\nv0.27.0'
     result=\$(_gs_eu2_channel_select_best \"\$versions\" '')
     [[ -n \"\$result\" ]] || { echo 'all v-prefixed tags were dropped'; echo FAIL; exit 0; }
@@ -680,7 +680,7 @@ t "t12f: v-prefixed tags accepted by channel filter (B2)" bash -c "
 # ═══════════════════════════════════════════════════════════════════════════
 section "13 — tag flags"
 
-_TF_SRC="source '/stack/bin/lib/env-update-v2/core/tag_flags.sh'"
+_TF_SRC="source '/stack/bin/lib/env-update/core/tag_flags.sh'"
 
 t "t13a: tag-filter keeps only matching" bash -c "
     ${_TF_SRC}
@@ -740,7 +740,7 @@ section "14 — HTTP seam"
 
 t "t14a: fixture hit returns file contents" bash -c "
     export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
-    source '/stack/bin/lib/env-update-v2/http/curl.sh'
+    source '/stack/bin/lib/env-update/http/curl.sh'
     # URL → strip query → sanitize → test.example_fixture-test
     out=\$(_gs_eu2_http_get 'https://test.example/fixture-test?foo=bar' 2>&1)
     echo \"\$out\" | grep -qF '1.2.3' || { echo \"fixture content missing: \$out\"; echo FAIL; exit 0; }
@@ -749,7 +749,7 @@ t "t14a: fixture hit returns file contents" bash -c "
 
 t "t14b: fixture miss returns non-zero with message" bash -c "
     export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
-    source '/stack/bin/lib/env-update-v2/http/curl.sh'
+    source '/stack/bin/lib/env-update/http/curl.sh'
     err=\$(_gs_eu2_http_get 'https://example.com/nonexistent' 2>&1 >/dev/null)
     [[ \$? -ne 0 ]] || err_code=0
     _gs_eu2_http_get 'https://example.com/nonexistent' >/dev/null 2>&1 && { echo FAIL; exit 0; }
@@ -762,15 +762,15 @@ t "t14b: fixture miss returns non-zero with message" bash -c "
 section "15 — dockerhub fetcher"
 
 _DH_LIBS="
-source '/stack/bin/lib/env-update-v2/config/defaults.sh'
-source '/stack/bin/lib/env-update-v2/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update-v2/core/records.sh'
-source '/stack/bin/lib/env-update-v2/core/semver.sh'
-source '/stack/bin/lib/env-update-v2/core/channel.sh'
-source '/stack/bin/lib/env-update-v2/core/tag_flags.sh'
-source '/stack/bin/lib/env-update-v2/core/cache.sh'
-source '/stack/bin/lib/env-update-v2/http/curl.sh'
-source '/stack/bin/lib/env-update-v2/fetchers/dockerhub.sh'
+source '/stack/bin/lib/env-update/config/defaults.sh'
+source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update/core/records.sh'
+source '/stack/bin/lib/env-update/core/semver.sh'
+source '/stack/bin/lib/env-update/core/channel.sh'
+source '/stack/bin/lib/env-update/core/tag_flags.sh'
+source '/stack/bin/lib/env-update/core/cache.sh'
+source '/stack/bin/lib/env-update/http/curl.sh'
+source '/stack/bin/lib/env-update/fetchers/dockerhub.sh'
 export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
 export _GS_EU2_CACHE_DIR=\${TMP_DIR}/dh_cache
 "
@@ -883,9 +883,9 @@ t "t15g: version-prefix re-prepended after tag-strip-prefix (B3)" bash -c "
 section "16 — decision classifier"
 
 _DC_LIBS="
-source '/stack/bin/lib/env-update-v2/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update-v2/core/semver.sh'
-source '/stack/bin/lib/env-update-v2/core/decide.sh'
+source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update/core/semver.sh'
+source '/stack/bin/lib/env-update/core/decide.sh'
 "
 
 t "t16a: same version → SKIP (up-to-date)" bash -c "
@@ -975,15 +975,15 @@ t "t17d: SKIP up-to-date includes reason in output (B4)" bash -c "
 section "18 — pagination and error handling"
 
 _DH_LIBS18="
-source '/stack/bin/lib/env-update-v2/config/defaults.sh'
-source '/stack/bin/lib/env-update-v2/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update-v2/core/records.sh'
-source '/stack/bin/lib/env-update-v2/core/semver.sh'
-source '/stack/bin/lib/env-update-v2/core/channel.sh'
-source '/stack/bin/lib/env-update-v2/core/tag_flags.sh'
-source '/stack/bin/lib/env-update-v2/core/cache.sh'
-source '/stack/bin/lib/env-update-v2/http/curl.sh'
-source '/stack/bin/lib/env-update-v2/fetchers/dockerhub.sh'
+source '/stack/bin/lib/env-update/config/defaults.sh'
+source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update/core/records.sh'
+source '/stack/bin/lib/env-update/core/semver.sh'
+source '/stack/bin/lib/env-update/core/channel.sh'
+source '/stack/bin/lib/env-update/core/tag_flags.sh'
+source '/stack/bin/lib/env-update/core/cache.sh'
+source '/stack/bin/lib/env-update/http/curl.sh'
+source '/stack/bin/lib/env-update/fetchers/dockerhub.sh'
 export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
 export _GS_EU2_CACHE_DIR=\${TMP_DIR}/dh18_cache
 "
@@ -1065,23 +1065,23 @@ t "t18f: major_hint with dot is treated as version not hint (D1)" bash -c "
 section "19 — non-numeric fallback, unversioned, --apply"
 
 _DH_LIBS19="
-source '/stack/bin/lib/env-update-v2/config/defaults.sh'
-source '/stack/bin/lib/env-update-v2/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update-v2/core/records.sh'
-source '/stack/bin/lib/env-update-v2/core/semver.sh'
-source '/stack/bin/lib/env-update-v2/core/channel.sh'
-source '/stack/bin/lib/env-update-v2/core/tag_flags.sh'
-source '/stack/bin/lib/env-update-v2/core/cache.sh'
-source '/stack/bin/lib/env-update-v2/http/curl.sh'
-source '/stack/bin/lib/env-update-v2/fetchers/dockerhub.sh'
+source '/stack/bin/lib/env-update/config/defaults.sh'
+source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update/core/records.sh'
+source '/stack/bin/lib/env-update/core/semver.sh'
+source '/stack/bin/lib/env-update/core/channel.sh'
+source '/stack/bin/lib/env-update/core/tag_flags.sh'
+source '/stack/bin/lib/env-update/core/cache.sh'
+source '/stack/bin/lib/env-update/http/curl.sh'
+source '/stack/bin/lib/env-update/fetchers/dockerhub.sh'
 export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
 export _GS_EU2_CACHE_DIR=\${TMP_DIR}/dh19_cache
 "
 
 t "t19a: channel_select_best falls back to sort-V for codename tags (C1)" bash -c "
-    source '/stack/bin/lib/env-update-v2/config/prerelease_markers.sh'
-    source '/stack/bin/lib/env-update-v2/core/semver.sh'
-    source '/stack/bin/lib/env-update-v2/core/channel.sh'
+    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+    source '/stack/bin/lib/env-update/core/semver.sh'
+    source '/stack/bin/lib/env-update/core/channel.sh'
     versions=\$'resolute-20260413\nresolute-20260108\nplucky-20260201\nlatest'
     result=\$(_gs_eu2_channel_select_best \"\$versions\" '')
     [[ \"\$result\" == 'resolute-20260413' ]] || { echo \"got: '\$result'\"; echo FAIL; exit 0; }
@@ -1089,9 +1089,9 @@ t "t19a: channel_select_best falls back to sort-V for codename tags (C1)" bash -
 "
 
 t "t19b: channel_select_best returns empty when only unversioned sentinels present" bash -c "
-    source '/stack/bin/lib/env-update-v2/config/prerelease_markers.sh'
-    source '/stack/bin/lib/env-update-v2/core/semver.sh'
-    source '/stack/bin/lib/env-update-v2/core/channel.sh'
+    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+    source '/stack/bin/lib/env-update/core/semver.sh'
+    source '/stack/bin/lib/env-update/core/channel.sh'
     versions=\$'latest\nedge'
     result=\$(_gs_eu2_channel_select_best \"\$versions\" '')
     [[ -z \"\$result\" ]] || { echo \"expected empty, got: '\$result'\"; echo FAIL; exit 0; }
@@ -1143,9 +1143,9 @@ t "t19e: moby/buildkit tag-filter excludes -ubuntu suffix (C2)" bash -c "
 "
 
 t "t19f: _gs_eu2_apply_updates dry-run shows DRY-RUN without modifying file" bash -c "
-    source '/stack/bin/lib/env-update-v2/config/defaults.sh'
-    source '/stack/bin/lib/env-update-v2/core/records.sh'
-    source '/stack/bin/lib/env-update-v2/core/apply.sh'
+    source '/stack/bin/lib/env-update/config/defaults.sh'
+    source '/stack/bin/lib/env-update/core/records.sh'
+    source '/stack/bin/lib/env-update/core/apply.sh'
     f=\${TMP_DIR}/t19f.env
     printf 'GLOBAL_STACK_FOO_VERSION=1.0.0\n' > \"\$f\"
     _gs_eu2_record_new; idx=\$_GS_EU2_LAST_IDX
@@ -1160,9 +1160,9 @@ t "t19f: _gs_eu2_apply_updates dry-run shows DRY-RUN without modifying file" bas
 "
 
 t "t19g: _gs_eu2_apply_updates rewrites AUTO var and preserves other lines" bash -c "
-    source '/stack/bin/lib/env-update-v2/config/defaults.sh'
-    source '/stack/bin/lib/env-update-v2/core/records.sh'
-    source '/stack/bin/lib/env-update-v2/core/apply.sh'
+    source '/stack/bin/lib/env-update/config/defaults.sh'
+    source '/stack/bin/lib/env-update/core/records.sh'
+    source '/stack/bin/lib/env-update/core/apply.sh'
     f=\${TMP_DIR}/t19g.env
     printf '# comment\nGLOBAL_STACK_FOO_VERSION=1.0.0\nGLOBAL_STACK_BAR=unchanged\n' > \"\$f\"
     _gs_eu2_record_new; idx=\$_GS_EU2_LAST_IDX
@@ -1183,13 +1183,13 @@ t "t19g: _gs_eu2_apply_updates rewrites AUTO var and preserves other lines" bash
 section "20 — codename delta + floating-reference SKIP"
 
 _SD_LIBS="
-source '/stack/bin/lib/env-update-v2/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update-v2/core/semver.sh'
+source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update/core/semver.sh'
 "
 _DC_LIBS20="
-source '/stack/bin/lib/env-update-v2/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update-v2/core/semver.sh'
-source '/stack/bin/lib/env-update-v2/core/decide.sh'
+source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update/core/semver.sh'
+source '/stack/bin/lib/env-update/core/decide.sh'
 "
 
 t "t20a: semver_delta — same codename prefix → patch" bash -c "
@@ -1235,7 +1235,7 @@ t "t20e: classify — unversioned current (nightly) → SKIP" bash -c "
 section "21 — hoist_all_flags"
 
 _HOIST_LIBS="
-source '/stack/bin/lib/env-update-v2/core/parse.sh'
+source '/stack/bin/lib/env-update/core/parse.sh'
 "
 
 t "t21a: single recognized flag extracted, rest cleaned" bash -c "
@@ -1366,7 +1366,7 @@ t "t22e: suffix mid-tag not matched" bash "${_TS_SCRIPT}" '-oraclelinux9' '9.0-o
 section "23 — alt_version record field"
 
 t "t23a: alt_version set and read back via record accessor" bash -c "
-    source '/stack/bin/lib/env-update-v2/core/records.sh'
+    source '/stack/bin/lib/env-update/core/records.sh'
     _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
     _gs_eu2_record_set \$idx alt_version 'v2.0.0 (latest stable)'
     val=\$(_gs_eu2_record_get \$idx alt_version)
@@ -1383,7 +1383,7 @@ t "t23b: alt_version appears in --dump output" bash -c "
 "
 
 t "t23c: alt_version defaults to empty string when not set" bash -c "
-    source '/stack/bin/lib/env-update-v2/core/records.sh'
+    source '/stack/bin/lib/env-update/core/records.sh'
     _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
     val=\$(_gs_eu2_record_get \$idx alt_version)
     [[ -z \"\$val\" ]] || { echo \"expected empty, got: '\$val'\"; echo FAIL; exit 0; }
@@ -1396,14 +1396,14 @@ t "t23c: alt_version defaults to empty string when not set" bash -c "
 section "24 — http_get_auth"
 
 t "t24a: auth function exists and accepts (url, token) signature" bash -c "
-    source '/stack/bin/lib/env-update-v2/http/curl.sh'
+    source '/stack/bin/lib/env-update/http/curl.sh'
     declare -f _gs_eu2_http_get_auth >/dev/null 2>&1 || { echo 'function not found'; echo FAIL; exit 0; }
     echo PASS
 "
 
 t "t24b: empty token delegates to plain http_get (fixture path identical)" bash -c "
     export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
-    source '/stack/bin/lib/env-update-v2/http/curl.sh'
+    source '/stack/bin/lib/env-update/http/curl.sh'
     # Same fixture as t14a — empty token must hit same file
     out=\$(_gs_eu2_http_get_auth 'https://test.example/fixture-test?foo=bar' '' 2>&1)
     echo \"\$out\" | grep -qF '1.2.3' || { echo \"fixture content missing: \$out\"; echo FAIL; exit 0; }
@@ -1412,7 +1412,7 @@ t "t24b: empty token delegates to plain http_get (fixture path identical)" bash 
 
 t "t24c: fixture injection works identically with non-empty token (no auth header sent to fixture)" bash -c "
     export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
-    source '/stack/bin/lib/env-update-v2/http/curl.sh'
+    source '/stack/bin/lib/env-update/http/curl.sh'
     # Fixture path is determined by URL only — token should not affect fixture lookup
     out=\$(_gs_eu2_http_get_auth 'https://test.example/fixture-test?foo=bar' 'my-secret-token' 2>&1)
     echo \"\$out\" | grep -qF '1.2.3' || { echo \"fixture content missing with token: \$out\"; echo FAIL; exit 0; }
@@ -1421,7 +1421,7 @@ t "t24c: fixture injection works identically with non-empty token (no auth heade
 
 t "t24d: missing fixture returns non-zero with auth token (same as without token)" bash -c "
     export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
-    source '/stack/bin/lib/env-update-v2/http/curl.sh'
+    source '/stack/bin/lib/env-update/http/curl.sh'
     _gs_eu2_http_get_auth 'https://example.com/no-such-fixture' 'tok' >/dev/null 2>&1 \
         && { echo 'expected non-zero exit'; echo FAIL; exit 0; }
     echo PASS
@@ -1433,15 +1433,15 @@ t "t24d: missing fixture returns non-zero with auth token (same as without token
 section "25 — dockerhub HOLD from pipeline not fetcher"
 
 _DH_LIBS25="
-source '/stack/bin/lib/env-update-v2/config/defaults.sh'
-source '/stack/bin/lib/env-update-v2/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update-v2/core/records.sh'
-source '/stack/bin/lib/env-update-v2/core/semver.sh'
-source '/stack/bin/lib/env-update-v2/core/channel.sh'
-source '/stack/bin/lib/env-update-v2/core/tag_flags.sh'
-source '/stack/bin/lib/env-update-v2/core/cache.sh'
-source '/stack/bin/lib/env-update-v2/http/curl.sh'
-source '/stack/bin/lib/env-update-v2/fetchers/dockerhub.sh'
+source '/stack/bin/lib/env-update/config/defaults.sh'
+source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update/core/records.sh'
+source '/stack/bin/lib/env-update/core/semver.sh'
+source '/stack/bin/lib/env-update/core/channel.sh'
+source '/stack/bin/lib/env-update/core/tag_flags.sh'
+source '/stack/bin/lib/env-update/core/cache.sh'
+source '/stack/bin/lib/env-update/http/curl.sh'
+source '/stack/bin/lib/env-update/fetchers/dockerhub.sh'
 export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
 export _GS_EU2_CACHE_DIR=\${TMP_DIR}/dh25_cache
 "
@@ -1486,9 +1486,9 @@ t "t25b: cache hit path also leaves decision empty (not AUTO)" bash -c "
 "
 
 t "t25c: pipeline (classify_decision) produces HOLD when major constraint would escape pin" bash -c "
-    source '/stack/bin/lib/env-update-v2/core/records.sh'
-    source '/stack/bin/lib/env-update-v2/core/semver.sh'
-    source '/stack/bin/lib/env-update-v2/core/decide.sh'
+    source '/stack/bin/lib/env-update/core/records.sh'
+    source '/stack/bin/lib/env-update/core/semver.sh'
+    source '/stack/bin/lib/env-update/core/decide.sh'
     # major_hint=17 but proposed=18.4 → HOLD
     result=\$(_gs_eu2_classify_decision '17.5' '18.4' '' '' '17')
     [[ \"\$result\" == 'HOLD' ]] || { echo \"expected HOLD, got: \$result\"; echo FAIL; exit 0; }
@@ -1496,10 +1496,10 @@ t "t25c: pipeline (classify_decision) produces HOLD when major constraint would 
 "
 
 t "t25d: full pipeline HOLD for major-pin escape (end-to-end, no fetcher HOLD involved)" bash -c "
-    source '/stack/bin/lib/env-update-v2/config/defaults.sh'
-    source '/stack/bin/lib/env-update-v2/core/records.sh'
-    source '/stack/bin/lib/env-update-v2/core/semver.sh'
-    source '/stack/bin/lib/env-update-v2/core/decide.sh'
+    source '/stack/bin/lib/env-update/config/defaults.sh'
+    source '/stack/bin/lib/env-update/core/records.sh'
+    source '/stack/bin/lib/env-update/core/semver.sh'
+    source '/stack/bin/lib/env-update/core/decide.sh'
     # Simulate what main.sh does: fetcher sets proposed only, then classify runs
     _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
     _gs_eu2_record_set \$idx current_version '17.5'
@@ -1523,15 +1523,15 @@ t "t25d: full pipeline HOLD for major-pin escape (end-to-end, no fetcher HOLD in
 section "26 — codeberg fetcher"
 
 _CB_LIBS="
-source '/stack/bin/lib/env-update-v2/config/defaults.sh'
-source '/stack/bin/lib/env-update-v2/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update-v2/core/records.sh'
-source '/stack/bin/lib/env-update-v2/core/semver.sh'
-source '/stack/bin/lib/env-update-v2/core/channel.sh'
-source '/stack/bin/lib/env-update-v2/core/tag_flags.sh'
-source '/stack/bin/lib/env-update-v2/core/cache.sh'
-source '/stack/bin/lib/env-update-v2/http/curl.sh'
-source '/stack/bin/lib/env-update-v2/fetchers/codeberg.sh'
+source '/stack/bin/lib/env-update/config/defaults.sh'
+source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update/core/records.sh'
+source '/stack/bin/lib/env-update/core/semver.sh'
+source '/stack/bin/lib/env-update/core/channel.sh'
+source '/stack/bin/lib/env-update/core/tag_flags.sh'
+source '/stack/bin/lib/env-update/core/cache.sh'
+source '/stack/bin/lib/env-update/http/curl.sh'
+source '/stack/bin/lib/env-update/fetchers/codeberg.sh'
 export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
 export _GS_EU2_CACHE_DIR=\${TMP_DIR}/cb_cache
 "
@@ -1629,15 +1629,15 @@ t "t26f: fetcher leaves decision empty on success path" bash -c "
 section "27 — quay fetcher"
 
 _QY_LIBS="
-source '/stack/bin/lib/env-update-v2/config/defaults.sh'
-source '/stack/bin/lib/env-update-v2/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update-v2/core/records.sh'
-source '/stack/bin/lib/env-update-v2/core/semver.sh'
-source '/stack/bin/lib/env-update-v2/core/channel.sh'
-source '/stack/bin/lib/env-update-v2/core/tag_flags.sh'
-source '/stack/bin/lib/env-update-v2/core/cache.sh'
-source '/stack/bin/lib/env-update-v2/http/curl.sh'
-source '/stack/bin/lib/env-update-v2/fetchers/quay.sh'
+source '/stack/bin/lib/env-update/config/defaults.sh'
+source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update/core/records.sh'
+source '/stack/bin/lib/env-update/core/semver.sh'
+source '/stack/bin/lib/env-update/core/channel.sh'
+source '/stack/bin/lib/env-update/core/tag_flags.sh'
+source '/stack/bin/lib/env-update/core/cache.sh'
+source '/stack/bin/lib/env-update/http/curl.sh'
+source '/stack/bin/lib/env-update/fetchers/quay.sh'
 export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
 export _GS_EU2_CACHE_DIR=\${TMP_DIR}/qy_cache
 "
@@ -1735,15 +1735,15 @@ t "t27f: fetcher leaves decision empty on success path" bash -c "
 section "28 — npm fetcher"
 
 _NPM_LIBS="
-source '/stack/bin/lib/env-update-v2/config/defaults.sh'
-source '/stack/bin/lib/env-update-v2/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update-v2/core/records.sh'
-source '/stack/bin/lib/env-update-v2/core/semver.sh'
-source '/stack/bin/lib/env-update-v2/core/channel.sh'
-source '/stack/bin/lib/env-update-v2/core/tag_flags.sh'
-source '/stack/bin/lib/env-update-v2/core/cache.sh'
-source '/stack/bin/lib/env-update-v2/http/curl.sh'
-source '/stack/bin/lib/env-update-v2/fetchers/npm.sh'
+source '/stack/bin/lib/env-update/config/defaults.sh'
+source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update/core/records.sh'
+source '/stack/bin/lib/env-update/core/semver.sh'
+source '/stack/bin/lib/env-update/core/channel.sh'
+source '/stack/bin/lib/env-update/core/tag_flags.sh'
+source '/stack/bin/lib/env-update/core/cache.sh'
+source '/stack/bin/lib/env-update/http/curl.sh'
+source '/stack/bin/lib/env-update/fetchers/npm.sh'
 export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
 export _GS_EU2_CACHE_DIR=\${TMP_DIR}/npm_cache
 "
@@ -1836,15 +1836,15 @@ t "t28f: fetcher leaves decision empty on success path" bash -c "
 section "29 — pypi fetcher"
 
 _PYPI_LIBS="
-source '/stack/bin/lib/env-update-v2/config/defaults.sh'
-source '/stack/bin/lib/env-update-v2/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update-v2/core/records.sh'
-source '/stack/bin/lib/env-update-v2/core/semver.sh'
-source '/stack/bin/lib/env-update-v2/core/channel.sh'
-source '/stack/bin/lib/env-update-v2/core/tag_flags.sh'
-source '/stack/bin/lib/env-update-v2/core/cache.sh'
-source '/stack/bin/lib/env-update-v2/http/curl.sh'
-source '/stack/bin/lib/env-update-v2/fetchers/pypi.sh'
+source '/stack/bin/lib/env-update/config/defaults.sh'
+source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update/core/records.sh'
+source '/stack/bin/lib/env-update/core/semver.sh'
+source '/stack/bin/lib/env-update/core/channel.sh'
+source '/stack/bin/lib/env-update/core/tag_flags.sh'
+source '/stack/bin/lib/env-update/core/cache.sh'
+source '/stack/bin/lib/env-update/http/curl.sh'
+source '/stack/bin/lib/env-update/fetchers/pypi.sh'
 export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
 export _GS_EU2_CACHE_DIR=\${TMP_DIR}/pypi_cache
 "
@@ -1925,15 +1925,15 @@ t "t29e: fetcher leaves decision empty on success path" bash -c "
 section "30 — rubygems fetcher"
 
 _RG_LIBS="
-source '/stack/bin/lib/env-update-v2/config/defaults.sh'
-source '/stack/bin/lib/env-update-v2/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update-v2/core/records.sh'
-source '/stack/bin/lib/env-update-v2/core/semver.sh'
-source '/stack/bin/lib/env-update-v2/core/channel.sh'
-source '/stack/bin/lib/env-update-v2/core/tag_flags.sh'
-source '/stack/bin/lib/env-update-v2/core/cache.sh'
-source '/stack/bin/lib/env-update-v2/http/curl.sh'
-source '/stack/bin/lib/env-update-v2/fetchers/rubygems.sh'
+source '/stack/bin/lib/env-update/config/defaults.sh'
+source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update/core/records.sh'
+source '/stack/bin/lib/env-update/core/semver.sh'
+source '/stack/bin/lib/env-update/core/channel.sh'
+source '/stack/bin/lib/env-update/core/tag_flags.sh'
+source '/stack/bin/lib/env-update/core/cache.sh'
+source '/stack/bin/lib/env-update/http/curl.sh'
+source '/stack/bin/lib/env-update/fetchers/rubygems.sh'
 export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
 export _GS_EU2_CACHE_DIR=\${TMP_DIR}/rg_cache
 "
@@ -2014,15 +2014,15 @@ t "t30e: fetcher leaves decision empty on success path" bash -c "
 section "31 — github fetcher"
 
 _GH_LIBS="
-source '/stack/bin/lib/env-update-v2/config/defaults.sh'
-source '/stack/bin/lib/env-update-v2/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update-v2/core/records.sh'
-source '/stack/bin/lib/env-update-v2/core/semver.sh'
-source '/stack/bin/lib/env-update-v2/core/channel.sh'
-source '/stack/bin/lib/env-update-v2/core/tag_flags.sh'
-source '/stack/bin/lib/env-update-v2/core/cache.sh'
-source '/stack/bin/lib/env-update-v2/http/curl.sh'
-source '/stack/bin/lib/env-update-v2/fetchers/github.sh'
+source '/stack/bin/lib/env-update/config/defaults.sh'
+source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update/core/records.sh'
+source '/stack/bin/lib/env-update/core/semver.sh'
+source '/stack/bin/lib/env-update/core/channel.sh'
+source '/stack/bin/lib/env-update/core/tag_flags.sh'
+source '/stack/bin/lib/env-update/core/cache.sh'
+source '/stack/bin/lib/env-update/http/curl.sh'
+source '/stack/bin/lib/env-update/fetchers/github.sh'
 export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
 export _GS_EU2_CACHE_DIR=\${TMP_DIR}/gh_cache
 "
@@ -2205,15 +2205,15 @@ t "t31l: Strategy 3 git ls-remote fallback — major_hint match found via ls-rem
 section "32 — sdkman fetcher"
 
 _SDK_LIBS="
-source '/stack/bin/lib/env-update-v2/config/defaults.sh'
-source '/stack/bin/lib/env-update-v2/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update-v2/core/records.sh'
-source '/stack/bin/lib/env-update-v2/core/semver.sh'
-source '/stack/bin/lib/env-update-v2/core/channel.sh'
-source '/stack/bin/lib/env-update-v2/core/tag_flags.sh'
-source '/stack/bin/lib/env-update-v2/core/cache.sh'
-source '/stack/bin/lib/env-update-v2/http/curl.sh'
-source '/stack/bin/lib/env-update-v2/fetchers/sdkman.sh'
+source '/stack/bin/lib/env-update/config/defaults.sh'
+source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update/core/records.sh'
+source '/stack/bin/lib/env-update/core/semver.sh'
+source '/stack/bin/lib/env-update/core/channel.sh'
+source '/stack/bin/lib/env-update/core/tag_flags.sh'
+source '/stack/bin/lib/env-update/core/cache.sh'
+source '/stack/bin/lib/env-update/http/curl.sh'
+source '/stack/bin/lib/env-update/fetchers/sdkman.sh'
 export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
 export _GS_EU2_CACHE_DIR=\${TMP_DIR}/sdk_cache
 "
@@ -2336,15 +2336,15 @@ t "t32g: cache hit skips HTTP (proposed_version from cache)" bash -c "
 section "33 — sdkmanager fetcher"
 
 _SDKMGR_LIBS="
-source '/stack/bin/lib/env-update-v2/config/defaults.sh'
-source '/stack/bin/lib/env-update-v2/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update-v2/core/records.sh'
-source '/stack/bin/lib/env-update-v2/core/semver.sh'
-source '/stack/bin/lib/env-update-v2/core/channel.sh'
-source '/stack/bin/lib/env-update-v2/core/tag_flags.sh'
-source '/stack/bin/lib/env-update-v2/core/cache.sh'
-source '/stack/bin/lib/env-update-v2/http/curl.sh'
-source '/stack/bin/lib/env-update-v2/fetchers/sdkmanager.sh'
+source '/stack/bin/lib/env-update/config/defaults.sh'
+source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update/core/records.sh'
+source '/stack/bin/lib/env-update/core/semver.sh'
+source '/stack/bin/lib/env-update/core/channel.sh'
+source '/stack/bin/lib/env-update/core/tag_flags.sh'
+source '/stack/bin/lib/env-update/core/cache.sh'
+source '/stack/bin/lib/env-update/http/curl.sh'
+source '/stack/bin/lib/env-update/fetchers/sdkmanager.sh'
 export _GS_EU2_SDKMANAGER_CMD_FIXTURE='${FIXTURES}/sdkmanager-list.txt'
 export _GS_EU2_CACHE_DIR=\${TMP_DIR}/sdkmgr_cache
 "
@@ -2461,13 +2461,13 @@ t "t33g: cache hit skips cmd fixture (proposed_version from cache)" bash -c "
 section "34 — pecl helper functions"
 
 _PECL_LIBS="
-source '/stack/bin/lib/env-update-v2/config/defaults.sh'
-source '/stack/bin/lib/env-update-v2/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update-v2/core/records.sh'
-source '/stack/bin/lib/env-update-v2/core/semver.sh'
-source '/stack/bin/lib/env-update-v2/core/cache.sh'
-source '/stack/bin/lib/env-update-v2/http/curl.sh'
-source '/stack/bin/lib/env-update-v2/fetchers/pecl.sh'
+source '/stack/bin/lib/env-update/config/defaults.sh'
+source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update/core/records.sh'
+source '/stack/bin/lib/env-update/core/semver.sh'
+source '/stack/bin/lib/env-update/core/cache.sh'
+source '/stack/bin/lib/env-update/http/curl.sh'
+source '/stack/bin/lib/env-update/fetchers/pecl.sh'
 export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
 export _GS_EU2_CACHE_DIR=\${TMP_DIR}/pecl_cache
 "
@@ -2518,17 +2518,17 @@ t "t34e: HTTP error for allreleases returns empty string, no crash" bash -c "
 section "35 — pecl-git fetcher"
 
 _PECLGIT_LIBS="
-source '/stack/bin/lib/env-update-v2/config/defaults.sh'
-source '/stack/bin/lib/env-update-v2/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update-v2/core/records.sh'
-source '/stack/bin/lib/env-update-v2/core/semver.sh'
-source '/stack/bin/lib/env-update-v2/core/channel.sh'
-source '/stack/bin/lib/env-update-v2/core/tag_flags.sh'
-source '/stack/bin/lib/env-update-v2/core/cache.sh'
-source '/stack/bin/lib/env-update-v2/http/curl.sh'
-source '/stack/bin/lib/env-update-v2/fetchers/github.sh'
-source '/stack/bin/lib/env-update-v2/fetchers/pecl.sh'
-source '/stack/bin/lib/env-update-v2/fetchers/pecl_git.sh'
+source '/stack/bin/lib/env-update/config/defaults.sh'
+source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update/core/records.sh'
+source '/stack/bin/lib/env-update/core/semver.sh'
+source '/stack/bin/lib/env-update/core/channel.sh'
+source '/stack/bin/lib/env-update/core/tag_flags.sh'
+source '/stack/bin/lib/env-update/core/cache.sh'
+source '/stack/bin/lib/env-update/http/curl.sh'
+source '/stack/bin/lib/env-update/fetchers/github.sh'
+source '/stack/bin/lib/env-update/fetchers/pecl.sh'
+source '/stack/bin/lib/env-update/fetchers/pecl_git.sh'
 export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
 export _GS_EU2_CACHE_DIR=\${TMP_DIR}/peclgit_cache
 "
@@ -2645,8 +2645,8 @@ t "t35g: GITHUB_TOKEN forwarded — fixture injection works with token set" bash
 section "36 — semver_delta date-sha format"
 
 _SV_LIBS="
-source '/stack/bin/lib/env-update-v2/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update-v2/core/semver.sh'
+source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update/core/semver.sh'
 "
 
 t "t36a: YYYYMMDD-sha8 → YYYYMMDD-sha8 (newer date) classifies as patch" bash -c "
@@ -2664,18 +2664,18 @@ t "t36b: SHA-only current → YYYYMMDD-sha8 proposed classifies as patch" bash -
 "
 
 t "t36c: same date-sha → SKIP (classify_decision integration)" bash -c "
-    source '/stack/bin/lib/env-update-v2/config/defaults.sh'
+    source '/stack/bin/lib/env-update/config/defaults.sh'
     ${_SV_LIBS}
-    source '/stack/bin/lib/env-update-v2/core/decide.sh'
+    source '/stack/bin/lib/env-update/core/decide.sh'
     result=\$(_gs_eu2_classify_decision '20260315-abc1234d' '20260315-abc1234d' '' '' '')
     [[ \"\$result\" == 'SKIP' ]] || { echo \"expected SKIP for same date-sha, got: '\$result'\"; echo FAIL; exit 0; }
     echo PASS
 "
 
 t "t36d: newer date-sha → AUTO (classify_decision integration)" bash -c "
-    source '/stack/bin/lib/env-update-v2/config/defaults.sh'
+    source '/stack/bin/lib/env-update/config/defaults.sh'
     ${_SV_LIBS}
-    source '/stack/bin/lib/env-update-v2/core/decide.sh'
+    source '/stack/bin/lib/env-update/core/decide.sh'
     result=\$(_gs_eu2_classify_decision '20260315-abc1234d' '20260316-def5678e' '' '' '')
     [[ \"\$result\" == 'AUTO' ]] || { echo \"expected AUTO for newer date-sha, got: '\$result'\"; echo FAIL; exit 0; }
     echo PASS
@@ -2687,17 +2687,17 @@ t "t36d: newer date-sha → AUTO (classify_decision integration)" bash -c "
 section "37 — url fetcher"
 
 _URL_LIBS="
-source '/stack/bin/lib/env-update-v2/config/defaults.sh'
-source '/stack/bin/lib/env-update-v2/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update-v2/core/records.sh'
-source '/stack/bin/lib/env-update-v2/core/semver.sh'
-source '/stack/bin/lib/env-update-v2/core/channel.sh'
-source '/stack/bin/lib/env-update-v2/core/tag_flags.sh'
-source '/stack/bin/lib/env-update-v2/core/cache.sh'
-source '/stack/bin/lib/env-update-v2/core/ubuntu.sh'
-source '/stack/bin/lib/env-update-v2/http/curl.sh'
-source '/stack/bin/lib/env-update-v2/fetchers/github.sh'
-source '/stack/bin/lib/env-update-v2/fetchers/url.sh'
+source '/stack/bin/lib/env-update/config/defaults.sh'
+source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update/core/records.sh'
+source '/stack/bin/lib/env-update/core/semver.sh'
+source '/stack/bin/lib/env-update/core/channel.sh'
+source '/stack/bin/lib/env-update/core/tag_flags.sh'
+source '/stack/bin/lib/env-update/core/cache.sh'
+source '/stack/bin/lib/env-update/core/ubuntu.sh'
+source '/stack/bin/lib/env-update/http/curl.sh'
+source '/stack/bin/lib/env-update/fetchers/github.sh'
+source '/stack/bin/lib/env-update/fetchers/url.sh'
 export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
 export _GS_EU2_CACHE_DIR=\"\${TMP_DIR}/url_cache\"
 "

@@ -17,7 +17,7 @@ _gs_eu2_print_summary() {
   local _noun="variables"
   [[ "${_count}" -eq 1 ]] && _noun="variable"
 
-  printf 'env-update-v2 v%s — parsed %s\n\n' "${_GS_EU2_VERSION}" "${_env_file}"
+  printf 'env-update v%s — parsed %s\n\n' "${_GS_EU2_VERSION}" "${_env_file}"
   printf '  %s annotated %s' "${_count}" "${_noun}"
 
   if [[ "${_count}" -eq 0 ]]; then

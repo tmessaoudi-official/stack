@@ -124,27 +124,27 @@ _gs_eu2_dispatch_flag() {
     tag-extract|tag-suffix|fetch-extract|fetch-json|url-probe|url-probe-depth|\
     version-prefix|pecl-ref)
       if [[ -z "${_val}" ]]; then
-        printf 'env-update-v2: %s:%s: flag %q requires a non-empty value\n' \
+        printf 'env-update: %s:%s: flag %q requires a non-empty value\n' \
           "${_env_file}" "${_lnum}" "${_name}" >&2
         exit 1
       fi
       ;;
     tag-replace)
       if [[ -z "${_val}" || "${_val}" != *:* ]]; then
-        printf 'env-update-v2: %s:%s: flag tag-replace requires FROM:TO format\n' \
+        printf 'env-update: %s:%s: flag tag-replace requires FROM:TO format\n' \
           "${_env_file}" "${_lnum}" >&2
         exit 1
       fi
       ;;
     depends-on)
       if [[ -z "${_val}" || "${_val}" != *:* ]]; then
-        printf 'env-update-v2: %s:%s: malformed depends-on — expected VAR:constraint, got %q\n' \
+        printf 'env-update: %s:%s: malformed depends-on — expected VAR:constraint, got %q\n' \
           "${_env_file}" "${_lnum}" "${_val:-<empty>}" >&2
         exit 1
       fi
       ;;
     *)
-      printf 'env-update-v2: %s:%s: unknown flag %q in annotation\n' \
+      printf 'env-update: %s:%s: unknown flag %q in annotation\n' \
         "${_env_file}" "${_lnum}" "${_name}" >&2
       exit 1
       ;;
@@ -206,7 +206,7 @@ _gs_eu2_parse_env_file() {
     # Annotation line
     if [[ "${_line}" =~ ${_re_annotation} ]]; then
       if [[ "${_state}" == "AWAITING_VARIABLE" ]]; then
-        printf 'env-update-v2: %s:%s: duplicate @todo env-update before assignment (previous at line %s)\n' \
+        printf 'env-update: %s:%s: duplicate @todo env-update before assignment (previous at line %s)\n' \
           "${_env_file}" "${_line_number}" "${_pending_lnum}" >&2
         exit 1
       fi
@@ -240,11 +240,11 @@ _gs_eu2_parse_env_file() {
           local _bad_flag="${_content_clean#(}"
           _bad_flag="${_bad_flag%%)*}"
           _bad_flag="${_bad_flag%%:*}"
-          printf 'env-update-v2: %s:%s: unknown flag %q in annotation\n' \
+          printf 'env-update: %s:%s: unknown flag %q in annotation\n' \
             "${_env_file}" "${_line_number}" "${_bad_flag}" >&2
         else
           local _got="${_content_clean%% *}"
-          printf 'env-update-v2: %s:%s: annotation has no TYPE:IDENTIFIER (got: %q)\n' \
+          printf 'env-update: %s:%s: annotation has no TYPE:IDENTIFIER (got: %q)\n' \
             "${_env_file}" "${_line_number}" "${_got:-<empty>}" >&2
         fi
         exit 1
@@ -364,7 +364,7 @@ _gs_eu2_parse_env_file() {
         _pending_git_url="" _pending_git_sha=""
       else
         # C2: non-blank non-comment non-assignment line — annotation not followed by var
-        printf 'env-update-v2: %s:%d: annotation not followed by variable assignment (got: %s)\n' \
+        printf 'env-update: %s:%d: annotation not followed by variable assignment (got: %s)\n' \
           "${_env_file}" "${_line_number}" "${_line}" >&2
         _state="IDLE"
         _pending_git_url="" _pending_git_sha=""

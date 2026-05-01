@@ -49,7 +49,7 @@ _gs_eu2_dump_records() {
     text) _gs_eu2_dump_text ;;
     json) _gs_eu2_dump_json ;;
     *)
-      printf 'env-update-v2: unknown --format value: %q (valid: text, json)\n' "${_format}" >&2
+      printf 'env-update: unknown --format value: %q (valid: text, json)\n' "${_format}" >&2
       exit 1 ;;
   esac
 }
