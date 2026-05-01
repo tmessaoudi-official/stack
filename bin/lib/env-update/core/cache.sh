@@ -20,13 +20,17 @@ _gs_eu2_cache_read() {
   local _key="${1}"
   local _f
   _f="$(_gs_eu2_cache_key_to_file "${_key}")"
-  [[ -f "${_f}" ]] || return 1
   local _now _mtime _age
   _now="$(date +%s)"
   _mtime="$(stat -c %Y "${_f}" 2>/dev/null || stat -f %m "${_f}" 2>/dev/null || echo 0)"
+  # stat returns 0 when file is absent — treat age as infinite (stale)
+  [[ "${_mtime}" == "0" ]] && return 1
   _age=$(( _now - _mtime ))
   (( _age <= _GS_EU2_CACHE_TTL )) || return 1
-  cat "${_f}"
+  # Atomic read: cat fails if file disappeared between stat and here — caller sees empty/error
+  local _content
+  _content="$(cat "${_f}" 2>/dev/null)" || return 1
+  printf '%s' "${_content}"
   return 0
 }
 
