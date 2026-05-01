@@ -177,7 +177,7 @@ make start-local-registry            # Start local TLS registry (port 5000)
 - `/stack-health` — health markers, container status, version markers
 - `/env-diff` — show divergences between `.env` and `.env.local`
 - `/service-info <name>` — deep-dive on one service (compose, Dockerfile, startup, health, ports, versions)
-- `/recent` — quick context: recent commits, uncommitted changes, stack health
+- `/recent` — quick context: recent commits, uncommitted changes, changed file stats (global command)
 - `/bundle` — *(global command — works in any project)* bundle config into a portable `.tar.gz`; `--scope project` (default) LLM-generalizes this project's CLAUDE.md + .claude/ into a rich template with ADAPT markers; `--scope global` exports `~/.claude/` as-is; `--scope all` produces both archives
 - `/install` — *(global command — works in any project)* install a bundle: Phase 0 detects existing `.claude/` (asks replace/manual-merge); bash installer runs; Phase 5 probes target project and fills ADAPT markers in-place
 - `/adapt-project` — *(global command)* explore the project deeply and fill all ADAPT markers in CLAUDE.md + .claude/ (from an imported bundle); safe to re-run (idempotent if no markers remain)
@@ -275,7 +275,7 @@ Claude Code's configuration for this project lives in:
   subagent-stop-reminder.sh              # SubagentStop: remind parent to verify Phase 7/8
 .claude/commands/                        # Slash command definitions
   lint.md  fmt.md  check-versions.md  validate.md
-  stack-health.md  env-diff.md  service-info.md  recent.md  new-service.md
+  stack-health.md  env-diff.md  service-info.md  new-service.md
 ```
 
 ## Software Craftsmanship & Thinking Frameworks

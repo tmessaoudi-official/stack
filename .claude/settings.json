@@ -34,7 +34,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/subagent-stop-reminder.sh",
+            "command": "/stack/.claude/hooks/subagent-stop-reminder.sh",
             "timeout": 10
           }
         ]
@@ -46,22 +46,22 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/shellcheck-on-write.sh",
+            "command": "/stack/.claude/hooks/shellcheck-on-write.sh",
             "timeout": 10
           },
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/hadolint-on-write.sh",
+            "command": "/stack/.claude/hooks/hadolint-on-write.sh",
             "timeout": 10
           },
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/yamllint-on-write.sh",
+            "command": "/stack/.claude/hooks/yamllint-on-write.sh",
             "timeout": 10
           },
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/shfmt-on-write.sh",
+            "command": "/stack/.claude/hooks/shfmt-on-write.sh",
             "timeout": 10
           }
         ]
