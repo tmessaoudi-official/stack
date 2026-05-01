@@ -88,6 +88,13 @@ docker/config/dist/conf/http-common/ssl/*.pem
 
 !/docker/config/root/.gitconfig
 !/docker/config/root/.gitattributes
+
+# SSH private keys — never commit, bind-mounted into containers
+docker/config/root/.ssh/id_*
+!docker/config/root/.ssh/id_*.pub
+docker/config/root/.ssh/known_hosts
+docker/config/root/.ssh/known_hosts.old
+
 /docker/config/root/**/*
 
 /docker/data/**/*
