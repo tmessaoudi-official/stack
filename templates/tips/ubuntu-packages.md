@@ -6,22 +6,22 @@ sudo dpkg --add-architecture i386
 sudo dpkg --remove-architecture i386
 
 sudo curl -o /usr/share/keyrings/postgresql.asc --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc
-sudo sh -c 'echo "Types: deb\nTrusted: yes\nSigned-By: /usr/share/keyrings/postgresql.asc\nArch: $(dpkg --print-architecture)\nURIs: https://apt.postgresql.org/pub/repos/apt\nSuites: ${UBUNTU_CODENAME}-pgdg\nComponents: main" > /etc/apt/sources.list.d/pgdg.sources'
+sudo sh -c 'echo "Types: deb\nSigned-By: /usr/share/keyrings/postgresql.asc\nArch: $(dpkg --print-architecture)\nURIs: https://apt.postgresql.org/pub/repos/apt\nSuites: ${UBUNTU_CODENAME}-pgdg\nComponents: main" > /etc/apt/sources.list.d/pgdg.sources'
 sudo curl -fsSL 'https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xF911AB184317630C59970973E363C90F8F1B6217' | gpg --dearmor | sudo tee /usr/share/keyrings/git.gpg
-sudo echo -e "Types: deb\nTrusted: yes\nSigned-By: /usr/share/keyrings/git.gpg\nArch: $(dpkg --print-architecture)\nURIs: https://ppa.launchpadcontent.net/git-core/ppa/ubuntu\nSuites: $(lsb_release -cs)\nComponents: main" | sudo dd of=/etc/apt/sources.list.d/git.sources
+sudo echo -e "Types: deb\nSigned-By: /usr/share/keyrings/git.gpg\nArch: $(dpkg --print-architecture)\nURIs: https://ppa.launchpadcontent.net/git-core/ppa/ubuntu\nSuites: $(lsb_release -cs)\nComponents: main" | sudo dd of=/etc/apt/sources.list.d/git.sources
 sudo curl -fsSL https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor | sudo dd of=/usr/share/keyrings/google-chrome.gpg
-sudo echo -e "Types: deb\nTrusted: yes\nSigned-By: /usr/share/keyrings/google-chrome.gpg\nArch: $(dpkg --print-architecture)\nURIs: http://dl.google.com/linux/chrome/deb/\nSuites: stable\nComponents: main" | sudo dd of=/etc/apt/sources.list.d/google-chrome.sources
+sudo echo -e "Types: deb\nSigned-By: /usr/share/keyrings/google-chrome.gpg\nArch: $(dpkg --print-architecture)\nURIs: http://dl.google.com/linux/chrome/deb/\nSuites: stable\nComponents: main" | sudo dd of=/etc/apt/sources.list.d/google-chrome.sources
 sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker.gpg
-sudo echo -e "Types: deb\nTrusted: yes\nSigned-By: /usr/share/keyrings/docker.gpg\nArch: $(dpkg --print-architecture)\nURIs: https://download.docker.com/linux/ubuntu\nSuites: ${UBUNTU_CODENAME}\nComponents: stable" | sudo tee /etc/apt/sources.list.d/docker.sources > /dev/null
+sudo echo -e "Types: deb\nSigned-By: /usr/share/keyrings/docker.gpg\nArch: $(dpkg --print-architecture)\nURIs: https://download.docker.com/linux/ubuntu\nSuites: ${UBUNTU_CODENAME}\nComponents: stable" | sudo tee /etc/apt/sources.list.d/docker.sources > /dev/null
 sudo curl -fsSL https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/${GLOBAL_STACK_PODMAN_CHANEL}/Release.key | sudo gpg --dearmor -o /usr/share/keyrings/podman.gpg
-sudo echo -e "Types: deb\nTrusted: yes\nSigned-By: /usr/share/keyrings/podman.gpg\nArch: $(dpkg --print-architecture)\nURIs: https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/${GLOBAL_STACK_PODMAN_CHANEL}/\nSuites: /" | sudo tee /etc/apt/sources.list.d/podman.sources
+sudo echo -e "Types: deb\nSigned-By: /usr/share/keyrings/podman.gpg\nArch: $(dpkg --print-architecture)\nURIs: https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/${GLOBAL_STACK_PODMAN_CHANEL}/\nSuites: /" | sudo tee /etc/apt/sources.list.d/podman.sources
 sudo curl -fsSL 'https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x6125E2A8C77F2818FB7BD15B93C4A3FD7BB9C367' | gpg --dearmor | sudo tee /usr/share/keyrings/ansible.gpg
-sudo echo -e "Types: deb\nTrusted: yes\nSigned-By: /usr/share/keyrings/ansible.gpg\nArch: $(dpkg --print-architecture)\nURIs: https://ppa.launchpadcontent.net/ansible/ansible/ubuntu\nSuites: questing\nComponents: main" | sudo tee /etc/apt/sources.list.d/ansible.sources
+sudo echo -e "Types: deb\nSigned-By: /usr/share/keyrings/ansible.gpg\nArch: $(dpkg --print-architecture)\nURIs: https://ppa.launchpadcontent.net/ansible/ansible/ubuntu\nSuites: questing\nComponents: main" | sudo tee /etc/apt/sources.list.d/ansible.sources
 sudo curl -o /tmp/gitlab-runner.sh "https://packages.gitlab.com/install/repositories/runner/gitlab-runner/script.deb.sh"
 sudo chmod a+x /tmp/gitlab-runner.sh
 sudo os=ubuntu dist=questing /tmp/gitlab-runner.sh
 sudo rm /tmp/gitlab-runner.sh /etc/apt/sources.list.d/runner_gitlab-runner.list
-echo -e "Types: deb\nTrusted: yes\nSigned-By: /etc/apt/keyrings/runner_gitlab-runner-archive-keyring.gpg\nArch: $(dpkg --print-architecture)\nURIs: https://packages.gitlab.com/runner/gitlab-runner/ubuntu/\nSuites: questing\nComponents: main\n\nTypes: deb-src\nTrusted: yes\nSigned-By: /etc/apt/keyrings/runner_gitlab-runner-archive-keyring.gpg\nArch: $(dpkg --print-architecture)\nURIs: https://packages.gitlab.com/runner/gitlab-runner/ubuntu/\nSuites: questing\nComponents: main" | sudo dd of=/etc/apt/sources.list.d/runner_gitlab-runner.sources
+echo -e "Types: deb\nSigned-By: /etc/apt/keyrings/runner_gitlab-runner-archive-keyring.gpg\nArch: $(dpkg --print-architecture)\nURIs: https://packages.gitlab.com/runner/gitlab-runner/ubuntu/\nSuites: questing\nComponents: main\n\nTypes: deb-src\nSigned-By: /etc/apt/keyrings/runner_gitlab-runner-archive-keyring.gpg\nArch: $(dpkg --print-architecture)\nURIs: https://packages.gitlab.com/runner/gitlab-runner/ubuntu/\nSuites: questing\nComponents: main" | sudo dd of=/etc/apt/sources.list.d/runner_gitlab-runner.sources
 
 
 sudo apt-get update --allow-releaseinfo-change
