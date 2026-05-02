@@ -24,13 +24,13 @@ sudo rm /tmp/gitlab-runner.sh /etc/apt/sources.list.d/runner_gitlab-runner.list
 echo -e "Types: deb\nTrusted: yes\nSigned-By: /etc/apt/keyrings/runner_gitlab-runner-archive-keyring.gpg\nArch: $(dpkg --print-architecture)\nURIs: https://packages.gitlab.com/runner/gitlab-runner/ubuntu/\nSuites: questing\nComponents: main\n\nTypes: deb-src\nTrusted: yes\nSigned-By: /etc/apt/keyrings/runner_gitlab-runner-archive-keyring.gpg\nArch: $(dpkg --print-architecture)\nURIs: https://packages.gitlab.com/runner/gitlab-runner/ubuntu/\nSuites: questing\nComponents: main" | sudo dd of=/etc/apt/sources.list.d/runner_gitlab-runner.sources
 
 
-sudo apt-get -o Acquire::AllowInsecureRepositories=true update --allow-releaseinfo-change
+sudo apt-get update --allow-releaseinfo-change
 
-sudo apt-get --allow-unauthenticated install -y --no-install-recommends --fix-missing tzdata
+sudo apt-get install -y --no-install-recommends --fix-missing tzdata
 
 sudo dpkg-reconfigure tzdata
 
-sudo apt-get --allow-unauthenticated install -y --fix-missing \
+sudo apt-get install -y --fix-missing \
     sudo \
     sendmail \
     locales \

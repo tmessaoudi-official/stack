@@ -21,8 +21,8 @@ SHELL ["/bin/bash", "-xeE", "-o", "pipefail", "-c"]
 # hadolint ignore=DL3008,DL3018
 RUN shopt -s extdebug \
     && IFS=$'\n\t' \
-    && apt-get -o Acquire::AllowInsecureRepositories=true update --allow-releaseinfo-change \
-    && apt-get --allow-unauthenticated install -y --no-install-recommends --fix-missing \
+    && apt-get update --allow-releaseinfo-change \
+    && apt-get install -y --no-install-recommends --fix-missing \
     libnss3-tools \
     sudo \
     && apt-get clean -y \
