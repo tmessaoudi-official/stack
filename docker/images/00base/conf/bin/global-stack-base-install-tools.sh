@@ -166,17 +166,17 @@ if [[ "" != "${OPERATING_SYSTEM}" ]]; then
 	if [[ "" != "${SHELLCHECK_ARCH}" ]]; then
 		echo "Installing shellcheck - system : ${OPERATING_SYSTEM}, arch : ${SHELLCHECK_ARCH}"
 		# GLOBAL_STACK_SHELLCHECK_VERSION="$(curl --silent https://github.com/koalaman/shellcheck/releases/latest | jq .name -r)"
-		sudo curl -L "https://github.com/koalaman/shellcheck/releases/download/${GLOBAL_STACK_SHELLCHECK_VERSION}/shellcheck-${GLOBAL_STACK_SHELLCHECK_VERSION}.${OPERATING_SYSTEM}.${SHELLCHECK_ARCH}.tar.xz" -o /usr/local/bin/shellcheck-"${GLOBAL_STACK_SHELLCHECK_VERSION}".tar.xz
-		sudo mkdir -p /usr/local/bin/shellcheck-${GLOBAL_STACK_SHELLCHECK_VERSION}
-		sudo tar -xf /usr/local/bin/shellcheck-${GLOBAL_STACK_SHELLCHECK_VERSION}.tar.xz -C /usr/local/bin/shellcheck-${GLOBAL_STACK_SHELLCHECK_VERSION}
-		sudo mv /usr/local/bin/shellcheck-${GLOBAL_STACK_SHELLCHECK_VERSION}/shellcheck-${GLOBAL_STACK_SHELLCHECK_VERSION}/shellcheck /usr/local/bin/shellcheck
-		sudo rm -rf /usr/local/bin/shellcheck-${GLOBAL_STACK_SHELLCHECK_VERSION}*
+		sudo curl -L "https://github.com/koalaman/shellcheck/releases/download/${GLOBAL_STACK_SHELLCHECK_VERSION}/shellcheck-${GLOBAL_STACK_SHELLCHECK_VERSION}.${OPERATING_SYSTEM}.${SHELLCHECK_ARCH}.tar.xz" -o "/usr/local/bin/shellcheck-${GLOBAL_STACK_SHELLCHECK_VERSION}.tar.xz"
+		sudo mkdir -p "/usr/local/bin/shellcheck-${GLOBAL_STACK_SHELLCHECK_VERSION}"
+		sudo tar -xf "/usr/local/bin/shellcheck-${GLOBAL_STACK_SHELLCHECK_VERSION}.tar.xz" -C "/usr/local/bin/shellcheck-${GLOBAL_STACK_SHELLCHECK_VERSION}"
+		sudo mv "/usr/local/bin/shellcheck-${GLOBAL_STACK_SHELLCHECK_VERSION}/shellcheck-${GLOBAL_STACK_SHELLCHECK_VERSION}/shellcheck" /usr/local/bin/shellcheck
+		sudo rm -rf "/usr/local/bin/shellcheck-${GLOBAL_STACK_SHELLCHECK_VERSION}"*
 		sudo chmod a+rwx /usr/local/bin/shellcheck
 	fi
 
 	if [[ "" != "${GITLEAKS_ARCH}" ]]; then
 		echo "Installing gitleaks - system : ${OPERATING_SYSTEM}, arch : ${GITLEAKS_ARCH}"
-		GLOBAL_UNU_GITLEAKS_LATEST=$(echo "${GLOBAL_STACK_GITLEAKS_VERSION}" | sed 's/v//')
+		GLOBAL_UNU_GITLEAKS_LATEST="${GLOBAL_STACK_GITLEAKS_VERSION#v}"
 		sudo curl -L "https://github.com/gitleaks/gitleaks/releases/download/v${GLOBAL_UNU_GITLEAKS_LATEST}/gitleaks_${GLOBAL_UNU_GITLEAKS_LATEST}_${OPERATING_SYSTEM}_${GITLEAKS_ARCH}.tar.gz" -o /usr/local/bin/gitleaks.tar.gz
 		sudo mkdir -p /usr/local/bin/gitleaks_archive
 		sudo tar -xf /usr/local/bin/gitleaks.tar.gz -C /usr/local/bin/gitleaks_archive
@@ -196,23 +196,23 @@ if [[ "" != "${OPERATING_SYSTEM}" ]]; then
 		TASK_ARCHIVE_NAME="task_${OPERATING_SYSTEM}_${TASK_ARCH}"
 		echo "https://github.com/go-task/task/releases/download/${GLOBAL_STACK_TASK_VERSION}/${TASK_ARCHIVE_NAME}.tar.gz"
 		sudo curl -L "https://github.com/go-task/task/releases/download/${GLOBAL_STACK_TASK_VERSION}/${TASK_ARCHIVE_NAME}.tar.gz" -o "/opt/${GLOBAL_STACK_DOCKER_USER_ID}/${TASK_ARCHIVE_NAME}.tar.gz"
-		cd "/opt/${GLOBAL_STACK_DOCKER_USER_ID}"
-		sudo mkdir -p cd "/opt/${GLOBAL_STACK_DOCKER_USER_ID}/${TASK_ARCHIVE_NAME}"
-		sudo tar -xf ${TASK_ARCHIVE_NAME}.tar.gz -C "/opt/${GLOBAL_STACK_DOCKER_USER_ID}/${TASK_ARCHIVE_NAME}"
+		cd "/opt/${GLOBAL_STACK_DOCKER_USER_ID}" || exit 1
+		sudo mkdir -p "/opt/${GLOBAL_STACK_DOCKER_USER_ID}/${TASK_ARCHIVE_NAME}"
+		sudo tar -xf "${TASK_ARCHIVE_NAME}.tar.gz" -C "/opt/${GLOBAL_STACK_DOCKER_USER_ID}/${TASK_ARCHIVE_NAME}"
 		sudo mv "${TASK_ARCHIVE_NAME}" task
-		sudo rm -rf ${TASK_ARCHIVE_NAME}.tar.gz
+		sudo rm -rf "${TASK_ARCHIVE_NAME}.tar.gz"
 		sudo chmod a+x "/opt/${GLOBAL_STACK_DOCKER_USER_ID}/task/task"
 	fi
 
 	if [[ "" != "${YAMLFMT_ARCH}" ]]; then
 		echo "Installing yamfmt - ${OPERATING_SYSTEM}, arch : ${YAMLFMT_ARCH}"
-		YAMLFMT_ARCHIVE_NAME="yamlfmt_$(echo "${GLOBAL_STACK_YAMLFMT_VERSION}" | sed 's/v//')_${OPERATING_SYSTEM}_${YAMLFMT_ARCH}"
+		YAMLFMT_ARCHIVE_NAME="yamlfmt_${GLOBAL_STACK_YAMLFMT_VERSION#v}_${OPERATING_SYSTEM}_${YAMLFMT_ARCH}"
 		echo "https://github.com/google/yamlfmt/releases/download/${GLOBAL_STACK_YAMLFMT_VERSION}/${YAMLFMT_ARCHIVE_NAME}.tar.gz"
-		sudo curl -L "https://github.com/google/yamlfmt/releases/download/${GLOBAL_STACK_YAMLFMT_VERSION}/${YAMLFMT_ARCHIVE_NAME}.tar.gz" -o /usr/local/bin/${YAMLFMT_ARCHIVE_NAME}.tar.gz
-		sudo mkdir -p /usr/local/bin/${YAMLFMT_ARCHIVE_NAME}
-		sudo tar -xf /usr/local/bin/${YAMLFMT_ARCHIVE_NAME}.tar.gz -C /usr/local/bin/${YAMLFMT_ARCHIVE_NAME}
-		sudo cp /usr/local/bin/${YAMLFMT_ARCHIVE_NAME}/yamlfmt /usr/local/bin/yamlfmt
-		sudo rm -rf /usr/local/bin/${YAMLFMT_ARCHIVE_NAME} /usr/local/bin/${YAMLFMT_ARCHIVE_NAME}.tar.gz
+		sudo curl -L "https://github.com/google/yamlfmt/releases/download/${GLOBAL_STACK_YAMLFMT_VERSION}/${YAMLFMT_ARCHIVE_NAME}.tar.gz" -o "/usr/local/bin/${YAMLFMT_ARCHIVE_NAME}.tar.gz"
+		sudo mkdir -p "/usr/local/bin/${YAMLFMT_ARCHIVE_NAME}"
+		sudo tar -xf "/usr/local/bin/${YAMLFMT_ARCHIVE_NAME}.tar.gz" -C "/usr/local/bin/${YAMLFMT_ARCHIVE_NAME}"
+		sudo cp "/usr/local/bin/${YAMLFMT_ARCHIVE_NAME}/yamlfmt" /usr/local/bin/yamlfmt
+		sudo rm -rf "/usr/local/bin/${YAMLFMT_ARCHIVE_NAME}" "/usr/local/bin/${YAMLFMT_ARCHIVE_NAME}.tar.gz"
 		sudo chmod a+x /usr/local/bin/yamlfmt
 	fi
 fi
@@ -231,15 +231,16 @@ fi
 if [[ "" != "${SONAR_SCANNER_CLI_OPERATING_SYSTEM}" && "" != "${SONAR_SCANNER_CLI_ARCH}" ]]; then
 	echo "Installing sonar-scanner-cli - system : ${SONAR_SCANNER_CLI_OPERATING_SYSTEM}, arch : ${SONAR_SCANNER_CLI_ARCH}"
 	SONAR_SCANNER_CLI_ARCHIVE_NAME="sonar-scanner-cli-${GLOBAL_STACK_SONAR_SCANNER_CLI_VERSION}-${SONAR_SCANNER_CLI_OPERATING_SYSTEM}"
+    # shellcheck disable=SC2001  # complex regex capture group not expressible as ${var//...}
     if [ "$(echo "${GLOBAL_STACK_SONAR_SCANNER_CLI_VERSION}" | sed 's@^[^0-9]*\([0-9]\+\).*@\1@')" -ge "6" ]; then
         SONAR_SCANNER_CLI_ARCHIVE_NAME="${SONAR_SCANNER_CLI_ARCHIVE_NAME}-${SONAR_SCANNER_CLI_ARCH}"
     fi
     
     sudo curl -L "https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/${SONAR_SCANNER_CLI_ARCHIVE_NAME}.zip" -o "/opt/${GLOBAL_STACK_DOCKER_USER_ID}/${SONAR_SCANNER_CLI_ARCHIVE_NAME}.zip"
-    cd "/opt/${GLOBAL_STACK_DOCKER_USER_ID}"
-    sudo unzip ${SONAR_SCANNER_CLI_ARCHIVE_NAME}.zip
-    sudo mv $(echo ${SONAR_SCANNER_CLI_ARCHIVE_NAME} | sed 's/sonar-scanner-cli-/sonar-scanner-/') sonar-scanner-cli
-    sudo rm -rf ${SONAR_SCANNER_CLI_ARCHIVE_NAME}.zip
+    cd "/opt/${GLOBAL_STACK_DOCKER_USER_ID}" || exit 1
+    sudo unzip "${SONAR_SCANNER_CLI_ARCHIVE_NAME}.zip"
+    sudo mv "${SONAR_SCANNER_CLI_ARCHIVE_NAME/sonar-scanner-cli-/sonar-scanner-}" sonar-scanner-cli
+    sudo rm -rf "${SONAR_SCANNER_CLI_ARCHIVE_NAME}.zip"
     sudo chmod a+x "/opt/${GLOBAL_STACK_DOCKER_USER_ID}/sonar-scanner-cli/bin/sonar-scanner" "/opt/${GLOBAL_STACK_DOCKER_USER_ID}/sonar-scanner-cli/bin/sonar-scanner-debug"
 fi
 
@@ -248,11 +249,11 @@ if [[ "" != "${BAT_OPERATING_SYSTEM}" && "" != "${BAT_ARCH}" ]]; then
 	BAT_ARCHIVE_NAME="bat-${GLOBAL_STACK_BAT_VERSION}-${BAT_ARCH}-${BAT_OPERATING_SYSTEM}"
 	echo "https://github.com/sharkdp/bat/releases/download/${GLOBAL_STACK_BAT_VERSION}/${BAT_ARCHIVE_NAME}.tar.gz"
 	sudo curl -L "https://github.com/sharkdp/bat/releases/download/${GLOBAL_STACK_BAT_VERSION}/${BAT_ARCHIVE_NAME}.tar.gz" -o "/opt/${GLOBAL_STACK_DOCKER_USER_ID}/${BAT_ARCHIVE_NAME}.tar.gz"
-	cd "/opt/${GLOBAL_STACK_DOCKER_USER_ID}"
+	cd "/opt/${GLOBAL_STACK_DOCKER_USER_ID}" || exit 1
 	sudo mkdir -p "/opt/${GLOBAL_STACK_DOCKER_USER_ID}/${BAT_ARCHIVE_NAME}"
-	sudo tar -xzf ${BAT_ARCHIVE_NAME}.tar.gz --strip-components=1 -C "/opt/${GLOBAL_STACK_DOCKER_USER_ID}/${BAT_ARCHIVE_NAME}"
+	sudo tar -xzf "${BAT_ARCHIVE_NAME}.tar.gz" --strip-components=1 -C "/opt/${GLOBAL_STACK_DOCKER_USER_ID}/${BAT_ARCHIVE_NAME}"
 	sudo mv "${BAT_ARCHIVE_NAME}" bat
-	sudo rm -rf ${BAT_ARCHIVE_NAME}.tar.gz
+	sudo rm -rf "${BAT_ARCHIVE_NAME}.tar.gz"
 	sudo chmod a+x "/opt/${GLOBAL_STACK_DOCKER_USER_ID}/bat/bat"
 fi
 
