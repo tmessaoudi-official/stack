@@ -1,15 +1,15 @@
 #!/bin/bash
 
 # Load OS information
+# shellcheck source=/dev/null
 . /etc/os-release
 
 # @todo check-updates
-sudo apt-get -o Acquire::AllowInsecureRepositories=true update --allow-releaseinfo-change
+sudo apt-get update --allow-releaseinfo-change
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker.gpg
-# @todo change later
-echo -e "Types: deb\nTrusted: yes\nSigned-By: /usr/share/keyrings/docker.gpg\nArch: $(dpkg --print-architecture)\nURIs: https://download.docker.com/linux/ubuntu\nSuites: ${UBUNTU_CODENAME}\nComponents: stable" | sudo tee /etc/apt/sources.list.d/docker.sources > /dev/null
-sudo apt-get -o Acquire::AllowInsecureRepositories=true update --allow-releaseinfo-change
-sudo apt-get --allow-unauthenticated install -y docker-ce docker-ce-cli containerd.io
+echo -e "Types: deb\nSigned-By: /usr/share/keyrings/docker.gpg\nArch: $(dpkg --print-architecture)\nURIs: https://download.docker.com/linux/ubuntu\nSuites: ${UBUNTU_CODENAME}\nComponents: stable" | sudo tee /etc/apt/sources.list.d/docker.sources > /dev/null
+sudo apt-get update --allow-releaseinfo-change
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io
 sudo groupadd docker > /dev/null
 sudo usermod -aG docker "${GLOBAL_STACK_DOCKER_USER_ID}"
 
@@ -96,13 +96,13 @@ if [[ "" != "${OPERATING_SYSTEM}" ]]; then
 	if [[ "" != "${DOCKER_COMPOSE_ARCH}" ]]; then
 		GLOBAL_UNU_DOCKER_COMPOSEV1_LATEST=${GLOBAL_STACK_DOCKER_COMPOSE_V1_VERSION}
 		echo "Installing docker-compose v1 - system : ${OPERATING_SYSTEM}, arch : ${DOCKER_COMPOSE_ARCH}"
-		sudo curl -L https://github.com/docker/compose/releases/download/${GLOBAL_UNU_DOCKER_COMPOSEV1_LATEST}/docker-compose-${OPERATING_SYSTEM}-${DOCKER_COMPOSE_ARCH} -o /usr/local/bin/docker-compose
+		sudo curl -L "https://github.com/docker/compose/releases/download/${GLOBAL_UNU_DOCKER_COMPOSEV1_LATEST}/docker-compose-${OPERATING_SYSTEM}-${DOCKER_COMPOSE_ARCH}" -o /usr/local/bin/docker-compose
 		sudo chmod a+rwx /usr/local/bin/docker-compose
 
 		# GLOBAL_UNU_DOCKER_COMPOSEV2_LATEST=$(curl --silent https://api.github.com/repos/docker/compose/releases/latest | jq .name -r)
 		GLOBAL_UNU_DOCKER_COMPOSEV2_LATEST=${GLOBAL_STACK_DOCKER_COMPOSE_V2_VERSION}
 		echo "Installing docker-compose v2 - system : ${OPERATING_SYSTEM}, arch : ${DOCKER_COMPOSE_ARCH}"
-		curl -L https://github.com/docker/compose/releases/download/${GLOBAL_UNU_DOCKER_COMPOSEV2_LATEST}/docker-compose-${OPERATING_SYSTEM}-${DOCKER_COMPOSE_ARCH} -o /home/"${GLOBAL_STACK_DOCKER_USER_ID}"/.docker/cli-plugins/docker-compose
+		curl -L "https://github.com/docker/compose/releases/download/${GLOBAL_UNU_DOCKER_COMPOSEV2_LATEST}/docker-compose-${OPERATING_SYSTEM}-${DOCKER_COMPOSE_ARCH}" -o /home/"${GLOBAL_STACK_DOCKER_USER_ID}"/.docker/cli-plugins/docker-compose
 		chmod a+rwx /home/"${GLOBAL_STACK_DOCKER_USER_ID}"/.docker/cli-plugins/docker-compose
 	fi
 
@@ -110,7 +110,7 @@ if [[ "" != "${OPERATING_SYSTEM}" ]]; then
 		# GLOBAL_UNU_DOCKER_BUILDX_LATEST=$(curl --silent https://api.github.com/repos/docker/buildx/releases/latest | jq .name -r)
 		GLOBAL_UNU_DOCKER_BUILDX_LATEST=${GLOBAL_STACK_DOCKER_BUILDX_VERSION}
 		echo "Installing docker-buildx - system : ${OPERATING_SYSTEM}, arch : ${DOCKER_BUILDX_ARCH}"
-		curl -L https://github.com/docker/buildx/releases/download/${GLOBAL_UNU_DOCKER_BUILDX_LATEST}/buildx-${GLOBAL_UNU_DOCKER_BUILDX_LATEST}.${OPERATING_SYSTEM}-${DOCKER_BUILDX_ARCH} -o /home/"${GLOBAL_STACK_DOCKER_USER_ID}"/.docker/cli-plugins/docker-buildx
+		curl -L "https://github.com/docker/buildx/releases/download/${GLOBAL_UNU_DOCKER_BUILDX_LATEST}/buildx-${GLOBAL_UNU_DOCKER_BUILDX_LATEST}.${OPERATING_SYSTEM}-${DOCKER_BUILDX_ARCH}" -o /home/"${GLOBAL_STACK_DOCKER_USER_ID}"/.docker/cli-plugins/docker-buildx
 		chmod a+rwx /home/"${GLOBAL_STACK_DOCKER_USER_ID}"/.docker/cli-plugins/docker-buildx
 	fi
 fi
