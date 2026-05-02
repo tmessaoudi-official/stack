@@ -23,8 +23,8 @@ SHELL ["/bin/bash", "-xeEu", "-o", "pipefail", "-c"]
 RUN shopt -s extdebug \
     && IFS=$'\n\t' \
     && echo -e 'net.core.rmem_max=8388608\nnet.core.wmem_max=8388608\nnet.core.rmem_default=8388608' | tee /etc/sysctl.d/udp_buffer.conf \
-    && apt-get -o Acquire::AllowInsecureRepositories=true update --allow-releaseinfo-change \
-    && apt-get --allow-unauthenticated install -y --no-install-recommends --fix-missing \
+    && apt-get update --allow-releaseinfo-change \
+    && apt-get install -y --no-install-recommends --fix-missing \
     subversion \
     libnghttp2-dev \
     libcurl4-gnutls-dev \

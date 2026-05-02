@@ -16,8 +16,8 @@ LABEL maintainer="Takieddine Messaoudi <takieddine.messaoudi.official@gmail.com>
 USER root
 
 # @todo fix pin versions
-RUN apt-get -o Acquire::AllowInsecureRepositories=true update --allow-releaseinfo-change \
-    && apt-get --allow-unauthenticated install -y --no-install-recommends --fix-missing \
+RUN apt-get update --allow-releaseinfo-change \
+    && apt-get install -y --no-install-recommends --fix-missing \
     libnss3-tools \
     sudo \
     && apt-get clean -y \

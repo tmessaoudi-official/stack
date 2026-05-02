@@ -15,8 +15,8 @@ USER root
 
 SHELL ["/bin/bash", "-xeEu", "-o", "pipefail", "-c"]
 
-RUN apt-get -o Acquire::AllowInsecureRepositories=true update --allow-releaseinfo-change \
-    && apt-get --allow-unauthenticated install -y --no-install-recommends --fix-missing \
+RUN apt-get update --allow-releaseinfo-change \
+    && apt-get install -y --no-install-recommends --fix-missing \
     libtinfo6 \
     && apt-get clean -y \
     && rm -rf /var/lib/apt/lists/*

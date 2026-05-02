@@ -30,8 +30,8 @@ ENV GLOBAL_STACK_NGINX_AUTOMAKE_VERSION="${GLOBAL_STACK_NGINX_AUTOMAKE_VERSION}"
 RUN shopt -s extdebug \
     && { [ "${GLOBAL_STACK_NGINX_AUTOMAKE_VERSION}" != "" ] && [ "${GLOBAL_STACK_NGINX_AUTOMAKE_MIRROR}" != "" ] && (curl -fsSLO "${GLOBAL_STACK_NGINX_AUTOMAKE_MIRROR}/automake-${GLOBAL_STACK_NGINX_AUTOMAKE_VERSION}.tar.gz" && tar -xf automake-${GLOBAL_STACK_NGINX_AUTOMAKE_VERSION}.tar.gz && cd automake-${GLOBAL_STACK_NGINX_AUTOMAKE_VERSION} && ./configure --prefix=/opt/automake-${GLOBAL_STACK_NGINX_AUTOMAKE_VERSION} && make -j$(nproc) && make install && rm -rf automake-${GLOBAL_STACK_NGINX_AUTOMAKE_VERSION}) || echo -e "\n automake will not be installed"; } \
     && IFS=$'\n\t' \
-    && apt-get -o Acquire::AllowInsecureRepositories=true update --allow-releaseinfo-change \
-    && apt-get --allow-unauthenticated install -y --no-install-recommends --fix-missing \
+    && apt-get update --allow-releaseinfo-change \
+    && apt-get install -y --no-install-recommends --fix-missing \
     subversion \
     libnghttp2-dev \
     libcurl4-gnutls-dev \

@@ -1,9 +1,9 @@
 #!/bin/bash
 
 # Update and fix broken dependencies
-sudo apt-get -o Acquire::AllowInsecureRepositories=true update --allow-releaseinfo-change
+sudo apt-get update --allow-releaseinfo-change
 sudo dpkg --configure -a
-sudo apt-get --allow-unauthenticated install -y --fix-broken --no-install-recommends --fix-missing
+sudo apt-get install -y --fix-broken --no-install-recommends --fix-missing
 
 # Perform upgrades
 sudo apt-get upgrade -y
@@ -18,5 +18,5 @@ sudo apt-get autoclean -y
 sudo apt-get autopurge -y
 
 # Final update and cleanup of remaining cached files
-sudo apt-get -o Acquire::AllowInsecureRepositories=true update --allow-releaseinfo-change
+sudo apt-get update --allow-releaseinfo-change
 sudo rm -rf /var/lib/apt/lists/* /etc/apt/apt.conf.d/docker-clean

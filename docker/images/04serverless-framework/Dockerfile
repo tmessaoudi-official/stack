@@ -23,8 +23,8 @@ ENV GLOBAL_STACK_RBENV_LOCALE="${GLOBAL_STACK_RBENV_LOCALE}" \
 
 RUN shopt -s extdebug \
     && IFS=$'\n\t' \
-    && apt-get -o Acquire::AllowInsecureRepositories=true update --allow-releaseinfo-change \
-    && apt-get --allow-unauthenticated install -y --no-install-recommends --fix-missing \
+    && apt-get update --allow-releaseinfo-change \
+    && apt-get install -y --no-install-recommends --fix-missing \
     llvm \
     libncurses5-dev \
     tk-dev \
