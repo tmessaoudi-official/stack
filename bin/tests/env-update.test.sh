@@ -2291,7 +2291,7 @@ t "t32e: Java distribution qualifier — java:11 with current=11.0.30-zulu prefe
     _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
     _gs_eu2_record_set \$idx type            'sdkman'
     _gs_eu2_record_set \$idx identifier      'java'
-    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_JAVA11_VERSION'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_JAVA21_VERSION'
     _gs_eu2_record_set \$idx current_version '11.0.30-zulu'
     _gs_eu2_record_set \$idx major_hint      '11'
     _gs_eu2_fetch_sdkman \$idx
