@@ -19,7 +19,7 @@ ARG GLOBAL_STACK_FRANKENPHP_WATCHER_VERSION
 ENV GLOBAL_STACK_FRANKENPHP_WATCHER_VERSION=${GLOBAL_STACK_FRANKENPHP_WATCHER_VERSION}
 
 # curl -fsSL 'https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x14AA40EC0831756756D7F66C4F4EA0AAE5267A6C' | gpg --dearmor | tee /usr/share/keyrings/php.gpg \
-# && sh -c 'echo "Types: deb\nTrusted: yes\nSigned-By: /usr/share/keyrings/php.gpg\nArch: $(dpkg --print-architecture)\nURIs: http://ppa.launchpad.net/ondrej/php/ubuntu\nSuites: noble\nComponents: main" > /etc/apt/sources.list.d/php-noble-main.sources' \
+# && sh -c 'echo "Types: deb\nSigned-By: /usr/share/keyrings/php.gpg\nArch: $(dpkg --print-architecture)\nURIs: http://ppa.launchpad.net/ondrej/php/ubuntu\nSuites: noble\nComponents: main" > /etc/apt/sources.list.d/php-noble-main.sources' \
 # @todo fix pin versions
 RUN apt-get update --allow-releaseinfo-change \
     && apt-get install -y --no-install-recommends --fix-missing \

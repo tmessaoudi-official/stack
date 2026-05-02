@@ -24,7 +24,6 @@ echo "deb [trusted=yes signed-by=/etc/apt/keyrings/bruno.gpg] http://debian.useb
 
 newest method (ubuntu 25.10 and above)
 Types: deb
-Trusted: yes
 Signed-by: /usr/share/keyrings/my-package-name.gpg
 Arch=amd64
 URIs: http://ppa.xxxx.xxxx
