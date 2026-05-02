@@ -6,7 +6,11 @@
       "Bash(bin/env-update.sh --version)",
       "Bash(bin/env-update.sh --dry-run *)",
       "Bash(bin/env-update.sh --dump *)",
-      "Bash(bin/tests/env-update.test.sh)"
+      "Bash(bin/tests/env-update.test.sh)",
+      "Bash(make login-*)",
+      "Bash(make log-follow-*)",
+      "Bash(make generate-buildx)",
+      "Bash(make create-buildx-builder)"
     ],
     "deny": [
       "Bash(make hard-restart)",
