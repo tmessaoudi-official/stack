@@ -177,13 +177,13 @@ RUN --mount=type=secret,id=global_stack_secret_docker_password \
     && echo "${GLOBAL_STACK_TIMEZONE}" > /etc/timezone \
     && echo 'APT::Key::Assert-Pubkey-Algo "";' > /etc/apt/apt.conf.d/99weakkey-warning \
     && mkdir -p /usr/share/man/man1 \
-    && apt-get -o Acquire::AllowInsecureRepositories=true update --allow-releaseinfo-change \
+    && apt-get update --allow-releaseinfo-change \
     && dpkg --add-architecture i386 \
     && apt-get dist-upgrade -y \
-    && apt-get --allow-unauthenticated install -y --no-install-recommends --fix-missing \
+    && apt-get install -y --no-install-recommends --fix-missing \
     tzdata \
     && dpkg-reconfigure tzdata \
-    && apt-get --allow-unauthenticated install -y --no-install-recommends --fix-missing \
+    && apt-get install -y --no-install-recommends --fix-missing \
     sudo \
     sendmail \
     locales \
@@ -258,13 +258,13 @@ RUN --mount=type=secret,id=global_stack_secret_docker_password \
     && pip install --no-cache-dir awscli-local==${GLOBAL_STACK_PYTHON3_INSTALL_PACKAGE_AWSCLI_LOCAL_VERSION} --break-system-packages \
     && curl -o /usr/share/keyrings/postgresql.asc --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc \
     # @todo make it $(lsb_release -cs) later
-    && sh -c 'echo "Types: deb\nTrusted: yes\nSigned-By: /usr/share/keyrings/postgresql.asc\nArch: $(dpkg --print-architecture)\nURIs: https://apt.postgresql.org/pub/repos/apt\nSuites: resolute-pgdg\nComponents: main" > /etc/apt/sources.list.d/pgdg.sources' \
+    && sh -c 'echo "Types: deb\nSigned-By: /usr/share/keyrings/postgresql.asc\nArch: $(dpkg --print-architecture)\nURIs: https://apt.postgresql.org/pub/repos/apt\nSuites: resolute-pgdg\nComponents: main" > /etc/apt/sources.list.d/pgdg.sources' \
     && curl -fsSL 'https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xF911AB184317630C59970973E363C90F8F1B6217' | gpg --dearmor | tee /usr/share/keyrings/git.gpg \
-    && echo -e "Types: deb\nTrusted: yes\nSigned-By: /usr/share/keyrings/git.gpg\nArch: $(dpkg --print-architecture)\nURIs: https://ppa.launchpadcontent.net/git-core/ppa/ubuntu\nSuites: $(lsb_release -cs)\nComponents: main" | dd of=/etc/apt/sources.list.d/git.sources \
+    && echo -e "Types: deb\nSigned-By: /usr/share/keyrings/git.gpg\nArch: $(dpkg --print-architecture)\nURIs: https://ppa.launchpadcontent.net/git-core/ppa/ubuntu\nSuites: $(lsb_release -cs)\nComponents: main" | dd of=/etc/apt/sources.list.d/git.sources \
     && curl -fsSL https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor | dd of=/usr/share/keyrings/google-chrome.gpg \
-    && echo -e "Types: deb\nTrusted: yes\nSigned-By: /usr/share/keyrings/google-chrome.gpg\nArch: $(dpkg --print-architecture)\nURIs: http://dl.google.com/linux/chrome/deb/\nSuites: stable\nComponents: main" | dd of=/etc/apt/sources.list.d/google-chrome.sources \
-    && apt-get -o Acquire::AllowInsecureRepositories=true update --allow-releaseinfo-change \
-    && apt-get --allow-unauthenticated install -y --no-install-recommends --fix-missing \
+    && echo -e "Types: deb\nSigned-By: /usr/share/keyrings/google-chrome.gpg\nArch: $(dpkg --print-architecture)\nURIs: http://dl.google.com/linux/chrome/deb/\nSuites: stable\nComponents: main" | dd of=/etc/apt/sources.list.d/google-chrome.sources \
+    && apt-get update --allow-releaseinfo-change \
+    && apt-get install -y --no-install-recommends --fix-missing \
     git \
     google-chrome-stable \
     postgresql-client-18 \
@@ -278,7 +278,7 @@ RUN --mount=type=secret,id=global_stack_secret_docker_password \
     libcjose-dev \
     libjansson-dev \
     && rm -rf /etc/apt/sources.list.d/google-chrome.list \
-    && { [ "${GLOBAL_STACK_WKHTMLTOPDF_VERSION}" != "" ] && [ "${GLOBAL_STACK_WKHTMLTOPDF_DISTRO}" != "" ] && (curl -fsSLO "https://github.com/wkhtmltopdf/packaging/releases/download/${GLOBAL_STACK_WKHTMLTOPDF_VERSION}/wkhtmltox_${GLOBAL_STACK_WKHTMLTOPDF_VERSION}.${GLOBAL_STACK_WKHTMLTOPDF_DISTRO}_amd64.deb" && apt-get --allow-unauthenticated install -y --no-install-recommends --fix-missing ./wkhtmltox_${GLOBAL_STACK_WKHTMLTOPDF_VERSION}.${GLOBAL_STACK_WKHTMLTOPDF_DISTRO}_amd64.deb && rm wkhtmltox_${GLOBAL_STACK_WKHTMLTOPDF_VERSION}.${GLOBAL_STACK_WKHTMLTOPDF_DISTRO}_amd64.deb) || echo -e "\n wkhtmltopdf will not be installed"; } \
+    && { [ "${GLOBAL_STACK_WKHTMLTOPDF_VERSION}" != "" ] && [ "${GLOBAL_STACK_WKHTMLTOPDF_DISTRO}" != "" ] && (curl -fsSLO "https://github.com/wkhtmltopdf/packaging/releases/download/${GLOBAL_STACK_WKHTMLTOPDF_VERSION}/wkhtmltox_${GLOBAL_STACK_WKHTMLTOPDF_VERSION}.${GLOBAL_STACK_WKHTMLTOPDF_DISTRO}_amd64.deb" && apt-get install -y --no-install-recommends --fix-missing ./wkhtmltox_${GLOBAL_STACK_WKHTMLTOPDF_VERSION}.${GLOBAL_STACK_WKHTMLTOPDF_DISTRO}_amd64.deb && rm wkhtmltox_${GLOBAL_STACK_WKHTMLTOPDF_VERSION}.${GLOBAL_STACK_WKHTMLTOPDF_DISTRO}_amd64.deb) || echo -e "\n wkhtmltopdf will not be installed"; } \
     && usermod -u 1001 ubuntu \
     && (find / -user 1000 -exec chown -h 1001 {} \; 2>/dev/null || true) \
     && groupmod -g 1001 ubuntu \
