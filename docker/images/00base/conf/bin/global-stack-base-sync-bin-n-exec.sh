@@ -1,4 +1,5 @@
 #!/bin/bash
+
 set -euo pipefail
 
 find "${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/bin/" -type f -exec sudo cp {} /usr/local/bin/ \;

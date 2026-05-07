@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -euo pipefail
+
 # https://askubuntu.com/questions/114759/warning-setlocale-lc-all-cannot-change-locale
 
 sudo locale-gen ${1}

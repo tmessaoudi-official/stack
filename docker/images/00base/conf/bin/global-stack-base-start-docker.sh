@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -euo pipefail
+
 sudo touch /var/log/docker-$(date '+%d-%m-%Y').log
 sudo chmod a+rwx /var/log/docker-$(date '+%d-%m-%Y').log
 

@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -euo pipefail
+
 sudo mkdir -p "/opt/${GLOBAL_STACK_DOCKER_USER_ID}"
 sudo chown -R "${GLOBAL_STACK_DOCKER_USER_ID}":"${GLOBAL_STACK_DOCKER_GROUP_ID}" "/opt/${GLOBAL_STACK_DOCKER_USER_ID}/"
 sudo chmod -R a+rwx "/opt/${GLOBAL_STACK_DOCKER_USER_ID}/"

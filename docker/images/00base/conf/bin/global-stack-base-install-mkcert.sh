@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -euo pipefail
+
 # STACK_MKCERT_LATEST_VERSION=$(curl --silent https://api.github.com/repos/FiloSottile/mkcert/releases/latest | jq .tag_name -r )
 STACK_MKCERT_LATEST_VERSION=${GLOBAL_STACK_MKCERT_VERSION}
 

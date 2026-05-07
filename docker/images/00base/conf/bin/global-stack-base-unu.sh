@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -euo pipefail
+
 # Update and fix broken dependencies
 sudo apt-get update --allow-releaseinfo-change
 sudo dpkg --configure -a

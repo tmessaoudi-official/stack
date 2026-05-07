@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -euo pipefail
+
 # Load OS information
 # shellcheck source=/dev/null
 . /etc/os-release

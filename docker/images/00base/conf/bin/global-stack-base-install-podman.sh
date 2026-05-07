@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -euo pipefail
+
 # @todo check-updates
 sudo apt-get update --allow-releaseinfo-change
 curl -fsSL "https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/${GLOBAL_STACK_PODMAN_CHANNEL}/Release.key" | sudo gpg --dearmor -o /usr/share/keyrings/podman.gpg
