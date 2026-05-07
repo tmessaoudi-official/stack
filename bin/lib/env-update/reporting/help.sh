@@ -24,6 +24,8 @@ Options:
   --apply                 Apply all AUTO decisions to the env file; implies --check.
                           Creates a timestamped .env backup before writing.
                           Use with --dry-run to preview without writing.
+  --scan                  After --apply, run bin/env-scan.sh to propagate changes to
+                          .env.local and Dockerfiles. Off by default.
   --no-cache              Bypass the fetch cache
   --cache-ttl=<seconds>   Cache TTL in seconds (default: 3600)
   --dry-run               No writes (gates cache, .env, and Dockerfile propagation).
@@ -40,6 +42,7 @@ Examples:
   bin/env-update.sh --check --no-cache             # bypass cache
   bin/env-update.sh --dump --format=json | jq .    # structured record dump
   bin/env-update.sh --check --apply                # fetch + apply all AUTO updates
+  bin/env-update.sh --check --apply --scan         # apply + propagate to .env.local + Dockerfiles
   bin/env-update.sh --check --apply --dry-run      # preview what would be applied
 EOF
 }

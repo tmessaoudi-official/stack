@@ -12,7 +12,7 @@ _gs_eu2_is_recognized_flag() {
   local _f="${1}" _name
   [[ "${_f}" == *:* ]] && _name="${_f%%:*}" || _name="${_f}"
   case "${_name}" in
-    override|manual|propagate|\
+    override|manual|propagate|use-sha|\
     channel|skip|\
     tag-filter|tag-exclude|tag-strip-prefix|tag-strip-suffix|\
     tag-extract|tag-suffix|tag-replace|\
@@ -116,6 +116,7 @@ _gs_eu2_dispatch_flag() {
     override)  _gs_eu2_record_set "${_idx}" override  "true"; return 0 ;;
     manual)    _gs_eu2_record_set "${_idx}" manual    "true"; return 0 ;;
     propagate) _gs_eu2_record_set "${_idx}" propagate "true"; return 0 ;;
+    use-sha)   _gs_eu2_record_set "${_idx}" use_sha   "true"; return 0 ;;
   esac
 
   # Keyed flags: validate non-empty value
@@ -183,6 +184,7 @@ _gs_eu2_parse_env_file() {
   local _pending_annotation="" _pending_lnum=0
   local _pending_type="" _pending_identifier="" _pending_major_hint=""
   local _pending_flags="" _pending_version="" _pending_hint=""
+  local _pending_sha=""
   local _pending_git_url="" _pending_git_sha=""
   local _pend_urls=""
   local _line_number=0
@@ -216,6 +218,7 @@ _gs_eu2_parse_env_file() {
       _pending_annotation="${_line}"
       _pending_type="" _pending_identifier="" _pending_major_hint=""
       _pending_flags="" _pending_version="" _pending_hint=""
+      _pending_sha=""
       _pend_urls=""
 
       local _content="${_line#*@todo env-update}"
@@ -287,6 +290,21 @@ _gs_eu2_parse_env_file() {
         _remaining="${_remaining%"${_remaining##*[! ]}"}"
       fi
 
+      # sha: keyword — annotated commit SHA (not a paren flag — handled separately)
+      if [[ " ${_remaining} " == *" sha:"* ]]; then
+        local _sha_tok _remaining_no_sha=""
+        for _sha_tok in ${_remaining}; do
+          if [[ "${_sha_tok}" == sha:* && -z "${_pending_sha}" ]]; then
+            _pending_sha="${_sha_tok#sha:}"
+          else
+            _remaining_no_sha+="${_sha_tok} "
+          fi
+        done
+        _remaining="${_remaining_no_sha% }"
+        _remaining="${_remaining#"${_remaining%%[! ]*}"}"
+        _remaining="${_remaining%"${_remaining##*[! ]}"}"
+      fi
+
       # hint: trailing (text) parenthetical — non-flag, may contain spaces
       local _re_hint='^(.*)[[:space:]][(]([^)]+)[)][[:space:]]*$'
       if [[ "${_remaining}" =~ ${_re_hint} ]]; then
@@ -320,11 +338,13 @@ _gs_eu2_parse_env_file() {
             local _filter_type="${_filter#type:}"
             if [[ "${_pending_type}" != "${_filter_type}" ]]; then
               _state="IDLE"
+              _pending_sha=""
               _pending_git_url="" _pending_git_sha=""
               continue
             fi
           elif [[ ! "${_var_name}" =~ ${_filter} ]]; then
             _state="IDLE"
+            _pending_sha=""
             _pending_git_url="" _pending_git_sha=""
             continue
           fi
@@ -347,6 +367,7 @@ _gs_eu2_parse_env_file() {
         _gs_eu2_record_set "${_idx}" git_fallback_url "${_pending_git_url}"
         _gs_eu2_record_set "${_idx}" git_fallback_sha "${_pending_git_sha}"
         _gs_eu2_record_set "${_idx}" urls             "${_pend_urls}"
+        _gs_eu2_record_set "${_idx}" annotation_sha   "${_pending_sha}"
 
         # Dispatch all hoisted flags (position-agnostic)
         if [[ -n "${_pending_flags}" ]]; then
@@ -361,6 +382,7 @@ _gs_eu2_parse_env_file() {
         fi
 
         _state="IDLE"
+        _pending_sha=""
         _pending_git_url="" _pending_git_sha=""
       else
         # C2: non-blank non-comment non-assignment line — annotation not followed by var

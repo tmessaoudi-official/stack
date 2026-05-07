@@ -1177,6 +1177,131 @@ t "t19g: _gs_eu2_apply_updates rewrites AUTO var and preserves other lines" bash
     echo PASS
 "
 
+t "t19h: _gs_eu2_apply_updates also rewrites the @todo annotation comment version" bash -c "
+    source '/stack/bin/lib/env-update/config/defaults.sh'
+    source '/stack/bin/lib/env-update/core/records.sh'
+    source '/stack/bin/lib/env-update/core/apply.sh'
+    f=\${TMP_DIR}/t19h.env
+    ann='# @todo env-update github:ruby/ruby:3 3 3.4.9'
+    printf '%s\nGLOBAL_STACK_RUBY_VERSION=3.4.9\n' \"\$ann\" > \"\$f\"
+    _gs_eu2_record_new; idx=\$_GS_EU2_LAST_IDX
+    _gs_eu2_record_set \$idx env_var          'GLOBAL_STACK_RUBY_VERSION'
+    _gs_eu2_record_set \$idx current_version  '3.4.9'
+    _gs_eu2_record_set \$idx proposed_version '3.5.0'
+    _gs_eu2_record_set \$idx raw_annotation   \"\$ann\"
+    _gs_eu2_record_set \$idx decision         'AUTO'
+    _gs_eu2_apply_updates \"\$f\" 'false' > /dev/null
+    grep -qF 'GLOBAL_STACK_RUBY_VERSION=3.5.0' \"\$f\" || { echo 'assignment not updated'; cat \"\$f\"; echo FAIL; exit 0; }
+    grep -qF '# @todo env-update github:ruby/ruby:3 3 3.5.0' \"\$f\" || { echo 'annotation not updated'; cat \"\$f\"; echo FAIL; exit 0; }
+    grep -qF '3.4.9' \"\$f\" && { echo 'old version still present'; cat \"\$f\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t19i: annotation update preserves trailing urls: extras and does not corrupt them" bash -c "
+    source '/stack/bin/lib/env-update/config/defaults.sh'
+    source '/stack/bin/lib/env-update/core/records.sh'
+    source '/stack/bin/lib/env-update/core/apply.sh'
+    f=\${TMP_DIR}/t19i.env
+    ann='# @todo env-update (tag-strip-prefix:v) github:ruby/ruby:4 4.0.1 urls: https://www.ruby-lang.org/en/'
+    printf '%s\nGLOBAL_STACK_RUBY4_VERSION=4.0.1\n' \"\$ann\" > \"\$f\"
+    _gs_eu2_record_new; idx=\$_GS_EU2_LAST_IDX
+    _gs_eu2_record_set \$idx env_var          'GLOBAL_STACK_RUBY4_VERSION'
+    _gs_eu2_record_set \$idx current_version  '4.0.1'
+    _gs_eu2_record_set \$idx proposed_version '4.0.3'
+    _gs_eu2_record_set \$idx raw_annotation   \"\$ann\"
+    _gs_eu2_record_set \$idx decision         'AUTO'
+    _gs_eu2_apply_updates \"\$f\" 'false' > /dev/null
+    grep -qF 'GLOBAL_STACK_RUBY4_VERSION=4.0.3' \"\$f\" || { echo 'assignment not updated'; cat \"\$f\"; echo FAIL; exit 0; }
+    grep -qF '# @todo env-update (tag-strip-prefix:v) github:ruby/ruby:4 4.0.3 urls: https://www.ruby-lang.org/en/' \"\$f\" || { echo 'annotation not updated or url corrupted'; cat \"\$f\"; echo FAIL; exit 0; }
+    grep -qF '4.0.1' \"\$f\" && { echo 'old version still present'; cat \"\$f\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t19j: sha: keyword extracted from annotation into annotation_sha record field" bash -c "
+    source '/stack/bin/lib/env-update/config/defaults.sh'
+    source '/stack/bin/lib/env-update/core/records.sh'
+    source '/stack/bin/lib/env-update/core/parse.sh'
+    f=\${TMP_DIR}/t19j.env
+    sha='aabbccdd1122334455667788990011aabbccdd11'
+    printf '# @todo env-update pecl-git:https://github.com/example/php-ext 1.2.3 sha:%s (pecl-ref:ext)\nGLOBAL_STACK_EXT_VERSION=1.2.3\n' \"\$sha\" > \"\$f\"
+    _gs_eu2_parse_env_file \"\$f\"
+    got=\$(_gs_eu2_record_get 0 annotation_sha)
+    [[ \"\$got\" == \"\$sha\" ]] || { echo \"annotation_sha expected '\$sha' got '\$got'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t19k: (use-sha) flag sets use_sha=true on record" bash -c "
+    source '/stack/bin/lib/env-update/config/defaults.sh'
+    source '/stack/bin/lib/env-update/core/records.sh'
+    source '/stack/bin/lib/env-update/core/parse.sh'
+    f=\${TMP_DIR}/t19k.env
+    sha='aabbccdd1122334455667788990011aabbccdd11'
+    printf '# @todo env-update (use-sha) pecl-git:https://github.com/example/php-ext sha:%s (pecl-ref:ext)\nGLOBAL_STACK_EXT_VERSION=%s\n' \"\$sha\" \"\$sha\" > \"\$f\"
+    _gs_eu2_parse_env_file \"\$f\"
+    got=\$(_gs_eu2_record_get 0 use_sha)
+    [[ \"\$got\" == 'true' ]] || { echo \"use_sha expected 'true' got '\$got'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t19l: apply with cur_sha/new_sha updates sha:OLD to sha:NEW in annotation while keeping version" bash -c "
+    source '/stack/bin/lib/env-update/config/defaults.sh'
+    source '/stack/bin/lib/env-update/core/records.sh'
+    source '/stack/bin/lib/env-update/core/apply.sh'
+    f=\${TMP_DIR}/t19l.env
+    old_sha='aaaa0000bbbb1111cccc2222dddd3333eeee4444'
+    new_sha='1111aaaa2222bbbb3333cccc4444dddd5555eeee'
+    ann=\"# @todo env-update pecl-git:https://github.com/example/php-ext 1.0.0 sha:\${old_sha} (pecl-ref:ext)\"
+    printf '%s\nGLOBAL_STACK_EXT_VERSION=1.0.0\n' \"\$ann\" > \"\$f\"
+    _gs_eu2_record_new; idx=\$_GS_EU2_LAST_IDX
+    _gs_eu2_record_set \$idx env_var          'GLOBAL_STACK_EXT_VERSION'
+    _gs_eu2_record_set \$idx current_version  '1.0.0'
+    _gs_eu2_record_set \$idx proposed_version '2.0.0'
+    _gs_eu2_record_set \$idx raw_annotation   \"\$ann\"
+    _gs_eu2_record_set \$idx decision         'AUTO'
+    _gs_eu2_apply_updates \"\$f\" 'false' > /dev/null
+    grep -qF \"sha:\${new_sha}\" \"\$f\" && { echo 'new_sha found but should not be (no new_sha provided)'; cat \"\$f\"; echo FAIL; exit 0; }
+    grep -qF 'GLOBAL_STACK_EXT_VERSION=2.0.0' \"\$f\" || { echo 'assignment not updated'; cat \"\$f\"; echo FAIL; exit 0; }
+    grep -qF '2.0.0' \"\$f\" || { echo 'new version not in annotation'; cat \"\$f\"; echo FAIL; exit 0; }
+    _gs_eu2_record_set \$idx proposed_version '3.0.0'
+    _gs_eu2_record_set \$idx annotation_sha   \"\$old_sha\"
+    _gs_eu2_record_set \$idx proposed_sha     \"\$new_sha\"
+    _gs_eu2_record_set \$idx current_version  '2.0.0'
+    ann2=\"# @todo env-update pecl-git:https://github.com/example/php-ext 2.0.0 sha:\${old_sha} (pecl-ref:ext)\"
+    printf '%s\nGLOBAL_STACK_EXT_VERSION=2.0.0\n' \"\$ann2\" > \"\$f\"
+    _gs_eu2_record_set \$idx raw_annotation   \"\$ann2\"
+    _gs_eu2_apply_updates \"\$f\" 'false' > /dev/null
+    grep -qF \"sha:\${new_sha}\" \"\$f\" || { echo \"sha not updated to new_sha; expected sha:\${new_sha}\"; cat \"\$f\"; echo FAIL; exit 0; }
+    grep -qF \"sha:\${old_sha}\" \"\$f\" && { echo 'old sha still present'; cat \"\$f\"; echo FAIL; exit 0; }
+    grep -qF 'GLOBAL_STACK_EXT_VERSION=3.0.0' \"\$f\" || { echo 'assignment not updated to 3.0.0'; cat \"\$f\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t19m: apply with use_sha=true writes new_sha to VAR= instead of new version" bash -c "
+    source '/stack/bin/lib/env-update/config/defaults.sh'
+    source '/stack/bin/lib/env-update/core/records.sh'
+    source '/stack/bin/lib/env-update/core/apply.sh'
+    f=\${TMP_DIR}/t19m.env
+    old_sha='aaaa0000bbbb1111cccc2222dddd3333eeee4444'
+    new_sha='1111aaaa2222bbbb3333cccc4444dddd5555eeee'
+    ann=\"# @todo env-update (use-sha) pecl-git:https://github.com/example/php-ext sha:\${old_sha} (pecl-ref:ext)\"
+    printf '%s\nGLOBAL_STACK_EXT_VERSION=%s\n' \"\$ann\" \"\$old_sha\" > \"\$f\"
+    _gs_eu2_record_new; idx=\$_GS_EU2_LAST_IDX
+    _gs_eu2_record_set \$idx env_var          'GLOBAL_STACK_EXT_VERSION'
+    _gs_eu2_record_set \$idx current_version  \"\$old_sha\"
+    _gs_eu2_record_set \$idx proposed_version '3.0.0'
+    _gs_eu2_record_set \$idx raw_annotation   \"\$ann\"
+    _gs_eu2_record_set \$idx annotation_sha   \"\$old_sha\"
+    _gs_eu2_record_set \$idx proposed_sha     \"\$new_sha\"
+    _gs_eu2_record_set \$idx use_sha          'true'
+    _gs_eu2_record_set \$idx decision         'AUTO'
+    _gs_eu2_apply_updates \"\$f\" 'false' > /dev/null
+    grep -qF \"GLOBAL_STACK_EXT_VERSION=\${new_sha}\" \"\$f\" || { echo 'VAR= not written with new_sha'; cat \"\$f\"; echo FAIL; exit 0; }
+    grep -qF 'GLOBAL_STACK_EXT_VERSION=3.0.0' \"\$f\" && { echo 'VAR= wrote version instead of sha'; echo FAIL; exit 0; }
+    grep -qF \"sha:\${new_sha}\" \"\$f\" || { echo \"sha: in annotation not updated to new_sha\"; cat \"\$f\"; echo FAIL; exit 0; }
+    grep -qF \"sha:\${old_sha}\" \"\$f\" && { echo 'old sha still present in annotation'; cat \"\$f\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Section 20 — codename delta + floating-reference SKIP
 # ═══════════════════════════════════════════════════════════════════════════
@@ -2533,7 +2658,7 @@ export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
 export _GS_EU2_CACHE_DIR=\${TMP_DIR}/peclgit_cache
 "
 
-t "t35a: happy path — proposed_version = YYYYMMDD-sha8 from latest commit" bash -c "
+t "t35a: happy path — proposed_version = release tag version from releases API" bash -c "
     ${_PECLGIT_LIBS}
     _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
     _gs_eu2_record_set \$idx type       'pecl-git'
@@ -2541,8 +2666,8 @@ t "t35a: happy path — proposed_version = YYYYMMDD-sha8 from latest commit" bas
     _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_PHP_IMAGICK_VERSION'
     _gs_eu2_fetch_pecl_git \$idx
     val=\$(_gs_eu2_record_get \$idx proposed_version)
-    # fixture sha=abc1234def..., date=2026-02-15 → proposed=20260215-abc1234d
-    [[ \"\$val\" == '20260215-abc1234d' ]] || { echo \"expected 20260215-abc1234d, got: '\$val'\"; echo FAIL; exit 0; }
+    # fixture releases: [3.8.1, 3.8.0] → best is 3.8.1 (v-prefix stripped)
+    [[ \"\$val\" == '3.8.1' ]] || { echo \"expected 3.8.1, got: '\$val'\"; echo FAIL; exit 0; }
     echo PASS
 "
 
@@ -2575,23 +2700,23 @@ t "t35c: no promotion — alt_version empty when git commit is newer than PECL r
     echo PASS
 "
 
-t "t35d: ext_name derived from repo name — php-redis strips php- prefix" bash -c "
+t "t35d: ext_name derived from repo name — phpredis fetcher returns release version" bash -c "
     ${_PECLGIT_LIBS}
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/peclgit_d_cache
     _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
     _gs_eu2_record_set \$idx type       'pecl-git'
     # phpredis repo → ext_name='phpredis' (no matching prefix → use full name)
-    # Check that the proposed_version is in YYYYMMDD-sha8 format (fetcher ran OK)
+    # Check that the proposed_version is the latest semver release tag
     _gs_eu2_record_set \$idx identifier 'https://github.com/phpredis/phpredis'
     _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_PHP_REDIS_VERSION'
     _gs_eu2_fetch_pecl_git \$idx
     val=\$(_gs_eu2_record_get \$idx proposed_version)
-    # Just verify it ran and set a date-sha proposed_version
-    [[ \"\$val\" =~ ^[0-9]{8}-[0-9a-f]{8}\$ ]] || { echo \"proposed not date-sha format: '\$val'\"; echo FAIL; exit 0; }
+    # fixture releases: [v6.3.0, v6.2.0, v6.1.0] → best is 6.3.0 (v-prefix stripped)
+    [[ \"\$val\" == '6.3.0' ]] || { echo \"expected 6.3.0, got: '\$val'\"; echo FAIL; exit 0; }
     echo PASS
 "
 
-t "t35e: pecl_ref override — uses override ext_name for PECL lookup" bash -c "
+t "t35e: pecl_ref override — uses override ext_name for PECL lookup, returns release version" bash -c "
     ${_PECLGIT_LIBS}
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/peclgit_e_cache
     _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
@@ -2602,9 +2727,8 @@ t "t35e: pecl_ref override — uses override ext_name for PECL lookup" bash -c "
     _gs_eu2_record_set \$idx pecl_ref   'pecl_ref_override'
     _gs_eu2_fetch_pecl_git \$idx
     val=\$(_gs_eu2_record_get \$idx proposed_version)
-    # Commit date 2026-03-01; pecl_ref_override stable 3.1.0 has no version XML fixture
-    # so check_promotion returns empty → no alt_version, just date-sha proposed
-    [[ -n \"\$val\" ]] || { echo 'proposed_version is empty'; echo FAIL; exit 0; }
+    # fixture releases: [v2.5.0, v2.4.0] → best is 2.5.0 (v-prefix stripped)
+    [[ \"\$val\" == '2.5.0' ]] || { echo \"expected 2.5.0, got: '\$val'\"; echo FAIL; exit 0; }
     echo PASS
 "
 
@@ -2635,7 +2759,7 @@ t "t35g: GITHUB_TOKEN forwarded — fixture injection works with token set" bash
     _gs_eu2_fetch_pecl_git \$idx
     val=\$(_gs_eu2_record_get \$idx proposed_version)
     # With token set, fixture injection still works (token not part of fixture path)
-    [[ \"\$val\" == '20260215-abc1234d' ]] || { echo \"token-with-fixture failed: '\$val'\"; echo FAIL; exit 0; }
+    [[ \"\$val\" == '3.8.1' ]] || { echo \"token-with-fixture failed: '\$val'\"; echo FAIL; exit 0; }
     echo PASS
 "
 

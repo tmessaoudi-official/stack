@@ -225,13 +225,17 @@ _gs_eu2_main() {
         fi
         printf 'Backup: %s\n' "${_backup}" >&2
         _gs_eu2_apply_updates "${_env_file}" "false"
-        local _env_scan
-        _env_scan="$(dirname "${BASH_SOURCE[0]}")/../../env-scan.sh"
-        if [[ -x "${_env_scan}" ]]; then
-          printf 'Running env-scan.sh to propagate changes...\n' >&2
-          bash "${_env_scan}" 2>&1 || printf 'WARNING: env-scan failed — .env updated but .env.local and Dockerfiles may be stale. Run bin/env-scan.sh manually.\n' >&2
+        if [[ "${_GS_EU2_CFG[scan]}" == "true" ]]; then
+          local _env_scan
+          _env_scan="$(dirname "${BASH_SOURCE[0]}")/../../env-scan.sh"
+          if [[ -x "${_env_scan}" ]]; then
+            printf 'Running env-scan.sh to propagate changes...\n' >&2
+            bash "${_env_scan}" 2>&1 || printf 'WARNING: env-scan failed — .env updated but .env.local and Dockerfiles may be stale. Run bin/env-scan.sh manually.\n' >&2
+          else
+            printf 'WARNING: --scan requested but env-scan.sh not found at %s\n' "${_env_scan}" >&2
+          fi
         else
-          printf 'Tip: run bin/env-scan.sh to propagate to .env.local and Dockerfiles\n' >&2
+          printf 'Tip: run bin/env-scan.sh to propagate to .env.local and Dockerfiles (or pass --scan)\n' >&2
         fi
       fi
     fi

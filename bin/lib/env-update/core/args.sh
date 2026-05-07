@@ -27,6 +27,7 @@ _gs_eu2_parse_args() {
       --dry-run)      _GS_EU2_CFG[dry_run]="true" ;;
       --check)        _GS_EU2_CFG[check]="true" ;;
       --apply)        _GS_EU2_CFG[apply]="true" ;;
+      --scan)         _GS_EU2_CFG[scan]="true" ;;
       --no-cache)     _GS_EU2_CFG[no_cache]="true" ;;
       --cache-ttl=*)
         local _ttl="${1#*=}"
@@ -51,6 +52,7 @@ _gs_eu2_parse_args() {
   [[ -z "${_GS_EU2_CFG[check]+set}" ]]     && _GS_EU2_CFG[check]="false"
   [[ -z "${_GS_EU2_CFG[no_cache]+set}" ]]  && _GS_EU2_CFG[no_cache]="false"
   [[ -z "${_GS_EU2_CFG[apply]+set}" ]]    && _GS_EU2_CFG[apply]="false"
+  [[ -z "${_GS_EU2_CFG[scan]+set}" ]]     && _GS_EU2_CFG[scan]="false"
   [[ -z "${_GS_EU2_CFG[cache_ttl]+set}" ]] && _GS_EU2_CFG[cache_ttl]="3600"
 
   if [[ "${_GS_EU2_CFG[dry_run]}" == "true" && "${_GS_EU2_CFG[apply]}" == "true" ]]; then
