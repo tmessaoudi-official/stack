@@ -197,7 +197,7 @@ _gs_eu2_fetch_github() {
   if [[ -n "${_major_hint}" ]]; then
     local _filtered_major
     _filtered_major="$(printf '%s\n' "${_tags}" \
-      | grep -E "^v?${_major_hint}([.^-]|\$)" 2>/dev/null || true)"
+      | grep -E "^v?${_major_hint}([.^_-]|\$)" 2>/dev/null || true)"
 
     # Strategy 3: git ls-remote fallback when pagination exhausted and major_hint yielded nothing
     if [[ -z "$(printf '%s\n' "${_filtered_major}" | grep -v '^$' || true)" ]]; then
@@ -214,7 +214,7 @@ _gs_eu2_fetch_github() {
         local _lsr_filtered
         _lsr_filtered="$(printf '%s\n' "${_lsr_tags}" \
           | _gs_eu2_apply_tag_flags_from_record "${_idx}" \
-          | grep -E "^v?${_major_hint}([.^-]|\$)" 2>/dev/null || true)"
+          | grep -E "^v?${_major_hint}([.^_-]|\$)" 2>/dev/null || true)"
         [[ -n "$(printf '%s\n' "${_lsr_filtered}" | grep -v '^$' || true)" ]] \
           && _filtered_major="${_lsr_filtered}"
       fi

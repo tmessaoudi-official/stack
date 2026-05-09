@@ -70,6 +70,9 @@ _gs_eu2_semver_delta() {
     echo "patch"; return
   fi
 
+  # Normalize underscore separators (e.g. Ruby's 3_4_9 style) to dots
+  _a="${_a//_/.}" _b="${_b//_/.}"
+
   local _am="${_a%%.*}" _bm="${_b%%.*}"
   [[ "${_am}" != "${_bm}" ]] && { echo "major"; return; }
   local _ar="${_a#*.}" _br="${_b#*.}"

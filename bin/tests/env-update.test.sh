@@ -2324,6 +2324,42 @@ t "t31l: Strategy 3 git ls-remote fallback — major_hint match found via ls-rem
     echo PASS
 "
 
+t "t31m: major_hint with underscore-separated tags (Ruby style) + tag-replace normalises to dots" bash -c "
+    ${_GH_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/gh_m_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type              'github'
+    _gs_eu2_record_set \$idx identifier        'testowner/underscore-repo'
+    _gs_eu2_record_set \$idx env_var           'GLOBAL_STACK_RUBY3_VERSION'
+    _gs_eu2_record_set \$idx major_hint        '3'
+    _gs_eu2_record_set \$idx tag_strip_prefix  'v'
+    _gs_eu2_record_set \$idx tag_replace_from  '_'
+    _gs_eu2_record_set \$idx tag_replace_to    '.'
+    _gs_eu2_fetch_github \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    # fixture: v4_0_1, v3_4_10, v3_4_9, v3_3_7 — major_hint=3+tag-replace → 3.4.10
+    [[ \"\$val\" == '3.4.10' ]] || { echo \"expected 3.4.10, got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t31n: major_hint with underscore tags and no tag-replace — major filter includes underscore separator" bash -c "
+    ${_GH_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/gh_n_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type              'github'
+    _gs_eu2_record_set \$idx identifier        'testowner/underscore-repo'
+    _gs_eu2_record_set \$idx env_var           'GLOBAL_STACK_RUBY3_VERSION'
+    _gs_eu2_record_set \$idx major_hint        '3'
+    _gs_eu2_record_set \$idx tag_strip_prefix  'v'
+    _gs_eu2_fetch_github \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    dec=\$(_gs_eu2_record_get \$idx decision)
+    # Without tag-replace, major filter must still match 3_4_10 (not return empty)
+    [[ \"\$dec\" != 'SKIP' || \"\$val\" == '' ]] && [[ -n \"\$val\" ]] || { echo \"major filter should not drop underscore tags, got dec='\$dec' val='\$val'\"; echo FAIL; exit 0; }
+    [[ \"\$val\" == '3_4_10' ]] || { echo \"expected 3_4_10 (no replace), got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Section 32 — sdkman fetcher
 # ═══════════════════════════════════════════════════════════════════════════
