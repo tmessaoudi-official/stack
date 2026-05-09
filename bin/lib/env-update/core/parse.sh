@@ -259,8 +259,7 @@ _gs_eu2_parse_env_file() {
       _pending_major_hint=""
       if [[ "${_type_rest}" == *:* ]]; then
         local _maybe_major="${_type_rest##*:}"
-        # D1: major_hint must be a plain integer — reject dot-containing values like "9.2"
-        if [[ "${_maybe_major}" =~ ^[0-9]+$ ]]; then
+        if [[ "${_maybe_major}" =~ ^[0-9]+(\.[0-9]+)*$ ]]; then
           _pending_major_hint="${_maybe_major}"
           _pending_identifier="${_type_rest%:*}"
         fi

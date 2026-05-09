@@ -1047,15 +1047,25 @@ t "t18e: blank line between annotation and var — record still created (C2)" ba
     echo PASS
 "
 
-t "t18f: major_hint with dot is treated as version not hint (D1)" bash -c "
+t "t18f: dotted major_hint (e.g., 9.2) parsed — identifier stripped, hint set" bash -c "
     f=\${TMP_DIR}/t18f.env
     printf '# @todo env-update dockerhub:_/postgres:9.2 9.2.5\nGLOBAL_STACK_PG_VERSION=9.2.5\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1)
-    # \"9.2\" should NOT be treated as major_hint (dots rejected); identifier should be _/postgres:9.2
-    echo \"\$out\" | grep -qF 'major_hint:' && {
-        hint=\$(echo \"\$out\" | grep 'major_hint:' | sed 's/.*major_hint: //')
-        [[ \"\$hint\" =~ ^[[:space:]]*$ ]] || { echo \"9.2 accepted as major_hint: \$hint\"; echo FAIL; exit 0; }
-    }
+    hint=\$(echo \"\$out\" | grep 'major_hint:' | sed 's/.*major_hint: //' | tr -d '[:space:]')
+    [[ \"\$hint\" == '9.2' ]] || { echo \"expected major_hint=9.2, got: '\$hint'\"; echo FAIL; exit 0; }
+    ident=\$(echo \"\$out\" | grep 'identifier:' | sed 's/.*identifier: //' | tr -d '[:space:]')
+    [[ \"\$ident\" == '_/postgres' ]] || { echo \"expected identifier=_/postgres, got: '\$ident'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t18g: github:php/php-src:8.2 parses to identifier=php/php-src major_hint=8.2" bash -c "
+    f=\${TMP_DIR}/t18g.env
+    printf '# @todo env-update github:php/php-src:8.2 8.2.30\nGLOBAL_STACK_PHP8_2_VERSION=8.2.30\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1)
+    hint=\$(echo \"\$out\" | grep 'major_hint:' | sed 's/.*major_hint: //' | tr -d '[:space:]')
+    [[ \"\$hint\" == '8.2' ]] || { echo \"expected major_hint=8.2, got: '\$hint'\"; echo FAIL; exit 0; }
+    ident=\$(echo \"\$out\" | grep 'identifier:' | sed 's/.*identifier: //' | tr -d '[:space:]')
+    [[ \"\$ident\" == 'php/php-src' ]] || { echo \"expected identifier=php/php-src, got: '\$ident'\"; echo FAIL; exit 0; }
     echo PASS
 "
 
