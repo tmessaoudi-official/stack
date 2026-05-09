@@ -29,6 +29,8 @@ Options:
   --no-cache              Bypass the fetch cache
   --cache-ttl=<seconds>   Cache TTL in seconds (default: 3600)
   --dry-run               No writes (gates cache, .env, and Dockerfile propagation).
+  --with-tags             Force tags-API merge for ALL github: and pecl-git: repos in
+                          one run. Equivalent to adding (check-tags) to every annotation.
 
 Default (no flags): print a parser summary with per-type breakdown and hints.
 
@@ -44,5 +46,6 @@ Examples:
   bin/env-update.sh --check --apply                # fetch + apply all AUTO updates
   bin/env-update.sh --check --apply --scan         # apply + propagate to .env.local + Dockerfiles
   bin/env-update.sh --check --apply --dry-run      # preview what would be applied
+  bin/env-update.sh --check --with-tags            # audit all github/pecl-git repos including tag-only releases
 EOF
 }
