@@ -820,8 +820,8 @@ t "t15c: tag-suffix filter applied" bash -c "
 
 t "t15d: cache hit skips HTTP call (sets proposed_version from cache)" bash -c "
     ${_DH_LIBS}
-    # Key must match what fetcher computes: dockerhub:<ns>:<tag_suffix>:<major_hint>:<channel>
-    _gs_eu2_cache_write 'dockerhub:library/postgres:::' '18.3-alpine3.23-CACHED'
+    # Key must match what fetcher computes: dockerhub:<ns>:<tag_suffix>:<major_hint>:<channel>:<prefer_specific>
+    _gs_eu2_cache_write 'dockerhub:library/postgres::::' '18.3-alpine3.23-CACHED'
     _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
     _gs_eu2_record_set \$idx type       'dockerhub'
     _gs_eu2_record_set \$idx identifier '_/postgres'
@@ -3286,6 +3286,54 @@ t "t40k: parse.sh recognises (prefer-specific) as a known flag" bash -c "
     val=\$(_gs_eu2_record_get 0 prefer_specific)
     rm -f \"\$f\"
     [[ \"\$val\" == 'true' ]] || { echo \"prefer_specific not set from annotation, got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t40l: cache key is segregated by prefer-specific flag (flag-on vs flag-off use different keys)" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='/stack/bin/tests/fixtures/env-update/http'
+    export _GS_EU2_CACHE_DIR=\$(mktemp -d)
+    # Run WITHOUT prefer-specific — writes one cache file
+    bash -c \"
+      export _GS_EU2_HTTP_FIXTURE_DIR='\$_GS_EU2_HTTP_FIXTURE_DIR'
+      export _GS_EU2_CACHE_DIR='\$_GS_EU2_CACHE_DIR'
+      declare -A _GS_EU2_CFG=([no_cache]=false [channel]=stable [cache_ttl]=3600)
+      source '/stack/bin/lib/env-update/core/records.sh'
+      source '/stack/bin/lib/env-update/core/semver.sh'
+      source '/stack/bin/lib/env-update/core/channel.sh'
+      source '/stack/bin/lib/env-update/core/tag_flags.sh'
+      source '/stack/bin/lib/env-update/core/cache.sh'
+      source '/stack/bin/lib/env-update/http/curl.sh'
+      source '/stack/bin/lib/env-update/fetchers/dockerhub.sh'
+      source '/stack/bin/lib/env-update/core/parse.sh'
+      f=\\\$(mktemp)
+      printf '# @todo env-update (tag-filter:alpine) dockerhub:valkey/valkey 9.0.3-alpine3.23\nGLOBAL_STACK_VALKEY_VERSION=9.0.3-alpine3.23\n' > \\\"\\\$f\\\"
+      _gs_eu2_parse_env_file \\\"\\\$f\\\"
+      _gs_eu2_fetch_dockerhub 0
+      rm -f \\\"\\\$f\\\"
+    \"
+    # Run WITH prefer-specific — writes a different cache file
+    bash -c \"
+      export _GS_EU2_HTTP_FIXTURE_DIR='\$_GS_EU2_HTTP_FIXTURE_DIR'
+      export _GS_EU2_CACHE_DIR='\$_GS_EU2_CACHE_DIR'
+      declare -A _GS_EU2_CFG=([no_cache]=false [channel]=stable [cache_ttl]=3600)
+      source '/stack/bin/lib/env-update/core/records.sh'
+      source '/stack/bin/lib/env-update/core/semver.sh'
+      source '/stack/bin/lib/env-update/core/channel.sh'
+      source '/stack/bin/lib/env-update/core/tag_flags.sh'
+      source '/stack/bin/lib/env-update/core/cache.sh'
+      source '/stack/bin/lib/env-update/http/curl.sh'
+      source '/stack/bin/lib/env-update/fetchers/dockerhub.sh'
+      source '/stack/bin/lib/env-update/core/parse.sh'
+      f=\\\$(mktemp)
+      printf '# @todo env-update (tag-filter:alpine) (prefer-specific) dockerhub:valkey/valkey 9.0.3-alpine3.23\nGLOBAL_STACK_VALKEY_VERSION=9.0.3-alpine3.23\n' > \\\"\\\$f\\\"
+      _gs_eu2_parse_env_file \\\"\\\$f\\\"
+      _gs_eu2_fetch_dockerhub 0
+      rm -f \\\"\\\$f\\\"
+    \"
+    # There must be exactly 2 cache files (different keys → different files)
+    n=\$(ls \"\$_GS_EU2_CACHE_DIR\" | wc -l | tr -d ' ')
+    rm -rf \"\$_GS_EU2_CACHE_DIR\"
+    [[ \"\$n\" -eq 2 ]] || { echo \"Expected 2 cache files (flag-on vs flag-off), got \$n\"; echo FAIL; exit 0; }
     echo PASS
 "
 

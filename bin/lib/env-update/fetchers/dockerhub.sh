@@ -73,8 +73,12 @@ _gs_eu2_fetch_dockerhub() {
   local _tag_suffix
   _tag_suffix="$(_gs_eu2_record_get "${_idx}" tag_suffix)"
 
-  # Build cache key
-  local _cache_key="dockerhub:${_ns}:${_tag_suffix}:${_major_hint}:${_channel}"
+  # prefer_specific: read early so it's available for cache key construction
+  local _prefer_specific
+  _prefer_specific="$(_gs_eu2_record_get "${_idx}" prefer_specific)"
+
+  # Build cache key — include prefer_specific so flag-on/off runs don't share entries
+  local _cache_key="dockerhub:${_ns}:${_tag_suffix}:${_major_hint}:${_channel}:${_prefer_specific}"
 
   # Cache read
   if [[ "${_no_cache}" != "true" ]]; then
@@ -126,8 +130,7 @@ _gs_eu2_fetch_dockerhub() {
   # This prevents X.Y tags (which silently re-point when patches ship) from
   # winning over X.Y.Z pinnable tags.  Flag is opt-in to avoid breaking images
   # like Postgres where X.Y *is* the specific version (no X.Y.Z exists).
-  local _prefer_specific
-  _prefer_specific="$(_gs_eu2_record_get "${_idx}" prefer_specific)"
+  # Note: _prefer_specific already read above (before cache key) — reuse it here.
   if [[ "${_prefer_specific}" == "true" ]]; then
     local _specific_tags
     _specific_tags="$(printf '%s\n' "${_tags}" | _gs_eu2_filter_specific_tags)"
