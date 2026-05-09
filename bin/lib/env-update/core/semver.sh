@@ -51,6 +51,11 @@ _gs_eu2_semver_delta() {
   local _a="${1#v}" _b="${2#v}"
   [[ -z "${_a}" || -z "${_b}" ]] && { echo "unknown"; return; }
 
+  # Strip path-like prefix (e.g. "tags/2.4.66" → "2.4.66", "refs/heads/v3" stays).
+  # Matches <word>/<digit-led-version> — git refs style like "tags/", "branches/".
+  [[ "${_a}" =~ ^[^0-9/][^/]*/([0-9].*)$ ]] && _a="${BASH_REMATCH[1]}"
+  [[ "${_b}" =~ ^[^0-9/][^/]*/([0-9].*)$ ]] && _b="${BASH_REMATCH[1]}"
+
   # Codename-date style (e.g. ubuntu "resolute-20260108" → "resolute-20260413"):
   # both strings start with an alpha char → extract prefix up to first hyphen.
   # Same prefix (same codename) → patch.  Different prefix → major.

@@ -3400,6 +3400,143 @@ t "t40l: cache key is segregated by prefer-specific flag (flag-on vs flag-off us
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Section 41 — semver_delta handles tags/X.Y.Z prefix (not falsely "major")
+# ═══════════════════════════════════════════════════════════════════════════
+section "41 — semver_delta tags/ prefix"
+
+_SV_LIBS41="
+source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update/core/semver.sh'
+"
+
+t "t41a: tags/X.Y.Z patch bump → patch (not falsely major)" bash -c "
+    ${_SV_LIBS41}
+    result=\$(_gs_eu2_semver_delta 'tags/2.4.66' 'tags/2.4.67')
+    [[ \"\$result\" == 'patch' ]] || { echo \"expected patch for tags/ patch bump, got: '\$result'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t41b: tags/X.Y.Z major bump → major" bash -c "
+    ${_SV_LIBS41}
+    result=\$(_gs_eu2_semver_delta 'tags/2.4.66' 'tags/3.0.0')
+    [[ \"\$result\" == 'major' ]] || { echo \"expected major for tags/ major bump, got: '\$result'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t41c: tags/X.Y.Z minor bump → minor" bash -c "
+    ${_SV_LIBS41}
+    result=\$(_gs_eu2_semver_delta 'tags/2.4.66' 'tags/2.5.0')
+    [[ \"\$result\" == 'minor' ]] || { echo \"expected minor for tags/ minor bump, got: '\$result'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 42 — prerelease guard: proposed RC when current is stable → SKIP
+# ═══════════════════════════════════════════════════════════════════════════
+section "42 — prerelease guard in decide.sh"
+
+_CD_LIBS42="
+source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update/core/semver.sh'
+source '/stack/bin/lib/env-update/core/decide.sh'
+"
+
+t "t42a: stable current + no-dash RC proposed → SKIP (not AUTO)" bash -c "
+    ${_CD_LIBS42}
+    result=\$(_gs_eu2_classify_decision '6.3.0' '6.3.0RC1' '' '' '')
+    [[ \"\$result\" == 'SKIP' ]] || { echo \"expected SKIP for stable→RC (no dash), got: '\$result'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t42b: stable current + dash RC proposed → SKIP" bash -c "
+    ${_CD_LIBS42}
+    result=\$(_gs_eu2_classify_decision '1.2.3' '1.3.0-rc1' '' '' '')
+    [[ \"\$result\" == 'SKIP' ]] || { echo \"expected SKIP for stable→rc1 (with dash), got: '\$result'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t42c: stable current + alpha proposed → SKIP" bash -c "
+    ${_CD_LIBS42}
+    result=\$(_gs_eu2_classify_decision '2.0.0' '2.1.0alpha1' '' '' '')
+    [[ \"\$result\" == 'SKIP' ]] || { echo \"expected SKIP for stable→alpha, got: '\$result'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t42d: prerelease current + prerelease proposed → AUTO (both pre-release)" bash -c "
+    ${_CD_LIBS42}
+    result=\$(_gs_eu2_classify_decision '1.0.0-rc1' '1.0.0-rc2' '' '' '')
+    [[ \"\$result\" == 'AUTO' ]] || { echo \"expected AUTO for rc1→rc2, got: '\$result'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t42e: stable current + stable proposed → AUTO (normal upgrade)" bash -c "
+    ${_CD_LIBS42}
+    result=\$(_gs_eu2_classify_decision '6.3.0' '6.3.1' '' '' '')
+    [[ \"\$result\" == 'AUTO' ]] || { echo \"expected AUTO for stable patch bump, got: '\$result'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t42f: stable alpine-tagged current + stable alpine-tagged proposed → AUTO" bash -c "
+    ${_CD_LIBS42}
+    result=\$(_gs_eu2_classify_decision '8.6.1-alpine3.23' '8.6.3-alpine3.23' '' '' '')
+    [[ \"\$result\" == 'AUTO' ]] || { echo \"expected AUTO for alpine patch bump, got: '\$result'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 43 — pecl_git filters prerelease when current is stable
+# ═══════════════════════════════════════════════════════════════════════════
+section "43 — pecl_git prerelease filter"
+
+_PECLGIT_LIBS43="
+source '/stack/bin/lib/env-update/config/defaults.sh'
+source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update/core/records.sh'
+source '/stack/bin/lib/env-update/core/semver.sh'
+source '/stack/bin/lib/env-update/core/channel.sh'
+source '/stack/bin/lib/env-update/core/tag_flags.sh'
+source '/stack/bin/lib/env-update/core/cache.sh'
+source '/stack/bin/lib/env-update/http/curl.sh'
+source '/stack/bin/lib/env-update/fetchers/github.sh'
+source '/stack/bin/lib/env-update/fetchers/pecl.sh'
+source '/stack/bin/lib/env-update/fetchers/pecl_git.sh'
+export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+export _GS_EU2_CACHE_DIR=\${TMP_DIR}/peclgit43_cache
+"
+
+t "t43a: stable current + RC in releases list → proposed is stable (RC filtered)" bash -c "
+    ${_PECLGIT_LIBS43}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/peclgit43a_cache
+    declare -A _GS_EU2_CFG=([no_cache]=true [channel]=stable)
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type             'pecl-git'
+    _gs_eu2_record_set \$idx identifier       'testowner/phpext-with-rc'
+    _gs_eu2_record_set \$idx env_var          'GLOBAL_STACK_TEST_VERSION'
+    _gs_eu2_record_set \$idx current_version  '6.3.0'
+    _gs_eu2_fetch_pecl_git \$idx 2>/dev/null || true
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    # fixture releases: RC first, then 6.3.0 — stable filter must prefer 6.3.0
+    [[ \"\$val\" == '6.3.0' ]] || { echo \"expected 6.3.0 (stable), got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t43b: prerelease current + RC in releases list → all candidates kept (no filter)" bash -c "
+    ${_PECLGIT_LIBS43}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/peclgit43b_cache
+    declare -A _GS_EU2_CFG=([no_cache]=true [channel]=stable)
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type             'pecl-git'
+    _gs_eu2_record_set \$idx identifier       'testowner/phpext-with-rc'
+    _gs_eu2_record_set \$idx env_var          'GLOBAL_STACK_TEST_VERSION'
+    _gs_eu2_record_set \$idx current_version  '6.3.0RC1'
+    _gs_eu2_fetch_pecl_git \$idx 2>/dev/null || true
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    # With prerelease current, RC candidates are kept — sort -V picks RC1 as best
+    [[ \"\$val\" == '6.3.0RC1' ]] || { echo \"expected 6.3.0RC1 (RC kept), got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section

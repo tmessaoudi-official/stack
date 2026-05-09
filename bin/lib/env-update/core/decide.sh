@@ -35,6 +35,12 @@ _gs_eu2_classify_decision() {
     echo "SKIP"; return 0
   fi
 
+  # Prerelease guard: don't auto-propose a prerelease when current is stable.
+  # Handles both dash-separated (6.3.0-rc1) and no-dash (6.3.0RC1) formats.
+  if _gs_eu2_is_prerelease "${_prop}" && ! _gs_eu2_is_prerelease "${_cur}"; then
+    echo "SKIP"; return 0
+  fi
+
   # Downgrade protection: if proposed sorts before current via sort -V, skip
   # Use sort -V directly (not semver_compare) to avoid misclassifying platform
   # suffixes like -alpine3.23 as pre-release markers.

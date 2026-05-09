@@ -143,6 +143,18 @@ _gs_eu2_fetch_pecl_git() {
     [[ -n "${_t}" ]] && _candidates+=("${_t}")
   done <<< "${_raw_tags}"
 
+  # ── Step 2b: Prefer stable releases when current version is stable ───────
+  # Prevents sort -V from picking a prerelease (e.g. 6.3.0RC1) over stable.
+  local _cur_v
+  _cur_v="$(_gs_eu2_record_get "${_idx}" current_version)"
+  if ! _gs_eu2_is_prerelease "${_cur_v}"; then
+    local _stable_cs=() _c
+    for _c in "${_candidates[@]}"; do
+      _gs_eu2_is_prerelease "${_c}" || _stable_cs+=("${_c}")
+    done
+    [[ ${#_stable_cs[@]} -gt 0 ]] && _candidates=("${_stable_cs[@]}")
+  fi
+
   # ── Step 3: Filter by major_hint ─────────────────────────────────────────
   if [[ -n "${_major_hint}" ]]; then
     local _maj_filtered=()

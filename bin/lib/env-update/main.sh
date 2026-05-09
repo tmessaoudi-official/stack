@@ -128,6 +128,15 @@ _gs_eu2_run_check() {
         "floating reference (${_cur}) — pin manually to adopt proposed version"
     fi
 
+    # Annotate SKIP when proposed is prerelease but current is stable
+    if [[ "$(_gs_eu2_record_get "${_i}" decision)" == "SKIP" && \
+          -z "$(_gs_eu2_record_get "${_i}" error_message)" && \
+          -n "${_prop}" && "${_prop}" != "${_cur}" ]] && \
+       _gs_eu2_is_prerelease "${_prop}" && ! _gs_eu2_is_prerelease "${_cur}"; then
+      _gs_eu2_record_set "${_i}" error_message \
+        "proposed is prerelease — pin manually when stable ships"
+    fi
+
     # Stream this record immediately — don't buffer until all fetches complete
     local _decision _err _tag _change _reason
     _decision="$(_gs_eu2_record_get "${_i}" decision)"
@@ -151,6 +160,9 @@ _gs_eu2_run_check() {
           _delta="$(_gs_eu2_semver_delta "${_cur}" "${_prop}")"
           _cur_maj="${_cur#v}"; _cur_maj="${_cur_maj%%.*}"
           _prop_maj="${_prop#v}"; _prop_maj="${_prop_maj%%.*}"
+          # Strip path-like prefix from major labels (e.g. "tags/2" → "2")
+          _cur_maj="${_cur_maj##*[^0-9]}"
+          _prop_maj="${_prop_maj##*[^0-9]}"
           if [[ -n "${_major}" ]]; then
             # Proposed escapes major_hint pin
             _reason="  ← major pin (${_prop_maj}.x available)"
