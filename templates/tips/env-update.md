@@ -361,6 +361,7 @@ The `_change` suffix is built from the decision and record state:
 | Condition | `_change` value |
 |-----------|----------------|
 | `SKIP` with `error_message` | `  (error_message text)` |
+| `SKIP` prerelease proposed, current stable | `  (proposed is prerelease — pin manually when stable ships)` |
 | `SKIP` downgrade detected | `  (would downgrade)` |
 | `SKIP` without error (up to date) | `  (up to date)` |
 | `HOLD` / `AUTO` / `MANUAL` with `proposed != current` | `  current_version → proposed_version[reason]` |
@@ -378,7 +379,8 @@ inspect the record.
 | `[HOLD  ]` | Major bump, no `major_hint` pin | `  ← major bump (X→Y)` where X=current major, Y=proposed major |
 | `[HOLD  ]` | Proposed version escapes `major_hint` pin | `  ← major pin (Y.x available)` where Y=proposed major |
 | `[MANUAL]` | `(override)` or `(manual)` annotation flag | `  ← manual flag` |
-| `[SKIP  ]` | Proposed is older than current (downgrade) | shown as `  (would downgrade)` in place of arrow |
+| `[SKIP  ]` | Proposed is a prerelease, current is stable | `  (proposed is prerelease — pin manually when stable ships)` |
+| `[SKIP  ]` | Proposed is older than current (downgrade) | `  (would downgrade)` in place of arrow |
 | `[SKIP  ]` | Up to date | `  (up to date)` — no label needed |
 | `[ERROR ]` | Fetch failure | error message is the reason — no additional label |
 
@@ -393,7 +395,7 @@ than showing a placeholder.
 | `[AUTO  ]` | The fetcher found a newer version within the same major (or within the major_hint pin), and no `override` or `manual` flag is set. Safe to apply automatically. |
 | `[HOLD  ]` | A newer version exists but it crosses a major version boundary, or the proposed version escapes the major_hint pin. Requires human review before upgrading. Reason label explains which case triggered. |
 | `[MANUAL]` | The annotation has `(override)` or `(manual)` flag, OR the fetcher (e.g. `sdkmanager`) explicitly sets `manual=true`. The proposed version is shown but will never be auto-applied. |
-| `[SKIP  ]` | The variable is already at the latest version (`current == proposed`), or the fetcher returned no viable candidates, or the current version is a floating reference (`latest`, `nightly`, etc.), or the proposed would downgrade the current version. Also used when a fetcher sets `error_message` but no `decision`. |
+| `[SKIP  ]` | The variable is already at the latest version (`current == proposed`), or the fetcher returned no viable candidates, or the current version is a floating reference (`latest`, `nightly`, etc.), or the proposed would downgrade the current version, or the proposed is a prerelease while the current is stable. Also used when a fetcher sets `error_message` but no `decision`. |
 | `[ERROR ]` | Network failure, HTTP error (4xx/5xx), rate limiting after 3 retries, or a parse failure in the API response. The fetch was attempted and definitively failed. |
 
 ### alt_version line
@@ -515,6 +517,8 @@ proposed_version empty?        → SKIP
 current is unversioned?        → SKIP  (floating ref: nightly/latest/edge/master/next/head/main)
 override=true OR manual=true?  → MANUAL
 current == proposed?           → SKIP  (up to date)
+proposed is prerelease AND
+  current is stable?           → SKIP  (prerelease guard — "proposed is prerelease")
 proposed sorts before current? → SKIP  (downgrade protection, via sort -V)
 semver_delta = major?
   major_hint empty?            → HOLD  (major jump, no pin — requires review)
@@ -522,6 +526,11 @@ semver_delta = major?
   does not start with hint?    → HOLD  (escapes the pin — C3 rule)
                                → AUTO  (within major, safe to apply)
 ```
+
+The **prerelease guard** protects stable variables from being auto-proposed RC/alpha/beta
+versions. It uses `_gs_eu2_is_prerelease` which matches the full marker set (both dash and
+no-dash formats: `6.3.0-rc1` and `6.3.0RC1` are both detected). When it fires, the SKIP
+annotation reads `(proposed is prerelease — pin manually when stable ships)`.
 
 ### Downgrade protection
 
@@ -550,12 +559,18 @@ pre-release is "older" (`1.0.0-rc1 < 1.0.0`). Falls back to `sort -V` for the fi
 
 **`_gs_eu2_semver_delta`** — returns `major`, `minor`, `patch`, or `unknown`:
 - Strips `v` prefix, normalizes `_` to `.`.
+- **Path-prefix stripping**: git-refs-style prefixes like `tags/2.4.66` are stripped to
+  `2.4.66` before comparison, so `tags/2.4.66 → tags/2.4.67` is correctly classified as
+  `patch` (not `major`). Pattern matched: `^<word>/<digit-led-version>`.
 - **Codename-date style** (e.g. ubuntu `resolute-20260108`): if both operands start with
-  a non-digit, compares the prefix before the first hyphen. Same prefix = `patch`, different
-  prefix = `major`.
+  a non-digit (after path stripping), compares the prefix before the first hyphen. Same
+  prefix = `patch`, different prefix = `major`.
 - **Date-SHA style** (e.g. `20241231-abc12345` or 40-char hex): always returns `patch` so
   `decide.sh` emits AUTO instead of HOLD for commit-tracking variables.
 - Numeric: compares first component for major, second for minor, falls back to patch.
+
+The HOLD reason label (e.g. `← major bump (2→3)`) also strips any path prefix so `tags/2`
+displays as just `2`.
 
 ### Prerelease detection (`_GS_EU2_PRERELEASE_MARKERS`)
 
@@ -1228,8 +1243,13 @@ Examples:
 
 1. Strip `v`-prefix from each tag.
 2. Apply `tag_strip_prefix` from the record (if set).
-3. Filter by `major_hint` (exact first-segment match: `${tag%%.*} == major_hint`).
-4. Sort with `sort -V`, take the highest.
+3. **Stable filter** (when current version is stable): discard any candidate that
+   `_gs_eu2_is_prerelease` identifies as a prerelease (e.g. `6.3.0RC1`, `6.3.0-beta2`).
+   This prevents `sort -V` from picking a release-candidate over a stable release.
+   If all candidates are prerelease (unusual), the filter is bypassed to avoid empty result.
+   Skipped when current version is itself a prerelease.
+4. Filter by `major_hint` (exact first-segment match: `${tag%%.*} == major_hint`).
+5. Sort with `sort -V`, take the highest.
 
 ### SHA lookup
 
