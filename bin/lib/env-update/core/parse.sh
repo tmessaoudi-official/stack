@@ -12,7 +12,7 @@ _gs_eu2_is_recognized_flag() {
   local _f="${1}" _name
   [[ "${_f}" == *:* ]] && _name="${_f%%:*}" || _name="${_f}"
   case "${_name}" in
-    override | manual | propagate | use-sha | prefer-specific | \
+    override | manual | propagate | use-sha | prefer-specific | check-tags | \
       channel | skip | \
       tag-filter | tag-exclude | tag-strip-prefix | tag-strip-suffix | \
       tag-extract | tag-suffix | tag-replace | \
@@ -131,6 +131,10 @@ _gs_eu2_dispatch_flag() {
       ;;
     prefer-specific)
       _gs_eu2_record_set "${_idx}" prefer_specific "true"
+      return 0
+      ;;
+    check-tags)
+      _gs_eu2_record_set "${_idx}" check_tags "true"
       return 0
       ;;
   esac

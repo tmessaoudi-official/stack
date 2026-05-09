@@ -67,6 +67,13 @@ _gs_eu2_fetch_pecl_git() {
   _tag_strip_prefix="$(_gs_eu2_record_get "${_idx}" tag_strip_prefix)"
   _no_cache="${_GS_EU2_CFG[no_cache]:-false}"
 
+  # ── Check-tags merge mode ─────────────────────────────────────────────────
+  local _check_tags _with_tags _merge_mode
+  _check_tags="$(_gs_eu2_record_get "${_idx}" check_tags)"
+  _with_tags="${_GS_EU2_CFG[with_tags]:-false}"
+  _merge_mode="false"
+  [[ "${_check_tags}" == "true" || "${_with_tags}" == "true" ]] && _merge_mode="true"
+
   # ── Extract owner/repo — accept shorthand or full URL (legacy fallback) ──
   local _owner_repo=""
   if [[ "${_identifier}" =~ ^[^/[:space:]]+/[^/[:space:]]+$ ]]; then
@@ -93,6 +100,7 @@ _gs_eu2_fetch_pecl_git() {
 
   # ── Cache key (pecl-git3 to invalidate stale YYYYMMDD-sha8 entries) ──────
   local _cache_key="pecl-git3:${_owner_repo}"
+  [[ "${_merge_mode}" == "true" ]] && _cache_key="${_cache_key}:tags"
 
   if [[ "${_no_cache}" != "true" ]]; then
     local _cached
@@ -109,17 +117,21 @@ _gs_eu2_fetch_pecl_git() {
 
   # ── Step 1: Fetch latest release tags ────────────────────────────────────
   local _tok="${GITHUB_TOKEN:-${GLOBAL_STACK_GITHUB_TOKEN:-}}"
-  local _raw_tags=""
-  local _releases_out
+  local _raw_tags="" _releases_out=""
   if _releases_out="$(_gs_eu2_github_fetch_releases "${_owner_repo}" "${_tok}" 2>/dev/null)"; then
     _raw_tags="${_releases_out}"
   fi
 
-  # Fallback: tags API (3 pages max)
-  if [[ -z "$(printf '%s\n' "${_raw_tags}" | grep -v '^$' || true)" ]]; then
+  # Fallback: tags API (3 pages max); in merge mode, always fetch and combine
+  if [[ -z "$(printf '%s\n' "${_raw_tags}" | grep -v '^$' || true)" || "${_merge_mode}" == "true" ]]; then
     local _tags_out
     _tags_out="$(_gs_eu2_github_fetch_tags_paginated "${_owner_repo}" "${_tok}" 3 2>/dev/null)" || true
-    _raw_tags="${_tags_out}"
+    if [[ "${_merge_mode}" == "true" ]]; then
+      # Merge: combine releases + tags into one candidate pool
+      _raw_tags="${_raw_tags}"$'\n'"${_tags_out}"
+    else
+      _raw_tags="${_tags_out}"
+    fi
   fi
 
   if [[ -z "$(printf '%s\n' "${_raw_tags}" | grep -v '^$' || true)" ]]; then
@@ -177,6 +189,55 @@ _gs_eu2_fetch_pecl_git() {
   # ── Step 4: Sort descending, take best ───────────────────────────────────
   local _best_ver
   _best_ver="$(printf '%s\n' "${_candidates[@]}" | sort -V | tail -1)"
+
+  # ── Step 4b: Version-gap fix — if best_ver < current, also check tags ────
+  # Fires only when merge_mode is not already active (avoids a redundant fetch).
+  if [[ "${_merge_mode}" != "true" && -n "${_best_ver}" ]]; then
+    local _cur_vg
+    _cur_vg="$(_gs_eu2_record_get "${_idx}" current_version)"
+    if [[ -n "${_cur_vg}" ]] && ! _gs_eu2_is_unversioned "${_cur_vg}"; then
+      local _oldest_vg
+      _oldest_vg="$(printf '%s\n%s\n' "${_cur_vg#v}" "${_best_ver#v}" | sort -V | head -1)"
+      if [[ "${_oldest_vg}" == "${_best_ver#v}" && "${_oldest_vg}" != "${_cur_vg#v}" ]]; then
+        local _gap_tags_raw
+        _gap_tags_raw="$(_gs_eu2_github_fetch_tags_paginated "${_owner_repo}" "${_tok}" 3 2>/dev/null)" || true
+        if [[ -n "$(printf '%s\n' "${_gap_tags_raw}" | grep -v '^$' || true)" ]]; then
+          local _merged_raw="${_releases_out}"$'\n'"${_gap_tags_raw}"
+          local _gap_candidates=()
+          local _gt
+          while IFS= read -r _gt; do
+            [[ -z "${_gt}" ]] && continue
+            _gt="${_gt#v}"
+            [[ -n "${_tag_strip_prefix}" ]] && _gt="${_gt#"${_tag_strip_prefix}"}"
+            [[ -n "${_gt}" ]] && _gap_candidates+=("${_gt}")
+          done <<< "${_merged_raw}"
+          if ! _gs_eu2_is_prerelease "${_cur_vg}"; then
+            local _stable_gap=() _gc
+            for _gc in "${_gap_candidates[@]}"; do
+              _gs_eu2_is_prerelease "${_gc}" || _stable_gap+=("${_gc}")
+            done
+            [[ ${#_stable_gap[@]} -gt 0 ]] && _gap_candidates=("${_stable_gap[@]}")
+          fi
+          if [[ -n "${_major_hint}" ]]; then
+            local _maj_gap=() _gc2
+            for _gc2 in "${_gap_candidates[@]}"; do
+              [[ "${_gc2%%.*}" == "${_major_hint}" ]] && _maj_gap+=("${_gc2}")
+            done
+            _gap_candidates=("${_maj_gap[@]+"${_maj_gap[@]}"}")
+          fi
+          if [[ ${#_gap_candidates[@]} -gt 0 ]]; then
+            local _gap_best
+            _gap_best="$(printf '%s\n' "${_gap_candidates[@]}" | sort -V | tail -1)"
+            local _oldest2
+            _oldest2="$(printf '%s\n%s\n' "${_best_ver#v}" "${_gap_best#v}" | sort -V | head -1)"
+            if [[ "${_oldest2}" == "${_best_ver#v}" && "${_oldest2}" != "${_gap_best#v}" ]]; then
+              _best_ver="${_gap_best}"
+            fi
+          fi
+        fi
+      fi
+    fi
+  fi
 
   # ── Step 5: Get SHA for the version tag ──────────────────────────────────
   local _proposed_sha=""

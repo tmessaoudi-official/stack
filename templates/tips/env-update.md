@@ -169,6 +169,7 @@ flags. Flags are **position-agnostic** — they can appear anywhere in the annot
 | `(propagate)` | `propagate: true` | Stored but not acted on by the core fetcher. Reserved for tools that need to track which variables should be propagated to derived files. |
 | `(use-sha)` | `use_sha: true` | For `pecl-git`: when `--apply` writes the variable, it writes `proposed_sha` instead of `proposed_version`. Use for variables tracking a git commit SHA rather than a version string. |
 | `(prefer-specific)` | `prefer_specific: true` | **dockerhub only.** After all tag filters run, drop any tag whose numeric prefix has fewer than two dots (i.e. `X` or `X.Y` "floating" tags). A tag like `9.1-alpine3.23` has numeric prefix `9.1` (1 dot) and is floating — Docker Hub silently updates it when `9.1.1` ships, making the tag string unchanging and therefore invisible to env-update. A tag like `9.0.4-alpine3.23` has prefix `9.0.4` (2 dots) and is pinnable. Use this flag when you want true version pinning. **Do NOT use for images where `X.Y` is the real specific version** (e.g. `postgres:18.3-alpine3.23` — Postgres has no `X.Y.Z` Docker tags). If all remaining tags are floating after this filter, the record is set to SKIP. |
+| `(check-tags)` | `check_tags: true` | **github and pecl-git only.** Always fetch both the Releases API and the Tags API for this repo, then merge the two candidate pools before applying filters. Use for repos that publish new versions as git tags before (or instead of) creating a GitHub Release — the canonical example is Zig, which had `0.15.2` in tags while the Releases API still returned `0.15.1`. Without this flag, the fetcher uses Releases as primary and only falls back to Tags when Releases returns nothing. See also the automatic [version-gap fix](#version-gap-fix) (fires for every repo; this flag is for repos where the gap is chronic). |
 
 ### Valued flags — channel
 
@@ -257,6 +258,7 @@ bin/env-update.sh [OPTIONS]
 | `--dry-run` | off | No writes of any kind: cache writes are suppressed, `.env` is never modified, Dockerfile propagation is skipped. Prints a `[DRY-RUN]` prefix line for each update that would be applied. Mutually exclusive with `--apply`. After a successful `--dry-run --check`, writes a timestamp marker (`last-dry-run-ts`) so a subsequent `--apply` can confirm the preview was recent. |
 | `--no-cache` | off | Bypass the flat-file cache entirely. Every fetch goes to the network. Cache reads return miss; cache writes are skipped. |
 | `--cache-ttl=N` | `3600` | Override the cache TTL in seconds. Must be a positive integer or zero (`0` = all cache entries treated as expired). |
+| `--with-tags` | off | For every `github:` and `pecl-git:` record in the run, always fetch both the Releases API and the Tags API and merge the candidate pools. Same effect as adding `(check-tags)` to every annotation, but applies globally for one run. Use when you suspect any repo in the batch may have released via tags only. Complements the automatic [version-gap fix](#version-gap-fix); this flag ensures the merged pool is used for all repos without waiting for a gap to be detected. |
 
 ### Flag combinations and mutual exclusivity
 
@@ -284,6 +286,10 @@ bin/env-update.sh --dump --format=json | jq .      # machine-readable records
 bin/env-update.sh --check --filter=POSTGRES        # only GLOBAL_STACK_POSTGRES* vars
 bin/env-update.sh --check --filter=type:github     # only github-type fetchers
 bin/env-update.sh --check --no-cache               # force fresh fetch
+
+# Tag-ahead audit
+bin/env-update.sh --check --with-tags              # merge releases+tags for all github/pecl-git repos
+bin/env-update.sh --check --filter=ZIG             # (check-tags already annotated on Zig — no flag needed)
 
 # Debug
 bin/env-update.sh --version                        # print 2.0.0
@@ -663,7 +669,33 @@ GLOBAL_STACK_VALKEY_VERSION=9.0.3-alpine3.23
 
 **Version prefix:** Applied after channel selection if `version_prefix` is set.
 
-**Cache key:** `github:owner/repo:major_hint:channel`
+**Cache key:** `github:owner/repo:major_hint:channel` (normal mode); `github:owner/repo:major_hint:channel:tags` (check-tags / --with-tags mode — separate key to prevent cache contamination).
+
+**Merge mode (`(check-tags)` / `--with-tags`):**
+
+When either the per-annotation `(check-tags)` flag or the `--with-tags` CLI flag is active, the fetcher **always runs both** the Releases API and the Tags API, then **merges the two candidate pools** before applying tag flags and channel selection. This guarantees the best version across both sources:
+
+```
+Releases → [v0.14.0]
+Tags     → [v0.15.2, v0.15.0, v0.14.0, v0.13.5]
+Merged   → [v0.14.0, v0.15.2, v0.15.0, v0.14.0, v0.13.5]
+Filtered → channel_select → v0.15.2
+```
+
+Use `(check-tags)` for repos where the Releases API chronically lags the Tags API (e.g. `ziglang/zig`). Use `--with-tags` for one-off audits of the entire batch.
+
+**Version-gap fix (automatic):** <a name="version-gap-fix"></a>
+
+Even without `(check-tags)`, the fetcher detects when the normal strategy proposes a version **older than the current version** (`proposed < current`). When this gap is detected, the fetcher automatically fetches the Tags API, merges it with the original releases pool, re-runs the filter+channel pipeline, and takes the best result. If the merged pool produces a newer version, it replaces the original proposed value.
+
+This fires silently and automatically on every run — no annotation change needed. It catches the "I updated to a tag-only release, but env-update is now stuck proposing the older Release" case.
+
+```
+Normal run:   releases → v0.14.0   vs current v0.15.2 → gap detected!
+Gap fix:      tags → v0.15.2, merged → v0.15.2 (same as current → SKIP, up to date)
+```
+
+Difference vs `(check-tags)`: The gap fix fires only **after** a gap is detected (reactive). `(check-tags)` fires on **every** run for that repo (proactive — use for chronic divergers).
 
 **Known quirks:**
 - Some repos publish via Releases API only; others only via Tags API. The fetcher handles both transparently. Repos with thousands of tags may need git ls-remote for deep major version searches.
@@ -678,6 +710,10 @@ GLOBAL_STACK_FLUTTER3_VERSION=3.29.3
 # With v-prefix stripping and restoration
 # @todo env-update (tag-strip-prefix:v) (version-prefix:v) github:docker/buildx v0.22.0
 GLOBAL_STACK_BUILDX_VERSION=v0.22.0
+
+# Repos that release via tags only (Zig releases tags before GitHub Releases)
+# @todo env-update (check-tags) github:ziglang/zig 0.15.2 urls: https://ziglang.org/download/
+GLOBAL_STACK_ZIG_VERSION=0.15.2
 
 # Tracking an underscore-repo (GitHub repo name with underscores)
 # HTTP fixture: bin/tests/fixtures/env-update/http/api.github.com_repos_testowner_underscore-repo_releases
@@ -729,7 +765,9 @@ See also [Section 10 (Extended)](#10-pecl-git-fetcher--extended) for full detail
 
 **Identifier format:** `owner/repo` (GitHub repository hosting a PHP extension).
 
-**Strategy:** Fetches release tags from GitHub (releases API → tags API fallback, max 3 pages). Strips `v`-prefix and any `tag_strip_prefix`. Filters by major_hint. Sorts descending, takes best. Fetches the commit SHA for the version tag. Fetches the commit date. Checks for PECL promotion.
+**Strategy:** Fetches release tags from GitHub (releases API → tags API fallback, max 3 pages). Strips `v`-prefix and any `tag_strip_prefix`. Filters stable candidates when current is stable (prerelease guard). Filters by major_hint. Sorts descending, takes best. Fetches the commit SHA for the version tag. Fetches the commit date. Checks for PECL promotion.
+
+**Merge mode and version-gap fix:** Supports `(check-tags)` and `--with-tags` exactly as the `github` fetcher does. When active, always fetches both the Releases API and Tags API and merges the candidate pools. The automatic version-gap fix (proposed < current → auto-check tags) also applies.
 
 **PECL extension name derivation:** Strips `php-`, `php_`, or `ext-` prefix from the repo name (lowercase). Override with `(pecl-ref:NAME)`.
 

@@ -142,10 +142,18 @@ _gs_eu2_fetch_github() {
   _major_hint="$(_gs_eu2_record_get "${_idx}" major_hint)"
   _no_cache="${_GS_EU2_CFG[no_cache]:-false}"
 
+  # ── Check-tags merge mode (per-annotation flag or --with-tags CLI flag) ────
+  local _check_tags _with_tags _merge_mode
+  _check_tags="$(_gs_eu2_record_get "${_idx}" check_tags)"
+  _with_tags="${_GS_EU2_CFG[with_tags]:-false}"
+  _merge_mode="false"
+  [[ "${_check_tags}" == "true" || "${_with_tags}" == "true" ]] && _merge_mode="true"
+
   local _tok="${GITHUB_TOKEN:-${GLOBAL_STACK_GITHUB_TOKEN:-}}"
 
-  # Build cache key
+  # Build cache key — include merge_mode to avoid polluting normal cache entries
   local _cache_key="github:${_identifier}:${_major_hint}:${_channel}"
+  [[ "${_merge_mode}" == "true" ]] && _cache_key="${_cache_key}:tags"
 
   # Cache read
   if [[ "${_no_cache}" != "true" ]]; then
@@ -170,11 +178,10 @@ _gs_eu2_fetch_github() {
     return 0
   fi
 
-  # ── Strategy 2: Tags API (when releases returned nothing, or all-prerelease for stable) ──
-  # Also triggered when the releases API returned only pre-releases and the channel is stable.
-  # Repos like Flutter publish GitHub Releases only for pre-releases; stable versions are
-  # tag-only.  Without this check, channel_select_best would see only pre-releases and
-  # return empty for the stable channel, causing a spurious SKIP.
+  # ── Strategy 2: Tags API ──────────────────────────────────────────────────
+  # Triggered when releases returned nothing, or all-prerelease for stable.
+  # Also triggered unconditionally in merge mode (check-tags / --with-tags):
+  # in merge mode the tags pool is combined with releases rather than replacing it.
   local _s2_trigger="false"
   if [[ -z "$(printf '%s\n' "${_raw_tags}" | grep -v '^$' || true)" ]]; then
     _s2_trigger="true"
@@ -191,10 +198,16 @@ _gs_eu2_fetch_github() {
     done <<< "${_raw_tags}"
     [[ "${_has_stable}" == "false" ]] && _s2_trigger="true"
   fi
-  if [[ "${_s2_trigger}" == "true" ]]; then
+  if [[ "${_s2_trigger}" == "true" || "${_merge_mode}" == "true" ]]; then
     local _tags_out
     _tags_out="$(_gs_eu2_github_fetch_tags_paginated "${_identifier}" "${_tok}" 10 2>/dev/null)"
-    _raw_tags="${_tags_out}"
+    if [[ "${_merge_mode}" == "true" ]]; then
+      # Merge mode: combine releases + tags into one candidate pool
+      _raw_tags="${_raw_tags}"$'\n'"${_tags_out}"
+    else
+      # Replace: releases were empty/all-prerelease, use tags only
+      _raw_tags="${_tags_out}"
+    fi
   fi
 
   # ── Strategy 3: git ls-remote (when tags pagination exhausted) ─────────────
@@ -270,6 +283,43 @@ _gs_eu2_fetch_github() {
     _gs_eu2_record_set "${_idx}" decision      "${_decision}"
     _gs_eu2_record_set "${_idx}" error_message "channel selection returned nothing for github:${_identifier}"
     return 0
+  fi
+
+  # ── Version-gap fix: if proposed is older than current, also check tags ───
+  # Fires only when merge_mode is not already active (avoids a redundant fetch).
+  # Scenario: releases API returns 0.14.0 but current is 0.15.2 (tag-only release)
+  # → we auto-fetch tags, merge with releases pool, re-run pipeline, take the max.
+  if [[ "${_merge_mode}" != "true" && -n "${_proposed}" ]]; then
+    local _cur_vg
+    _cur_vg="$(_gs_eu2_record_get "${_idx}" current_version)"
+    if [[ -n "${_cur_vg}" ]] && ! _gs_eu2_is_unversioned "${_cur_vg}"; then
+      local _oldest_vg
+      _oldest_vg="$(printf '%s\n%s\n' "${_cur_vg#v}" "${_proposed#v}" | sort -V | head -1)"
+      if [[ "${_oldest_vg}" == "${_proposed#v}" && "${_oldest_vg}" != "${_cur_vg#v}" ]]; then
+        local _gap_raw
+        _gap_raw="$(_gs_eu2_github_fetch_tags_paginated "${_identifier}" "${_tok}" 10 2>/dev/null)"
+        if [[ -n "$(printf '%s\n' "${_gap_raw}" | grep -v '^$' || true)" ]]; then
+          local _merged_raw="${_releases_out}"$'\n'"${_gap_raw}"
+          local _merged_filtered
+          _merged_filtered="$(printf '%s\n' "${_merged_raw}" | _gs_eu2_apply_tag_flags_from_record "${_idx}")"
+          if [[ -n "${_major_hint}" ]]; then
+            _merged_filtered="$(printf '%s\n' "${_merged_filtered}" \
+              | grep -E "^v?${_major_hint}([.^_-]|\$)" 2>/dev/null || true)"
+          fi
+          if [[ -n "$(printf '%s\n' "${_merged_filtered}" | grep -v '^$' || true)" ]]; then
+            local _gap_proposed
+            _gap_proposed="$(_gs_eu2_channel_select_best "${_merged_filtered}" "${_channel}")"
+            if [[ -n "${_gap_proposed}" ]]; then
+              local _oldest2
+              _oldest2="$(printf '%s\n%s\n' "${_proposed#v}" "${_gap_proposed#v}" | sort -V | head -1)"
+              if [[ "${_oldest2}" == "${_proposed#v}" && "${_oldest2}" != "${_gap_proposed#v}" ]]; then
+                _proposed="${_gap_proposed}"
+              fi
+            fi
+          fi
+        fi
+      fi
+    fi
   fi
 
   # ── alt_version: hint when a newer pre-release exists beyond the stable pick ─

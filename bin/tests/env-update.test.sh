@@ -3537,6 +3537,202 @@ t "t43b: prerelease current + RC in releases list → all candidates kept (no fi
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Section 44 — check-tags flag + github.sh version-gap fix
+# ═══════════════════════════════════════════════════════════════════════════
+section "44 — check-tags flag + github version-gap fix"
+
+t "t44a: (check-tags) flag recognised by parse.sh → no error, check_tags in dump" bash -c "
+    f=\${TMP_DIR}/t44a.env
+    printf '# @todo env-update (check-tags) github:testowner/tag-ahead 0.14.0\nGLOBAL_STACK_TEST_VERSION=0.14.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF 'check_tags: true' || { echo \"check_tags not in dump: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t44b: (check-tags) position-agnostic — after type:identifier" bash -c "
+    f=\${TMP_DIR}/t44b.env
+    printf '# @todo env-update github:testowner/tag-ahead (check-tags) 0.14.0\nGLOBAL_STACK_TEST_VERSION=0.14.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF 'check_tags: true' || { echo \"check_tags not in dump (trailing): \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+_GH_LIBS44="
+source '/stack/bin/lib/env-update/config/defaults.sh'
+source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update/core/records.sh'
+source '/stack/bin/lib/env-update/core/semver.sh'
+source '/stack/bin/lib/env-update/core/channel.sh'
+source '/stack/bin/lib/env-update/core/tag_flags.sh'
+source '/stack/bin/lib/env-update/core/cache.sh'
+source '/stack/bin/lib/env-update/http/curl.sh'
+source '/stack/bin/lib/env-update/fetchers/github.sh'
+export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+"
+
+t "t44c: check_tags=true → merges releases + tags → finds newer tag version" bash -c "
+    ${_GH_LIBS44}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/gh44c_cache
+    declare -A _GS_EU2_CFG=([no_cache]=true)
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type             'github'
+    _gs_eu2_record_set \$idx identifier       'testowner/tag-ahead'
+    _gs_eu2_record_set \$idx check_tags       'true'
+    _gs_eu2_record_set \$idx env_var          'GLOBAL_STACK_TEST_VERSION'
+    _gs_eu2_record_set \$idx current_version  '0.13.0'
+    _gs_eu2_fetch_github \$idx 2>/dev/null || true
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    # releases has v0.14.0 only; tags has v0.15.2 — check-tags must merge and find v0.15.2
+    [[ \"\$val\" == 'v0.15.2' ]] || { echo \"expected v0.15.2, got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t44d: with_tags=true in CFG → same merge behaviour" bash -c "
+    ${_GH_LIBS44}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/gh44d_cache
+    declare -A _GS_EU2_CFG=([no_cache]=true [with_tags]=true)
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type             'github'
+    _gs_eu2_record_set \$idx identifier       'testowner/tag-ahead'
+    _gs_eu2_record_set \$idx env_var          'GLOBAL_STACK_TEST_VERSION'
+    _gs_eu2_record_set \$idx current_version  '0.13.0'
+    _gs_eu2_fetch_github \$idx 2>/dev/null || true
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$val\" == 'v0.15.2' ]] || { echo \"expected v0.15.2 (with_tags=true), got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t44e: version-gap fix — releases older than current → auto-checks tags → finds newer" bash -c "
+    ${_GH_LIBS44}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/gh44e_cache
+    declare -A _GS_EU2_CFG=([no_cache]=true)
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type             'github'
+    _gs_eu2_record_set \$idx identifier       'testowner/tag-ahead'
+    _gs_eu2_record_set \$idx env_var          'GLOBAL_STACK_ZIG_VERSION'
+    _gs_eu2_record_set \$idx current_version  '0.15.2'
+    _gs_eu2_fetch_github \$idx 2>/dev/null || true
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    # releases v0.14.0 < current 0.15.2 → gap fix fetches tags → finds v0.15.2
+    [[ \"\$val\" == 'v0.15.2' ]] || { echo \"expected v0.15.2 (gap fix), got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t44f: version-gap fix uses cache key with :tags suffix in check-tags mode" bash -c "
+    ${_GH_LIBS44}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/gh44f_cache
+    declare -A _GS_EU2_CFG=([no_cache]=false)
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type             'github'
+    _gs_eu2_record_set \$idx identifier       'testowner/tag-ahead'
+    _gs_eu2_record_set \$idx check_tags       'true'
+    _gs_eu2_record_set \$idx env_var          'GLOBAL_STACK_TEST_VERSION'
+    _gs_eu2_record_set \$idx current_version  '0.13.0'
+    # First call populates cache
+    _gs_eu2_fetch_github \$idx 2>/dev/null || true
+    val1=\$(_gs_eu2_record_get \$idx proposed_version)
+    # Second call via separate record reads from cache
+    _gs_eu2_record_new; idx2=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx2 type             'github'
+    _gs_eu2_record_set \$idx2 identifier       'testowner/tag-ahead'
+    _gs_eu2_record_set \$idx2 check_tags       'true'
+    _gs_eu2_record_set \$idx2 env_var          'GLOBAL_STACK_TEST_VERSION2'
+    _gs_eu2_record_set \$idx2 current_version  '0.13.0'
+    _gs_eu2_fetch_github \$idx2 2>/dev/null || true
+    val2=\$(_gs_eu2_record_get \$idx2 proposed_version)
+    [[ \"\$val1\" == 'v0.15.2' && \"\$val2\" == 'v0.15.2' ]] \
+        || { echo \"expected v0.15.2/v0.15.2, got: '\$val1'/'\$val2'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 45 — --with-tags CLI flag + pecl_git version-gap fix
+# ═══════════════════════════════════════════════════════════════════════════
+section "45 — --with-tags CLI + pecl_git version-gap fix"
+
+t "t45a: --with-tags CLI flag sets CFG[with_tags]=true" bash -c "
+    source '/stack/bin/lib/env-update/config/defaults.sh'
+    source '/stack/bin/lib/env-update/reporting/help.sh'
+    source '/stack/bin/lib/env-update/core/args.sh'
+    _gs_eu2_parse_args --with-tags
+    [[ \"\${_GS_EU2_CFG[with_tags]}\" == 'true' ]] \
+        || { echo \"expected with_tags=true, got: '\${_GS_EU2_CFG[with_tags]}'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t45b: --with-tags default is false when not passed" bash -c "
+    source '/stack/bin/lib/env-update/config/defaults.sh'
+    source '/stack/bin/lib/env-update/reporting/help.sh'
+    source '/stack/bin/lib/env-update/core/args.sh'
+    _gs_eu2_parse_args
+    [[ \"\${_GS_EU2_CFG[with_tags]}\" == 'false' ]] \
+        || { echo \"expected with_tags=false, got: '\${_GS_EU2_CFG[with_tags]}'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+_PECLGIT_LIBS45="
+source '/stack/bin/lib/env-update/config/defaults.sh'
+source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update/core/records.sh'
+source '/stack/bin/lib/env-update/core/semver.sh'
+source '/stack/bin/lib/env-update/core/channel.sh'
+source '/stack/bin/lib/env-update/core/tag_flags.sh'
+source '/stack/bin/lib/env-update/core/cache.sh'
+source '/stack/bin/lib/env-update/http/curl.sh'
+source '/stack/bin/lib/env-update/fetchers/github.sh'
+source '/stack/bin/lib/env-update/fetchers/pecl.sh'
+source '/stack/bin/lib/env-update/fetchers/pecl_git.sh'
+export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+"
+
+t "t45c: pecl_git check_tags=true → merges releases + tags → finds 0.15.2" bash -c "
+    ${_PECLGIT_LIBS45}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/peclgit45c_cache
+    declare -A _GS_EU2_CFG=([no_cache]=true)
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type             'pecl-git'
+    _gs_eu2_record_set \$idx identifier       'testowner/tag-ahead'
+    _gs_eu2_record_set \$idx check_tags       'true'
+    _gs_eu2_record_set \$idx env_var          'GLOBAL_STACK_TEST_VERSION'
+    _gs_eu2_record_set \$idx current_version  '0.13.0'
+    _gs_eu2_fetch_pecl_git \$idx 2>/dev/null || true
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$val\" == '0.15.2' ]] || { echo \"expected 0.15.2 (check-tags), got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t45d: pecl_git version-gap fix — releases older than current → auto-checks tags" bash -c "
+    ${_PECLGIT_LIBS45}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/peclgit45d_cache
+    declare -A _GS_EU2_CFG=([no_cache]=true)
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type             'pecl-git'
+    _gs_eu2_record_set \$idx identifier       'testowner/tag-ahead'
+    _gs_eu2_record_set \$idx env_var          'GLOBAL_STACK_TEST_VERSION'
+    _gs_eu2_record_set \$idx current_version  '0.15.2'
+    _gs_eu2_fetch_pecl_git \$idx 2>/dev/null || true
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    # releases v0.14.0 < current 0.15.2 → gap fix → tags has 0.15.2
+    [[ \"\$val\" == '0.15.2' ]] || { echo \"expected 0.15.2 (gap fix), got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t45e: pecl_git with_tags=true in CFG → finds 0.15.2" bash -c "
+    ${_PECLGIT_LIBS45}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/peclgit45e_cache
+    declare -A _GS_EU2_CFG=([no_cache]=true [with_tags]=true)
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type             'pecl-git'
+    _gs_eu2_record_set \$idx identifier       'testowner/tag-ahead'
+    _gs_eu2_record_set \$idx env_var          'GLOBAL_STACK_TEST_VERSION'
+    _gs_eu2_record_set \$idx current_version  '0.13.0'
+    _gs_eu2_fetch_pecl_git \$idx 2>/dev/null || true
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$val\" == '0.15.2' ]] || { echo \"expected 0.15.2 (with_tags=true), got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section
