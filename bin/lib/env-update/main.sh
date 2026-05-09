@@ -196,6 +196,8 @@ _gs_eu2_run_check() {
       _change="  (${_err})"
     elif [[ "${_decision}" == "SKIP" ]]; then
       _change="  (up to date)"
+    elif [[ -n "${_reason}" ]]; then
+      _change="${_reason}"
     fi
 
     # Clear the progress line then print the result
