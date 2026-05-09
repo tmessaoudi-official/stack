@@ -16,6 +16,7 @@ _gs_eu2_record_fields() {
     override manual propagate \
     channel skip_reason \
     version_prefix \
+    prefer_specific \
     tag_filter tag_exclude tag_strip_prefix tag_strip_suffix \
     tag_extract tag_replace_from tag_replace_to tag_suffix \
     fetch_extract fetch_json \

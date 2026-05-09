@@ -12,14 +12,14 @@ _gs_eu2_is_recognized_flag() {
   local _f="${1}" _name
   [[ "${_f}" == *:* ]] && _name="${_f%%:*}" || _name="${_f}"
   case "${_name}" in
-    override|manual|propagate|use-sha|\
-    channel|skip|\
-    tag-filter|tag-exclude|tag-strip-prefix|tag-strip-suffix|\
-    tag-extract|tag-suffix|tag-replace|\
-    fetch-extract|fetch-json|\
-    url-probe|url-probe-depth|\
-    version-prefix|\
-    pecl-ref|depends-on) return 0 ;;
+    override | manual | propagate | use-sha | prefer-specific | \
+      channel | skip | \
+      tag-filter | tag-exclude | tag-strip-prefix | tag-strip-suffix | \
+      tag-extract | tag-suffix | tag-replace | \
+      fetch-extract | fetch-json | \
+      url-probe | url-probe-depth | \
+      version-prefix | \
+      pecl-ref | depends-on) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -43,27 +43,27 @@ _gs_eu2_hoist_all_flags() {
   _haf_flags=""
   local _haf_result="" _haf_len="${#_haf_in}" _haf_i=0
 
-  while (( _haf_i < _haf_len )); do
+  while ((_haf_i < _haf_len)); do
     local _haf_ch="${_haf_in:${_haf_i}:1}"
 
     if [[ "${_haf_ch}" != "(" ]]; then
       _haf_result+="${_haf_ch}"
-      (( ++_haf_i )) || true
+      ((++_haf_i)) || true
       continue
     fi
 
     # Found '(' — extract the balanced group
     local _haf_depth=0 _haf_content="" _haf_found=false _haf_end=0 _haf_j
-    for (( _haf_j = _haf_i; _haf_j < _haf_len; _haf_j++ )); do
+    for ((_haf_j = _haf_i; _haf_j < _haf_len; _haf_j++)); do
       local _haf_c="${_haf_in:${_haf_j}:1}"
-      if   [[ "${_haf_c}" == "(" ]]; then
-        (( ++_haf_depth )) || true
-        (( _haf_depth > 1 )) && _haf_content+="${_haf_c}"
+      if [[ "${_haf_c}" == "(" ]]; then
+        ((++_haf_depth)) || true
+        ((_haf_depth > 1)) && _haf_content+="${_haf_c}"
       elif [[ "${_haf_c}" == ")" ]]; then
-        (( --_haf_depth )) || true
-        if (( _haf_depth == 0 )); then
+        ((--_haf_depth)) || true
+        if ((_haf_depth == 0)); then
           _haf_found=true
-          _haf_end=$(( _haf_j + 1 ))
+          _haf_end=$((_haf_j + 1))
           break
         else
           _haf_content+="${_haf_c}"
@@ -78,8 +78,8 @@ _gs_eu2_hoist_all_flags() {
       [[ -n "${_haf_flags}" ]] && _haf_flags+=$'\x1f'
       _haf_flags+="${_haf_content}"
       # Swallow one trailing space (flag separator) if present
-      if (( _haf_end < _haf_len )) && [[ "${_haf_in:${_haf_end}:1}" == " " ]]; then
-        (( ++_haf_end )) || true
+      if ((_haf_end < _haf_len)) && [[ "${_haf_in:${_haf_end}:1}" == " " ]]; then
+        ((++_haf_end)) || true
       fi
       _haf_i="${_haf_end}"
     elif [[ "${_haf_found}" == "true" ]]; then
@@ -89,7 +89,7 @@ _gs_eu2_hoist_all_flags() {
     else
       # Unbalanced paren — keep as-is
       _haf_result+="${_haf_ch}"
-      (( ++_haf_i )) || true
+      ((++_haf_i)) || true
     fi
   done
 
@@ -113,17 +113,33 @@ _gs_eu2_dispatch_flag() {
   fi
 
   case "${_name}" in
-    override)  _gs_eu2_record_set "${_idx}" override  "true"; return 0 ;;
-    manual)    _gs_eu2_record_set "${_idx}" manual    "true"; return 0 ;;
-    propagate) _gs_eu2_record_set "${_idx}" propagate "true"; return 0 ;;
-    use-sha)   _gs_eu2_record_set "${_idx}" use_sha   "true"; return 0 ;;
+    override)
+      _gs_eu2_record_set "${_idx}" override "true"
+      return 0
+      ;;
+    manual)
+      _gs_eu2_record_set "${_idx}" manual "true"
+      return 0
+      ;;
+    propagate)
+      _gs_eu2_record_set "${_idx}" propagate "true"
+      return 0
+      ;;
+    use-sha)
+      _gs_eu2_record_set "${_idx}" use_sha "true"
+      return 0
+      ;;
+    prefer-specific)
+      _gs_eu2_record_set "${_idx}" prefer_specific "true"
+      return 0
+      ;;
   esac
 
   # Keyed flags: validate non-empty value
   case "${_name}" in
-    channel|skip|tag-filter|tag-exclude|tag-strip-prefix|tag-strip-suffix|\
-    tag-extract|tag-suffix|fetch-extract|fetch-json|url-probe|url-probe-depth|\
-    version-prefix|pecl-ref)
+    channel | skip | tag-filter | tag-exclude | tag-strip-prefix | tag-strip-suffix | \
+      tag-extract | tag-suffix | fetch-extract | fetch-json | url-probe | url-probe-depth | \
+      version-prefix | pecl-ref)
       if [[ -z "${_val}" ]]; then
         printf 'env-update: %s:%s: flag %q requires a non-empty value\n' \
           "${_env_file}" "${_lnum}" "${_name}" >&2
@@ -152,25 +168,25 @@ _gs_eu2_dispatch_flag() {
   esac
 
   case "${_name}" in
-    channel)           _gs_eu2_record_set "${_idx}" channel          "${_val}" ;;
-    skip)              _gs_eu2_record_set "${_idx}" skip_reason      "${_val}" ;;
-    tag-filter)        _gs_eu2_record_set "${_idx}" tag_filter       "${_val}" ;;
-    tag-exclude)       _gs_eu2_record_set "${_idx}" tag_exclude      "${_val}" ;;
-    tag-strip-prefix)  _gs_eu2_record_set "${_idx}" tag_strip_prefix "${_val}" ;;
-    tag-strip-suffix)  _gs_eu2_record_set "${_idx}" tag_strip_suffix "${_val}" ;;
-    tag-extract)       _gs_eu2_record_set "${_idx}" tag_extract      "${_val}" ;;
-    tag-suffix)        _gs_eu2_record_set "${_idx}" tag_suffix       "${_val}" ;;
-    fetch-extract)     _gs_eu2_record_set "${_idx}" fetch_extract    "${_val}" ;;
-    fetch-json)        _gs_eu2_record_set "${_idx}" fetch_json       "${_val}" ;;
-    url-probe)         _gs_eu2_record_set "${_idx}" url_probe        "${_val}" ;;
-    url-probe-depth)   _gs_eu2_record_set "${_idx}" url_probe_depth  "${_val}" ;;
+    channel) _gs_eu2_record_set "${_idx}" channel "${_val}" ;;
+    skip) _gs_eu2_record_set "${_idx}" skip_reason "${_val}" ;;
+    tag-filter) _gs_eu2_record_set "${_idx}" tag_filter "${_val}" ;;
+    tag-exclude) _gs_eu2_record_set "${_idx}" tag_exclude "${_val}" ;;
+    tag-strip-prefix) _gs_eu2_record_set "${_idx}" tag_strip_prefix "${_val}" ;;
+    tag-strip-suffix) _gs_eu2_record_set "${_idx}" tag_strip_suffix "${_val}" ;;
+    tag-extract) _gs_eu2_record_set "${_idx}" tag_extract "${_val}" ;;
+    tag-suffix) _gs_eu2_record_set "${_idx}" tag_suffix "${_val}" ;;
+    fetch-extract) _gs_eu2_record_set "${_idx}" fetch_extract "${_val}" ;;
+    fetch-json) _gs_eu2_record_set "${_idx}" fetch_json "${_val}" ;;
+    url-probe) _gs_eu2_record_set "${_idx}" url_probe "${_val}" ;;
+    url-probe-depth) _gs_eu2_record_set "${_idx}" url_probe_depth "${_val}" ;;
     # D2: version_prefix stored; applied during fetch/compare in Phase 3
-    version-prefix)    _gs_eu2_record_set "${_idx}" version_prefix   "${_val}" ;;
-    pecl-ref)          _gs_eu2_record_set "${_idx}" pecl_ref         "${_val}" ;;
-    depends-on)        _gs_eu2_record_set "${_idx}" depends_on       "${_val}" ;;
+    version-prefix) _gs_eu2_record_set "${_idx}" version_prefix "${_val}" ;;
+    pecl-ref) _gs_eu2_record_set "${_idx}" pecl_ref "${_val}" ;;
+    depends-on) _gs_eu2_record_set "${_idx}" depends_on "${_val}" ;;
     tag-replace)
       _gs_eu2_record_set "${_idx}" tag_replace_from "${_val%%:*}"
-      _gs_eu2_record_set "${_idx}" tag_replace_to   "${_val#*:}"
+      _gs_eu2_record_set "${_idx}" tag_replace_to "${_val#*:}"
       ;;
   esac
 }
@@ -196,7 +212,7 @@ _gs_eu2_parse_env_file() {
 
   local _line
   while IFS= read -r _line || [[ -n "${_line}" ]]; do
-    (( ++_line_number )) || true
+    ((++_line_number)) || true
 
     # Git fallback line
     if [[ "${_line}" =~ ${_re_git_fallback} ]]; then
@@ -355,18 +371,18 @@ _gs_eu2_parse_env_file() {
         _gs_eu2_record_new
         local _idx="${_GS_EU2_LAST_IDX}"
 
-        _gs_eu2_record_set "${_idx}" env_var          "${_var_name}"
-        _gs_eu2_record_set "${_idx}" current_version  "${_final_version}"
-        _gs_eu2_record_set "${_idx}" type             "${_pending_type}"
-        _gs_eu2_record_set "${_idx}" identifier       "${_pending_identifier}"
-        _gs_eu2_record_set "${_idx}" major_hint       "${_pending_major_hint}"
-        _gs_eu2_record_set "${_idx}" hint             "${_pending_hint}"
-        _gs_eu2_record_set "${_idx}" line_number      "${_pending_lnum}"
-        _gs_eu2_record_set "${_idx}" raw_annotation   "${_pending_annotation}"
+        _gs_eu2_record_set "${_idx}" env_var "${_var_name}"
+        _gs_eu2_record_set "${_idx}" current_version "${_final_version}"
+        _gs_eu2_record_set "${_idx}" type "${_pending_type}"
+        _gs_eu2_record_set "${_idx}" identifier "${_pending_identifier}"
+        _gs_eu2_record_set "${_idx}" major_hint "${_pending_major_hint}"
+        _gs_eu2_record_set "${_idx}" hint "${_pending_hint}"
+        _gs_eu2_record_set "${_idx}" line_number "${_pending_lnum}"
+        _gs_eu2_record_set "${_idx}" raw_annotation "${_pending_annotation}"
         _gs_eu2_record_set "${_idx}" git_fallback_url "${_pending_git_url}"
         _gs_eu2_record_set "${_idx}" git_fallback_sha "${_pending_git_sha}"
-        _gs_eu2_record_set "${_idx}" urls             "${_pend_urls}"
-        _gs_eu2_record_set "${_idx}" annotation_sha   "${_pending_sha}"
+        _gs_eu2_record_set "${_idx}" urls "${_pend_urls}"
+        _gs_eu2_record_set "${_idx}" annotation_sha "${_pending_sha}"
 
         # Dispatch all hoisted flags (position-agnostic)
         if [[ -n "${_pending_flags}" ]]; then
@@ -391,5 +407,5 @@ _gs_eu2_parse_env_file() {
         _pending_git_url="" _pending_git_sha=""
       fi
     fi
-  done < "${_env_file}"
+  done <"${_env_file}"
 }

@@ -89,13 +89,13 @@ _gs_eu2_fetch_dockerhub() {
   # Fetch tags
   local _raw_tags
   if ! _raw_tags="$(_gs_eu2_dh_fetch_tags "${_ns}" 2>/dev/null)"; then
-    _gs_eu2_record_set "${_idx}" decision      "ERROR"
+    _gs_eu2_record_set "${_idx}" decision "ERROR"
     _gs_eu2_record_set "${_idx}" error_message "fetch failed for ${_ns}"
     return 0
   fi
 
   if [[ -z "${_raw_tags}" ]]; then
-    _gs_eu2_record_set "${_idx}" decision      "ERROR"
+    _gs_eu2_record_set "${_idx}" decision "ERROR"
     _gs_eu2_record_set "${_idx}" error_message "no tags returned for ${_ns}"
     return 0
   fi
@@ -117,19 +117,40 @@ _gs_eu2_fetch_dockerhub() {
   fi
 
   if [[ -z "${_tags}" ]]; then
-    _gs_eu2_record_set "${_idx}" decision      "SKIP"
+    _gs_eu2_record_set "${_idx}" decision "SKIP"
     _gs_eu2_record_set "${_idx}" error_message "no tags matched filters for ${_ns}"
     return 0
+  fi
+
+  # prefer-specific: drop floating tags (X or X.Y form) when flag is set.
+  # This prevents X.Y tags (which silently re-point when patches ship) from
+  # winning over X.Y.Z pinnable tags.  Flag is opt-in to avoid breaking images
+  # like Postgres where X.Y *is* the specific version (no X.Y.Z exists).
+  local _prefer_specific
+  _prefer_specific="$(_gs_eu2_record_get "${_idx}" prefer_specific)"
+  if [[ "${_prefer_specific}" == "true" ]]; then
+    local _specific_tags
+    _specific_tags="$(printf '%s\n' "${_tags}" | _gs_eu2_filter_specific_tags)"
+    if [[ -n "${_specific_tags}" ]]; then
+      _tags="${_specific_tags}"
+    else
+      _gs_eu2_record_set "${_idx}" decision "SKIP"
+      _gs_eu2_record_set "${_idx}" error_message "no specific (X.Y.Z) tags found for ${_ns} after prefer-specific filter"
+      return 0
+    fi
   fi
 
   # Detect all-unversioned tag set (e.g. oracle-xe image has only "latest")
   local _has_versioned=false _utag
   while IFS= read -r _utag; do
     [[ -z "${_utag}" ]] && continue
-    if ! _gs_eu2_is_unversioned "${_utag}"; then _has_versioned=true; break; fi
-  done <<< "${_tags}"
+    if ! _gs_eu2_is_unversioned "${_utag}"; then
+      _has_versioned=true
+      break
+    fi
+  done <<<"${_tags}"
   if [[ "${_has_versioned}" == "false" ]]; then
-    _gs_eu2_record_set "${_idx}" decision      "SKIP"
+    _gs_eu2_record_set "${_idx}" decision "SKIP"
     _gs_eu2_record_set "${_idx}" error_message "no versioned tags available for ${_ns}"
     return 0
   fi
@@ -139,7 +160,7 @@ _gs_eu2_fetch_dockerhub() {
   _proposed="$(_gs_eu2_channel_select_best "${_tags}" "${_channel}")"
 
   if [[ -z "${_proposed}" ]]; then
-    _gs_eu2_record_set "${_idx}" decision      "SKIP"
+    _gs_eu2_record_set "${_idx}" decision "SKIP"
     _gs_eu2_record_set "${_idx}" error_message "channel selection returned nothing for ${_ns}"
     return 0
   fi

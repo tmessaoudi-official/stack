@@ -3170,6 +3170,126 @@ t "t39g: HOLD unpinned major bump reason includes both majors" bash -c "
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Section 40 — prefer-specific flag (floating tag demotion)
+# ═══════════════════════════════════════════════════════════════════════════
+section "40 — prefer-specific flag (floating tag demotion)"
+
+_DH_LIBS40="
+source '/stack/bin/lib/env-update/config/defaults.sh'
+source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update/core/records.sh'
+source '/stack/bin/lib/env-update/core/semver.sh'
+source '/stack/bin/lib/env-update/core/channel.sh'
+source '/stack/bin/lib/env-update/core/tag_flags.sh'
+source '/stack/bin/lib/env-update/core/cache.sh'
+source '/stack/bin/lib/env-update/http/curl.sh'
+source '/stack/bin/lib/env-update/fetchers/dockerhub.sh'
+export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+export _GS_EU2_CACHE_DIR=\${TMP_DIR}/dh40_cache
+"
+
+t "t40a: is_floating_tag detects X.Y tag as floating" bash -c "
+    source '/stack/bin/lib/env-update/core/tag_flags.sh'
+    _gs_eu2_is_floating_tag '9.1-alpine3.23' && echo PASS || { echo 'FAIL: X.Y-suffix should be floating'; exit 0; }
+"
+
+t "t40b: is_floating_tag detects X tag as floating" bash -c "
+    source '/stack/bin/lib/env-update/core/tag_flags.sh'
+    _gs_eu2_is_floating_tag '9-alpine3.23' && echo PASS || { echo 'FAIL: X-suffix should be floating'; exit 0; }
+"
+
+t "t40c: is_floating_tag accepts X.Y.Z tag as specific" bash -c "
+    source '/stack/bin/lib/env-update/core/tag_flags.sh'
+    _gs_eu2_is_floating_tag '9.0.4-alpine3.23' && { echo 'FAIL: X.Y.Z-suffix should NOT be floating'; exit 0; } || echo PASS
+"
+
+t "t40d: is_floating_tag accepts X.Y.Z-prerelease tag as specific" bash -c "
+    source '/stack/bin/lib/env-update/core/tag_flags.sh'
+    _gs_eu2_is_floating_tag '9.1.0-rc2-alpine3.23' && { echo 'FAIL: X.Y.Z-rc should NOT be floating'; exit 0; } || echo PASS
+"
+
+t "t40e: is_floating_tag accepts bare X.Y.Z (no suffix)" bash -c "
+    source '/stack/bin/lib/env-update/core/tag_flags.sh'
+    _gs_eu2_is_floating_tag '9.0.4' && { echo 'FAIL: bare X.Y.Z should NOT be floating'; exit 0; } || echo PASS
+"
+
+t "t40f: is_floating_tag rejects bare X.Y (no suffix)" bash -c "
+    source '/stack/bin/lib/env-update/core/tag_flags.sh'
+    _gs_eu2_is_floating_tag '9.1' && echo PASS || { echo 'FAIL: bare X.Y should be floating'; exit 0; }
+"
+
+t "t40g: prefer-specific flag record field is recognized" bash -c "
+    source '/stack/bin/lib/env-update/core/records.sh'
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx prefer_specific 'true'
+    val=\$(_gs_eu2_record_get \$idx prefer_specific)
+    [[ \"\$val\" == 'true' ]] || { echo \"field not found or wrong value: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t40h: prefer-specific flag — fetcher prefers X.Y.Z over floating X.Y" bash -c "
+    ${_DH_LIBS40}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'dockerhub'
+    _gs_eu2_record_set \$idx identifier      'valkey/valkey'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_VALKEY_VERSION'
+    _gs_eu2_record_set \$idx tag_filter      'alpine3.23'
+    _gs_eu2_record_set \$idx prefer_specific 'true'
+    _gs_eu2_fetch_dockerhub \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    # fixture has 9.0.4-alpine3.23 (stable specific) and 9.1-alpine3.23 (floating)
+    # prefer-specific must choose 9.0.4-alpine3.23, not 9.1-alpine3.23
+    [[ \"\$val\" == '9.0.4-alpine3.23' ]] || { echo \"expected 9.0.4-alpine3.23, got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t40i: without prefer-specific flag — default behavior unchanged (floating allowed)" bash -c "
+    ${_DH_LIBS40}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/dh40i_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'dockerhub'
+    _gs_eu2_record_set \$idx identifier 'valkey/valkey'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_VALKEY_VERSION'
+    _gs_eu2_record_set \$idx tag_filter 'alpine3.23'
+    # No prefer_specific — fetcher may return floating tag (9.1-alpine3.23 sorts higher)
+    _gs_eu2_fetch_dockerhub \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ -n \"\$val\" ]] || { echo 'proposed_version is empty'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t40j: prefer-specific skips all-floating set → SKIP with error" bash -c "
+    ${_DH_LIBS40}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/dh40j_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'dockerhub'
+    _gs_eu2_record_set \$idx identifier      'valkey/valkey'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_VALKEY_VERSION'
+    # Filter to only floating tags (9 and 9.1 — no patch component)
+    _gs_eu2_record_set \$idx major_hint      '9'
+    _gs_eu2_record_set \$idx tag_filter      '^9(\\.1)?(-|$)'
+    _gs_eu2_record_set \$idx tag_exclude     '[0-9]+\\.[0-9]+\\.[0-9]'
+    _gs_eu2_record_set \$idx prefer_specific 'true'
+    _gs_eu2_fetch_dockerhub \$idx
+    decision=\$(_gs_eu2_record_get \$idx decision)
+    [[ \"\$decision\" == 'SKIP' || \"\$decision\" == 'ERROR' ]] \
+        || { echo \"expected SKIP/ERROR when only floating tags remain, got: '\$decision'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t40k: parse.sh recognises (prefer-specific) as a known flag" bash -c "
+    source '/stack/bin/lib/env-update/core/records.sh'
+    source '/stack/bin/lib/env-update/core/parse.sh'
+    f=\$(mktemp)
+    printf '# @todo env-update (prefer-specific) dockerhub:valkey/valkey 9.0.3-alpine3.23\nGLOBAL_STACK_VALKEY_VERSION=9.0.3-alpine3.23\n' > \"\$f\"
+    _gs_eu2_parse_env_file \"\$f\"
+    val=\$(_gs_eu2_record_get 0 prefer_specific)
+    rm -f \"\$f\"
+    [[ \"\$val\" == 'true' ]] || { echo \"prefer_specific not set from annotation, got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section

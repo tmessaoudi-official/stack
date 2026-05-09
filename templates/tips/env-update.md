@@ -168,6 +168,7 @@ flags. Flags are **position-agnostic** — they can appear anywhere in the annot
 | `(manual)` | `manual: true` | Same effect as `override` — forces MANUAL. Semantic distinction: `manual` means "needs human judgment"; `override` means "auto is wrong here." |
 | `(propagate)` | `propagate: true` | Stored but not acted on by the core fetcher. Reserved for tools that need to track which variables should be propagated to derived files. |
 | `(use-sha)` | `use_sha: true` | For `pecl-git`: when `--apply` writes the variable, it writes `proposed_sha` instead of `proposed_version`. Use for variables tracking a git commit SHA rather than a version string. |
+| `(prefer-specific)` | `prefer_specific: true` | **dockerhub only.** After all tag filters run, drop any tag whose numeric prefix has fewer than two dots (i.e. `X` or `X.Y` "floating" tags). A tag like `9.1-alpine3.23` has numeric prefix `9.1` (1 dot) and is floating — Docker Hub silently updates it when `9.1.1` ships, making the tag string unchanging and therefore invisible to env-update. A tag like `9.0.4-alpine3.23` has prefix `9.0.4` (2 dots) and is pinnable. Use this flag when you want true version pinning. **Do NOT use for images where `X.Y` is the real specific version** (e.g. `postgres:18.3-alpine3.23` — Postgres has no `X.Y.Z` Docker tags). If all remaining tags are floating after this filter, the record is set to SKIP. |
 
 ### Valued flags — channel
 
@@ -593,7 +594,9 @@ the special alias `_/` for Docker Official Library images.
 
 **Major hint:** Yes. After the tag pipeline, filters with `grep -E "^${major_hint}([.^-]|$)"` then falls back to awk for exact first-segment matching.
 
-**Tag flags:** All tag flags apply. The `tag-suffix` flag is special — it pre-filters tags before the rest of the pipeline runs.
+**Tag flags:** All tag flags apply. The `tag-suffix` flag is special — it pre-filters tags before the rest of the pipeline runs. The `prefer-specific` flag (see Section 3) demotes floating tags after all filters, before channel selection.
+
+**Floating vs specific tags — why it matters:** Docker Hub serves both "floating" tags (`X.Y`, `X`) that are continuously updated to point to the latest patch, and "specific" tags (`X.Y.Z`) that are permanently pinned to an exact image. A floating tag like `9.1-alpine3.23` silently re-points when Docker Hub publishes `9.1.1-alpine3.23`. Since the tag string never changes, env-update will never detect the update and your container will silently pull a different image on next `docker pull`. Use `(prefer-specific)` to enforce pinnable `X.Y.Z` tags.
 
 **Version prefix:** After pipeline and channel selection, if `version_prefix` is set, it is prepended to the proposed version (B3 rule).
 
@@ -605,13 +608,19 @@ the special alias `_/` for Docker Official Library images.
 - Images with only `latest` tag (no versioned tags) → SKIP with "no versioned tags available".
 - The `_/` prefix shorthand: using the raw image name without `_/` will attempt to fetch `imagename` as a user namespace (likely fails).
 - `tag-suffix` must match the exact literal suffix (not a regex) — the code escapes it before using it in grep.
+- **Do NOT use `(prefer-specific)` with Postgres**: `postgres:18.3-alpine3.23` is the real specific tag — no `18.3.x` Docker tags exist. The filter would drop all tags and produce SKIP.
 
 **Cache key:** `dockerhub:namespace/image:tag_suffix:major_hint:channel`
 
-**Example annotation:**
+**Example annotations:**
 ```bash
+# Standard with oraclelinux suffix
 # @todo env-update (tag-suffix:-oraclelinux9) (tag-strip-suffix:-oraclelinux9) dockerhub:_/mysql:9 9.1.0
 GLOBAL_STACK_MYSQL9_VERSION=9.1.0-oraclelinux9
+
+# Pinning to specific X.Y.Z tags (floating X.Y tags are rejected)
+# @todo env-update (tag-filter:alpine) (prefer-specific) dockerhub:valkey/valkey 9.0.3-alpine3.23
+GLOBAL_STACK_VALKEY_VERSION=9.0.3-alpine3.23
 ```
 
 ---

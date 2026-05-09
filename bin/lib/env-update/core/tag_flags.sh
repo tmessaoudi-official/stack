@@ -4,6 +4,40 @@
 [[ -n "${_GS_EU2_TAG_FLAGS_SH_LOADED:-}" ]] && return 0
 readonly _GS_EU2_TAG_FLAGS_SH_LOADED=1
 
+# Returns 0 if a tag is "floating" — i.e. its numeric prefix has fewer than two
+# dots (X or X.Y form), making it a tag that silently re-points when patches
+# are released.  X.Y.Z, X.Y.Z-rcN, X.Y.Z-suffix are all specific (not floating).
+#
+# Algorithm: strip everything from the first non-numeric, non-dot character to
+# isolate the numeric prefix, then count dots.  Two or more dots → specific.
+# Zero or one dot → floating.
+#
+# Examples:
+#   9.1-alpine3.23      → np=9.1   → 1 dot  → floating  (returns 0)
+#   9-alpine3.23        → np=9     → 0 dots → floating  (returns 0)
+#   9.0.4-alpine3.23    → np=9.0.4 → 2 dots → specific  (returns 1)
+#   9.1.0-rc2-alpine3.23 → np=9.1.0 → 2 dots → specific  (returns 1)
+#   9.1                 → np=9.1   → 1 dot  → floating  (returns 0)
+#   9.0.4               → np=9.0.4 → 2 dots → specific  (returns 1)
+_gs_eu2_is_floating_tag() {
+  local _tag="${1}"
+  local _np="${_tag%%[!0-9.]*}" # strip from first non-numeric/non-dot char
+  _np="${_np%.}"                # strip trailing dot if any
+  local _dots="${_np//[^.]/}"   # remove everything except dots
+  ((${#_dots} < 2))             # true (returns 0) when fewer than 2 dots → floating
+}
+
+# Filter stdin tag list to only specific (non-floating) tags.
+# A tag is specific if its numeric prefix contains at least two dots (X.Y.Z form).
+# Used when the prefer_specific record field is 'true'.
+_gs_eu2_filter_specific_tags() {
+  local _tag
+  while IFS= read -r _tag; do
+    [[ -z "${_tag}" ]] && continue
+    _gs_eu2_is_floating_tag "${_tag}" || printf '%s\n' "${_tag}"
+  done
+}
+
 # Apply tag flags to a newline-separated list of tags (reads from stdin).
 # Args (positional, all optional/empty):
 #   1 tag_filter        — keep only tags matching ERE regex
@@ -20,12 +54,12 @@ _gs_eu2_apply_tag_flags() {
 
   while IFS= read -r _tag; do
     [[ -z "${_tag}" ]] && continue
-    [[ -n "${_tf}"  ]] && { [[ "${_tag}" =~ ${_tf}  ]] || continue; }
-    [[ -n "${_te}"  ]] && { [[ "${_tag}" =~ ${_te}  ]] && continue; }
+    [[ -n "${_tf}" ]] && { [[ "${_tag}" =~ ${_tf} ]] || continue; }
+    [[ -n "${_te}" ]] && { [[ "${_tag}" =~ ${_te} ]] && continue; }
     if [[ -n "${_tex}" ]]; then
       local _x
-      _x="$(printf '%s\n' "${_tag}" | \
-        perl -ne "if (/${_tex}/) { print \"\$1\n\" }" 2>/dev/null || true)"
+      _x="$(printf '%s\n' "${_tag}" \
+        | perl -ne "if (/${_tex}/) { print \"\$1\n\" }" 2>/dev/null || true)"
       [[ -z "${_x}" ]] && continue
       _tag="${_x}"
     fi
