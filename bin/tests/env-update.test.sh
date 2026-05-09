@@ -3081,6 +3081,95 @@ t "t38b: url type not-implemented SKIP count is 0 — all url entries dispatch" 
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Section 39 — reason labels + dynamic column alignment
+# ═══════════════════════════════════════════════════════════════════════════
+section "39 — reason labels and dynamic alignment"
+
+# ── Reason label: HOLD (unpinned major bump) ─────────────────────────────
+
+t "t39a: HOLD unpinned major bump has 'major bump' reason label" bash -c "
+    f=\${TMP_DIR}/t39a.env
+    printf '# @todo env-update github:testowner/majorpin-repo\nGLOBAL_STACK_TEST_MAJORPIN=3.5.1\n' > \"\$f\"
+    out=\$(export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'; export _GS_EU2_CACHE_DIR=\"\${TMP_DIR}/t39a_cache\"; bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null)
+    echo \"\$out\" | grep -qF 'major bump' || { echo \"no 'major bump' in HOLD output: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ── Reason label: HOLD (pin escape — proposed escapes major_hint) ─────────
+
+t "t39b: HOLD pin escape has 'major pin' reason label" bash -c "
+    f=\${TMP_DIR}/t39b.env
+    # major_hint embedded in type token (colon-separated) — proposed v4.0.0 escapes pin=3
+    printf '# @todo env-update github:testowner/majorpin-repo:3 3.4.0\nGLOBAL_STACK_TEST_PINNED=3.4.0\n' > \"\$f\"
+    out=\$(export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'; export _GS_EU2_CACHE_DIR=\"\${TMP_DIR}/t39b_cache\"; bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null)
+    echo \"\$out\" | grep -qF 'major pin' || { echo \"no 'major pin' in HOLD output: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ── Reason label: SKIP (up to date) keeps existing text ───────────────────
+
+t "t39c: SKIP up-to-date still shows '(up to date)'" bash -c "
+    f=\${TMP_DIR}/t39c.env
+    printf '# @todo env-update dockerhub:_/postgres 18.4-alpine3.23\nGLOBAL_STACK_POSTGRES_VERSION=18.4-alpine3.23\n' > \"\$f\"
+    out=\$(export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'; export _GS_EU2_CACHE_DIR=\"\${TMP_DIR}/t39c_cache\"; bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null)
+    echo \"\$out\" | grep -qF 'up to date' || { echo \"no '(up to date)' in SKIP output: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ── Reason label: MANUAL (override flag) ─────────────────────────────────
+
+t "t39d: MANUAL from override flag shows reason label" bash -c "
+    f=\${TMP_DIR}/t39d.env
+    printf '# @todo env-update (override) dockerhub:_/postgres 18\nGLOBAL_STACK_POSTGRES_MANUAL=18.3\n' > \"\$f\"
+    out=\$(export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'; export _GS_EU2_CACHE_DIR=\"\${TMP_DIR}/t39d_cache\"; bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null)
+    echo \"\$out\" | grep -qF 'manual' || { echo \"no 'manual' reason in MANUAL output: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ── Reason label: SKIP (downgrade protection) ────────────────────────────
+
+t "t39e: SKIP downgrade protection shows '(would downgrade)'" bash -c "
+    f=\${TMP_DIR}/t39e.env
+    # fixture proposes 18.4-alpine3.23; set current higher so downgrade triggers
+    printf '# @todo env-update dockerhub:_/postgres\nGLOBAL_STACK_POSTGRES_DOWN=99.0\n' > \"\$f\"
+    out=\$(export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'; export _GS_EU2_CACHE_DIR=\"\${TMP_DIR}/t39e_cache\"; bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null)
+    echo \"\$out\" | grep -qF 'would downgrade' || { echo \"no downgrade reason in output: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ── Dynamic alignment: arrow at same column ───────────────────────────────
+
+t "t39f: dynamic alignment — arrow at same column across records (long var > 60 chars)" bash -c "
+    f=\${TMP_DIR}/t39f.env
+    # Two vars: one short (A), one longer than the fixed 60-char field
+    # Without dynamic alignment the long name overflows and pushes → further right
+    printf '%s\n' \
+        '# @todo env-update dockerhub:_/postgres 18' \
+        'A=18.3' \
+        '# @todo env-update dockerhub:_/postgres 18' \
+        'GLOBAL_STACK_POSTGRES_VERY_LONG_VARIABLE_NAME_EXCEEDING_SIXTY_CHARS=18.3' \
+        > \"\$f\"
+    out=\$(export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'; export _GS_EU2_CACHE_DIR=\"\${TMP_DIR}/t39f_cache\"; bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null)
+    # Extract the column position of → in each AUTO line
+    col1=\$(echo \"\$out\" | grep -F '→' | head -1 | grep -bo '→' | cut -d: -f1 | head -1)
+    col2=\$(echo \"\$out\" | grep -F '→' | tail -1 | grep -bo '→' | cut -d: -f1 | head -1)
+    [[ -n \"\$col1\" && -n \"\$col2\" ]] || { echo \"no → found in output: \$out\"; echo FAIL; exit 0; }
+    [[ \"\$col1\" == \"\$col2\" ]] || { echo \"misaligned: → at col \$col1 vs \$col2 (output: \$out)\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ── HOLD reason includes proposed major ──────────────────────────────────
+
+t "t39g: HOLD unpinned major bump reason includes both majors" bash -c "
+    f=\${TMP_DIR}/t39g.env
+    printf '# @todo env-update github:testowner/majorpin-repo\nGLOBAL_STACK_TEST_MAJORPIN2=3.5.1\n' > \"\$f\"
+    out=\$(export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'; export _GS_EU2_CACHE_DIR=\"\${TMP_DIR}/t39g_cache\"; bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null)
+    # Should show 3→4 in the reason
+    echo \"\$out\" | grep -qE '3.*4|4.*3' || { echo \"no major numbers in HOLD reason: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section

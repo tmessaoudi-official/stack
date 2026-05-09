@@ -60,6 +60,17 @@ _gs_eu2_run_check() {
 
   local _n_auto=0 _n_hold=0 _n_skip=0 _n_error=0 _n_manual=0
 
+  # Dynamic column width: pre-scan all env_var names so the → arrow aligns
+  # across every record in this run, regardless of variable name length.
+  local _max_var_len=40
+  local _vl _j _vname _tmpval
+  for (( _j = 0; _j < _count; _j++ )); do
+    _vname="_GS_EU2_REC_${_j}_env_var"
+    _tmpval="${!_vname:-}"
+    _vl="${#_tmpval}"
+    (( _vl > _max_var_len )) && _max_var_len="${_vl}"
+  done
+
   for (( _i = 0; _i < _count; _i++ )); do
     local _env_var
     _env_var="$(_gs_eu2_record_get "${_i}" env_var)"
@@ -118,7 +129,7 @@ _gs_eu2_run_check() {
     fi
 
     # Stream this record immediately — don't buffer until all fetches complete
-    local _decision _err _tag _change
+    local _decision _err _tag _change _reason
     _decision="$(_gs_eu2_record_get "${_i}" decision)"
     _err="$(_gs_eu2_record_get "${_i}" error_message)"
 
@@ -131,11 +142,44 @@ _gs_eu2_run_check() {
       *)      _tag="[SKIP  ]"; (( ++_n_skip ))   || true ;;
     esac
 
+    # Compute reason label for non-AUTO decisions
+    _reason=""
+    case "${_decision}" in
+      HOLD)
+        if [[ -n "${_prop}" ]]; then
+          local _delta _cur_maj _prop_maj
+          _delta="$(_gs_eu2_semver_delta "${_cur}" "${_prop}")"
+          _cur_maj="${_cur#v}"; _cur_maj="${_cur_maj%%.*}"
+          _prop_maj="${_prop#v}"; _prop_maj="${_prop_maj%%.*}"
+          if [[ -n "${_major}" ]]; then
+            # Proposed escapes major_hint pin
+            _reason="  ← major pin (${_prop_maj}.x available)"
+          elif [[ "${_delta}" == "major" ]]; then
+            # Unpinned major bump
+            _reason="  ← major bump (${_cur_maj}→${_prop_maj})"
+          fi
+        fi
+        ;;
+      MANUAL)
+        _reason="  ← manual flag"
+        ;;
+      SKIP)
+        # Detect downgrade: proposed non-empty, differs from current, no error yet
+        if [[ -z "${_err}" && -n "${_prop}" && "${_prop}" != "${_cur}" ]]; then
+          local _oldest
+          _oldest="$(printf '%s\n%s\n' "${_cur#v}" "${_prop#v}" | sort -V | head -1)"
+          if [[ "${_oldest}" == "${_prop#v}" && "${_oldest}" != "${_cur#v}" ]]; then
+            _err="would downgrade"
+          fi
+        fi
+        ;;
+    esac
+
     _change=""
     if [[ "${_decision}" == "SKIP" && -n "${_err}" ]]; then
       _change="  (${_err})"
     elif [[ -n "${_prop}" && "${_prop}" != "${_cur}" ]]; then
-      _change="  ${_cur} → ${_prop}"
+      _change="  ${_cur} → ${_prop}${_reason}"
     elif [[ -n "${_err}" ]]; then
       _change="  (${_err})"
     elif [[ "${_decision}" == "SKIP" ]]; then
@@ -143,8 +187,9 @@ _gs_eu2_run_check() {
     fi
 
     # Clear the progress line then print the result
-    printf '\r%-80s\r' "" >&2
-    printf '%s  %-60s%s\n' "${_tag}" "${_env_var}" "${_change}"
+    # Width: tag(8) + 2 spaces + var field + some margin for change text
+    printf '\r%*s\r' "$(( _max_var_len + 20 ))" "" >&2
+    printf "%s  %-${_max_var_len}s%s\n" "${_tag}" "${_env_var}" "${_change}"
   done
 
   local _total=$(( _n_auto + _n_hold + _n_skip + _n_error + _n_manual ))

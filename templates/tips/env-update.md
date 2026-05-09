@@ -322,12 +322,14 @@ the fetch is in progress.
 
 ```
 [AUTO  ]  GLOBAL_STACK_POSTGRES18_VERSION              18.3-alpine3.23 → 18.4-alpine3.23
-[HOLD  ]  GLOBAL_STACK_MYSQL9_VERSION                  9.1.0 → 9.6.0
+[HOLD  ]  GLOBAL_STACK_MYSQL9_VERSION                  9.1.0 → 9.6.0  ← major bump (9→9)
+[HOLD  ]  GLOBAL_STACK_JAVA_VERSION                    17.5 → 21.0.3  ← major pin (21.x available)
 [SKIP  ]  GLOBAL_STACK_NGINX_VERSION                   (up to date)
-[MANUAL]  GLOBAL_STACK_ANDROID_BUILD_TOOLS_VERSION     (sdkmanager: review required)
+[SKIP  ]  GLOBAL_STACK_OLD_VERSION                     (would downgrade)
+[MANUAL]  GLOBAL_STACK_ANDROID_BUILD_TOOLS_VERSION     18.3 → 19.0  ← manual flag
 [ERROR ]  GLOBAL_STACK_SOME_VERSION                    (fetch failed for github:owner/repo)
 ──────────────────────────────────────────────────────────────────────────────
-  Summary: 1 AUTO, 1 HOLD, 0 MANUAL, 1 SKIP, 1 ERROR  (4 checked)
+  Summary: 1 AUTO, 2 HOLD, 1 MANUAL, 2 SKIP, 1 ERROR  (7 checked)
 ```
 
 ### Column layout and spacing
@@ -335,16 +337,21 @@ the fetch is in progress.
 Each output line follows this `printf` template:
 
 ```bash
-printf '%s  %-60s%s\n' "${_tag}" "${_env_var}" "${_change}"
+printf "%s  %-${_max_var_len}s%s\n" "${_tag}" "${_env_var}" "${_change}"
 ```
 
 - `_tag` — 8 characters wide (e.g. `[AUTO  ]`, `[HOLD  ]`, `[SKIP  ]`, `[ERROR ]`, `[MANUAL]`). Note the **two trailing spaces** after the bracket content for all 4-letter decisions (`AUTO`, `HOLD`, `SKIP`) to align with the 6-char `[MANUAL]`. The actual tag strings are `[AUTO  ]`, `[HOLD  ]`, `[SKIP  ]`, `[ERROR ]`, `[MANUAL]`.
 - Two spaces between tag and variable name.
-- `_env_var` — left-padded to 60 characters.
+- `_env_var` — left-padded to `_max_var_len` characters (dynamic — see below).
 - `_change` — appended directly after, starting with two spaces.
 
+**Dynamic column width**: before the fetch loop, `main.sh` pre-scans all `env_var` names
+in the current run and sets `_max_var_len` to the length of the longest name. Minimum
+width is 40 characters. This ensures the `→` arrow (or reason label) appears at the same
+column across all lines in the output, regardless of variable name length.
+
 **Why are there multiple spaces between `[MANUAL]` and the variable name?**
-The tag itself is always exactly 8 characters: `[` + 6-char content + `]`. Content is padded to 6 chars, so `AUTO` becomes `AUTO  ` (2 trailing spaces), `HOLD` becomes `HOLD  `, `SKIP` becomes `SKIP  `, `ERROR` becomes `ERROR ` (1 trailing space), and `MANUAL` is exactly 6 chars with no padding. After the tag come **2 fixed spaces** (the `  ` in the format string), then the variable name in a 60-char field. The visual appearance of "extra spaces" between `[AUTO  ]` and the variable name comes from the 2 trailing spaces inside the tag brackets plus the 2 fixed spaces = 4 spaces before the variable.
+The tag itself is always exactly 8 characters: `[` + 6-char content + `]`. Content is padded to 6 chars, so `AUTO` becomes `AUTO  ` (2 trailing spaces), `HOLD` becomes `HOLD  `, `SKIP` becomes `SKIP  `, `ERROR` becomes `ERROR ` (1 trailing space), and `MANUAL` is exactly 6 chars with no padding. After the tag come **2 fixed spaces** (the `  ` in the format string), then the variable name in a dynamic-width field. The visual appearance of "extra spaces" between `[AUTO  ]` and the variable name comes from the 2 trailing spaces inside the tag brackets plus the 2 fixed spaces = 4 spaces before the variable.
 
 ### The `_change` field
 
@@ -353,19 +360,39 @@ The `_change` suffix is built from the decision and record state:
 | Condition | `_change` value |
 |-----------|----------------|
 | `SKIP` with `error_message` | `  (error_message text)` |
+| `SKIP` downgrade detected | `  (would downgrade)` |
 | `SKIP` without error (up to date) | `  (up to date)` |
-| Any decision with `proposed != current` | `  current_version → proposed_version` |
+| `HOLD` / `AUTO` / `MANUAL` with `proposed != current` | `  current_version → proposed_version[reason]` |
 | Any decision with `error_message` (no proposed) | `  (error_message text)` |
 | Otherwise | `` (empty) |
+
+### Reason labels
+
+Non-AUTO decisions append a short reason label to the version arrow so the user knows
+immediately why the decision was made, without needing to understand annotation flags or
+inspect the record.
+
+| Decision | Trigger | Reason label appended |
+|----------|---------|----------------------|
+| `[HOLD  ]` | Major bump, no `major_hint` pin | `  ← major bump (X→Y)` where X=current major, Y=proposed major |
+| `[HOLD  ]` | Proposed version escapes `major_hint` pin | `  ← major pin (Y.x available)` where Y=proposed major |
+| `[MANUAL]` | `(override)` or `(manual)` annotation flag | `  ← manual flag` |
+| `[SKIP  ]` | Proposed is older than current (downgrade) | shown as `  (would downgrade)` in place of arrow |
+| `[SKIP  ]` | Up to date | `  (up to date)` — no label needed |
+| `[ERROR ]` | Fetch failure | error message is the reason — no additional label |
+
+Reason labels use the same color as surrounding text — no new colors are introduced.
+If a reason cannot be determined (unknown HOLD sub-case), the label is omitted rather
+than showing a placeholder.
 
 ### Decision tags
 
 | Tag | When it fires |
 |-----|--------------|
 | `[AUTO  ]` | The fetcher found a newer version within the same major (or within the major_hint pin), and no `override` or `manual` flag is set. Safe to apply automatically. |
-| `[HOLD  ]` | A newer version exists but it crosses a major version boundary, or the proposed version escapes the major_hint pin. Requires human review before upgrading. |
+| `[HOLD  ]` | A newer version exists but it crosses a major version boundary, or the proposed version escapes the major_hint pin. Requires human review before upgrading. Reason label explains which case triggered. |
 | `[MANUAL]` | The annotation has `(override)` or `(manual)` flag, OR the fetcher (e.g. `sdkmanager`) explicitly sets `manual=true`. The proposed version is shown but will never be auto-applied. |
-| `[SKIP  ]` | The variable is already at the latest version (`current == proposed`), or the fetcher returned no viable candidates, or the current version is a floating reference (`latest`, `nightly`, etc.), or the skip reason was set. Also used when a fetcher sets `error_message` but no `decision` (e.g. `sdkman` / `sdkmanager` when the binary is not installed). |
+| `[SKIP  ]` | The variable is already at the latest version (`current == proposed`), or the fetcher returned no viable candidates, or the current version is a floating reference (`latest`, `nightly`, etc.), or the proposed would downgrade the current version. Also used when a fetcher sets `error_message` but no `decision`. |
 | `[ERROR ]` | Network failure, HTTP error (4xx/5xx), rate limiting after 3 retries, or a parse failure in the API response. The fetch was attempted and definitively failed. |
 
 ### alt_version line
