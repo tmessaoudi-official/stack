@@ -2370,6 +2370,68 @@ t "t31n: major_hint with underscore tags and no tag-replace — major filter inc
     echo PASS
 "
 
+t "t31o: Flutter-style repo — releases=pre-release-only, tags=v-prefixed, ls-remote has stable → returns stable via Strategy 3" bash -c "
+    ${_GH_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/gh_o_cache
+    export _GS_EU2_GIT_LS_REMOTE_FIXTURE='${FIXTURES}/git-ls-remote-flutter.txt'
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'github'
+    _gs_eu2_record_set \$idx identifier      'flutter/flutter'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_FLUTTER3_VERSION'
+    _gs_eu2_record_set \$idx tag_filter      '^[0-9\.]'
+    _gs_eu2_record_set \$idx major_hint      '3'
+    _gs_eu2_record_set \$idx current_version '3.41.4'
+    _gs_eu2_fetch_github \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    dec=\$(_gs_eu2_record_get \$idx decision)
+    # releases API returns 7 pre-releases; tags API returns v1.x (filtered out by ^[0-9\.]);
+    # ls-remote has 3.41.0, 3.41.4, 3.41.9 (stable) + 3.42/43/44-pre → Strategy 3 picks 3.41.9
+    [[ \"\$val\" == '3.41.9' ]] || { echo \"expected 3.41.9 (stable via ls-remote), got: '\$val' (dec='\$dec')\"; echo FAIL; exit 0; }
+    [[ -z \"\$dec\" ]] || { echo \"expected empty decision on success, got: '\$dec'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t31p: channel-selection-empty with stable current_version → decision=ERROR (not SKIP)" bash -c "
+    ${_GH_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/gh_p_cache
+    # releases=pre-releases-only, tags=v-prefixed (filtered by ^[0-9\.] → empty after filter),
+    # ls-remote fixture is empty → no tags survive any strategy → channel_select_best returns empty
+    # current_version is stable → should be ERROR not SKIP
+    export _GS_EU2_GIT_LS_REMOTE_FIXTURE='${FIXTURES}/git-ls-remote-empty.txt'
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'github'
+    _gs_eu2_record_set \$idx identifier      'flutter/flutter'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_FLUTTER3_VERSION'
+    _gs_eu2_record_set \$idx tag_filter      '^[0-9\.]'
+    _gs_eu2_record_set \$idx major_hint      '3'
+    _gs_eu2_record_set \$idx current_version '3.41.4'
+    _gs_eu2_fetch_github \$idx
+    dec=\$(_gs_eu2_record_get \$idx decision)
+    err=\$(_gs_eu2_record_get \$idx error_message)
+    [[ \"\$dec\" == 'ERROR' ]] || { echo \"expected ERROR (stable current, no stable found), got: '\$dec' (err='\$err')\"; echo FAIL; exit 0; }
+    [[ -n \"\$err\" ]] || { echo 'error_message should be set'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t31q: channel-selection-empty with prerelease current_version → decision=SKIP (unchanged)" bash -c "
+    ${_GH_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/gh_q_cache
+    # Same as t31p but current_version is pre-release → expect SKIP (no implied stable must exist)
+    export _GS_EU2_GIT_LS_REMOTE_FIXTURE='${FIXTURES}/git-ls-remote-empty.txt'
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'github'
+    _gs_eu2_record_set \$idx identifier      'flutter/flutter'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_FLUTTER3_VERSION'
+    _gs_eu2_record_set \$idx tag_filter      '^[0-9\.]'
+    _gs_eu2_record_set \$idx major_hint      '3'
+    _gs_eu2_record_set \$idx current_version '3.41.0-0.1.pre'
+    _gs_eu2_fetch_github \$idx
+    dec=\$(_gs_eu2_record_get \$idx decision)
+    # current is prerelease → SKIP (not ERROR) — no reason to assume stable releases must exist
+    [[ \"\$dec\" == 'SKIP' ]] || { echo \"expected SKIP (prerelease current, no stable), got: '\$dec'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Section 32 — sdkman fetcher
 # ═══════════════════════════════════════════════════════════════════════════

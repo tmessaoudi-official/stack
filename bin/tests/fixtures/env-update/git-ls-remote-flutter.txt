@@ -1,0 +1,12 @@
+abc001abc001abc001abc001abc001abc001abc001a	refs/tags/3.41.0
+abc002abc002abc002abc002abc002abc002abc002b	refs/tags/3.41.0^{}
+abc003abc003abc003abc003abc003abc003abc003c	refs/tags/3.41.4
+abc004abc004abc004abc004abc004abc004abc004d	refs/tags/3.41.4^{}
+abc005abc005abc005abc005abc005abc005abc005e	refs/tags/3.41.9
+abc006abc006abc006abc006abc006abc006abc006f	refs/tags/3.41.9^{}
+abc007abc007abc007abc007abc007abc007abc007a	refs/tags/3.42.0-0.1.pre
+abc008abc008abc008abc008abc008abc008abc008b	refs/tags/3.42.0-0.1.pre^{}
+abc009abc009abc009abc009abc009abc009abc009c	refs/tags/3.43.0-0.1.pre
+abc010abc010abc010abc010abc010abc010abc010d	refs/tags/3.43.0-0.1.pre^{}
+abc011abc011abc011abc011abc011abc011abc011e	refs/tags/3.44.0-0.3.pre
+abc012abc012abc012abc012abc012abc012abc012f	refs/tags/3.44.0-0.3.pre^{}

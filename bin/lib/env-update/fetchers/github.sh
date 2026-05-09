@@ -170,8 +170,28 @@ _gs_eu2_fetch_github() {
     return 0
   fi
 
-  # ── Strategy 2: Tags API (when releases returned nothing) ─────────────────
+  # ── Strategy 2: Tags API (when releases returned nothing, or all-prerelease for stable) ──
+  # Also triggered when the releases API returned only pre-releases and the channel is stable.
+  # Repos like Flutter publish GitHub Releases only for pre-releases; stable versions are
+  # tag-only.  Without this check, channel_select_best would see only pre-releases and
+  # return empty for the stable channel, causing a spurious SKIP.
+  local _s2_trigger="false"
   if [[ -z "$(printf '%s\n' "${_raw_tags}" | grep -v '^$' || true)" ]]; then
+    _s2_trigger="true"
+  elif [[ -z "${_channel}" || "${_channel}" == "stable" ]]; then
+    # Check if ALL non-empty releases entries are pre-releases
+    local _has_stable="false"
+    local _v
+    while IFS= read -r _v; do
+      [[ -z "${_v}" ]] && continue
+      if ! _gs_eu2_is_prerelease "${_v}"; then
+        _has_stable="true"
+        break
+      fi
+    done <<< "${_raw_tags}"
+    [[ "${_has_stable}" == "false" ]] && _s2_trigger="true"
+  fi
+  if [[ "${_s2_trigger}" == "true" ]]; then
     local _tags_out
     _tags_out="$(_gs_eu2_github_fetch_tags_paginated "${_identifier}" "${_tok}" 10 2>/dev/null)"
     _raw_tags="${_tags_out}"
@@ -224,7 +244,13 @@ _gs_eu2_fetch_github() {
   fi
 
   if [[ -z "$(printf '%s\n' "${_tags}" | grep -v '^$' || true)" ]]; then
-    _gs_eu2_record_set "${_idx}" decision      "SKIP"
+    # Heuristic: stable current + no tags found = fetcher failure, not a legitimate no-stable case.
+    local _cur0 _decision0="SKIP"
+    _cur0="$(_gs_eu2_record_get "${_idx}" current_version)"
+    if [[ -n "${_cur0}" ]] && ! _gs_eu2_is_prerelease "${_cur0}"; then
+      _decision0="ERROR"
+    fi
+    _gs_eu2_record_set "${_idx}" decision      "${_decision0}"
     _gs_eu2_record_set "${_idx}" error_message "no tags matched filters for github:${_identifier}"
     return 0
   fi
@@ -234,7 +260,14 @@ _gs_eu2_fetch_github() {
   _proposed="$(_gs_eu2_channel_select_best "${_tags}" "${_channel}")"
 
   if [[ -z "${_proposed}" ]]; then
-    _gs_eu2_record_set "${_idx}" decision      "SKIP"
+    # Heuristic: if the current version is stable, stable releases must exist for this project —
+    # finding none is a fetcher failure, not a legitimate "no stable releases" case.
+    local _cur _decision="SKIP"
+    _cur="$(_gs_eu2_record_get "${_idx}" current_version)"
+    if [[ -n "${_cur}" ]] && ! _gs_eu2_is_prerelease "${_cur}"; then
+      _decision="ERROR"
+    fi
+    _gs_eu2_record_set "${_idx}" decision      "${_decision}"
     _gs_eu2_record_set "${_idx}" error_message "channel selection returned nothing for github:${_identifier}"
     return 0
   fi

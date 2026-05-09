@@ -632,8 +632,9 @@ GLOBAL_STACK_VALKEY_VERSION=9.0.3-alpine3.23
 **Three-strategy fetch (tried in order):**
 
 1. **Releases API** — `GET /repos/{owner}/{repo}/releases?per_page=100`. Filters out drafts (`draft == false`). Pre-releases and stable releases are both included at this stage; channel selection decides later.
+   - **Pre-release-only fallthrough:** If the Releases API returns only pre-releases and the channel is stable (empty or `"stable"`), the fetcher automatically falls through to Strategy 2. This handles repos like Flutter that publish GitHub Releases exclusively for pre-releases while stable tags are tag-only.
 2. **Tags API** — `GET /repos/{owner}/{repo}/tags?per_page=100&page=N`. Paginated up to 10 pages. Stops early when a page returns fewer than 100 items.
-3. **git ls-remote** — last resort, triggered only when `major_hint` is set and both the Releases and Tags APIs returned nothing that matched the pin. Calls `git ls-remote` on `https://github.com/{owner}/{repo}.git`. Testable via the `_GS_EU2_GIT_LS_REMOTE_FIXTURE` env var.
+3. **git ls-remote** — last resort, triggered when `major_hint` is set and both the Releases and Tags APIs returned nothing that matched the pin after applying all tag filters. Calls `git ls-remote` on `https://github.com/{owner}/{repo}.git`. Testable via the `_GS_EU2_GIT_LS_REMOTE_FIXTURE` env var.
 
 **Authentication:** Reads `GITHUB_TOKEN` or `GLOBAL_STACK_GITHUB_TOKEN` from the environment. Without a token, the unauthenticated API rate limit (60 req/hr) applies. The error message includes a hint to set the token when auth is absent and a fetch fails.
 
@@ -649,7 +650,10 @@ GLOBAL_STACK_VALKEY_VERSION=9.0.3-alpine3.23
 
 **Cache key:** `github:owner/repo:major_hint:channel`
 
-**Known quirk:** Some repos publish via Releases API only; others only via Tags API. The fetcher handles both transparently. Repos with thousands of tags may need git ls-remote for deep major version searches.
+**Known quirks:**
+- Some repos publish via Releases API only; others only via Tags API. The fetcher handles both transparently. Repos with thousands of tags may need git ls-remote for deep major version searches.
+- **Repos that publish GitHub Releases only for pre-releases** (e.g., Flutter): the fetcher detects this and falls through to the Tags API and git ls-remote automatically — no special annotation needed beyond the normal `tag-filter` flag.
+- **SKIP→ERROR escalation:** When all fetch strategies exhaust without finding stable tags, and the current version is itself stable, the fetcher sets `ERROR` instead of `SKIP`. The reasoning: a stable current version proves stable releases have existed for this project — failing to find any indicates a fetcher failure rather than a legitimate "no stable releases" scenario.
 
 **Example annotations:**
 ```bash
@@ -1419,10 +1423,12 @@ These do not abort the tool — they set `decision=ERROR` and move to the next r
 | Condition | Message |
 |-----------|---------|
 | Current version is a floating reference | `floating reference (nightly) — pin manually to adopt proposed version` |
-| All tags filtered out (major-pin, tag-filter, etc.) | `no tags matched filters for TYPE:IDENTIFIER` |
-| Channel selection returned nothing | `channel selection returned nothing for TYPE:IDENTIFIER` |
+| All tags filtered out (major-pin, tag-filter, etc.) and current version is pre-release | `no tags matched filters for TYPE:IDENTIFIER` |
+| Channel selection returned nothing and current version is pre-release | `channel selection returned nothing for TYPE:IDENTIFIER` |
 | sdkman not installed | `sdkman not installed (SDKMAN_DIR=PATH)` |
 | sdkmanager not found | `sdkmanager not found` |
+
+> **Note:** When the `github` fetcher hits a "no tags matched" or "channel selection returned nothing" condition and the current version is **stable** (not pre-release), it escalates to `ERROR` instead of `SKIP`. The reasoning: a stable current version proves stable releases exist — failing to find any is a fetcher failure, not a legitimate no-stable-releases scenario.
 | url: no tier matched | `url: no extraction strategy matched for URL` |
 | url: fetch-extract matched nothing | `url: fetch-extract pattern 'REGEX' matched nothing from URL` |
 | url: fetch-json returned empty | `url: fetch-json jq path 'PATH' returned empty from URL` |
