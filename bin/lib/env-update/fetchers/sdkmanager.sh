@@ -117,9 +117,6 @@ _gs_eu2_fetch_sdkmanager() {
   _channel="$(_gs_eu2_record_get "${_idx}" channel)"
   _no_cache="${_GS_EU2_CFG[no_cache]:-false}"
 
-  # Always mark as manual — sdkmanager versions cannot be auto-applied
-  _gs_eu2_record_set "${_idx}" manual "true"
-
   # Build cache key
   local _cache_key="sdkmanager:${_identifier}:${_channel}"
 

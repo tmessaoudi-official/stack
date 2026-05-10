@@ -160,6 +160,12 @@ SOME_VERSION=2.3.0
 All flags use balanced parentheses: `(flag)` for boolean flags, `(flag:value)` for valued
 flags. Flags are **position-agnostic** — they can appear anywhere in the annotation line.
 
+### Note flag
+
+| Flag | Record field | Description |
+|------|-------------|-------------|
+| `(note:TEXT)` | `note` | Free-text annotation displayed as a `↳ TEXT` line below the version line in `--check` output. Use when bumping the variable in `.env` is not sufficient on its own — another file must also be updated. Example: `(note:also add new version to compat list in setup.sh)`. Has no effect on the decision classification. |
+
 ### Boolean (presence-only) flags
 
 | Flag | Record field | Description |

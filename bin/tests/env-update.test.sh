@@ -1459,11 +1459,11 @@ t "t21i: tag-filter flag with regex value extracted" bash -c "
 t "t21j: mixed recognized + unrecognized flags, order preserved" bash -c "
     ${_HOIST_LIBS}
     flags=''; cleaned=''
-    _gs_eu2_hoist_all_flags flags cleaned '(propagate) (note: internal) (override) dockerhub:bar 2.0'
+    _gs_eu2_hoist_all_flags flags cleaned '(propagate) (compat: old-api) (override) dockerhub:bar 2.0'
     IFS=\$'\\x1f' read -ra parts <<< \"\$flags\"
     [[ \"\${parts[0]}\" == 'propagate' ]] || { echo \"part0 wrong: \${parts[0]}\"; echo FAIL; exit 0; }
     [[ \"\${parts[1]}\" == 'override'  ]] || { echo \"part1 wrong: \${parts[1]}\"; echo FAIL; exit 0; }
-    [[ \"\$cleaned\" == '(note: internal) dockerhub:bar 2.0' ]] || { echo \"cleaned wrong: \$cleaned\"; echo FAIL; exit 0; }
+    [[ \"\$cleaned\" == '(compat: old-api) dockerhub:bar 2.0' ]] || { echo \"cleaned wrong: \$cleaned\"; echo FAIL; exit 0; }
     echo PASS
 "
 
@@ -2645,7 +2645,7 @@ t "t33d: channel:unstable — build-tools picks rc version" bash -c "
     echo PASS
 "
 
-t "t33e: sdkmanager sets manual=true — classify via decide.sh not fetcher decision field" bash -c "
+t "t33e: sdkmanager does NOT set manual — decide.sh owns classification via version comparison" bash -c "
     ${_SDKMGR_LIBS}
     _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
     _gs_eu2_record_set \$idx type            'sdkmanager'
@@ -2655,7 +2655,7 @@ t "t33e: sdkmanager sets manual=true — classify via decide.sh not fetcher deci
     _gs_eu2_fetch_sdkmanager \$idx
     manual=\$(_gs_eu2_record_get \$idx manual)
     dec=\$(_gs_eu2_record_get \$idx decision)
-    [[ \"\$manual\" == 'true' ]] || { echo \"sdkmanager must set manual=true; got: '\$manual'\"; echo FAIL; exit 0; }
+    [[ -z \"\$manual\" ]] || { echo \"sdkmanager must NOT set manual; got: '\$manual'\"; echo FAIL; exit 0; }
     # Fetcher must NOT write decision (that is decide.sh's job)
     [[ -z \"\$dec\" ]] || { echo \"fetcher must not write decision; got: '\$dec'\"; echo FAIL; exit 0; }
     echo PASS
@@ -3729,6 +3729,124 @@ t "t45e: pecl_git with_tags=true in CFG → finds 0.15.2" bash -c "
     _gs_eu2_fetch_pecl_git \$idx 2>/dev/null || true
     val=\$(_gs_eu2_record_get \$idx proposed_version)
     [[ \"\$val\" == '0.15.2' ]] || { echo \"expected 0.15.2 (with_tags=true), got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 46 — same-version SKIP beats manual/override (RC1) + display (RC2)
+# ═══════════════════════════════════════════════════════════════════════════
+section "46 — same-version SKIP beats manual/override + display"
+
+_DC46_LIBS="
+source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update/core/semver.sh'
+source '/stack/bin/lib/env-update/core/decide.sh'
+"
+
+t "t46a: classify — same version + override=true → SKIP (not MANUAL)" bash -c "
+    ${_DC46_LIBS}
+    result=\$(_gs_eu2_classify_decision '18.3' '18.3' 'true' '' '')
+    [[ \"\$result\" == 'SKIP' ]] || { echo \"expected SKIP, got: '\$result'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t46b: classify — same version + manual=true → SKIP (not MANUAL)" bash -c "
+    ${_DC46_LIBS}
+    result=\$(_gs_eu2_classify_decision '2.2.0' '2.2.0' '' 'true' '')
+    [[ \"\$result\" == 'SKIP' ]] || { echo \"expected SKIP, got: '\$result'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t46c: classify — override=true but version changed → still MANUAL" bash -c "
+    ${_DC46_LIBS}
+    result=\$(_gs_eu2_classify_decision '18.3' '18.4' 'true' '' '')
+    [[ \"\$result\" == 'MANUAL' ]] || { echo \"expected MANUAL for changed version with override, got: '\$result'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t46d: display — (override) at same version shows '(up to date — manual)' not '← manual flag'" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t46d_cache
+    f=\${TMP_DIR}/t46d.env
+    # fixture for dockerhub:_/postgres returns 18.4-alpine3.23; set current to same
+    printf '# @todo env-update (override) dockerhub:_/postgres\nGLOBAL_STACK_POSTGRES_OVR=18.4-alpine3.23\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null)
+    echo \"\$out\" | grep -qF 'up to date' || { echo \"expected 'up to date' in SKIP output: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'manual'     || { echo \"expected 'manual' hint in SKIP output: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qvF '[MANUAL]'  || { echo \"should show [SKIP] not [MANUAL]: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t46e: sdkmanager fetcher does NOT set manual field — decide.sh classifies via versions" bash -c "
+    source '/stack/bin/lib/env-update/config/defaults.sh'
+    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+    source '/stack/bin/lib/env-update/core/records.sh'
+    source '/stack/bin/lib/env-update/core/semver.sh'
+    source '/stack/bin/lib/env-update/core/channel.sh'
+    source '/stack/bin/lib/env-update/core/tag_flags.sh'
+    source '/stack/bin/lib/env-update/core/cache.sh'
+    source '/stack/bin/lib/env-update/http/curl.sh'
+    source '/stack/bin/lib/env-update/fetchers/sdkmanager.sh'
+    export _GS_EU2_SDKMANAGER_CMD_FIXTURE='${FIXTURES}/sdkmanager-list.txt'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t46e_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'sdkmanager'
+    _gs_eu2_record_set \$idx identifier      'ndk'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_ANDROID_NDK_VERSION'
+    _gs_eu2_record_set \$idx current_version '29.0.14206865'
+    _gs_eu2_fetch_sdkmanager \$idx
+    manual=\$(_gs_eu2_record_get \$idx manual)
+    [[ -z \"\$manual\" ]] || { echo \"sdkmanager must NOT set manual; got: '\$manual'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# Section 47 — (note:TEXT) annotation flag
+# ═══════════════════════════════════════════════════════════════════════════
+section "47 — (note:TEXT) annotation flag"
+
+t "t47a: note flag parsed and stored in record field" bash -c "
+    f=\${TMP_DIR}/t47a.env
+    printf '# @todo env-update (note:also update setup.sh compat list) sdkmanager:build-tools 36.1.0\nGLOBAL_STACK_ANDROID_BUILD_TOOLS_VERSION=36.1.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF 'note: also update setup.sh compat list' || { echo \"note field not found in dump; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t47b: note text with spaces preserved exactly" bash -c "
+    f=\${TMP_DIR}/t47b.env
+    printf '# @todo env-update (note:keep CHROME and FIREFOX in sync) dockerhub:selenium/standalone-chrome 4.41.0-20260222\nGLOBAL_STACK_SELENIUM_VERSION=4.41.0-20260222\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF 'note: keep CHROME and FIREFOX in sync' || { echo \"note text not preserved; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t47c: note flag can appear alongside other flags (order-agnostic)" bash -c "
+    f=\${TMP_DIR}/t47c.env
+    printf '# @todo env-update (override) (note:companion var) dockerhub:_/myimage 1.0.0\nGLOBAL_STACK_FOO=1.0.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF 'note: companion var'  || { echo \"note not found; got: \$out\";     echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'override: true'        || { echo \"override not found; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t47d: note line (↳) appears in --check output when version changes" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t47d_cache
+    f=\${TMP_DIR}/t47d.env
+    printf '# @todo env-update (note:also add to setup.sh compat list) dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_POSTGRES_NOTE=18.3-alpine3.23\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null)
+    echo \"\$out\" | grep -qF '↳' || { echo \"expected ↳ note line in output; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'also add to setup.sh compat list' || { echo \"note text not in output; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t47e: no ↳ line when note is absent" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t47e_cache
+    f=\${TMP_DIR}/t47e.env
+    printf '# @todo env-update dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_POSTGRES_NONOTE=18.3-alpine3.23\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null)
+    echo \"\$out\" | grep -qF '↳' && { echo \"unexpected ↳ in output (no note set): \$out\"; echo FAIL; exit 0; } || true
     echo PASS
 "
 

@@ -25,14 +25,15 @@ _gs_eu2_classify_decision() {
   # The proposed value is informational only; a pin change requires deliberate action.
   if _gs_eu2_is_unversioned "${_cur}"; then echo "SKIP"; return 0; fi
 
-  # Override or manual flags → MANUAL always
-  if [[ "${_override}" == "true" || "${_manual}" == "true" ]]; then
-    echo "MANUAL"; return 0
-  fi
-
-  # Same version → up to date, SKIP
+  # Same version → nothing to do; SKIP even for manual/override vars.
+  # manual/override means "don't auto-apply changes", not "always surface as MANUAL".
   if [[ "${_cur}" == "${_prop}" ]]; then
     echo "SKIP"; return 0
+  fi
+
+  # Override or manual flags → MANUAL (only reached when there IS a version change)
+  if [[ "${_override}" == "true" || "${_manual}" == "true" ]]; then
+    echo "MANUAL"; return 0
   fi
 
   # Prerelease guard: don't auto-propose a prerelease when current is stable.

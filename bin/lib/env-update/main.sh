@@ -46,8 +46,6 @@ source "$(dirname "${BASH_SOURCE[0]}")/reporting/help.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/reporting/dump.sh"
 # shellcheck source=./reporting/summary.sh
 source "$(dirname "${BASH_SOURCE[0]}")/reporting/summary.sh"
-# shellcheck source=./reporting/stream.sh
-source "$(dirname "${BASH_SOURCE[0]}")/reporting/stream.sh"
 # shellcheck source=./core/apply.sh
 source "$(dirname "${BASH_SOURCE[0]}")/core/apply.sh"
 
@@ -106,12 +104,13 @@ _gs_eu2_run_check() {
     esac
 
     # Apply decision classifier (refines any AUTO decision the fetcher set)
-    local _cur _prop _override _manual _major _fetcher_decision
+    local _cur _prop _override _manual _major _note _fetcher_decision
     _cur="$(_gs_eu2_record_get "${_i}" current_version)"
     _prop="$(_gs_eu2_record_get "${_i}" proposed_version)"
     _override="$(_gs_eu2_record_get "${_i}" override)"
     _manual="$(_gs_eu2_record_get "${_i}" manual)"
     _major="$(_gs_eu2_record_get "${_i}" major_hint)"
+    _note="$(_gs_eu2_record_get "${_i}" note)"
     _fetcher_decision="$(_gs_eu2_record_get "${_i}" decision)"
 
     if [[ "${_fetcher_decision}" == "AUTO" || -z "${_fetcher_decision}" ]]; then
@@ -195,7 +194,11 @@ _gs_eu2_run_check() {
     elif [[ -n "${_err}" ]]; then
       _change="  (${_err})"
     elif [[ "${_decision}" == "SKIP" ]]; then
-      _change="  (up to date)"
+      if [[ "${_manual}" == "true" || "${_override}" == "true" ]]; then
+        _change="  (up to date — manual)"
+      else
+        _change="  (up to date)"
+      fi
     elif [[ -n "${_reason}" ]]; then
       _change="${_reason}"
     fi
@@ -204,6 +207,7 @@ _gs_eu2_run_check() {
     # Width: tag(8) + 2 spaces + var field + some margin for change text
     printf '\r%*s\r' "$(( _max_var_len + 20 ))" "" >&2
     printf "%s  %-${_max_var_len}s%s\n" "${_tag}" "${_env_var}" "${_change}"
+    [[ -n "${_note}" ]] && printf '%10s↳ %s\n' "" "${_note}"
   done
 
   local _total=$(( _n_auto + _n_hold + _n_skip + _n_error + _n_manual ))

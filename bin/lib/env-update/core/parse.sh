@@ -13,6 +13,7 @@ _gs_eu2_is_recognized_flag() {
   [[ "${_f}" == *:* ]] && _name="${_f%%:*}" || _name="${_f}"
   case "${_name}" in
     override | manual | propagate | use-sha | prefer-specific | check-tags | \
+      note | \
       channel | skip | \
       tag-filter | tag-exclude | tag-strip-prefix | tag-strip-suffix | \
       tag-extract | tag-suffix | tag-replace | \
@@ -141,7 +142,8 @@ _gs_eu2_dispatch_flag() {
 
   # Keyed flags: validate non-empty value
   case "${_name}" in
-    channel | skip | tag-filter | tag-exclude | tag-strip-prefix | tag-strip-suffix | \
+    note | \
+      channel | skip | tag-filter | tag-exclude | tag-strip-prefix | tag-strip-suffix | \
       tag-extract | tag-suffix | fetch-extract | fetch-json | url-probe | url-probe-depth | \
       version-prefix | pecl-ref)
       if [[ -z "${_val}" ]]; then
@@ -172,6 +174,7 @@ _gs_eu2_dispatch_flag() {
   esac
 
   case "${_name}" in
+    note) _gs_eu2_record_set "${_idx}" note "${_val}" ;;
     channel) _gs_eu2_record_set "${_idx}" channel "${_val}" ;;
     skip) _gs_eu2_record_set "${_idx}" skip_reason "${_val}" ;;
     tag-filter) _gs_eu2_record_set "${_idx}" tag_filter "${_val}" ;;

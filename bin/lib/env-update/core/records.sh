@@ -23,7 +23,7 @@ _gs_eu2_record_fields() {
     url_probe url_probe_depth \
     pecl_ref depends_on urls \
     git_fallback_url git_fallback_sha \
-    hint line_number raw_annotation \
+    hint note line_number raw_annotation \
     proposed_version decision error_message alt_version \
     annotation_sha proposed_sha use_sha commit_date
 }
