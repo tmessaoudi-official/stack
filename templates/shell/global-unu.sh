@@ -520,16 +520,16 @@ if eval "${env_file_exists}"; then
 		if _gs_semver_lt "${GLOBAL_UNU_CLAUDE_CODE_VERSION}" "${GLOBAL_UNU_CLAUDE_CODE_TARGET}"; then
 			echo "Installing/Updating claude-code ${GLOBAL_UNU_CLAUDE_CODE_VERSION} → ${GLOBAL_UNU_CLAUDE_CODE_TARGET}"
 			curl -sSL https://claude.ai/install.sh | bash -s -- "${GLOBAL_STACK_CLAUDE_CODE_VERSION}"
+
+			if [[ "true" == "${GLOBAL_STACK_RTK_INIT}" ]] \
+			&& command -v rtk >/dev/null 2>&1 \
+			&& command -v claude >/dev/null 2>&1; then
+				rtk telemetry disable
+				rtk init --agent claude --global --auto-patch
+			fi
 		else
 			echo "claude-code ${GLOBAL_UNU_CLAUDE_CODE_VERSION} is current or newer than target ${GLOBAL_UNU_CLAUDE_CODE_TARGET}, skipping"
 		fi
-	fi
-
-	if [[ "true" == "${GLOBAL_STACK_RTK_INIT}" ]] \
-	  && command -v rtk >/dev/null 2>&1 \
-	  && command -v claude >/dev/null 2>&1; then
-		rtk telemetry disable
-		rtk init --agent claude --global --auto-patch
 	fi
 fi
 
