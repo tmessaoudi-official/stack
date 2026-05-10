@@ -8,7 +8,7 @@ _GS_EU2_PRERELEASE_MARKERS=(
   # D5: Use [0-9.]* to match both rc1 and rc.1 patterns
   'alpha[0-9.]*' 'beta[0-9.]*' 'rc[0-9.]*' 'preview' 'pre'
   'nightly' 'edge' 'canary' 'snapshot' 'experimental' 'insiders'
-  '\.dev' '-dev'
+  '\.dev' '-dev([0-9.]|$)'
   '[0-9]a[0-9]' '[0-9]b[0-9]'
   'milestone' '[.-]m[0-9]' '-cr[0-9]' '-ea'
   '-next\.' 'next'
