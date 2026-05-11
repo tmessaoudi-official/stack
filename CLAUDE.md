@@ -159,7 +159,7 @@ make start-local-registry            # Start local TLS registry (port 5000)
 ## Testing & Verification
 
 - **env-scan tests**: `bash bin/tests/env-scan.test.sh` — custom harness with `assert_equals`, `assert_contains`, `assert_not_contains`, `assert_file_exists`
-- **env-update tests**: `bash bin/tests/env-update.test.sh` — 216 tests across 38 sections (fetchers, cache, semver, apply, args…); use `--dry-run --filter=<VAR>` and `--offline` for manual cache-only testing
+- **env-update tests**: `bash bin/tests/env-update.test.sh` — 279 tests across 47 sections (fetchers, cache, semver, apply, args…); use `--dry-run --filter=<VAR>` and `--offline` for manual cache-only testing
 - **Shell scripts**: `shellcheck <file>` and `shfmt -d -i 2 -ci -bn <file>` (diff mode)
 - **YAML files**: `yamllint -d relaxed <file>` and `yamlfmt -dry <file>` (dry-run mode)
 - **Formatting**: `/fmt --check` to preview all formatting changes, `/fmt` to apply them

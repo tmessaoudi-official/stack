@@ -3851,6 +3851,39 @@ t "t47e: no ↳ line when note is absent" bash -c "
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Section 47 — pecl fetcher (type:pecl) dispatch path
+# ═══════════════════════════════════════════════════════════════════════════
+section "47 — pecl fetcher dispatch path"
+
+t "t47a: type:pecl dispatches to _gs_eu2_fetch_pecl — not SKIP fallback (imagick, fixture)" bash -c "
+    f=\${TMP_DIR}/t47a.env
+    printf '# @todo env-update pecl:imagick\nGLOBAL_STACK_PHP_IMAGICK_PECL=3.7.0\n' > \"\$f\"
+    out=\$(export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'; export _GS_EU2_CACHE_DIR=\"\${TMP_DIR}/t47a_cache\"; bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null)
+    echo \"\$out\" | grep -qF 'not yet implemented' && { echo \"still hitting SKIP fallback: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'unknown fetcher type' && { echo \"still hitting unknown-type fallback: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qE 'AUTO|SKIP|HOLD|ERROR' || { echo \"no decision token in output: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t47b: type:pecl happy path — proposed_version = latest stable from fixture (apcu 6.3.0)" bash -c "
+    f=\${TMP_DIR}/t47b.env
+    printf '# @todo env-update pecl:apcu\nGLOBAL_STACK_PHP_APCU_VERSION=6.1.0\n' > \"\$f\"
+    out=\$(export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'; export _GS_EU2_CACHE_DIR=\"\${TMP_DIR}/t47b_cache\"; bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null)
+    echo \"\$out\" | grep -qF '6.3.0' || { echo \"expected 6.3.0 in output; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t47c: type:pecl unknown extension — ERROR decision not SKIP fallback" bash -c "
+    f=\${TMP_DIR}/t47c.env
+    printf '# @todo env-update pecl:no-such-extension-xyzzy\nGLOBAL_STACK_XYZZY_PECL=1.0.0\n' > \"\$f\"
+    out=\$(unset _GS_EU2_HTTP_FIXTURE_DIR; export _GS_EU2_CACHE_DIR=\"\${TMP_DIR}/t47c_cache\"; bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null || true)
+    echo \"\$out\" | grep -qF 'unknown fetcher type' && { echo \"hit unknown-type fallback instead of ERROR: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'not yet implemented' && { echo \"hit not-implemented fallback instead of ERROR: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qE 'ERROR|no stable release' || { echo \"expected ERROR or 'no stable release' in output; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section

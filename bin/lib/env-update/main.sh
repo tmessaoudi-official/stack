@@ -89,17 +89,18 @@ _gs_eu2_run_check() {
       rubygems)   _gs_eu2_fetch_rubygems   "${_i}" ;;
       sdkman)     _gs_eu2_fetch_sdkman     "${_i}" ;;
       sdkmanager) _gs_eu2_fetch_sdkmanager "${_i}" ;;
+      pecl)       _gs_eu2_fetch_pecl       "${_i}" ;;
       pecl-git)   _gs_eu2_fetch_pecl_git   "${_i}" ;;
       url)        _gs_eu2_fetch_url        "${_i}" ;;
-      # Phase 3a implemented: codeberg (1), quay (1) — see fetchers/codeberg.sh + fetchers/quay.sh
-      # Phase 3b implemented: npm (55), pypi (24), rubygems (4) — see fetchers/{npm,pypi,rubygems}.sh
-      # Phase 3c implemented: github (73) — see fetchers/github.sh
-      # Phase 3d implemented: pecl-git (100) — see fetchers/pecl.sh + fetchers/pecl_git.sh
-      # Phase 3e implemented: sdkman (19), sdkmanager (5) — see fetchers/{sdkman,sdkmanager}.sh
-      # Phase 3f implemented: url (8) — see fetchers/url.sh + core/ubuntu.sh
+      # All 12 fetcher types implemented:
+      #   codeberg, dockerhub, github, quay   — fetchers/{codeberg,dockerhub,github,quay}.sh
+      #   npm, pypi, rubygems                 — fetchers/{npm,pypi,rubygems}.sh
+      #   sdkman, sdkmanager                  — fetchers/{sdkman,sdkmanager}.sh
+      #   pecl, pecl-git                      — fetchers/{pecl,pecl_git}.sh
+      #   url                                 — fetchers/url.sh + core/ubuntu.sh
       *)
         _gs_eu2_record_set "${_i}" decision      "SKIP"
-        _gs_eu2_record_set "${_i}" error_message "fetcher '${_type}' not yet implemented (see Phase 3f+ TODO above)"
+        _gs_eu2_record_set "${_i}" error_message "unknown fetcher type '${_type}' — check annotation syntax"
         ;;
     esac
 

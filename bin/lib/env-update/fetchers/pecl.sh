@@ -134,3 +134,27 @@ _gs_eu2_pecl_check_promotion() {
   fi
   return 0
 }
+
+# _gs_eu2_fetch_pecl IDX
+# Entry point for type:pecl annotations.
+# Identifier field = bare extension name (e.g. apcu, redis, imagick).
+# Writes proposed_version on success, or sets decision=ERROR on failure.
+# Caching is handled entirely by _gs_eu2_pecl_get_latest_stable.
+_gs_eu2_fetch_pecl() {
+  local _idx="${1}"
+
+  local _identifier
+  _identifier="$(_gs_eu2_record_get "${_idx}" identifier)"
+
+  local _ver
+  _ver="$(_gs_eu2_pecl_get_latest_stable "${_identifier}")"
+
+  if [[ -z "${_ver}" ]]; then
+    _gs_eu2_record_set "${_idx}" decision      "ERROR"
+    _gs_eu2_record_set "${_idx}" error_message "pecl: no stable release found for '${_identifier}'"
+    return 0
+  fi
+
+  _gs_eu2_record_set "${_idx}" proposed_version "${_ver}"
+  return 0
+}
