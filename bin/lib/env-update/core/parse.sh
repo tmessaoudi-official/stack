@@ -20,7 +20,7 @@ _gs_eu2_is_recognized_flag() {
       fetch-extract | fetch-json | \
       url-probe | url-probe-depth | \
       version-prefix | \
-      pecl-ref | depends-on) return 0 ;;
+      pecl-ref | depends-on | git) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -166,6 +166,13 @@ _gs_eu2_dispatch_flag() {
         exit 1
       fi
       ;;
+    git)
+      if [[ -z "${_val}" || "${_val}" != */* ]]; then
+        printf 'env-update: %s:%s: flag git requires OWNER/REPO format\n' \
+          "${_env_file}" "${_lnum}" >&2
+        exit 1
+      fi
+      ;;
     *)
       printf 'env-update: %s:%s: unknown flag %q in annotation\n' \
         "${_env_file}" "${_lnum}" "${_name}" >&2
@@ -191,6 +198,7 @@ _gs_eu2_dispatch_flag() {
     version-prefix) _gs_eu2_record_set "${_idx}" version_prefix "${_val}" ;;
     pecl-ref) _gs_eu2_record_set "${_idx}" pecl_ref "${_val}" ;;
     depends-on) _gs_eu2_record_set "${_idx}" depends_on "${_val}" ;;
+    git) _gs_eu2_record_set "${_idx}" git_repo "${_val}" ;;
     tag-replace)
       _gs_eu2_record_set "${_idx}" tag_replace_from "${_val%%:*}"
       _gs_eu2_record_set "${_idx}" tag_replace_to "${_val#*:}"

@@ -51,7 +51,7 @@ source types, classifies each update decision, and can apply AUTO decisions back
 | `sdkmanager` | `component-name` | No | No | No | Always MANUAL; requires `sdkmanager` binary |
 | `url` | URL string | No | Yes (some tiers) | Varies | 5-tier strategy; most flexible fetcher |
 | `codeberg` | `owner/repo` | Yes | Yes | No | Gitea API; releases → tags fallback |
-| `pecl` | (internal, not annotated directly) | No | No | No | Helper for `pecl-git`; PECL REST XML API |
+| `pecl` | `extension-name` | No | No | No | PECL REST XML API; use `(git:owner/repo)` flag to also fetch SHA from GitHub tag |
 
 ---
 
@@ -1063,24 +1063,51 @@ GLOBAL_STACK_GOTOSOCIAL_VERSION=0.17.3
 
 ---
 
-### 7.12 pecl (internal helper)
+### 7.12 pecl
 
-The `pecl` type is not used directly in `.env` annotations. It is an internal helper
-library (`fetchers/pecl.sh`) used exclusively by the `pecl-git` fetcher.
+The `pecl` type uses PECL as the authoritative version source. It replaces the old
+`(pecl-ref:ext) pecl-git:owner/repo` two-annotation pattern for PHP extensions that have
+stable PECL releases and optionally a GitHub repo for SHA tracking.
+
+**Annotation pattern:**
+```bash
+# @todo env-update (manual) pecl:zmq (git:zeromq/php-zmq) 1.1.3 sha:616b6c64...
+GLOBAL_STACK_PHP_DEFAULT_ZMQ_VERSION=
+
+# @todo env-update pecl:imagick 3.8.0
+GLOBAL_STACK_PHP_DEFAULT_IMAGICK_VERSION=3.8.0
+```
+
+**`(git:owner/repo)` flag (optional):** when set, fetches the commit SHA for the
+version tag (`v{ver}` then `{ver}`) from GitHub after PECL returns the version. If no
+matching tag exists, a warning is printed to stderr but the version update is not blocked
+(soft-fail). The SHA is written to `proposed_sha` and used by `--apply` to update the
+`sha:` field in the annotation.
+
+**Decision matrix:**
+- PECL has stable release, git tag found → `proposed_version` + `proposed_sha`
+- PECL has stable release, no git tag → `proposed_version` only, warning to stderr
+- No PECL stable release → `decision=ERROR`
+
+**When to use which pattern:**
+- `pecl:ext` — extension is on PECL with stable releases, no SHA tracking needed
+- `pecl:ext (git:owner/repo)` — extension is on PECL with stable releases + want SHA
+- `pecl-git:owner/repo` — no PECL stable releases; git tags are the only source
 
 **API endpoints:**
 - `https://pecl.php.net/rest/r/{ext}/allreleases.xml` — all releases XML
 - `https://pecl.php.net/rest/r/{ext}/{version}.xml` — per-version details (release date)
+- `https://api.github.com/repos/{owner}/{repo}/commits?sha={ref}&per_page=1` — SHA lookup
 
 **XML parsing:** Uses `grep/sed` without `xmllint`. Extracts `<v>VERSION</v><s>STABILITY</s>` pairs.
 
-**Functions provided:**
+**Helper functions (also used by `pecl-git`):**
 - `_gs_eu2_pecl_get_latest_stable EXT` — returns latest stable PECL version (empty on failure)
 - `_gs_eu2_pecl_get_release_date EXT VERSION` — returns YYYY-MM-DD release date
 - `_gs_eu2_pecl_check_promotion EXT COMMIT_DATE` — returns the PECL version if its release
   date is strictly newer than `COMMIT_DATE`, otherwise returns empty
 
-**Cache keys:** `pecl2:stable:{ext}` and `pecl2:date:{ext}:{version}`
+**Cache keys:** `pecl2:stable:{ext}` and `pecl2:date:{ext}:{version}` (version cache only; SHA is not cached)
 
 ---
 

@@ -3940,6 +3940,126 @@ t "t48b: all-letter tags — letter-prefixed fallback still produces a result" b
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Section 49 — pecl fetcher with (git:owner/repo) flag
+# ═══════════════════════════════════════════════════════════════════════════
+section "49 — pecl fetcher with (git:owner/repo) flag"
+
+_PECL_GIT_FLAG_LIBS="
+source '/stack/bin/lib/env-update/config/defaults.sh'
+source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update/core/records.sh'
+source '/stack/bin/lib/env-update/core/semver.sh'
+source '/stack/bin/lib/env-update/core/cache.sh'
+source '/stack/bin/lib/env-update/http/curl.sh'
+source '/stack/bin/lib/env-update/fetchers/github.sh'
+source '/stack/bin/lib/env-update/fetchers/pecl.sh'
+export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+export _GS_EU2_CACHE_DIR=\${TMP_DIR}/pecl49_cache
+"
+
+t "t49a: pecl + (git:...) — proposed_version from PECL, proposed_sha from git tag" bash -c "
+    ${_PECL_GIT_FLAG_LIBS}
+    declare -A _GS_EU2_CFG=([no_cache]=true)
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type             'pecl'
+    _gs_eu2_record_set \$idx identifier       'zmq'
+    _gs_eu2_record_set \$idx git_repo         'zeromq/php-zmq'
+    _gs_eu2_record_set \$idx env_var          'GLOBAL_STACK_PHP_ZMQ_VERSION'
+    _gs_eu2_record_set \$idx current_version  '1.1.2'
+    _gs_eu2_fetch_pecl \$idx 2>/dev/null || true
+    ver=\$(_gs_eu2_record_get \$idx proposed_version)
+    sha=\$(_gs_eu2_record_get \$idx proposed_sha)
+    [[ \"\$ver\" == '1.1.3' ]] || { echo \"expected ver=1.1.3, got: '\$ver'\"; echo FAIL; exit 0; }
+    [[ -n \"\$sha\" ]] || { echo 'expected non-empty SHA'; echo FAIL; exit 0; }
+    [[ \"\$sha\" == '616b6c64ffd3866ed038615494306dd464ab53fc' ]] || { echo \"expected SHA=616b6c64..., got: '\$sha'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t49b: pecl + (git:...) — reuses imagick fixtures, version + SHA both set" bash -c "
+    ${_PECL_GIT_FLAG_LIBS}
+    declare -A _GS_EU2_CFG=([no_cache]=true)
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type             'pecl'
+    _gs_eu2_record_set \$idx identifier       'imagick'
+    _gs_eu2_record_set \$idx git_repo         'Imagick/imagick'
+    _gs_eu2_record_set \$idx env_var          'GLOBAL_STACK_PHP_IMAGICK_VERSION'
+    _gs_eu2_record_set \$idx current_version  '3.7.0'
+    _gs_eu2_fetch_pecl \$idx 2>/dev/null || true
+    ver=\$(_gs_eu2_record_get \$idx proposed_version)
+    sha=\$(_gs_eu2_record_get \$idx proposed_sha)
+    # imagick fixture: 3.8.0 stable, 3.9.0beta1 beta → 3.8.0 wins
+    [[ \"\$ver\" == '3.8.0' ]] || { echo \"expected ver=3.8.0, got: '\$ver'\"; echo FAIL; exit 0; }
+    [[ -n \"\$sha\" ]] || { echo 'expected non-empty SHA'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t49c: pecl + (git:...) where no matching git tag — version set, SHA empty, warning on stderr" bash -c "
+    ${_PECL_GIT_FLAG_LIBS}
+    declare -A _GS_EU2_CFG=([no_cache]=true)
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type             'pecl'
+    _gs_eu2_record_set \$idx identifier       'zmq'
+    _gs_eu2_record_set \$idx git_repo         'testowner/no-git-tag-repo'
+    _gs_eu2_record_set \$idx env_var          'GLOBAL_STACK_PHP_ZMQ_VERSION'
+    _gs_eu2_record_set \$idx current_version  '1.1.2'
+    stderr_file=\$(mktemp)
+    _gs_eu2_fetch_pecl \$idx 2>\"\$stderr_file\" || true
+    ver=\$(_gs_eu2_record_get \$idx proposed_version)
+    sha=\$(_gs_eu2_record_get \$idx proposed_sha)
+    dec=\$(_gs_eu2_record_get \$idx decision)
+    stderr_out=\$(cat \"\$stderr_file\"); rm -f \"\$stderr_file\"
+    [[ \"\$ver\" == '1.1.3' ]] || { echo \"expected ver=1.1.3 even when SHA missing, got: '\$ver'\"; echo FAIL; exit 0; }
+    [[ -z \"\$sha\" ]] || { echo \"expected empty SHA when no tag found, got: '\$sha'\"; echo FAIL; exit 0; }
+    [[ \"\$dec\" != 'ERROR' ]] || { echo 'decision must not be ERROR (soft-fail)'; echo FAIL; exit 0; }
+    printf '%s' \"\$stderr_out\" | grep -q 'no git tag' || { echo \"expected 'no git tag' warning on stderr, got: '\$stderr_out'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t49d: git flag missing (plain pecl) — no SHA fetched, proposed_sha empty" bash -c "
+    ${_PECL_GIT_FLAG_LIBS}
+    declare -A _GS_EU2_CFG=([no_cache]=true)
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type             'pecl'
+    _gs_eu2_record_set \$idx identifier       'zmq'
+    _gs_eu2_record_set \$idx env_var          'GLOBAL_STACK_PHP_ZMQ_VERSION'
+    _gs_eu2_record_set \$idx current_version  '1.1.2'
+    # No git_repo set
+    _gs_eu2_fetch_pecl \$idx 2>/dev/null || true
+    ver=\$(_gs_eu2_record_get \$idx proposed_version)
+    sha=\$(_gs_eu2_record_get \$idx proposed_sha)
+    [[ \"\$ver\" == '1.1.3' ]] || { echo \"expected ver=1.1.3, got: '\$ver'\"; echo FAIL; exit 0; }
+    [[ -z \"\$sha\" ]] || { echo \"expected empty SHA when no git flag, got: '\$sha'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t49e: parse — (git:owner/repo) flag recognized and stored in git_repo field" bash -c "
+    source '/stack/bin/lib/env-update/core/records.sh'
+    source '/stack/bin/lib/env-update/core/parse.sh'
+    f=\$(mktemp)
+    printf '# @todo env-update pecl:zmq (git:zeromq/php-zmq) 1.1.3\nGLOBAL_STACK_ZMQ=\n' > \"\$f\"
+    _gs_eu2_parse_env_file \"\$f\"
+    rm -f \"\$f\"
+    git_repo=\$(_gs_eu2_record_get 0 git_repo)
+    typ=\$(_gs_eu2_record_get 0 type)
+    id=\$(_gs_eu2_record_get 0 identifier)
+    [[ \"\$typ\" == 'pecl' ]] || { echo \"expected type=pecl, got: '\$typ'\"; echo FAIL; exit 0; }
+    [[ \"\$id\" == 'zmq' ]] || { echo \"expected identifier=zmq, got: '\$id'\"; echo FAIL; exit 0; }
+    [[ \"\$git_repo\" == 'zeromq/php-zmq' ]] || { echo \"expected git_repo=zeromq/php-zmq, got: '\$git_repo'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t49f: parse — (git:) without slash exits non-zero (invalid format)" bash -c "
+    source '/stack/bin/lib/env-update/core/records.sh'
+    source '/stack/bin/lib/env-update/core/parse.sh'
+    f=\$(mktemp)
+    printf '# @todo env-update pecl:zmq (git:noslash) 1.1.3\nGLOBAL_STACK_ZMQ=\n' > \"\$f\"
+    err=\$(_gs_eu2_parse_env_file \"\$f\" 2>&1 || true)
+    rm -f \"\$f\"
+    printf '%s' \"\$err\" | grep -q 'OWNER/REPO' || { echo \"expected OWNER/REPO error, got: '\$err'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section

@@ -23,6 +23,8 @@ readonly _GS_EU2_PECL_SH_LOADED=1
 source "$(dirname "${BASH_SOURCE[0]}")/../http/curl.sh"
 # shellcheck source=../core/cache.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../core/cache.sh"
+# shellcheck source=./github.sh
+source "$(dirname "${BASH_SOURCE[0]}")/github.sh"
 
 # _gs_eu2_pecl_fetch_allreleases EXT_NAME
 # Returns raw allreleases XML on stdout; non-zero on HTTP failure.
@@ -156,5 +158,24 @@ _gs_eu2_fetch_pecl() {
   fi
 
   _gs_eu2_record_set "${_idx}" proposed_version "${_ver}"
+
+  # If (git:owner/repo) flag is set, fetch SHA for the version tag.
+  # Soft-fail: a missing tag emits a warning but does not block the version update.
+  local _git_repo
+  _git_repo="$(_gs_eu2_record_get "${_idx}" git_repo)"
+  if [[ -n "${_git_repo}" ]]; then
+    local _proposed_sha=""
+    _proposed_sha="$(_gs_eu2_github_get_commit_sha "${_git_repo}" "v${_ver}" 2>/dev/null)" || true
+    if [[ -z "${_proposed_sha}" ]]; then
+      _proposed_sha="$(_gs_eu2_github_get_commit_sha "${_git_repo}" "${_ver}" 2>/dev/null)" || true
+    fi
+    if [[ -n "${_proposed_sha}" ]]; then
+      _gs_eu2_record_set "${_idx}" proposed_sha "${_proposed_sha}"
+    else
+      printf 'env-update: pecl: no git tag matching %s found in %s; version applied without SHA\n' \
+        "${_ver}" "${_git_repo}" >&2
+    fi
+  fi
+
   return 0
 }
