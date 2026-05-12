@@ -164,21 +164,20 @@ _gs_eu2_fetch_pecl() {
 
   _gs_eu2_record_set "${_idx}" proposed_version "${_ver}"
 
-  # If (git:owner/repo) flag is set, fetch SHA for the version tag.
-  # Soft-fail: a missing tag emits a warning but does not block the version update.
+  # If (git:owner/repo) flag is set, fetch HEAD SHA from the repo.
+  # HEAD is always preferred over a tagged SHA: the user runs PHP master and
+  # installs extensions from PECL anyway (SHA is a reference anchor, not a pin),
+  # so we want the freshest commit that works with unreleased PHP versions.
   local _git_repo
   _git_repo="$(_gs_eu2_record_get "${_idx}" git_repo)"
   if [[ -n "${_git_repo}" ]]; then
     local _proposed_sha=""
-    _proposed_sha="$(_gs_eu2_github_get_commit_sha "${_git_repo}" "v${_ver}" 2>/dev/null)" || true
-    if [[ -z "${_proposed_sha}" ]]; then
-      _proposed_sha="$(_gs_eu2_github_get_commit_sha "${_git_repo}" "${_ver}" 2>/dev/null)" || true
-    fi
+    _proposed_sha="$(_gs_eu2_github_get_commit_sha "${_git_repo}" "HEAD" 2>/dev/null)" || true
     if [[ -n "${_proposed_sha}" ]]; then
       _gs_eu2_record_set "${_idx}" proposed_sha "${_proposed_sha}"
-    else
-      printf 'env-update: pecl: no git tag matching %s found in %s; version applied without SHA\n' \
-        "${_ver}" "${_git_repo}" >&2
+      local _proposed_sha_date=""
+      _proposed_sha_date="$(_gs_eu2_github_get_commit_date "${_git_repo}" "${_proposed_sha}" 2>/dev/null)" || true
+      [[ -n "${_proposed_sha_date}" ]] && _gs_eu2_record_set "${_idx}" proposed_sha_date "${_proposed_sha_date}"
     fi
   fi
 

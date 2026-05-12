@@ -42,6 +42,9 @@ _gs_eu2_apply_single() {
       print; next
     }
     index($0, var "=") == 1 {
+      # Skip VAR= rewrite when newval is empty and use_sha is not set.
+      # This handles SHA-only updates where only the annotation comment changes.
+      if (newval == "" && use_sha != "true") { print; next }
       val = (use_sha == "true" && new_sha != "") ? new_sha : newval
       print var "=" val; next
     }
@@ -57,18 +60,58 @@ _gs_eu2_apply_updates() {
   local _n_applied=0 _n_would=0
 
   local _i _var _cur _prop _decision _raw_ann
-  local _ann_sha _new_sha _use_sha
+  local _ann_sha _ann_sha_date _new_sha _new_sha_date _use_sha
+  local _n_sha_applied=0 _n_sha_would=0
   for (( _i = 0; _i < _count; _i++ )); do
     _decision="$(_gs_eu2_record_get "${_i}" decision)"
+
+    # ── SHA-only update path ───────────────────────────────────────────────
+    if [[ "${_decision}" == "SHA" ]]; then
+      _var="$(_gs_eu2_record_get "${_i}" env_var)"
+      _raw_ann="$(_gs_eu2_record_get "${_i}" raw_annotation)"
+      _ann_sha="$(_gs_eu2_record_get "${_i}" annotation_sha)"
+      _new_sha="$(_gs_eu2_record_get "${_i}" proposed_sha)"
+      _new_sha_date="$(_gs_eu2_record_get "${_i}" proposed_sha_date)"
+      # Construct new sha token: sha:FULLHASH (YYYY-MM-DD)
+      local _new_sha_tok="${_new_sha}"
+      [[ -n "${_new_sha_date}" ]] && _new_sha_tok="${_new_sha} (${_new_sha_date})"
+      # Build old sha token to replace in annotation (match bare or with date)
+      local _old_sha_tok="${_ann_sha}"
+      _ann_sha_date="$(_gs_eu2_record_get "${_i}" annotation_sha_date)"
+      [[ -n "${_ann_sha_date}" ]] && _old_sha_tok="${_ann_sha} (${_ann_sha_date})"
+
+      if [[ "${_dry_run}" == "true" ]]; then
+        printf '  [DRY-RUN]  %-55s  sha:%s → sha:%s\n' "${_var}" "${_ann_sha:0:8}" "${_new_sha:0:8}"
+        (( ++_n_sha_would )) || true
+      else
+        # For SHA-only: pass empty _prop/_cur/_new (version line untouched);
+        # reuse apply_single with cur_sha=old_sha_tok and new_sha=new_sha_tok.
+        _gs_eu2_apply_single "${_env_file}" "${_var}" "" "${_raw_ann}" "" \
+                              "${_old_sha_tok}" "${_new_sha_tok}" "false"
+        printf '  [SHA]      %-55s  sha:%s → sha:%s\n' "${_var}" "${_ann_sha:0:8}" "${_new_sha:0:8}"
+        (( ++_n_sha_applied )) || true
+      fi
+      continue
+    fi
+
+    # ── Version update path (AUTO decisions) ──────────────────────────────
     [[ "${_decision}" != "AUTO" ]] && continue
     _var="$(_gs_eu2_record_get "${_i}" env_var)"
     _cur="$(_gs_eu2_record_get "${_i}" current_version)"
     _prop="$(_gs_eu2_record_get "${_i}" proposed_version)"
     _raw_ann="$(_gs_eu2_record_get "${_i}" raw_annotation)"
     _ann_sha="$(_gs_eu2_record_get "${_i}" annotation_sha)"
+    _ann_sha_date="$(_gs_eu2_record_get "${_i}" annotation_sha_date)"
     _new_sha="$(_gs_eu2_record_get "${_i}" proposed_sha)"
+    _new_sha_date="$(_gs_eu2_record_get "${_i}" proposed_sha_date)"
     _use_sha="$(_gs_eu2_record_get "${_i}" use_sha)"
     [[ -z "${_prop}" || "${_prop}" == "${_cur}" ]] && continue
+
+    # Build sha tokens for annotation rewrite (include date when available)
+    local _old_sha_tok2="${_ann_sha}"
+    [[ -n "${_ann_sha_date}" ]] && _old_sha_tok2="${_ann_sha} (${_ann_sha_date})"
+    local _new_sha_tok2="${_new_sha}"
+    [[ -n "${_new_sha_date}" ]] && _new_sha_tok2="${_new_sha} (${_new_sha_date})"
 
     if [[ "${_dry_run}" == "true" ]]; then
       local _display_proposed="${_prop}"
@@ -77,15 +120,19 @@ _gs_eu2_apply_updates() {
       (( ++_n_would )) || true
     else
       _gs_eu2_apply_single "${_env_file}" "${_var}" "${_prop}" "${_raw_ann}" "${_cur}" \
-                            "${_ann_sha}" "${_new_sha}" "${_use_sha:-false}"
+                            "${_old_sha_tok2}" "${_new_sha_tok2}" "${_use_sha:-false}"
       printf '  [APPLIED]  %-55s  %s → %s\n' "${_var}" "${_cur}" "${_prop}"
       (( ++_n_applied )) || true
     fi
   done
 
   if [[ "${_dry_run}" == "true" ]]; then
-    printf '  %d update(s) would be applied (--dry-run — no writes)\n' "${_n_would}"
+    local _total_would=$(( _n_would + _n_sha_would ))
+    printf '  %d update(s) would be applied (%d version, %d SHA) (--dry-run — no writes)\n' \
+      "${_total_would}" "${_n_would}" "${_n_sha_would}"
   else
-    printf '  %d update(s) applied to %s\n' "${_n_applied}" "${_env_file}"
+    local _total_applied=$(( _n_applied + _n_sha_applied ))
+    printf '  %d update(s) applied to %s (%d version, %d SHA)\n' \
+      "${_total_applied}" "${_env_file}" "${_n_applied}" "${_n_sha_applied}"
   fi
 }

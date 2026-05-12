@@ -25,7 +25,8 @@ _gs_eu2_record_fields() {
     git_fallback_url git_fallback_sha \
     hint note line_number raw_annotation \
     proposed_version decision error_message alt_version \
-    annotation_sha proposed_sha use_sha commit_date
+    annotation_sha proposed_sha use_sha commit_date \
+    proposed_sha_date annotation_sha_date
 }
 
 # Allocate next record index.

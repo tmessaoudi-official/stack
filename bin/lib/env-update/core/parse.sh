@@ -20,7 +20,7 @@ _gs_eu2_is_recognized_flag() {
       fetch-extract | fetch-json | \
       url-probe | url-probe-depth | \
       version-prefix | \
-      pecl-ref | depends-on | git) return 0 ;;
+      depends-on | git) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -145,7 +145,7 @@ _gs_eu2_dispatch_flag() {
     note | \
       channel | skip | tag-filter | tag-exclude | tag-strip-prefix | tag-strip-suffix | \
       tag-extract | tag-suffix | fetch-extract | fetch-json | url-probe | url-probe-depth | \
-      version-prefix | pecl-ref)
+      version-prefix)
       if [[ -z "${_val}" ]]; then
         printf 'env-update: %s:%s: flag %q requires a non-empty value\n' \
           "${_env_file}" "${_lnum}" "${_name}" >&2
@@ -196,7 +196,7 @@ _gs_eu2_dispatch_flag() {
     url-probe-depth) _gs_eu2_record_set "${_idx}" url_probe_depth "${_val}" ;;
     # D2: version_prefix stored; applied during fetch/compare in Phase 3
     version-prefix) _gs_eu2_record_set "${_idx}" version_prefix "${_val}" ;;
-    pecl-ref) _gs_eu2_record_set "${_idx}" pecl_ref "${_val}" ;;
+    # pecl-ref removed: use pecl:EXTNAME (git:owner/repo) instead
     depends-on) _gs_eu2_record_set "${_idx}" depends_on "${_val}" ;;
     git) _gs_eu2_record_set "${_idx}" git_repo "${_val}" ;;
     tag-replace)
@@ -215,7 +215,7 @@ _gs_eu2_parse_env_file() {
   local _pending_annotation="" _pending_lnum=0
   local _pending_type="" _pending_identifier="" _pending_major_hint=""
   local _pending_flags="" _pending_version="" _pending_hint=""
-  local _pending_sha=""
+  local _pending_sha="" _pending_sha_date=""
   local _pending_git_url="" _pending_git_sha=""
   local _pend_urls=""
   local _line_number=0
@@ -249,7 +249,7 @@ _gs_eu2_parse_env_file() {
       _pending_annotation="${_line}"
       _pending_type="" _pending_identifier="" _pending_major_hint=""
       _pending_flags="" _pending_version="" _pending_hint=""
-      _pending_sha=""
+      _pending_sha="" _pending_sha_date=""
       _pend_urls=""
 
       local _content="${_line#*@todo env-update}"
@@ -321,7 +321,18 @@ _gs_eu2_parse_env_file() {
       fi
 
       # sha: keyword — annotated commit SHA (not a paren flag — handled separately)
-      if [[ " ${_remaining} " == *" sha:"* ]]; then
+      # Format: sha:HASH or sha:HASH (YYYY-MM-DD) — the date paren must be consumed
+      # here before the hint regex would otherwise swallow it.
+      local _sha_date_re='(^|[[:space:]])sha:([0-9a-f]+)[[:space:]]+\(([0-9]{4}-[0-9]{2}-[0-9]{2})\)'
+      if [[ "${_remaining}" =~ ${_sha_date_re} ]]; then
+        _pending_sha="${BASH_REMATCH[2]}"
+        _pending_sha_date="${BASH_REMATCH[3]}"
+        # Remove the matched portion (sha:HASH (YYYY-MM-DD)) from _remaining
+        local _sha_with_date="sha:${_pending_sha} (${_pending_sha_date})"
+        _remaining="${_remaining//${_sha_with_date}/}"
+        _remaining="${_remaining#"${_remaining%%[! ]*}"}"
+        _remaining="${_remaining%"${_remaining##*[! ]}"}"
+      elif [[ " ${_remaining} " == *" sha:"* || "${_remaining}" == sha:* ]]; then
         local _sha_tok _remaining_no_sha=""
         for _sha_tok in ${_remaining}; do
           if [[ "${_sha_tok}" == sha:* && -z "${_pending_sha}" ]]; then
@@ -368,13 +379,13 @@ _gs_eu2_parse_env_file() {
             local _filter_type="${_filter#type:}"
             if [[ "${_pending_type}" != "${_filter_type}" ]]; then
               _state="IDLE"
-              _pending_sha=""
+              _pending_sha="" _pending_sha_date=""
               _pending_git_url="" _pending_git_sha=""
               continue
             fi
           elif [[ ! "${_var_name}" =~ ${_filter} ]]; then
             _state="IDLE"
-            _pending_sha=""
+            _pending_sha="" _pending_sha_date=""
             _pending_git_url="" _pending_git_sha=""
             continue
           fi
@@ -398,6 +409,7 @@ _gs_eu2_parse_env_file() {
         _gs_eu2_record_set "${_idx}" git_fallback_sha "${_pending_git_sha}"
         _gs_eu2_record_set "${_idx}" urls "${_pend_urls}"
         _gs_eu2_record_set "${_idx}" annotation_sha "${_pending_sha}"
+        _gs_eu2_record_set "${_idx}" annotation_sha_date "${_pending_sha_date}"
 
         # Dispatch all hoisted flags (position-agnostic)
         if [[ -n "${_pending_flags}" ]]; then
@@ -412,7 +424,7 @@ _gs_eu2_parse_env_file() {
         fi
 
         _state="IDLE"
-        _pending_sha=""
+        _pending_sha="" _pending_sha_date=""
         _pending_git_url="" _pending_git_sha=""
       else
         # C2: non-blank non-comment non-assignment line — annotation not followed by var

@@ -56,7 +56,7 @@ _gs_eu2_run_check() {
   # Propagate cache settings from CFG to env vars consumed by cache.sh
   _GS_EU2_CACHE_TTL="${_GS_EU2_CFG[cache_ttl]:-3600}"
 
-  local _n_auto=0 _n_hold=0 _n_skip=0 _n_error=0 _n_manual=0
+  local _n_auto=0 _n_hold=0 _n_skip=0 _n_error=0 _n_manual=0 _n_sha=0
 
   # Dynamic column width: pre-scan all env_var names so the → arrow aligns
   # across every record in this run, regardless of variable name length.
@@ -120,6 +120,19 @@ _gs_eu2_run_check() {
       _gs_eu2_record_set "${_i}" decision "${_classified}"
     fi
 
+    # SHA classification: independent of version decision.
+    # When a repo is tracking HEAD (git:owner/repo flag), the annotation SHA may
+    # lag behind even when the version is current.  Upgrade the decision to SHA
+    # so the apply step can rewrite the annotation without touching VAR=.
+    local _ann_sha _prop_sha _sha_classified
+    _ann_sha="$(_gs_eu2_record_get "${_i}" annotation_sha)"
+    _prop_sha="$(_gs_eu2_record_get "${_i}" proposed_sha)"
+    _sha_classified="$(_gs_eu2_classify_sha_decision "${_ann_sha}" "${_prop_sha}")"
+    if [[ "${_sha_classified}" == "SHA" && \
+          "$(_gs_eu2_record_get "${_i}" decision)" == "SKIP" ]]; then
+      _gs_eu2_record_set "${_i}" decision "SHA"
+    fi
+
     # Annotate SKIP on a floating-reference current with a human-readable reason
     if [[ "$(_gs_eu2_record_get "${_i}" decision)" == "SKIP" && \
           "${_prop}" != "${_cur}" ]] && \
@@ -148,6 +161,7 @@ _gs_eu2_run_check() {
       SKIP)   _tag="[SKIP  ]"; (( ++_n_skip ))   || true ;;
       ERROR)  _tag="[ERROR ]"; (( ++_n_error ))  || true ;;
       MANUAL) _tag="[MANUAL]"; (( ++_n_manual )) || true ;;
+      SHA)    _tag="[SHA   ]"; (( ++_n_sha ))    || true ;;
       *)      _tag="[SKIP  ]"; (( ++_n_skip ))   || true ;;
     esac
 
@@ -188,7 +202,12 @@ _gs_eu2_run_check() {
     esac
 
     _change=""
-    if [[ "${_decision}" == "SKIP" && -n "${_err}" ]]; then
+    if [[ "${_decision}" == "SHA" ]]; then
+      local _sha_disp_new _sha_disp_ann
+      _sha_disp_new="$(_gs_eu2_record_get "${_i}" proposed_sha)"
+      _sha_disp_ann="$(_gs_eu2_record_get "${_i}" annotation_sha)"
+      _change="  sha:${_sha_disp_ann:0:8} → sha:${_sha_disp_new:0:8}"
+    elif [[ "${_decision}" == "SKIP" && -n "${_err}" ]]; then
       _change="  (${_err})"
     elif [[ -n "${_prop}" && "${_prop}" != "${_cur}" ]]; then
       _change="  ${_cur} → ${_prop}${_reason}"
@@ -209,12 +228,26 @@ _gs_eu2_run_check() {
     printf '\r%*s\r' "$(( _max_var_len + 20 ))" "" >&2
     printf "%s  %-${_max_var_len}s%s\n" "${_tag}" "${_env_var}" "${_change}"
     [[ -n "${_note}" ]] && printf '%10s↳ %s\n' "" "${_note}"
+
+    # SHA sub-line: show short SHA (8 chars) + date for AUTO and SHA decisions
+    if [[ "${_decision}" == "AUTO" || "${_decision}" == "SHA" ]]; then
+      local _disp_prop_sha _disp_ann_sha _disp_sha_date
+      _disp_prop_sha="$(_gs_eu2_record_get "${_i}" proposed_sha)"
+      _disp_ann_sha="$(_gs_eu2_record_get "${_i}" annotation_sha)"
+      _disp_sha_date="$(_gs_eu2_record_get "${_i}" proposed_sha_date)"
+      if [[ -n "${_disp_prop_sha}" && "${_disp_prop_sha}" != "${_disp_ann_sha}" ]]; then
+        local _sha_sub="sha: ${_disp_prop_sha:0:8}"
+        [[ -n "${_disp_sha_date}" ]] && _sha_sub+=" (${_disp_sha_date})"
+        [[ -n "${_disp_ann_sha}" ]] && _sha_sub+="  ← was ${_disp_ann_sha:0:8}"
+        printf '%10s↳ %s\n' "" "${_sha_sub}"
+      fi
+    fi
   done
 
-  local _total=$(( _n_auto + _n_hold + _n_skip + _n_error + _n_manual ))
+  local _total=$(( _n_auto + _n_hold + _n_skip + _n_error + _n_manual + _n_sha ))
   printf '%-80s\n' "──────────────────────────────────────────────────────────────────────────────"
-  printf '  Summary: %d AUTO, %d HOLD, %d MANUAL, %d SKIP, %d ERROR  (%d checked)\n' \
-    "${_n_auto}" "${_n_hold}" "${_n_manual}" "${_n_skip}" "${_n_error}" "${_total}"
+  printf '  Summary: %d AUTO, %d SHA, %d HOLD, %d MANUAL, %d SKIP, %d ERROR  (%d checked)\n' \
+    "${_n_auto}" "${_n_sha}" "${_n_hold}" "${_n_manual}" "${_n_skip}" "${_n_error}" "${_total}"
 }
 
 _gs_eu2_main() {

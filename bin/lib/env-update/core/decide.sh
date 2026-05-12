@@ -71,3 +71,17 @@ _gs_eu2_classify_decision() {
 
   echo "AUTO"
 }
+
+# Classify a SHA-only update.
+# Args:
+#   $1 annotation_sha  — SHA currently stored in the annotation (may be empty)
+#   $2 proposed_sha    — SHA fetched from HEAD (may be empty)
+# Echoes: SHA | SKIP
+_gs_eu2_classify_sha_decision() {
+  local _ann_sha="${1:-}" _prop_sha="${2:-}"
+  # No proposed SHA → nothing to do
+  [[ -z "${_prop_sha}" ]] && { echo "SKIP"; return 0; }
+  # Same SHA → nothing to do
+  [[ "${_ann_sha}" == "${_prop_sha}" ]] && { echo "SKIP"; return 0; }
+  echo "SHA"
+}

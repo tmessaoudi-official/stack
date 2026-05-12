@@ -26,7 +26,7 @@
 #   8. Fetch commit date for SHA (hint only)
 #   9. Check for PECL promotion
 #
-# Cache key: pecl-git3:OWNER/REPO (bumped from pecl-git2 to avoid stale YYYYMMDD-sha8 values)
+# Cache key: pecl-git4:OWNER/REPO (bumped from pecl-git3: HEAD SHA instead of tag SHA)
 #
 # Depends on: github.sh (provides _gs_eu2_github_fetch_releases,
 #             _gs_eu2_github_fetch_tags_paginated, _gs_eu2_github_get_commit_sha,
@@ -59,10 +59,9 @@ _gs_eu2_pecl_git_derive_ext_name() {
 _gs_eu2_fetch_pecl_git() {
   local _idx="${1}"
 
-  local _identifier _channel _pecl_ref _major_hint _tag_strip_prefix _no_cache
+  local _identifier _channel _major_hint _tag_strip_prefix _no_cache
   _identifier="$(_gs_eu2_record_get "${_idx}" identifier)"
   _channel="$(_gs_eu2_record_get "${_idx}" channel)"
-  _pecl_ref="$(_gs_eu2_record_get "${_idx}" pecl_ref)"
   _major_hint="$(_gs_eu2_record_get "${_idx}" major_hint)"
   _tag_strip_prefix="$(_gs_eu2_record_get "${_idx}" tag_strip_prefix)"
   _no_cache="${_GS_EU2_CFG[no_cache]:-false}"
@@ -91,15 +90,11 @@ _gs_eu2_fetch_pecl_git() {
 
   # ── Determine ext_name for PECL lookup ───────────────────────────────────
   local _ext_name
-  if [[ -n "${_pecl_ref}" ]]; then
-    _ext_name="${_pecl_ref}"
-  else
-    local _repo_name="${_owner_repo##*/}"
-    _ext_name="$(_gs_eu2_pecl_git_derive_ext_name "${_repo_name}")"
-  fi
+  local _repo_name="${_owner_repo##*/}"
+  _ext_name="$(_gs_eu2_pecl_git_derive_ext_name "${_repo_name}")"
 
-  # ── Cache key (pecl-git3 to invalidate stale YYYYMMDD-sha8 entries) ──────
-  local _cache_key="pecl-git3:${_owner_repo}"
+  # ── Cache key (pecl-git4: HEAD SHA instead of tag SHA) ───────────────────
+  local _cache_key="pecl-git4:${_owner_repo}"
   [[ "${_merge_mode}" == "true" ]] && _cache_key="${_cache_key}:tags"
 
   if [[ "${_no_cache}" != "true" ]]; then
@@ -266,18 +261,17 @@ _gs_eu2_fetch_pecl_git() {
     fi
   fi
 
-  # ── Step 5: Get SHA for the version tag ──────────────────────────────────
+  # ── Step 5: Get HEAD SHA — always prefer HEAD over a tagged SHA ──────────
+  # HEAD is the freshest commit; the user builds extensions against PHP master
+  # so a tag SHA may lag behind fixes needed for unreleased PHP versions.
   local _proposed_sha=""
-  # Try v-prefixed tag first, then bare
-  _proposed_sha="$(_gs_eu2_github_get_commit_sha "${_owner_repo}" "v${_best_ver}" 2>/dev/null)" || true
-  if [[ -z "${_proposed_sha}" ]]; then
-    _proposed_sha="$(_gs_eu2_github_get_commit_sha "${_owner_repo}" "${_best_ver}" 2>/dev/null)" || true
-  fi
+  _proposed_sha="$(_gs_eu2_github_get_commit_sha "${_owner_repo}" "HEAD" 2>/dev/null)" || true
 
-  # ── Step 6: Get commit date (hint only — never stored as version) ─────────
-  local _commit_date=""
+  # ── Step 6: Get commit date for HEAD (hint for PECL promotion check) ─────
+  local _commit_date="" _proposed_sha_date=""
   if [[ -n "${_proposed_sha}" ]]; then
     _commit_date="$(_gs_eu2_github_get_commit_date "${_owner_repo}" "${_proposed_sha}" 2>/dev/null)" || true
+    _proposed_sha_date="${_commit_date}"
   fi
 
   # ── Step 7: Check for PECL promotion ─────────────────────────────────────
@@ -291,9 +285,10 @@ _gs_eu2_fetch_pecl_git() {
   fi
 
   # ── Step 8: Write results ─────────────────────────────────────────────────
-  _gs_eu2_record_set "${_idx}" proposed_version "${_best_ver}"
-  _gs_eu2_record_set "${_idx}" proposed_sha     "${_proposed_sha}"
-  _gs_eu2_record_set "${_idx}" commit_date      "${_commit_date}"
+  _gs_eu2_record_set "${_idx}" proposed_version  "${_best_ver}"
+  _gs_eu2_record_set "${_idx}" proposed_sha      "${_proposed_sha}"
+  _gs_eu2_record_set "${_idx}" proposed_sha_date "${_proposed_sha_date}"
+  _gs_eu2_record_set "${_idx}" commit_date       "${_commit_date}"
 
   # Cache: pipe-separated VER|SHA
   if [[ "${_no_cache}" != "true" ]]; then

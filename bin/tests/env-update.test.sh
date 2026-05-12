@@ -343,9 +343,10 @@ t "t04b: urls — 3 URLs" bash -c "
     echo PASS
 "
 
-t "t04c: pecl-ref token" bash -c "
+t "t04c: pecl-ref fixture parses without error (pecl-ref flag removed)" bash -c "
     out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file='${FIXTURES}/pecl-ref.env' 2>&1)
-    echo \"\$out\" | grep -qF 'pecl_ref: event' || { echo \"pecl_ref not found\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'type: pecl-git' || { echo \"type not found; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'pecl_ref: event' && { echo 'pecl_ref still present — was not removed'; echo FAIL; exit 0; }
     echo PASS
 "
 
@@ -1233,7 +1234,7 @@ t "t19j: sha: keyword extracted from annotation into annotation_sha record field
     source '/stack/bin/lib/env-update/core/parse.sh'
     f=\${TMP_DIR}/t19j.env
     sha='aabbccdd1122334455667788990011aabbccdd11'
-    printf '# @todo env-update pecl-git:https://github.com/example/php-ext 1.2.3 sha:%s (pecl-ref:ext)\nGLOBAL_STACK_EXT_VERSION=1.2.3\n' \"\$sha\" > \"\$f\"
+    printf '# @todo env-update pecl-git:https://github.com/example/php-ext 1.2.3 sha:%s\nGLOBAL_STACK_EXT_VERSION=1.2.3\n' \"\$sha\" > \"\$f\"
     _gs_eu2_parse_env_file \"\$f\"
     got=\$(_gs_eu2_record_get 0 annotation_sha)
     [[ \"\$got\" == \"\$sha\" ]] || { echo \"annotation_sha expected '\$sha' got '\$got'\"; echo FAIL; exit 0; }
@@ -1246,7 +1247,7 @@ t "t19k: (use-sha) flag sets use_sha=true on record" bash -c "
     source '/stack/bin/lib/env-update/core/parse.sh'
     f=\${TMP_DIR}/t19k.env
     sha='aabbccdd1122334455667788990011aabbccdd11'
-    printf '# @todo env-update (use-sha) pecl-git:https://github.com/example/php-ext sha:%s (pecl-ref:ext)\nGLOBAL_STACK_EXT_VERSION=%s\n' \"\$sha\" \"\$sha\" > \"\$f\"
+    printf '# @todo env-update (use-sha) pecl-git:https://github.com/example/php-ext sha:%s\nGLOBAL_STACK_EXT_VERSION=%s\n' \"\$sha\" \"\$sha\" > \"\$f\"
     _gs_eu2_parse_env_file \"\$f\"
     got=\$(_gs_eu2_record_get 0 use_sha)
     [[ \"\$got\" == 'true' ]] || { echo \"use_sha expected 'true' got '\$got'\"; echo FAIL; exit 0; }
@@ -1260,7 +1261,7 @@ t "t19l: apply with cur_sha/new_sha updates sha:OLD to sha:NEW in annotation whi
     f=\${TMP_DIR}/t19l.env
     old_sha='aaaa0000bbbb1111cccc2222dddd3333eeee4444'
     new_sha='1111aaaa2222bbbb3333cccc4444dddd5555eeee'
-    ann=\"# @todo env-update pecl-git:https://github.com/example/php-ext 1.0.0 sha:\${old_sha} (pecl-ref:ext)\"
+    ann=\"# @todo env-update pecl-git:https://github.com/example/php-ext 1.0.0 sha:\${old_sha}\"
     printf '%s\nGLOBAL_STACK_EXT_VERSION=1.0.0\n' \"\$ann\" > \"\$f\"
     _gs_eu2_record_new; idx=\$_GS_EU2_LAST_IDX
     _gs_eu2_record_set \$idx env_var          'GLOBAL_STACK_EXT_VERSION'
@@ -1276,7 +1277,7 @@ t "t19l: apply with cur_sha/new_sha updates sha:OLD to sha:NEW in annotation whi
     _gs_eu2_record_set \$idx annotation_sha   \"\$old_sha\"
     _gs_eu2_record_set \$idx proposed_sha     \"\$new_sha\"
     _gs_eu2_record_set \$idx current_version  '2.0.0'
-    ann2=\"# @todo env-update pecl-git:https://github.com/example/php-ext 2.0.0 sha:\${old_sha} (pecl-ref:ext)\"
+    ann2=\"# @todo env-update pecl-git:https://github.com/example/php-ext 2.0.0 sha:\${old_sha}\"
     printf '%s\nGLOBAL_STACK_EXT_VERSION=2.0.0\n' \"\$ann2\" > \"\$f\"
     _gs_eu2_record_set \$idx raw_annotation   \"\$ann2\"
     _gs_eu2_apply_updates \"\$f\" 'false' > /dev/null
@@ -1293,7 +1294,7 @@ t "t19m: apply with use_sha=true writes new_sha to VAR= instead of new version" 
     f=\${TMP_DIR}/t19m.env
     old_sha='aaaa0000bbbb1111cccc2222dddd3333eeee4444'
     new_sha='1111aaaa2222bbbb3333cccc4444dddd5555eeee'
-    ann=\"# @todo env-update (use-sha) pecl-git:https://github.com/example/php-ext sha:\${old_sha} (pecl-ref:ext)\"
+    ann=\"# @todo env-update (use-sha) pecl-git:https://github.com/example/php-ext sha:\${old_sha}\"
     printf '%s\nGLOBAL_STACK_EXT_VERSION=%s\n' \"\$ann\" \"\$old_sha\" > \"\$f\"
     _gs_eu2_record_new; idx=\$_GS_EU2_LAST_IDX
     _gs_eu2_record_set \$idx env_var          'GLOBAL_STACK_EXT_VERSION'
@@ -3993,7 +3994,7 @@ t "t49b: pecl + (git:...) — reuses imagick fixtures, version + SHA both set" b
     echo PASS
 "
 
-t "t49c: pecl + (git:...) where no matching git tag — version set, SHA empty, warning on stderr" bash -c "
+t "t49c: pecl + (git:...) HEAD unreachable — version set, SHA may be empty, no ERROR decision" bash -c "
     ${_PECL_GIT_FLAG_LIBS}
     declare -A _GS_EU2_CFG=([no_cache]=true)
     _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
@@ -4002,16 +4003,13 @@ t "t49c: pecl + (git:...) where no matching git tag — version set, SHA empty, 
     _gs_eu2_record_set \$idx git_repo         'testowner/no-git-tag-repo'
     _gs_eu2_record_set \$idx env_var          'GLOBAL_STACK_PHP_ZMQ_VERSION'
     _gs_eu2_record_set \$idx current_version  '1.1.2'
-    stderr_file=\$(mktemp)
-    _gs_eu2_fetch_pecl \$idx 2>\"\$stderr_file\" || true
+    _gs_eu2_fetch_pecl \$idx 2>/dev/null || true
     ver=\$(_gs_eu2_record_get \$idx proposed_version)
-    sha=\$(_gs_eu2_record_get \$idx proposed_sha)
     dec=\$(_gs_eu2_record_get \$idx decision)
-    stderr_out=\$(cat \"\$stderr_file\"); rm -f \"\$stderr_file\"
-    [[ \"\$ver\" == '1.1.3' ]] || { echo \"expected ver=1.1.3 even when SHA missing, got: '\$ver'\"; echo FAIL; exit 0; }
-    [[ -z \"\$sha\" ]] || { echo \"expected empty SHA when no tag found, got: '\$sha'\"; echo FAIL; exit 0; }
+    # Version must still be proposed (PECL fetch is independent of HEAD SHA fetch)
+    [[ \"\$ver\" == '1.1.3' ]] || { echo \"expected ver=1.1.3 even when HEAD SHA missing, got: '\$ver'\"; echo FAIL; exit 0; }
+    # Decision must not be ERROR — HEAD SHA failure is a soft-fail
     [[ \"\$dec\" != 'ERROR' ]] || { echo 'decision must not be ERROR (soft-fail)'; echo FAIL; exit 0; }
-    printf '%s' \"\$stderr_out\" | grep -q 'no git tag' || { echo \"expected 'no git tag' warning on stderr, got: '\$stderr_out'\"; echo FAIL; exit 0; }
     echo PASS
 "
 
@@ -4108,6 +4106,198 @@ t "t50e: v20260311 → v20260512 via classify_decision → AUTO (not HOLD)" bash
     ${_CD_LIBS50}
     result=\$(_gs_eu2_classify_decision 'v20260311' 'v20260512' '' '' '')
     [[ \"\$result\" == 'AUTO' ]] || { echo \"expected AUTO for YYYYMMDD date bump, got: '\$result'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 51 — SHA decision path (classify_sha_decision, parse annotation_sha_date,
+#               apply SHA-only updates, display [SHA   ] label)
+# ═══════════════════════════════════════════════════════════════════════════
+section "51 — SHA decision path"
+
+_SHA_CORE_LIBS="
+source '/stack/bin/lib/env-update/config/defaults.sh'
+source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update/core/semver.sh'
+source '/stack/bin/lib/env-update/core/records.sh'
+source '/stack/bin/lib/env-update/core/decide.sh'
+"
+
+t "t51a: classify_sha_decision — same SHA returns SKIP" bash -c "
+    ${_SHA_CORE_LIBS}
+    sha='aabbccdd1122334455667788aabbccdd11223344'
+    result=\$(_gs_eu2_classify_sha_decision \"\$sha\" \"\$sha\")
+    [[ \"\$result\" == 'SKIP' ]] || { echo \"expected SKIP for same SHA, got: '\$result'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t51b: classify_sha_decision — different SHAs returns SHA" bash -c "
+    ${_SHA_CORE_LIBS}
+    old='aabbccdd1122334455667788aabbccdd11223344'
+    new='1122334455667788aabbccdd11223344aabbccdd'
+    result=\$(_gs_eu2_classify_sha_decision \"\$old\" \"\$new\")
+    [[ \"\$result\" == 'SHA' ]] || { echo \"expected SHA for different SHAs, got: '\$result'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t51c: classify_sha_decision — empty proposed_sha returns SKIP" bash -c "
+    ${_SHA_CORE_LIBS}
+    result=\$(_gs_eu2_classify_sha_decision 'aabbccdd' '')
+    [[ \"\$result\" == 'SKIP' ]] || { echo \"expected SKIP for empty proposed, got: '\$result'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t51d: classify_sha_decision — empty annotation_sha with non-empty proposed returns SHA" bash -c "
+    ${_SHA_CORE_LIBS}
+    result=\$(_gs_eu2_classify_sha_decision '' 'aabbccdd1122334455667788aabbccdd11223344')
+    [[ \"\$result\" == 'SHA' ]] || { echo \"expected SHA when no annotation SHA, got: '\$result'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t51e: parse sha:HASH (YYYY-MM-DD) — extracts both annotation_sha and annotation_sha_date" bash -c "
+    source '/stack/bin/lib/env-update/config/defaults.sh'
+    source '/stack/bin/lib/env-update/core/records.sh'
+    source '/stack/bin/lib/env-update/core/parse.sh'
+    f=\${TMP_DIR}/t51e.env
+    sha='aabbccdd1122334455667788990011aabbccdd11'
+    date='2026-05-12'
+    printf '# @todo env-update pecl-git:owner/repo 1.2.3 sha:%s (%s)\nGLOBAL_STACK_EXT_VERSION=1.2.3\n' \"\$sha\" \"\$date\" > \"\$f\"
+    _gs_eu2_parse_env_file \"\$f\"
+    got_sha=\$(_gs_eu2_record_get 0 annotation_sha)
+    got_date=\$(_gs_eu2_record_get 0 annotation_sha_date)
+    [[ \"\$got_sha\" == \"\$sha\" ]] || { echo \"annotation_sha: expected '\$sha' got '\$got_sha'\"; echo FAIL; exit 0; }
+    [[ \"\$got_date\" == \"\$date\" ]] || { echo \"annotation_sha_date: expected '\$date' got '\$got_date'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t51f: parse sha:HASH without date — annotation_sha_date empty, version token extracted correctly" bash -c "
+    source '/stack/bin/lib/env-update/config/defaults.sh'
+    source '/stack/bin/lib/env-update/core/records.sh'
+    source '/stack/bin/lib/env-update/core/parse.sh'
+    f=\${TMP_DIR}/t51f.env
+    sha='aabbccdd1122334455667788990011aabbccdd11'
+    printf '# @todo env-update pecl-git:owner/repo 1.2.3 sha:%s\nGLOBAL_STACK_EXT_VERSION=1.2.3\n' \"\$sha\" > \"\$f\"
+    _gs_eu2_parse_env_file \"\$f\"
+    got_sha=\$(_gs_eu2_record_get 0 annotation_sha)
+    got_date=\$(_gs_eu2_record_get 0 annotation_sha_date)
+    got_ver=\$(_gs_eu2_record_get 0 current_version)
+    [[ \"\$got_sha\" == \"\$sha\" ]] || { echo \"annotation_sha: expected '\$sha' got '\$got_sha'\"; echo FAIL; exit 0; }
+    [[ -z \"\$got_date\" ]] || { echo \"annotation_sha_date should be empty, got '\$got_date'\"; echo FAIL; exit 0; }
+    [[ \"\$got_ver\" == '1.2.3' ]] || { echo \"current_version: expected '1.2.3' got '\$got_ver'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t51g: parse sha:HASH (YYYY-MM-DD) — hint after date paren still extracted separately" bash -c "
+    source '/stack/bin/lib/env-update/config/defaults.sh'
+    source '/stack/bin/lib/env-update/core/records.sh'
+    source '/stack/bin/lib/env-update/core/parse.sh'
+    f=\${TMP_DIR}/t51g.env
+    sha='aabbccdd1122334455667788990011aabbccdd11'
+    printf '# @todo env-update pecl-git:owner/repo 1.2.3 sha:%s (2026-05-12) (hint text here)\nGLOBAL_STACK_EXT_VERSION=1.2.3\n' \"\$sha\" > \"\$f\"
+    _gs_eu2_parse_env_file \"\$f\"
+    got_sha=\$(_gs_eu2_record_get 0 annotation_sha)
+    got_date=\$(_gs_eu2_record_get 0 annotation_sha_date)
+    got_hint=\$(_gs_eu2_record_get 0 hint)
+    [[ \"\$got_sha\" == \"\$sha\" ]] || { echo \"annotation_sha mismatch: got '\$got_sha'\"; echo FAIL; exit 0; }
+    [[ \"\$got_date\" == '2026-05-12' ]] || { echo \"annotation_sha_date: expected '2026-05-12' got '\$got_date'\"; echo FAIL; exit 0; }
+    [[ \"\$got_hint\" == 'hint text here' ]] || { echo \"hint: expected 'hint text here' got '\$got_hint'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t51h: apply SHA-only update rewrites sha: in annotation but leaves VAR= untouched" bash -c "
+    source '/stack/bin/lib/env-update/config/defaults.sh'
+    source '/stack/bin/lib/env-update/core/records.sh'
+    source '/stack/bin/lib/env-update/core/apply.sh'
+    f=\${TMP_DIR}/t51h.env
+    old_sha='aaaa0000bbbb1111cccc2222dddd3333eeee4444'
+    new_sha='1111aaaa2222bbbb3333cccc4444dddd5555eeee'
+    new_date='2026-05-12'
+    ann=\"# @todo env-update pecl:apcu (git:krakjoe/apcu) 5.1.24 sha:\${old_sha}\"
+    printf '%s\nGLOBAL_STACK_PHP_APCU_VERSION=5.1.24\n' \"\$ann\" > \"\$f\"
+    _gs_eu2_record_new; idx=\$_GS_EU2_LAST_IDX
+    _gs_eu2_record_set \$idx env_var          'GLOBAL_STACK_PHP_APCU_VERSION'
+    _gs_eu2_record_set \$idx current_version  '5.1.24'
+    _gs_eu2_record_set \$idx raw_annotation   \"\$ann\"
+    _gs_eu2_record_set \$idx annotation_sha   \"\$old_sha\"
+    _gs_eu2_record_set \$idx proposed_sha     \"\$new_sha\"
+    _gs_eu2_record_set \$idx proposed_sha_date \"\$new_date\"
+    _gs_eu2_record_set \$idx decision         'SHA'
+    _gs_eu2_apply_updates \"\$f\" 'false' > /dev/null
+    grep -qF \"sha:\${new_sha} (\${new_date})\" \"\$f\" || { echo \"new sha+date not written; content:\"; cat \"\$f\"; echo FAIL; exit 0; }
+    grep -qF \"sha:\${old_sha}\" \"\$f\" && { echo 'old sha still present'; cat \"\$f\"; echo FAIL; exit 0; }
+    grep -qF 'GLOBAL_STACK_PHP_APCU_VERSION=5.1.24' \"\$f\" || { echo 'VAR= should be unchanged'; cat \"\$f\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t51i: apply SHA-only update with date rewrites sha:HASH (OLD-DATE) to sha:HASH (NEW-DATE)" bash -c "
+    source '/stack/bin/lib/env-update/config/defaults.sh'
+    source '/stack/bin/lib/env-update/core/records.sh'
+    source '/stack/bin/lib/env-update/core/apply.sh'
+    f=\${TMP_DIR}/t51i.env
+    old_sha='aaaa0000bbbb1111cccc2222dddd3333eeee4444'
+    old_date='2026-04-01'
+    new_sha='1111aaaa2222bbbb3333cccc4444dddd5555eeee'
+    new_date='2026-05-12'
+    ann=\"# @todo env-update pecl:apcu (git:krakjoe/apcu) 5.1.24 sha:\${old_sha} (\${old_date})\"
+    printf '%s\nGLOBAL_STACK_PHP_APCU_VERSION=5.1.24\n' \"\$ann\" > \"\$f\"
+    _gs_eu2_record_new; idx=\$_GS_EU2_LAST_IDX
+    _gs_eu2_record_set \$idx env_var            'GLOBAL_STACK_PHP_APCU_VERSION'
+    _gs_eu2_record_set \$idx current_version    '5.1.24'
+    _gs_eu2_record_set \$idx raw_annotation     \"\$ann\"
+    _gs_eu2_record_set \$idx annotation_sha     \"\$old_sha\"
+    _gs_eu2_record_set \$idx annotation_sha_date \"\$old_date\"
+    _gs_eu2_record_set \$idx proposed_sha       \"\$new_sha\"
+    _gs_eu2_record_set \$idx proposed_sha_date  \"\$new_date\"
+    _gs_eu2_record_set \$idx decision           'SHA'
+    _gs_eu2_apply_updates \"\$f\" 'false' > /dev/null
+    grep -qF \"sha:\${new_sha} (\${new_date})\" \"\$f\" || { echo \"new sha+date not written; content:\"; cat \"\$f\"; echo FAIL; exit 0; }
+    grep -qF \"\${old_sha}\" \"\$f\" && { echo 'old sha still present'; cat \"\$f\"; echo FAIL; exit 0; }
+    grep -qF \"\${old_date}\" \"\$f\" && { echo 'old date still present'; cat \"\$f\"; echo FAIL; exit 0; }
+    grep -qF 'GLOBAL_STACK_PHP_APCU_VERSION=5.1.24' \"\$f\" || { echo 'VAR= should be unchanged'; cat \"\$f\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t51j: (pecl-ref:ext) no longer sets pecl_ref field — treated as hint (passthrough)" bash -c "
+    source '/stack/bin/lib/env-update/config/defaults.sh'
+    source '/stack/bin/lib/env-update/core/records.sh'
+    source '/stack/bin/lib/env-update/core/parse.sh'
+    f=\${TMP_DIR}/t51j.env
+    printf '# @todo env-update pecl-git:owner/repo 1.0.0 (pecl-ref:ext)\nGLOBAL_STACK_EXT_VERSION=1.0.0\n' > \"\$f\"
+    _gs_eu2_parse_env_file \"\$f\"
+    # pecl_ref field must be empty (flag no longer hoisted or dispatched)
+    got_pecl_ref=\$(_gs_eu2_record_get 0 pecl_ref)
+    [[ -z \"\$got_pecl_ref\" ]] || { echo \"pecl_ref should be empty, got '\$got_pecl_ref'\"; echo FAIL; exit 0; }
+    # The paren group passes through as a hint instead
+    got_hint=\$(_gs_eu2_record_get 0 hint)
+    [[ \"\$got_hint\" == 'pecl-ref:ext' ]] || { echo \"expected hint='pecl-ref:ext', got '\$got_hint'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t51k: AUTO version update also rewrites sha: in annotation with new date" bash -c "
+    source '/stack/bin/lib/env-update/config/defaults.sh'
+    source '/stack/bin/lib/env-update/core/records.sh'
+    source '/stack/bin/lib/env-update/core/apply.sh'
+    f=\${TMP_DIR}/t51k.env
+    old_sha='aaaa0000bbbb1111cccc2222dddd3333eeee4444'
+    old_date='2026-04-01'
+    new_sha='1111aaaa2222bbbb3333cccc4444dddd5555eeee'
+    new_date='2026-05-12'
+    ann=\"# @todo env-update pecl:apcu (git:krakjoe/apcu) 5.1.23 sha:\${old_sha} (\${old_date})\"
+    printf '%s\nGLOBAL_STACK_PHP_APCU_VERSION=5.1.23\n' \"\$ann\" > \"\$f\"
+    _gs_eu2_record_new; idx=\$_GS_EU2_LAST_IDX
+    _gs_eu2_record_set \$idx env_var            'GLOBAL_STACK_PHP_APCU_VERSION'
+    _gs_eu2_record_set \$idx current_version    '5.1.23'
+    _gs_eu2_record_set \$idx proposed_version   '5.1.24'
+    _gs_eu2_record_set \$idx raw_annotation     \"\$ann\"
+    _gs_eu2_record_set \$idx annotation_sha     \"\$old_sha\"
+    _gs_eu2_record_set \$idx annotation_sha_date \"\$old_date\"
+    _gs_eu2_record_set \$idx proposed_sha       \"\$new_sha\"
+    _gs_eu2_record_set \$idx proposed_sha_date  \"\$new_date\"
+    _gs_eu2_record_set \$idx decision           'AUTO'
+    _gs_eu2_apply_updates \"\$f\" 'false' > /dev/null
+    grep -qF 'GLOBAL_STACK_PHP_APCU_VERSION=5.1.24' \"\$f\" || { echo 'version not updated'; cat \"\$f\"; echo FAIL; exit 0; }
+    grep -qF \"sha:\${new_sha} (\${new_date})\" \"\$f\" || { echo 'new sha+date not written'; cat \"\$f\"; echo FAIL; exit 0; }
+    grep -qF \"\${old_sha}\" \"\$f\" && { echo 'old sha still present'; cat \"\$f\"; echo FAIL; exit 0; }
     echo PASS
 "
 

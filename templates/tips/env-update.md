@@ -230,12 +230,6 @@ After the pipeline, channel selection picks the best remaining version.
 | `(url-probe:PATHS)` | `url_probe` | Tier 5 | Comma-separated path templates to probe. Templates support `{codename}` (Ubuntu codename like `noble`) and `{codename-version}` (Ubuntu version like `24.04`). The fetcher probes from newest Ubuntu codename to oldest, stopping at the first 2xx/3xx response. |
 | `(url-probe-depth:N)` | `url_probe_depth` | Tier 5 | Maximum number of codenames to probe backward. Default: 6. |
 
-### Valued flags — PECL-specific
-
-| Flag | Record field | Description |
-|------|-------------|---|
-| `(pecl-ref:EXT_NAME)` | `pecl_ref` | **Deprecated.** Override the auto-derived PECL extension name for `pecl-git` annotations. Kept for backward compatibility — all new annotations should use `pecl:EXT_NAME (git:owner/repo)` instead (see [§7.12](#712-pecl)). |
-
 ### Valued flags — dependency tracking
 
 | Flag | Record field | Description |
@@ -775,16 +769,17 @@ See also [Section 10 (Extended)](#10-pecl-git-fetcher--extended) for full detail
 
 **Merge mode and version-gap fix:** Supports `(check-tags)` and `--with-tags` exactly as the `github` fetcher does. When active, always fetches both the Releases API and Tags API and merges the candidate pools. The automatic version-gap fix (proposed < current → auto-check tags) also applies.
 
-**PECL extension name derivation:** Strips `php-`, `php_`, or `ext-` prefix from the repo name (lowercase). Override with `(pecl-ref:NAME)` (**deprecated** — for extensions on PECL, migrate to `pecl:NAME (git:owner/repo)` instead; see [§7.12](#712-pecl)).
+**PECL extension name derivation:** Strips `php-`, `php_`, or `ext-` prefix from the repo name (lowercase). If auto-derivation is wrong, migrate to `pecl:NAME (git:owner/repo)` instead (see [§7.12](#712-pecl)).
 
 **`proposed_version`:** The semver release tag (v-prefix stripped, e.g. `6.3.0`).
-**`proposed_sha`:** Full commit SHA for the release tag (may be empty if the SHA lookup fails).
-**`commit_date`:** YYYY-MM-DD date of the release commit (stored in record, not written to `.env`).
+**`proposed_sha`:** Full commit SHA for HEAD (always HEAD, not the tagged SHA — supports PHP master workflows). May be empty if the GitHub API is unreachable.
+**`proposed_sha_date`:** YYYY-MM-DD date of the HEAD commit (stored in record; written to annotation as `sha:HASH (YYYY-MM-DD)` by `--apply`).
+**`commit_date`:** Same as `proposed_sha_date` — YYYY-MM-DD date of HEAD (used for PECL promotion check).
 **`alt_version`:** If a newer stable PECL release exists (i.e., `pecl_release_date > commit_date`), set to `"PECL stable available: VERSION — consider switching to pecl:EXTNAME"`.
 
 **`use_sha` flag:** When `(use-sha)` is present, `--apply` writes `proposed_sha` to the variable instead of `proposed_version`.
 
-**Cache key:** `pecl-git3:owner/repo` (the `3` suffix was bumped to invalidate stale YYYYMMDD-sha8 cached values from prior versions).
+**Cache key:** `pecl-git4:owner/repo` (the `4` suffix was bumped to switch from tag SHA to HEAD SHA).
 
 **Auth:** Reads `GITHUB_TOKEN` or `GLOBAL_STACK_GITHUB_TOKEN`.
 
@@ -1066,8 +1061,8 @@ GLOBAL_STACK_GOTOSOCIAL_VERSION=0.17.3
 ### 7.12 pecl
 
 The `pecl` type uses PECL as the authoritative version source. It replaces the old
-`(pecl-ref:ext) pecl-git:owner/repo` two-annotation pattern for PHP extensions that have
-stable PECL releases and optionally a GitHub repo for SHA tracking.
+`pecl-git:owner/repo` pattern for PHP extensions that have stable PECL releases and
+optionally a GitHub repo for HEAD SHA tracking.
 
 **Annotation pattern:**
 ```bash
@@ -1078,15 +1073,14 @@ GLOBAL_STACK_PHP_DEFAULT_ZMQ_VERSION=
 GLOBAL_STACK_PHP_DEFAULT_IMAGICK_VERSION=3.8.0
 ```
 
-**`(git:owner/repo)` flag (optional):** when set, fetches the commit SHA for the
-version tag (`v{ver}` then `{ver}`) from GitHub after PECL returns the version. If no
-matching tag exists, a warning is printed to stderr but the version update is not blocked
-(soft-fail). The SHA is written to `proposed_sha` and used by `--apply` to update the
-`sha:` field in the annotation.
+**`(git:owner/repo)` flag (optional):** when set, fetches the HEAD commit SHA from GitHub
+after PECL returns the version. HEAD is always used (not the tagged SHA) so the annotation
+stays current for PHP master workflows. If the GitHub API is unreachable, the SHA is empty
+but the version update is not blocked (soft-fail).
 
 **Decision matrix:**
-- PECL has stable release, git tag found → `proposed_version` + `proposed_sha`
-- PECL has stable release, no git tag → `proposed_version` only, warning to stderr
+- PECL has stable release, HEAD SHA fetched → `proposed_version` + `proposed_sha` + `proposed_sha_date`
+- PECL has stable release, HEAD unreachable → `proposed_version` only (no SHA)
 - No PECL stable release → `decision=ERROR`
 
 **When to use which pattern:**
@@ -1296,7 +1290,7 @@ The fetcher automatically derives the PECL extension name from the repo name:
 4. If no match: strip `ext-` prefix
 5. If no match: use the repo name as-is
 
-Override with `(pecl-ref:EXT_NAME)` when auto-derivation is wrong.
+If auto-derivation is wrong, migrate the annotation to `pecl:EXT_NAME (git:owner/repo)` where `EXT_NAME` is the correct PECL extension name.
 
 Examples:
 - `php-event` → `event`
@@ -1377,8 +1371,8 @@ specific commit rather than a semver tag).
 # @todo env-update pecl-git:krakjoe/parallel 1.2.2
 GLOBAL_STACK_PHP_PARALLEL_VERSION=1.2.2
 
-# With explicit PECL extension name (repo is php-event, extension is event)
-# @todo env-update (pecl-ref:event) pecl-git:mkoppanen/php-event 3.1.4
+# For extensions where name auto-derivation works: use pecl: type instead
+# @todo env-update pecl:event (git:mkoppanen/php-event) 3.1.4
 GLOBAL_STACK_PHP_EVENT_VERSION=3.1.4
 
 # SHA tracking (variable stores a commit SHA)
