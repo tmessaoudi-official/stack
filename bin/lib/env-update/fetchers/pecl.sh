@@ -39,12 +39,17 @@ _gs_eu2_pecl_fetch_allreleases() {
 _gs_eu2_pecl_parse_stable() {
   local _xml="${1}"
   # Extract all v:s pairs; keep only stable entries; sort and pick highest.
+  # Two pipefail hazards absorbed with || true:
+  #   1. grep exits 1 when no <v>...</v><s>...</s> pairs are found at all.
+  #   2. The while body's last iteration may exit 1 when the stability check
+  #      is false (non-stable release) — the [[ ]] && printf pattern leaves
+  #      exit code 1 as the last command result, which pipefail propagates.
   printf '%s' "${_xml}" \
-    | grep -oE '<v>[^<]+</v><s>[^<]+</s>' \
+    | { grep -oE '<v>[^<]+</v><s>[^<]+</s>' || true; } \
     | sed 's|<v>\([^<]*\)</v><s>\([^<]*\)</s>|\1:\2|g' \
     2>/dev/null \
     | while IFS=: read -r _ver _stab; do
-        [[ "${_stab,,}" == "stable" ]] && printf '%s\n' "${_ver}"
+        [[ "${_stab,,}" == "stable" ]] && printf '%s\n' "${_ver}" || true
       done \
     | sort -V | tail -1
 }
