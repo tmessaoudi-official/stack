@@ -186,7 +186,23 @@ _gs_eu2_fetch_pecl_git() {
     return 0
   fi
 
-  # ── Step 4: Sort descending, take best ───────────────────────────────────
+  # ── Step 4: Digit-preference filter + sort descending, take best ─────────
+  # GNU sort -V places letter-prefixed strings (PHP_ZIP-1.12.1, RELEASE_3_3_0)
+  # AFTER digit-starting strings, so tail -1 would pick them over clean semver.
+  # Partition: digit-starting candidates win outright; fall back only when zero.
+  local _dig_candidates=() _let_candidates=() _c4
+  for _c4 in "${_candidates[@]}"; do
+    if [[ "${_c4}" =~ ^[0-9] ]]; then
+      _dig_candidates+=("${_c4}")
+    else
+      _let_candidates+=("${_c4}")
+    fi
+  done
+  if [[ ${#_dig_candidates[@]} -gt 0 ]]; then
+    _candidates=("${_dig_candidates[@]}")
+  else
+    _candidates=("${_let_candidates[@]+"${_let_candidates[@]}"}")
+  fi
   local _best_ver
   _best_ver="$(printf '%s\n' "${_candidates[@]}" | sort -V | tail -1)"
 
@@ -226,6 +242,17 @@ _gs_eu2_fetch_pecl_git() {
             _gap_candidates=("${_maj_gap[@]+"${_maj_gap[@]}"}")
           fi
           if [[ ${#_gap_candidates[@]} -gt 0 ]]; then
+            # Same digit-preference filter as Step 4 — letter-prefixed tags must not win.
+            local _gdg=() _glt=() _gc3
+            for _gc3 in "${_gap_candidates[@]}"; do
+              if [[ "${_gc3}" =~ ^[0-9] ]]; then
+                _gdg+=("${_gc3}")
+              else
+                _glt+=("${_gc3}")
+              fi
+            done
+            [[ ${#_gdg[@]} -gt 0 ]] && _gap_candidates=("${_gdg[@]}") \
+              || _gap_candidates=("${_glt[@]+"${_glt[@]}"}")
             local _gap_best
             _gap_best="$(printf '%s\n' "${_gap_candidates[@]}" | sort -V | tail -1)"
             local _oldest2

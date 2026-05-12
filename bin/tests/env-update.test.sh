@@ -3884,6 +3884,62 @@ t "t47c: type:pecl unknown extension — ERROR decision not SKIP fallback" bash 
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Section 48 — pecl_git digit-preference filter
+# ═══════════════════════════════════════════════════════════════════════════
+section "48 — pecl_git digit-preference filter"
+
+_PECLGIT_LIBS48="
+source '/stack/bin/lib/env-update/config/defaults.sh'
+source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update/core/records.sh'
+source '/stack/bin/lib/env-update/core/semver.sh'
+source '/stack/bin/lib/env-update/core/channel.sh'
+source '/stack/bin/lib/env-update/core/tag_flags.sh'
+source '/stack/bin/lib/env-update/core/cache.sh'
+source '/stack/bin/lib/env-update/http/curl.sh'
+source '/stack/bin/lib/env-update/fetchers/github.sh'
+source '/stack/bin/lib/env-update/fetchers/pecl.sh'
+source '/stack/bin/lib/env-update/fetchers/pecl_git.sh'
+export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+"
+
+t "t48a: mixed tags — digit-prefixed wins over letter-prefixed (sort -V bug prevented)" bash -c "
+    ${_PECLGIT_LIBS48}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/peclgit48a_cache
+    declare -A _GS_EU2_CFG=([no_cache]=true)
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type             'pecl-git'
+    _gs_eu2_record_set \$idx identifier       'testowner/mixed-tags-repo'
+    _gs_eu2_record_set \$idx env_var          'GLOBAL_STACK_PHP_ZIP_VERSION'
+    _gs_eu2_record_set \$idx current_version  '1.0.0'
+    _gs_eu2_fetch_pecl_git \$idx 2>/dev/null || true
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    # fixture releases: 1.22.8, PHP_ZIP-1.12.1, 1.0.0
+    # Without fix: sort -V picks PHP_ZIP-1.12.1 (letter-prefixed sorts last)
+    # With fix:    digit-preference filter discards PHP_ZIP-1.12.1 → 1.22.8 wins
+    [[ \"\$val\" == '1.22.8' ]] || { echo \"expected 1.22.8 (digit-prefixed), got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t48b: all-letter tags — letter-prefixed fallback still produces a result" bash -c "
+    ${_PECLGIT_LIBS48}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/peclgit48b_cache
+    declare -A _GS_EU2_CFG=([no_cache]=true)
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    # testowner/tags-only-repo releases fixture returns [] (empty); tags fixture has
+    # digit-only candidates → still picks highest digit version
+    _gs_eu2_record_set \$idx type             'pecl-git'
+    _gs_eu2_record_set \$idx identifier       'testowner/tags-only-repo'
+    _gs_eu2_record_set \$idx env_var          'GLOBAL_STACK_TEST_VER48B'
+    _gs_eu2_record_set \$idx current_version  '2.0.0'
+    _gs_eu2_fetch_pecl_git \$idx 2>/dev/null || true
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    # fixture tags: 3.1.0, 3.0.2, 3.0.1, 3.0.0 (all digit-starting) → 3.1.0
+    [[ \"\$val\" == '3.1.0' ]] || { echo \"expected 3.1.0 (all-digit tags), got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section

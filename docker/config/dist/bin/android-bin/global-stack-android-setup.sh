@@ -22,7 +22,7 @@ sudo chmod -R a+rwx "${ANDROID_HOME}" "${ANDROID_SDK_HOME}" "${ANDROID_SDK_ROOT}
 sudo chown -R "${GLOBAL_STACK_DOCKER_USER_ID}":"${GLOBAL_STACK_DOCKER_GROUP_ID}" "${ANDROID_HOME}" "${ANDROID_SDK_HOME}" "${ANDROID_SDK_ROOT}" "${GRADLE_USER_HOME}"
 ## Installs Android SDK
 cd "${ANDROID_HOME}"
-curl -fsSL -o "${ANDROID_HOME}/tools.zip" "${GLOBAL_STACK_ANDROID_SDK_URL}"
+curl -fsSL -o "${ANDROID_HOME}/tools.zip" "https://dl.google.com/android/repository/commandlinetools-linux-${GLOBAL_STACK_ANDROID_SDK_URL}_latest.zip"
 unzip "${ANDROID_HOME}/tools.zip" && rm "${ANDROID_HOME}/tools.zip"
 # Download tools
 # @todo fix version not found !!! "platform-tools;${GLOBAL_STACK_ANDROID_PLATFORM_TOOLS_VERSION}" "ndk-bundle;${GLOBAL_STACK_ANDROID_NDK_BUNDLE_VERSION}" "ndk;${GLOBAL_STACK_ANDROID_NDK_VERSION}"
