@@ -26,7 +26,8 @@ _gs_eu2_record_fields() {
     hint note line_number raw_annotation \
     proposed_version decision error_message alt_version \
     annotation_sha proposed_sha use_sha commit_date \
-    proposed_sha_date annotation_sha_date
+    proposed_sha_date annotation_sha_date \
+    unstable_proposed
 }
 
 # Allocate next record index.

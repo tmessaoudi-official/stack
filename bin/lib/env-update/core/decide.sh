@@ -16,7 +16,8 @@ source "$(dirname "${BASH_SOURCE[0]}")/semver.sh"
 #   $5 major_hint   — if set, proposed must stay within this major
 # Echoes: AUTO | HOLD | MANUAL | SKIP
 _gs_eu2_classify_decision() {
-  local _cur="${1}" _prop="${2}" _override="${3:-}" _manual="${4:-}" _major_hint="${5:-}"
+  local _cur="${1}" _prop="${2}" _override="${3:-}" _manual="${4:-}" _major_hint="${5:-}" \
+        _unstable_mode="${6:-}"
 
   # No proposed version → skip
   [[ -z "${_prop}" ]] && { echo "SKIP"; return 0; }
@@ -38,7 +39,9 @@ _gs_eu2_classify_decision() {
 
   # Prerelease guard: don't auto-propose a prerelease when current is stable.
   # Handles both dash-separated (6.3.0-rc1) and no-dash (6.3.0RC1) formats.
-  if _gs_eu2_is_prerelease "${_prop}" && ! _gs_eu2_is_prerelease "${_cur}"; then
+  # Bypassed when unstable_mode=full (user explicitly opted in to prerelease tracking).
+  if [[ "${_unstable_mode}" != "full" ]] && \
+     _gs_eu2_is_prerelease "${_prop}" && ! _gs_eu2_is_prerelease "${_cur}"; then
     echo "SKIP"; return 0
   fi
 

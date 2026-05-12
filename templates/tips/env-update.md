@@ -259,6 +259,8 @@ bin/env-update.sh [OPTIONS]
 | `--no-cache` | off | Bypass the flat-file cache entirely. Every fetch goes to the network. Cache reads return miss; cache writes are skipped. |
 | `--cache-ttl=N` | `3600` | Override the cache TTL in seconds. Must be a positive integer or zero (`0` = all cache entries treated as expired). |
 | `--with-tags` | off | For every `github:` and `pecl-git:` record in the run, always fetch both the Releases API and the Tags API and merge the candidate pools. Same effect as adding `(check-tags)` to every annotation, but applies globally for one run. Use when you suspect any repo in the batch may have released via tags only. Complements the automatic [version-gap fix](#version-gap-fix); this flag ensures the merged pool is used for all repos without waiting for a gap to be detected. |
+| `--unstable` / `--unstable=full` | off | **Full unstable mode.** Forces `channel=unstable` on every record that does not already have an explicit non-stable channel in its annotation. Fetchers return the highest prerelease as the proposed candidate. The prerelease guard in `decide.sh` is bypassed: `stable current + prerelease proposed` classifies as `AUTO` (not `SKIP`). `(manual)` and `(hold)` flags are still respected. Use when you want to track prerelease versions globally for a run. Accepts both `--unstable` (bare) and `--unstable=full`. |
+| `--unstable=info` | off | **Informational unstable mode.** Does NOT change `AUTO`/`HOLD`/`SKIP` decision logic and does NOT bypass the prerelease guard. After each fetch, performs a second pass (cache hit — no extra HTTP) with `channel=unstable` to discover what the latest prerelease would be. When a prerelease version is found that differs from the stable proposed version, it is shown as a `↳ [INFO] unstable: <version>` sub-line under the main decision line. Use when you want a heads-up about available prereleases without committing to tracking them. |
 
 ### Flag combinations and mutual exclusivity
 
@@ -286,6 +288,11 @@ bin/env-update.sh --dump --format=json | jq .      # machine-readable records
 bin/env-update.sh --check --filter=POSTGRES        # only GLOBAL_STACK_POSTGRES* vars
 bin/env-update.sh --check --filter=type:github     # only github-type fetchers
 bin/env-update.sh --check --no-cache               # force fresh fetch
+
+# Unstable / prerelease tracking
+bin/env-update.sh --unstable --check               # full unstable: propose prereleases as AUTO
+bin/env-update.sh --unstable --check --filter=NODE # unstable only for NODE vars
+bin/env-update.sh --unstable=info --check          # info mode: show unstable as sub-line only
 
 # Tag-ahead audit
 bin/env-update.sh --check --with-tags              # merge releases+tags for all github/pecl-git repos

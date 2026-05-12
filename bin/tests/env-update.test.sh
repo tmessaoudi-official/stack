@@ -4342,6 +4342,110 @@ t "t51k: AUTO version update also rewrites sha: in annotation with new date" bas
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Section 52 — --unstable flag (full / info modes)
+# ═══════════════════════════════════════════════════════════════════════════
+section "52 — --unstable flag"
+
+_DC_LIBS52="
+source '/stack/bin/lib/env-update/config/defaults.sh'
+source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update/core/semver.sh'
+source '/stack/bin/lib/env-update/core/decide.sh'
+"
+
+# t52a: --unstable is accepted as a valid flag (no exit 1 for unknown option)
+t "t52a: --unstable flag accepted (no unknown-option error)" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/chk52a
+    err=\$(bash '${ENV_UPDATE_V2}' --unstable --check \
+        --env-file='${FIXTURES}/basic-dockerhub.env' 2>&1 >/dev/null || true)
+    echo \"\$err\" | grep -qi 'unknown option' && { echo \"--unstable rejected as unknown option\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t52b: classify_decision with unstable_mode=full bypasses prerelease guard
+#       stable current (1.2.3) + prerelease proposed (1.3.0-rc1) → AUTO (not SKIP)
+t "t52b: unstable full mode: stable→prerelease classified AUTO (prerelease guard bypassed)" bash -c "
+    ${_DC_LIBS52}
+    result=\$(_gs_eu2_classify_decision '1.2.3' '1.3.0-rc1' '' '' '' 'full')
+    [[ \"\$result\" == 'AUTO' ]] || { echo \"expected AUTO for stable→rc1 with unstable=full, got: '\$result'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t52c: classify_decision with unstable_mode=full still respects manual flag → MANUAL
+t "t52c: unstable full mode: manual flag still forces MANUAL" bash -c "
+    ${_DC_LIBS52}
+    result=\$(_gs_eu2_classify_decision '1.2.3' '1.3.0-rc1' '' 'true' '' 'full')
+    [[ \"\$result\" == 'MANUAL' ]] || { echo \"expected MANUAL for manual+unstable=full, got: '\$result'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t52d: classify_decision with unstable_mode=full still respects override flag → MANUAL
+t "t52d: unstable full mode: override flag still forces MANUAL" bash -c "
+    ${_DC_LIBS52}
+    result=\$(_gs_eu2_classify_decision '1.2.3' '1.3.0-rc1' 'true' '' '' 'full')
+    [[ \"\$result\" == 'MANUAL' ]] || { echo \"expected MANUAL for override+unstable=full, got: '\$result'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t52e: classify_decision without unstable mode still SKIPs stable→prerelease (regression guard)
+t "t52e: without unstable mode: stable→prerelease still SKIP (regression guard)" bash -c "
+    ${_DC_LIBS52}
+    result=\$(_gs_eu2_classify_decision '1.2.3' '1.3.0-rc1' '' '' '')
+    [[ \"\$result\" == 'SKIP' ]] || { echo \"expected SKIP without unstable mode, got: '\$result'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t52f: --unstable=info is accepted as a valid flag value
+t "t52f: --unstable=info flag accepted (no unknown-option error)" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/chk52f
+    err=\$(bash '${ENV_UPDATE_V2}' --unstable=info --check \
+        --env-file='${FIXTURES}/basic-dockerhub.env' 2>&1 >/dev/null || true)
+    echo \"\$err\" | grep -qi 'unknown option' && { echo \"--unstable=info rejected as unknown option\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t52g: --unstable with invalid value fails with a helpful error
+t "t52g: --unstable=bogus exits with error message" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/chk52g
+    err=\$(bash '${ENV_UPDATE_V2}' --unstable=bogus --check \
+        --env-file='${FIXTURES}/basic-dockerhub.env' 2>&1 || true)
+    echo \"\$err\" | grep -qi 'bogus\|invalid\|unstable' || { echo \"expected error for bogus unstable value; got: '\$err'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t52h: --unstable full mode injects channel=unstable for records with no channel set.
+#        We verify via --dump that channel field becomes 'unstable'.
+t "t52h: --unstable full mode sets channel=unstable on records without annotation channel" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/chk52h
+    out=\$(bash '${ENV_UPDATE_V2}' --unstable --dump --format=text \
+        --env-file='${FIXTURES}/basic-dockerhub.env' 2>/dev/null)
+    # The dump text output shows 'channel: unstable' (or the field is present with value)
+    echo \"\$out\" | grep -qi 'unstable' || { echo \"expected 'unstable' in dump output; got: '\$out'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t52i: --unstable=info mode does NOT change classify_decision output (SKIP stays SKIP)
+t "t52i: unstable info mode: stable→prerelease still SKIP (no bypass)" bash -c "
+    ${_DC_LIBS52}
+    result=\$(_gs_eu2_classify_decision '1.2.3' '1.3.0-rc1' '' '' '' 'info')
+    [[ \"\$result\" == 'SKIP' ]] || { echo \"expected SKIP for info mode (no bypass), got: '\$result'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t52j: --unstable full mode: stable current + alpha proposed with major bump → HOLD (not bypassed)
+#        Major guard must still apply even in unstable mode.
+t "t52j: unstable full mode: major jump + prerelease proposed → HOLD (major guard unchanged)" bash -c "
+    ${_DC_LIBS52}
+    result=\$(_gs_eu2_classify_decision '1.0.0' '2.0.0-alpha1' '' '' '' 'full')
+    [[ \"\$result\" == 'HOLD' ]] || { echo \"expected HOLD for major+prerelease unstable=full (no major_hint), got: '\$result'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section

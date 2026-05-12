@@ -104,6 +104,56 @@ _gs_eu2_run_check() {
         ;;
     esac
 
+    # --unstable=info second-pass: temporarily swap channel→unstable, re-run the
+    # same fetcher (cache hit — no extra HTTP), capture proposed as unstable_proposed,
+    # then restore proposed_version and decision to pre-pass values.
+    # Only runs when: unstable=info, record channel is not already unstable,
+    # and the fetcher type supports channel selection (github/dockerhub/quay/npm/…).
+    if [[ "${_GS_EU2_CFG[unstable]:-}" == "info" ]]; then
+      local _info_chan
+      _info_chan="$(_gs_eu2_record_get "${_i}" channel)"
+      if [[ "${_info_chan}" != "unstable" ]]; then
+        # Save state (all fields that fetchers may overwrite during the second pass)
+        local _saved_prop _saved_decision _saved_chan _saved_err
+        _saved_prop="$(_gs_eu2_record_get "${_i}" proposed_version)"
+        _saved_decision="$(_gs_eu2_record_get "${_i}" decision)"
+        _saved_err="$(_gs_eu2_record_get "${_i}" error_message)"
+        _saved_chan="${_info_chan}"
+        # Temporarily set channel=unstable and re-run fetcher
+        _gs_eu2_record_set "${_i}" channel "unstable"
+        _gs_eu2_record_set "${_i}" proposed_version ""
+        _gs_eu2_record_set "${_i}" decision ""
+        _gs_eu2_record_set "${_i}" error_message ""
+        case "${_type}" in
+          codeberg)  _gs_eu2_fetch_codeberg  "${_i}" ;;
+          dockerhub) _gs_eu2_fetch_dockerhub "${_i}" ;;
+          github)    _gs_eu2_fetch_github    "${_i}" ;;
+          quay)      _gs_eu2_fetch_quay      "${_i}" ;;
+          npm)        _gs_eu2_fetch_npm        "${_i}" ;;
+          pypi)       _gs_eu2_fetch_pypi       "${_i}" ;;
+          rubygems)   _gs_eu2_fetch_rubygems   "${_i}" ;;
+          sdkman)     _gs_eu2_fetch_sdkman     "${_i}" ;;
+          sdkmanager) _gs_eu2_fetch_sdkmanager "${_i}" ;;
+          pecl)       _gs_eu2_fetch_pecl       "${_i}" ;;
+          pecl-git)   _gs_eu2_fetch_pecl_git   "${_i}" ;;
+          url)        _gs_eu2_fetch_url        "${_i}" ;;
+        esac
+        local _unstable_ver
+        _unstable_ver="$(_gs_eu2_record_get "${_i}" proposed_version)"
+        # Restore original state (including error_message to avoid info-pass errors bleeding through)
+        _gs_eu2_record_set "${_i}" channel "${_saved_chan}"
+        _gs_eu2_record_set "${_i}" proposed_version "${_saved_prop}"
+        _gs_eu2_record_set "${_i}" decision "${_saved_decision}"
+        _gs_eu2_record_set "${_i}" error_message "${_saved_err}"
+        # Store unstable_proposed only if it's a prerelease, different from stable proposed,
+        # and different from current (something actually new to show)
+        if [[ -n "${_unstable_ver}" && "${_unstable_ver}" != "${_saved_prop}" ]] && \
+           _gs_eu2_is_prerelease "${_unstable_ver}"; then
+          _gs_eu2_record_set "${_i}" unstable_proposed "${_unstable_ver}"
+        fi
+      fi
+    fi
+
     # Apply decision classifier (refines any AUTO decision the fetcher set)
     local _cur _prop _override _manual _major _note _fetcher_decision
     _cur="$(_gs_eu2_record_get "${_i}" current_version)"
@@ -116,7 +166,7 @@ _gs_eu2_run_check() {
 
     if [[ "${_fetcher_decision}" == "AUTO" || -z "${_fetcher_decision}" ]]; then
       local _classified
-      _classified="$(_gs_eu2_classify_decision "${_cur}" "${_prop}" "${_override}" "${_manual}" "${_major}")"
+      _classified="$(_gs_eu2_classify_decision "${_cur}" "${_prop}" "${_override}" "${_manual}" "${_major}" "${_GS_EU2_CFG[unstable]:-}")"
       _gs_eu2_record_set "${_i}" decision "${_classified}"
     fi
 
@@ -242,6 +292,17 @@ _gs_eu2_run_check() {
         printf '%10s↳ %s\n' "" "${_sha_sub}"
       fi
     fi
+
+    # --unstable=info sub-line: show what the unstable version would be (informational only).
+    # Only shown when: unstable=info mode, unstable_proposed is set, and it differs from
+    # both the stable proposed_version and the current version.
+    if [[ "${_GS_EU2_CFG[unstable]:-}" == "info" ]]; then
+      local _unstable_disp
+      _unstable_disp="$(_gs_eu2_record_get "${_i}" unstable_proposed)"
+      if [[ -n "${_unstable_disp}" && "${_unstable_disp}" != "${_cur}" ]]; then
+        printf '%10s↳ [INFO] unstable: %s\n' "" "${_unstable_disp}"
+      fi
+    fi
   done
 
   local _total=$(( _n_auto + _n_hold + _n_skip + _n_error + _n_manual + _n_sha ))
@@ -294,6 +355,23 @@ _gs_eu2_main() {
   fi
 
   _gs_eu2_parse_env_file "${_env_file}" "${_GS_EU2_CFG[filter]}"
+
+  # --unstable full: inject channel=unstable on records that don't already have it.
+  # This causes fetchers to return the highest prerelease as proposed_version, and
+  # classify_decision will promote stable→prerelease to AUTO (prerelease guard bypassed).
+  # Note: --unstable=info does NOT inject here — it does a separate second-pass fetch
+  # after each record to populate unstable_proposed without touching the main decision.
+  if [[ "${_GS_EU2_CFG[unstable]:-}" == "full" ]]; then
+    local _uc _ucount
+    _ucount="$(_gs_eu2_record_count)"
+    for (( _uc = 0; _uc < _ucount; _uc++ )); do
+      local _existing_channel
+      _existing_channel="$(_gs_eu2_record_get "${_uc}" channel)"
+      if [[ -z "${_existing_channel}" || "${_existing_channel}" == "stable" ]]; then
+        _gs_eu2_record_set "${_uc}" channel "unstable"
+      fi
+    done
+  fi
 
   if [[ "true" == "${_GS_EU2_CFG[dump]}" ]]; then
     _gs_eu2_dump_records "${_GS_EU2_CFG[format]}"
