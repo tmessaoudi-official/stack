@@ -4060,6 +4060,58 @@ t "t49f: parse — (git:) without slash exits non-zero (invalid format)" bash -c
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Section 50 — semver_delta YYYYMMDD-only date stamps → patch (not major)
+# ═══════════════════════════════════════════════════════════════════════════
+section "50 — semver_delta pure-date stamps (YYYYMMDD/YYYYMM)"
+
+_SV_LIBS50="
+source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update/core/semver.sh'
+"
+
+_CD_LIBS50="
+source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update/core/semver.sh'
+source '/stack/bin/lib/env-update/core/decide.sh'
+"
+
+t "t50a: v20260311 → v20260512 (YYYYMMDD with v-prefix) → patch" bash -c "
+    ${_SV_LIBS50}
+    result=\$(_gs_eu2_semver_delta 'v20260311' 'v20260512')
+    [[ \"\$result\" == 'patch' ]] || { echo \"expected patch for YYYYMMDD date bump, got: '\$result'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t50b: 20260101 → 20261231 (bare YYYYMMDD, no prefix) → patch" bash -c "
+    ${_SV_LIBS50}
+    result=\$(_gs_eu2_semver_delta '20260101' '20261231')
+    [[ \"\$result\" == 'patch' ]] || { echo \"expected patch for bare YYYYMMDD bump, got: '\$result'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t50c: 202601 → 202612 (YYYYMM 6-digit variant) → patch" bash -c "
+    ${_SV_LIBS50}
+    result=\$(_gs_eu2_semver_delta '202601' '202612')
+    [[ \"\$result\" == 'patch' ]] || { echo \"expected patch for YYYYMM date bump, got: '\$result'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t50d: 1.0.0 → 2.0.0 (normal semver major) still → major (regression guard)" bash -c "
+    ${_SV_LIBS50}
+    result=\$(_gs_eu2_semver_delta '1.0.0' '2.0.0')
+    [[ \"\$result\" == 'major' ]] || { echo \"expected major for semver major bump, got: '\$result'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t50e: v20260311 → v20260512 via classify_decision → AUTO (not HOLD)" bash -c "
+    source '/stack/bin/lib/env-update/config/defaults.sh'
+    ${_CD_LIBS50}
+    result=\$(_gs_eu2_classify_decision 'v20260311' 'v20260512' '' '' '')
+    [[ \"\$result\" == 'AUTO' ]] || { echo \"expected AUTO for YYYYMMDD date bump, got: '\$result'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section

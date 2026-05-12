@@ -79,6 +79,17 @@ _gs_eu2_semver_delta() {
   _a="${_a//_/.}" _b="${_b//_/.}"
 
   local _am="${_a%%.*}" _bm="${_b%%.*}"
+
+  # Date-version guard: if both major components are 6+ digit pure numerics
+  # (YYYYMMDD, YYYYMM, or similar monotonic date stamps), treat any forward
+  # increment as "patch" — these are not semantic major versions.
+  # By the time we reach semver_delta, decide.sh has already verified _b >= _a
+  # via sort -V, so if both components are date-stamps we know it is a forward
+  # increment and "patch" is correct.
+  if [[ "${_am}" =~ ^[0-9]{6,}$ && "${_bm}" =~ ^[0-9]{6,}$ ]]; then
+    echo "patch"; return
+  fi
+
   [[ "${_am}" != "${_bm}" ]] && { echo "major"; return; }
   local _ar="${_a#*.}" _br="${_b#*.}"
   [[ "${_ar%%.*}" != "${_br%%.*}" ]] && { echo "minor"; return; }
