@@ -234,7 +234,7 @@ After the pipeline, channel selection picks the best remaining version.
 
 | Flag | Record field | Description |
 |------|-------------|---|
-| `(pecl-ref:EXT_NAME)` | `pecl_ref` | Override the auto-derived PECL extension name. By default, `pecl-git` derives the extension name from the GitHub repo name by stripping `php-`, `php_`, or `ext-` prefixes. Use `(pecl-ref:event)` when the repo is named `php-event` and the PECL extension is `event`. |
+| `(pecl-ref:EXT_NAME)` | `pecl_ref` | **Deprecated.** Override the auto-derived PECL extension name for `pecl-git` annotations. Kept for backward compatibility — all new annotations should use `pecl:EXT_NAME (git:owner/repo)` instead (see [§7.12](#712-pecl)). |
 
 ### Valued flags — dependency tracking
 
@@ -775,7 +775,7 @@ See also [Section 10 (Extended)](#10-pecl-git-fetcher--extended) for full detail
 
 **Merge mode and version-gap fix:** Supports `(check-tags)` and `--with-tags` exactly as the `github` fetcher does. When active, always fetches both the Releases API and Tags API and merges the candidate pools. The automatic version-gap fix (proposed < current → auto-check tags) also applies.
 
-**PECL extension name derivation:** Strips `php-`, `php_`, or `ext-` prefix from the repo name (lowercase). Override with `(pecl-ref:NAME)`.
+**PECL extension name derivation:** Strips `php-`, `php_`, or `ext-` prefix from the repo name (lowercase). Override with `(pecl-ref:NAME)` (**deprecated** — for extensions on PECL, migrate to `pecl:NAME (git:owner/repo)` instead; see [§7.12](#712-pecl)).
 
 **`proposed_version`:** The semver release tag (v-prefix stripped, e.g. `6.3.0`).
 **`proposed_sha`:** Full commit SHA for the release tag (may be empty if the SHA lookup fails).
