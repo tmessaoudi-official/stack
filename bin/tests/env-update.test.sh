@@ -676,6 +676,46 @@ t "t12f: v-prefixed tags accepted by channel filter (B2)" bash -c "
     echo PASS
 "
 
+t "t12g: nightly channel with only stable versions returns empty (falls through to Tier 4)" bash -c "
+    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+    source '/stack/bin/lib/env-update/core/semver.sh'
+    source '/stack/bin/lib/env-update/core/channel.sh'
+    versions=\$'v26.0.0\nv26.1.0\nv25.9.0'
+    result=\$(_gs_eu2_channel_select_best \"\$versions\" 'nightly')
+    [[ -z \"\$result\" ]] || { echo \"expected empty, got: \$result\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t12h: nightly channel with nightly-tagged versions returns latest nightly" bash -c "
+    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+    source '/stack/bin/lib/env-update/core/semver.sh'
+    source '/stack/bin/lib/env-update/core/channel.sh'
+    versions=\$'v26.0.0-nightly20260101abc\nv26.0.0-nightly20260314xyz\nv26.0.0-nightly20260201def'
+    result=\$(_gs_eu2_channel_select_best \"\$versions\" 'nightly')
+    [[ \"\$result\" == 'v26.0.0-nightly20260314xyz' ]] || { echo \"got: \$result\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t12i: nightly channel with mixed stable+nightly returns latest nightly only" bash -c "
+    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+    source '/stack/bin/lib/env-update/core/semver.sh'
+    source '/stack/bin/lib/env-update/core/channel.sh'
+    versions=\$'v26.1.0\nv26.0.0-nightly20260101abc\nv26.0.0-nightly20260314xyz'
+    result=\$(_gs_eu2_channel_select_best \"\$versions\" 'nightly')
+    [[ \"\$result\" == 'v26.0.0-nightly20260314xyz' ]] || { echo \"got: \$result\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t12j: filter_versions_by_channel with nightly channel now filters (no longer all-pass)" bash -c "
+    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+    source '/stack/bin/lib/env-update/core/semver.sh'
+    source '/stack/bin/lib/env-update/core/channel.sh'
+    versions=\$'v26.0.0\nv26.1.0\nv25.9.0'
+    result=\$(_gs_eu2_filter_versions_by_channel \"\$versions\" 'nightly')
+    [[ -z \"\$result\" ]] || { echo \"expected empty (no nightly tags), got: \$result\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Section 13 — Tag flags application
 # ═══════════════════════════════════════════════════════════════════════════

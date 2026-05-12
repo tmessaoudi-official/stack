@@ -26,7 +26,7 @@ _gs_eu2_version_matches_channel() {
 # Filter a newline-separated version list by channel
 _gs_eu2_filter_versions_by_channel() {
   local _vers="${1}" _chan="${2:-}"
-  [[ -z "${_chan}" || "${_chan}" == "nightly" ]] && { printf '%s\n' "${_vers}"; return 0; }
+  [[ -z "${_chan}" ]] && { printf '%s\n' "${_vers}"; return 0; }
   local _v
   while IFS= read -r _v; do
     [[ -z "${_v}" ]] && continue
@@ -79,6 +79,20 @@ _gs_eu2_channel_select_best() {
   if [[ "${_chan}" == "unstable" ]]; then
     [[ -n "${_hp}" ]] && { printf '%s\n' "${_hp}"; return 0; }
     [[ -n "${_hs}" ]] && printf '%s\n' "${_hs}"
+    return 0
+  fi
+
+  # Nightly: only return a version whose tag literally contains "nightly".
+  # If none found → return nothing so the caller (url.sh) falls through to
+  # the Tier-4 nightly directory listing.
+  if [[ "${_chan}" == "nightly" ]]; then
+    local _nightlies=()
+    while IFS= read -r _v; do
+      [[ -z "${_v}" ]] && continue
+      [[ "${_v,,}" == *"nightly"* ]] && _nightlies+=("${_v}")
+    done <<< "${_all}"
+    [[ ${#_nightlies[@]} -gt 0 ]] && \
+      printf '%s\n' "$(printf '%s\n' "${_nightlies[@]}" | sort -V | tail -1)"
     return 0
   fi
 
