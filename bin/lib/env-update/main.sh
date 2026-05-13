@@ -109,7 +109,9 @@ _gs_eu2_run_check() {
     # then restore proposed_version and decision to pre-pass values.
     # Only runs when: unstable=info, record channel is not already unstable,
     # and the fetcher type supports channel selection (github/dockerhub/quay/npm/…).
-    if [[ "${_GS_EU2_CFG[unstable]:-}" == "info" ]]; then
+    # Suppressed when --stable is active (args.sh already enforces mutual exclusivity,
+    # but this belt-and-suspenders guard protects against direct library calls).
+    if [[ "${_GS_EU2_CFG[unstable]:-}" == "info" && "${_GS_EU2_CFG[stable]:-}" != "true" ]]; then
       local _info_chan
       _info_chan="$(_gs_eu2_record_get "${_i}" channel)"
       if [[ "${_info_chan}" != "unstable" ]]; then
@@ -296,7 +298,8 @@ _gs_eu2_run_check() {
     # --unstable=info sub-line: show what the unstable version would be (informational only).
     # Only shown when: unstable=info mode, unstable_proposed is set, and it differs from
     # both the stable proposed_version and the current version.
-    if [[ "${_GS_EU2_CFG[unstable]:-}" == "info" ]]; then
+    # Suppressed when --stable is active (mutual exclusivity enforced in args.sh).
+    if [[ "${_GS_EU2_CFG[unstable]:-}" == "info" && "${_GS_EU2_CFG[stable]:-}" != "true" ]]; then
       local _unstable_disp
       _unstable_disp="$(_gs_eu2_record_get "${_i}" unstable_proposed)"
       if [[ -n "${_unstable_disp}" && "${_unstable_disp}" != "${_cur}" ]]; then
@@ -371,6 +374,26 @@ _gs_eu2_main() {
         _gs_eu2_record_set "${_uc}" channel "unstable"
       fi
     done
+  fi
+
+  # --stable: force channel=stable on all records that have an explicit non-stable channel.
+  # Overrides channel:rc, channel:beta, channel:alpha, channel:nightly, channel:unstable, etc.
+  # Records already at channel="" or channel="stable" are untouched.
+  if [[ "${_GS_EU2_CFG[stable]:-}" == "true" ]]; then
+    local _sc _scount _stable_overrides
+    _stable_overrides=0
+    _scount="$(_gs_eu2_record_count)"
+    for (( _sc = 0; _sc < _scount; _sc++ )); do
+      local _existing_sc_channel
+      _existing_sc_channel="$(_gs_eu2_record_get "${_sc}" channel)"
+      if [[ -n "${_existing_sc_channel}" && "${_existing_sc_channel}" != "stable" ]]; then
+        _gs_eu2_record_set "${_sc}" channel "stable"
+        (( _stable_overrides++ )) || true
+      fi
+    done
+    if [[ "${_stable_overrides}" -gt 0 ]]; then
+      printf '[STABLE MODE] channel forced stable for %d record(s)\n' "${_stable_overrides}"
+    fi
   fi
 
   if [[ "true" == "${_GS_EU2_CFG[dump]}" ]]; then

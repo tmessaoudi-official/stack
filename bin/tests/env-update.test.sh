@@ -4446,6 +4446,86 @@ t "t52j: unstable full mode: major jump + prerelease proposed → HOLD (major gu
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Section 53 — --stable flag
+# ═══════════════════════════════════════════════════════════════════════════
+section "53 — --stable flag"
+
+# t53a: --stable is accepted (no unknown-option error)
+t "t53a: --stable flag accepted (no unknown-option error)" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/chk53a
+    err=\$(bash '${ENV_UPDATE_V2}' --stable --check \
+        --env-file='${FIXTURES}/basic-dockerhub.env' 2>&1 >/dev/null || true)
+    echo \"\$err\" | grep -qi 'unknown option' && { echo '--stable rejected as unknown option'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t53b: --stable mutually exclusive with --unstable
+t "t53b: --stable and --unstable are mutually exclusive" bash -c "
+    err=\$(bash '${ENV_UPDATE_V2}' --stable --unstable 2>&1 || true)
+    echo \"\$err\" | grep -qi 'mutually exclusive' || { echo \"expected mutually exclusive error, got: '\$err'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t53c: --stable mutually exclusive with --unstable=info
+t "t53c: --stable and --unstable=info are mutually exclusive" bash -c "
+    err=\$(bash '${ENV_UPDATE_V2}' --stable --unstable=info 2>&1 || true)
+    echo \"\$err\" | grep -qi 'mutually exclusive' || { echo \"expected mutually exclusive error, got: '\$err'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t53d: --stable overrides channel:unstable via --dump
+# The dump text output for a channel:unstable record must show channel: stable after override.
+# Discrimination: grep for exact 'channel: stable' line and ensure 'channel: unstable' is absent.
+# Note: annotation uses (channel:VALUE) syntax with parentheses; write to a temp file because
+# env-update.sh validates [[ -f env_file ]] (process substitution /dev/fd paths are not regular files).
+t "t53d: --stable forces channel to stable on channel:unstable records (via --dump)" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/chk53d
+    _tf53d=\"\${TMP_DIR}/t53d.env\"
+    printf '# @todo env-update (channel:unstable) dockerhub:_/mariadb:11 11.8.0\nGLOBAL_STACK_MARIADB_VERSION=11.8.0\n' > \"\${_tf53d}\"
+    out=\$(bash '${ENV_UPDATE_V2}' --stable --dump --format=text \
+        --env-file=\"\${_tf53d}\" 2>/dev/null)
+    echo \"\$out\" | grep -qE '^channel:[[:space:]]*stable\$' || { echo \"expected 'channel: stable' in dump, got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qE '^channel:[[:space:]]*unstable\$' && { echo \"channel still unstable after --stable; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t53e: --stable leaves already-stable (channel="") records unchanged — no STABLE MODE header
+t "t53e: --stable leaves channel-unset records unchanged (no override header)" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/chk53e
+    _tf53e=\"\${TMP_DIR}/t53e.env\"
+    printf '# @todo env-update dockerhub:_/alpine:3 3.21.0\nGLOBAL_STACK_X=3.21.0\n' > \"\${_tf53e}\"
+    out=\$(bash '${ENV_UPDATE_V2}' --stable --dump \
+        --env-file=\"\${_tf53e}\" 2>&1)
+    echo \"\$out\" | grep -qi 'STABLE MODE' && { echo 'unexpected STABLE MODE header for all-stable input'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t53f: --stable header line is printed when overrides occur
+t "t53f: --stable prints STABLE MODE header when records are overridden" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/chk53f
+    _tf53f=\"\${TMP_DIR}/t53f.env\"
+    printf '# @todo env-update (channel:rc) dockerhub:_/mariadb:11 11.8.0\nGLOBAL_STACK_MARIADB_VERSION=11.8.0\n' > \"\${_tf53f}\"
+    out=\$(bash '${ENV_UPDATE_V2}' --stable --dump \
+        --env-file=\"\${_tf53f}\" 2>&1)
+    echo \"\$out\" | grep -qi 'STABLE MODE' || { echo \"expected STABLE MODE header, got: '\$out'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t53g: regression — --unstable=full still works normally (no breakage from --stable addition)
+t "t53g: --unstable=full still works after --stable addition (regression)" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/chk53g
+    err=\$(bash '${ENV_UPDATE_V2}' --unstable=full --check \
+        --env-file='${FIXTURES}/basic-dockerhub.env' 2>&1 >/dev/null || true)
+    echo \"\$err\" | grep -qi 'unknown option' && { echo '--unstable=full broken after --stable addition'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section

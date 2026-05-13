@@ -31,6 +31,18 @@ Options:
   --dry-run               No writes (gates cache, .env, and Dockerfile propagation).
   --with-tags             Force tags-API merge for ALL github: and pecl-git: repos in
                           one run. Equivalent to adding (check-tags) to every annotation.
+  --unstable / --unstable=full
+                          Force channel=unstable on all stable/default records.
+                          Fetchers return the highest prerelease. The prerelease
+                          guard in decide.sh is bypassed: stable→prerelease
+                          classifies as AUTO. (manual) and (hold) still apply.
+  --unstable=info         Informational only — after each fetch, shows the latest
+                          prerelease as a "↳ [INFO] unstable: <version>" sub-line.
+                          Does not change AUTO/HOLD/SKIP logic.
+  --stable                Force channel=stable on all records with a non-stable
+                          channel (rc, beta, alpha, nightly, unstable). Records
+                          already on stable/default are unchanged. Mutually
+                          exclusive with --unstable.
 
 Default (no flags): print a parser summary with per-type breakdown and hints.
 
@@ -47,5 +59,9 @@ Examples:
   bin/env-update.sh --check --apply --scan         # apply + propagate to .env.local + Dockerfiles
   bin/env-update.sh --check --apply --dry-run      # preview what would be applied
   bin/env-update.sh --check --with-tags            # audit all github/pecl-git repos including tag-only releases
+  bin/env-update.sh --unstable --check             # force unstable: propose prereleases globally as AUTO
+  bin/env-update.sh --unstable=info --check        # info mode: show unstable sub-line without changing decisions
+  bin/env-update.sh --stable --check               # force stable: see stable versions for all rc/beta/nightly vars
+  bin/env-update.sh --stable --check --dry-run     # preview stable-forced output without writing
 EOF
 }

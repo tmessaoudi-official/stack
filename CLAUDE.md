@@ -78,7 +78,7 @@ See `templates/tips/env-update.md` for the full fetcher-type and flag reference.
 
 **v2.0.0 (all fetcher types)** — parses `.env` annotations, fetches latest versions across all 12 source types (dockerhub, github, npm, pecl, pecl-git, pypi, quay, rubygems, sdkman, sdkmanager, url, codeberg), streams a `[AUTO|HOLD|SKIP|ERROR]` report, and can apply AUTO decisions back to `.env`.
 
-**Key flags**: `--check` (fetch + report), `--apply` (apply AUTO decisions; implies `--check`), `--dry-run` (no writes), `--filter=<regex>`, `--no-cache`, `--format=text|json`, `--dump`, `--env-file=<path>`, `--cache-ttl=<N>`
+**Key flags**: `--check` (fetch + report), `--apply` (apply AUTO decisions; implies `--check`), `--dry-run` (no writes), `--filter=<regex>`, `--no-cache`, `--format=text|json`, `--dump`, `--env-file=<path>`, `--cache-ttl=<N>`, `--with-tags`, `--unstable[=full|info]` (prerelease channel mode), `--stable` (force stable channel everywhere)
 
 **⚠️ Safety rule**: Always run `--dry-run` before `--apply` in the same session. Never run `--apply` cold — ask-tier operation. (Incident 2026-04-23: ran `--apply` without prior dry-run.)
 
@@ -159,7 +159,7 @@ make start-local-registry            # Start local TLS registry (port 5000)
 ## Testing & Verification
 
 - **env-scan tests**: `bash bin/tests/env-scan.test.sh` — custom harness with `assert_equals`, `assert_contains`, `assert_not_contains`, `assert_file_exists`
-- **env-update tests**: `bash bin/tests/env-update.test.sh` — 290 tests across 49 sections (fetchers, cache, semver, apply, args…); use `--dry-run --filter=<VAR>` and `--offline` for manual cache-only testing
+- **env-update tests**: `bash bin/tests/env-update.test.sh` — 327 tests across 53 sections (fetchers, cache, semver, apply, args…); use `--dry-run --filter=<VAR>` and `--offline` for manual cache-only testing
 - **Shell scripts**: `shellcheck <file>` and `shfmt -d -i 2 -ci -bn <file>` (diff mode)
 - **YAML files**: `yamllint -d relaxed <file>` and `yamlfmt -dry <file>` (dry-run mode)
 - **Formatting**: `/fmt --check` to preview all formatting changes, `/fmt` to apply them
