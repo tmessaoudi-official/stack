@@ -3981,6 +3981,69 @@ t "t48b: all-letter tags — letter-prefixed fallback still produces a result" b
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Section 48b — pecl_git (use-sha) bypass for tag-less repos
+# ═══════════════════════════════════════════════════════════════════════════
+section "48b — pecl_git (use-sha) bypass for tag-less repos"
+
+_PECLGIT_LIBS48B="
+source '/stack/bin/lib/env-update/config/defaults.sh'
+source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update/core/records.sh'
+source '/stack/bin/lib/env-update/core/semver.sh'
+source '/stack/bin/lib/env-update/core/channel.sh'
+source '/stack/bin/lib/env-update/core/tag_flags.sh'
+source '/stack/bin/lib/env-update/core/cache.sh'
+source '/stack/bin/lib/env-update/http/curl.sh'
+source '/stack/bin/lib/env-update/fetchers/github.sh'
+source '/stack/bin/lib/env-update/fetchers/pecl.sh'
+source '/stack/bin/lib/env-update/fetchers/pecl_git.sh'
+export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+"
+
+t "t48b_a: (use-sha) + no release tags → no ERROR, HEAD SHA returned" bash -c "
+    ${_PECLGIT_LIBS48B}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/peclgit48b_a_cache
+    declare -A _GS_EU2_CFG=([no_cache]=true)
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'pecl-git'
+    _gs_eu2_record_set \$idx identifier      'fake/no-tags-repo'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_PHP_FFI_TEST_VERSION'
+    _gs_eu2_record_set \$idx current_version '0.3'
+    _gs_eu2_record_set \$idx use_sha         'true'
+    _gs_eu2_record_set \$idx annotation_sha  'oldsha1234567890123456789012345678901234'
+    _gs_eu2_fetch_pecl_git \$idx 2>/dev/null || true
+    decision=\$(_gs_eu2_record_get \$idx decision)
+    sha=\$(_gs_eu2_record_get \$idx proposed_sha)
+    ver=\$(_gs_eu2_record_get \$idx proposed_version)
+    # Must not be ERROR
+    [[ \"\$decision\" != 'ERROR' ]] || { echo \"expected non-ERROR decision, got: '\$decision'\"; echo FAIL; exit 0; }
+    # proposed_sha must be set (HEAD SHA from fixture)
+    [[ -n \"\$sha\" ]] || { echo 'expected non-empty proposed_sha'; echo FAIL; exit 0; }
+    [[ \"\$sha\" == 'fe3d1b7c8a92044db56e1234567890abcdef1234' ]] || { echo \"expected HEAD SHA fe3d1b7c..., got: '\$sha'\"; echo FAIL; exit 0; }
+    # proposed_version must equal current_version (no version change — SHA is what we track)
+    [[ \"\$ver\" == '0.3' ]] || { echo \"expected proposed_version=0.3 (current unchanged), got: '\$ver'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t48b_b: without (use-sha), no tags → ERROR as before" bash -c "
+    ${_PECLGIT_LIBS48B}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/peclgit48b_b_cache
+    declare -A _GS_EU2_CFG=([no_cache]=true)
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'pecl-git'
+    _gs_eu2_record_set \$idx identifier      'fake/no-tags-repo'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_PHP_FFI_TEST_VERSION'
+    _gs_eu2_record_set \$idx current_version '0.3'
+    # use_sha NOT set — should still produce ERROR for tag-less repos
+    _gs_eu2_fetch_pecl_git \$idx 2>/dev/null || true
+    decision=\$(_gs_eu2_record_get \$idx decision)
+    [[ \"\$decision\" == 'ERROR' ]] || { echo \"expected ERROR without use_sha, got: '\$decision'\"; echo FAIL; exit 0; }
+    err=\$(_gs_eu2_record_get \$idx error_message)
+    [[ \"\$err\" == *'use-sha'* ]] || { echo \"expected (use-sha) hint in error_message, got: '\$err'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Section 49 — pecl fetcher with (git:owner/repo) flag
 # ═══════════════════════════════════════════════════════════════════════════
 section "49 — pecl fetcher with (git:owner/repo) flag"

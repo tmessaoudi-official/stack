@@ -59,12 +59,13 @@ _gs_eu2_pecl_git_derive_ext_name() {
 _gs_eu2_fetch_pecl_git() {
   local _idx="${1}"
 
-  local _identifier _channel _major_hint _tag_strip_prefix _no_cache
+  local _identifier _channel _major_hint _tag_strip_prefix _no_cache _use_sha
   _identifier="$(_gs_eu2_record_get "${_idx}" identifier)"
   _channel="$(_gs_eu2_record_get "${_idx}" channel)"
   _major_hint="$(_gs_eu2_record_get "${_idx}" major_hint)"
   _tag_strip_prefix="$(_gs_eu2_record_get "${_idx}" tag_strip_prefix)"
   _no_cache="${_GS_EU2_CFG[no_cache]:-false}"
+  _use_sha="$(_gs_eu2_record_get "${_idx}" use_sha)"
 
   # ── Check-tags merge mode ─────────────────────────────────────────────────
   local _check_tags _with_tags _merge_mode
@@ -129,14 +130,24 @@ _gs_eu2_fetch_pecl_git() {
     fi
   fi
 
+  local _no_tags_use_sha="false"
   if [[ -z "$(printf '%s\n' "${_raw_tags}" | grep -v '^$' || true)" ]]; then
-    local _rate_hint=""
-    [[ -z "${_tok}" ]] && _rate_hint=" (set GITHUB_TOKEN or GLOBAL_STACK_GITHUB_TOKEN to avoid rate limits)"
-    _gs_eu2_record_set "${_idx}" decision      "ERROR"
-    _gs_eu2_record_set "${_idx}" error_message \
-      "pecl-git: no release tags found for '${_owner_repo}'; pin manually with (use-sha)${_rate_hint}"
-    return 0
+    if [[ "${_use_sha}" != "true" ]]; then
+      local _rate_hint=""
+      [[ -z "${_tok}" ]] && _rate_hint=" (set GITHUB_TOKEN or GLOBAL_STACK_GITHUB_TOKEN to avoid rate limits)"
+      _gs_eu2_record_set "${_idx}" decision      "ERROR"
+      _gs_eu2_record_set "${_idx}" error_message \
+        "pecl-git: no release tags found for '${_owner_repo}'; pin manually with (use-sha)${_rate_hint}"
+      return 0
+    fi
+    # (use-sha) + no tags: skip version resolution, proceed to HEAD SHA fetch.
+    # proposed_version will stay as current_version (version unchanged, SHA is what we track).
+    _no_tags_use_sha="true"
   fi
+
+  # ── Steps 2-4: Version picking from tags (skipped when no tags + use_sha) ─
+  local _best_ver=""
+  if [[ "${_no_tags_use_sha}" != "true" ]]; then
 
   # ── Step 2: Strip v-prefix and apply tag_strip_prefix ────────────────────
   local _candidates=()
@@ -198,7 +209,6 @@ _gs_eu2_fetch_pecl_git() {
   else
     _candidates=("${_let_candidates[@]+"${_let_candidates[@]}"}")
   fi
-  local _best_ver
   _best_ver="$(printf '%s\n' "${_candidates[@]}" | sort -V | tail -1)"
 
   # ── Step 4b: Version-gap fix — if best_ver < current, also check tags ────
@@ -259,6 +269,12 @@ _gs_eu2_fetch_pecl_git() {
         fi
       fi
     fi
+  fi
+
+  fi # end: if [[ "${_no_tags_use_sha}" != "true" ]]
+
+  if [[ "${_no_tags_use_sha}" == "true" ]]; then
+    _best_ver="$(_gs_eu2_record_get "${_idx}" current_version)"
   fi
 
   # ── Step 5: Get HEAD SHA — always prefer HEAD over a tagged SHA ──────────
