@@ -33,9 +33,11 @@ Options:
                           one run. Equivalent to adding (check-tags) to every annotation.
   --unstable / --unstable=full
                           Force channel=unstable on all stable/default records.
-                          Fetchers return the highest prerelease. The prerelease
-                          guard in decide.sh is bypassed: stable→prerelease
-                          classifies as AUTO. (manual) and (hold) still apply.
+                          Fetchers return the highest prerelease; if stable has
+                          surpassed the highest prerelease, stable is returned
+                          instead (promotion guard). The prerelease guard in
+                          decide.sh is bypassed: stable→prerelease classifies
+                          as AUTO. (manual) and (hold) still apply.
   --unstable=info         Informational only — after each fetch, shows the latest
                           prerelease as a "↳ [INFO] unstable: <version>" sub-line.
                           Does not change AUTO/HOLD/SKIP logic.

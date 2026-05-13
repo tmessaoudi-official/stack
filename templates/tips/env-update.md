@@ -185,7 +185,7 @@ flags. Flags are **position-agnostic** — they can appear anywhere in the annot
 
 **Channel behavior details:**
 - `stable` (empty or explicit): picks the highest non-prerelease version. Never falls back to pre-releases.
-- `unstable`: picks the highest pre-release version. Falls back to stable if no pre-release exists.
+- `unstable`: picks the highest pre-release version. Falls back to stable if no pre-release exists. **Promotion guard**: if the highest stable has surpassed the highest pre-release (e.g. stable=3.1.1 vs prerelease=3.0.0-rc4), the stable version is returned instead — it is not a downgrade.
 - `rc`, `beta`, `alpha`: picks the highest version matching that channel keyword. Falls back to the highest pre-release if no exact match, then stable if the stable has surpassed the channel version.
 - `nightly`: for the `url` fetcher's Tier 4, treats the identifier as a directory listing of nightly build directories.
 - `(skip:REASON)` — forces a SKIP decision with the provided reason string stored in `skip_reason`. The fetcher still runs, but the decision is overridden. Useful for temporarily pausing a variable.

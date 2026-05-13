@@ -4834,6 +4834,30 @@ t "t56g: without --force-auto, (manual) annotation produces MANUAL classificatio
     echo PASS
 "
 
+t "t56h: --force-auto: (override) annotation treated as AUTO-eligible" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t56h_cache
+    f=\${TMP_DIR}/t56h.env
+    # current=18.3-alpine3.23, fixture returns 18.4-alpine3.23 (patch bump → AUTO)
+    # (override) flag normally forces MANUAL; --force-auto must bypass it
+    printf '# @todo env-update (override) dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T56H=18.3-alpine3.23\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --force-auto --env-file=\"\$f\" 2>/dev/null)
+    echo \"\$out\" | grep -qF '[MANUAL]' && { echo \"(override) still classified MANUAL with --force-auto: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t56i: --force-auto upgrades HOLD to AUTO (major-bump guard bypass)" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t56i_cache
+    f=\${TMP_DIR}/t56i.env
+    # current=17.3-alpine3.23, fixture returns 18.4-alpine3.23 (major jump, no major_hint → HOLD)
+    # With --force-auto, HOLD must be upgraded to AUTO
+    printf '# @todo env-update dockerhub:_/postgres 17.3-alpine3.23\nGLOBAL_STACK_T56I=17.3-alpine3.23\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --force-auto --env-file=\"\$f\" 2>/dev/null)
+    echo \"\$out\" | grep -qF '[HOLD' && { echo \"HOLD not upgraded to AUTO with --force-auto: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
 # ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
