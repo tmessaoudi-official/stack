@@ -30,7 +30,14 @@ _gs_eu2_parse_args() {
       --scan)         _GS_EU2_CFG[scan]="true" ;;
       --no-cache)     _GS_EU2_CFG[no_cache]="true" ;;
       --with-tags)    _GS_EU2_CFG[with_tags]="true" ;;
-      --stable)       _GS_EU2_CFG[stable]="true" ;;
+      --stable)     _GS_EU2_CFG[stable]="full" ;;
+      --stable=*)
+        local _sval="${1#*=}"
+        if [[ "${_sval}" != "full" && "${_sval}" != "info" ]]; then
+          printf 'env-update: --stable accepts "full" or "info", got: %q\n' "${_sval}" >&2
+          exit 1
+        fi
+        _GS_EU2_CFG[stable]="${_sval}" ;;
       --unstable)     _GS_EU2_CFG[unstable]="full" ;;
       --unstable=*)
         local _uval="${1#*=}"
@@ -66,15 +73,15 @@ _gs_eu2_parse_args() {
   [[ -z "${_GS_EU2_CFG[scan]+set}" ]]     && _GS_EU2_CFG[scan]="false"
   [[ -z "${_GS_EU2_CFG[cache_ttl]+set}" ]] && _GS_EU2_CFG[cache_ttl]="3600"
   [[ -z "${_GS_EU2_CFG[unstable]+set}" ]]  && _GS_EU2_CFG[unstable]=""
-  [[ -z "${_GS_EU2_CFG[stable]+set}" ]]   && _GS_EU2_CFG[stable]="false"
+  [[ -z "${_GS_EU2_CFG[stable]+set}" ]]   && _GS_EU2_CFG[stable]=""
 
   if [[ "${_GS_EU2_CFG[dry_run]}" == "true" && "${_GS_EU2_CFG[apply]}" == "true" ]]; then
     printf 'env-update: --dry-run and --apply are mutually exclusive\n' >&2
     exit 1
   fi
 
-  if [[ "${_GS_EU2_CFG[stable]}" == "true" && -n "${_GS_EU2_CFG[unstable]}" ]]; then
-    printf 'env-update: --stable and --unstable are mutually exclusive\n' >&2
+  if [[ "${_GS_EU2_CFG[stable]}" == "full" && "${_GS_EU2_CFG[unstable]}" == "full" ]]; then
+    printf 'env-update: --stable=full and --unstable=full are mutually exclusive\n' >&2
     exit 1
   fi
   return 0

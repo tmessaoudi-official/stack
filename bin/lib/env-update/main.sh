@@ -109,9 +109,10 @@ _gs_eu2_run_check() {
     # then restore proposed_version and decision to pre-pass values.
     # Only runs when: unstable=info, record channel is not already unstable,
     # and the fetcher type supports channel selection (github/dockerhub/quay/npm/…).
-    # Suppressed when --stable is active (args.sh already enforces mutual exclusivity,
+    # Suppressed when --stable=full is active (args.sh already enforces mutual exclusivity,
     # but this belt-and-suspenders guard protects against direct library calls).
-    if [[ "${_GS_EU2_CFG[unstable]:-}" == "info" && "${_GS_EU2_CFG[stable]:-}" != "true" ]]; then
+    # stable=info is compatible — both second-pass blocks can run independently.
+    if [[ "${_GS_EU2_CFG[unstable]:-}" == "info" && "${_GS_EU2_CFG[stable]:-}" != "full" ]]; then
       local _info_chan
       _info_chan="$(_gs_eu2_record_get "${_i}" channel)"
       if [[ "${_info_chan}" != "unstable" ]]; then
@@ -152,6 +153,53 @@ _gs_eu2_run_check() {
         if [[ -n "${_unstable_ver}" && "${_unstable_ver}" != "${_saved_prop}" ]] && \
            _gs_eu2_is_prerelease "${_unstable_ver}"; then
           _gs_eu2_record_set "${_i}" unstable_proposed "${_unstable_ver}"
+        fi
+      fi
+    fi
+
+    # --stable=info second-pass: temporarily swap channel→stable, re-run the
+    # same fetcher (cache hit — no extra HTTP), capture proposed as stable_proposed,
+    # then restore proposed_version and decision to pre-pass values.
+    # Only runs when: stable=info, record channel is not already stable/empty
+    # (a stable channel would make the second pass identical to the main fetch).
+    if [[ "${_GS_EU2_CFG[stable]:-}" == "info" ]]; then
+      local _si_chan
+      _si_chan="$(_gs_eu2_record_get "${_i}" channel)"
+      if [[ -n "${_si_chan}" && "${_si_chan}" != "stable" ]]; then
+        local _si_saved_prop _si_saved_decision _si_saved_chan _si_saved_err
+        _si_saved_prop="$(_gs_eu2_record_get "${_i}" proposed_version)"
+        _si_saved_decision="$(_gs_eu2_record_get "${_i}" decision)"
+        _si_saved_err="$(_gs_eu2_record_get "${_i}" error_message)"
+        _si_saved_chan="${_si_chan}"
+        _gs_eu2_record_set "${_i}" channel "stable"
+        _gs_eu2_record_set "${_i}" proposed_version ""
+        _gs_eu2_record_set "${_i}" decision ""
+        _gs_eu2_record_set "${_i}" error_message ""
+        case "${_type}" in
+          codeberg)   _gs_eu2_fetch_codeberg   "${_i}" ;;
+          dockerhub)  _gs_eu2_fetch_dockerhub  "${_i}" ;;
+          github)     _gs_eu2_fetch_github     "${_i}" ;;
+          quay)       _gs_eu2_fetch_quay       "${_i}" ;;
+          npm)        _gs_eu2_fetch_npm        "${_i}" ;;
+          pypi)       _gs_eu2_fetch_pypi       "${_i}" ;;
+          rubygems)   _gs_eu2_fetch_rubygems   "${_i}" ;;
+          sdkman)     _gs_eu2_fetch_sdkman     "${_i}" ;;
+          sdkmanager) _gs_eu2_fetch_sdkmanager "${_i}" ;;
+          pecl)       _gs_eu2_fetch_pecl       "${_i}" ;;
+          pecl-git)   _gs_eu2_fetch_pecl_git   "${_i}" ;;
+          url)        _gs_eu2_fetch_url        "${_i}" ;;
+        esac
+        local _stable_ver
+        _stable_ver="$(_gs_eu2_record_get "${_i}" proposed_version)"
+        _gs_eu2_record_set "${_i}" channel "${_si_saved_chan}"
+        _gs_eu2_record_set "${_i}" proposed_version "${_si_saved_prop}"
+        _gs_eu2_record_set "${_i}" decision "${_si_saved_decision}"
+        _gs_eu2_record_set "${_i}" error_message "${_si_saved_err}"
+        # Store stable_proposed only if it's non-empty, not a prerelease,
+        # and different from the main proposed (suppress when identical).
+        if [[ -n "${_stable_ver}" && "${_stable_ver}" != "${_si_saved_prop}" ]] && \
+           ! _gs_eu2_is_prerelease "${_stable_ver}"; then
+          _gs_eu2_record_set "${_i}" stable_proposed "${_stable_ver}"
         fi
       fi
     fi
@@ -298,12 +346,23 @@ _gs_eu2_run_check() {
     # --unstable=info sub-line: show what the unstable version would be (informational only).
     # Only shown when: unstable=info mode, unstable_proposed is set, and it differs from
     # both the stable proposed_version and the current version.
-    # Suppressed when --stable is active (mutual exclusivity enforced in args.sh).
-    if [[ "${_GS_EU2_CFG[unstable]:-}" == "info" && "${_GS_EU2_CFG[stable]:-}" != "true" ]]; then
+    # Suppressed when --stable=full is active (mutual exclusivity enforced in args.sh).
+    # stable=info is compatible — both sub-lines may appear (unstable first, stable second).
+    if [[ "${_GS_EU2_CFG[unstable]:-}" == "info" && "${_GS_EU2_CFG[stable]:-}" != "full" ]]; then
       local _unstable_disp
       _unstable_disp="$(_gs_eu2_record_get "${_i}" unstable_proposed)"
       if [[ -n "${_unstable_disp}" && "${_unstable_disp}" != "${_cur}" ]]; then
         printf '%10s↳ [INFO] unstable: %s\n' "" "${_unstable_disp}"
+      fi
+    fi
+
+    # --stable=info sub-line: show what the stable version would be (informational only).
+    # Only shown when: stable=info mode, stable_proposed is set, and it differs from current.
+    if [[ "${_GS_EU2_CFG[stable]:-}" == "info" ]]; then
+      local _stable_disp
+      _stable_disp="$(_gs_eu2_record_get "${_i}" stable_proposed)"
+      if [[ -n "${_stable_disp}" && "${_stable_disp}" != "${_cur}" ]]; then
+        printf '%10s↳ [INFO] stable: %s\n' "" "${_stable_disp}"
       fi
     fi
   done
@@ -379,7 +438,7 @@ _gs_eu2_main() {
   # --stable: force channel=stable on all records that have an explicit non-stable channel.
   # Overrides channel:rc, channel:beta, channel:alpha, channel:nightly, channel:unstable, etc.
   # Records already at channel="" or channel="stable" are untouched.
-  if [[ "${_GS_EU2_CFG[stable]:-}" == "true" ]]; then
+  if [[ "${_GS_EU2_CFG[stable]:-}" == "full" ]]; then
     local _sc _scount _stable_overrides
     _stable_overrides=0
     _scount="$(_gs_eu2_record_count)"

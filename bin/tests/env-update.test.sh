@@ -4460,16 +4460,16 @@ t "t53a: --stable flag accepted (no unknown-option error)" bash -c "
     echo PASS
 "
 
-# t53b: --stable mutually exclusive with --unstable
-t "t53b: --stable and --unstable are mutually exclusive" bash -c "
+# t53b: --stable=full mutually exclusive with --unstable=full (bare forms)
+t "t53b: --stable and --unstable (both full) are mutually exclusive" bash -c "
     err=\$(bash '${ENV_UPDATE_V2}' --stable --unstable 2>&1 || true)
     echo \"\$err\" | grep -qi 'mutually exclusive' || { echo \"expected mutually exclusive error, got: '\$err'\"; echo FAIL; exit 0; }
     echo PASS
 "
 
-# t53c: --stable mutually exclusive with --unstable=info
-t "t53c: --stable and --unstable=info are mutually exclusive" bash -c "
-    err=\$(bash '${ENV_UPDATE_V2}' --stable --unstable=info 2>&1 || true)
+# t53c: --stable=full + --unstable=full explicitly → still mutually exclusive
+t "t53c: --stable=full + --unstable=full are mutually exclusive" bash -c "
+    err=\$(bash '${ENV_UPDATE_V2}' --stable=full --unstable=full 2>&1 || true)
     echo \"\$err\" | grep -qi 'mutually exclusive' || { echo \"expected mutually exclusive error, got: '\$err'\"; echo FAIL; exit 0; }
     echo PASS
 "
@@ -4522,6 +4522,76 @@ t "t53g: --unstable=full still works after --stable addition (regression)" bash 
     err=\$(bash '${ENV_UPDATE_V2}' --unstable=full --check \
         --env-file='${FIXTURES}/basic-dockerhub.env' 2>&1 >/dev/null || true)
     echo \"\$err\" | grep -qi 'unknown option' && { echo '--unstable=full broken after --stable addition'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t53h: --stable=info is accepted as a valid flag value
+t "t53h: --stable=info flag accepted (no unknown-option error)" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/chk53h
+    err=\$(bash '${ENV_UPDATE_V2}' --stable=info --check \
+        --env-file='${FIXTURES}/basic-dockerhub.env' 2>&1 >/dev/null || true)
+    echo \"\$err\" | grep -qi 'unknown option\|bogus\|invalid' && { echo '--stable=info rejected as unknown'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t53i: --stable=bogus rejected with clear error
+t "t53i: --stable=bogus exits with error message" bash -c "
+    err=\$(bash '${ENV_UPDATE_V2}' --stable=bogus 2>&1 || true)
+    echo \"\$err\" | grep -qi 'bogus\|invalid\|stable' || { echo \"expected error for bogus stable value; got: '\$err'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t53j: --stable=full + --unstable=info allowed (relaxed mutex)
+t "t53j: --stable=full + --unstable=info is allowed (no mutex error)" bash -c "
+    err=\$(bash '${ENV_UPDATE_V2}' --stable=full --unstable=info 2>&1 || true)
+    echo \"\$err\" | grep -qi 'mutually exclusive' && { echo \"unexpected mutex error for stable=full+unstable=info; got: '\$err'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t53k: --stable=info + --unstable=full allowed (relaxed mutex)
+t "t53k: --stable=info + --unstable=full is allowed (no mutex error)" bash -c "
+    err=\$(bash '${ENV_UPDATE_V2}' --stable=info --unstable=full 2>&1 || true)
+    echo \"\$err\" | grep -qi 'mutually exclusive' && { echo \"unexpected mutex error for stable=info+unstable=full; got: '\$err'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t53l: --stable=info + --unstable=info allowed (relaxed mutex)
+t "t53l: --stable=info + --unstable=info is allowed (no mutex error)" bash -c "
+    err=\$(bash '${ENV_UPDATE_V2}' --stable=info --unstable=info 2>&1 || true)
+    echo \"\$err\" | grep -qi 'mutually exclusive' && { echo \"unexpected mutex error for stable=info+unstable=info; got: '\$err'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t53m: --stable=info does NOT trigger second pass for already-stable-channel records.
+#        A record with no annotation channel (default stable) should have no stable_proposed
+#        value set. We check via --dump that the field is absent or empty (uses exact prefix
+#        match ^stable_proposed to avoid matching 'unstable_proposed').
+t "t53m: --stable=info skips second pass for already-stable-channel records (via --dump)" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/chk53m
+    _tf53m=\"\${TMP_DIR}/t53m.env\"
+    printf '# @todo env-update dockerhub:_/alpine:3 3.21.0\nGLOBAL_STACK_X=3.21.0\n' > \"\${_tf53m}\"
+    out=\$(bash '${ENV_UPDATE_V2}' --stable=info --dump --format=text \
+        --env-file=\"\${_tf53m}\" 2>/dev/null)
+    # grep for 'stable_proposed: <non-empty>' — use ^stable_proposed to avoid matching unstable_proposed
+    echo \"\$out\" | grep -qE '^stable_proposed:[[:space:]]+[^[:space:]]' && {
+      echo \"stable_proposed unexpectedly set for already-stable channel; got: \$out\"
+      echo FAIL; exit 0
+    }
+    echo PASS
+"
+
+# t53n: --stable injection still uses 'full' check (regression: existing stable=full behavior unchanged)
+#        --stable=full forces channel=stable for rc records — STABLE MODE header must appear.
+t "t53n: --stable=full injection still works (== full check regression guard)" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/chk53n
+    _tf53n=\"\${TMP_DIR}/t53n.env\"
+    printf '# @todo env-update (channel:rc) dockerhub:_/mariadb:11 11.8.0\nGLOBAL_STACK_MARIADB_VERSION=11.8.0\n' > \"\${_tf53n}\"
+    out=\$(bash '${ENV_UPDATE_V2}' --stable=full --dump \
+        --env-file=\"\${_tf53n}\" 2>&1)
+    echo \"\$out\" | grep -qi 'STABLE MODE' || { echo \"expected STABLE MODE header for --stable=full; got: '\$out'\"; echo FAIL; exit 0; }
     echo PASS
 "
 

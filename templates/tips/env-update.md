@@ -259,9 +259,10 @@ bin/env-update.sh [OPTIONS]
 | `--no-cache` | off | Bypass the flat-file cache entirely. Every fetch goes to the network. Cache reads return miss; cache writes are skipped. |
 | `--cache-ttl=N` | `3600` | Override the cache TTL in seconds. Must be a positive integer or zero (`0` = all cache entries treated as expired). |
 | `--with-tags` | off | For every `github:` and `pecl-git:` record in the run, always fetch both the Releases API and the Tags API and merge the candidate pools. Same effect as adding `(check-tags)` to every annotation, but applies globally for one run. Use when you suspect any repo in the batch may have released via tags only. Complements the automatic [version-gap fix](#version-gap-fix); this flag ensures the merged pool is used for all repos without waiting for a gap to be detected. |
-| `--unstable` / `--unstable=full` | off | **Full unstable mode.** Forces `channel=unstable` on every record that does not already have an explicit non-stable channel in its annotation. Fetchers return the highest prerelease as the proposed candidate. The prerelease guard in `decide.sh` is bypassed: `stable current + prerelease proposed` classifies as `AUTO` (not `SKIP`). `(manual)` and `(hold)` flags are still respected. Use when you want to track prerelease versions globally for a run. Accepts both `--unstable` (bare) and `--unstable=full`. Mutually exclusive with `--stable`. |
-| `--unstable=info` | off | **Informational unstable mode.** Does NOT change `AUTO`/`HOLD`/`SKIP` decision logic and does NOT bypass the prerelease guard. After each fetch, performs a second pass (cache hit — no extra HTTP) with `channel=unstable` to discover what the latest prerelease would be. When a prerelease version is found that differs from the stable proposed version, it is shown as a `↳ [INFO] unstable: <version>` sub-line under the main decision line. Use when you want a heads-up about available prereleases without committing to tracking them. Mutually exclusive with `--stable`. |
-| `--stable` | off | **Force stable channel.** Forces `channel=stable` on every record whose annotation has an explicit non-stable channel (`rc`, `beta`, `alpha`, `nightly`, `unstable`, or any other non-empty, non-stable value). Records already on the default stable channel (empty or `stable`) are untouched. Prints a `[STABLE MODE] channel forced stable for N record(s)` header line when at least one override occurs. Use when you want to see what the stable versions would be for a set of vars that are normally tracked at prerelease. Mutually exclusive with `--unstable` (any form). |
+| `--unstable` / `--unstable=full` | off | **Full unstable mode.** Forces `channel=unstable` on every record that does not already have an explicit non-stable channel in its annotation. Fetchers return the highest prerelease as the proposed candidate. The prerelease guard in `decide.sh` is bypassed: `stable current + prerelease proposed` classifies as `AUTO` (not `SKIP`). `(manual)` and `(hold)` flags are still respected. Use when you want to track prerelease versions globally for a run. Accepts both `--unstable` (bare) and `--unstable=full`. Mutually exclusive with `--stable=full` only. |
+| `--unstable=info` | off | **Informational unstable mode.** Does NOT change `AUTO`/`HOLD`/`SKIP` decision logic and does NOT bypass the prerelease guard. After each fetch, performs a second pass (cache hit — no extra HTTP) with `channel=unstable` to discover what the latest prerelease would be. When a prerelease version is found that differs from the stable proposed version, it is shown as a `↳ [INFO] unstable: <version>` sub-line under the main decision line. Use when you want a heads-up about available prereleases without committing to tracking them. Compatible with all `--stable` forms. |
+| `--stable` / `--stable=full` | off | **Force stable channel.** Forces `channel=stable` on every record whose annotation has an explicit non-stable channel (`rc`, `beta`, `alpha`, `nightly`, `unstable`, or any other non-empty, non-stable value). Records already on the default stable channel (empty or `stable`) are untouched. Prints a `[STABLE MODE] channel forced stable for N record(s)` header line when at least one override occurs. Use when you want to see what the stable versions would be for a set of vars that are normally tracked at prerelease. Mutually exclusive with `--unstable=full` only. |
+| `--stable=info` | off | **Informational stable mode.** Does NOT change `AUTO`/`HOLD`/`SKIP` decision logic and does NOT inject channel overrides. After each fetch, performs a second pass (cache hit — no extra HTTP) with `channel=stable` to discover what the latest stable version would be. Only runs for records whose annotation channel is neither empty nor `stable` (those already use the stable fetch path). When a stable version is found that differs from the main proposed version (and is not a prerelease itself), it is shown as a `↳ [INFO] stable: <version>` sub-line under the main decision line. Use when you want a baseline stable reference while tracking prerelease vars. Compatible with `--unstable=full` and `--unstable=info`; when both are active, the unstable sub-line appears first, stable second. |
 
 ### Flag combinations and mutual exclusivity
 
@@ -270,7 +271,11 @@ bin/env-update.sh [OPTIONS]
 - `--dump` and `--apply` are mutually exclusive — exit 1 if both are given.
 - `--apply` implies `--check` — no need to specify both; `--apply` alone triggers a check first.
 - `--scan` is a no-op unless `--apply` is also specified and not `--dry-run`.
-- `--stable` and `--unstable` (any form: bare, `=full`, `=info`) are mutually exclusive — exit 1 if both are given.
+- `--stable=full` and `--unstable=full` are mutually exclusive — exit 1 if both are given (contradictory: cannot force stable and force unstable simultaneously).
+- All other `--stable` / `--unstable` combos are allowed:
+  - `--stable=full + --unstable=info` ✓ (force stable decisions, show prerelease sub-line)
+  - `--stable=info + --unstable=full` ✓ (force prerelease decisions, show stable sub-line)
+  - `--stable=info + --unstable=info` ✓ (both sub-lines shown; unstable first, stable second)
 
 ### Typical usage patterns
 
@@ -299,6 +304,8 @@ bin/env-update.sh --unstable=info --check          # info mode: show unstable as
 # Stable channel override (see what stable versions would be for prerelease-tracked vars)
 bin/env-update.sh --stable --check                 # force stable: stable versions for all rc/beta/nightly vars
 bin/env-update.sh --stable --check --dry-run       # preview stable-forced output without writing
+bin/env-update.sh --stable=info --check            # info mode: show stable sub-line for non-stable-channel records
+bin/env-update.sh --stable=info --unstable=full --check  # unstable decisions + stable sub-line for each record
 
 # Tag-ahead audit
 bin/env-update.sh --check --with-tags              # merge releases+tags for all github/pecl-git repos

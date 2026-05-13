@@ -39,10 +39,14 @@ Options:
   --unstable=info         Informational only — after each fetch, shows the latest
                           prerelease as a "↳ [INFO] unstable: <version>" sub-line.
                           Does not change AUTO/HOLD/SKIP logic.
-  --stable                Force channel=stable on all records with a non-stable
-                          channel (rc, beta, alpha, nightly, unstable). Records
-                          already on stable/default are unchanged. Mutually
-                          exclusive with --unstable.
+  --stable / --stable=full        Force channel=stable on all records with a non-stable
+                                  channel (rc, beta, alpha, nightly, unstable → stable).
+                                  Records already on stable/default are unchanged.
+                                  Mutually exclusive with --unstable=full only.
+  --stable=info                   Informational only — after each fetch, shows the stable
+                                  version as a "↳ [INFO] stable: <version>" sub-line for
+                                  records on non-stable channels. Does not change decisions.
+                                  Compatible with --unstable=full (shown below main line).
 
 Default (no flags): print a parser summary with per-type breakdown and hints.
 
@@ -63,5 +67,7 @@ Examples:
   bin/env-update.sh --unstable=info --check        # info mode: show unstable sub-line without changing decisions
   bin/env-update.sh --stable --check               # force stable: see stable versions for all rc/beta/nightly vars
   bin/env-update.sh --stable --check --dry-run     # preview stable-forced output without writing
+  bin/env-update.sh --stable=info --check          # info mode: show stable sub-line for non-stable-channel records
+  bin/env-update.sh --stable=info --unstable=full --check  # unstable decisions + stable sub-line for each
 EOF
 }
