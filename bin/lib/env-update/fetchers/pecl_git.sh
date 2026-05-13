@@ -192,6 +192,24 @@ _gs_eu2_fetch_pecl_git() {
     return 0
   fi
 
+  # ── Step 3b: Snapshot best stable (post-major-filter) for promotion guard ──
+  # Captured here (after major_hint filter, before prerelease sorting) so we can
+  # compare against the final best_ver below and demote a prerelease that is older
+  # than the best stable — mirrors the promotion guard in channel.sh/_chan==unstable.
+  local _best_stable_snap=""
+  local _c3b
+  for _c3b in "${_candidates[@]}"; do
+    _gs_eu2_is_prerelease "${_c3b}" || _best_stable_snap="${_c3b}"
+  done
+  if [[ -n "${_best_stable_snap}" ]]; then
+    # sort -V picks the highest stable among all non-prerelease candidates
+    local _stable_snap_list=()
+    for _c3b in "${_candidates[@]}"; do
+      _gs_eu2_is_prerelease "${_c3b}" || _stable_snap_list+=("${_c3b}")
+    done
+    _best_stable_snap="$(printf '%s\n' "${_stable_snap_list[@]}" | sort -V | tail -1)"
+  fi
+
   # ── Step 4: Digit-preference filter + sort descending, take best ─────────
   # GNU sort -V places letter-prefixed strings (PHP_ZIP-1.12.1, RELEASE_3_3_0)
   # AFTER digit-starting strings, so tail -1 would pick them over clean semver.
@@ -268,6 +286,21 @@ _gs_eu2_fetch_pecl_git() {
           fi
         fi
       fi
+    fi
+  fi
+
+  # ── Step 4c: Promotion guard — demote prerelease when stable is newer ───────
+  # Mirrors channel.sh's unstable-channel promotion guard.
+  # When channel=unstable is injected (via --unstable flag), Step 2b's stable-only
+  # filter is skipped, allowing sort -V to pick a prerelease. If that prerelease is
+  # OLDER than the best stable (e.g. best=3.0.0-rc.4 vs stable snap=3.1.1), use
+  # stable instead — a prerelease that sorts below stable is not an advance.
+  if [[ -n "${_best_ver}" && -n "${_best_stable_snap}" ]] && \
+     _gs_eu2_is_prerelease "${_best_ver}"; then
+    local _pg_cmp
+    _pg_cmp="$(_gs_eu2_semver_compare "${_best_stable_snap}" "${_best_ver}")"
+    if [[ "${_pg_cmp}" == "newer" ]]; then
+      _best_ver="${_best_stable_snap}"
     fi
   fi
 

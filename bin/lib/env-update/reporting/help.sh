@@ -47,6 +47,16 @@ Options:
                                   version as a "↳ [INFO] stable: <version>" sub-line for
                                   records on non-stable channels. Does not change decisions.
                                   Compatible with --unstable=full (shown below main line).
+  --no-notes                      Suppress annotation (note: TEXT) sub-lines — for minimal
+                                  output. Does NOT suppress SHA, unstable INFO, or stable
+                                  INFO sub-lines.
+  --force-auto                    Override (manual) and (override) annotation flags and HOLD
+                                  decisions — treats them as AUTO-eligible. Useful for
+                                  scripted environments where human gates are not appropriate.
+                                  When used with --apply, requires --confirm="Confirm override"
+                                  to proceed (safety gate — prevents accidental use).
+  --confirm=TEXT                  Confirmation string required by --force-auto --apply.
+                                  Must be exactly: Confirm override
 
 Default (no flags): print a parser summary with per-type breakdown and hints.
 
@@ -69,5 +79,8 @@ Examples:
   bin/env-update.sh --stable --check --dry-run     # preview stable-forced output without writing
   bin/env-update.sh --stable=info --check          # info mode: show stable sub-line for non-stable-channel records
   bin/env-update.sh --stable=info --unstable=full --check  # unstable decisions + stable sub-line for each
+  bin/env-update.sh --check --no-notes                    # suppress (note: ...) sub-lines
+  bin/env-update.sh --check --force-auto                  # preview: (manual)/(hold) treated as AUTO
+  bin/env-update.sh --apply --force-auto --confirm="Confirm override"  # apply with force-auto
 EOF
 }

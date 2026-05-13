@@ -263,6 +263,9 @@ bin/env-update.sh [OPTIONS]
 | `--unstable=info` | off | **Informational unstable mode.** Does NOT change `AUTO`/`HOLD`/`SKIP` decision logic and does NOT bypass the prerelease guard. After each fetch, performs a second pass (cache hit — no extra HTTP) with `channel=unstable` to discover what the latest prerelease would be. When a prerelease version is found that differs from the stable proposed version, it is shown as a `↳ [INFO] unstable: <version>` sub-line under the main decision line. Use when you want a heads-up about available prereleases without committing to tracking them. Compatible with all `--stable` forms. |
 | `--stable` / `--stable=full` | off | **Force stable channel.** Forces `channel=stable` on every record whose annotation has an explicit non-stable channel (`rc`, `beta`, `alpha`, `nightly`, `unstable`, or any other non-empty, non-stable value). Records already on the default stable channel (empty or `stable`) are untouched. Prints a `[STABLE MODE] channel forced stable for N record(s)` header line when at least one override occurs. Use when you want to see what the stable versions would be for a set of vars that are normally tracked at prerelease. Mutually exclusive with `--unstable=full` only. |
 | `--stable=info` | off | **Informational stable mode.** Does NOT change `AUTO`/`HOLD`/`SKIP` decision logic and does NOT inject channel overrides. After each fetch, performs a second pass (cache hit — no extra HTTP) with `channel=stable` to discover what the latest stable version would be. Only runs for records whose annotation channel is neither empty nor `stable` (those already use the stable fetch path). When a stable version is found that differs from the main proposed version (and is not a prerelease itself), it is shown as a `↳ [INFO] stable: <version>` sub-line under the main decision line. Use when you want a baseline stable reference while tracking prerelease vars. Compatible with `--unstable=full` and `--unstable=info`; when both are active, the unstable sub-line appears first, stable second. |
+| `--no-notes` | off | **Suppress note sub-lines.** When set, `↳ (note: TEXT)` annotation sub-lines are omitted from `--check` output. Useful for minimal/scripted output. Does NOT suppress SHA sub-lines, `[INFO] unstable:` sub-lines, or `[INFO] stable:` sub-lines. |
+| `--force-auto` | off | **Override annotation gates.** Treats `(manual)` and `(override)` annotation flags as if they were absent, and upgrades `HOLD` decisions to `AUTO`. Use when you need to auto-apply updates that are normally gated (e.g. in CI scripts or one-shot mass updates). When combined with `--apply`, requires `--confirm="Confirm override"` (exact string) — exit 1 without it. When combined with `--check` only, no confirmation is needed. |
+| `--confirm=TEXT` | (none) | **Confirmation gate for `--force-auto --apply`.** Must be exactly `Confirm override` (case-sensitive, including the space). Prevents accidental invocation of `--force-auto --apply` in interactive sessions. Has no effect unless `--force-auto` and `--apply` are both specified. |
 
 ### Flag combinations and mutual exclusivity
 
@@ -310,6 +313,13 @@ bin/env-update.sh --stable=info --unstable=full --check  # unstable decisions + 
 # Tag-ahead audit
 bin/env-update.sh --check --with-tags              # merge releases+tags for all github/pecl-git repos
 bin/env-update.sh --check --filter=ZIG             # (check-tags already annotated on Zig — no flag needed)
+
+# Output filtering
+bin/env-update.sh --check --no-notes               # suppress (note: TEXT) sub-lines
+
+# Force-auto (bypass annotation gates)
+bin/env-update.sh --check --force-auto             # preview: (manual)/(hold) treated as AUTO
+bin/env-update.sh --apply --force-auto --confirm="Confirm override"  # apply with gate bypass
 
 # Debug
 bin/env-update.sh --version                        # print 2.0.0

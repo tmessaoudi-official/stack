@@ -75,9 +75,19 @@ _gs_eu2_channel_select_best() {
     return 0
   fi
 
-  # Unstable: highest pre-release
+  # Unstable: highest pre-release — but promote stable when it has surpassed the prerelease.
+  # e.g. stable=3.1.1 vs hp=3.0.0-rc.4 → stable is newer → return stable (not a downgrade).
+  # e.g. stable=1.7.1 vs hp=1.8.0-rc1  → hp is newer → return hp (genuine prerelease advance).
   if [[ "${_chan}" == "unstable" ]]; then
-    [[ -n "${_hp}" ]] && { printf '%s\n' "${_hp}"; return 0; }
+    if [[ -n "${_hp}" ]]; then
+      if [[ -n "${_hs}" ]]; then
+        local _cmp
+        _cmp="$(_gs_eu2_semver_compare "${_hs}" "${_hp}")"
+        [[ "${_cmp}" == "newer" ]] && { printf '%s\n' "${_hs}"; return 0; }
+      fi
+      printf '%s\n' "${_hp}"
+      return 0
+    fi
     [[ -n "${_hs}" ]] && printf '%s\n' "${_hs}"
     return 0
   fi

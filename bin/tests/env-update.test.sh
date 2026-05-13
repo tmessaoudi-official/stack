@@ -4659,6 +4659,182 @@ t "t53n: --stable=full injection still works (== full check regression guard)" b
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Section 54 — unstable promotion guard (channel.sh + pecl_git.sh)
+# ═══════════════════════════════════════════════════════════════════════════
+section "54 — unstable promotion guard"
+
+# Direct unit-test of _gs_eu2_channel_select_best with channel=unstable
+
+t "t54a: unstable: stable newer than prerelease → returns stable (promotion guard)" bash -c "
+    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+    source '/stack/bin/lib/env-update/core/semver.sh'
+    source '/stack/bin/lib/env-update/core/channel.sh'
+    # stable=3.1.1 is newer than hp=3.0.0-rc.4 — should promote to stable
+    versions=\$'3.0.0-rc.4\n3.1.1'
+    result=\$(_gs_eu2_channel_select_best \"\$versions\" 'unstable')
+    [[ \"\$result\" == '3.1.1' ]] || { echo \"expected 3.1.1 (stable promoted), got: \$result\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t54b: unstable: prerelease genuinely newer than stable → returns prerelease" bash -c "
+    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+    source '/stack/bin/lib/env-update/core/semver.sh'
+    source '/stack/bin/lib/env-update/core/channel.sh'
+    # hp=1.8.0-rc1 is newer base than hs=1.7.1 — prerelease wins
+    versions=\$'1.7.1\n1.8.0-rc1'
+    result=\$(_gs_eu2_channel_select_best \"\$versions\" 'unstable')
+    [[ \"\$result\" == '1.8.0-rc1' ]] || { echo \"expected 1.8.0-rc1 (prerelease advance), got: \$result\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t54c: unstable: no stable exists → returns highest prerelease" bash -c "
+    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+    source '/stack/bin/lib/env-update/core/semver.sh'
+    source '/stack/bin/lib/env-update/core/channel.sh'
+    # No stable candidate — should return the highest prerelease
+    versions=\$'0.1.0-alpha1\n0.2.0-rc1'
+    result=\$(_gs_eu2_channel_select_best \"\$versions\" 'unstable')
+    [[ \"\$result\" == '0.2.0-rc1' ]] || { echo \"expected 0.2.0-rc1 (highest prerelease), got: \$result\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t54d: unstable: same-base prerelease vs stable → stable newer (1.0.0-rc1 vs 1.0.0)" bash -c "
+    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+    source '/stack/bin/lib/env-update/core/semver.sh'
+    source '/stack/bin/lib/env-update/core/channel.sh'
+    # 1.0.0-rc1 shipped as 1.0.0 → stable is newer, should promote
+    versions=\$'1.0.0-rc1\n1.0.0'
+    result=\$(_gs_eu2_channel_select_best \"\$versions\" 'unstable')
+    [[ \"\$result\" == '1.0.0' ]] || { echo \"expected 1.0.0 (stable promoted over rc of same base), got: \$result\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t54e: unstable: prerelease of higher base wins (0.35.0-rc1 vs stable 0.34.0)" bash -c "
+    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+    source '/stack/bin/lib/env-update/core/semver.sh'
+    source '/stack/bin/lib/env-update/core/channel.sh'
+    # 0.35.0-rc1 has higher base than stable 0.34.0 — prerelease wins
+    versions=\$'0.34.0\n0.35.0-rc1'
+    result=\$(_gs_eu2_channel_select_best \"\$versions\" 'unstable')
+    [[ \"\$result\" == '0.35.0-rc1' ]] || { echo \"expected 0.35.0-rc1 (genuinely newer), got: \$result\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 55 — --no-notes flag
+# ═══════════════════════════════════════════════════════════════════════════
+section "55 — --no-notes flag"
+
+t "t55a: --no-notes suppresses (note: TEXT) sub-lines in --check output" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t55a_cache
+    f=\${TMP_DIR}/t55a.env
+    printf '# @todo env-update (note:also add to setup.sh) dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_PG_NONOTES=18.3-alpine3.23\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --no-notes --env-file=\"\$f\" 2>/dev/null)
+    echo \"\$out\" | grep -qF 'also add to setup.sh' && { echo \"note line still present with --no-notes: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t55b: without --no-notes, (note: TEXT) sub-line IS shown" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t55b_cache
+    f=\${TMP_DIR}/t55b.env
+    printf '# @todo env-update (note:sync with setup.sh) dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_PG_WITHNOTES=18.3-alpine3.23\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null)
+    echo \"\$out\" | grep -qF 'sync with setup.sh' || { echo \"note line missing without --no-notes: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t55c: --no-notes does NOT suppress SHA sub-lines" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t55c_cache
+    f=\${TMP_DIR}/t55c.env
+    # Use pecl-git fixture that produces a SHA sub-line + note
+    printf '# @todo env-update (note:check compat) (use-sha) pecl-git:php/php-src\nGLOBAL_STACK_PHPSRC_SHA=8.4.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --no-notes --env-file=\"\$f\" 2>/dev/null)
+    # note should be gone
+    echo \"\$out\" | grep -qF 'check compat' && { echo \"note still present with --no-notes: \$out\"; echo FAIL; exit 0; }
+    # Decision line must still be there
+    echo \"\$out\" | grep -qE 'AUTO|SKIP|ERROR|HOLD|MANUAL' || { echo \"no decision token in output: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t55d: --no-notes is accepted without error (args parsing)" bash -c "
+    err=\$(bash '${ENV_UPDATE_V2}' --no-notes 2>&1 || true)
+    echo \"\$err\" | grep -qi 'unknown option\|error' && { echo \"--no-notes rejected as unknown: \$err\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 56 — --force-auto + --confirm flags
+# ═══════════════════════════════════════════════════════════════════════════
+section "56 — --force-auto + --confirm flags"
+
+t "t56a: --force-auto --apply without --confirm exits 1 with FATAL message" bash -c "
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t56a_cache
+    f=\${TMP_DIR}/t56a.env
+    printf '# @todo env-update dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T56A=18.3-alpine3.23\n' > \"\$f\"
+    # Create dry-run marker so apply guard is satisfied
+    mkdir -p \"\${TMP_DIR}/t56a_cache\"
+    touch \"\${TMP_DIR}/t56a_cache/last-dry-run-ts\"
+    err=\$(bash '${ENV_UPDATE_V2}' --apply --force-auto --env-file=\"\$f\" 2>&1 || true)
+    echo \"\$err\" | grep -qiF 'FATAL' || { echo \"expected FATAL message, got: '\$err'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t56b: --force-auto --apply --confirm='Wrong string' exits 1" bash -c "
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t56b_cache
+    f=\${TMP_DIR}/t56b.env
+    printf '# @todo env-update dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T56B=18.3-alpine3.23\n' > \"\$f\"
+    mkdir -p \"\${TMP_DIR}/t56b_cache\"
+    touch \"\${TMP_DIR}/t56b_cache/last-dry-run-ts\"
+    err=\$(bash '${ENV_UPDATE_V2}' --apply --force-auto --confirm='wrong string' --env-file=\"\$f\" 2>&1 || true)
+    echo \"\$err\" | grep -qiF 'FATAL' || { echo \"expected FATAL for wrong confirm, got: '\$err'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t56c: --force-auto --check (no --apply) exits 0 — no confirm needed" bash -c "
+    err=\$(bash '${ENV_UPDATE_V2}' --force-auto 2>&1 || true)
+    echo \"\$err\" | grep -qiF 'FATAL' && { echo \"unexpected FATAL for --force-auto without --apply: \$err\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t56d: --force-auto accepted without error (args parsing)" bash -c "
+    err=\$(bash '${ENV_UPDATE_V2}' --force-auto 2>&1 || true)
+    echo \"\$err\" | grep -qi 'unknown option' && { echo \"--force-auto rejected as unknown: \$err\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t56e: --confirm= accepted without error (args parsing)" bash -c "
+    err=\$(bash '${ENV_UPDATE_V2}' --confirm='Confirm override' 2>&1 || true)
+    echo \"\$err\" | grep -qi 'unknown option' && { echo \"--confirm rejected as unknown: \$err\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t56f: --force-auto: (manual) annotation treated as AUTO-eligible" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t56f_cache
+    f=\${TMP_DIR}/t56f.env
+    # current=18.3-alpine3.23 → fixture returns 18.4-alpine3.23, (manual) normally → MANUAL
+    # With --force-auto it should NOT be MANUAL (becomes AUTO or SKIP)
+    printf '# @todo env-update (manual) dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T56F=18.3-alpine3.23\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --force-auto --env-file=\"\$f\" 2>/dev/null)
+    echo \"\$out\" | grep -qF '[MANUAL]' && { echo \"(manual) still classified MANUAL with --force-auto: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t56g: without --force-auto, (manual) annotation produces MANUAL classification" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t56g_cache
+    f=\${TMP_DIR}/t56g.env
+    # postgres fixture returns 18.4-alpine3.23 (newer than current 18.3-alpine3.23) → MANUAL
+    printf '# @todo env-update (manual) dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T56G=18.3-alpine3.23\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null)
+    echo \"\$out\" | grep -qF '[MANUAL]' || { echo \"expected MANUAL without --force-auto: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section

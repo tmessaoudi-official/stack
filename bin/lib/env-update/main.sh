@@ -149,10 +149,19 @@ _gs_eu2_run_check() {
         _gs_eu2_record_set "${_i}" decision "${_saved_decision}"
         _gs_eu2_record_set "${_i}" error_message "${_saved_err}"
         # Store unstable_proposed only if it's a prerelease, different from stable proposed,
-        # and different from current (something actually new to show)
+        # AND genuinely newer than the stable proposed (not a backward step like stable=3.1.1
+        # returning hp=3.0.0-rc.4 — that would be a downgrade, not an advance).
         if [[ -n "${_unstable_ver}" && "${_unstable_ver}" != "${_saved_prop}" ]] && \
            _gs_eu2_is_prerelease "${_unstable_ver}"; then
-          _gs_eu2_record_set "${_i}" unstable_proposed "${_unstable_ver}"
+          local _ui_store="true"
+          if [[ -n "${_saved_prop}" ]]; then
+            local _ui_cmp
+            _ui_cmp="$(_gs_eu2_semver_compare "${_saved_prop}" "${_unstable_ver}")"
+            # "older" means stable is older than unstable — i.e. unstable is genuinely newer
+            [[ "${_ui_cmp}" != "older" ]] && _ui_store="false"
+          fi
+          [[ "${_ui_store}" == "true" ]] && \
+            _gs_eu2_record_set "${_i}" unstable_proposed "${_unstable_ver}"
         fi
       fi
     fi
@@ -216,7 +225,17 @@ _gs_eu2_run_check() {
 
     if [[ "${_fetcher_decision}" == "AUTO" || -z "${_fetcher_decision}" ]]; then
       local _classified
-      _classified="$(_gs_eu2_classify_decision "${_cur}" "${_prop}" "${_override}" "${_manual}" "${_major}" "${_GS_EU2_CFG[unstable]:-}")"
+      # --force-auto: bypass (manual) and (override) annotation flags by passing "" so
+      # classify_decision never sees them.  The HOLD gate is handled after classification.
+      local _eff_override="${_override}" _eff_manual="${_manual}"
+      if [[ "${_GS_EU2_CFG[force_auto]:-false}" == "true" ]]; then
+        _eff_override="" _eff_manual=""
+      fi
+      _classified="$(_gs_eu2_classify_decision "${_cur}" "${_prop}" "${_eff_override}" "${_eff_manual}" "${_major}" "${_GS_EU2_CFG[unstable]:-}")"
+      # --force-auto: upgrade HOLD to AUTO (bypasses major-bump guard / major_hint pin guard)
+      if [[ "${_GS_EU2_CFG[force_auto]:-false}" == "true" && "${_classified}" == "HOLD" ]]; then
+        _classified="AUTO"
+      fi
       _gs_eu2_record_set "${_i}" decision "${_classified}"
     fi
 
@@ -327,7 +346,8 @@ _gs_eu2_run_check() {
     # Width: tag(8) + 2 spaces + var field + some margin for change text
     printf '\r%*s\r' "$(( _max_var_len + 20 ))" "" >&2
     printf "%s  %-${_max_var_len}s%s\n" "${_tag}" "${_env_var}" "${_change}"
-    [[ -n "${_note}" ]] && printf '%10s↳ %s\n' "" "${_note}"
+    [[ -n "${_note}" && "${_GS_EU2_CFG[no_notes]:-false}" != "true" ]] && \
+      printf '%10s↳ %s\n' "" "${_note}"
 
     # SHA sub-line: show short SHA (8 chars) + date for AUTO and SHA decisions
     if [[ "${_decision}" == "AUTO" || "${_decision}" == "SHA" ]]; then
