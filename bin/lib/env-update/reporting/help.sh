@@ -9,7 +9,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/../config/defaults.sh"
 
 _gs_eu2_show_help() {
   cat << EOF
-bin/env-update.sh v${_GS_EU2_VERSION} — annotation parser + version checker (12 fetcher types)
+bin/env-update.sh v${_GS_EU2_VERSION} — annotation parser + version checker (11 fetcher types)
 
 Usage: env-update.sh [OPTIONS]
 
