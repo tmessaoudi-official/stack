@@ -1,7 +1,9 @@
 ---
 services:
   02phpbrew:
-    init: ${DOCKER_INIT}
+    extends:
+      file: docker/config/compose-fragments/base.compose.yaml
+      service: base
     build:
       args:
         BUILDKIT_INLINE_CACHE: 1
@@ -11,16 +13,10 @@ services:
         GLOBAL_STACK_VERSION: ${GLOBAL_STACK_VERSION}
       context: ./
       dockerfile: ./docker/images/02phpbrew/Dockerfile
-    cap_add:
-      - NET_ADMIN
     depends_on:
       00base:
         condition: service_healthy
         required: true
-    extra_hosts:
-      - ${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}:${GLOBAL_STACK_HOST_GATEWAY_IP}
-      - ${GLOBAL_STACK_DOCKER_HOST_DSN}:${GLOBAL_STACK_HOST_GATEWAY_IP}
-      - ${GLOBAL_STACK_EXPOSED_VIRTUAL_HOSTS}:${GLOBAL_STACK_HOST_GATEWAY_IP}
     environment:
       - PHPBREW_MODE=install
       - GLOBAL_STACK_COMPOSER_VERSION=${GLOBAL_STACK_COMPOSER_VERSION}
@@ -65,8 +61,6 @@ services:
       - GLOBAL_STACK_DOCKER_USER_NAME=${GLOBAL_STACK_DOCKER_USER_NAME}
       - GLOBAL_STACK_ERROR_TOKEN=phpbrew
     image: ${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}:${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_PORT_5000}/local_global_stack_02phpbrew:${GLOBAL_STACK_VERSION}
-    networks:
-      - public
     ports:
       - ${GLOBAL_STACK_PHPBREW_PORT_9001:-}9001
     healthcheck:
@@ -79,14 +73,3 @@ services:
       stack.service: "02phpbrew"
       stack.tier: "runtime"
       stack.version: "${GLOBAL_STACK_VERSION}"
-    privileged: true
-    restart: "on-failure:5"
-    volumes:
-      - /etc/ssl/certs/ca-certificates.crt:/etc/ssl/certs/ca-certificates.crt:rw,delegated
-      - ./projects:${GLOBAL_STACK_DOCKER_WORKDIR}:rw
-      - ./tools:${GLOBAL_STACK_DOCKER_TOOLS_PATH}:rw
-      - ./${GLOBAL_STACK_SHELL_HISTORY}:/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_HISTORY_TARGET}:rw
-      - ./docker/config/root:${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/home/user:rw
-      - ./docker/config/dist/bin:${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/bin:rw
-      - ./docker/config/dist/conf:${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/conf:rw
-    working_dir: ${GLOBAL_STACK_DOCKER_WORKDIR}
