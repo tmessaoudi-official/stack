@@ -3801,12 +3801,12 @@ t "t49f: parse — (git:) without slash exits non-zero (invalid format)" bash -c
     echo PASS
 "
 
-t "t49g: regression — pecl-git fetcher eliminated; pecl:zmq (git:zeromq/php-zmq) dispatches without crash" bash -c "
+t "t49g: regression — git-primary PHP extensions use github: fetcher; zeromq/php-zmq dispatches without crash" bash -c "
     f=\${TMP_DIR}/t49g.env
-    printf '# @todo env-update pecl:zmq (git:zeromq/php-zmq) 1.1.3\nGLOBAL_STACK_PHP_ZMQ_VERSION=1.1.3\n' > \"\$f\"
+    printf '# @todo env-update github:zeromq/php-zmq 1.1.3\nGLOBAL_STACK_PHP_ZMQ_VERSION=1.1.3\n' > \"\$f\"
     out=\$(export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'; export _GS_EU2_CACHE_DIR=\"\${TMP_DIR}/t49g_cache\"; bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null)
     # Must not produce unknown-type error
-    echo \"\$out\" | grep -qF 'unknown fetcher type' && { echo \"pecl: still hitting unknown-type fallback: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'unknown fetcher type' && { echo \"github: hitting unknown-type fallback: \$out\"; echo FAIL; exit 0; }
     # Must not be an empty result
     echo \"\$out\" | grep -qE 'AUTO|SKIP|HOLD|ERROR' || { echo \"no decision token in output: \$out\"; echo FAIL; exit 0; }
     echo PASS
@@ -4401,8 +4401,8 @@ t "t55c: --no-notes does NOT suppress SHA sub-lines" bash -c "
     export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t55c_cache
     f=\${TMP_DIR}/t55c.env
-    # Use pecl+git fixture that produces a SHA sub-line + note
-    printf '# @todo env-update (note:check compat) (use-sha) pecl:zmq (git:zeromq/php-zmq) 1.1.3\nGLOBAL_STACK_ZMQ_SHA=1.1.3\n' > \"\$f\"
+    # Use github+use-sha fixture that produces a SHA sub-line + note
+    printf '# @todo env-update (note:check compat) (use-sha) github:zeromq/php-zmq 1.1.3\nGLOBAL_STACK_ZMQ_SHA=1.1.3\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --no-notes --env-file=\"\$f\" 2>/dev/null)
     # note should be gone
     echo \"\$out\" | grep -qF 'check compat' && { echo \"note still present with --no-notes: \$out\"; echo FAIL; exit 0; }

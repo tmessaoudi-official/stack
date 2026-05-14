@@ -734,6 +734,7 @@ Difference vs `(check-tags)`: The gap fix fires only **after** a gap is detected
 - Some repos publish via Releases API only; others only via Tags API. The fetcher handles both transparently. Repos with thousands of tags may need git ls-remote for deep major version searches.
 - **Repos that publish GitHub Releases only for pre-releases** (e.g., Flutter): the fetcher detects this and falls through to the Tags API and git ls-remote automatically — no special annotation needed beyond the normal `tag-filter` flag.
 - **SKIP→ERROR escalation:** When all fetch strategies exhaust without finding stable tags, and the current version is itself stable, the fetcher sets `ERROR` instead of `SKIP`. The reasoning: a stable current version proves stable releases have existed for this project — failing to find any indicates a fetcher failure rather than a legitimate "no stable releases" scenario.
+- **`(manual)` + no releases = SKIP (not ERROR):** When the `(manual)` flag is set and the repository has zero releases and zero tags (e.g. a dormant code-dump repo), the fetcher returns `SKIP` instead of `ERROR`. Use this for repos like `dstogov/php-ffi` that have no versioned artifacts — the `(manual)` flag signals that human review is required for any update, so the absence of fetchable versions is expected, not a failure.
 
 **Example annotations:**
 ```bash
@@ -751,6 +752,14 @@ GLOBAL_STACK_ZIG_VERSION=0.15.2
 # Tracking an underscore-repo (GitHub repo name with underscores)
 # HTTP fixture: bin/tests/fixtures/env-update/http/api.github.com_repos_testowner_underscore-repo_releases
 # @todo env-update github:testowner/underscore-repo 1.0.0
+
+# Git-primary PHP extension (beta/alpha-only on PECL — use github: not pecl:)
+# @todo env-update (manual) github:zeromq/php-zmq 1.1.3 sha:616b6c64ffd3866ed038615494306dd464ab53fc
+GLOBAL_STACK_PHP_DEFAULT_ZMQ_VERSION=
+
+# Dormant repo with no releases or tags — (manual) suppresses ERROR, produces SKIP
+# @todo env-update (manual) (use-sha) github:dstogov/php-ffi 0.3 sha:92d1c39e2650cf5f9c66c4cfae69a3874a7eabba
+GLOBAL_STACK_PHP_DEFAULT_FFI_VERSION=
 ```
 
 ---
@@ -818,19 +827,21 @@ GLOBAL_STACK_SERVERLESS_VERSION=3.38.0
 
 **Error:** `pecl: no stable release found for '{ext}'` when the PECL allreleases.xml contains no stable entry.
 
+> **Note:** Use `github:` for extensions with no stable PECL release (beta/alpha only on PECL are not found by the `pecl:` fetcher). Examples: zmq (beta-only on PECL), timecop (beta-only), ffi (alpha-only, code-dump repo with no tags) — these belong on `github:`, not `pecl:`.
+
 **Example annotations:**
 ```bash
 # Basic PECL fetch
 # @todo env-update pecl:apcu 5.1.24
 GLOBAL_STACK_PHP_DEFAULT_APCU_VERSION=5.1.24
 
-# PECL + GitHub HEAD SHA tracking
-# @todo env-update pecl:zmq (git:zeromq/php-zmq) 1.1.3 sha:616b6c64ffd3866ed038615494306dd464ab53fc
-GLOBAL_STACK_PHP_DEFAULT_ZMQ_VERSION=
+# PECL + GitHub HEAD SHA tracking (amqp has both stable PECL releases and a GitHub mirror)
+# @todo env-update pecl:amqp (git:php-amqp/php-amqp) 2.2.0 sha:64fff28839ffb4218b1d80d590618010c0c7da2f
+GLOBAL_STACK_PHP_DEFAULT_AMQP_VERSION=2.2.0
 
 # PECL + GitHub SHA, use-sha mode (variable holds the SHA not the version)
-# @todo env-update (manual) (use-sha) pecl:ffi (git:dstogov/php-ffi) 0.3 sha:92d1c39e2650cf5f9c66c4cfae69a3874a7eabba
-GLOBAL_STACK_PHP_DEFAULT_FFI_VERSION=
+# @todo env-update (use-sha) pecl:raphf (git:m6w6/ext-raphf) 2.0.2 sha:5836579db73ac959b9f743e09d8763c41c7cfcef
+GLOBAL_STACK_PHP_DEFAULT_RAPHF_VERSION=5836579db73ac959b9f743e09d8763c41c7cfcef
 ```
 
 ---

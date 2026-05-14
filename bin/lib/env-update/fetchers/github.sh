@@ -136,11 +136,12 @@ _gs_eu2_github_fetch_tags_paginated() {
 _gs_eu2_fetch_github() {
   local _idx="${1}"
 
-  local _identifier _channel _major_hint _no_cache
+  local _identifier _channel _major_hint _no_cache _manual
   _identifier="$(_gs_eu2_record_get "${_idx}" identifier)"
   _channel="$(_gs_eu2_record_get "${_idx}" channel)"
   _major_hint="$(_gs_eu2_record_get "${_idx}" major_hint)"
   _no_cache="${_GS_EU2_CFG[no_cache]:-false}"
+  _manual="$(_gs_eu2_record_get "${_idx}" manual)"
 
   # ── Check-tags merge mode (per-annotation flag or --with-tags CLI flag) ────
   local _check_tags _with_tags _merge_mode
@@ -217,6 +218,12 @@ _gs_eu2_fetch_github() {
   if [[ -z "$(printf '%s\n' "${_raw_tags}" | grep -v '^$' || true)" ]]; then
     local _hint=""
     [[ -z "${_tok}" ]] && _hint=" (set GITHUB_TOKEN or GLOBAL_STACK_GITHUB_TOKEN to avoid rate limits)"
+    # (manual) repos with no releases/tags are expected (e.g. code-dump repos with no versioned
+    # releases). Skip rather than error — the annotation is human-managed.
+    if [[ "${_manual}" == "true" ]]; then
+      _gs_eu2_record_set "${_idx}" decision "SKIP"
+      return 0
+    fi
     _gs_eu2_record_set "${_idx}" decision      "ERROR"
     _gs_eu2_record_set "${_idx}" error_message "no tags or releases found for github:${_identifier}${_hint}"
     return 0
