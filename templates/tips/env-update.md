@@ -575,6 +575,12 @@ Before the semver delta check, the engine uses `sort -V` to compare `current` an
 is `SKIP`. This prevents accidentally "downgrading" a variable when the registry returns an
 older tag that passes the filter.
 
+**RC→stable promotion exception**: when `current` is a prerelease (e.g. `37.0.0-rc2`) and
+`proposed` is the stable release of the same base version (`37.0.0`), the `sort -V` check
+is skipped — GNU `sort -V` puts the bare base before any suffixed variant and would
+otherwise misclassify the promotion as a downgrade. Platform suffixes like `-alpine3.23`
+are not treated as prerelease markers and are unaffected by this exception.
+
 ### Major hint enforcement (C3 rule)
 
 The major hint pin uses the regex `^${major_hint}([.^_-]|$)` to test whether the proposed

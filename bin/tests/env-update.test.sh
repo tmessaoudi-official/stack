@@ -4859,6 +4859,54 @@ t "t56i: --force-auto upgrades HOLD to AUTO (major-bump guard bypass)" bash -c "
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Section 57 — RC→stable promotion guard in decide.sh
+# ═══════════════════════════════════════════════════════════════════════════
+section "57 — RC→stable promotion guard"
+
+_CD_LIBS57="
+source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update/core/semver.sh'
+source '/stack/bin/lib/env-update/core/decide.sh'
+"
+
+t "t57a: rc2→stable same base → AUTO (not SKIP)" bash -c "
+    ${_CD_LIBS57}
+    result=\$(_gs_eu2_classify_decision '37.0.0-rc2' '37.0.0' '' '' '')
+    [[ \"\$result\" == 'AUTO' ]] || { echo \"expected AUTO for rc2→stable, got: '\$result'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t57b: alpha1→stable same base → AUTO (not SKIP)" bash -c "
+    ${_CD_LIBS57}
+    result=\$(_gs_eu2_classify_decision '1.0.0-alpha1' '1.0.0' '' '' '')
+    [[ \"\$result\" == 'AUTO' ]] || { echo \"expected AUTO for alpha→stable, got: '\$result'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t57c: prerelease→lower stable different base → SKIP (genuine downgrade)" bash -c "
+    ${_CD_LIBS57}
+    result=\$(_gs_eu2_classify_decision '2.0.0-beta3' '1.9.9' '' '' '')
+    [[ \"\$result\" == 'SKIP' ]] || { echo \"expected SKIP for downgrade to lower base, got: '\$result'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t57d: stable→RC same base → SKIP (not a promotion)" bash -c "
+    ${_CD_LIBS57}
+    result=\$(_gs_eu2_classify_decision '3.0.0' '3.0.0-rc1' '' '' '')
+    [[ \"\$result\" == 'SKIP' ]] || { echo \"expected SKIP for stable→RC, got: '\$result'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# Platform suffix (-alpine3.23) is NOT a prerelease — guard does not fire;
+# stripping the platform suffix remains a SKIP (sort -V path still applies).
+t "t57e: alpine-tagged→bare same numeric base → SKIP (platform suffix, not prerelease)" bash -c "
+    ${_CD_LIBS57}
+    result=\$(_gs_eu2_classify_decision '3.0.0-alpine3.23' '3.0.0' '' '' '')
+    [[ \"\$result\" == 'SKIP' ]] || { echo \"expected SKIP for alpine→bare (platform suffix not prerelease), got: '\$result'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section

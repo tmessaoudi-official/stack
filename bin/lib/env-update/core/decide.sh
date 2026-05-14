@@ -45,11 +45,26 @@ _gs_eu2_classify_decision() {
     echo "SKIP"; return 0
   fi
 
-  # Downgrade protection: if proposed sorts before current via sort -V, skip
+  # Downgrade protection: if proposed sorts before current via sort -V, skip.
   # Use sort -V directly (not semver_compare) to avoid misclassifying platform
   # suffixes like -alpine3.23 as pre-release markers.
   local _cv="${_cur#v}" _pv="${_prop#v}"
-  if [[ "${_cv}" != "${_pv}" ]]; then
+
+  # RC→stable promotion guard: sort -V puts the bare base version (37.0.0) BEFORE
+  # any suffixed variant (37.0.0-rc2), which falsely triggers downgrade protection.
+  # When current is a prerelease AND proposed is stable (no prerelease marker), and
+  # both share the same numeric base, this is a forward promotion — skip the sort -V
+  # check entirely.  Platform suffixes (e.g. -alpine3.23) are NOT detected as
+  # prerelease by _gs_eu2_is_prerelease, so they are unaffected by this guard.
+  local _skip_sort_v=false
+  if _gs_eu2_is_prerelease "${_cv}" && ! _gs_eu2_is_prerelease "${_pv}"; then
+    local _cv_base="${_cv%%-*}" _pv_base="${_pv%%-*}"
+    if [[ "${_cv_base}" == "${_pv_base}" ]]; then
+      _skip_sort_v=true
+    fi
+  fi
+
+  if [[ "${_skip_sort_v}" == false && "${_cv}" != "${_pv}" ]]; then
     local _oldest
     _oldest="$(printf '%s\n%s\n' "${_cv}" "${_pv}" | sort -V | head -1)"
     if [[ "${_oldest}" == "${_pv}" ]]; then
