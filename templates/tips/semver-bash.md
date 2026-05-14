@@ -23,13 +23,13 @@ Lexicographic `sort` would give: `1.0.0`, `1.10.0`, `1.9.0`, `2.0.0` (wrong — 
 
 `sort -V` treats suffixes as "later" in version ordering — any character after the numeric version sorts after the plain number:
 
-| Comparison | Result from sort -V | Correct for semver? |
+| Comparison | sort -V output order | Correct for semver? |
 |---|---|---|
-| `1.0.0` vs `1.0.0-rc1` | `1.0.0-rc1` < `1.0.0` | **Wrong** — semver says rc1 is OLDER than 1.0.0 |
-| `1.0.0` vs `1.0.0-alpine3.23` | `1.0.0-alpine3.23` > `1.0.0` | Acceptable for Docker tags (alpine variant is a different artifact, not a prerelease) |
-| `v1.0.0` vs `1.0.0` | Handles `v` prefix correctly | Correct |
+| `1.0.0` vs `1.0.0-rc1` | `1.0.0` then `1.0.0-rc1` (rc1 sorts LATER/higher) | **Wrong** — semver says rc1 is OLDER than the stable release |
+| `1.0.0` vs `1.0.0-alpine3.23` | `1.0.0` then `1.0.0-alpine3.23` (suffix sorts later) | Acceptable for Docker tags (alpine variant is a different artifact) |
+| `v1.0.0` vs `1.0.0` | `1.0.0` then `v1.0.0` (v prefix sorts later) | Use the strip-v pattern in semver_compare to normalize |
 
-**Bottom line**: `sort -V` is correct for file/tag sorting but WRONG for semver prerelease semantics. A release candidate (`1.0.0-rc1`) is older than the stable release (`1.0.0`), but `sort -V` says the opposite. See the prerelease section below.
+**Bottom line**: `sort -V` is correct for file/tag sorting but WRONG for semver prerelease semantics. A release candidate (`1.0.0-rc1`) is older than the stable release (`1.0.0`), but `sort -V` treats the suffix as "later" and places rc1 after stable. See the prerelease section below.
 
 ## Comparing two versions
 
@@ -71,12 +71,13 @@ When comparing a prerelease to its stable release, `sort -V` gives the wrong ans
 
 ```bash
 printf '%s\n' "1.0.0-rc2" "1.0.0" | sort -V
-# Output: 1.0.0-rc2 then 1.0.0
-# sort -V says: 1.0.0-rc2 < 1.0.0 — correct by sort ordering
-# But wait — sort -V actually puts rc2 AFTER 1.0.0 (suffix sorts later)
+# Output:
+#   1.0.0
+#   1.0.0-rc2
+# sort -V puts 1.0.0 first — so it considers 1.0.0-rc2 to be "newer" than 1.0.0
 ```
 
-Test it yourself — `sort -V` actually places `1.0.0-rc2` AFTER `1.0.0`, so `semver_compare "1.0.0-rc2" "1.0.0"` returns "newer" — which is WRONG. The RC is older than the stable release.
+`sort -V` places `1.0.0-rc2` AFTER `1.0.0` (suffix = later), so `semver_compare "1.0.0-rc2" "1.0.0"` returns "newer" — which is WRONG. The RC is older than the stable release.
 
 **Fix**: detect the same-base prerelease-to-stable promotion explicitly:
 
