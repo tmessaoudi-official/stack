@@ -1,7 +1,9 @@
 ---
 services:
   04serverless-framework:
-    init: ${DOCKER_INIT}
+    extends:
+      file: docker/config/compose-fragments/base.compose.yaml
+      service: base
     build:
       args:
         BUILDKIT_INLINE_CACHE: 1
@@ -140,8 +142,6 @@ services:
       - GLOBAL_STACK_DOCKER_USER_EMAIL=${GLOBAL_STACK_DOCKER_USER_EMAIL}
       - GLOBAL_STACK_DOCKER_USER_NAME=${GLOBAL_STACK_DOCKER_USER_NAME}
       - GLOBAL_STACK_ERROR_TOKEN=serverless
-    cap_add:
-      - NET_ADMIN
     depends_on:
       00base:
         condition: service_healthy
@@ -179,12 +179,6 @@ services:
       03phpedge:
         condition: service_healthy
         required: true
-    extra_hosts:
-      - ${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}:${GLOBAL_STACK_HOST_GATEWAY_IP}
-      - ${GLOBAL_STACK_DOCKER_HOST_DSN}:${GLOBAL_STACK_HOST_GATEWAY_IP}
-      - ${GLOBAL_STACK_EXPOSED_VIRTUAL_HOSTS}:${GLOBAL_STACK_HOST_GATEWAY_IP}
-    networks:
-      - public
     healthcheck:
       test: ["CMD-SHELL", "! test -f ${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}/serverless && test -f ${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/serverless || exit 1"]
       interval: 30s
@@ -195,18 +189,9 @@ services:
       stack.service: "04serverless-framework"
       stack.tier: "tools"
       stack.version: "${GLOBAL_STACK_VERSION}"
-    privileged: true
-    restart: "on-failure:5"
-    volumes:
-      - /etc/ssl/certs/ca-certificates.crt:/etc/ssl/certs/ca-certificates.crt:rw,delegated
-      - ./projects:${GLOBAL_STACK_DOCKER_WORKDIR}:rw
-      - ./tools:${GLOBAL_STACK_DOCKER_TOOLS_PATH}:rw
-      - ./${GLOBAL_STACK_SHELL_HISTORY}:/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_HISTORY_TARGET}:rw
-      - ./docker/config/root:${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/home/user:rw
-      - ./docker/config/dist/bin:${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/bin:rw
-      - ./docker/config/dist/conf:${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/conf:rw
-      - 04serverless_framework_lib_docker:/var/lib/docker:rw,delegated
     working_dir: ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework
+    volumes:
+      - 04serverless_framework_lib_docker:/var/lib/docker:rw,delegated
 volumes:
   04serverless_framework_lib_docker:
     name: ${COMPOSE_PROJECT_NAME}_${GLOBAL_STACK_VERSION}_04serverless_framework_lib_docker

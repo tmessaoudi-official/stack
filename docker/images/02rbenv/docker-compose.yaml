@@ -1,7 +1,9 @@
 ---
 services:
   02rbenv:
-    init: ${DOCKER_INIT}
+    extends:
+      file: docker/config/compose-fragments/base-6vol.compose.yaml
+      service: base-6vol
     build:
       args:
         BUILDKIT_INLINE_CACHE: 1
@@ -12,16 +14,10 @@ services:
         GLOBAL_STACK_RBENV_SET_LOCALE: ${GLOBAL_STACK_RBENV_SET_LOCALE}
       context: ./
       dockerfile: ./docker/images/02rbenv/Dockerfile
-    cap_add:
-      - NET_ADMIN
     depends_on:
       00base:
         condition: service_healthy
         required: true
-    extra_hosts:
-      - ${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}:${GLOBAL_STACK_HOST_GATEWAY_IP}
-      - ${GLOBAL_STACK_DOCKER_HOST_DSN}:${GLOBAL_STACK_HOST_GATEWAY_IP}
-      - ${GLOBAL_STACK_EXPOSED_VIRTUAL_HOSTS}:${GLOBAL_STACK_HOST_GATEWAY_IP}
     environment:
       - RBENV_MODE=install
       - GLOBAL_STACK_RBENV_VERSION=${GLOBAL_STACK_RBENV_VERSION}
@@ -48,8 +44,6 @@ services:
       - GLOBAL_STACK_DOCKER_USER_NAME=${GLOBAL_STACK_DOCKER_USER_NAME}
       - GLOBAL_STACK_ERROR_TOKEN=rbenv
     image: ${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}:${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_PORT_5000}/local_global_stack_02rbenv:${GLOBAL_STACK_VERSION}
-    networks:
-      - public
     healthcheck:
       test: ["CMD-SHELL", "! test -f ${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}/rbenv && test -f ${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/rbenv || exit 1"]
       interval: 30s
@@ -60,13 +54,3 @@ services:
       stack.service: "02rbenv"
       stack.tier: "runtime"
       stack.version: "${GLOBAL_STACK_VERSION}"
-    privileged: true
-    restart: "on-failure:5"
-    volumes:
-      - /etc/ssl/certs/ca-certificates.crt:/etc/ssl/certs/ca-certificates.crt:rw,delegated
-      - ./projects:${GLOBAL_STACK_DOCKER_WORKDIR}:rw
-      - ./tools:${GLOBAL_STACK_DOCKER_TOOLS_PATH}:rw
-      - ./${GLOBAL_STACK_SHELL_HISTORY}:/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_HISTORY_TARGET}:rw
-      - ./docker/config/root:${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/home/user:rw
-      - ./docker/config/dist/bin:${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/bin:rw
-    working_dir: ${GLOBAL_STACK_DOCKER_WORKDIR}

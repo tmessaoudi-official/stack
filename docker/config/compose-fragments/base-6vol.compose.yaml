@@ -1,10 +1,6 @@
 ---
-# Base service fragment — extend this in runtime services (02*/03*/04* tiers).
-#
-# Provides: init, cap_add, restart, privileged, networks, working_dir,
-#           7 standard volumes (ssl-cert, projects, tools, bash_history,
-#           config/root, config/dist/bin, config/dist/conf), extra_hosts,
-#           and the stack.version label.
+# 6-volume base fragment — services that mount dist/bin but NOT dist/conf.
+# Services: 02pyenv, 02rbenv, 02rust, 03python3, 03ruby3, 03ruby4
 #
 # Volumes use ${GLOBAL_STACK_DOCKER_ROOT_PATH} for absolute path resolution
 # because extends: resolves relative paths from the base file's directory,
@@ -12,13 +8,8 @@
 #
 # NOT included (service-specific): build, image, depends_on, environment,
 #   healthcheck, labels.stack.service, labels.stack.tier, ports.
-#
-# Services with 6 volumes (no dist/conf): 02pyenv, 02rbenv, 02rust,
-#   03python3, 03ruby3, 03ruby4 — these extend base-6vol.compose.yaml instead.
-# Services with extra volumes: 04android, 04serverless-framework,
-#   05edge, 05stable — these extend this fragment and declare only their extras.
 services:
-  base:
+  base-6vol:
     init: ${DOCKER_INIT}
     cap_add:
       - NET_ADMIN
@@ -34,7 +25,6 @@ services:
       - ${GLOBAL_STACK_DOCKER_ROOT_PATH}/${GLOBAL_STACK_SHELL_HISTORY}:/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_HISTORY_TARGET}:rw
       - ${GLOBAL_STACK_DOCKER_ROOT_PATH}/docker/config/root:${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/home/user:rw
       - ${GLOBAL_STACK_DOCKER_ROOT_PATH}/docker/config/dist/bin:${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/bin:rw
-      - ${GLOBAL_STACK_DOCKER_ROOT_PATH}/docker/config/dist/conf:${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/conf:rw
     extra_hosts:
       - ${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}:${GLOBAL_STACK_HOST_GATEWAY_IP}
       - ${GLOBAL_STACK_DOCKER_HOST_DSN}:${GLOBAL_STACK_HOST_GATEWAY_IP}
