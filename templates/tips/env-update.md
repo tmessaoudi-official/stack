@@ -1,8 +1,8 @@
 # env-update v2.0.0 — Complete Reference
 
 `bin/env-update.sh` is the automated version checker for Global Stack. It parses
-`@todo env-update` annotations in `.env`, fetches the latest versions from 12 upstream
-source types, classifies each update decision, and can apply AUTO decisions back to `.env`.
+`@todo env-update` annotations in `.env`, fetches the latest versions from 11 upstream
+fetcher types, classifies each update decision, and can apply AUTO decisions back to `.env`.
 
 ---
 
@@ -548,17 +548,27 @@ but if `decision` is `AUTO` or empty, `decide.sh` makes the final call.
 ```
 proposed_version empty?        → SKIP
 current is unversioned?        → SKIP  (floating ref: nightly/latest/edge/master/next/head/main)
-override=true OR manual=true?  → MANUAL
-current == proposed?           → SKIP  (up to date)
+current == proposed?           → SKIP  (up to date — fires before manual/override to suppress noise)
 proposed is prerelease AND
   current is stable?           → SKIP  (prerelease guard — "proposed is prerelease")
 proposed sorts before current? → SKIP  (downgrade protection, via sort -V)
+                                        NOTE: downgrade check fires BEFORE manual/override so that
+                                        a fetcher returning an older version is always suppressed,
+                                        even for (manual) or (override) annotations.
+override=true OR manual=true?  → MANUAL  (only reached for genuine forward version changes)
 semver_delta = major?
   major_hint empty?            → HOLD  (major jump, no pin — requires review)
   major_hint set but proposed
   does not start with hint?    → HOLD  (escapes the pin — C3 rule)
                                → AUTO  (within major, safe to apply)
 ```
+
+**Order matters**: The downgrade check runs *before* the manual/override check. This prevents
+the case where a fetcher incorrectly proposes an older version for a `(manual)` annotation
+from surfacing as `[MANUAL]` when it should be suppressed as `[SKIP] (would downgrade)`.
+A real-world example: `aleph.js` had `current=1.0.0-beta.44` (from deno.land) but GitHub
+only has `v0.3.0-beta.*` tags — the fetcher would propose a downgrade. With the correct
+order, this is silently skipped rather than noisily shown as a manual flag candidate.
 
 The **prerelease guard** protects stable variables from being auto-proposed RC/alpha/beta
 versions. It uses `_gs_eu2_is_prerelease` which matches the full marker set (both dash and
@@ -567,16 +577,35 @@ annotation reads `(proposed is prerelease — pin manually when stable ships)`.
 
 ### Downgrade protection
 
-Before the semver delta check, the engine uses `sort -V` to compare `current` and
-`proposed` (stripping any leading `v`). If `proposed` sorts before `current`, the decision
-is `SKIP`. This prevents accidentally "downgrading" a variable when the registry returns an
-older tag that passes the filter.
+Before the manual/override and semver delta check, the engine uses `sort -V` to compare
+`current` and `proposed` (stripping any leading `v`). If `proposed` sorts before `current`,
+the decision is `SKIP`. This prevents accidentally "downgrading" a variable when the
+registry returns an older tag that passes the filter. The downgrade check applies even to
+`(manual)` and `(override)` entries — a fetcher returning an older version is always wrong.
 
 **RC→stable promotion exception**: when `current` is a prerelease (e.g. `37.0.0-rc2`) and
 `proposed` is the stable release of the same base version (`37.0.0`), the `sort -V` check
 is skipped — GNU `sort -V` puts the bare base before any suffixed variant and would
 otherwise misclassify the promotion as a downgrade. Platform suffixes like `-alpine3.23`
 are not treated as prerelease markers and are unaffected by this exception.
+
+### Mixed v-prefix sort behavior
+
+`channel.sh` uses `sort -V` to select the highest version from a candidate pool. GNU
+`sort -V` misorders pools containing both `v`-prefixed and non-prefixed versions: the `v`
+character has a higher ASCII value than any digit, so `v0.3.0` sorts *after* `1.0.0-alpha`
+(numerically `0.3.0 < 1.0.0`). The fix: strip the leading `v` for the sort key via `awk`
+(preserving the original tag string), then recover the original from the second column.
+
+```bash
+# Fixed sort — preserves original tag string, sorts by stripped key
+printf '%s\n' "${versions[@]}" \
+  | awk '{n=$0; sub(/^v/,"",n); printf "%s\t%s\n",n,$0}' \
+  | sort -V -k1,1 | tail -1 | cut -f2-
+```
+
+This applies to all `_hs` / `_hp` calculations in `channel.sh` as well as the specific-
+channel sort path.
 
 ### Major hint enforcement (C3 rule)
 
@@ -1356,6 +1385,40 @@ GLOBAL_STACK_BUILDX_VERSION=v0.20.2
 ```
 
 Strip `v` for clean semver comparison, restore it so the variable keeps `v0.20.2`.
+
+### Tier-drift pattern (DEFAULT vs per-tier overrides)
+
+Some packages have a shared `DEFAULT` version variable and per-tier overrides. Each tier
+variable references the default via shell expansion in `.env`:
+
+```bash
+# @todo env-update (note:also update per-tier overrides below) npm:@types/node 22.15.17
+GLOBAL_STACK_NODE_DEFAULT_TYPES_NODE_VERSION=22.15.17
+
+# Per-tier overrides — annotated independently to track each tier's active major
+# @todo env-update (major:22) npm:@types/node 22.15.17
+GLOBAL_STACK_NODE22_TYPES_NODE_VERSION=${GLOBAL_STACK_NODE_DEFAULT_TYPES_NODE_VERSION}
+
+# @todo env-update (major:24) npm:@types/node 24.0.3
+GLOBAL_STACK_NODE24_TYPES_NODE_VERSION=${GLOBAL_STACK_NODE_DEFAULT_TYPES_NODE_VERSION}
+```
+
+**Rules for this pattern:**
+- The `DEFAULT` annotation tracks the latest stable (no major pin). When a new major ships,
+  the `DEFAULT` variable moves to it automatically via AUTO.
+- Per-tier annotations use `(major:N)` to stay locked to a specific major. They will HOLD
+  when a new major ships, letting the operator decide whether to bump the per-tier pin.
+- The per-tier `VAR=` value is a shell expansion `${DEFAULT_VAR}` — the annotation
+  `CURRENT_VERSION` field in the annotation is the pinned version string for comparison
+  purposes. `--apply` will NOT overwrite the shell-expansion value in `VAR=` for per-tier
+  lines; `env-scan.sh` handles propagation of the DEFAULT value to derived files.
+- Always annotate the DEFAULT with `(note:also update per-tier overrides below)` so the
+  operator is reminded to sync per-tier pins when the default advances to a new major.
+
+**Drift detection**: if `DEFAULT` has moved to major 24 but `NODE22_TYPES_NODE_VERSION`
+annotation still says `(major:22)`, env-update will HOLD with `← major pin (24.x available)`
+on the DEFAULT but AUTO on `NODE22` (because 22.x is the correct pin for that tier). This
+is intentional — the drift is surfaced by the HOLD on DEFAULT, not on the per-tier var.
 
 ---
 

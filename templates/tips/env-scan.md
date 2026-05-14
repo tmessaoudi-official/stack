@@ -249,3 +249,72 @@ With `--profile=true`, a table like this is printed after the run:
 
 Duration is colour-coded: green < 200 ms, yellow 200 ms–1 s, red > 1 s.
 Memory delta is per-phase RSS change; Peak shows the highest RSS seen.
+
+---
+
+## Integration with env-update
+
+The canonical workflow for updating a version and propagating it everywhere:
+
+```bash
+# 1. Preview available updates (--dry-run is a safety gate for --apply)
+bin/env-update.sh --check --dry-run
+
+# 2. Apply AUTO decisions to .env
+bin/env-update.sh --apply
+
+# 3. Propagate updated values to .env.local and Dockerfiles
+bin/env-scan.sh
+
+# 4. Rebuild the affected containers
+make down-n-rebuild-force-recreate
+```
+
+Or in one step using `--scan`:
+
+```bash
+bin/env-update.sh --apply --scan   # apply + run env-scan automatically
+```
+
+**env-scan after env-update is mandatory** because:
+- `--apply` only writes to `.env` (the master reference tracked in git).
+- `.env.local` (machine-specific, gitignored) needs to be re-synced.
+- Dockerfiles with `ARG VAR=value` lines need their values updated to match `.env`.
+
+---
+
+## ARG Line Propagation — What Gets Propagated
+
+`gs_es_propagate_to_dockerfiles` rewrites `ARG VAR=value` lines in Dockerfiles under
+`docker/` when the Dockerfile value diverges from the canonical `.env` value.
+
+**What is skipped:**
+- `ARG VAR` (no `=` default) — no value to compare.
+- Vars whose `.env` value contains `${` (shell expansion) — cannot be embedded literally.
+- Vars matching `_GS_ES_CFG[exclude_multiple_values_pattern]` — protected from structural
+  divergence (e.g. `GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS` uses a shell-expanded form
+  in `.env` but a literal hostname in Dockerfiles).
+
+**Quoting preserved:** The original ARG quoting style (`ARG FOO="value"`, `ARG FOO='value'`,
+or `ARG FOO=value`) is detected and maintained after propagation.
+
+---
+
+## Known Pitfalls
+
+- **Trailing `;` in `COMPOSE_FILE`** in `.env` will break Docker Compose silently. Always
+  check `env-scan.sh` output when editing this var.
+- **Port vars must end with `:`** — e.g. `GLOBAL_STACK_POSTGRES18_PORT_N=42708:`. The
+  Compose config uses `${VAR:-}PORT`, so omitting the colon silently concatenates the port
+  numbers (`427085432` instead of `42708:5432`).
+- **`--backup-keep=0`** means unlimited retention (no pruning), not "keep nothing". To
+  disable backups entirely, use `--backup=false`.
+- **`--dry-run` is a single flag** (no `=value`), unlike most other env-scan flags which
+  use `--flag=value` form.
+- **Gitignored Dockerfiles** (e.g. `Dockerfile.local`) are backed up before propagation
+  only when the `--backup=true` flag is active. Tracked Dockerfiles are rewritten in-place
+  without a backup (git provides the rollback).
+- **The `check-missing` function** compares against the Docker-scan output, not directly
+  against `.env` source. When `--scan-sources=false` is passed, the scan output is empty
+  and `check-missing` produces no output (even for keys that exist in `.env` but not in
+  `.env.local`). This is a known limitation of the check-missing implementation.
