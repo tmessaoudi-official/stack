@@ -1,5 +1,5 @@
 #!/bin/bash
-# pecl.sh — PECL REST API helper functions for pecl-git fetcher
+# pecl.sh — PECL REST API helper functions and entry point for pecl: fetcher type
 #
 # Provides:
 #   _gs_eu2_pecl_get_latest_stable EXT_NAME

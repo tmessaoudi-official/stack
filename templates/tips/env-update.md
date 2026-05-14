@@ -18,7 +18,7 @@ source types, classifies each update decision, and can apply AUTO decisions back
    - [dockerhub](#71-dockerhub)
    - [github](#72-github)
    - [npm](#73-npm)
-   - [pecl-git](#74-pecl-git)
+   - [pecl](#74-pecl)
    - [pypi](#75-pypi)
    - [quay](#76-quay)
    - [rubygems](#77-rubygems)
@@ -26,13 +26,11 @@ source types, classifies each update decision, and can apply AUTO decisions back
    - [sdkmanager](#79-sdkmanager)
    - [url](#710-url)
    - [codeberg](#711-codeberg)
-   - [pecl (internal helper)](#712-pecl-internal-helper)
 8. [Caching System](#8-caching-system)
 9. [The Apply Cycle](#9-the-apply-cycle)
-10. [PECL-Git Fetcher — Extended](#10-pecl-git-fetcher--extended)
-11. [Multi-Variable Patterns](#11-multi-variable-patterns)
-12. [Error Reference](#12-error-reference)
-13. [Testing and Development](#13-testing-and-development)
+10. [Multi-Variable Patterns](#10-multi-variable-patterns)
+11. [Error Reference](#11-error-reference)
+12. [Testing and Development](#12-testing-and-development)
 
 ---
 
@@ -43,7 +41,7 @@ source types, classifies each update decision, and can apply AUTO decisions back
 | `dockerhub` | `_/image` or `org/image` | Yes | Yes | No | `_/` = Docker Library; paginates all tags |
 | `github` | `owner/repo` | Yes | Yes | GITHUB_TOKEN (optional but recommended) | 3-strategy: releases → tags → git ls-remote |
 | `npm` | `package-name` or `@scope/name` | Yes | Yes | No | CLI fast path via `npm view` when available |
-| `pecl-git` | `owner/repo` | Yes | Partial | GITHUB_TOKEN (optional) | Dual-source: GitHub tags + PECL promotion check |
+| `pecl` | `extension-name` | No | No | GITHUB_TOKEN (optional, for git: flag) | PECL REST XML API; add `(git:owner/repo)` flag for HEAD SHA tracking from GitHub |
 | `pypi` | `package-name` | Yes | Yes | No | CLI fast path via `pip index versions` when available |
 | `quay` | `org/image` | Yes | Yes | No | 50-tag limit per call; no pagination |
 | `rubygems` | `gem-name` | Yes | Yes | No | CLI fast path via `gem search` when available; two-endpoint strategy |
@@ -51,7 +49,6 @@ source types, classifies each update decision, and can apply AUTO decisions back
 | `sdkmanager` | `component-name` | No | No | No | Always MANUAL; requires `sdkmanager` binary |
 | `url` | URL string | No | Yes (some tiers) | Varies | 5-tier strategy; most flexible fetcher |
 | `codeberg` | `owner/repo` | Yes | Yes | No | Gitea API; releases → tags fallback |
-| `pecl` | `extension-name` | No | No | No | PECL REST XML API; use `(git:owner/repo)` flag to also fetch SHA from GitHub tag |
 
 ---
 
@@ -74,7 +71,7 @@ VAR_NAME=current_value
 
 **`TYPE:IDENTIFIER[:MAJOR_HINT]`** — required; must appear exactly once.
 
-- `TYPE` — lowercase fetcher name: `dockerhub`, `github`, `npm`, `pecl-git`, `pypi`,
+- `TYPE` — lowercase fetcher name: `dockerhub`, `github`, `npm`, `pecl`, `pypi`,
   `quay`, `rubygems`, `sdkman`, `sdkmanager`, `url`, `codeberg`.
 - `IDENTIFIER` — the resource to fetch. Format varies by fetcher type (see Section 7).
 - `:MAJOR_HINT` — optional numeric suffix. Accepts dotted values like `8.2` (the D1 fix).
@@ -173,9 +170,9 @@ flags. Flags are **position-agnostic** — they can appear anywhere in the annot
 | `(override)` | `override: true` | Force MANUAL decision regardless of version comparison. Use when a variable should never be auto-applied. |
 | `(manual)` | `manual: true` | Same effect as `override` — forces MANUAL. Semantic distinction: `manual` means "needs human judgment"; `override` means "auto is wrong here." |
 | `(propagate)` | `propagate: true` | Stored but not acted on by the core fetcher. Reserved for tools that need to track which variables should be propagated to derived files. |
-| `(use-sha)` | `use_sha: true` | For `pecl-git`: when `--apply` writes the variable, it writes `proposed_sha` instead of `proposed_version`. Use for variables tracking a git commit SHA rather than a version string. |
+| `(use-sha)` | `use_sha: true` | For `pecl` with `(git:owner/repo)` flag: when `--apply` writes the variable, it writes `proposed_sha` instead of `proposed_version`. Use for variables tracking a git commit SHA rather than a version string. |
 | `(prefer-specific)` | `prefer_specific: true` | **dockerhub only.** After all tag filters run, drop any tag whose numeric prefix has fewer than two dots (i.e. `X` or `X.Y` "floating" tags). A tag like `9.1-alpine3.23` has numeric prefix `9.1` (1 dot) and is floating — Docker Hub silently updates it when `9.1.1` ships, making the tag string unchanging and therefore invisible to env-update. A tag like `9.0.4-alpine3.23` has prefix `9.0.4` (2 dots) and is pinnable. Use this flag when you want true version pinning. **Do NOT use for images where `X.Y` is the real specific version** (e.g. `postgres:18.3-alpine3.23` — Postgres has no `X.Y.Z` Docker tags). If all remaining tags are floating after this filter, the record is set to SKIP. |
-| `(check-tags)` | `check_tags: true` | **github and pecl-git only.** Always fetch both the Releases API and the Tags API for this repo, then merge the two candidate pools before applying filters. Use for repos that publish new versions as git tags before (or instead of) creating a GitHub Release — the canonical example is Zig, which had `0.15.2` in tags while the Releases API still returned `0.15.1`. Without this flag, the fetcher uses Releases as primary and only falls back to Tags when Releases returns nothing. See also the automatic [version-gap fix](#version-gap-fix) (fires for every repo; this flag is for repos where the gap is chronic). |
+| `(check-tags)` | `check_tags: true` | **github only.** Always fetch both the Releases API and the Tags API for this repo, then merge the two candidate pools before applying filters. Use for repos that publish new versions as git tags before (or instead of) creating a GitHub Release — the canonical example is Zig, which had `0.15.2` in tags while the Releases API still returned `0.15.1`. Without this flag, the fetcher uses Releases as primary and only falls back to Tags when Releases returns nothing. See also the automatic [version-gap fix](#version-gap-fix) (fires for every repo; this flag is for repos where the gap is chronic). |
 
 ### Valued flags — channel
 
@@ -258,7 +255,7 @@ bin/env-update.sh [OPTIONS]
 | `--dry-run` | off | No writes of any kind: cache writes are suppressed, `.env` is never modified, Dockerfile propagation is skipped. Prints a `[DRY-RUN]` prefix line for each update that would be applied. Mutually exclusive with `--apply`. After a successful `--dry-run --check`, writes a timestamp marker (`last-dry-run-ts`) so a subsequent `--apply` can confirm the preview was recent. |
 | `--no-cache` | off | Bypass the flat-file cache entirely. Every fetch goes to the network. Cache reads return miss; cache writes are skipped. |
 | `--cache-ttl=N` | `3600` | Override the cache TTL in seconds. Must be a positive integer or zero (`0` = all cache entries treated as expired). |
-| `--with-tags` | off | For every `github:` and `pecl-git:` record in the run, always fetch both the Releases API and the Tags API and merge the candidate pools. Same effect as adding `(check-tags)` to every annotation, but applies globally for one run. Use when you suspect any repo in the batch may have released via tags only. Complements the automatic [version-gap fix](#version-gap-fix); this flag ensures the merged pool is used for all repos without waiting for a gap to be detected. |
+| `--with-tags` | off | For every `github:` record in the run, always fetch both the Releases API and the Tags API and merge the candidate pools. Same effect as adding `(check-tags)` to every annotation, but applies globally for one run. Use when you suspect any repo in the batch may have released via tags only. Complements the automatic [version-gap fix](#version-gap-fix); this flag ensures the merged pool is used for all repos without waiting for a gap to be detected. |
 | `--unstable` / `--unstable=full` | off | **Full unstable mode.** Forces `channel=unstable` on every record that does not already have an explicit non-stable channel in its annotation. Fetchers return the highest prerelease as the proposed candidate. The prerelease guard in `decide.sh` is bypassed: `stable current + prerelease proposed` classifies as `AUTO` (not `SKIP`). `(manual)` and `(hold)` flags are still respected. Use when you want to track prerelease versions globally for a run. Accepts both `--unstable` (bare) and `--unstable=full`. Mutually exclusive with `--stable=full` only. |
 | `--unstable=info` | off | **Informational unstable mode.** Does NOT change `AUTO`/`HOLD`/`SKIP` decision logic and does NOT bypass the prerelease guard. After each fetch, performs a second pass (cache hit — no extra HTTP) with `channel=unstable` to discover what the latest prerelease would be. When a prerelease version is found that differs from the stable proposed version, it is shown as a `↳ [INFO] unstable: <version>` sub-line under the main decision line. Use when you want a heads-up about available prereleases without committing to tracking them. Compatible with all `--stable` forms. |
 | `--stable` / `--stable=full` | off | **Force stable channel.** Forces `channel=stable` on every record whose annotation has an explicit non-stable channel (`rc`, `beta`, `alpha`, `nightly`, `unstable`, or any other non-empty, non-stable value). Records already on the default stable channel (empty or `stable`) are untouched. Prints a `[STABLE MODE] channel forced stable for N record(s)` header line when at least one override occurs. Use when you want to see what the stable versions would be for a set of vars that are normally tracked at prerelease. Mutually exclusive with `--unstable=full` only. |
@@ -311,7 +308,7 @@ bin/env-update.sh --stable=info --check            # info mode: show stable sub-
 bin/env-update.sh --stable=info --unstable=full --check  # unstable decisions + stable sub-line for each record
 
 # Tag-ahead audit
-bin/env-update.sh --check --with-tags              # merge releases+tags for all github/pecl-git repos
+bin/env-update.sh --check --with-tags              # merge releases+tags for all github repos
 bin/env-update.sh --check --filter=ZIG             # (check-tags already annotated on Zig — no flag needed)
 
 # Output filtering
@@ -338,10 +335,10 @@ to stdout. No network calls are made.
 ```
 env-update v2.0.0 — parsed /stack/.env
 
-  73 annotated variables across 8 fetcher types:
+  73 annotated variables across 7 fetcher types:
     codeberg        1   dockerhub      21   github         34
-    npm             8   pecl           4   pecl-git        2
-    sdkman          2   url            1
+    npm             8   pecl           7   sdkman          2
+    url             1
 
   Hint: run --check to fetch latest versions (network required)
         run --dump  to emit structured records
@@ -438,7 +435,7 @@ than showing a placeholder.
 
 When the `github` fetcher selects a stable version but a newer pre-release also exists in
 the tag list, it populates `alt_version`. The `url` fetcher also populates it in some
-cases. The `pecl-git` fetcher uses it to signal PECL promotion availability.
+cases.
 
 The `alt_version` field is visible in `--dump` output. In the streaming `--check` output,
 `alt_version` is not currently printed inline (it is stored in the record and accessible
@@ -795,34 +792,45 @@ GLOBAL_STACK_SERVERLESS_VERSION=3.38.0
 
 ---
 
-### 7.4 pecl-git
+### 7.4 pecl
 
-See also [Section 10 (Extended)](#10-pecl-git-fetcher--extended) for full details.
+**Identifier format:** `extension-name` — the lowercase PECL extension name (e.g. `apcu`, `redis`, `imagick`).
 
-**Identifier format:** `owner/repo` (GitHub repository hosting a PHP extension).
+**Optional `(git:owner/repo)` flag:** When present, also fetches the HEAD commit SHA from the GitHub repository for the extension. The HEAD SHA is preferred over a tagged SHA because users running PHP master install extensions directly from PECL sources — the freshest commit is what works with unreleased PHP versions.
 
-**Strategy:** Fetches release tags from GitHub (releases API → tags API fallback, max 3 pages). Strips `v`-prefix and any `tag_strip_prefix`. Filters stable candidates when current is stable (prerelease guard). Filters by major_hint. Sorts descending, takes best. Fetches the commit SHA for the version tag. Fetches the commit date. Checks for PECL promotion.
+**Strategy:** Queries the PECL REST XML API (`https://pecl.php.net/rest/r/{ext}/allreleases.xml`). Parses `<v>VERSION</v><s>stable|beta|…</s>` pairs. Keeps only `stable` entries. Sorts with `sort -V`, takes the highest. When `(git:owner/repo)` is set, additionally fetches:
+- HEAD SHA via `https://api.github.com/repos/{owner}/{repo}/commits` — stored as `proposed_sha`
+- HEAD commit date via commits API — stored as `proposed_sha_date`
 
-**Merge mode and version-gap fix:** Supports `(check-tags)` and `--with-tags` exactly as the `github` fetcher does. When active, always fetches both the Releases API and Tags API and merges the candidate pools. The automatic version-gap fix (proposed < current → auto-check tags) also applies.
+**`proposed_version`:** The highest stable PECL version (e.g. `3.1.5`).
+**`proposed_sha`:** Full commit SHA for HEAD (only when `(git:owner/repo)` flag is set). May be empty if the GitHub API is unreachable.
+**`proposed_sha_date`:** YYYY-MM-DD date of the HEAD commit (only when `(git:owner/repo)` flag is set).
 
-**PECL extension name derivation:** Strips `php-`, `php_`, or `ext-` prefix from the repo name (lowercase). If auto-derivation is wrong, migrate to `pecl:NAME (git:owner/repo)` instead (see [§7.12](#712-pecl)).
+**`use_sha` flag:** When `(use-sha)` is present, `--apply` writes `proposed_sha` to the variable instead of `proposed_version`. Use for variables tracking a git commit SHA rather than a PECL version string.
 
-**`proposed_version`:** The semver release tag (v-prefix stripped, e.g. `6.3.0`).
-**`proposed_sha`:** Full commit SHA for HEAD (always HEAD, not the tagged SHA — supports PHP master workflows). May be empty if the GitHub API is unreachable.
-**`proposed_sha_date`:** YYYY-MM-DD date of the HEAD commit (stored in record; written to annotation as `sha:HASH (YYYY-MM-DD)` by `--apply`).
-**`commit_date`:** Same as `proposed_sha_date` — YYYY-MM-DD date of HEAD (used for PECL promotion check).
-**`alt_version`:** If a newer stable PECL release exists (i.e., `pecl_release_date > commit_date`), set to `"PECL stable available: VERSION — consider switching to pecl:EXTNAME"`.
+**Cache keys:** `pecl2:stable:{ext}` (PECL version), `pecl2:date:{ext}:{ver}` (PECL release date). The `(git:)` SHA uses GitHub API cache keys `github:sha:{repo}:HEAD` and `github:date:{repo}:{sha}`.
 
-**`use_sha` flag:** When `(use-sha)` is present, `--apply` writes `proposed_sha` to the variable instead of `proposed_version`.
+**Auth:** No auth for PECL. The `(git:owner/repo)` flag reads `GITHUB_TOKEN` or `GLOBAL_STACK_GITHUB_TOKEN` (optional, increases rate limit).
 
-**Cache key:** `pecl-git4:owner/repo` (the `4` suffix was bumped to switch from tag SHA to HEAD SHA).
+**Major hint:** No — PECL extension versions are not pinnable to a major in the same way.
 
-**Auth:** Reads `GITHUB_TOKEN` or `GLOBAL_STACK_GITHUB_TOKEN`.
+**Tag flags:** Not supported.
 
-**Example annotation:**
+**Error:** `pecl: no stable release found for '{ext}'` when the PECL allreleases.xml contains no stable entry.
+
+**Example annotations:**
 ```bash
-# @todo env-update pecl-git:krakjoe/parallel 1.2.2
-GLOBAL_STACK_PHP_PARALLEL_VERSION=1.2.2
+# Basic PECL fetch
+# @todo env-update pecl:apcu 5.1.24
+GLOBAL_STACK_PHP_DEFAULT_APCU_VERSION=5.1.24
+
+# PECL + GitHub HEAD SHA tracking
+# @todo env-update pecl:zmq (git:zeromq/php-zmq) 1.1.3 sha:616b6c64ffd3866ed038615494306dd464ab53fc
+GLOBAL_STACK_PHP_DEFAULT_ZMQ_VERSION=
+
+# PECL + GitHub SHA, use-sha mode (variable holds the SHA not the version)
+# @todo env-update (manual) (use-sha) pecl:ffi (git:dstogov/php-ffi) 0.3 sha:92d1c39e2650cf5f9c66c4cfae69a3874a7eabba
+GLOBAL_STACK_PHP_DEFAULT_FFI_VERSION=
 ```
 
 ---
@@ -1094,51 +1102,6 @@ GLOBAL_STACK_GOTOSOCIAL_VERSION=0.17.3
 
 ---
 
-### 7.12 pecl
-
-The `pecl` type uses PECL as the authoritative version source. It replaces the old
-`pecl-git:owner/repo` pattern for PHP extensions that have stable PECL releases and
-optionally a GitHub repo for HEAD SHA tracking.
-
-**Annotation pattern:**
-```bash
-# @todo env-update (manual) pecl:zmq (git:zeromq/php-zmq) 1.1.3 sha:616b6c64...
-GLOBAL_STACK_PHP_DEFAULT_ZMQ_VERSION=
-
-# @todo env-update pecl:imagick 3.8.0
-GLOBAL_STACK_PHP_DEFAULT_IMAGICK_VERSION=3.8.0
-```
-
-**`(git:owner/repo)` flag (optional):** when set, fetches the HEAD commit SHA from GitHub
-after PECL returns the version. HEAD is always used (not the tagged SHA) so the annotation
-stays current for PHP master workflows. If the GitHub API is unreachable, the SHA is empty
-but the version update is not blocked (soft-fail).
-
-**Decision matrix:**
-- PECL has stable release, HEAD SHA fetched → `proposed_version` + `proposed_sha` + `proposed_sha_date`
-- PECL has stable release, HEAD unreachable → `proposed_version` only (no SHA)
-- No PECL stable release → `decision=ERROR`
-
-**When to use which pattern:**
-- `pecl:ext` — extension is on PECL with stable releases, no SHA tracking needed
-- `pecl:ext (git:owner/repo)` — extension is on PECL with stable releases + want SHA
-- `pecl-git:owner/repo` — no PECL stable releases; git tags are the only source
-
-**API endpoints:**
-- `https://pecl.php.net/rest/r/{ext}/allreleases.xml` — all releases XML
-- `https://pecl.php.net/rest/r/{ext}/{version}.xml` — per-version details (release date)
-- `https://api.github.com/repos/{owner}/{repo}/commits?sha={ref}&per_page=1` — SHA lookup
-
-**XML parsing:** Uses `grep/sed` without `xmllint`. Extracts `<v>VERSION</v><s>STABILITY</s>` pairs.
-
-**Helper functions (also used by `pecl-git`):**
-- `_gs_eu2_pecl_get_latest_stable EXT` — returns latest stable PECL version (empty on failure)
-- `_gs_eu2_pecl_get_release_date EXT VERSION` — returns YYYY-MM-DD release date
-- `_gs_eu2_pecl_check_promotion EXT COMMIT_DATE` — returns the PECL version if its release
-  date is strictly newer than `COMMIT_DATE`, otherwise returns empty
-
-**Cache keys:** `pecl2:stable:{ext}` and `pecl2:date:{ext}:{version}` (version cache only; SHA is not cached)
-
 ---
 
 ## 8. Caching System
@@ -1177,7 +1140,6 @@ Characters replaced: `:`, `/`, `@`, and space → `_`. The result is a flat file
 | codeberg | `codeberg:owner/repo:major_hint:channel` |
 | sdkman | `sdkman:candidate:major_hint:channel` |
 | sdkmanager | `sdkmanager:component:channel` |
-| pecl-git | `pecl-git3:owner/repo` |
 | url | `url:URL:fe_flag:fj_flag:up_flag:channel` |
 | pecl (stable) | `pecl2:stable:ext_name` |
 | pecl (date) | `pecl2:date:ext_name:version` |
@@ -1195,7 +1157,7 @@ Override TTL: `--cache-ttl=N` (seconds). `--cache-ttl=0` treats all entries as e
 The fetcher's final `proposed_version` string (after pipeline and channel selection). The
 cache does NOT store the full decision or error message — only the proposed version.
 
-For `pecl-git`, the cache format is `proposed_version|proposed_sha` (pipe-separated).
+For `pecl` with `(git:owner/repo)`, the SHA is fetched live (not cached separately); the PECL stable version is cached under `pecl2:stable:{ext}`.
 
 ### Cache writes in dry-run mode (C4 rule)
 
@@ -1298,127 +1260,7 @@ was already updated successfully).
 
 ---
 
-## 10. PECL-Git Fetcher — Extended
-
-The `pecl-git` fetcher is the most complex in the system because it tracks PHP extensions
-that exist on GitHub but also (potentially) on PECL. It must reason about two independent
-version streams and decide which is authoritative.
-
-### Use case
-
-Some PHP extensions are not (yet) officially released on PECL, or their GitHub releases are
-ahead of what PECL has published. `pecl-git` tracks the GitHub release tags as the primary
-source, but warns when PECL has caught up (suggesting a switch to the simpler `pecl` type).
-
-### Identifier format
-
-`owner/repo` — the GitHub repository (e.g. `krakjoe/parallel`, `arnaud-lb/php-rdkafka`).
-
-Legacy full-URL form (`https://github.com/owner/repo`) is also accepted for backward
-compatibility with cached/old annotations.
-
-### PECL extension name derivation
-
-The fetcher automatically derives the PECL extension name from the repo name:
-1. Lowercase the repo name
-2. Strip `php-` prefix → result is the extension name
-3. If no match: strip `php_` prefix
-4. If no match: strip `ext-` prefix
-5. If no match: use the repo name as-is
-
-If auto-derivation is wrong, migrate the annotation to `pecl:EXT_NAME (git:owner/repo)` where `EXT_NAME` is the correct PECL extension name.
-
-Examples:
-- `php-event` → `event`
-- `php_rdkafka` → `rdkafka`
-- `ext-swoole` → `swoole`
-- `parallel` → `parallel` (no prefix to strip)
-
-### GitHub fetch strategy
-
-1. **Releases API** (up to 100 results per call, no pagination for pecl-git).
-2. **Tags API fallback** (3 pages max, 100 per page).
-3. **ERROR** if both return nothing — includes a hint to use `(use-sha)` for manual pinning.
-
-### Tag processing
-
-1. Strip `v`-prefix from each tag.
-2. Apply `tag_strip_prefix` from the record (if set).
-3. **Stable filter** (when current version is stable): discard any candidate that
-   `_gs_eu2_is_prerelease` identifies as a prerelease (e.g. `6.3.0RC1`, `6.3.0-beta2`).
-   This prevents `sort -V` from picking a release-candidate over a stable release.
-   If all candidates are prerelease (unusual), the filter is bypassed to avoid empty result.
-   Skipped when current version is itself a prerelease.
-4. Filter by `major_hint` (exact first-segment match: `${tag%%.*} == major_hint`).
-5. Sort with `sort -V`, take the highest.
-
-### SHA lookup
-
-After selecting the best version tag, the fetcher calls:
-```
-GET https://api.github.com/repos/{owner}/{repo}/commits?sha=v{version}&per_page=1
-```
-(tries `v`-prefixed first, then bare version tag).
-
-The returned full SHA is stored in `proposed_sha`.
-
-### Commit date
-
-After SHA lookup, fetches:
-```
-GET https://api.github.com/repos/{owner}/{repo}/commits/{sha}
-```
-Extracts `.commit.author.date` (ISO8601), trims to `YYYY-MM-DD`. Stored in `commit_date`
-(hint only — never written to `.env` by `--apply`).
-
-### PECL promotion check
-
-After getting the commit date, calls `_gs_eu2_pecl_check_promotion`:
-- Fetches latest stable PECL version for the extension.
-- Fetches the PECL release date for that version.
-- If PECL release date > commit date (lexicographic YYYY-MM-DD comparison): the PECL
-  release is newer than the git commit → sets `alt_version` to:
-  `"PECL stable available: VERSION — consider switching to pecl:EXTNAME"`
-
-This signals that the extension has caught up on PECL and the annotation could be simplified
-from `pecl-git:owner/repo` to `pecl:extension-name`.
-
-### Cache format
-
-`pecl-git3:owner/repo` → `proposed_version|proposed_sha`
-
-The `3` in the key prefix was bumped to invalidate stale values from prior versions that
-stored a `YYYYMMDD-sha8` compound format.
-
-### `use-sha` mode
-
-When `(use-sha)` is set:
-- `proposed_version` is still computed and displayed in `--check` output.
-- But `--apply` writes `proposed_sha` to `VAR=` instead of `proposed_version`.
-- Both the annotation version token and the `sha:` keyword in the annotation are updated.
-
-Use this for variables that track a commit SHA (e.g. when a Docker image is pinned to a
-specific commit rather than a semver tag).
-
-### Example annotations
-
-```bash
-# Standard semver tracking
-# @todo env-update pecl-git:krakjoe/parallel 1.2.2
-GLOBAL_STACK_PHP_PARALLEL_VERSION=1.2.2
-
-# For extensions where name auto-derivation works: use pecl: type instead
-# @todo env-update pecl:event (git:mkoppanen/php-event) 3.1.4
-GLOBAL_STACK_PHP_EVENT_VERSION=3.1.4
-
-# SHA tracking (variable stores a commit SHA)
-# @todo env-update (use-sha) pecl-git:owner/ext sha:abc123... 1.0.0
-GLOBAL_STACK_EXT_SHA=abc123def456...
-```
-
----
-
-## 11. Multi-Variable Patterns
+## 10. Multi-Variable Patterns
 
 Some services require multiple related variables that must be updated together.
 
@@ -1506,7 +1348,7 @@ Strip `v` for clean semver comparison, restore it so the variable keeps `v0.20.2
 
 ---
 
-## 12. Error Reference
+## 11. Error Reference
 
 ### Parser errors (exit 1 immediately)
 
@@ -1536,8 +1378,7 @@ These do not abort the tool — they set `decision=ERROR` and move to the next r
 | `no tags or releases found for github:REPO` | GitHub API returned empty releases and empty tags. | Check that the repo exists and has releases/tags. |
 | `no tags returned for TYPE:IDENTIFIER` | API returned HTTP 200 but empty tag list. | Verify the identifier is correct. |
 | `rate-limited by URL after 3 attempts — try again later` | HTTP 429 persisted through 3 retry attempts with exponential backoff. | Wait and retry; set `GITHUB_TOKEN` for GitHub. |
-| `pecl-git: cannot extract owner/repo from 'IDENTIFIER'` | The identifier is neither `owner/repo` nor a full `github.com/owner/repo` URL. | Use the `owner/repo` format. |
-| `pecl-git: no release tags found for 'REPO'; pin manually with (use-sha)` | The GitHub repo has no releases and no tags, or all failed auth. | Use `(use-sha)` and pin to a commit SHA manually. |
+| `pecl: no stable release found for 'EXT'` | The PECL REST API allreleases.xml has no stable entry for the extension. | Verify the extension name is correct; if the extension has no PECL stable releases, remove the `pecl:` annotation entirely and track the variable manually. |
 
 ### SKIP conditions (not errors — no message or informational)
 
@@ -1570,7 +1411,7 @@ These do not abort the tool — they set `decision=ERROR` and move to the next r
 
 ---
 
-## 13. Testing and Development
+## 12. Testing and Development
 
 ### Running the test suite
 

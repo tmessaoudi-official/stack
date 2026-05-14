@@ -36,8 +36,6 @@ source "$(dirname "${BASH_SOURCE[0]}")/fetchers/sdkman.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/fetchers/sdkmanager.sh"
 # shellcheck source=./fetchers/pecl.sh
 source "$(dirname "${BASH_SOURCE[0]}")/fetchers/pecl.sh"
-# shellcheck source=./fetchers/pecl_git.sh
-source "$(dirname "${BASH_SOURCE[0]}")/fetchers/pecl_git.sh"
 # shellcheck source=./fetchers/url.sh
 source "$(dirname "${BASH_SOURCE[0]}")/fetchers/url.sh"
 # shellcheck source=./reporting/help.sh
@@ -90,13 +88,12 @@ _gs_eu2_run_check() {
       sdkman)     _gs_eu2_fetch_sdkman     "${_i}" ;;
       sdkmanager) _gs_eu2_fetch_sdkmanager "${_i}" ;;
       pecl)       _gs_eu2_fetch_pecl       "${_i}" ;;
-      pecl-git)   _gs_eu2_fetch_pecl_git   "${_i}" ;;
       url)        _gs_eu2_fetch_url        "${_i}" ;;
-      # All 12 fetcher types implemented:
+      # All 11 fetcher types implemented:
       #   codeberg, dockerhub, github, quay   — fetchers/{codeberg,dockerhub,github,quay}.sh
       #   npm, pypi, rubygems                 — fetchers/{npm,pypi,rubygems}.sh
       #   sdkman, sdkmanager                  — fetchers/{sdkman,sdkmanager}.sh
-      #   pecl, pecl-git                      — fetchers/{pecl,pecl_git}.sh
+      #   pecl                                — fetchers/pecl.sh (use git:owner/repo flag for SHA tracking)
       #   url                                 — fetchers/url.sh + core/ubuntu.sh
       *)
         _gs_eu2_record_set "${_i}" decision      "SKIP"
@@ -138,7 +135,6 @@ _gs_eu2_run_check() {
           sdkman)     _gs_eu2_fetch_sdkman     "${_i}" ;;
           sdkmanager) _gs_eu2_fetch_sdkmanager "${_i}" ;;
           pecl)       _gs_eu2_fetch_pecl       "${_i}" ;;
-          pecl-git)   _gs_eu2_fetch_pecl_git   "${_i}" ;;
           url)        _gs_eu2_fetch_url        "${_i}" ;;
         esac
         local _unstable_ver
@@ -195,7 +191,6 @@ _gs_eu2_run_check() {
           sdkman)     _gs_eu2_fetch_sdkman     "${_i}" ;;
           sdkmanager) _gs_eu2_fetch_sdkmanager "${_i}" ;;
           pecl)       _gs_eu2_fetch_pecl       "${_i}" ;;
-          pecl-git)   _gs_eu2_fetch_pecl_git   "${_i}" ;;
           url)        _gs_eu2_fetch_url        "${_i}" ;;
         esac
         local _stable_ver

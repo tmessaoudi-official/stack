@@ -29,8 +29,8 @@ Options:
   --no-cache              Bypass the fetch cache
   --cache-ttl=<seconds>   Cache TTL in seconds (default: 3600)
   --dry-run               No writes (gates cache, .env, and Dockerfile propagation).
-  --with-tags             Force tags-API merge for ALL github: and pecl-git: repos in
-                          one run. Equivalent to adding (check-tags) to every annotation.
+  --with-tags             Force tags-API merge for ALL github: repos in one run.
+                          Equivalent to adding (check-tags) to every annotation.
   --unstable / --unstable=full
                           Force channel=unstable on all stable/default records.
                           Fetchers return the highest prerelease; if stable has
@@ -62,8 +62,9 @@ Options:
 
 Default (no flags): print a parser summary with per-type breakdown and hints.
 
-Fetcher types: dockerhub, github, npm, pecl, pecl-git, pypi, quay, rubygems,
+Fetcher types: dockerhub, github, npm, pecl, pypi, quay, rubygems,
 sdkman, sdkmanager, url, codeberg.
+pecl supports an optional (git:owner/repo) flag for HEAD SHA tracking.
 
 Examples:
   bin/env-update.sh                                # parser summary (no network)
@@ -74,7 +75,7 @@ Examples:
   bin/env-update.sh --check --apply                # fetch + apply all AUTO updates
   bin/env-update.sh --check --apply --scan         # apply + propagate to .env.local + Dockerfiles
   bin/env-update.sh --check --apply --dry-run      # preview what would be applied
-  bin/env-update.sh --check --with-tags            # audit all github/pecl-git repos including tag-only releases
+  bin/env-update.sh --check --with-tags            # audit all github repos including tag-only releases
   bin/env-update.sh --unstable --check             # force unstable: propose prereleases globally as AUTO
   bin/env-update.sh --unstable=info --check        # info mode: show unstable sub-line without changing decisions
   bin/env-update.sh --stable --check               # force stable: see stable versions for all rc/beta/nightly vars

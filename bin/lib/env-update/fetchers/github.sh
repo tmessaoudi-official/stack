@@ -16,7 +16,7 @@
 # Authentication: GITHUB_TOKEN env var injected as Bearer token on all API calls.
 # Rate-limit hint: included in error_message on HTTP failure when token is absent.
 #
-# Exported helpers used by the pecl-git fetcher:
+# Exported helpers used by the pecl fetcher (git:owner/repo flag):
 #   _gs_eu2_github_get_commit_sha  repo_id ref   → SHA string (7+ hex chars)
 #   _gs_eu2_github_get_commit_date repo_id sha   → YYYY-MM-DD
 
@@ -76,7 +76,7 @@ _gs_eu2_github_ls_remote() {
 
 # _gs_eu2_github_get_commit_sha REPO_ID REF
 # Returns the commit SHA (full or short) for REF (branch name, tag, or SHA).
-# Exported for use by the pecl-git fetcher.
+# Exported for use by the pecl fetcher (git:owner/repo flag).
 _gs_eu2_github_get_commit_sha() {
   local _repo="${1}" _ref="${2:-main}"
   local _url="https://api.github.com/repos/${_repo}/commits?sha=${_ref}&per_page=1"
@@ -87,7 +87,7 @@ _gs_eu2_github_get_commit_sha() {
 
 # _gs_eu2_github_get_commit_date REPO_ID SHA
 # Returns the commit date (YYYY-MM-DD) for a given SHA.
-# Exported for use by the pecl-git fetcher.
+# Exported for use by the pecl fetcher (git:owner/repo flag).
 _gs_eu2_github_get_commit_date() {
   local _repo="${1}" _sha="${2}"
   local _url="https://api.github.com/repos/${_repo}/commits/${_sha}"

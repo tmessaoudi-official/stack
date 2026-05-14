@@ -21,7 +21,7 @@ _gs_eu2_record_fields() {
     tag_extract tag_replace_from tag_replace_to tag_suffix \
     fetch_extract fetch_json \
     url_probe url_probe_depth \
-    pecl_ref depends_on urls \
+    pecl_ref git_repo depends_on urls \
     git_fallback_url git_fallback_sha \
     hint note line_number raw_annotation \
     proposed_version decision error_message alt_version \

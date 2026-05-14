@@ -343,10 +343,11 @@ t "t04b: urls — 3 URLs" bash -c "
     echo PASS
 "
 
-t "t04c: pecl-ref fixture parses without error (pecl-ref flag removed)" bash -c "
+t "t04c: pecl fixture with git: flag parses correctly (pecl-git fetcher eliminated)" bash -c "
     out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file='${FIXTURES}/pecl-ref.env' 2>&1)
-    echo \"\$out\" | grep -qF 'type: pecl-git' || { echo \"type not found; got: \$out\"; echo FAIL; exit 0; }
-    echo \"\$out\" | grep -qF 'pecl_ref: event' && { echo 'pecl_ref still present — was not removed'; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'type: pecl' || { echo \"type:pecl not found; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'git_repo: php/pecl-event' || { echo \"git_repo not found; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'type: pecl-git' && { echo 'pecl-git type still present — not eliminated'; echo FAIL; exit 0; } || true
     echo PASS
 "
 
@@ -2787,132 +2788,6 @@ t "t34e: HTTP error for allreleases returns empty string, no crash" bash -c "
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Section 35 — pecl-git fetcher
-# ═══════════════════════════════════════════════════════════════════════════
-section "35 — pecl-git fetcher"
-
-_PECLGIT_LIBS="
-source '/stack/bin/lib/env-update/config/defaults.sh'
-source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update/core/records.sh'
-source '/stack/bin/lib/env-update/core/semver.sh'
-source '/stack/bin/lib/env-update/core/channel.sh'
-source '/stack/bin/lib/env-update/core/tag_flags.sh'
-source '/stack/bin/lib/env-update/core/cache.sh'
-source '/stack/bin/lib/env-update/http/curl.sh'
-source '/stack/bin/lib/env-update/fetchers/github.sh'
-source '/stack/bin/lib/env-update/fetchers/pecl.sh'
-source '/stack/bin/lib/env-update/fetchers/pecl_git.sh'
-export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
-export _GS_EU2_CACHE_DIR=\${TMP_DIR}/peclgit_cache
-"
-
-t "t35a: happy path — proposed_version = release tag version from releases API" bash -c "
-    ${_PECLGIT_LIBS}
-    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
-    _gs_eu2_record_set \$idx type       'pecl-git'
-    _gs_eu2_record_set \$idx identifier 'https://github.com/Imagick/imagick'
-    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_PHP_IMAGICK_VERSION'
-    _gs_eu2_fetch_pecl_git \$idx
-    val=\$(_gs_eu2_record_get \$idx proposed_version)
-    # fixture releases: [3.8.1, 3.8.0] → best is 3.8.1 (v-prefix stripped)
-    [[ \"\$val\" == '3.8.1' ]] || { echo \"expected 3.8.1, got: '\$val'\"; echo FAIL; exit 0; }
-    echo PASS
-"
-
-t "t35b: promotion detected — alt_version set when stable PECL release is newer than git" bash -c "
-    ${_PECLGIT_LIBS}
-    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/peclgit_b_cache
-    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
-    _gs_eu2_record_set \$idx type       'pecl-git'
-    # phpredis: git date 2026-02-10, redis pecl 6.1.0 released 2026-03-20 → promotion
-    _gs_eu2_record_set \$idx identifier 'https://github.com/phpredis/phpredis'
-    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_PHP_REDIS_VERSION'
-    _gs_eu2_fetch_pecl_git \$idx
-    alt=\$(_gs_eu2_record_get \$idx alt_version)
-    [[ -n \"\$alt\" ]] || { echo 'alt_version should be set for promotion'; echo FAIL; exit 0; }
-    [[ \"\$alt\" == *'6.1.0'* ]] || { echo \"expected 6.1.0 in alt_version, got: '\$alt'\"; echo FAIL; exit 0; }
-    echo PASS
-"
-
-t "t35c: no promotion — alt_version empty when git commit is newer than PECL release" bash -c "
-    ${_PECLGIT_LIBS}
-    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/peclgit_c_cache
-    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
-    _gs_eu2_record_set \$idx type       'pecl-git'
-    # imagick: git date 2026-02-15, imagick pecl 3.8.0 released 2026-01-10 → no promotion
-    _gs_eu2_record_set \$idx identifier 'https://github.com/Imagick/imagick'
-    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_PHP_IMAGICK_VERSION'
-    _gs_eu2_fetch_pecl_git \$idx
-    alt=\$(_gs_eu2_record_get \$idx alt_version)
-    [[ -z \"\$alt\" ]] || { echo \"alt_version should be empty (no promotion), got: '\$alt'\"; echo FAIL; exit 0; }
-    echo PASS
-"
-
-t "t35d: ext_name derived from repo name — phpredis fetcher returns release version" bash -c "
-    ${_PECLGIT_LIBS}
-    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/peclgit_d_cache
-    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
-    _gs_eu2_record_set \$idx type       'pecl-git'
-    # phpredis repo → ext_name='phpredis' (no matching prefix → use full name)
-    # Check that the proposed_version is the latest semver release tag
-    _gs_eu2_record_set \$idx identifier 'https://github.com/phpredis/phpredis'
-    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_PHP_REDIS_VERSION'
-    _gs_eu2_fetch_pecl_git \$idx
-    val=\$(_gs_eu2_record_get \$idx proposed_version)
-    # fixture releases: [v6.3.0, v6.2.0, v6.1.0] → best is 6.3.0 (v-prefix stripped)
-    [[ \"\$val\" == '6.3.0' ]] || { echo \"expected 6.3.0, got: '\$val'\"; echo FAIL; exit 0; }
-    echo PASS
-"
-
-t "t35e: pecl_ref override — uses override ext_name for PECL lookup, returns release version" bash -c "
-    ${_PECLGIT_LIBS}
-    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/peclgit_e_cache
-    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
-    _gs_eu2_record_set \$idx type       'pecl-git'
-    _gs_eu2_record_set \$idx identifier 'https://github.com/test-org/pecl-event'
-    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_PHP_EVENT_VERSION'
-    # Override ext_name so PECL lookup uses 'pecl_ref_override' (our fixture)
-    _gs_eu2_record_set \$idx pecl_ref   'pecl_ref_override'
-    _gs_eu2_fetch_pecl_git \$idx
-    val=\$(_gs_eu2_record_get \$idx proposed_version)
-    # fixture releases: [v2.5.0, v2.4.0] → best is 2.5.0 (v-prefix stripped)
-    [[ \"\$val\" == '2.5.0' ]] || { echo \"expected 2.5.0, got: '\$val'\"; echo FAIL; exit 0; }
-    echo PASS
-"
-
-t "t35f: GitHub API error — error_message set, decision=ERROR" bash -c "
-    ${_PECLGIT_LIBS}
-    unset _GS_EU2_HTTP_FIXTURE_DIR
-    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/peclgit_f_cache
-    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
-    _gs_eu2_record_set \$idx type       'pecl-git'
-    _gs_eu2_record_set \$idx identifier 'https://github.com/no-such-owner/no-such-repo'
-    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_XYZZY_VERSION'
-    _gs_eu2_fetch_pecl_git \$idx 2>/dev/null || true
-    decision=\$(_gs_eu2_record_get \$idx decision)
-    err=\$(_gs_eu2_record_get \$idx error_message)
-    [[ \"\$decision\" == 'ERROR' ]] || { echo \"expected ERROR, got: '\$decision'\"; echo FAIL; exit 0; }
-    [[ -n \"\$err\" ]] || { echo 'error_message is empty'; echo FAIL; exit 0; }
-    echo PASS
-"
-
-t "t35g: GITHUB_TOKEN forwarded — fixture injection works with token set" bash -c "
-    ${_PECLGIT_LIBS}
-    export GITHUB_TOKEN='test-token-for-fixture-injection'
-    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/peclgit_g_cache
-    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
-    _gs_eu2_record_set \$idx type       'pecl-git'
-    _gs_eu2_record_set \$idx identifier 'https://github.com/Imagick/imagick'
-    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_PHP_IMAGICK_VERSION'
-    _gs_eu2_fetch_pecl_git \$idx
-    val=\$(_gs_eu2_record_get \$idx proposed_version)
-    # With token set, fixture injection still works (token not part of fixture path)
-    [[ \"\$val\" == '3.8.1' ]] || { echo \"token-with-fixture failed: '\$val'\"; echo FAIL; exit 0; }
-    echo PASS
-"
-
-# ═══════════════════════════════════════════════════════════════════════════
 # Section 36 — semver_delta handles YYYYMMDD-sha8 format (patch, not major)
 # ═══════════════════════════════════════════════════════════════════════════
 section "36 — semver_delta date-sha format"
@@ -3525,59 +3400,6 @@ t "t42f: stable alpine-tagged current + stable alpine-tagged proposed → AUTO" 
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Section 43 — pecl_git filters prerelease when current is stable
-# ═══════════════════════════════════════════════════════════════════════════
-section "43 — pecl_git prerelease filter"
-
-_PECLGIT_LIBS43="
-source '/stack/bin/lib/env-update/config/defaults.sh'
-source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update/core/records.sh'
-source '/stack/bin/lib/env-update/core/semver.sh'
-source '/stack/bin/lib/env-update/core/channel.sh'
-source '/stack/bin/lib/env-update/core/tag_flags.sh'
-source '/stack/bin/lib/env-update/core/cache.sh'
-source '/stack/bin/lib/env-update/http/curl.sh'
-source '/stack/bin/lib/env-update/fetchers/github.sh'
-source '/stack/bin/lib/env-update/fetchers/pecl.sh'
-source '/stack/bin/lib/env-update/fetchers/pecl_git.sh'
-export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
-export _GS_EU2_CACHE_DIR=\${TMP_DIR}/peclgit43_cache
-"
-
-t "t43a: stable current + RC in releases list → proposed is stable (RC filtered)" bash -c "
-    ${_PECLGIT_LIBS43}
-    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/peclgit43a_cache
-    declare -A _GS_EU2_CFG=([no_cache]=true [channel]=stable)
-    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
-    _gs_eu2_record_set \$idx type             'pecl-git'
-    _gs_eu2_record_set \$idx identifier       'testowner/phpext-with-rc'
-    _gs_eu2_record_set \$idx env_var          'GLOBAL_STACK_TEST_VERSION'
-    _gs_eu2_record_set \$idx current_version  '6.3.0'
-    _gs_eu2_fetch_pecl_git \$idx 2>/dev/null || true
-    val=\$(_gs_eu2_record_get \$idx proposed_version)
-    # fixture releases: RC first, then 6.3.0 — stable filter must prefer 6.3.0
-    [[ \"\$val\" == '6.3.0' ]] || { echo \"expected 6.3.0 (stable), got: '\$val'\"; echo FAIL; exit 0; }
-    echo PASS
-"
-
-t "t43b: prerelease current + RC in releases list → all candidates kept (no filter)" bash -c "
-    ${_PECLGIT_LIBS43}
-    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/peclgit43b_cache
-    declare -A _GS_EU2_CFG=([no_cache]=true [channel]=stable)
-    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
-    _gs_eu2_record_set \$idx type             'pecl-git'
-    _gs_eu2_record_set \$idx identifier       'testowner/phpext-with-rc'
-    _gs_eu2_record_set \$idx env_var          'GLOBAL_STACK_TEST_VERSION'
-    _gs_eu2_record_set \$idx current_version  '6.3.0RC1'
-    _gs_eu2_fetch_pecl_git \$idx 2>/dev/null || true
-    val=\$(_gs_eu2_record_get \$idx proposed_version)
-    # With prerelease current, RC candidates are kept — sort -V picks RC1 as best
-    [[ \"\$val\" == '6.3.0RC1' ]] || { echo \"expected 6.3.0RC1 (RC kept), got: '\$val'\"; echo FAIL; exit 0; }
-    echo PASS
-"
-
-# ═══════════════════════════════════════════════════════════════════════════
 # Section 44 — check-tags flag + github.sh version-gap fix
 # ═══════════════════════════════════════════════════════════════════════════
 section "44 — check-tags flag + github version-gap fix"
@@ -3687,9 +3509,9 @@ t "t44f: version-gap fix uses cache key with :tags suffix in check-tags mode" ba
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Section 45 — --with-tags CLI flag + pecl_git version-gap fix
+# Section 45 — --with-tags CLI flag
 # ═══════════════════════════════════════════════════════════════════════════
-section "45 — --with-tags CLI + pecl_git version-gap fix"
+section "45 — --with-tags CLI flag"
 
 t "t45a: --with-tags CLI flag sets CFG[with_tags]=true" bash -c "
     source '/stack/bin/lib/env-update/config/defaults.sh'
@@ -3708,68 +3530,6 @@ t "t45b: --with-tags default is false when not passed" bash -c "
     _gs_eu2_parse_args
     [[ \"\${_GS_EU2_CFG[with_tags]}\" == 'false' ]] \
         || { echo \"expected with_tags=false, got: '\${_GS_EU2_CFG[with_tags]}'\"; echo FAIL; exit 0; }
-    echo PASS
-"
-
-_PECLGIT_LIBS45="
-source '/stack/bin/lib/env-update/config/defaults.sh'
-source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update/core/records.sh'
-source '/stack/bin/lib/env-update/core/semver.sh'
-source '/stack/bin/lib/env-update/core/channel.sh'
-source '/stack/bin/lib/env-update/core/tag_flags.sh'
-source '/stack/bin/lib/env-update/core/cache.sh'
-source '/stack/bin/lib/env-update/http/curl.sh'
-source '/stack/bin/lib/env-update/fetchers/github.sh'
-source '/stack/bin/lib/env-update/fetchers/pecl.sh'
-source '/stack/bin/lib/env-update/fetchers/pecl_git.sh'
-export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
-"
-
-t "t45c: pecl_git check_tags=true → merges releases + tags → finds 0.15.2" bash -c "
-    ${_PECLGIT_LIBS45}
-    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/peclgit45c_cache
-    declare -A _GS_EU2_CFG=([no_cache]=true)
-    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
-    _gs_eu2_record_set \$idx type             'pecl-git'
-    _gs_eu2_record_set \$idx identifier       'testowner/tag-ahead'
-    _gs_eu2_record_set \$idx check_tags       'true'
-    _gs_eu2_record_set \$idx env_var          'GLOBAL_STACK_TEST_VERSION'
-    _gs_eu2_record_set \$idx current_version  '0.13.0'
-    _gs_eu2_fetch_pecl_git \$idx 2>/dev/null || true
-    val=\$(_gs_eu2_record_get \$idx proposed_version)
-    [[ \"\$val\" == '0.15.2' ]] || { echo \"expected 0.15.2 (check-tags), got: '\$val'\"; echo FAIL; exit 0; }
-    echo PASS
-"
-
-t "t45d: pecl_git version-gap fix — releases older than current → auto-checks tags" bash -c "
-    ${_PECLGIT_LIBS45}
-    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/peclgit45d_cache
-    declare -A _GS_EU2_CFG=([no_cache]=true)
-    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
-    _gs_eu2_record_set \$idx type             'pecl-git'
-    _gs_eu2_record_set \$idx identifier       'testowner/tag-ahead'
-    _gs_eu2_record_set \$idx env_var          'GLOBAL_STACK_TEST_VERSION'
-    _gs_eu2_record_set \$idx current_version  '0.15.2'
-    _gs_eu2_fetch_pecl_git \$idx 2>/dev/null || true
-    val=\$(_gs_eu2_record_get \$idx proposed_version)
-    # releases v0.14.0 < current 0.15.2 → gap fix → tags has 0.15.2
-    [[ \"\$val\" == '0.15.2' ]] || { echo \"expected 0.15.2 (gap fix), got: '\$val'\"; echo FAIL; exit 0; }
-    echo PASS
-"
-
-t "t45e: pecl_git with_tags=true in CFG → finds 0.15.2" bash -c "
-    ${_PECLGIT_LIBS45}
-    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/peclgit45e_cache
-    declare -A _GS_EU2_CFG=([no_cache]=true [with_tags]=true)
-    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
-    _gs_eu2_record_set \$idx type             'pecl-git'
-    _gs_eu2_record_set \$idx identifier       'testowner/tag-ahead'
-    _gs_eu2_record_set \$idx env_var          'GLOBAL_STACK_TEST_VERSION'
-    _gs_eu2_record_set \$idx current_version  '0.13.0'
-    _gs_eu2_fetch_pecl_git \$idx 2>/dev/null || true
-    val=\$(_gs_eu2_record_get \$idx proposed_version)
-    [[ \"\$val\" == '0.15.2' ]] || { echo \"expected 0.15.2 (with_tags=true), got: '\$val'\"; echo FAIL; exit 0; }
     echo PASS
 "
 
@@ -3925,128 +3685,9 @@ t "t47c: type:pecl unknown extension — ERROR decision not SKIP fallback" bash 
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Section 48 — pecl_git digit-preference filter
+# Section 48 — pecl fetcher with (git:owner/repo) flag
 # ═══════════════════════════════════════════════════════════════════════════
-section "48 — pecl_git digit-preference filter"
-
-_PECLGIT_LIBS48="
-source '/stack/bin/lib/env-update/config/defaults.sh'
-source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update/core/records.sh'
-source '/stack/bin/lib/env-update/core/semver.sh'
-source '/stack/bin/lib/env-update/core/channel.sh'
-source '/stack/bin/lib/env-update/core/tag_flags.sh'
-source '/stack/bin/lib/env-update/core/cache.sh'
-source '/stack/bin/lib/env-update/http/curl.sh'
-source '/stack/bin/lib/env-update/fetchers/github.sh'
-source '/stack/bin/lib/env-update/fetchers/pecl.sh'
-source '/stack/bin/lib/env-update/fetchers/pecl_git.sh'
-export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
-"
-
-t "t48a: mixed tags — digit-prefixed wins over letter-prefixed (sort -V bug prevented)" bash -c "
-    ${_PECLGIT_LIBS48}
-    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/peclgit48a_cache
-    declare -A _GS_EU2_CFG=([no_cache]=true)
-    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
-    _gs_eu2_record_set \$idx type             'pecl-git'
-    _gs_eu2_record_set \$idx identifier       'testowner/mixed-tags-repo'
-    _gs_eu2_record_set \$idx env_var          'GLOBAL_STACK_PHP_ZIP_VERSION'
-    _gs_eu2_record_set \$idx current_version  '1.0.0'
-    _gs_eu2_fetch_pecl_git \$idx 2>/dev/null || true
-    val=\$(_gs_eu2_record_get \$idx proposed_version)
-    # fixture releases: 1.22.8, PHP_ZIP-1.12.1, 1.0.0
-    # Without fix: sort -V picks PHP_ZIP-1.12.1 (letter-prefixed sorts last)
-    # With fix:    digit-preference filter discards PHP_ZIP-1.12.1 → 1.22.8 wins
-    [[ \"\$val\" == '1.22.8' ]] || { echo \"expected 1.22.8 (digit-prefixed), got: '\$val'\"; echo FAIL; exit 0; }
-    echo PASS
-"
-
-t "t48b: all-letter tags — letter-prefixed fallback still produces a result" bash -c "
-    ${_PECLGIT_LIBS48}
-    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/peclgit48b_cache
-    declare -A _GS_EU2_CFG=([no_cache]=true)
-    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
-    # testowner/tags-only-repo releases fixture returns [] (empty); tags fixture has
-    # digit-only candidates → still picks highest digit version
-    _gs_eu2_record_set \$idx type             'pecl-git'
-    _gs_eu2_record_set \$idx identifier       'testowner/tags-only-repo'
-    _gs_eu2_record_set \$idx env_var          'GLOBAL_STACK_TEST_VER48B'
-    _gs_eu2_record_set \$idx current_version  '2.0.0'
-    _gs_eu2_fetch_pecl_git \$idx 2>/dev/null || true
-    val=\$(_gs_eu2_record_get \$idx proposed_version)
-    # fixture tags: 3.1.0, 3.0.2, 3.0.1, 3.0.0 (all digit-starting) → 3.1.0
-    [[ \"\$val\" == '3.1.0' ]] || { echo \"expected 3.1.0 (all-digit tags), got: '\$val'\"; echo FAIL; exit 0; }
-    echo PASS
-"
-
-# ═══════════════════════════════════════════════════════════════════════════
-# Section 48b — pecl_git (use-sha) bypass for tag-less repos
-# ═══════════════════════════════════════════════════════════════════════════
-section "48b — pecl_git (use-sha) bypass for tag-less repos"
-
-_PECLGIT_LIBS48B="
-source '/stack/bin/lib/env-update/config/defaults.sh'
-source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update/core/records.sh'
-source '/stack/bin/lib/env-update/core/semver.sh'
-source '/stack/bin/lib/env-update/core/channel.sh'
-source '/stack/bin/lib/env-update/core/tag_flags.sh'
-source '/stack/bin/lib/env-update/core/cache.sh'
-source '/stack/bin/lib/env-update/http/curl.sh'
-source '/stack/bin/lib/env-update/fetchers/github.sh'
-source '/stack/bin/lib/env-update/fetchers/pecl.sh'
-source '/stack/bin/lib/env-update/fetchers/pecl_git.sh'
-export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
-"
-
-t "t48b_a: (use-sha) + no release tags → no ERROR, HEAD SHA returned" bash -c "
-    ${_PECLGIT_LIBS48B}
-    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/peclgit48b_a_cache
-    declare -A _GS_EU2_CFG=([no_cache]=true)
-    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
-    _gs_eu2_record_set \$idx type            'pecl-git'
-    _gs_eu2_record_set \$idx identifier      'fake/no-tags-repo'
-    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_PHP_FFI_TEST_VERSION'
-    _gs_eu2_record_set \$idx current_version '0.3'
-    _gs_eu2_record_set \$idx use_sha         'true'
-    _gs_eu2_record_set \$idx annotation_sha  'oldsha1234567890123456789012345678901234'
-    _gs_eu2_fetch_pecl_git \$idx 2>/dev/null || true
-    decision=\$(_gs_eu2_record_get \$idx decision)
-    sha=\$(_gs_eu2_record_get \$idx proposed_sha)
-    ver=\$(_gs_eu2_record_get \$idx proposed_version)
-    # Must not be ERROR
-    [[ \"\$decision\" != 'ERROR' ]] || { echo \"expected non-ERROR decision, got: '\$decision'\"; echo FAIL; exit 0; }
-    # proposed_sha must be set (HEAD SHA from fixture)
-    [[ -n \"\$sha\" ]] || { echo 'expected non-empty proposed_sha'; echo FAIL; exit 0; }
-    [[ \"\$sha\" == 'fe3d1b7c8a92044db56e1234567890abcdef1234' ]] || { echo \"expected HEAD SHA fe3d1b7c..., got: '\$sha'\"; echo FAIL; exit 0; }
-    # proposed_version must equal current_version (no version change — SHA is what we track)
-    [[ \"\$ver\" == '0.3' ]] || { echo \"expected proposed_version=0.3 (current unchanged), got: '\$ver'\"; echo FAIL; exit 0; }
-    echo PASS
-"
-
-t "t48b_b: without (use-sha), no tags → ERROR as before" bash -c "
-    ${_PECLGIT_LIBS48B}
-    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/peclgit48b_b_cache
-    declare -A _GS_EU2_CFG=([no_cache]=true)
-    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
-    _gs_eu2_record_set \$idx type            'pecl-git'
-    _gs_eu2_record_set \$idx identifier      'fake/no-tags-repo'
-    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_PHP_FFI_TEST_VERSION'
-    _gs_eu2_record_set \$idx current_version '0.3'
-    # use_sha NOT set — should still produce ERROR for tag-less repos
-    _gs_eu2_fetch_pecl_git \$idx 2>/dev/null || true
-    decision=\$(_gs_eu2_record_get \$idx decision)
-    [[ \"\$decision\" == 'ERROR' ]] || { echo \"expected ERROR without use_sha, got: '\$decision'\"; echo FAIL; exit 0; }
-    err=\$(_gs_eu2_record_get \$idx error_message)
-    [[ \"\$err\" == *'use-sha'* ]] || { echo \"expected (use-sha) hint in error_message, got: '\$err'\"; echo FAIL; exit 0; }
-    echo PASS
-"
-
-# ═══════════════════════════════════════════════════════════════════════════
-# Section 49 — pecl fetcher with (git:owner/repo) flag
-# ═══════════════════════════════════════════════════════════════════════════
-section "49 — pecl fetcher with (git:owner/repo) flag"
+section "48 — pecl fetcher with (git:owner/repo) flag"
 
 _PECL_GIT_FLAG_LIBS="
 source '/stack/bin/lib/env-update/config/defaults.sh'
@@ -4157,6 +3798,17 @@ t "t49f: parse — (git:) without slash exits non-zero (invalid format)" bash -c
     err=\$(_gs_eu2_parse_env_file \"\$f\" 2>&1 || true)
     rm -f \"\$f\"
     printf '%s' \"\$err\" | grep -q 'OWNER/REPO' || { echo \"expected OWNER/REPO error, got: '\$err'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t49g: regression — pecl-git fetcher eliminated; pecl:zmq (git:zeromq/php-zmq) dispatches without crash" bash -c "
+    f=\${TMP_DIR}/t49g.env
+    printf '# @todo env-update pecl:zmq (git:zeromq/php-zmq) 1.1.3\nGLOBAL_STACK_PHP_ZMQ_VERSION=1.1.3\n' > \"\$f\"
+    out=\$(export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'; export _GS_EU2_CACHE_DIR=\"\${TMP_DIR}/t49g_cache\"; bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null)
+    # Must not produce unknown-type error
+    echo \"\$out\" | grep -qF 'unknown fetcher type' && { echo \"pecl: still hitting unknown-type fallback: \$out\"; echo FAIL; exit 0; }
+    # Must not be an empty result
+    echo \"\$out\" | grep -qE 'AUTO|SKIP|HOLD|ERROR' || { echo \"no decision token in output: \$out\"; echo FAIL; exit 0; }
     echo PASS
 "
 
@@ -4659,7 +4311,7 @@ t "t53n: --stable=full injection still works (== full check regression guard)" b
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Section 54 — unstable promotion guard (channel.sh + pecl_git.sh)
+# Section 54 — unstable promotion guard (channel.sh)
 # ═══════════════════════════════════════════════════════════════════════════
 section "54 — unstable promotion guard"
 
@@ -4749,8 +4401,8 @@ t "t55c: --no-notes does NOT suppress SHA sub-lines" bash -c "
     export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t55c_cache
     f=\${TMP_DIR}/t55c.env
-    # Use pecl-git fixture that produces a SHA sub-line + note
-    printf '# @todo env-update (note:check compat) (use-sha) pecl-git:php/php-src\nGLOBAL_STACK_PHPSRC_SHA=8.4.0\n' > \"\$f\"
+    # Use pecl+git fixture that produces a SHA sub-line + note
+    printf '# @todo env-update (note:check compat) (use-sha) pecl:zmq (git:zeromq/php-zmq) 1.1.3\nGLOBAL_STACK_ZMQ_SHA=1.1.3\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --no-notes --env-file=\"\$f\" 2>/dev/null)
     # note should be gone
     echo \"\$out\" | grep -qF 'check compat' && { echo \"note still present with --no-notes: \$out\"; echo FAIL; exit 0; }
