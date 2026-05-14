@@ -1,0 +1,25 @@
+---
+# Ruby runtime package fragment — extend this in 03ruby* services.
+#
+# Provides: all shared RUBY_CONFIG_PACKAGE_* and RUBY_INSTALL_PACKAGE_*
+#           environment variables (packages 01-02 + dummy sentinel).
+#
+# Chain: 03ruby* → ruby-packages → base-6vol.compose.yaml
+#           (inherits 6-volume base: no dist/conf mount)
+#
+# NOT included (service-specific): build, image, depends_on, environment vars
+#   for RBENV_MODE, RUBY_VERSION/VERSION_AS, GLOBAL_STACK_RBENV_VERSION,
+#   GLOBAL_STACK_RELOAD_RUBY, GLOBAL_STACK_ERROR_TOKEN,
+#   healthcheck, labels.stack.service/tier.
+services:
+  ruby-packages:
+    extends:
+      file: base-6vol.compose.yaml
+      service: base-6vol
+    environment:
+      - RUBY_CONFIG_PACKAGE_DUMMY_NAME=dummy
+      - RUBY_INSTALL_PACKAGE_DUMMY_VERSION=0
+      - RUBY_CONFIG_PACKAGE_01_GOOGLE_API_CLIENT_NAME=${GLOBAL_STACK_RUBY_CONFIG_PACKAGE_GOOGLE_API_CLIENT_NAME}
+      - RUBY_INSTALL_PACKAGE_01_GOOGLE_API_CLIENT_VERSION=${GLOBAL_STACK_RUBY_INSTALL_PACKAGE_GOOGLE_API_CLIENT_VERSION}
+      - RUBY_CONFIG_PACKAGE_02_FASTLANE_NAME=${GLOBAL_STACK_RUBY_CONFIG_PACKAGE_FASTLANE_NAME}
+      - RUBY_INSTALL_PACKAGE_02_FASTLANE_VERSION=${GLOBAL_STACK_RUBY_INSTALL_PACKAGE_FASTLANE_VERSION}
