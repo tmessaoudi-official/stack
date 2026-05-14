@@ -32,11 +32,6 @@ _gs_eu2_classify_decision() {
     echo "SKIP"; return 0
   fi
 
-  # Override or manual flags → MANUAL (only reached when there IS a version change)
-  if [[ "${_override}" == "true" || "${_manual}" == "true" ]]; then
-    echo "MANUAL"; return 0
-  fi
-
   # Prerelease guard: don't auto-propose a prerelease when current is stable.
   # Handles both dash-separated (6.3.0-rc1) and no-dash (6.3.0RC1) formats.
   # Bypassed when unstable_mode=full (user explicitly opted in to prerelease tracking).
@@ -48,6 +43,9 @@ _gs_eu2_classify_decision() {
   # Downgrade protection: if proposed sorts before current via sort -V, skip.
   # Use sort -V directly (not semver_compare) to avoid misclassifying platform
   # suffixes like -alpine3.23 as pre-release markers.
+  # NOTE: runs BEFORE the manual/override check so that downgrades are suppressed
+  # even for manual entries — a fetcher returning an older version is always wrong,
+  # regardless of annotation flags.
   local _cv="${_cur#v}" _pv="${_prop#v}"
 
   # RC→stable promotion guard: sort -V puts the bare base version (37.0.0) BEFORE
@@ -70,6 +68,12 @@ _gs_eu2_classify_decision() {
     if [[ "${_oldest}" == "${_pv}" ]]; then
       echo "SKIP"; return 0
     fi
+  fi
+
+  # Override or manual flags → MANUAL (only reached when proposed > current AND no
+  # prerelease guard fired — i.e. a genuine forward version change).
+  if [[ "${_override}" == "true" || "${_manual}" == "true" ]]; then
+    echo "MANUAL"; return 0
   fi
 
   # Determine semver delta

@@ -49,9 +49,16 @@ _gs_eu2_channel_select_best() {
     else _stables+=("${_v}"); fi
   done <<< "${_all}"
 
+  # sort -V misorders mixed v-prefix/no-prefix inputs (v0.3.0 sorts after 1.0.0 because
+  # 'v' > '1' in ASCII, while semantically 0.3.0 < 1.0.0).  Strip the leading 'v' before
+  # sorting (key col 1), then recover the original tag string from col 2.
   local _hs="" _hp=""
-  [[ ${#_stables[@]} -gt 0 ]] && _hs="$(printf '%s\n' "${_stables[@]}" | sort -V | tail -1)" || true
-  [[ ${#_pres[@]}    -gt 0 ]] && _hp="$(printf '%s\n' "${_pres[@]}"    | sort -V | tail -1)" || true
+  [[ ${#_stables[@]} -gt 0 ]] && _hs="$(printf '%s\n' "${_stables[@]}" \
+    | awk '{n=$0; sub(/^v/,"",n); printf "%s\t%s\n",n,$0}' \
+    | sort -V -k1,1 | tail -1 | cut -f2-)" || true
+  [[ ${#_pres[@]}    -gt 0 ]] && _hp="$(printf '%s\n' "${_pres[@]}" \
+    | awk '{n=$0; sub(/^v/,"",n); printf "%s\t%s\n",n,$0}' \
+    | sort -V -k1,1 | tail -1 | cut -f2-)" || true
 
   # Non-numeric fallback: handle letter-starting tags (e.g. ubuntu codename "resolute-20260413").
   # When no numeric/v-prefixed tags survive the loop, sort all non-unversioned tags with sort -V.
@@ -102,7 +109,9 @@ _gs_eu2_channel_select_best() {
       [[ "${_v,,}" == *"nightly"* ]] && _nightlies+=("${_v}")
     done <<< "${_all}"
     [[ ${#_nightlies[@]} -gt 0 ]] && \
-      printf '%s\n' "$(printf '%s\n' "${_nightlies[@]}" | sort -V | tail -1)"
+      printf '%s\n' "$(printf '%s\n' "${_nightlies[@]}" \
+        | awk '{n=$0; sub(/^v/,"",n); printf "%s\t%s\n",n,$0}' \
+        | sort -V -k1,1 | tail -1 | cut -f2-)"
     return 0
   fi
 
@@ -110,7 +119,9 @@ _gs_eu2_channel_select_best() {
   local _filtered
   _filtered="$(_gs_eu2_filter_versions_by_channel "${_all}" "${_chan}")"
   local _cm=""
-  [[ -n "${_filtered}" ]] && _cm="$(printf '%s\n' "${_filtered}" | grep -v '^$' | sort -V | tail -1)" || true
+  [[ -n "${_filtered}" ]] && _cm="$(printf '%s\n' "${_filtered}" | grep -v '^$' \
+    | awk '{n=$0; sub(/^v/,"",n); printf "%s\t%s\n",n,$0}' \
+    | sort -V -k1,1 | tail -1 | cut -f2-)" || true
   [[ -z "${_cm}" && -n "${_hp}" ]] && _cm="${_hp}"
 
   if [[ -z "${_cm}" ]]; then

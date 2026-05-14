@@ -717,6 +717,30 @@ t "t12j: filter_versions_by_channel with nightly channel now filters (no longer 
     echo PASS
 "
 
+# t12k: mixed v-prefix sort — v0.3.0 must not outrank 1.0.0-alpha (aleph.js regression)
+t "t12k: unstable channel — mixed v-prefix pool picks highest semantic version" bash -c "
+    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+    source '/stack/bin/lib/env-update/core/semver.sh'
+    source '/stack/bin/lib/env-update/core/channel.sh'
+    # Simulates aleph.js GitHub release pool: 1.0.0-alpha.* releases + v0.3.0-beta.* tags
+    # sort -V without v-strip puts v0.3.0-beta.19 AFTER 1.0.0-alpha.47 (bug); fix must return alpha.47
+    versions=\$'1.0.0-alpha.47\n1.0.0-alpha.42\nv0.3.0-beta.19\nv0.3.0-beta.18'
+    result=\$(_gs_eu2_channel_select_best \"\$versions\" 'unstable')
+    [[ \"\$result\" == '1.0.0-alpha.47' ]] || { echo \"expected 1.0.0-alpha.47, got: \$result\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t12l: mixed v-prefix pool in stable channel also sorts correctly
+t "t12l: stable channel — mixed v-prefix pool picks highest stable" bash -c "
+    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+    source '/stack/bin/lib/env-update/core/semver.sh'
+    source '/stack/bin/lib/env-update/core/channel.sh'
+    versions=\$'1.0.0\nv0.9.0\nv1.1.0\n0.8.0'
+    result=\$(_gs_eu2_channel_select_best \"\$versions\" '')
+    [[ \"\$result\" == 'v1.1.0' ]] || { echo \"expected v1.1.0, got: \$result\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Section 13 — Tag flags application
 # ═══════════════════════════════════════════════════════════════════════════
@@ -962,6 +986,31 @@ t "t16e: proposed older than current → SKIP (downgrade protection, B1)" bash -
     ${_DC_LIBS}
     result=\$(_gs_eu2_classify_decision '1.29.3' '1.2.5' '' '' '')
     [[ \"\$result\" == 'SKIP' ]] || { echo \"downgrade not prevented: got \$result\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t16f: manual=true + downgrade → SKIP (downgrade beats MANUAL; fetcher returning older is always wrong)
+t "t16f: manual flag + downgrade → SKIP not MANUAL (aleph.js regression guard)" bash -c "
+    ${_DC_LIBS}
+    # Simulates aleph.js: current=1.0.0-beta.44, proposed=v0.3.0-beta.19 (older)
+    result=\$(_gs_eu2_classify_decision '1.0.0-beta.44' 'v0.3.0-beta.19' '' 'true' '' 'full')
+    [[ \"\$result\" == 'SKIP' ]] || { echo \"expected SKIP for manual+downgrade, got: '\$result'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t16g: override=true + downgrade → SKIP (same rule: downgrade beats override)
+t "t16g: override flag + downgrade → SKIP not MANUAL" bash -c "
+    ${_DC_LIBS}
+    result=\$(_gs_eu2_classify_decision '18.4' '18.3' 'true' '' '')
+    [[ \"\$result\" == 'SKIP' ]] || { echo \"expected SKIP for override+downgrade, got: '\$result'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t16h: manual=true + upgrade → still MANUAL (the normal case must remain unaffected)
+t "t16h: manual flag + upgrade → MANUAL (normal MANUAL upgrade preserved)" bash -c "
+    ${_DC_LIBS}
+    result=\$(_gs_eu2_classify_decision '18.3' '18.4' '' 'true' '')
+    [[ \"\$result\" == 'MANUAL' ]] || { echo \"expected MANUAL for manual+upgrade, got: '\$result'\"; echo FAIL; exit 0; }
     echo PASS
 "
 
