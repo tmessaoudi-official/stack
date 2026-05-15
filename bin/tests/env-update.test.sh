@@ -537,6 +537,15 @@ t "t09d: --dry-run appears in --help output" bash -c "
     echo PASS
 "
 
+t "t09e: --filter prints [FILTER: REGEX] banner" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t09e_cache
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --filter=POSTGRES \
+        --env-file='${FIXTURES}/basic-dockerhub.env' 2>&1)
+    echo \"\$out\" | grep -qi 'FILTER.*POSTGRES' || { echo \"expected [FILTER: POSTGRES] banner, got: '\$out'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Section 10 — Default summary output (no flags → useful output, no network)
 # ═══════════════════════════════════════════════════════════════════════════
@@ -600,6 +609,16 @@ t "t11d: cache_key sanitizes colons and slashes" bash -c "
     f=\$(_gs_eu2_cache_key_to_file 'dockerhub:_/postgres:18:stable')
     [[ \"\$f\" == *'dockerhub__'* ]] || { echo \"colon not replaced: \$f\"; echo FAIL; exit 0; }
     [[ \"\$f\" != *':'* ]] || { echo \"raw colon in path: \$f\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t11e: --no-cache prints [NO-CACHE] banner" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t11e_cache
+    f=\${TMP_DIR}/t11e.env
+    printf '# @todo env-update dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T11E=18.3-alpine3.23\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --no-cache --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qi 'NO-CACHE' || { echo \"expected [NO-CACHE] banner, got: '\$out'\"; echo FAIL; exit 0; }
     echo PASS
 "
 
@@ -3580,6 +3599,15 @@ t "t45b: --with-tags default is false when not passed" bash -c "
     _gs_eu2_parse_args
     [[ \"\${_GS_EU2_CFG[with_tags]}\" == 'false' ]] \
         || { echo \"expected with_tags=false, got: '\${_GS_EU2_CFG[with_tags]}'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t45c: --with-tags prints [WITH-TAGS] banner" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t45c_cache
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --with-tags \
+        --env-file='${FIXTURES}/basic-dockerhub.env' 2>&1)
+    echo \"\$out\" | grep -qi 'WITH-TAGS' || { echo \"expected [WITH-TAGS] banner, got: '\$out'\"; echo FAIL; exit 0; }
     echo PASS
 "
 

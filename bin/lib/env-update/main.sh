@@ -526,6 +526,15 @@ _gs_eu2_main() {
   if [[ "${_GS_EU2_CFG[no_notes]:-false}" == "true" ]]; then
     printf '[NO-NOTES MODE] note sub-lines suppressed\n'
   fi
+  if [[ "${_GS_EU2_CFG[no_cache]:-false}" == "true" ]]; then
+    printf '[NO-CACHE] cache bypassed — all fetches hit network\n'
+  fi
+  if [[ "${_GS_EU2_CFG[with_tags]:-false}" == "true" ]]; then
+    printf '[WITH-TAGS] tags API merged for all github records\n'
+  fi
+  if [[ -n "${_GS_EU2_CFG[filter]:-}" ]]; then
+    printf '[FILTER: %s]\n' "${_GS_EU2_CFG[filter]}"
+  fi
 
   if [[ "true" == "${_GS_EU2_CFG[dump]}" ]]; then
     _gs_eu2_dump_records "${_GS_EU2_CFG[format]}"
