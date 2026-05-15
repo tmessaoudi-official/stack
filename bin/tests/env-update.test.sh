@@ -886,8 +886,8 @@ t "t15c: tag-suffix filter applied" bash -c "
 
 t "t15d: cache hit skips HTTP call (sets proposed_version from cache)" bash -c "
     ${_DH_LIBS}
-    # Key must match what fetcher computes: dockerhub:<ns>:<tag_suffix>:<major_hint>:<channel>:<prefer_specific>
-    _gs_eu2_cache_write 'dockerhub:library/postgres::::' '18.3-alpine3.23-CACHED'
+    # Key must match what fetcher computes: dockerhub:<ns>:<tag_suffix>:<major_hint>:<channel>:<prefer_specific>:<watch_major_depth>
+    _gs_eu2_cache_write 'dockerhub:library/postgres:::::' '18.3-alpine3.23-CACHED'
     _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
     _gs_eu2_record_set \$idx type       'dockerhub'
     _gs_eu2_record_set \$idx identifier '_/postgres'
@@ -2642,7 +2642,8 @@ t "t32f: sdkman does NOT set manual=true (decide.sh classifies AUTO/HOLD based o
 
 t "t32g: cache hit skips HTTP (proposed_version from cache)" bash -c "
     ${_SDK_LIBS}
-    _gs_eu2_cache_write 'sdkman:gradle::' '9.99.0-CACHED'
+    # Key must match: sdkman:<identifier>:<major_hint>:<channel>:<watch_major_depth>
+    _gs_eu2_cache_write 'sdkman:gradle:::' '9.99.0-CACHED'
     _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
     _gs_eu2_record_set \$idx type            'sdkman'
     _gs_eu2_record_set \$idx identifier      'gradle'
@@ -4730,6 +4731,103 @@ t "t58l: watch-major coexists with manual flag — decision is MANUAL, WATCH may
     printf '# @todo env-update (manual) (watch-major) dockerhub:_/postgres:17 17.5\nGLOBAL_STACK_PG17C=17.5\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null)
     echo \"\$out\" | grep -qF 'MANUAL' || { echo \"expected MANUAL decision, got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t58m: SDKMAN Java (watch-major) fires — current on major 11, fixture has 25.x
+# java fixture (/versions/all) contains 11.x through 25.x; pinned to :11 → WATCH fires 11 → 25.
+_SDK_LIBS58M="
+source '/stack/bin/lib/env-update/config/defaults.sh'
+source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update/core/records.sh'
+source '/stack/bin/lib/env-update/core/semver.sh'
+source '/stack/bin/lib/env-update/core/channel.sh'
+source '/stack/bin/lib/env-update/core/tag_flags.sh'
+source '/stack/bin/lib/env-update/core/cache.sh'
+source '/stack/bin/lib/env-update/http/curl.sh'
+source '/stack/bin/lib/env-update/fetchers/sdkman.sh'
+export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t58m_cache
+"
+
+t "t58m: sdkman java (watch-major) fires when fixture has a higher major (11→25)" bash -c "
+    ${_SDK_LIBS58M}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'sdkman'
+    _gs_eu2_record_set \$idx identifier      'java'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_JAVA11_VERSION'
+    _gs_eu2_record_set \$idx current_version '11.0.30-zulu'
+    _gs_eu2_record_set \$idx major_hint      '11'
+    _gs_eu2_record_set \$idx watch_major_depth '1'
+    _gs_eu2_fetch_sdkman \$idx
+    proposed=\$(_gs_eu2_record_get \$idx proposed_version)
+    unconstrained=\$(_gs_eu2_record_get \$idx latest_unconstrained)
+    [[ -n \"\$proposed\" ]] || { echo \"proposed_version empty\"; echo FAIL; exit 0; }
+    [[ \"\$proposed\" == 11.* ]] || { echo \"proposed should be 11.x, got: '\$proposed'\"; echo FAIL; exit 0; }
+    [[ -n \"\$unconstrained\" ]] || { echo \"latest_unconstrained empty — WATCH cannot fire\"; echo FAIL; exit 0; }
+    # unconstrained should be the highest version from the full fixture (25.x-zulu)
+    [[ \"\$unconstrained\" == 25.* ]] || { echo \"expected unconstrained 25.x, got: '\$unconstrained'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t58n: SDKMAN Java (watch-major) silent — current on major 25, no higher major in fixture
+t "t58n: sdkman java (watch-major) silent when already on latest major (25)" bash -c "
+    ${_SDK_LIBS58M}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t58n_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'sdkman'
+    _gs_eu2_record_set \$idx identifier      'java'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_JAVA25_VERSION'
+    _gs_eu2_record_set \$idx current_version '25.0.1-zulu'
+    _gs_eu2_record_set \$idx major_hint      '25'
+    _gs_eu2_record_set \$idx watch_major_depth '1'
+    _gs_eu2_fetch_sdkman \$idx
+    proposed=\$(_gs_eu2_record_get \$idx proposed_version)
+    unconstrained=\$(_gs_eu2_record_get \$idx latest_unconstrained)
+    [[ -n \"\$proposed\" ]] || { echo \"proposed_version empty\"; echo FAIL; exit 0; }
+    [[ \"\$proposed\" == 25.* ]] || { echo \"proposed should be 25.x, got: '\$proposed'\"; echo FAIL; exit 0; }
+    # When unconstrained == proposed major, WATCH must not fire.
+    # Either unconstrained is empty (nothing higher found) or its major matches proposed.
+    if [[ -n \"\$unconstrained\" ]]; then
+      pfx_p=\$(_gs_eu2_version_prefix \"\$proposed\" '1')
+      pfx_u=\$(_gs_eu2_version_prefix \"\$unconstrained\" '1')
+      [[ \"\$pfx_p\" == \"\$pfx_u\" ]] || { echo \"unconstrained '\$unconstrained' has different major than proposed '\$proposed' — WATCH would fire unexpectedly\"; echo FAIL; exit 0; }
+    fi
+    echo PASS
+"
+
+# t58o: SDKMAN non-Java (watch-major) fires — gradle pinned to major 4, fixture has 9.x
+_SDK_LIBS58O="
+source '/stack/bin/lib/env-update/config/defaults.sh'
+source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update/core/records.sh'
+source '/stack/bin/lib/env-update/core/semver.sh'
+source '/stack/bin/lib/env-update/core/channel.sh'
+source '/stack/bin/lib/env-update/core/tag_flags.sh'
+source '/stack/bin/lib/env-update/core/cache.sh'
+source '/stack/bin/lib/env-update/http/curl.sh'
+source '/stack/bin/lib/env-update/fetchers/sdkman.sh'
+export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t58o_cache
+"
+
+t "t58o: sdkman gradle (watch-major) fires when fixture has higher major (4→9)" bash -c "
+    ${_SDK_LIBS58O}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'sdkman'
+    _gs_eu2_record_set \$idx identifier      'gradle'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_GRADLE4_VERSION'
+    _gs_eu2_record_set \$idx current_version '4.6'
+    _gs_eu2_record_set \$idx major_hint      '4'
+    _gs_eu2_record_set \$idx watch_major_depth '1'
+    _gs_eu2_fetch_sdkman \$idx
+    proposed=\$(_gs_eu2_record_get \$idx proposed_version)
+    unconstrained=\$(_gs_eu2_record_get \$idx latest_unconstrained)
+    [[ -n \"\$proposed\" ]] || { echo \"proposed_version empty\"; echo FAIL; exit 0; }
+    [[ \"\$proposed\" == 4.* ]] || { echo \"proposed should be 4.x, got: '\$proposed'\"; echo FAIL; exit 0; }
+    [[ -n \"\$unconstrained\" ]] || { echo \"latest_unconstrained empty — WATCH cannot fire\"; echo FAIL; exit 0; }
+    # unconstrained should be from 9.x (highest stable in gradle fixture)
+    [[ \"\$unconstrained\" == 9.* ]] || { echo \"expected unconstrained 9.x, got: '\$unconstrained'\"; echo FAIL; exit 0; }
     echo PASS
 "
 

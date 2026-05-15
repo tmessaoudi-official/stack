@@ -77,8 +77,14 @@ _gs_eu2_fetch_dockerhub() {
   local _prefer_specific
   _prefer_specific="$(_gs_eu2_record_get "${_idx}" prefer_specific)"
 
-  # Build cache key — include prefer_specific so flag-on/off runs don't share entries
-  local _cache_key="dockerhub:${_ns}:${_tag_suffix}:${_major_hint}:${_channel}:${_prefer_specific}"
+  # watch_major_depth read early for cache key: watch-major runs must not share
+  # a cache entry with non-watch-major runs (cache-hit returns before latest_unconstrained
+  # is populated, so a shared entry would silently suppress WATCH on subsequent runs).
+  local _wm_depth_ck
+  _wm_depth_ck="$(_gs_eu2_record_get "${_idx}" watch_major_depth)"
+
+  # Build cache key — include prefer_specific and watch depth so flag-on/off runs don't share entries
+  local _cache_key="dockerhub:${_ns}:${_tag_suffix}:${_major_hint}:${_channel}:${_prefer_specific}:${_wm_depth_ck}"
 
   # Cache read
   if [[ "${_no_cache}" != "true" ]]; then

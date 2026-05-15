@@ -152,8 +152,14 @@ _gs_eu2_fetch_github() {
 
   local _tok="${GITHUB_TOKEN:-${GLOBAL_STACK_GITHUB_TOKEN:-}}"
 
-  # Build cache key — include merge_mode to avoid polluting normal cache entries
-  local _cache_key="github:${_identifier}:${_major_hint}:${_channel}"
+  # watch_major_depth read early for cache key: watch-major runs must not share
+  # a cache entry with non-watch-major runs (cache-hit returns before latest_unconstrained
+  # is populated, so a shared entry would silently suppress WATCH on subsequent runs).
+  local _wm_depth_ck
+  _wm_depth_ck="$(_gs_eu2_record_get "${_idx}" watch_major_depth)"
+
+  # Build cache key — include merge_mode and watch depth to avoid polluting normal cache entries
+  local _cache_key="github:${_identifier}:${_major_hint}:${_channel}:${_wm_depth_ck}"
   [[ "${_merge_mode}" == "true" ]] && _cache_key="${_cache_key}:tags"
 
   # Cache read

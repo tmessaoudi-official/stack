@@ -131,8 +131,14 @@ _gs_eu2_fetch_sdkman() {
   _current="$(_gs_eu2_record_get "${_idx}" current_version)"
   _no_cache="${_GS_EU2_CFG[no_cache]:-false}"
 
+  # watch_major_depth read early for cache key: watch-major runs must not share
+  # a cache entry with non-watch-major runs (cache-hit returns before latest_unconstrained
+  # is populated, so a shared entry would silently suppress WATCH on subsequent runs).
+  local _wm_depth_ck
+  _wm_depth_ck="$(_gs_eu2_record_get "${_idx}" watch_major_depth)"
+
   # Build cache key
-  local _cache_key="sdkman:${_identifier}:${_major_hint}:${_channel}"
+  local _cache_key="sdkman:${_identifier}:${_major_hint}:${_channel}:${_wm_depth_ck}"
 
   # Cache read
   if [[ "${_no_cache}" != "true" ]]; then
@@ -224,12 +230,25 @@ _gs_eu2_fetch_sdkman() {
     return 0
   fi
 
-  # ── (watch-major) note ─────────────────────────────────────────────────────
-  # latest_unconstrained is NOT populated here. The sdkman extraction functions
-  # (_gs_eu2_sdkman_extract_java_versions / _gs_eu2_sdkman_extract_versions) bake
-  # the major_hint filter into the API query, so no pre-pin full list is available.
-  # For sdkman vars, (watch-major) silently does not fire — consistent with the
-  # "version-specific source" caveat documented in templates/tips/env-update.md.
+  # ── (watch-major) — populate latest_unconstrained ─────────────────────────
+  # _raw holds the full unfiltered API response (all versions, no major-pin).
+  # Re-run extraction without the major_hint to get the unconstrained best;
+  # compare against _proposed (which IS major-pinned) in main.sh to fire WATCH.
+  local _wm_depth
+  _wm_depth="$(_gs_eu2_record_get "${_idx}" watch_major_depth)"
+  if [[ -n "${_wm_depth}" && -n "${_major_hint}" ]]; then
+    if [[ "${_is_java}" == "true" ]]; then
+      local _all_java_versions _unconstrained
+      _all_java_versions="$(_gs_eu2_sdkman_extract_java_versions "${_raw}" "" "${_preferred_dist}")"
+      _unconstrained="$(_gs_eu2_sdkman_select_java "${_all_java_versions}" "${_preferred_dist}")"
+      [[ -n "${_unconstrained}" ]] && _gs_eu2_record_set "${_idx}" latest_unconstrained "${_unconstrained}"
+    else
+      local _all_versions _unconstrained_best
+      _all_versions="$(_gs_eu2_sdkman_extract_versions "${_raw}" "")"
+      _unconstrained_best="$(_gs_eu2_channel_select_best "${_all_versions}" "stable")"
+      [[ -n "${_unconstrained_best}" ]] && _gs_eu2_record_set "${_idx}" latest_unconstrained "${_unconstrained_best}"
+    fi
+  fi
 
   # ── Write result — proposed_version only; decision left empty for decide.sh ─
   _gs_eu2_record_set "${_idx}" proposed_version "${_proposed}"

@@ -47,8 +47,14 @@ _gs_eu2_fetch_codeberg() {
   _major_hint="$(_gs_eu2_record_get "${_idx}" major_hint)"
   _no_cache="${_GS_EU2_CFG[no_cache]:-false}"
 
+  # watch_major_depth read early for cache key: watch-major runs must not share
+  # a cache entry with non-watch-major runs (cache-hit returns before latest_unconstrained
+  # is populated, so a shared entry would silently suppress WATCH on subsequent runs).
+  local _wm_depth_ck
+  _wm_depth_ck="$(_gs_eu2_record_get "${_idx}" watch_major_depth)"
+
   # Build cache key — same shape as dockerhub for consistency
-  local _cache_key="codeberg:${_identifier}:${_major_hint}:${_channel}"
+  local _cache_key="codeberg:${_identifier}:${_major_hint}:${_channel}:${_wm_depth_ck}"
 
   # Cache read
   if [[ "${_no_cache}" != "true" ]]; then
