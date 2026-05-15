@@ -3161,7 +3161,7 @@ t "t39e: SKIP downgrade protection shows '(would downgrade)'" bash -c "
     # fixture proposes 18.4-alpine3.23; set current higher so downgrade triggers
     printf '# @todo env-update dockerhub:_/postgres\nGLOBAL_STACK_POSTGRES_DOWN=99.0\n' > \"\$f\"
     out=\$(export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'; export _GS_EU2_CACHE_DIR=\"\${TMP_DIR}/t39e_cache\"; bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null)
-    echo \"\$out\" | grep -qF 'would downgrade' || { echo \"no downgrade reason in output: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'would downgrade: current' || { echo \"no downgrade reason in output: \$out\"; echo FAIL; exit 0; }
     echo PASS
 "
 
@@ -4852,6 +4852,559 @@ t "t58o: sdkman gradle (watch-major) fires when fixture has higher major (4→9)
     [[ -n \"\$unconstrained\" ]] || { echo \"latest_unconstrained empty — WATCH cannot fire\"; echo FAIL; exit 0; }
     # unconstrained should be from 9.x (highest stable in gradle fixture)
     [[ \"\$unconstrained\" == 9.* ]] || { echo \"expected unconstrained 9.x, got: '\$unconstrained'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 59 — github (watch-major) flag
+# ═══════════════════════════════════════════════════════════════════════════
+section "59 — github (watch-major) flag"
+
+_GH_LIBS59="
+source '/stack/bin/lib/env-update/config/defaults.sh'
+source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update/core/records.sh'
+source '/stack/bin/lib/env-update/core/semver.sh'
+source '/stack/bin/lib/env-update/core/channel.sh'
+source '/stack/bin/lib/env-update/core/tag_flags.sh'
+source '/stack/bin/lib/env-update/core/cache.sh'
+source '/stack/bin/lib/env-update/http/curl.sh'
+source '/stack/bin/lib/env-update/fetchers/github.sh'
+export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+"
+
+# t59a: github + (watch-major) — same major in fixture, no WATCH
+# watchrepo-older has v3.1.0, v3.0.5, v2.9.0. Pin to major 3 → proposed=v3.1.0.
+# latest_unconstrained also 3.x → WATCH must NOT fire.
+t "t59a: github watch-major — same major in fixture, no WATCH emitted" bash -c "
+    ${_GH_LIBS59}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t59a_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'github'
+    _gs_eu2_record_set \$idx identifier      'testorg/watchrepo-older'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_TEST_WM_A'
+    _gs_eu2_record_set \$idx current_version '3.0.5'
+    _gs_eu2_record_set \$idx major_hint      '3'
+    _gs_eu2_record_set \$idx watch_major_depth '1'
+    _gs_eu2_fetch_github \$idx
+    proposed=\$(_gs_eu2_record_get \$idx proposed_version)
+    unconstrained=\$(_gs_eu2_record_get \$idx latest_unconstrained)
+    [[ -n \"\$proposed\" ]] || { echo 'proposed_version empty'; echo FAIL; exit 0; }
+    # If unconstrained is set, its major must equal proposed's major (no new generation)
+    if [[ -n \"\$unconstrained\" ]]; then
+      pfx_p=\$(_gs_eu2_version_prefix \"\$proposed\" '1')
+      pfx_u=\$(_gs_eu2_version_prefix \"\$unconstrained\" '1')
+      [[ \"\$pfx_p\" == \"\$pfx_u\" ]] || { echo \"unconstrained '\$unconstrained' has higher major than proposed '\$proposed'\"; echo FAIL; exit 0; }
+    fi
+    echo PASS
+"
+
+# t59b: github + (watch-major) — newer major exists, latest_unconstrained set
+# watchrepo-newer has v4.0.0, v3.1.0, v3.0.5. Pin to major 3 → proposed=v3.1.0.
+# unconstrained = v4.0.0 → WATCH fires (depth1: 3 vs 4).
+t "t59b: github watch-major — newer major exists, latest_unconstrained populated" bash -c "
+    ${_GH_LIBS59}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t59b_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'github'
+    _gs_eu2_record_set \$idx identifier      'testorg/watchrepo-newer'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_TEST_WM_B'
+    _gs_eu2_record_set \$idx current_version '3.0.5'
+    _gs_eu2_record_set \$idx major_hint      '3'
+    _gs_eu2_record_set \$idx watch_major_depth '1'
+    _gs_eu2_fetch_github \$idx
+    proposed=\$(_gs_eu2_record_get \$idx proposed_version)
+    unconstrained=\$(_gs_eu2_record_get \$idx latest_unconstrained)
+    [[ -n \"\$proposed\" ]] || { echo 'proposed_version empty'; echo FAIL; exit 0; }
+    [[ \"\$proposed\" == v3.* || \"\$proposed\" == 3.* ]] || { echo \"proposed should be 3.x, got: '\$proposed'\"; echo FAIL; exit 0; }
+    [[ -n \"\$unconstrained\" ]] || { echo 'latest_unconstrained empty — WATCH cannot fire'; echo FAIL; exit 0; }
+    pfx_u=\$(_gs_eu2_version_prefix \"\$unconstrained\" '1')
+    [[ \"\$pfx_u\" == '4' ]] || { echo \"expected unconstrained major 4, got: '\$pfx_u' (full: '\$unconstrained')\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t59c: github + (watch-major) via --check, WATCH line appears in output
+t "t59c: github watch-major — [WATCH] line appears in --check output when newer major exists" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t59c_cache
+    f=\${TMP_DIR}/t59c.env
+    printf '# @todo env-update (watch-major) github:testorg/watchrepo-newer:3 3.0.5\nGLOBAL_STACK_TEST_WM_C=3.0.5\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null)
+    echo \"\$out\" | grep -qF '[WATCH]' || { echo \"expected [WATCH] in output, got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t59d: github + (watch-major) — no WATCH when already at latest major
+t "t59d: github watch-major — no [WATCH] when on latest major in fixture" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t59d_cache
+    f=\${TMP_DIR}/t59d.env
+    printf '# @todo env-update (watch-major) github:testorg/watchrepo-newer:4 4.0.0\nGLOBAL_STACK_TEST_WM_D=4.0.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null)
+    echo \"\$out\" | grep -qF '[WATCH]' && { echo \"unexpected [WATCH] on latest major: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t59e: github + (watch-major:2) depth2 — same X.Y, no WATCH
+# watchrepo-depth2-older has v8.5.3, v8.5.0, v8.4.9, v8.3.0. Pin to major_hint=8.
+# unconstrained (depth2 prefix: 8.5) == proposed depth2 → no WATCH.
+t "t59e: github watch-major:2 — same X.Y generation, no WATCH" bash -c "
+    ${_GH_LIBS59}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t59e_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type              'github'
+    _gs_eu2_record_set \$idx identifier        'testorg/watchrepo-depth2-older'
+    _gs_eu2_record_set \$idx env_var           'GLOBAL_STACK_TEST_WM_E'
+    _gs_eu2_record_set \$idx current_version   '8.5.0'
+    _gs_eu2_record_set \$idx major_hint        '8'
+    _gs_eu2_record_set \$idx watch_major_depth '2'
+    _gs_eu2_record_set \$idx tag_strip_prefix  'v'
+    _gs_eu2_fetch_github \$idx
+    proposed=\$(_gs_eu2_record_get \$idx proposed_version)
+    unconstrained=\$(_gs_eu2_record_get \$idx latest_unconstrained)
+    [[ -n \"\$proposed\" ]] || { echo 'proposed_version empty'; echo FAIL; exit 0; }
+    if [[ -n \"\$unconstrained\" ]]; then
+      pfx_p=\$(_gs_eu2_version_prefix \"\$proposed\" '2')
+      pfx_u=\$(_gs_eu2_version_prefix \"\$unconstrained\" '2')
+      [[ \"\$pfx_p\" == \"\$pfx_u\" ]] || { echo \"unconstrained '\$unconstrained' has different X.Y than proposed '\$proposed'\"; echo FAIL; exit 0; }
+    fi
+    echo PASS
+"
+
+# t59f: github + (watch-major:2) depth2 — newer X.Y, latest_unconstrained set with 8.6
+# watchrepo-depth2-newer has v8.6.0, v8.5.3, v8.5.0, v8.4.0. Pin to major_hint=8.
+# unconstrained=8.6.0 (prefix depth2: 8.6) vs proposed=8.5.3 (prefix: 8.5) → WATCH fires.
+t "t59f: github watch-major:2 — newer X.Y generation, latest_unconstrained populated" bash -c "
+    ${_GH_LIBS59}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t59f_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type              'github'
+    _gs_eu2_record_set \$idx identifier        'testorg/watchrepo-depth2-newer'
+    _gs_eu2_record_set \$idx env_var           'GLOBAL_STACK_TEST_WM_F'
+    _gs_eu2_record_set \$idx current_version   '8.5.0'
+    _gs_eu2_record_set \$idx major_hint        '8'
+    _gs_eu2_record_set \$idx watch_major_depth '2'
+    _gs_eu2_record_set \$idx tag_strip_prefix  'v'
+    _gs_eu2_fetch_github \$idx
+    proposed=\$(_gs_eu2_record_get \$idx proposed_version)
+    unconstrained=\$(_gs_eu2_record_get \$idx latest_unconstrained)
+    [[ -n \"\$proposed\" ]] || { echo 'proposed_version empty'; echo FAIL; exit 0; }
+    [[ -n \"\$unconstrained\" ]] || { echo 'latest_unconstrained empty — WATCH cannot fire for depth2'; echo FAIL; exit 0; }
+    pfx_u=\$(_gs_eu2_version_prefix \"\$unconstrained\" '2')
+    [[ \"\$pfx_u\" == '8.6' ]] || { echo \"expected unconstrained prefix 8.6, got: '\$pfx_u' (full: '\$unconstrained')\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t59g: github + (watch-major) — --no-notes does NOT suppress WATCH
+t "t59g: github watch-major — --no-notes does NOT suppress [WATCH] sub-line" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t59g_cache
+    f=\${TMP_DIR}/t59g.env
+    printf '# @todo env-update (watch-major) github:testorg/watchrepo-newer:3 3.0.5\nGLOBAL_STACK_TEST_WM_G=3.0.5\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --no-notes --env-file=\"\$f\" 2>/dev/null)
+    echo \"\$out\" | grep -qF '[WATCH]' || { echo \"[WATCH] suppressed by --no-notes (should not be): \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t59h: github + (watch-major) unit check — latest_unconstrained is populated by the fetcher
+# Note: --dump only shows parsed annotation fields (no fetcher invoked); use unit-level API.
+t "t59h: github watch-major — fetcher populates latest_unconstrained (unit check)" bash -c "
+    ${_GH_LIBS59}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t59h_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'github'
+    _gs_eu2_record_set \$idx identifier      'testorg/watchrepo-newer'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_TEST_WM_H'
+    _gs_eu2_record_set \$idx current_version '3.0.5'
+    _gs_eu2_record_set \$idx major_hint      '3'
+    _gs_eu2_record_set \$idx watch_major_depth '1'
+    _gs_eu2_fetch_github \$idx
+    unconstrained=\$(_gs_eu2_record_get \$idx latest_unconstrained)
+    [[ -n \"\$unconstrained\" ]] || { echo 'latest_unconstrained empty after fetching watchrepo-newer'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 28 additions — npm (watch-major) flag (after bug fix)
+# ═══════════════════════════════════════════════════════════════════════════
+section "28b — npm (watch-major) flag"
+
+_NPM_LIBS_WM="
+source '/stack/bin/lib/env-update/config/defaults.sh'
+source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update/core/records.sh'
+source '/stack/bin/lib/env-update/core/semver.sh'
+source '/stack/bin/lib/env-update/core/channel.sh'
+source '/stack/bin/lib/env-update/core/tag_flags.sh'
+source '/stack/bin/lib/env-update/core/cache.sh'
+source '/stack/bin/lib/env-update/http/curl.sh'
+source '/stack/bin/lib/env-update/fetchers/npm.sh'
+export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+"
+
+# t28g: npm + (watch-major) — same major, no WATCH (unconstrained == proposed major)
+# somepackage fixture: dist-tags.latest=24.1.0, versions: 24.1.0, 24.0.5, 23.8.0
+# Pin to major 24 → proposed=24.1.0, unconstrained=24.1.0 → same major, no WATCH.
+t "t28g: npm watch-major — same major in fixture, no WATCH emitted" bash -c "
+    ${_NPM_LIBS_WM}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t28g_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'npm'
+    _gs_eu2_record_set \$idx identifier      'somepackage'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_TEST_NPM_WM_G'
+    _gs_eu2_record_set \$idx current_version '24.0.5'
+    _gs_eu2_record_set \$idx major_hint      '24'
+    _gs_eu2_record_set \$idx watch_major_depth '1'
+    _gs_eu2_fetch_npm \$idx
+    proposed=\$(_gs_eu2_record_get \$idx proposed_version)
+    unconstrained=\$(_gs_eu2_record_get \$idx latest_unconstrained)
+    [[ -n \"\$proposed\" ]] || { echo 'proposed_version empty'; echo FAIL; exit 0; }
+    [[ \"\$proposed\" == 24.* ]] || { echo \"proposed should be 24.x, got: '\$proposed'\"; echo FAIL; exit 0; }
+    if [[ -n \"\$unconstrained\" ]]; then
+      pfx_p=\$(_gs_eu2_version_prefix \"\$proposed\" '1')
+      pfx_u=\$(_gs_eu2_version_prefix \"\$unconstrained\" '1')
+      [[ \"\$pfx_p\" == \"\$pfx_u\" ]] || { echo \"unconstrained '\$unconstrained' has higher major than proposed '\$proposed'\"; echo FAIL; exit 0; }
+    fi
+    echo PASS
+"
+
+# t28h: npm + (watch-major) — newer major exists, latest_unconstrained populated
+# bigpackage fixture: versions 25.0.0, 24.1.0, 24.0.5. Pin to major 24 → proposed=24.1.0.
+# unconstrained=25.0.0 → WATCH fires.
+t "t28h: npm watch-major — newer major in fixture, latest_unconstrained=25.x" bash -c "
+    ${_NPM_LIBS_WM}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t28h_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'npm'
+    _gs_eu2_record_set \$idx identifier      'bigpackage'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_TEST_NPM_WM_H'
+    _gs_eu2_record_set \$idx current_version '24.0.5'
+    _gs_eu2_record_set \$idx major_hint      '24'
+    _gs_eu2_record_set \$idx watch_major_depth '1'
+    _gs_eu2_fetch_npm \$idx
+    proposed=\$(_gs_eu2_record_get \$idx proposed_version)
+    unconstrained=\$(_gs_eu2_record_get \$idx latest_unconstrained)
+    [[ -n \"\$proposed\" ]] || { echo 'proposed_version empty'; echo FAIL; exit 0; }
+    [[ \"\$proposed\" == 24.* ]] || { echo \"proposed should be 24.x (major-pinned), got: '\$proposed'\"; echo FAIL; exit 0; }
+    [[ -n \"\$unconstrained\" ]] || { echo 'latest_unconstrained empty — WATCH cannot fire'; echo FAIL; exit 0; }
+    pfx_u=\$(_gs_eu2_version_prefix \"\$unconstrained\" '1')
+    [[ \"\$pfx_u\" == '25' ]] || { echo \"expected unconstrained major 25, got: '\$pfx_u' (full: '\$unconstrained')\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t28i: npm + (watch-major) — _GS_EU2_HTTP_FIXTURE_DIR bypasses CLI fast path
+# This verifies the fixture seam already works (the pre-condition for t28g/t28h).
+t "t28i: npm watch-major — fixture dir set means CLI path not taken (stable fast path gated)" bash -c "
+    ${_NPM_LIBS_WM}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t28i_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'npm'
+    _gs_eu2_record_set \$idx identifier      'somepackage'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_TEST_NPM_WM_I'
+    _gs_eu2_record_set \$idx current_version '24.0.5'
+    _gs_eu2_record_set \$idx major_hint      '24'
+    _gs_eu2_record_set \$idx watch_major_depth '1'
+    _gs_eu2_fetch_npm \$idx
+    # If fixture was used (API path), proposed_version comes from versions list
+    proposed=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ -n \"\$proposed\" ]] || { echo 'proposed_version empty — fixture not served'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t28j: npm + (watch-major) — major_hint correctly caps result to 24, unconstrained holds 25
+t "t28j: npm watch-major — major_hint caps proposed to 24, unconstrained holds 25.0.0" bash -c "
+    ${_NPM_LIBS_WM}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t28j_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'npm'
+    _gs_eu2_record_set \$idx identifier      'bigpackage'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_TEST_NPM_WM_J'
+    _gs_eu2_record_set \$idx current_version '24.0.5'
+    _gs_eu2_record_set \$idx major_hint      '24'
+    _gs_eu2_record_set \$idx watch_major_depth '1'
+    _gs_eu2_fetch_npm \$idx
+    proposed=\$(_gs_eu2_record_get \$idx proposed_version)
+    unconstrained=\$(_gs_eu2_record_get \$idx latest_unconstrained)
+    # proposed must be capped to major 24
+    [[ \"\$proposed\" == 24.* ]] || { echo \"proposed not capped to 24: '\$proposed'\"; echo FAIL; exit 0; }
+    # unconstrained must be 25.0.0 (highest across all versions)
+    [[ \"\$unconstrained\" == '25.0.0' ]] || { echo \"expected unconstrained=25.0.0, got: '\$unconstrained'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 60 — --format=json (--dump) output
+# ═══════════════════════════════════════════════════════════════════════════
+section "60 — --format=json (--dump) output"
+
+# t60a: --dump --format=json produces valid JSON
+t "t60a: --dump --format=json output is valid JSON (parses with jq)" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t60a_cache
+    out=\$(bash '${ENV_UPDATE_V2}' --dump --format=json \
+        --env-file='${FIXTURES}/basic-dockerhub.env' 2>/dev/null)
+    echo \"\$out\" | jq empty 2>/dev/null && echo PASS || { echo \"invalid JSON: \$out\"; echo FAIL; }
+"
+
+# t60b: --dump --format=json contains required record fields
+t "t60b: --dump --format=json contains env_var, type, current_version, identifier fields" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t60b_cache
+    out=\$(bash '${ENV_UPDATE_V2}' --dump --format=json \
+        --env-file='${FIXTURES}/basic-dockerhub.env' 2>/dev/null)
+    echo \"\$out\" | jq -e '.[0].env_var' >/dev/null 2>&1 || { echo \"env_var field missing\"; echo FAIL; exit 0; }
+    echo \"\$out\" | jq -e '.[0].type' >/dev/null 2>&1 || { echo \"type field missing\"; echo FAIL; exit 0; }
+    echo \"\$out\" | jq -e '.[0].current_version' >/dev/null 2>&1 || { echo \"current_version field missing\"; echo FAIL; exit 0; }
+    echo \"\$out\" | jq -e '.[0].identifier' >/dev/null 2>&1 || { echo \"identifier field missing\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t60c: --dump --format=json contains watch_major_depth field when annotation uses (watch-major)
+# Note: --dump shows parsed annotation fields; watch_major_depth is set by the parser.
+t "t60c: --dump --format=json contains watch_major_depth field for watch-major annotations" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t60c_cache
+    f=\${TMP_DIR}/t60c.env
+    printf '# @todo env-update (watch-major) github:testorg/watchrepo-newer:3 3.0.5\nGLOBAL_STACK_T60C=3.0.5\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --dump --format=json --env-file=\"\$f\" 2>/dev/null)
+    echo \"\$out\" | jq empty 2>/dev/null || { echo \"invalid JSON\"; echo FAIL; exit 0; }
+    val=\$(echo \"\$out\" | jq -r '.[] | .watch_major_depth' 2>/dev/null)
+    [[ -n \"\$val\" && \"\$val\" != 'null' && \"\$val\" != '' ]] || { echo \"watch_major_depth missing or null in JSON dump: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t60d: --dump --format=json with multiple records is a valid JSON array
+t "t60d: --dump --format=json produces a JSON array (not object)" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t60d_cache
+    out=\$(bash '${ENV_UPDATE_V2}' --dump --format=json \
+        --env-file='${FIXTURES}/basic-dockerhub.env' 2>/dev/null)
+    echo \"\$out\" | jq -e 'type == \"array\"' >/dev/null 2>&1 && echo PASS || { echo \"expected JSON array, got: \$(echo \"\$out\" | head -1)\"; echo FAIL; }
+"
+
+# t60e: --format=text (explicit) uses text format (regression guard after json addition)
+t "t60e: --dump --format=text produces human-readable text (not JSON)" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t60e_cache
+    out=\$(bash '${ENV_UPDATE_V2}' --dump --format=text \
+        --env-file='${FIXTURES}/basic-dockerhub.env' 2>/dev/null)
+    echo \"\$out\" | grep -qF 'env_var:' || { echo \"text format missing env_var: field\"; echo FAIL; exit 0; }
+    echo \"\$out\" | jq empty 2>/dev/null && { echo \"output is JSON (expected text)\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 58b — pypi + rubygems (watch-major)
+# ═══════════════════════════════════════════════════════════════════════════
+section "58b — pypi + rubygems (watch-major)"
+
+_PYPI_LIBS_WM="
+source '/stack/bin/lib/env-update/config/defaults.sh'
+source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update/core/records.sh'
+source '/stack/bin/lib/env-update/core/semver.sh'
+source '/stack/bin/lib/env-update/core/channel.sh'
+source '/stack/bin/lib/env-update/core/tag_flags.sh'
+source '/stack/bin/lib/env-update/core/cache.sh'
+source '/stack/bin/lib/env-update/http/curl.sh'
+source '/stack/bin/lib/env-update/fetchers/pypi.sh'
+export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+"
+
+_RUBY_LIBS_WM="
+source '/stack/bin/lib/env-update/config/defaults.sh'
+source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update/core/records.sh'
+source '/stack/bin/lib/env-update/core/semver.sh'
+source '/stack/bin/lib/env-update/core/channel.sh'
+source '/stack/bin/lib/env-update/core/tag_flags.sh'
+source '/stack/bin/lib/env-update/core/cache.sh'
+source '/stack/bin/lib/env-update/http/curl.sh'
+source '/stack/bin/lib/env-update/fetchers/rubygems.sh'
+export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+"
+
+# t58p: pypi + (watch-major) — same major, no newer generation
+# somepkg fixture: versions 3.0.0, 3.1.0, 3.1.1. Pin to major 3 → proposed=3.1.1.
+# unconstrained=3.1.1 → same major → WATCH must NOT fire.
+t "t58p: pypi watch-major — same major in fixture, unconstrained matches proposed major" bash -c "
+    ${_PYPI_LIBS_WM}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t58p_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'pypi'
+    _gs_eu2_record_set \$idx identifier      'somepkg'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_PYPI_WM_P'
+    _gs_eu2_record_set \$idx current_version '3.0.5'
+    _gs_eu2_record_set \$idx major_hint      '3'
+    _gs_eu2_record_set \$idx watch_major_depth '1'
+    _gs_eu2_fetch_pypi \$idx
+    proposed=\$(_gs_eu2_record_get \$idx proposed_version)
+    unconstrained=\$(_gs_eu2_record_get \$idx latest_unconstrained)
+    [[ -n \"\$proposed\" ]] || { echo 'proposed_version empty'; echo FAIL; exit 0; }
+    if [[ -n \"\$unconstrained\" ]]; then
+      pfx_p=\$(_gs_eu2_version_prefix \"\$proposed\" '1')
+      pfx_u=\$(_gs_eu2_version_prefix \"\$unconstrained\" '1')
+      [[ \"\$pfx_p\" == \"\$pfx_u\" ]] || { echo \"unconstrained '\$unconstrained' has higher major than proposed '\$proposed'\"; echo FAIL; exit 0; }
+    fi
+    echo PASS
+"
+
+# t58q: pypi + (watch-major) — newer major exists, latest_unconstrained populated
+# bigpkg fixture: versions 4.0.0, 3.1.0, 3.0.5. Pin to major 3 → proposed=3.1.0.
+# unconstrained=4.0.0 → WATCH fires.
+t "t58q: pypi watch-major — newer major in fixture, latest_unconstrained=4.x" bash -c "
+    ${_PYPI_LIBS_WM}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t58q_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'pypi'
+    _gs_eu2_record_set \$idx identifier      'bigpkg'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_PYPI_WM_Q'
+    _gs_eu2_record_set \$idx current_version '3.0.5'
+    _gs_eu2_record_set \$idx major_hint      '3'
+    _gs_eu2_record_set \$idx watch_major_depth '1'
+    _gs_eu2_fetch_pypi \$idx
+    proposed=\$(_gs_eu2_record_get \$idx proposed_version)
+    unconstrained=\$(_gs_eu2_record_get \$idx latest_unconstrained)
+    [[ -n \"\$proposed\" ]] || { echo 'proposed_version empty'; echo FAIL; exit 0; }
+    [[ \"\$proposed\" == 3.* ]] || { echo \"proposed should be 3.x (major-pinned), got: '\$proposed'\"; echo FAIL; exit 0; }
+    [[ -n \"\$unconstrained\" ]] || { echo 'latest_unconstrained empty — WATCH cannot fire'; echo FAIL; exit 0; }
+    pfx_u=\$(_gs_eu2_version_prefix \"\$unconstrained\" '1')
+    [[ \"\$pfx_u\" == '4' ]] || { echo \"expected unconstrained major 4, got: '\$pfx_u' (full: '\$unconstrained')\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t58r: rubygems + (watch-major) — same major, no newer generation
+# oldgem fixture: gems=2.1.0, versions=[2.0.0, 2.1.0]. Pin to major 2 → proposed=2.1.0.
+# unconstrained=2.1.0 → same major → no WATCH.
+t "t58r: rubygems watch-major — same major in fixture, unconstrained matches proposed major" bash -c "
+    ${_RUBY_LIBS_WM}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t58r_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'rubygems'
+    _gs_eu2_record_set \$idx identifier      'oldgem'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_RUBY_WM_R'
+    _gs_eu2_record_set \$idx current_version '2.0.0'
+    _gs_eu2_record_set \$idx major_hint      '2'
+    _gs_eu2_record_set \$idx watch_major_depth '1'
+    _gs_eu2_fetch_rubygems \$idx
+    proposed=\$(_gs_eu2_record_get \$idx proposed_version)
+    unconstrained=\$(_gs_eu2_record_get \$idx latest_unconstrained)
+    [[ -n \"\$proposed\" ]] || { echo 'proposed_version empty'; echo FAIL; exit 0; }
+    if [[ -n \"\$unconstrained\" ]]; then
+      pfx_p=\$(_gs_eu2_version_prefix \"\$proposed\" '1')
+      pfx_u=\$(_gs_eu2_version_prefix \"\$unconstrained\" '1')
+      [[ \"\$pfx_p\" == \"\$pfx_u\" ]] || { echo \"unconstrained '\$unconstrained' has higher major than proposed '\$proposed'\"; echo FAIL; exit 0; }
+    fi
+    echo PASS
+"
+
+# t58s: rubygems + (watch-major) — newer major exists, latest_unconstrained populated
+# newgem fixture: gems=3.0.0, versions=[3.0.0, 2.1.0, 2.0.0]. Pin to major 2 → proposed=2.1.0.
+# unconstrained=3.0.0 → WATCH fires.
+t "t58s: rubygems watch-major — newer major in fixture, latest_unconstrained=3.x" bash -c "
+    ${_RUBY_LIBS_WM}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t58s_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'rubygems'
+    _gs_eu2_record_set \$idx identifier      'newgem'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_RUBY_WM_S'
+    _gs_eu2_record_set \$idx current_version '2.0.0'
+    _gs_eu2_record_set \$idx major_hint      '2'
+    _gs_eu2_record_set \$idx watch_major_depth '1'
+    _gs_eu2_fetch_rubygems \$idx
+    proposed=\$(_gs_eu2_record_get \$idx proposed_version)
+    unconstrained=\$(_gs_eu2_record_get \$idx latest_unconstrained)
+    [[ -n \"\$proposed\" ]] || { echo 'proposed_version empty'; echo FAIL; exit 0; }
+    [[ \"\$proposed\" == 2.* ]] || { echo \"proposed should be 2.x (major-pinned), got: '\$proposed'\"; echo FAIL; exit 0; }
+    [[ -n \"\$unconstrained\" ]] || { echo 'latest_unconstrained empty — WATCH cannot fire'; echo FAIL; exit 0; }
+    pfx_u=\$(_gs_eu2_version_prefix \"\$unconstrained\" '1')
+    [[ \"\$pfx_u\" == '3' ]] || { echo \"expected unconstrained major 3, got: '\$pfx_u' (full: '\$unconstrained')\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 19b — --apply e2e pipeline tests
+# ═══════════════════════════════════════════════════════════════════════════
+section "19b — --apply e2e pipeline"
+
+# t19-apply-e2e-a: --apply on a temp env file with one AUTO var actually updates the file
+# Use postgres fixture: 18.3-alpine3.23 → 18.4-alpine3.23 (known AUTO bump in fixture).
+t "t19-apply-e2e-a: --apply with AUTO var updates the env file on disk" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t19ea_cache
+    f=\${TMP_DIR}/t19ea.env
+    printf '# @todo env-update dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_PG18_T19=18.3-alpine3.23\n' > \"\$f\"
+    # Run dry-run first to satisfy the dry-run gate
+    bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null || true
+    # Now apply — postgres fixture has 18.4-alpine3.23, so decision is AUTO
+    bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$f\" 2>/dev/null || true
+    [[ -f \"\$f\" ]] || { echo 'env file deleted by --apply'; echo FAIL; exit 0; }
+    # The value should now be updated to 18.4-alpine3.23
+    grep -qF 'GLOBAL_STACK_PG18_T19=18.4-alpine3.23' \"\$f\" || {
+      echo \"expected value 18.4-alpine3.23 in file after apply, got:\"; cat \"\$f\"; echo FAIL; exit 0
+    }
+    echo PASS
+"
+
+# t19-apply-e2e-b: --dry-run --apply does NOT modify the env file
+t "t19-apply-e2e-b: --dry-run --apply does NOT modify the env file" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t19eb_cache
+    f=\${TMP_DIR}/t19eb.env
+    cp '${FIXTURES}/basic-dockerhub.env' \"\$f\"
+    before=\$(cat \"\$f\")
+    # Run dry-run first
+    bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null || true
+    # Now apply with dry-run — file must NOT change
+    bash '${ENV_UPDATE_V2}' --apply --dry-run --env-file=\"\$f\" 2>/dev/null || true
+    after=\$(cat \"\$f\")
+    [[ \"\$before\" == \"\$after\" ]] || { echo \"env file was modified by --dry-run --apply\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 36b — --cache-ttl flag acceptance
+# ═══════════════════════════════════════════════════════════════════════════
+section "36b — --cache-ttl flag acceptance"
+
+# t36b-a: --cache-ttl=60 accepted without error
+t "t36b-a: --cache-ttl=60 accepted without error" bash -c "
+    err=\$(bash '${ENV_UPDATE_V2}' --cache-ttl=60 2>&1 || true)
+    echo \"\$err\" | grep -qi 'unknown option\|invalid' && { echo \"--cache-ttl=60 rejected: \$err\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t36b-b: --cache-ttl=0 accepted without error
+t "t36b-b: --cache-ttl=0 accepted (disables cache)" bash -c "
+    err=\$(bash '${ENV_UPDATE_V2}' --cache-ttl=0 2>&1 || true)
+    echo \"\$err\" | grep -qi 'unknown option\|invalid' && { echo \"--cache-ttl=0 rejected: \$err\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 52b — --unstable=info vs --unstable=full distinction
+# ═══════════════════════════════════════════════════════════════════════════
+section "52b — --unstable=info vs --unstable=full distinction"
+
+# t52b-a: --unstable=info with a var that has a prerelease available — decision stays AUTO/SKIP
+#         (not promoted to prerelease); stable proposed is chosen, not prerelease.
+t "t52b-a: --unstable=info keeps stable decision, does not promote to prerelease" bash -c "
+    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+    source '/stack/bin/lib/env-update/core/semver.sh'
+    source '/stack/bin/lib/env-update/core/decide.sh'
+    # unstable=info mode → classify_decision uses 'info' → stable→prerelease stays SKIP
+    result=\$(_gs_eu2_classify_decision '1.2.3' '1.3.0-rc1' '' '' '' 'info')
+    [[ \"\$result\" == 'SKIP' ]] || { echo \"expected SKIP for unstable=info, got: '\$result'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t52b-b: --unstable=full with same var — decision becomes AUTO (prerelease guard bypassed)
+t "t52b-b: --unstable=full promotes stable→prerelease to AUTO (guard bypassed)" bash -c "
+    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+    source '/stack/bin/lib/env-update/core/semver.sh'
+    source '/stack/bin/lib/env-update/core/decide.sh'
+    result=\$(_gs_eu2_classify_decision '1.2.3' '1.3.0-rc1' '' '' '' 'full')
+    [[ \"\$result\" == 'AUTO' ]] || { echo \"expected AUTO for unstable=full, got: '\$result'\"; echo FAIL; exit 0; }
     echo PASS
 "
 

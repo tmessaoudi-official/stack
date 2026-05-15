@@ -309,7 +309,7 @@ _gs_eu2_run_check() {
           local _oldest
           _oldest="$(printf '%s\n%s\n' "${_cur#v}" "${_prop#v}" | sort -V | head -1)"
           if [[ "${_oldest}" == "${_prop#v}" && "${_oldest}" != "${_cur#v}" ]]; then
-            _err="would downgrade"
+            _err="would downgrade: current ${_cur#v} → stable ${_prop#v}"
           fi
         fi
         ;;
