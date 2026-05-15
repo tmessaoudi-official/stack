@@ -58,12 +58,8 @@ while read -r line; do
   url=""
   _type=""
 
-  # pecl-git: before pecl: to avoid partial match
-  if [[ "${line}" =~ pecl-git:(https?://[^[:space:]]+) ]]; then
-    _type="pecl-git"
-    url="${BASH_REMATCH[1]}"
   # url: — identifier IS the URL
-  elif [[ "${line}" =~ url:(https?://[^[:space:]]+) ]]; then
+  if [[ "${line}" =~ url:(https?://[^[:space:]]+) ]]; then
     _type="url"
     url="${BASH_REMATCH[1]}"
   # github:owner/repo[:major]
@@ -140,6 +136,11 @@ while read -r line; do
     _re_pecl_ref="[(]pecl-ref:([a-zA-Z0-9_-]+)[)]"
     if [[ "${line}" =~ ${_re_pecl_ref} ]]; then
       _gs_eu_md_open_url "https://pecl.php.net/package/${BASH_REMATCH[1]}"
+    fi
+    # git: open the GitHub commits page when annotation has (git:org/repo) — SHA-pinned pecl extensions
+    _re_git_ref="[(]git:([a-zA-Z0-9_.-]+)/([a-zA-Z0-9_.-]+)[)]"
+    if [[ "${line}" =~ ${_re_git_ref} ]]; then
+      _gs_eu_md_open_url "https://github.com/${BASH_REMATCH[1]}/${BASH_REMATCH[2]}/commits/HEAD/"
     fi
     # url-probe: probe the last _GS_EU_MD_URL_PROBE_BACK Ubuntu versions (newest first)
     # curl-probes each URL first — only opens tabs for versions that actually exist (2xx/3xx)
