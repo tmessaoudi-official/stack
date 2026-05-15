@@ -5768,6 +5768,66 @@ t "t61h: parse.sh stores channel=unstable in record field" bash -c "
     echo PASS
 "
 
+# t61i: channel:unstable + up-to-date guard — current == proposed → fetch still works
+#       The SKIP decision is downstream (decide.sh/main.sh); _gs_eu2_fetch_pecl only
+#       sets proposed_version. With current_version already at the highest beta (1.1.3),
+#       the fetcher should succeed (no ERROR) and return proposed_version=1.1.3.
+t "t61i: channel:unstable + current==proposed → proposed populated, no ERROR" bash -c "
+    ${_PECL_CH_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/pecl_ch_i_cache
+    declare -A _GS_EU2_CFG=([no_cache]=true)
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'pecl'
+    _gs_eu2_record_set \$idx identifier      'zmqlike'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_ZMQ_VERSION'
+    _gs_eu2_record_set \$idx current_version '1.1.3'
+    _gs_eu2_record_set \$idx channel         'unstable'
+    _gs_eu2_fetch_pecl \$idx 2>/dev/null || true
+    dec=\$(_gs_eu2_record_get \$idx decision)
+    ver=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$dec\" != 'ERROR' ]] || { echo \"expected no ERROR for up-to-date unstable, got: '\$dec'\"; echo FAIL; exit 0; }
+    [[ \"\$ver\" == '1.1.3' ]] || { echo \"expected proposed_version=1.1.3 (latest beta), got: '\$ver'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t61j: _gs_eu2_pecl_check_promotion is stable-only regardless of channel (regression guard)
+#       The function signature is check_promotion(EXT_NAME, COMMIT_DATE) — no channel param.
+#       imagick fixture: 3.9.0beta1 (beta) + 3.8.0 (stable); 3.8.0 released 2026-01-10.
+#       git commit date 2026-01-01 → PECL stable is newer → must return '3.8.0', never the beta.
+t "t61j: check_promotion is always stable-only regardless of channel (no channel param)" bash -c "
+    ${_PECL_CH_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/pecl_ch_j_cache
+    declare -A _GS_EU2_CFG=([no_cache]=true)
+    result=\$(_gs_eu2_pecl_check_promotion 'imagick' '2026-01-01')
+    [[ \"\$result\" == '3.8.0' ]] || { echo \"expected stable 3.8.0 (beta must be ignored), got: '\$result'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t61k: --unstable=info secondary pass reaches PECL and finds beta
+#       main.sh temporarily sets channel=unstable for ALL records during secondary pass.
+#       This test simulates that: no channel annotation on record, then manually set
+#       channel=unstable before calling _gs_eu2_fetch_pecl (mirroring main.sh's injection).
+#       imagick: 3.9.0beta1 (beta) + 3.8.0 (stable). With channel=unstable,
+#       sort -V picks 3.9.0beta1 as the highest overall version.
+t "t61k: secondary-pass channel=unstable injection reaches PECL and returns beta" bash -c "
+    ${_PECL_CH_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/pecl_ch_k_cache
+    declare -A _GS_EU2_CFG=([no_cache]=true)
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'pecl'
+    _gs_eu2_record_set \$idx identifier      'imagick'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_IMAGICK_VERSION'
+    _gs_eu2_record_set \$idx current_version '3.5.0'
+    # No channel annotation — simulating main.sh secondary-pass injection
+    _gs_eu2_record_set \$idx channel         'unstable'
+    _gs_eu2_fetch_pecl \$idx 2>/dev/null || true
+    ver=\$(_gs_eu2_record_get \$idx proposed_version)
+    dec=\$(_gs_eu2_record_get \$idx decision)
+    [[ \"\$dec\" != 'ERROR' ]] || { echo \"expected no ERROR for secondary-pass unstable, got: '\$dec'\"; echo FAIL; exit 0; }
+    [[ \"\$ver\" == '3.9.0beta1' ]] || { echo \"expected 3.9.0beta1 (highest with channel=unstable), got: '\$ver'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
 # ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
