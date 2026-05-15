@@ -215,8 +215,11 @@ After the pipeline, channel selection picks the best remaining version.
 | `(tag-extract:PERL_REGEX)` | `tag_extract` | All tag-based fetchers | Apply a Perl regex to each tag; tags not matching are discarded; matching tags are replaced by capture group 1. Uses `perl -ne`. |
 | `(tag-replace:FROM:TO)` | `tag_replace_from` / `tag_replace_to` | All tag-based fetchers | Replace all occurrences of the literal string FROM with TO in each tag. For example, Ruby tags use underscores (`3_4_9`) — `(tag-replace:_:.)` converts them to dots for semver comparison. The FROM:TO format is mandatory; FROM and TO may be empty on either side of the colon. |
 | `(tag-suffix:STR)` | `tag_suffix` | `dockerhub` | **Applies only to dockerhub.** Filters the raw tag list to only tags ending with the suffix, before the rest of the pipeline runs. The suffix string is treated as a literal (not a regex). Example: `(tag-suffix:-oraclelinux9)` keeps only tags like `9.1.0-oraclelinux9`. |
+| `(tag-channel-prefix:STR)` | `tag_channel_prefix` | `github` | **Round-trip channel-prefix handling.** For repos that encode the release channel in the tag prefix (e.g. RTK's `dev-0.40.1-rc.223` for pre-releases vs `v0.40.0` for stable). Strips `STR` from ALL tags before sort/selection so `sort -V` sees clean semver; after the winning version is chosen, re-prepends `STR` only if the original raw tag had that prefix (stable releases keep their original form). The value is stored verbatim in `.env` and round-trips cleanly. Cache key is segregated from non-flag runs. **Not to be confused with `tag-strip-prefix`** (which is one-way / destructive). |
 
 > **NOTE:** `tag-suffix` is special — it is a pre-pipeline filter specific to the `dockerhub` fetcher and is applied before the `tag-filter` / `tag-exclude` pipeline. Other fetchers ignore it.
+>
+> **NOTE:** `tag-channel-prefix` is specific to the `github` fetcher. It operates outside the `tag_flags` pipeline (before and after) to preserve full round-trip semantics.
 
 ### Valued flags — version prefix restoration
 

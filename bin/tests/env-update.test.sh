@@ -5409,6 +5409,205 @@ t "t52b-b: --unstable=full promotes stable→prerelease to AUTO (guard bypassed)
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Section 53 — (tag-channel-prefix) flag
+# ═══════════════════════════════════════════════════════════════════════════
+section "53 — tag-channel-prefix flag"
+
+_TCP_LIBS="
+source '/stack/bin/lib/env-update/config/defaults.sh'
+source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update/core/records.sh'
+source '/stack/bin/lib/env-update/core/semver.sh'
+source '/stack/bin/lib/env-update/core/channel.sh'
+source '/stack/bin/lib/env-update/core/tag_flags.sh'
+source '/stack/bin/lib/env-update/core/cache.sh'
+source '/stack/bin/lib/env-update/http/curl.sh'
+source '/stack/bin/lib/env-update/fetchers/github.sh'
+export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+export _GS_EU2_CACHE_DIR=\${TMP_DIR}/tcp_cache
+"
+
+# t53a: stable channel — current=v0.39.0, fixture has v0.40.0 (stable) and dev-0.40.1-rc.223 (pre).
+#       Proposed must be v0.40.0 (stable winner — no dev- prefix because raw tag was v0.40.0).
+t "t53a: stable current — proposed is v0.40.0 (no prefix re-prepend for stable tag)" bash -c "
+    ${_TCP_LIBS}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type               'github'
+    _gs_eu2_record_set \$idx identifier         'rtk-ai/rtk'
+    _gs_eu2_record_set \$idx env_var            'GLOBAL_STACK_RTK_VERSION'
+    _gs_eu2_record_set \$idx current_version    'v0.39.0'
+    _gs_eu2_record_set \$idx tag_channel_prefix 'dev-'
+    _gs_eu2_fetch_github \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$val\" == 'v0.40.0' ]] || { echo \"expected v0.40.0, got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t53b: unstable channel — current=dev-0.40.1-rc.223, proposed must be dev-0.40.1-rc.223
+#       (same version → SKIP via equality, but proposed_version must be dev-0.40.1-rc.223).
+t "t53b: pre-release current equals proposed — proposed carries dev- prefix (round-trip)" bash -c "
+    ${_TCP_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/tcp_b_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type               'github'
+    _gs_eu2_record_set \$idx identifier         'rtk-ai/rtk'
+    _gs_eu2_record_set \$idx env_var            'GLOBAL_STACK_RTK_VERSION'
+    _gs_eu2_record_set \$idx current_version    'dev-0.40.1-rc.223'
+    _gs_eu2_record_set \$idx channel            'unstable'
+    _gs_eu2_record_set \$idx tag_channel_prefix 'dev-'
+    _gs_eu2_fetch_github \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$val\" == 'dev-0.40.1-rc.223' ]] || { echo \"expected dev-0.40.1-rc.223, got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t53c: stable channel only — fixture has only stable tags (no dev- prefix at all).
+#       No prefix should be re-prepended on the winner.
+t "t53c: stable-only fixture — proposed has no prefix (no spurious re-prepend)" bash -c "
+    ${_TCP_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/tcp_c_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type               'github'
+    _gs_eu2_record_set \$idx identifier         'test-tcp/only-stable'
+    _gs_eu2_record_set \$idx env_var            'GLOBAL_STACK_TEST_VERSION'
+    _gs_eu2_record_set \$idx current_version    'v1.9.0'
+    _gs_eu2_record_set \$idx tag_channel_prefix 'dev-'
+    _gs_eu2_fetch_github \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$val\" == 'v2.0.0' ]] || { echo \"expected v2.0.0, got: '\$val'\"; echo FAIL; exit 0; }
+    [[ \"\$val\" != dev-* ]] || { echo \"spurious dev- prefix on stable winner: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t53d: semver_compare — third param strips channel prefix before comparison.
+# dev-0.40.1-rc.223 stripped to 0.40.1-rc.223, vs v0.40.0 → 0.40.0.
+# sort -V: 0.40.0 < 0.40.1-rc.223 (0.40.1 > 0.40.0 numerically).
+# So 0.40.1-rc.223 is NEWER than 0.40.0 — correct; it is a pre-release of a higher patch.
+# Also test that without tcp the raw dev- prefix would make the comparison nonsensical —
+# verify the stripped form gives the expected order.
+t "t53d: semver_compare strips tcp before ordering (dev- prefix aware)" bash -c "
+    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+    source '/stack/bin/lib/env-update/core/semver.sh'
+    # With tcp=dev-: strips to 0.40.1-rc.223 vs 0.40.0
+    # 0.40.1-rc.223 numerically > 0.40.0 → newer (pre-release of a higher patch)
+    result=\$(_gs_eu2_semver_compare 'dev-0.40.1-rc.223' 'v0.40.0' 'dev-')
+    [[ \"\$result\" == 'newer' ]] || { echo \"expected newer (0.40.1-rc > 0.40.0), got: '\$result'\"; echo FAIL; exit 0; }
+    # Complementary: dev-0.40.0-rc.201 vs v0.40.0 → rc of same base → older
+    result2=\$(_gs_eu2_semver_compare 'dev-0.40.0-rc.201' 'v0.40.0' 'dev-')
+    [[ \"\$result2\" == 'older' ]] || { echo \"expected older (0.40.0-rc < 0.40.0), got: '\$result2'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t53e: semver_compare backward-compatible — no third param = behaves identically to before.
+t "t53e: semver_compare backward-compatible — no third param, v-prefix only" bash -c "
+    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+    source '/stack/bin/lib/env-update/core/semver.sh'
+    result=\$(_gs_eu2_semver_compare 'v1.2.3' 'v1.3.0')
+    [[ \"\$result\" == 'older' ]] || { echo \"expected older, got: '\$result'\"; echo FAIL; exit 0; }
+    result2=\$(_gs_eu2_semver_compare 'v2.0.0' 'v1.9.9')
+    [[ \"\$result2\" == 'newer' ]] || { echo \"expected newer, got: '\$result2'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t53f: parse.sh recognises tag-channel-prefix and dispatches to record field.
+t "t53f: parse.sh stores tag_channel_prefix in record" bash -c "
+    source '/stack/bin/lib/env-update/config/defaults.sh'
+    source '/stack/bin/lib/env-update/core/records.sh'
+    source '/stack/bin/lib/env-update/core/semver.sh'
+    source '/stack/bin/lib/env-update/core/parse.sh'
+    tmp_env=\$(mktemp)
+    printf '# @todo env-update (tag-channel-prefix:dev-) github:rtk-ai/rtk v0.39.0\nGLOBAL_STACK_RTK_VERSION=v0.39.0\n' > \"\$tmp_env\"
+    _gs_eu2_parse_env_file \"\$tmp_env\"
+    rm -f \"\$tmp_env\"
+    tcp=\$(_gs_eu2_record_get 0 tag_channel_prefix)
+    [[ \"\$tcp\" == 'dev-' ]] || { echo \"expected dev-, got: '\$tcp'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t53g: full pipeline via env-update.sh --check — stable current, flag active.
+#       Output line for RTK must show AUTO with v0.40.0 (not dev- prefixed).
+t "t53g: full pipeline --check — stable current proposes v0.40.0 (AUTO)" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/tcp_g_cache
+    out=\$('${ENV_UPDATE_V2}' --check --no-cache \
+        --env-file='${FIXTURES}/github-tcp-stable.env' 2>&1)
+    echo \"\$out\" | grep -qi 'auto\|v0.40.0' \
+        || { echo \"expected AUTO or v0.40.0 in output\"; echo \"\$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -q 'v0.40.0' \
+        || { echo \"v0.40.0 missing from output\"; echo \"\$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t53h: downgrade guard — current=dev-0.40.1-rc.223 (newest), proposed=v0.40.0 (older stripped).
+#       After tcp strip: 0.40.1-rc.223 vs 0.40.0 → rc < stable but 0.40.1 > 0.40.0 → NOT a
+#       downgrade? Let's clarify: sort -V puts 0.40.0 < 0.40.1-rc.223 because 0.40.1 > 0.40.0
+#       numerically. So current 0.40.1-rc.223 > proposed 0.40.0 → downgrade SKIP is correct.
+t "t53h: downgrade guard fires when current rc version > proposed stable (stripped comparison)" bash -c "
+    ${_TCP_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/tcp_h_cache
+    source '/stack/bin/lib/env-update/core/decide.sh'
+    # Simulate: current=dev-0.40.1-rc.223, proposed=v0.40.0
+    # Pre-strip tcp from both: cur=0.40.1-rc.223, prop=0.40.0
+    # sort -V: 0.40.0 < 0.40.1-rc.223 → proposed is older → SKIP
+    result=\$(_gs_eu2_classify_decision '0.40.1-rc.223' '0.40.0' '' '' '')
+    [[ \"\$result\" == 'SKIP' ]] || { echo \"expected SKIP for downgrade, got: '\$result'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t53i: unknown flag variant — tag-channel-prefix without value must error.
+t "t53i: tag-channel-prefix without value is rejected by parse.sh" bash -c "
+    source '/stack/bin/lib/env-update/config/defaults.sh'
+    source '/stack/bin/lib/env-update/core/records.sh'
+    source '/stack/bin/lib/env-update/core/semver.sh'
+    source '/stack/bin/lib/env-update/core/parse.sh'
+    tmp_env=\$(mktemp)
+    printf '# @todo env-update (tag-channel-prefix) github:rtk-ai/rtk v0.39.0\nGLOBAL_STACK_RTK_VERSION=v0.39.0\n' > \"\$tmp_env\"
+    err=\$(_gs_eu2_parse_env_file \"\$tmp_env\" 2>&1) && rc=0 || rc=\$?
+    rm -f \"\$tmp_env\"
+    [[ \$rc -ne 0 ]] || { echo \"expected non-zero exit for missing value, got 0\"; echo FAIL; exit 0; }
+    echo \"\$err\" | grep -qi 'requires\|non-empty\|value' \
+        || { echo \"expected requires/non-empty/value in error: \$err\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t53j: cache key includes tcp segment — separate flag/no-flag runs use distinct keys.
+t "t53j: cache key differs with and without tag-channel-prefix (no cache poisoning)" bash -c "
+    ${_TCP_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/tcp_j_cache
+    source '/stack/bin/lib/env-update/core/cache.sh'
+
+    # Run with tcp set
+    _gs_eu2_record_new; idx1=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx1 type               'github'
+    _gs_eu2_record_set \$idx1 identifier         'rtk-ai/rtk'
+    _gs_eu2_record_set \$idx1 env_var            'GLOBAL_STACK_RTK_VERSION'
+    _gs_eu2_record_set \$idx1 current_version    'v0.39.0'
+    _gs_eu2_record_set \$idx1 tag_channel_prefix 'dev-'
+    _gs_eu2_fetch_github \$idx1
+    val_tcp=\$(_gs_eu2_record_get \$idx1 proposed_version)
+
+    # Run without tcp (different record, new cache dir to avoid any bleed)
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/tcp_j2_cache
+    _gs_eu2_record_new; idx2=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx2 type            'github'
+    _gs_eu2_record_set \$idx2 identifier      'rtk-ai/rtk'
+    _gs_eu2_record_set \$idx2 env_var         'GLOBAL_STACK_RTK_VERSION'
+    _gs_eu2_record_set \$idx2 current_version 'v0.39.0'
+    _gs_eu2_fetch_github \$idx2
+    val_notcp=\$(_gs_eu2_record_get \$idx2 proposed_version)
+
+    # Both must have proposals (fixture serves both)
+    [[ -n \"\$val_tcp\" ]] || { echo 'tcp run: no proposed'; echo FAIL; exit 0; }
+    [[ -n \"\$val_notcp\" ]] || { echo 'no-tcp run: no proposed'; echo FAIL; exit 0; }
+    # With fixture: tcp run proposes v0.40.0 (stable); no-tcp run also proposes v0.40.0
+    # Key distinction: tcp cache key includes 'tcp_dev-' segment
+    # Verify no cache file from tcp run exists in notcp cache dir (key segregation)
+    ls \${TMP_DIR}/tcp_j_cache/ 2>/dev/null | grep -q 'tcp_dev-' \
+        || { echo 'cache key missing tcp_ segment'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section

@@ -136,12 +136,13 @@ _gs_eu2_github_fetch_tags_paginated() {
 _gs_eu2_fetch_github() {
   local _idx="${1}"
 
-  local _identifier _channel _major_hint _no_cache _manual
+  local _identifier _channel _major_hint _no_cache _manual _tcp
   _identifier="$(_gs_eu2_record_get "${_idx}" identifier)"
   _channel="$(_gs_eu2_record_get "${_idx}" channel)"
   _major_hint="$(_gs_eu2_record_get "${_idx}" major_hint)"
   _no_cache="${_GS_EU2_CFG[no_cache]:-false}"
   _manual="$(_gs_eu2_record_get "${_idx}" manual)"
+  _tcp="$(_gs_eu2_record_get "${_idx}" tag_channel_prefix)"
 
   # ── Check-tags merge mode (per-annotation flag or --with-tags CLI flag) ────
   local _check_tags _with_tags _merge_mode
@@ -158,8 +159,10 @@ _gs_eu2_fetch_github() {
   local _wm_depth_ck
   _wm_depth_ck="$(_gs_eu2_record_get "${_idx}" watch_major_depth)"
 
-  # Build cache key — include merge_mode and watch depth to avoid polluting normal cache entries
+  # Build cache key — include merge_mode, watch depth, and channel prefix to avoid
+  # poisoning a non-tcp cache entry with tcp-stripped results (or vice versa).
   local _cache_key="github:${_identifier}:${_major_hint}:${_channel}:${_wm_depth_ck}"
+  [[ -n "${_tcp}" ]] && _cache_key="${_cache_key}:tcp_${_tcp}"
   [[ "${_merge_mode}" == "true" ]] && _cache_key="${_cache_key}:tags"
 
   # Cache read
@@ -235,6 +238,17 @@ _gs_eu2_fetch_github() {
     return 0
   fi
 
+  # ── (tag-channel-prefix) — round-trip strip before pipeline ─────────────────
+  # Capture the original (raw) tags BEFORE stripping so we can conditionally
+  # re-prepend the prefix on the winner (only when the winning raw tag had it).
+  # Also strips _tcp from _releases_out so the version-gap fix block (which reads
+  # _releases_out directly) operates on already-stripped data.
+  local _orig_tags="${_raw_tags}"
+  if [[ -n "${_tcp}" ]]; then
+    _raw_tags="$(printf '%s\n' "${_raw_tags}" | sed "s/^${_tcp}//")"
+    _releases_out="$(printf '%s\n' "${_releases_out}" | sed "s/^${_tcp}//")"
+  fi
+
   # ── Apply tag_flags pipeline ───────────────────────────────────────────────
   local _tags
   _tags="$(printf '%s\n' "${_raw_tags}" | _gs_eu2_apply_tag_flags_from_record "${_idx}")"
@@ -261,6 +275,11 @@ _gs_eu2_fetch_github() {
     local _unconstrained_best
     _unconstrained_best="$(_gs_eu2_channel_select_best "${_wm_tags}" "stable")"
     if [[ -n "${_unconstrained_best}" ]]; then
+      # Conditional re-prepend: only if the original raw tag had the channel prefix
+      if [[ -n "${_tcp}" ]] && \
+         printf '%s\n' "${_orig_tags}" | grep -qxF "${_tcp}${_unconstrained_best}"; then
+        _unconstrained_best="${_tcp}${_unconstrained_best}"
+      fi
       local _vp_wm
       _vp_wm="$(_gs_eu2_record_get "${_idx}" version_prefix)"
       [[ -n "${_vp_wm}" ]] && _unconstrained_best="${_vp_wm}${_unconstrained_best}"
@@ -335,13 +354,21 @@ _gs_eu2_fetch_github() {
     local _cur_vg
     _cur_vg="$(_gs_eu2_record_get "${_idx}" current_version)"
     if [[ -n "${_cur_vg}" ]] && ! _gs_eu2_is_unversioned "${_cur_vg}"; then
+      # Strip _tcp from both sides before comparing (current may carry the prefix)
+      local _cur_vg_cmp="${_cur_vg#v}" _proposed_cmp="${_proposed#v}"
+      [[ -n "${_tcp}" ]] && _cur_vg_cmp="${_cur_vg_cmp#"${_tcp}"}"
+      [[ -n "${_tcp}" ]] && _proposed_cmp="${_proposed_cmp#"${_tcp}"}"
       local _oldest_vg
-      _oldest_vg="$(printf '%s\n%s\n' "${_cur_vg#v}" "${_proposed#v}" | sort -V | head -1)"
-      if [[ "${_oldest_vg}" == "${_proposed#v}" && "${_oldest_vg}" != "${_cur_vg#v}" ]]; then
+      _oldest_vg="$(printf '%s\n%s\n' "${_cur_vg_cmp}" "${_proposed_cmp}" | sort -V | head -1)"
+      if [[ "${_oldest_vg}" == "${_proposed_cmp}" && "${_oldest_vg}" != "${_cur_vg_cmp}" ]]; then
         local _gap_raw
         _gap_raw="$(_gs_eu2_github_fetch_tags_paginated "${_identifier}" "${_tok}" 10 2>/dev/null)"
         if [[ -n "$(printf '%s\n' "${_gap_raw}" | grep -v '^$' || true)" ]]; then
-          local _merged_raw="${_releases_out}"$'\n'"${_gap_raw}"
+          # Strip _tcp from gap raw tags before merging with already-stripped _releases_out
+          local _gap_raw_stripped="${_gap_raw}"
+          [[ -n "${_tcp}" ]] && \
+            _gap_raw_stripped="$(printf '%s\n' "${_gap_raw}" | sed "s/^${_tcp}//")"
+          local _merged_raw="${_releases_out}"$'\n'"${_gap_raw_stripped}"
           local _merged_filtered
           _merged_filtered="$(printf '%s\n' "${_merged_raw}" | _gs_eu2_apply_tag_flags_from_record "${_idx}")"
           if [[ -n "${_major_hint}" ]]; then
@@ -353,8 +380,13 @@ _gs_eu2_fetch_github() {
             _gap_proposed="$(_gs_eu2_channel_select_best "${_merged_filtered}" "${_channel}")"
             if [[ -n "${_gap_proposed}" ]]; then
               local _oldest2
-              _oldest2="$(printf '%s\n%s\n' "${_proposed#v}" "${_gap_proposed#v}" | sort -V | head -1)"
-              if [[ "${_oldest2}" == "${_proposed#v}" && "${_oldest2}" != "${_gap_proposed#v}" ]]; then
+              _oldest2="$(printf '%s\n%s\n' "${_proposed_cmp}" "${_gap_proposed#v}" | sort -V | head -1)"
+              if [[ "${_oldest2}" == "${_proposed_cmp}" && "${_oldest2}" != "${_gap_proposed#v}" ]]; then
+                # Conditional re-prepend for gap winner
+                if [[ -n "${_tcp}" ]] && \
+                   printf '%s\n' "${_orig_tags}" | grep -qxF "${_tcp}${_gap_proposed}"; then
+                  _gap_proposed="${_tcp}${_gap_proposed}"
+                fi
                 _proposed="${_gap_proposed}"
               fi
             fi
@@ -368,13 +400,33 @@ _gs_eu2_fetch_github() {
   if [[ -z "${_channel}" || "${_channel}" == "stable" ]]; then
     local _best_pre
     _best_pre="$(_gs_eu2_channel_select_best "${_tags}" "unstable")"
-    if [[ -n "${_best_pre}" && "${_best_pre}" != "${_proposed}" ]]; then
-      local _cmp
-      _cmp="$(_gs_eu2_semver_compare "${_best_pre}" "${_proposed}")"
-      if [[ "${_cmp}" == "newer" ]]; then
-        _gs_eu2_record_set "${_idx}" alt_version "pre-release also available: ${_best_pre}"
+    if [[ -n "${_best_pre}" ]]; then
+      # Conditional re-prepend before comparison — _tags is already stripped,
+      # so re-prepend if the original raw tag had the channel prefix
+      local _best_pre_display="${_best_pre}"
+      if [[ -n "${_tcp}" ]] && \
+         printf '%s\n' "${_orig_tags}" | grep -qxF "${_tcp}${_best_pre}"; then
+        _best_pre_display="${_tcp}${_best_pre}"
+      fi
+      # Compare stripped versions; _proposed may carry _tcp if it was re-prepended above
+      local _proposed_stripped="${_proposed#v}"
+      [[ -n "${_tcp}" ]] && _proposed_stripped="${_proposed_stripped#"${_tcp}"}"
+      if [[ "${_best_pre_display}" != "${_proposed}" ]]; then
+        local _cmp
+        _cmp="$(_gs_eu2_semver_compare "${_best_pre}" "${_proposed_stripped}" "${_tcp}")"
+        if [[ "${_cmp}" == "newer" ]]; then
+          _gs_eu2_record_set "${_idx}" alt_version "pre-release also available: ${_best_pre_display}"
+        fi
       fi
     fi
+  fi
+
+  # ── Conditional re-prepend of tag-channel-prefix ─────────────────────────
+  # Re-prepend ONLY when the original raw tag had the channel prefix.
+  # This preserves stable releases (no prefix) and round-trips pre-release tags.
+  if [[ -n "${_tcp}" ]] && \
+     printf '%s\n' "${_orig_tags}" | grep -qxF "${_tcp}${_proposed}"; then
+    _proposed="${_tcp}${_proposed}"
   fi
 
   # ── Re-prepend version_prefix stripped by tag-strip-prefix ────────────────

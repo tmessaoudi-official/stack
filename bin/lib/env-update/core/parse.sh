@@ -16,6 +16,7 @@ _gs_eu2_is_recognized_flag() {
       note | \
       channel | skip | \
       tag-filter | tag-exclude | tag-strip-prefix | tag-strip-suffix | \
+      tag-channel-prefix | \
       tag-extract | tag-suffix | tag-replace | \
       fetch-extract | fetch-json | \
       url-probe | url-probe-depth | \
@@ -155,6 +156,7 @@ _gs_eu2_dispatch_flag() {
   case "${_name}" in
     note | \
       channel | skip | tag-filter | tag-exclude | tag-strip-prefix | tag-strip-suffix | \
+      tag-channel-prefix | \
       tag-extract | tag-suffix | fetch-extract | fetch-json | url-probe | url-probe-depth | \
       version-prefix)
       if [[ -z "${_val}" ]]; then
@@ -199,6 +201,7 @@ _gs_eu2_dispatch_flag() {
     tag-exclude) _gs_eu2_record_set "${_idx}" tag_exclude "${_val}" ;;
     tag-strip-prefix) _gs_eu2_record_set "${_idx}" tag_strip_prefix "${_val}" ;;
     tag-strip-suffix) _gs_eu2_record_set "${_idx}" tag_strip_suffix "${_val}" ;;
+    tag-channel-prefix) _gs_eu2_record_set "${_idx}" tag_channel_prefix "${_val}" ;;
     tag-extract) _gs_eu2_record_set "${_idx}" tag_extract "${_val}" ;;
     tag-suffix) _gs_eu2_record_set "${_idx}" tag_suffix "${_val}" ;;
     fetch-extract) _gs_eu2_record_set "${_idx}" fetch_extract "${_val}" ;;

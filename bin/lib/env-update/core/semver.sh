@@ -21,8 +21,15 @@ _gs_eu2_is_unversioned() {
 
 # Compare two version strings. Echoes: older | newer | equal
 # Handles v-prefix and SemVer pre-release ordering (1.0.0-rc1 < 1.0.0)
+# Optional $3: channel prefix to strip before comparison (e.g. "dev-").
+# Backward-compatible: callers omitting $3 behave identically to before.
 _gs_eu2_semver_compare() {
+  local _tcp="${3:-}"
   local _a="${1#v}" _b="${2#v}"
+  if [[ -n "${_tcp}" ]]; then
+    _a="${_a#"${_tcp}"}"
+    _b="${_b#"${_tcp}"}"
+  fi
   [[ "${_a}" == "${_b}" ]] && { echo "equal"; return 0; }
 
   local _a_base="${_a}" _b_base="${_b}"

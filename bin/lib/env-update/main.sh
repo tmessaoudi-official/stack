@@ -226,7 +226,17 @@ _gs_eu2_run_check() {
       if [[ "${_GS_EU2_CFG[force_auto]:-false}" == "true" ]]; then
         _eff_override="" _eff_manual=""
       fi
-      _classified="$(_gs_eu2_classify_decision "${_cur}" "${_prop}" "${_eff_override}" "${_eff_manual}" "${_major}" "${_GS_EU2_CFG[unstable]:-}")"
+      # (tag-channel-prefix): pre-strip the channel prefix from _cur and _prop so that
+      # decide.sh's internal sort -V downgrade check compares pure semver strings.
+      # The round-trip prefix is display/storage-only; classify_decision must not see it.
+      local _cur_cls="${_cur}" _prop_cls="${_prop}"
+      local _tcp_cls
+      _tcp_cls="$(_gs_eu2_record_get "${_i}" tag_channel_prefix)"
+      if [[ -n "${_tcp_cls}" ]]; then
+        _cur_cls="${_cur_cls#v}"; _cur_cls="${_cur_cls#"${_tcp_cls}"}"
+        _prop_cls="${_prop_cls#v}"; _prop_cls="${_prop_cls#"${_tcp_cls}"}"
+      fi
+      _classified="$(_gs_eu2_classify_decision "${_cur_cls}" "${_prop_cls}" "${_eff_override}" "${_eff_manual}" "${_major}" "${_GS_EU2_CFG[unstable]:-}")"
       # --force-auto: upgrade HOLD to AUTO (bypasses major-bump guard / major_hint pin guard)
       if [[ "${_GS_EU2_CFG[force_auto]:-false}" == "true" && "${_classified}" == "HOLD" ]]; then
         _classified="AUTO"
@@ -306,10 +316,15 @@ _gs_eu2_run_check() {
       SKIP)
         # Detect downgrade: proposed non-empty, differs from current, no error yet
         if [[ -z "${_err}" && -n "${_prop}" && "${_prop}" != "${_cur}" ]]; then
+          local _tcp_disp
+          _tcp_disp="$(_gs_eu2_record_get "${_i}" tag_channel_prefix)"
+          local _cur_cmp="${_cur#v}" _prop_cmp="${_prop#v}"
+          [[ -n "${_tcp_disp}" ]] && _cur_cmp="${_cur_cmp#"${_tcp_disp}"}"
+          [[ -n "${_tcp_disp}" ]] && _prop_cmp="${_prop_cmp#"${_tcp_disp}"}"
           local _oldest
-          _oldest="$(printf '%s\n%s\n' "${_cur#v}" "${_prop#v}" | sort -V | head -1)"
-          if [[ "${_oldest}" == "${_prop#v}" && "${_oldest}" != "${_cur#v}" ]]; then
-            _err="would downgrade: current ${_cur#v} → stable ${_prop#v}"
+          _oldest="$(printf '%s\n%s\n' "${_cur_cmp}" "${_prop_cmp}" | sort -V | head -1)"
+          if [[ "${_oldest}" == "${_prop_cmp}" && "${_oldest}" != "${_cur_cmp}" ]]; then
+            _err="would downgrade: current ${_cur_cmp} → stable ${_prop_cmp}"
           fi
         fi
         ;;
