@@ -484,15 +484,20 @@ _gs_eu2_main() {
   # Note: --unstable=info does NOT inject here — it does a separate second-pass fetch
   # after each record to populate unstable_proposed without touching the main decision.
   if [[ "${_GS_EU2_CFG[unstable]:-}" == "full" ]]; then
-    local _uc _ucount
+    local _uc _ucount _unstable_overrides
+    _unstable_overrides=0
     _ucount="$(_gs_eu2_record_count)"
     for (( _uc = 0; _uc < _ucount; _uc++ )); do
       local _existing_channel
       _existing_channel="$(_gs_eu2_record_get "${_uc}" channel)"
       if [[ -z "${_existing_channel}" || "${_existing_channel}" == "stable" ]]; then
         _gs_eu2_record_set "${_uc}" channel "unstable"
+        (( _unstable_overrides++ )) || true
       fi
     done
+    if [[ "${_unstable_overrides}" -gt 0 ]]; then
+      printf '[UNSTABLE MODE] channel forced unstable for %d record(s)\n' "${_unstable_overrides}"
+    fi
   fi
 
   # --stable: force channel=stable on all records that have an explicit non-stable channel.

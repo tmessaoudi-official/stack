@@ -4280,6 +4280,18 @@ t "t53f: --stable prints STABLE MODE header when records are overridden" bash -c
     echo PASS
 "
 
+# t53f2: --unstable=full prints UNSTABLE MODE header when records are upgraded
+t "t53f2: --unstable=full prints UNSTABLE MODE header when records are upgraded" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/chk53f2
+    _tf53f2=\"\${TMP_DIR}/t53f2.env\"
+    printf '# @todo env-update dockerhub:_/mariadb:11 11.8.0\nGLOBAL_STACK_MARIADB_VERSION=11.8.0\n' > \"\${_tf53f2}\"
+    out=\$(bash '${ENV_UPDATE_V2}' --unstable=full --dump \
+        --env-file=\"\${_tf53f2}\" 2>&1)
+    echo \"\$out\" | grep -qi 'UNSTABLE MODE' || { echo \"expected UNSTABLE MODE header, got: '\$out'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
 # t53g: regression — --unstable=full still works normally (no breakage from --stable addition)
 t "t53g: --unstable=full still works after --stable addition (regression)" bash -c "
     export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
