@@ -80,6 +80,9 @@ _gs_eu2_version_prefix() {
   local _version="${1}" _depth="${2:-1}"
   # Strip build metadata (everything after +)
   local _clean="${_version%%+*}"
+  # Strip leading v-prefix (e.g. v24.14.0 → 24.14.0) so the first segment
+  # passes the ^[0-9]+$ check even when the raw tag carries a v.
+  _clean="${_clean#v}"
   # Strip pre-release / tag suffix starting with a dash followed by a non-digit
   # e.g. -LTS, -alpine, -rc1 → removed; -20260108 (date) → kept as it IS numeric
   _clean="$(printf '%s' "${_clean}" | sed 's/-[^0-9].*//')"

@@ -4642,6 +4642,30 @@ t "t58c: version_prefix depth-1 plain version" bash -c "
     echo PASS
 "
 
+# t58c2: _gs_eu2_version_prefix strips v-prefix — v24.14.0 → 24
+t "t58c2: version_prefix strips v-prefix (v24.14.0 → 24)" bash -c "
+    ${_CD_LIBS58}
+    r=\$(_gs_eu2_version_prefix 'v24.14.0' '1')
+    [[ \"\$r\" == '24' ]] || { echo \"expected '24', got: '\$r'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t58c3: _gs_eu2_version_prefix strips v-prefix — v26.0.0 → 26
+t "t58c3: version_prefix strips v-prefix (v26.0.0 → 26)" bash -c "
+    ${_CD_LIBS58}
+    r=\$(_gs_eu2_version_prefix 'v26.0.0' '1')
+    [[ \"\$r\" == '26' ]] || { echo \"expected '26', got: '\$r'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t58c4: _gs_eu2_version_prefix strips v-prefix — v3.4.9 → 3
+t "t58c4: version_prefix strips v-prefix (v3.4.9 → 3)" bash -c "
+    ${_CD_LIBS58}
+    r=\$(_gs_eu2_version_prefix 'v3.4.9' '1')
+    [[ \"\$r\" == '3' ]] || { echo \"expected '3', got: '\$r'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
 # t58d: _gs_eu2_version_tag_suffix — dash suffix detected
 t "t58d: version_tag_suffix detects -zulu suffix" bash -c "
     ${_CD_LIBS58}
@@ -4712,14 +4736,14 @@ t "t58j: watch-major silent when already on latest major" bash -c "
     echo PASS
 "
 
-# t58k: --no-notes suppresses [WATCH] sub-line
-t "t58k: --no-notes suppresses the [WATCH] sub-line" bash -c "
+# t58k: --no-notes does NOT suppress [WATCH] sub-line (WATCH is a signal, not a note)
+t "t58k: --no-notes does NOT suppress [WATCH] sub-line" bash -c "
     export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t58k_cache
     f=\${TMP_DIR}/t58k.env
     printf '# @todo env-update (watch-major) dockerhub:_/postgres:17 17.5\nGLOBAL_STACK_PG17B=17.5\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --no-notes --env-file=\"\$f\" 2>/dev/null)
-    echo \"\$out\" | grep -qF '[WATCH]' && { echo \"[WATCH] present with --no-notes: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '[WATCH]' || { echo \"[WATCH] missing with --no-notes (should fire): \$out\"; echo FAIL; exit 0; }
     echo PASS
 "
 

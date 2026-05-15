@@ -347,9 +347,9 @@ _gs_eu2_run_check() {
     # (watch-major) sub-line: emit when a new runtime generation is available.
     # Uses latest_unconstrained (set by fetchers from the pre-major-pin tag set),
     # falling back to proposed_version for fetcher types with no major-pin concept.
-    # Suppressed when: --no-notes, decision is ERROR/SKIP-unversioned, or no depth set.
-    if [[ "${_GS_EU2_CFG[no_notes]:-false}" != "true" && \
-          "${_decision}" != "ERROR" ]]; then
+    # Suppressed when: decision is ERROR/SKIP-unversioned, or no depth set.
+    # NOT suppressed by --no-notes — WATCH is a signal, not a note.
+    if [[ "${_decision}" != "ERROR" ]]; then
       local _wm_depth_r
       _wm_depth_r="$(_gs_eu2_record_get "${_i}" watch_major_depth)"
       if [[ -n "${_wm_depth_r}" ]]; then
