@@ -210,7 +210,7 @@ if [[ "" != "$(command -v sdk)" ]]; then
 
 	source "${GLOBAL_STACK_DOCKER_ROOT_PATH}"/docker/config/dist/bin/base-bin/global-stack-base-setup-packages.sh
 	global_stack_base_setup_packages \
-		--prefix='GLOBAL_STACK_JAVA25' \
+		--prefix='GLOBAL_STACK_JAVA' \
 		--command='echo -e "**** Using ${PACKAGE_NAME} ${PACKAGE_VERSION}"' \
 		--command='sdk use ${PACKAGE_NAME} "${PACKAGE_VERSION}"'
 fi
