@@ -4479,6 +4479,16 @@ t "t55d: --no-notes is accepted without error (args parsing)" bash -c "
     echo PASS
 "
 
+t "t55e: --no-notes prints [NO-NOTES MODE] banner" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t55e_cache
+    f=\${TMP_DIR}/t55e.env
+    printf '# @todo env-update dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T55E=18.3-alpine3.23\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --no-notes --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qi 'NO-NOTES MODE' || { echo \"expected [NO-NOTES MODE] banner, got: '\$out'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Section 56 — --force-auto + --confirm flags
 # ═══════════════════════════════════════════════════════════════════════════
@@ -4569,6 +4579,16 @@ t "t56i: --force-auto upgrades HOLD to AUTO (major-bump guard bypass)" bash -c "
     printf '# @todo env-update dockerhub:_/postgres 17.3-alpine3.23\nGLOBAL_STACK_T56I=17.3-alpine3.23\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --force-auto --env-file=\"\$f\" 2>/dev/null)
     echo \"\$out\" | grep -qF '[HOLD' && { echo \"HOLD not upgraded to AUTO with --force-auto: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t56j: --force-auto prints [FORCE-AUTO MODE] banner" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t56j_cache
+    f=\${TMP_DIR}/t56j.env
+    printf '# @todo env-update dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T56J=18.3-alpine3.23\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --force-auto --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qi 'FORCE-AUTO MODE' || { echo \"expected [FORCE-AUTO MODE] banner, got: '\$out'\"; echo FAIL; exit 0; }
     echo PASS
 "
 

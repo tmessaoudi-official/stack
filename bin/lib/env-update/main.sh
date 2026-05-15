@@ -520,6 +520,13 @@ _gs_eu2_main() {
     fi
   fi
 
+  if [[ "${_GS_EU2_CFG[force_auto]:-false}" == "true" ]]; then
+    printf '[FORCE-AUTO MODE] (manual) and (override) gates bypassed\n'
+  fi
+  if [[ "${_GS_EU2_CFG[no_notes]:-false}" == "true" ]]; then
+    printf '[NO-NOTES MODE] note sub-lines suppressed\n'
+  fi
+
   if [[ "true" == "${_GS_EU2_CFG[dump]}" ]]; then
     _gs_eu2_dump_records "${_GS_EU2_CFG[format]}"
   elif [[ "true" == "${_GS_EU2_CFG[check]}" ]]; then
