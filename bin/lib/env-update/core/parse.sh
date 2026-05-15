@@ -19,7 +19,7 @@ _gs_eu2_is_recognized_flag() {
       tag-extract | tag-suffix | tag-replace | \
       fetch-extract | fetch-json | \
       url-probe | url-probe-depth | \
-      version-prefix | \
+      version-prefix | watch-major | \
       depends-on | git) return 0 ;;
     *) return 1 ;;
   esac
@@ -136,6 +136,17 @@ _gs_eu2_dispatch_flag() {
       ;;
     check-tags)
       _gs_eu2_record_set "${_idx}" check_tags "true"
+      return 0
+      ;;
+    watch-major)
+      # Value is optional: watch-major defaults to depth 1, watch-major:N sets depth N
+      local _wm_depth="${_val:-1}"
+      if [[ ! "${_wm_depth}" =~ ^[1-9][0-9]*$ ]]; then
+        printf 'env-update: %s:%s: flag watch-major depth must be a positive integer (got: %q)\n' \
+          "${_env_file}" "${_lnum}" "${_wm_depth}" >&2
+        exit 1
+      fi
+      _gs_eu2_record_set "${_idx}" watch_major_depth "${_wm_depth}"
       return 0
       ;;
   esac

@@ -97,6 +97,35 @@ _gs_eu2_fetch_codeberg() {
   local _tags
   _tags="$(printf '%s\n' "${_raw_tags}" | _gs_eu2_apply_tag_flags_from_record "${_idx}")"
 
+  # (watch-major) — capture unconstrained best from full tag set (post-tag_flags, pre-major-pin).
+  # Inherits all tag_flags (already applied to _tags). Auto-detects variant suffix from
+  # current_version when no explicit tag-filter is present.
+  local _wm_depth
+  _wm_depth="$(_gs_eu2_record_get "${_idx}" watch_major_depth)"
+  if [[ -n "${_wm_depth}" && -n "${_major_hint}" ]]; then
+    local _wm_tags="${_tags}"
+    local _wm_tag_filter
+    _wm_tag_filter="$(_gs_eu2_record_get "${_idx}" tag_filter)"
+    if [[ -z "${_wm_tag_filter}" ]]; then
+      local _wm_cur _wm_suffix
+      _wm_cur="$(_gs_eu2_record_get "${_idx}" current_version)"
+      _wm_suffix="$(_gs_eu2_version_tag_suffix "${_wm_cur}")"
+      if [[ -n "${_wm_suffix}" ]]; then
+        local _wm_suffix_esc
+        _wm_suffix_esc="$(printf '%s' "${_wm_suffix}" | sed 's/[.[\*^$()+?{}|]/\\&/g')"
+        _wm_tags="$(printf '%s\n' "${_wm_tags}" | grep -E "${_wm_suffix_esc}"'$' || true)"
+      fi
+    fi
+    local _unconstrained_best
+    _unconstrained_best="$(_gs_eu2_channel_select_best "${_wm_tags}" "stable")"
+    if [[ -n "${_unconstrained_best}" ]]; then
+      local _vp_wm
+      _vp_wm="$(_gs_eu2_record_get "${_idx}" version_prefix)"
+      [[ -n "${_vp_wm}" ]] && _unconstrained_best="${_vp_wm}${_unconstrained_best}"
+      _gs_eu2_record_set "${_idx}" latest_unconstrained "${_unconstrained_best}"
+    fi
+  fi
+
   # Major-pin filter
   if [[ -n "${_major_hint}" ]]; then
     _tags="$(printf '%s\n' "${_tags}" | grep -E "^v?${_major_hint}([.^-]|\$)" 2>/dev/null \

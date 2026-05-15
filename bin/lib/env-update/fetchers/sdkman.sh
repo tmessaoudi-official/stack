@@ -224,6 +224,13 @@ _gs_eu2_fetch_sdkman() {
     return 0
   fi
 
+  # ── (watch-major) note ─────────────────────────────────────────────────────
+  # latest_unconstrained is NOT populated here. The sdkman extraction functions
+  # (_gs_eu2_sdkman_extract_java_versions / _gs_eu2_sdkman_extract_versions) bake
+  # the major_hint filter into the API query, so no pre-pin full list is available.
+  # For sdkman vars, (watch-major) silently does not fire — consistent with the
+  # "version-specific source" caveat documented in templates/tips/env-update.md.
+
   # ── Write result — proposed_version only; decision left empty for decide.sh ─
   _gs_eu2_record_set "${_idx}" proposed_version "${_proposed}"
 

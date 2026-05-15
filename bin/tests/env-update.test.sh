@@ -4608,6 +4608,132 @@ t "t57e: alpine-tagged→bare same numeric base → SKIP (platform suffix, not p
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Section 58 — (watch-major) flag
+# ═══════════════════════════════════════════════════════════════════════════
+section "58 — (watch-major) flag"
+
+_CD_LIBS58="
+source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update/core/semver.sh'
+"
+
+# t58a: _gs_eu2_version_prefix depth 1 — strips build metadata and returns major
+t "t58a: version_prefix depth-1 strips +meta and returns major" bash -c "
+    ${_CD_LIBS58}
+    r=\$(_gs_eu2_version_prefix '25.0.1+9-LTS' '1')
+    [[ \"\$r\" == '25' ]] || { echo \"expected '25', got: '\$r'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t58b: _gs_eu2_version_prefix depth 2 — returns major.minor
+t "t58b: version_prefix depth-2 returns major.minor" bash -c "
+    ${_CD_LIBS58}
+    r=\$(_gs_eu2_version_prefix '8.5.2' '2')
+    [[ \"\$r\" == '8.5' ]] || { echo \"expected '8.5', got: '\$r'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t58c: _gs_eu2_version_prefix depth 1 plain version — returns major only
+t "t58c: version_prefix depth-1 plain version" bash -c "
+    ${_CD_LIBS58}
+    r=\$(_gs_eu2_version_prefix '22.15.0' '1')
+    [[ \"\$r\" == '22' ]] || { echo \"expected '22', got: '\$r'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t58d: _gs_eu2_version_tag_suffix — dash suffix detected
+t "t58d: version_tag_suffix detects -zulu suffix" bash -c "
+    ${_CD_LIBS58}
+    r=\$(_gs_eu2_version_tag_suffix '25.0.1-zulu')
+    [[ \"\$r\" == '-zulu' ]] || { echo \"expected '-zulu', got: '\$r'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t58e: _gs_eu2_version_tag_suffix — build metadata (+) is NOT a tag suffix
+t "t58e: version_tag_suffix ignores build metadata (+9-LTS)" bash -c "
+    ${_CD_LIBS58}
+    r=\$(_gs_eu2_version_tag_suffix '25.0.1+9-LTS')
+    [[ -z \"\$r\" ]] || { echo \"expected empty (build metadata), got: '\$r'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t58f: _gs_eu2_version_tag_suffix — no suffix
+t "t58f: version_tag_suffix returns empty when no suffix" bash -c "
+    ${_CD_LIBS58}
+    r=\$(_gs_eu2_version_tag_suffix '22.15.0')
+    [[ -z \"\$r\" ]] || { echo \"expected empty, got: '\$r'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t58g: (watch-major) flag is recognised by the parser (no error)
+t "t58g: watch-major flag is recognised — no parse error" bash -c "
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t58g_cache
+    f=\${TMP_DIR}/t58g.env
+    printf '# @todo env-update (watch-major) dockerhub:_/postgres 17.5\nGLOBAL_STACK_PG=17.5\n' > \"\$f\"
+    err=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1 || true)
+    echo \"\$err\" | grep -qi 'unknown flag\|unrecognized' && { echo \"flag rejected: \$err\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t58h: (watch-major:2) with explicit depth — recognised, no error
+t "t58h: watch-major:2 (depth 2) is recognised — no parse error" bash -c "
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t58h_cache
+    f=\${TMP_DIR}/t58h.env
+    printf '# @todo env-update (watch-major:2) dockerhub:_/php 8.5.2\nGLOBAL_STACK_PHP=8.5.2\n' > \"\$f\"
+    err=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1 || true)
+    echo \"\$err\" | grep -qi 'unknown flag\|unrecognized' && { echo \"flag rejected: \$err\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t58i: (watch-major) fires when fixture contains a higher major
+# Postgres fixture has 18.4 (latest) + 17.5. Pin to major 17.
+# WATCH should fire: 17 → 18.
+t "t58i: watch-major fires when higher-major version exists in fixture" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t58i_cache
+    f=\${TMP_DIR}/t58i.env
+    printf '# @todo env-update (watch-major) dockerhub:_/postgres:17 17.5\nGLOBAL_STACK_PG17=17.5\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null)
+    echo \"\$out\" | grep -qF '[WATCH]' || { echo \"expected [WATCH] sub-line, got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '18' || { echo \"expected 18 in WATCH output, got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t58j: (watch-major) does NOT fire when current is already on latest major
+# Pin to major 18 — 18.4 is the highest in the fixture; no WATCH.
+t "t58j: watch-major silent when already on latest major" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t58j_cache
+    f=\${TMP_DIR}/t58j.env
+    printf '# @todo env-update (watch-major) dockerhub:_/postgres:18 18.3\nGLOBAL_STACK_PG18=18.3\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null)
+    echo \"\$out\" | grep -qF '[WATCH]' && { echo \"unexpected [WATCH] when on latest major: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t58k: --no-notes suppresses [WATCH] sub-line
+t "t58k: --no-notes suppresses the [WATCH] sub-line" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t58k_cache
+    f=\${TMP_DIR}/t58k.env
+    printf '# @todo env-update (watch-major) dockerhub:_/postgres:17 17.5\nGLOBAL_STACK_PG17B=17.5\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --no-notes --env-file=\"\$f\" 2>/dev/null)
+    echo \"\$out\" | grep -qF '[WATCH]' && { echo \"[WATCH] present with --no-notes: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t58l: (watch-major) coexists with (manual) — AUTO decision not affected
+t "t58l: watch-major coexists with manual flag — decision is MANUAL, WATCH may appear" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t58l_cache
+    f=\${TMP_DIR}/t58l.env
+    printf '# @todo env-update (manual) (watch-major) dockerhub:_/postgres:17 17.5\nGLOBAL_STACK_PG17C=17.5\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null)
+    echo \"\$out\" | grep -qF 'MANUAL' || { echo \"expected MANUAL decision, got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section

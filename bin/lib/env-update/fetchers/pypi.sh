@@ -113,6 +113,30 @@ _gs_eu2_fetch_pypi() {
   local _versions
   _versions="$(printf '%s\n' "${_raw_versions}" | _gs_eu2_apply_tag_flags_from_record "${_idx}")"
 
+  # (watch-major) — capture unconstrained best from full version list (post-tag_flags, pre-major-pin).
+  # Inherits all tag_flags. Auto-detects variant suffix from current_version when no tag-filter set.
+  local _wm_depth
+  _wm_depth="$(_gs_eu2_record_get "${_idx}" watch_major_depth)"
+  if [[ -n "${_wm_depth}" && -n "${_major_hint}" ]]; then
+    local _wm_versions="${_versions}"
+    local _wm_tag_filter
+    _wm_tag_filter="$(_gs_eu2_record_get "${_idx}" tag_filter)"
+    if [[ -z "${_wm_tag_filter}" ]]; then
+      local _wm_cur _wm_suffix
+      _wm_cur="$(_gs_eu2_record_get "${_idx}" current_version)"
+      _wm_suffix="$(_gs_eu2_version_tag_suffix "${_wm_cur}")"
+      if [[ -n "${_wm_suffix}" ]]; then
+        local _wm_suffix_esc
+        _wm_suffix_esc="$(printf '%s' "${_wm_suffix}" | sed 's/[.[\*^$()+?{}|]/\\&/g')"
+        _wm_versions="$(printf '%s\n' "${_wm_versions}" | grep -E "${_wm_suffix_esc}"'$' || true)"
+      fi
+    fi
+    local _unconstrained_best
+    _unconstrained_best="$(_gs_eu2_channel_select_best "${_wm_versions}" "stable")"
+    [[ -n "${_unconstrained_best}" ]] && \
+      _gs_eu2_record_set "${_idx}" latest_unconstrained "${_unconstrained_best}"
+  fi
+
   # Major-pin filter
   if [[ -n "${_major_hint}" ]]; then
     _versions="$(printf '%s\n' "${_versions}" | grep -E "^v?${_major_hint}([.^-]|\$)" 2>/dev/null \

@@ -46,6 +46,63 @@ _gs_eu2_semver_compare() {
   if [[ "${_first}" == "${_a}" ]]; then echo "older"; else echo "newer"; fi
 }
 
+# Extract first N dot-separated numeric segments from a version string.
+# Strips build metadata (+...) and non-numeric suffixes (-LTS, -alpine, etc.)
+# so "25.0.1+9-LTS" at depth 1 returns "25", and "8.5.2" at depth 2 returns "8.5".
+# Returns empty string if the version cannot be parsed.
+# Extract the variant tag suffix from a version string for (watch-major) unconstrained fetch.
+# Returns the trailing "-SUFFIX" when the version has a non-numeric dash suffix (e.g. -zulu,
+# -alpine3.21, -fpm).  Returns empty when no dash suffix or when only build metadata (+...).
+# Examples:
+#   "25.0.1-zulu"         → "-zulu"
+#   "8.5.2-alpine3.21"   → "-alpine3.21"
+#   "25.0.1+9-LTS"       → "" (build metadata, not a tag suffix)
+#   "22.15.0"             → ""
+_gs_eu2_version_tag_suffix() {
+  local _v="${1}"
+  # Strip build metadata (everything from +) — build metadata never appears in tag names
+  local _no_meta="${_v%%+*}"
+  # Extract the leading semver numeric portion: digits, dots, optionally v-prefix
+  local _numeric_part
+  _numeric_part="$(printf '%s' "${_no_meta}" | grep -oE '^v?[0-9]+(\.[0-9]+)*')"
+  if [[ -z "${_numeric_part}" ]]; then
+    printf ''
+    return
+  fi
+  # Remainder after numeric part — only return if it starts with -
+  local _remainder="${_no_meta#"${_numeric_part}"}"
+  if [[ "${_remainder}" == -* ]]; then
+    printf '%s' "${_remainder}"
+  fi
+}
+
+_gs_eu2_version_prefix() {
+  local _version="${1}" _depth="${2:-1}"
+  # Strip build metadata (everything after +)
+  local _clean="${_version%%+*}"
+  # Strip pre-release / tag suffix starting with a dash followed by a non-digit
+  # e.g. -LTS, -alpine, -rc1 → removed; -20260108 (date) → kept as it IS numeric
+  _clean="$(printf '%s' "${_clean}" | sed 's/-[^0-9].*//')"
+  # Extract the first _depth dot-separated numeric segments
+  local _out="" _seg _remaining="${_clean}" _i=0
+  while (( _i < _depth )); do
+    _seg="${_remaining%%.*}"
+    [[ "${_seg}" =~ ^[0-9]+$ ]] || break
+    [[ -n "${_out}" ]] && _out+="."
+    _out+="${_seg}"
+    (( ++_i )) || true
+    if [[ "${_remaining}" == *"."* ]]; then
+      _remaining="${_remaining#*.}"
+    else
+      break
+    fi
+  done
+  # Only output if we got the requested depth
+  if (( _i == _depth )); then
+    printf '%s' "${_out}"
+  fi
+}
+
 # Returns delta type between two versions: major | minor | patch | unknown
 _gs_eu2_semver_delta() {
   local _a="${1#v}" _b="${2#v}"

@@ -113,6 +113,35 @@ _gs_eu2_fetch_dockerhub() {
   # Apply full tag flags pipeline
   _tags="$(printf '%s\n' "${_tags}" | _gs_eu2_apply_tag_flags_from_record "${_idx}")"
 
+  # (watch-major) — capture unconstrained best from full tag set (post-tag_flags, pre-major-pin).
+  # Inherits all tag_flags (already applied to _tags). Auto-detects variant suffix from
+  # current_version when no explicit tag-filter is present, so zulu/alpine/fpm variants
+  # stay within their family even without a repeated (tag-filter:...) flag.
+  local _wm_depth
+  _wm_depth="$(_gs_eu2_record_get "${_idx}" watch_major_depth)"
+  if [[ -n "${_wm_depth}" && -n "${_major_hint}" ]]; then
+    local _wm_tags="${_tags}"
+    local _wm_tag_filter
+    _wm_tag_filter="$(_gs_eu2_record_get "${_idx}" tag_filter)"
+    if [[ -z "${_wm_tag_filter}" ]]; then
+      local _wm_suffix
+      _wm_suffix="$(_gs_eu2_version_tag_suffix "${_current}")"
+      if [[ -n "${_wm_suffix}" ]]; then
+        local _wm_suffix_esc
+        _wm_suffix_esc="$(printf '%s' "${_wm_suffix}" | sed 's/[.[\*^$()+?{}|]/\\&/g')"
+        _wm_tags="$(printf '%s\n' "${_wm_tags}" | grep -E "${_wm_suffix_esc}"'$' || true)"
+      fi
+    fi
+    local _unconstrained_best
+    _unconstrained_best="$(_gs_eu2_channel_select_best "${_wm_tags}" "stable")"
+    if [[ -n "${_unconstrained_best}" ]]; then
+      local _vp_wm
+      _vp_wm="$(_gs_eu2_record_get "${_idx}" version_prefix)"
+      [[ -n "${_vp_wm}" ]] && _unconstrained_best="${_vp_wm}${_unconstrained_best}"
+      _gs_eu2_record_set "${_idx}" latest_unconstrained "${_unconstrained_best}"
+    fi
+  fi
+
   # C3: Major-pin filter — anchor end of major component with ([.^-]|$) to prevent
   # major_hint="18" from matching "180.0" (the | was missing the $ end-of-string case).
   if [[ -n "${_major_hint}" ]]; then

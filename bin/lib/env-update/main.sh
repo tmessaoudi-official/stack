@@ -344,6 +344,36 @@ _gs_eu2_run_check() {
     [[ -n "${_note}" && "${_GS_EU2_CFG[no_notes]:-false}" != "true" ]] && \
       printf '%10s↳ %s\n' "" "${_note}"
 
+    # (watch-major) sub-line: emit when a new runtime generation is available.
+    # Uses latest_unconstrained (set by fetchers from the pre-major-pin tag set),
+    # falling back to proposed_version for fetcher types with no major-pin concept.
+    # Suppressed when: --no-notes, decision is ERROR/SKIP-unversioned, or no depth set.
+    if [[ "${_GS_EU2_CFG[no_notes]:-false}" != "true" && \
+          "${_decision}" != "ERROR" ]]; then
+      local _wm_depth_r
+      _wm_depth_r="$(_gs_eu2_record_get "${_i}" watch_major_depth)"
+      if [[ -n "${_wm_depth_r}" ]]; then
+        local _wm_latest
+        _wm_latest="$(_gs_eu2_record_get "${_i}" latest_unconstrained)"
+        # Fall back to proposed_version for fetchers without major-pin filtering
+        [[ -z "${_wm_latest}" ]] && _wm_latest="${_prop}"
+        if [[ -n "${_wm_latest}" && -n "${_cur}" ]]; then
+          local _wm_cur_pfx _wm_lat_pfx
+          _wm_cur_pfx="$(_gs_eu2_version_prefix "${_cur}" "${_wm_depth_r}")"
+          _wm_lat_pfx="$(_gs_eu2_version_prefix "${_wm_latest}" "${_wm_depth_r}")"
+          if [[ -n "${_wm_cur_pfx}" && -n "${_wm_lat_pfx}" && \
+                "${_wm_cur_pfx}" != "${_wm_lat_pfx}" ]]; then
+            local _wm_higher
+            _wm_higher="$(printf '%s\n%s\n' "${_wm_cur_pfx}" "${_wm_lat_pfx}" | sort -V | tail -1)"
+            if [[ "${_wm_higher}" == "${_wm_lat_pfx}" ]]; then
+              printf '%10s↳ [WATCH] New generation available: %s (depth %s: %s → %s)\n' \
+                "" "${_wm_latest}" "${_wm_depth_r}" "${_wm_cur_pfx}" "${_wm_lat_pfx}"
+            fi
+          fi
+        fi
+      fi
+    fi
+
     # SHA sub-line: show short SHA (8 chars) + date for AUTO and SHA decisions
     if [[ "${_decision}" == "AUTO" || "${_decision}" == "SHA" ]]; then
       local _disp_prop_sha _disp_ann_sha _disp_sha_date
