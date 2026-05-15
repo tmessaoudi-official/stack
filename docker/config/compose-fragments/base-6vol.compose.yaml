@@ -10,6 +10,9 @@
 #   healthcheck, labels.stack.service, labels.stack.tier, ports.
 services:
   base-6vol:
+    extends:
+      file: base-env.compose.yaml
+      service: base-env
     init: ${DOCKER_INIT}
     cap_add:
       - NET_ADMIN

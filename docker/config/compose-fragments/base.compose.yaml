@@ -19,6 +19,9 @@
 #   05edge, 05stable — these extend this fragment and declare only their extras.
 services:
   base:
+    extends:
+      file: base-env.compose.yaml
+      service: base-env
     init: ${DOCKER_INIT}
     cap_add:
       - NET_ADMIN
