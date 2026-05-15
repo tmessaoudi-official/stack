@@ -845,17 +845,23 @@ GLOBAL_STACK_SERVERLESS_VERSION=3.38.0
 
 **Optional `(git:owner/repo)` flag:** When present, also fetches the HEAD commit SHA from the GitHub repository for the extension. The HEAD SHA is preferred over a tagged SHA because users running PHP master install extensions directly from PECL sources — the freshest commit is what works with unreleased PHP versions.
 
-**Strategy:** Queries the PECL REST XML API (`https://pecl.php.net/rest/r/{ext}/allreleases.xml`). Parses `<v>VERSION</v><s>stable|beta|…</s>` pairs. Keeps only `stable` entries. Sorts with `sort -V`, takes the highest. When `(git:owner/repo)` is set, additionally fetches:
+**Strategy:** Queries the PECL REST XML API (`https://pecl.php.net/rest/r/{ext}/allreleases.xml`). Parses `<v>VERSION</v><s>stable|beta|…</s>` pairs. Keeps accepted stability entries (see `channel` flag below). Sorts with `sort -V`, takes the highest. When `(git:owner/repo)` is set, additionally fetches:
 - HEAD SHA via `https://api.github.com/repos/{owner}/{repo}/commits` — stored as `proposed_sha`
 - HEAD commit date via commits API — stored as `proposed_sha_date`
 
-**`proposed_version`:** The highest stable PECL version (e.g. `3.1.5`).
+**`(channel:unstable)` flag:** When set, the stability filter is widened to accept all four PECL stability levels: `stable`, `beta`, `alpha`, `devel`. The highest-versioned release among all accepted levels wins (via `sort -V`). Without the flag (or with `channel:stable`), only `stable` entries are accepted.
+
+> **Promotion check is always stable-only.** `_gs_eu2_pecl_check_promotion` (which detects when a PECL maintainer cuts a stable release for a SHA-tracked extension) always queries for stable releases regardless of `channel`. This ensures stable promotion hints are not suppressed for extensions using `channel:unstable`.
+
+Use `(channel:unstable)` for extensions that have never cut a stable PECL release (e.g. `zmq` — all releases are `beta`). This keeps the variable tracked via `pecl:` rather than requiring a switch to `github:`.
+
+**`proposed_version`:** The highest acceptable PECL version per channel (e.g. `1.1.3`).
 **`proposed_sha`:** Full commit SHA for HEAD (only when `(git:owner/repo)` flag is set). May be empty if the GitHub API is unreachable.
 **`proposed_sha_date`:** YYYY-MM-DD date of the HEAD commit (only when `(git:owner/repo)` flag is set).
 
 **`use_sha` flag:** When `(use-sha)` is present, `--apply` writes `proposed_sha` to the variable instead of `proposed_version`. Use for variables tracking a git commit SHA rather than a PECL version string.
 
-**Cache keys:** `pecl2:stable:{ext}` (PECL version), `pecl2:date:{ext}:{ver}` (PECL release date). The `(git:)` SHA uses GitHub API cache keys `github:sha:{repo}:HEAD` and `github:date:{repo}:{sha}`.
+**Cache keys:** `pecl2:{channel}:{ext}` (PECL version — channel-segregated to prevent stable/unstable cache poisoning), `pecl2:date:{ext}:{ver}` (PECL release date). The `(git:)` SHA uses GitHub API cache keys `github:sha:{repo}:HEAD` and `github:date:{repo}:{sha}`.
 
 **Auth:** No auth for PECL. The `(git:owner/repo)` flag reads `GITHUB_TOKEN` or `GLOBAL_STACK_GITHUB_TOKEN` (optional, increases rate limit).
 
@@ -863,13 +869,11 @@ GLOBAL_STACK_SERVERLESS_VERSION=3.38.0
 
 **Tag flags:** Not supported.
 
-**Error:** `pecl: no stable release found for '{ext}'` when the PECL allreleases.xml contains no stable entry.
-
-> **Note:** Use `github:` for extensions with no stable PECL release (beta/alpha only on PECL are not found by the `pecl:` fetcher). Examples: zmq (beta-only on PECL), timecop (beta-only), ffi (alpha-only, code-dump repo with no tags) — these belong on `github:`, not `pecl:`.
+**Error:** `pecl: no stable release found for '{ext}'` when the PECL allreleases.xml contains no accepted entry for the configured channel.
 
 **Example annotations:**
 ```bash
-# Basic PECL fetch
+# Basic PECL fetch — stable channel (default)
 # @todo env-update pecl:apcu 5.1.24
 GLOBAL_STACK_PHP_DEFAULT_APCU_VERSION=5.1.24
 
@@ -880,6 +884,11 @@ GLOBAL_STACK_PHP_DEFAULT_AMQP_VERSION=2.2.0
 # PECL + GitHub SHA, use-sha mode (variable holds the SHA not the version)
 # @todo env-update (use-sha) pecl:raphf (git:m6w6/ext-raphf) 2.0.2 sha:5836579db73ac959b9f743e09d8763c41c7cfcef
 GLOBAL_STACK_PHP_DEFAULT_RAPHF_VERSION=5836579db73ac959b9f743e09d8763c41c7cfcef
+
+# zmq: zero stable PECL releases — channel:unstable accepts beta releases
+# (manual) keeps it HOLD so the SHA is reviewed before any apply
+# @todo env-update (manual) (use-sha) (channel:unstable) pecl:zmq (git:zeromq/php-zmq) 1.1.3 sha:616b6c64ffd3866ed038615494306dd464ab53fc
+GLOBAL_STACK_PHP_DEFAULT_ZMQ_VERSION=
 ```
 
 ---

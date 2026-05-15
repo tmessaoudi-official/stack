@@ -5608,6 +5608,167 @@ t "t53j: cache key differs with and without tag-channel-prefix (no cache poisoni
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Section 61 — PECL channel:unstable support
+# ═══════════════════════════════════════════════════════════════════════════
+section "61 — pecl channel:unstable support"
+
+_PECL_CH_LIBS="
+source '/stack/bin/lib/env-update/config/defaults.sh'
+source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update/core/records.sh'
+source '/stack/bin/lib/env-update/core/semver.sh'
+source '/stack/bin/lib/env-update/core/cache.sh'
+source '/stack/bin/lib/env-update/http/curl.sh'
+source '/stack/bin/lib/env-update/fetchers/github.sh'
+source '/stack/bin/lib/env-update/fetchers/pecl.sh'
+export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+export _GS_EU2_CACHE_DIR=\${TMP_DIR}/pecl_ch_cache
+"
+
+# t61a: channel:stable (default) + all-beta extension → no stable found → ERROR
+t "t61a: channel:stable + all-beta extension → ERROR (no stable release)" bash -c "
+    ${_PECL_CH_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/pecl_ch_a_cache
+    declare -A _GS_EU2_CFG=([no_cache]=true)
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'pecl'
+    _gs_eu2_record_set \$idx identifier      'betaonly'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_BETAONLY_VERSION'
+    _gs_eu2_record_set \$idx current_version '1.0.0'
+    # No channel set — defaults to stable
+    _gs_eu2_fetch_pecl \$idx 2>/dev/null || true
+    dec=\$(_gs_eu2_record_get \$idx decision)
+    [[ \"\$dec\" == 'ERROR' ]] || { echo \"expected ERROR for stable channel on all-beta ext, got: '\$dec'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t61b: channel:unstable + all-beta extension → AUTO with latest beta
+t "t61b: channel:unstable + all-beta extension → AUTO with highest beta version" bash -c "
+    ${_PECL_CH_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/pecl_ch_b_cache
+    declare -A _GS_EU2_CFG=([no_cache]=true)
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'pecl'
+    _gs_eu2_record_set \$idx identifier      'betaonly'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_BETAONLY_VERSION'
+    _gs_eu2_record_set \$idx current_version '1.0.0'
+    _gs_eu2_record_set \$idx channel         'unstable'
+    _gs_eu2_fetch_pecl \$idx 2>/dev/null || true
+    ver=\$(_gs_eu2_record_get \$idx proposed_version)
+    dec=\$(_gs_eu2_record_get \$idx decision)
+    [[ \"\$dec\" != 'ERROR' ]] || { echo \"expected no ERROR for unstable channel, got: '\$dec'\"; echo FAIL; exit 0; }
+    [[ \"\$ver\" == '2.1.0beta2' ]] || { echo \"expected 2.1.0beta2 (highest beta), got: '\$ver'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t61c: channel:unstable + mixed (stable + beta) → stable wins because it has higher version
+#       Fixture: betaonly has 2.1.0beta2, mixedstablebeta has 2.5.0 stable + 3.0.0beta1 beta
+#       For mixedstablebeta: sort -V selects 3.0.0beta1 as highest overall (beta > stable here)
+#       Verify unstable channel accepts beta when it is numerically higher than stable
+t "t61c: channel:unstable + mixed fixture → highest version wins (3.0.0beta1 beats 2.5.0 stable)" bash -c "
+    ${_PECL_CH_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/pecl_ch_c_cache
+    declare -A _GS_EU2_CFG=([no_cache]=true)
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'pecl'
+    _gs_eu2_record_set \$idx identifier      'mixedstablebeta'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_MIXED_VERSION'
+    _gs_eu2_record_set \$idx current_version '2.0.0'
+    _gs_eu2_record_set \$idx channel         'unstable'
+    _gs_eu2_fetch_pecl \$idx 2>/dev/null || true
+    ver=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$ver\" == '3.0.0beta1' ]] || { echo \"expected 3.0.0beta1 (highest), got: '\$ver'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t61d: channel:unstable + alpha-only extension → accepts alpha
+t "t61d: channel:unstable + alpha-only extension → accepts alpha" bash -c "
+    ${_PECL_CH_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/pecl_ch_d_cache
+    declare -A _GS_EU2_CFG=([no_cache]=true)
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'pecl'
+    _gs_eu2_record_set \$idx identifier      'alphaonly'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_ALPHA_VERSION'
+    _gs_eu2_record_set \$idx current_version '0.7.0'
+    _gs_eu2_record_set \$idx channel         'unstable'
+    _gs_eu2_fetch_pecl \$idx 2>/dev/null || true
+    ver=\$(_gs_eu2_record_get \$idx proposed_version)
+    dec=\$(_gs_eu2_record_get \$idx decision)
+    [[ \"\$dec\" != 'ERROR' ]] || { echo \"expected no ERROR for alpha channel, got: '\$dec'\"; echo FAIL; exit 0; }
+    [[ \"\$ver\" == '0.9.0alpha2' ]] || { echo \"expected 0.9.0alpha2, got: '\$ver'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t61e: channel:unstable + devel-only extension → accepts devel
+t "t61e: channel:unstable + devel-only extension → accepts devel" bash -c "
+    ${_PECL_CH_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/pecl_ch_e_cache
+    declare -A _GS_EU2_CFG=([no_cache]=true)
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'pecl'
+    _gs_eu2_record_set \$idx identifier      'develonly'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_DEVEL_VERSION'
+    _gs_eu2_record_set \$idx current_version '0.1.0'
+    _gs_eu2_record_set \$idx channel         'unstable'
+    _gs_eu2_fetch_pecl \$idx 2>/dev/null || true
+    ver=\$(_gs_eu2_record_get \$idx proposed_version)
+    dec=\$(_gs_eu2_record_get \$idx decision)
+    [[ \"\$dec\" != 'ERROR' ]] || { echo \"expected no ERROR for devel channel, got: '\$dec'\"; echo FAIL; exit 0; }
+    [[ \"\$ver\" == '0.3.0devel' ]] || { echo \"expected 0.3.0devel, got: '\$ver'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t61f: zmq-like fixture (all beta) + channel:unstable → AUTO with 1.1.3
+t "t61f: zmq-like fixture (all beta) + channel:unstable → proposed=1.1.3" bash -c "
+    ${_PECL_CH_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/pecl_ch_f_cache
+    declare -A _GS_EU2_CFG=([no_cache]=true)
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'pecl'
+    _gs_eu2_record_set \$idx identifier      'zmqlike'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_ZMQ_VERSION'
+    _gs_eu2_record_set \$idx current_version '1.1.2'
+    _gs_eu2_record_set \$idx channel         'unstable'
+    _gs_eu2_fetch_pecl \$idx 2>/dev/null || true
+    ver=\$(_gs_eu2_record_get \$idx proposed_version)
+    dec=\$(_gs_eu2_record_get \$idx decision)
+    [[ \"\$dec\" != 'ERROR' ]] || { echo \"expected no ERROR, got ERROR\"; echo FAIL; exit 0; }
+    [[ \"\$ver\" == '1.1.3' ]] || { echo \"expected 1.1.3, got: '\$ver'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t61g: cache key segregation — stable and unstable runs use distinct cache keys
+t "t61g: cache keys differ between channel:stable and channel:unstable (no poisoning)" bash -c "
+    ${_PECL_CH_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/pecl_ch_g_cache
+    declare -A _GS_EU2_CFG=([no_cache]=false)
+    # Run channel:stable first (writes pecl2:stable:betaonly → empty, skipped by cache_write)
+    _gs_eu2_pecl_get_latest_stable 'betaonly' 'stable' 2>/dev/null || true
+    # Run channel:unstable second
+    result=\$(_gs_eu2_pecl_get_latest_stable 'betaonly' 'unstable' 2>/dev/null)
+    [[ \"\$result\" == '2.1.0beta2' ]] || { echo \"expected 2.1.0beta2 from unstable channel, got: '\$result'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t61h: parse.sh recognises channel:unstable and stores it in the record
+t "t61h: parse.sh stores channel=unstable in record field" bash -c "
+    source '/stack/bin/lib/env-update/config/defaults.sh'
+    source '/stack/bin/lib/env-update/core/records.sh'
+    source '/stack/bin/lib/env-update/core/semver.sh'
+    source '/stack/bin/lib/env-update/core/parse.sh'
+    tmp_env=\$(mktemp)
+    printf '# @todo env-update (channel:unstable) pecl:zmq 1.1.3\nGLOBAL_STACK_ZMQ=\n' > \"\$tmp_env\"
+    _gs_eu2_parse_env_file \"\$tmp_env\"
+    rm -f \"\$tmp_env\"
+    ch=\$(_gs_eu2_record_get 0 channel)
+    typ=\$(_gs_eu2_record_get 0 type)
+    [[ \"\$typ\" == 'pecl' ]] || { echo \"expected type=pecl, got: '\$typ'\"; echo FAIL; exit 0; }
+    [[ \"\$ch\" == 'unstable' ]] || { echo \"expected channel=unstable, got: '\$ch'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section

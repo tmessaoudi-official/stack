@@ -34,32 +34,44 @@ _gs_eu2_pecl_fetch_allreleases() {
   _gs_eu2_http_get "${_url}"
 }
 
-# _gs_eu2_pecl_parse_stable XML
-# Parses allreleases XML and returns the highest stable version, or empty.
+# _gs_eu2_pecl_parse_stable XML [CHANNEL]
+# Parses allreleases XML and returns the highest acceptable version, or empty.
+# CHANNEL defaults to "stable"; when "unstable", accepts stable, beta, alpha, devel.
 _gs_eu2_pecl_parse_stable() {
   local _xml="${1}"
-  # Extract all v:s pairs; keep only stable entries; sort and pick highest.
+  local _channel="${2:-stable}"
+  # Extract all v:s pairs; keep accepted stability entries; sort and pick highest.
   # Two pipefail hazards absorbed with || true:
   #   1. grep exits 1 when no <v>...</v><s>...</s> pairs are found at all.
   #   2. The while body's last iteration may exit 1 when the stability check
-  #      is false (non-stable release) — the [[ ]] && printf pattern leaves
+  #      is false (non-accepted release) — the [[ ]] && printf pattern leaves
   #      exit code 1 as the last command result, which pipefail propagates.
   printf '%s' "${_xml}" \
     | { grep -oE '<v>[^<]+</v><s>[^<]+</s>' || true; } \
     | sed 's|<v>\([^<]*\)</v><s>\([^<]*\)</s>|\1:\2|g' \
     2>/dev/null \
     | while IFS=: read -r _ver _stab; do
-        [[ "${_stab,,}" == "stable" ]] && printf '%s\n' "${_ver}" || true
+        if [[ "${_channel}" == "unstable" ]]; then
+          case "${_stab,,}" in
+            stable | beta | alpha | devel) printf '%s\n' "${_ver}" ;;
+            *) true ;;
+          esac
+        else
+          [[ "${_stab,,}" == "stable" ]] && printf '%s\n' "${_ver}" || true
+        fi
       done \
     | sort -V | tail -1
 }
 
-# _gs_eu2_pecl_get_latest_stable EXT_NAME
-# Returns the latest stable PECL version for EXT_NAME on stdout.
-# Returns empty (not an error exit) when no stable release found or HTTP fails.
+# _gs_eu2_pecl_get_latest_stable EXT_NAME [CHANNEL]
+# Returns the latest acceptable PECL version for EXT_NAME on stdout.
+# CHANNEL defaults to "stable"; "unstable" also accepts beta/alpha/devel.
+# Returns empty (not an error exit) when no matching release found or HTTP fails.
 _gs_eu2_pecl_get_latest_stable() {
   local _ext="${1}"
-  local _cache_key="pecl2:stable:${_ext}"
+  local _channel="${2:-stable}"
+  # Cache key includes channel so stable and unstable runs never share entries.
+  local _cache_key="pecl2:${_channel}:${_ext}"
 
   # Cache read
   local _no_cache="${_GS_EU2_CFG[no_cache]:-false}"
@@ -75,7 +87,7 @@ _gs_eu2_pecl_get_latest_stable() {
   _xml="$(_gs_eu2_pecl_fetch_allreleases "${_ext}" 2>/dev/null)" || return 0
 
   local _ver
-  _ver="$(_gs_eu2_pecl_parse_stable "${_xml}")"
+  _ver="$(_gs_eu2_pecl_parse_stable "${_xml}" "${_channel}")"
   [[ -z "${_ver}" ]] && return 0
 
   [[ "${_no_cache}" != "true" ]] && _gs_eu2_cache_write "${_cache_key}" "${_ver}"
@@ -147,14 +159,20 @@ _gs_eu2_pecl_check_promotion() {
 # Identifier field = bare extension name (e.g. apcu, redis, imagick).
 # Writes proposed_version on success, or sets decision=ERROR on failure.
 # Caching is handled entirely by _gs_eu2_pecl_get_latest_stable.
+# When the record has channel=unstable, beta/alpha/devel releases are accepted.
 _gs_eu2_fetch_pecl() {
   local _idx="${1}"
 
   local _identifier
   _identifier="$(_gs_eu2_record_get "${_idx}" identifier)"
 
+  # Read channel flag from annotation record (default: stable).
+  local _channel
+  _channel="$(_gs_eu2_record_get "${_idx}" channel)"
+  _channel="${_channel:-stable}"
+
   local _ver
-  _ver="$(_gs_eu2_pecl_get_latest_stable "${_identifier}")"
+  _ver="$(_gs_eu2_pecl_get_latest_stable "${_identifier}" "${_channel}")"
 
   if [[ -z "${_ver}" ]]; then
     _gs_eu2_record_set "${_idx}" decision      "ERROR"

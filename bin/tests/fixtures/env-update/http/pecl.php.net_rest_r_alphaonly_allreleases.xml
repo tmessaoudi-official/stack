@@ -1,0 +1,7 @@
+<?xml version="1.0"?>
+<a xmlns="http://pear.php.net/dtd/rest.allreleases" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://pear.php.net/dtd/rest.allreleases http://pear.php.net/dtd/rest.allreleases.xsd">
+ <p>alphaonly</p>
+ <c>pecl.php.net</c>
+ <r><v>0.9.0alpha2</v><s>alpha</s></r>
+ <r><v>0.8.0alpha1</v><s>alpha</s></r>
+</a>
