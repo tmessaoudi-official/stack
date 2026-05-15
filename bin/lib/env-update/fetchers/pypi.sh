@@ -56,7 +56,10 @@ _gs_eu2_fetch_pypi() {
 
   # CLI fast path: use `pip index versions` when available and not in fixture-test mode.
   # Gate: fixture mode forces API path to keep tests deterministic.
-  if [[ -z "${_GS_EU2_HTTP_FIXTURE_DIR:-}" ]] && command -v pip >/dev/null 2>&1; then
+  # Gate: watch-major vars require the full API path so latest_unconstrained is populated;
+  #       skip CLI fast path when watch_major_depth is set (correctness over speed).
+  if [[ -z "${_GS_EU2_HTTP_FIXTURE_DIR:-}" ]] && command -v pip >/dev/null 2>&1 \
+      && [[ -z "${_wm_depth_ck}" ]]; then
     if [[ -z "${_channel}" || "${_channel}" == "stable" ]]; then
       local _cli_out
       # pip index versions exits 0 even on unknown package in some versions; guard with grep
@@ -84,8 +87,10 @@ _gs_eu2_fetch_pypi() {
     return 0
   fi
 
-  # Stable fast path via .info.version when no special channel requested
-  if [[ -z "${_channel}" || "${_channel}" == "stable" ]]; then
+  # Stable fast path via .info.version when no special channel requested.
+  # Skipped for watch-major vars: they need the full version list to populate
+  # latest_unconstrained — returning early here would silently suppress [WATCH].
+  if [[ -z "${_wm_depth_ck}" ]] && [[ -z "${_channel}" || "${_channel}" == "stable" ]]; then
     local _latest
     _latest="$(printf '%s\n' "${_resp}" | jq -r '.info.version // empty' 2>/dev/null || true)"
     if [[ -n "${_latest}" ]]; then

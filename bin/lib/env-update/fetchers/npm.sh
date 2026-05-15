@@ -70,7 +70,10 @@ _gs_eu2_fetch_npm() {
 
   # CLI fast path: use `npm view` when available and not in fixture-test mode.
   # Gate: fixture mode forces API path to keep tests deterministic.
-  if [[ -z "${_GS_EU2_HTTP_FIXTURE_DIR:-}" ]] && command -v npm >/dev/null 2>&1; then
+  # Gate: watch-major vars require the full API path so latest_unconstrained is populated;
+  #       skip CLI fast path when watch_major_depth is set (correctness over speed).
+  if [[ -z "${_GS_EU2_HTTP_FIXTURE_DIR:-}" ]] && command -v npm >/dev/null 2>&1 \
+      && [[ -z "${_wm_depth_ck}" ]]; then
     local _cli_out
     if [[ -z "${_channel}" || "${_channel}" == "stable" ]]; then
       if _cli_out="$(npm view "${_identifier}" dist-tags.latest 2>/dev/null)" \
@@ -91,8 +94,10 @@ _gs_eu2_fetch_npm() {
     return 0
   fi
 
-  # Stable fast path via dist-tags.latest when no special channel requested
-  if [[ -z "${_channel}" || "${_channel}" == "stable" ]]; then
+  # Stable fast path via dist-tags.latest when no special channel requested.
+  # Skipped for watch-major vars: they need the full version list to populate
+  # latest_unconstrained — returning early here would silently suppress [WATCH].
+  if [[ -z "${_wm_depth_ck}" ]] && [[ -z "${_channel}" || "${_channel}" == "stable" ]]; then
     local _latest
     _latest="$(printf '%s\n' "${_resp}" | jq -r '."dist-tags".latest // empty' 2>/dev/null || true)"
     if [[ -n "${_latest}" ]]; then

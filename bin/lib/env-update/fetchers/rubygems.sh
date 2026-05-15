@@ -35,8 +35,14 @@ _gs_eu2_fetch_rubygems() {
   _major_hint="$(_gs_eu2_record_get "${_idx}" major_hint)"
   _no_cache="${_GS_EU2_CFG[no_cache]:-false}"
 
+  # watch_major_depth read early for cache key: watch-major runs must not share
+  # a cache entry with non-watch-major runs (cache-hit returns before latest_unconstrained
+  # is populated, so a shared entry would silently suppress WATCH on subsequent runs).
+  local _wm_depth_ck
+  _wm_depth_ck="$(_gs_eu2_record_get "${_idx}" watch_major_depth)"
+
   # Build cache key
-  local _cache_key="rubygems:${_identifier}:${_major_hint}:${_channel}"
+  local _cache_key="rubygems:${_identifier}:${_major_hint}:${_channel}:${_wm_depth_ck}"
 
   # Cache read
   if [[ "${_no_cache}" != "true" ]]; then
@@ -52,7 +58,10 @@ _gs_eu2_fetch_rubygems() {
 
   # CLI fast path: use `gem` when available and not in fixture-test mode.
   # Gate: fixture mode forces API path to keep tests deterministic.
-  if [[ -z "${_GS_EU2_HTTP_FIXTURE_DIR:-}" ]] && command -v gem >/dev/null 2>&1; then
+  # Gate: watch-major vars require the full API path so latest_unconstrained is populated;
+  #       skip CLI fast path when watch_major_depth is set (correctness over speed).
+  if [[ -z "${_GS_EU2_HTTP_FIXTURE_DIR:-}" ]] && command -v gem >/dev/null 2>&1 \
+      && [[ -z "${_wm_depth_ck}" ]]; then
     if [[ -z "${_channel}" || "${_channel}" == "stable" ]]; then
       local _cli_out _proposed
       if _cli_out="$(gem search "^${_identifier}$" --versions --all --no-color 2>/dev/null)" \
@@ -76,8 +85,10 @@ _gs_eu2_fetch_rubygems() {
     _stable_version="$(printf '%s\n' "${_gems_resp}" | jq -r '.version // empty' 2>/dev/null || true)"
   fi
 
-  # If no special channel and we got a stable version, use it directly
-  if [[ (-z "${_channel}" || "${_channel}" == "stable") && -n "${_stable_version}" ]]; then
+  # If no special channel and we got a stable version, use it directly.
+  # Skipped for watch-major vars: they need the full version list to populate
+  # latest_unconstrained — returning early here would silently suppress [WATCH].
+  if [[ -z "${_wm_depth_ck}" ]] && [[ (-z "${_channel}" || "${_channel}" == "stable") && -n "${_stable_version}" ]]; then
     _gs_eu2_record_set "${_idx}" proposed_version "${_stable_version}"
     [[ "${_no_cache}" != "true" ]] && _gs_eu2_cache_write "${_cache_key}" "${_stable_version}"
     return 0

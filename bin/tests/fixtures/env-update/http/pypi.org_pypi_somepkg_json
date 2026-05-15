@@ -1,0 +1,11 @@
+{
+  "info": {
+    "name": "somepkg",
+    "version": "3.1.0"
+  },
+  "releases": {
+    "3.0.0": [{"yanked": false}],
+    "3.1.0": [{"yanked": false}],
+    "3.1.1": [{"yanked": false}]
+  }
+}

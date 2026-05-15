@@ -1,0 +1,11 @@
+{
+  "info": {
+    "name": "bigpkg",
+    "version": "4.0.0"
+  },
+  "releases": {
+    "4.0.0": [{"yanked": false}],
+    "3.1.0": [{"yanked": false}],
+    "3.0.5": [{"yanked": false}]
+  }
+}

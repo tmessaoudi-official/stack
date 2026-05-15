@@ -1322,6 +1322,89 @@ t "with --sync-values=false, common-key values from dest are preserved over src"
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Section 22 — --profile=true flag
+# ═══════════════════════════════════════════════════════════════════════════
+section "22 — --profile=true flag"
+
+t "--profile=true produces timing output (Phase or ms)" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t22a; mkdir -p \"\$D\"
+    printf 'GLOBAL_STACK_FOO=1\n' > \"\$D/.env\"
+    cp \"\$D/.env\" \"\$D/.env.local\"
+    out=\$(bash '${ENV_SCAN}' --dir=\"\$D\" --profile=true \
+        --scan-sources=false \
+        --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1)
+    echo \"\$out\" | grep -qiE 'Phase|ms|elapsed|Profile' || { echo \"no timing output found: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "--profile=true: normal sync still occurs alongside profiling (new var added)" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t22b; mkdir -p \"\$D\"
+    printf 'GLOBAL_STACK_EXISTING=1\nGLOBAL_STACK_NEW_PROFILE=hello\n' > \"\$D/.env\"
+    printf 'GLOBAL_STACK_EXISTING=1\n' > \"\$D/.env.local\"
+    bash '${ENV_SCAN}' --dir=\"\$D\" --profile=true \
+        --scan-sources=false \
+        --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
+    grep -q 'GLOBAL_STACK_NEW_PROFILE=hello' \"\$D/.env.local\" && echo PASS || { echo \"new key not synced with --profile=true\"; echo FAIL; }
+"
+
+t "--profile=false produces no timing output" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t22c; mkdir -p \"\$D\"
+    printf 'GLOBAL_STACK_FOO=1\n' > \"\$D/.env\"
+    cp \"\$D/.env\" \"\$D/.env.local\"
+    out=\$(bash '${ENV_SCAN}' --dir=\"\$D\" --profile=false \
+        --scan-sources=false \
+        --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1)
+    echo \"\$out\" | grep -qiE 'Phase.*ms|Profile' && { echo \"unexpected timing output with --profile=false: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 23 — --sync-values=false + new key behavior
+# ═══════════════════════════════════════════════════════════════════════════
+section "23 — --sync-values=false + new key behavior"
+
+t "--sync-values=false: new key from src is added to dest with src value" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t23a; mkdir -p \"\$D\"
+    # src has both EXISTING and NEW_KEY; dest has only EXISTING
+    # With sync-values=false, common keys keep dest values, but new keys must still be added
+    printf 'GLOBAL_STACK_EXISTING=src_val\nGLOBAL_STACK_NEW_KEY=src_new\n' > \"\$D/.env\"
+    printf 'GLOBAL_STACK_EXISTING=local_override\n' > \"\$D/.env.local\"
+    bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=false --sync-values=false \
+        --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
+    # NEW_KEY must be added (new key, not a value sync)
+    grep -q 'GLOBAL_STACK_NEW_KEY=src_new' \"\$D/.env.local\" || { echo \"new key not added with --sync-values=false\"; echo FAIL; exit 0; }
+    # EXISTING must retain its local override value
+    grep -q 'GLOBAL_STACK_EXISTING=local_override' \"\$D/.env.local\" || { echo \"existing key overwritten despite sync-values=false\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "--sync-values=false: common key value differences preserved (dest wins)" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t23b; mkdir -p \"\$D\"
+    printf 'GLOBAL_STACK_MYKEY=src_version\n' > \"\$D/.env\"
+    printf 'GLOBAL_STACK_MYKEY=local_version\n' > \"\$D/.env.local\"
+    bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=false --sync-values=false \
+        --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
+    grep -q 'GLOBAL_STACK_MYKEY=local_version' \"\$D/.env.local\" && echo PASS || { echo \"dest value overwritten\"; echo FAIL; }
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 24 — --backup=false suppresses Dockerfile backups
+# ═══════════════════════════════════════════════════════════════════════════
+section "24 — --backup=false suppresses Dockerfile backups"
+
+t "--backup=false with Dockerfile propagation creates no .bak.* Dockerfile backup" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t24a; mkdir -p \"\$D/docker/images/testimg\"
+    printf 'GLOBAL_STACK_MYVER=1.0.0\n' > \"\$D/.env\"
+    printf 'GLOBAL_STACK_MYVER=0.9.0\n' > \"\$D/.env.local\"
+    printf 'FROM ubuntu:22.04\nARG GLOBAL_STACK_MYVER=0.9.0\n' > \"\$D/docker/images/testimg/Dockerfile\"
+    bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=false --backup=false \
+        --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
+    # No .bak.* files should exist alongside the Dockerfile
+    found=\$(find \"\$D/docker\" -name '*.bak.*' 2>/dev/null | head -1)
+    [[ -z \"\$found\" ]] && echo PASS || { echo \"unexpected .bak.* file found: \$found\"; echo FAIL; }
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section
