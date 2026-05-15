@@ -140,7 +140,7 @@ while read -r line; do
     # git: open the GitHub commits page when annotation has (git:org/repo) — SHA-pinned pecl extensions
     _re_git_ref="[(]git:([a-zA-Z0-9_.-]+)/([a-zA-Z0-9_.-]+)[)]"
     if [[ "${line}" =~ ${_re_git_ref} ]]; then
-      _gs_eu_md_open_url "https://github.com/${BASH_REMATCH[1]}/${BASH_REMATCH[2]}/commits/HEAD/"
+      _gs_eu_md_open_url "https://github.com/${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
     fi
     # url-probe: probe the last _GS_EU_MD_URL_PROBE_BACK Ubuntu versions (newest first)
     # curl-probes each URL first — only opens tabs for versions that actually exist (2xx/3xx)
