@@ -81,6 +81,19 @@ _gs_eu2_parse_args() {
   [[ -z "${_GS_EU2_CFG[force_auto]+set}" ]] && _GS_EU2_CFG[force_auto]="false"
   [[ -z "${_GS_EU2_CFG[confirm]+set}" ]]    && _GS_EU2_CFG[confirm]=""
 
+  # Validate --filter regex early: invalid ERE causes per-record bash errors and silent
+  # empty output. type: prefixes are not regex — skip validation for those.
+  # grep -E exits 0 (match), 1 (no match), or 2 (invalid regex) — we only reject exit 2.
+  if [[ -n "${_GS_EU2_CFG[filter]}" && "${_GS_EU2_CFG[filter]}" != type:* ]]; then
+    printf '' | grep -E "${_GS_EU2_CFG[filter]}" >/dev/null 2>&1 || {
+      local _grep_rc=$?
+      if [[ "${_grep_rc}" -ge 2 ]]; then
+        printf 'env-update: invalid --filter regex: %s\n' "${_GS_EU2_CFG[filter]}" >&2
+        exit 1
+      fi
+    }
+  fi
+
   if [[ "${_GS_EU2_CFG[dry_run]}" == "true" && "${_GS_EU2_CFG[apply]}" == "true" ]]; then
     printf 'env-update: --dry-run and --apply are mutually exclusive\n' >&2
     exit 1

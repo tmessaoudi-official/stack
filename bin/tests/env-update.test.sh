@@ -530,6 +530,15 @@ t "t08h: --dump and --check together → non-zero exit with message" bash -c "
     echo PASS
 "
 
+t "t08i: --filter with invalid regex → non-zero exit with message (not silent per-record errors)" bash -c "
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --filter='((' --env-file='${FIXTURES}/basic-dockerhub.env' 2>&1)
+    code=\$?
+    [[ \"\$code\" -ne 0 ]] || { echo \"expected non-zero exit, got 0; output: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qiF 'invalid --filter' || { echo \"expected 'invalid --filter' in error; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qiF 'invalid regular expression' && { echo \"got per-record bash errors instead of early validation; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Section 9 — --dry-run flag
 # ═══════════════════════════════════════════════════════════════════════════
