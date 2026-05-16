@@ -1405,6 +1405,122 @@ t "--backup=false with Dockerfile propagation creates no .bak.* Dockerfile backu
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
+section "25 — SOH delimiter: semicolon in value not a false split"
+# ═══════════════════════════════════════════════════════════════════════════
+# Regression guard for extract.sh fix: the multiple-defaults awk joined
+# values with SOH (\001) and splits on SOH at END{}.  Before the fix the
+# delimiter was ";", so a value like "jdbc:mysql://h:3306/db?a=1;b=2" was
+# split into 3 tokens and falsely reported as having multiple defaults.
+# This test asserts a SINGLE occurrence of the variable with ";" in its
+# value is NOT reported by gs_es_detect_multiple_defaults.
+
+t "Value with semicolon — single occurrence not reported as multiple defaults" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t25a; mkdir -p \"\$D/docker/images/svc1\"
+    # .env: one definition
+    printf 'GLOBAL_STACK_JDBC=jdbc:mysql://host:3306/db?param=1;param=2\n' > \"\$D/.env\"
+    cp \"\$D/.env\" \"\$D/.env.local\"
+    # compose: same single definition (not a conflict)
+    printf '%s\n' '- GLOBAL_STACK_JDBC=jdbc:mysql://host:3306/db?param=1;param=2' \
+        > \"\$D/docker/images/svc1/docker-compose.yaml\"
+    out=\$(bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=true \
+        --scan-delete-output=false \
+        --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1)
+    echo \"\$out\" | grep -q 'GLOBAL_STACK_JDBC' && { echo \"\$out\"; echo FAIL; } || echo PASS
+"
+
+t "Value with semicolons and distinct second value — correctly reported as multiple defaults" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t25b; mkdir -p \"\$D/docker/images/svc1\" \"\$D/docker/images/svc2\"
+    printf 'GLOBAL_STACK_JDBC2=jdbc:mysql://host:3306/db?a=1;b=2\n' > \"\$D/.env\"
+    cp \"\$D/.env\" \"\$D/.env.local\"
+    # svc1: same value (should not create a conflict on its own)
+    printf '%s\n' '- GLOBAL_STACK_JDBC2=jdbc:mysql://host:3306/db?a=1;b=2' \
+        > \"\$D/docker/images/svc1/docker-compose.yaml\"
+    # svc2: genuinely different value (should trigger the multi-default report)
+    printf '%s\n' '- GLOBAL_STACK_JDBC2=jdbc:postgres://other:5432/db' \
+        > \"\$D/docker/images/svc2/docker-compose.yaml\"
+    out=\$(bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=true \
+        --scan-delete-output=false \
+        --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1)
+    echo \"\$out\" | grep -q 'GLOBAL_STACK_JDBC2' && echo PASS || { echo \"\$out\"; echo FAIL; }
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
+section "26 — local -A scope guard: propagate.sh + merge.sh"
+# ═══════════════════════════════════════════════════════════════════════════
+# Regression guard for the local -A fix: declare -A inside a function is
+# global in bash; local -A is function-scoped.  If the fix regresses,
+# _prop_env_map / _gs_es_dest_vals / _gs_es_dest_emitted would be visible
+# in the calling scope after the function returns.
+# These tests source the library directly so they can inspect scope.
+
+t "propagate.sh — _prop_env_map does not leak to caller" bash -c "
+    set -euo pipefail
+    # Source relative to the script directory so bash_source dirname resolves
+    SDIR='${SCRIPT_DIR}/../lib/env-scan'
+    # Bootstrap _GS_ES_CFG so config/defaults.sh does not error
+    declare -Ag _GS_ES_CFG=([backup]=false [backup_suffix]=.bak [_backup_ts]='' [dir]='.' [quiet]=true)
+    source \"\$SDIR/propagate.sh\"
+    # Create a minimal env file and a non-existent docker root (function returns 0)
+    ETMP=\$(mktemp); printf 'GLOBAL_STACK_X=1\n' > \"\$ETMP\"
+    gs_es_propagate_to_dockerfiles \"\$ETMP\" '/nonexistent_docker_root_xyz' '' 'true' 2>/dev/null || true
+    rm -f \"\$ETMP\"
+    # _prop_env_map must not be visible in this scope
+    if declare -p _prop_env_map 2>/dev/null | grep -q 'declare'; then
+        echo 'SCOPE LEAK: _prop_env_map escaped function scope'
+        echo FAIL
+    else
+        echo PASS
+    fi
+"
+
+t "merge.sh — _gs_es_dest_vals does not leak to caller" bash -c "
+    set -euo pipefail
+    SDIR='${SCRIPT_DIR}/../lib/env-scan'
+    declare -Ag _GS_ES_CFG=(
+        [destination_file_tmp_suffix]='.tmp'
+        [destination_file_merged_suffix]='.merged'
+        [strip_comments]='false'
+        [remove_empty_lines]='false'
+        [remove_trailing_spaces]='false'
+        [show_added_entries]='false'
+        [check_missing]='false'
+        [exclude_local_pattern]=''
+        [exclude_source_check_pattern]=''
+        [exclude_check_missing]=''
+        [cleanup_tmp]='true'
+        [debug]='false'
+        [show_different_entries]='false'
+        [sync_values]='true'
+        [scan_output_file]='/dev/null'
+        [dir]='.'
+        [scan_path]='.'
+        [prune_removed]='false'
+        [orphan_quiet]='true'
+        [backup]='false'
+        [backup_suffix]='.bak'
+        [_backup_ts]=''
+        [quiet]='true'
+    )
+    source \"\$SDIR/core/merge.sh\"
+    # Create minimal src + dest files
+    STMP=\$(mktemp); DTMP=\$(mktemp)
+    printf 'GLOBAL_STACK_A=1\n' > \"\$STMP\"
+    printf 'GLOBAL_STACK_A=1\n' > \"\$DTMP\"
+    gs_es_process_file \"\$STMP\" \"\$DTMP\" '99' 'false' 2>/dev/null || true
+    rm -f \"\$STMP\" \"\$DTMP\"
+    # Neither _gs_es_dest_vals nor _gs_es_dest_emitted should be visible here
+    leaked=false
+    declare -p _gs_es_dest_vals    2>/dev/null | grep -q 'declare' && leaked=true || true
+    declare -p _gs_es_dest_emitted 2>/dev/null | grep -q 'declare' && leaked=true || true
+    if [[ \"\$leaked\" == 'true' ]]; then
+        echo 'SCOPE LEAK: _gs_es_dest_vals or _gs_es_dest_emitted escaped function scope'
+        echo FAIL
+    else
+        echo PASS
+    fi
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section
