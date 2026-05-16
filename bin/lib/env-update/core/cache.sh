@@ -40,10 +40,17 @@ _gs_eu2_cache_write() {
     return 0
   fi
   local _key="${1}" _value="${2}"
-  local _f
+  local _f _ftmp
   _f="$(_gs_eu2_cache_key_to_file "${_key}")"
   mkdir -p "${_GS_EU2_CACHE_DIR}"
-  printf '%s' "${_value}" > "${_f}"
+  # Atomic write: write to a temp file in the same directory, then rename.
+  # Prevents partial reads when a concurrent fetch writes the same cache key.
+  _ftmp="$(mktemp "${_GS_EU2_CACHE_DIR}/.cache.XXXXXXXX")"
+  if printf '%s' "${_value}" > "${_ftmp}" && mv "${_ftmp}" "${_f}"; then
+    return 0
+  fi
+  rm -f "${_ftmp}" || true
+  return 1
 }
 
 _gs_eu2_cache_invalidate() {
