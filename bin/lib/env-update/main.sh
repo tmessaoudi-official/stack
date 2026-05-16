@@ -54,7 +54,7 @@ _gs_eu2_run_check() {
   # Propagate cache settings from CFG to env vars consumed by cache.sh
   _GS_EU2_CACHE_TTL="${_GS_EU2_CFG[cache_ttl]:-3600}"
 
-  local _n_auto=0 _n_hold=0 _n_skip=0 _n_error=0 _n_manual=0 _n_sha=0
+  local _n_auto=0 _n_hold=0 _n_skip=0 _n_error=0 _n_manual=0 _n_sha=0 _n_lock=0
 
   # Dynamic column width: pre-scan all env_var names so the → arrow aligns
   # across every record in this run, regardless of variable name length.
@@ -257,6 +257,20 @@ _gs_eu2_run_check() {
       _gs_eu2_record_set "${_i}" decision "${_classified}"
     fi
 
+    # Lock gate: (lock:REASON) overrides AUTO/HOLD/MANUAL/SKIP(classifier) to LOCK.
+    # Fires AFTER force-auto (HOLD→AUTO upgrade) — lock is immune to --force-auto.
+    # Does NOT override ERROR (fetch failures must surface).
+    # Does NOT override SKIP from the skip gate (when _skip_reason is set) —
+    # only overrides SKIP from the classifier (current==proposed with no skip flag).
+    local _lock_reason
+    _lock_reason="$(_gs_eu2_record_get "${_i}" lock_reason)"
+    if [[ -n "${_lock_reason}" && \
+          "$(_gs_eu2_record_get "${_i}" decision)" != "ERROR" && \
+          -z "${_skip_reason}" ]]; then
+      _gs_eu2_record_set "${_i}" decision "LOCK"
+      _gs_eu2_record_set "${_i}" error_message "${_lock_reason}"
+    fi
+
     # SHA classification: independent of version decision.
     # When a repo is tracking HEAD (git:owner/repo flag), the annotation SHA may
     # lag behind even when the version is current.  Upgrade the decision to SHA
@@ -307,6 +321,7 @@ _gs_eu2_run_check() {
       ERROR)  _tag="[ERROR ]"; (( ++_n_error ))  || true ;;
       MANUAL) _tag="[MANUAL]"; (( ++_n_manual )) || true ;;
       SHA)    _tag="[SHA   ]"; (( ++_n_sha ))    || true ;;
+      LOCK)   _tag="[LOCK  ]"; (( ++_n_lock ))   || true ;;
       *)      _tag="[SKIP  ]"; (( ++_n_skip ))   || true ;;
     esac
 
@@ -333,6 +348,9 @@ _gs_eu2_run_check() {
         ;;
       MANUAL)
         _reason="  ← manual flag"
+        ;;
+      LOCK)
+        _reason="  ← locked: ${_lock_reason}"
         ;;
       SKIP)
         # Detect downgrade: proposed non-empty, differs from current, no error yet
@@ -448,10 +466,10 @@ _gs_eu2_run_check() {
     fi
   done
 
-  local _total=$(( _n_auto + _n_hold + _n_skip + _n_error + _n_manual + _n_sha ))
+  local _total=$(( _n_auto + _n_hold + _n_skip + _n_error + _n_manual + _n_sha + _n_lock ))
   printf '%-80s\n' "──────────────────────────────────────────────────────────────────────────────"
-  printf '  Summary: %d AUTO, %d SHA, %d HOLD, %d MANUAL, %d SKIP, %d ERROR  (%d checked)\n' \
-    "${_n_auto}" "${_n_sha}" "${_n_hold}" "${_n_manual}" "${_n_skip}" "${_n_error}" "${_total}"
+  printf '  Summary: %d AUTO, %d SHA, %d HOLD, %d MANUAL, %d LOCK, %d SKIP, %d ERROR  (%d checked)\n' \
+    "${_n_auto}" "${_n_sha}" "${_n_hold}" "${_n_manual}" "${_n_lock}" "${_n_skip}" "${_n_error}" "${_total}"
   # Exit non-zero when any ERROR decisions were recorded — callers can detect fetch failures.
   (( _n_error > 0 )) && return 1 || return 0
 }
