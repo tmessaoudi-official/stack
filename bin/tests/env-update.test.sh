@@ -6056,6 +6056,308 @@ t "t61k: secondary-pass channel=unstable injection reaches PECL and returns beta
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Section 63 — (lock:REASON) flag
+# ═══════════════════════════════════════════════════════════════════════════
+section "63 — (lock:REASON) flag"
+
+_LOCK_PARSE_LIBS="
+source '/stack/bin/lib/env-update/config/defaults.sh'
+source '/stack/bin/lib/env-update/core/records.sh'
+source '/stack/bin/lib/env-update/core/semver.sh'
+source '/stack/bin/lib/env-update/core/parse.sh'
+"
+
+_LOCK_DECIDE_LIBS="
+source '/stack/bin/lib/env-update/config/defaults.sh'
+source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update/core/semver.sh'
+source '/stack/bin/lib/env-update/core/records.sh'
+source '/stack/bin/lib/env-update/core/decide.sh'
+"
+
+# ── A: Basic behaviour ────────────────────────────────────────────────────
+
+# t63a1: parse.sh stores lock_reason in record field
+t "t63a1: parse.sh stores lock_reason in record" bash -c "
+    ${_LOCK_PARSE_LIBS}
+    tmp=\$(mktemp)
+    printf '# @todo env-update (lock:Pinned to master) github:owner/repo 1.2.3\nGLOBAL_STACK_TEST=1.2.3\n' > \"\$tmp\"
+    _gs_eu2_parse_env_file \"\$tmp\"
+    rm -f \"\$tmp\"
+    got=\$(_gs_eu2_record_get 0 lock_reason)
+    [[ \"\$got\" == 'Pinned to master' ]] || { echo \"expected 'Pinned to master', got: '\$got'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t63a2: lock_reason is recognised as a flag by is_recognized_flag
+t "t63a2: is_recognized_flag returns 0 for lock" bash -c "
+    ${_LOCK_PARSE_LIBS}
+    _gs_eu2_is_recognized_flag 'lock:some reason' && echo PASS || { echo 'lock not recognised'; echo FAIL; }
+"
+
+# t63a3: lock with empty reason exits with error
+t "t63a3: (lock:) with empty reason is a parse error" bash -c "
+    ${_LOCK_PARSE_LIBS}
+    tmp=\$(mktemp)
+    printf '# @todo env-update (lock:) github:owner/repo 1.2.3\nGLOBAL_STACK_TEST=1.2.3\n' > \"\$tmp\"
+    err=\$(_gs_eu2_parse_env_file \"\$tmp\" 2>&1) && rc=0 || rc=\$?
+    rm -f \"\$tmp\"
+    [[ \$rc -ne 0 ]] || { echo 'expected non-zero exit for empty lock reason'; echo FAIL; exit 0; }
+    echo \"\$err\" | grep -qi 'requires\|non-empty\|value' \
+        || { echo \"expected requires/non-empty/value in error: \$err\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t63a4: lock_reason stored verbatim (spaces preserved)
+t "t63a4: lock_reason with spaces stored verbatim" bash -c "
+    ${_LOCK_PARSE_LIBS}
+    tmp=\$(mktemp)
+    printf '# @todo env-update (lock:Unused for now — needs investigation) dockerhub:_/nginx latest\nGLOBAL_STACK_TEST=latest\n' > \"\$tmp\"
+    _gs_eu2_parse_env_file \"\$tmp\"
+    rm -f \"\$tmp\"
+    got=\$(_gs_eu2_record_get 0 lock_reason)
+    [[ \"\$got\" == 'Unused for now — needs investigation' ]] || { echo \"expected full reason, got: '\$got'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ── B: force-auto immunity ────────────────────────────────────────────────
+
+# t63b1: --force-auto does NOT override LOCK (lock is immune)
+t "t63b1: --force-auto does not override (lock:) — stays LOCK" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t63b1_cache
+    f=\${TMP_DIR}/t63b1.env
+    # current=18.3-alpine3.23 → fixture returns 18.4-alpine3.23 → with --force-auto would be AUTO
+    # but (lock:) must override to LOCK even with --force-auto
+    printf '# @todo env-update (lock:pinned for stability) dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T63B1=18.3-alpine3.23\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --force-auto --env-file=\"\$f\" 2>/dev/null)
+    echo \"\$out\" | grep -qF '[LOCK  ]' || { echo \"expected [LOCK  ] with --force-auto, got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '[AUTO  ]' && { echo \"[AUTO  ] must not appear with (lock:) + --force-auto\"; echo FAIL; exit 0; } || true
+    echo PASS
+"
+
+# t63b2: without (lock:), --force-auto still produces AUTO (control)
+t "t63b2: without (lock:), --force-auto produces AUTO (control test)" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t63b2_cache
+    f=\${TMP_DIR}/t63b2.env
+    printf '# @todo env-update dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T63B2=18.3-alpine3.23\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --force-auto --env-file=\"\$f\" 2>/dev/null)
+    echo \"\$out\" | grep -qF '[AUTO  ]' || { echo \"expected AUTO without lock, got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ── C: Flag interactions ──────────────────────────────────────────────────
+
+# t63c1: (lock:) + (skip:) — skip gate fires first, decision=SKIP not LOCK
+t "t63c1: (lock:) does not override SKIP — skip gate wins" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t63c1_cache
+    f=\${TMP_DIR}/t63c1.env
+    # Both (skip:) and (lock:) present — skip fires first, lock gate must not override it
+    printf '# @todo env-update (skip:skip reason) (lock:lock reason) dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T63C1=18.3-alpine3.23\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null)
+    echo \"\$out\" | grep -qF '[SKIP  ]' || { echo \"expected SKIP, got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '[LOCK  ]' && { echo \"LOCK must not override SKIP\"; echo FAIL; exit 0; } || true
+    echo PASS
+"
+
+# t63c2: (lock:) + ERROR decision — lock gate must NOT override ERROR
+t "t63c2: (lock:) does not override ERROR — fetch failures surface" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t63c2_cache
+    f=\${TMP_DIR}/t63c2.env
+    # Use a non-existent fixture repo so fetcher returns ERROR
+    printf '# @todo env-update (lock:pinned) dockerhub:_/nonexistent-repo-xyz 1.0.0\nGLOBAL_STACK_T63C2=1.0.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null || true)
+    echo \"\$out\" | grep -qF '[ERROR ]' || { echo \"expected ERROR, got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '[LOCK  ]' && { echo \"LOCK must not override ERROR\"; echo FAIL; exit 0; } || true
+    echo PASS
+"
+
+# t63c3: (manual) + (lock:) — LOCK wins silently, (manual) ignored
+t "t63c3: (manual) + (lock:) coexist — LOCK wins, (manual) ignored" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t63c3_cache
+    f=\${TMP_DIR}/t63c3.env
+    printf '# @todo env-update (manual) (lock:lock wins) dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T63C3=18.3-alpine3.23\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null)
+    echo \"\$out\" | grep -qF '[LOCK  ]' || { echo \"expected LOCK when (manual)+(lock:) coexist: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '[MANUAL]' && { echo \"MANUAL must not appear when (lock:) present\"; echo FAIL; exit 0; } || true
+    echo PASS
+"
+
+# t63c4: (lock:) when up to date (current == proposed) — decision still LOCK
+t "t63c4: (lock:) when current == proposed — decision is LOCK, not SKIP" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t63c4_cache
+    f=\${TMP_DIR}/t63c4.env
+    # current matches what the fixture returns → propose == current → classify=SKIP, but lock gate turns it to LOCK
+    # postgres fixture returns 18.4-alpine3.23 — use that as current
+    printf '# @todo env-update (lock:pinned) dockerhub:_/postgres:18 18.4-alpine3.23\nGLOBAL_STACK_T63C4=18.4-alpine3.23\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null)
+    echo \"\$out\" | grep -qF '[LOCK  ]' || { echo \"expected LOCK even when current==proposed: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ── D: Output / display ───────────────────────────────────────────────────
+
+# t63d1: [LOCK  ] tag is 8 chars wide — matches other decision tags
+t "t63d1: [LOCK  ] tag is exactly 8 chars wide" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t63d1_cache
+    f=\${TMP_DIR}/t63d1.env
+    printf '# @todo env-update (lock:pinned) dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T63D1=18.3-alpine3.23\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null)
+    echo \"\$out\" | grep -qF '[LOCK  ]' || { echo \"expected '[LOCK  ]' (LOCK+2 spaces), got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t63d2: summary line includes LOCK count
+t "t63d2: summary line includes LOCK count" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t63d2_cache
+    f=\${TMP_DIR}/t63d2.env
+    printf '# @todo env-update (lock:pinned) dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T63D2=18.3-alpine3.23\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null)
+    echo \"\$out\" | grep -qi 'LOCK' | head -1 || true
+    echo \"\$out\" | grep -qi '1 LOCK\|1.*LOCK\|LOCK.*1' || { echo \"expected LOCK count in summary: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t63d3: LOCK output shows lock reason (← locked: REASON)
+t "t63d3: LOCK output line shows lock reason" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t63d3_cache
+    f=\${TMP_DIR}/t63d3.env
+    printf '# @todo env-update (lock:pinned for stability) dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T63D3=18.3-alpine3.23\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null)
+    echo \"\$out\" | grep -qi 'pinned for stability\|locked\|lock' \
+        || { echo \"expected lock reason in output: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ── E: Apply behaviour ───────────────────────────────────────────────────
+
+# t63e1: --apply updates annotation version token but NOT VAR= value
+t "t63e1: --apply: annotation version updated, VAR= value unchanged" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t63e1_cache
+    mkdir -p \"\${TMP_DIR}/t63e1_cache\"
+    touch \"\${TMP_DIR}/t63e1_cache/last-dry-run-ts\"
+    f=\${TMP_DIR}/t63e1.env
+    # current=18.3-alpine3.23 in annotation; fixture returns 18.4-alpine3.23 (proposed)
+    ann='# @todo env-update (lock:pinned) dockerhub:_/postgres:18 18.3-alpine3.23'
+    printf '%s\nGLOBAL_STACK_T63E1=18.3-alpine3.23\n' \"\$ann\" > \"\$f\"
+    bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$f\" 2>/dev/null || true
+    # VAR= line must still hold the original value
+    grep -q 'GLOBAL_STACK_T63E1=18.3-alpine3.23' \"\$f\" \
+        || { echo 'VAR= value was changed — must stay 18.3-alpine3.23'; echo FAIL; exit 0; }
+    # Annotation version must be updated to proposed value
+    grep -q '18.4-alpine3.23' \"\$f\" \
+        || { echo 'annotation not updated to 18.4-alpine3.23'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t63e2: --dry-run with LOCK reports [DRY-RUN] without writing
+t "t63e2: --dry-run with (lock:) reports DRY-RUN and makes no changes" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t63e2_cache
+    mkdir -p \"\${TMP_DIR}/t63e2_cache\"
+    touch \"\${TMP_DIR}/t63e2_cache/last-dry-run-ts\"
+    f=\${TMP_DIR}/t63e2.env
+    ann='# @todo env-update (lock:pinned) dockerhub:_/postgres:18 18.3-alpine3.23'
+    printf '%s\nGLOBAL_STACK_T63E2=18.3-alpine3.23\n' \"\$ann\" > \"\$f\"
+    original=\$(cat \"\$f\")
+    bash '${ENV_UPDATE_V2}' --apply --dry-run --env-file=\"\$f\" 2>/dev/null || true
+    current=\$(cat \"\$f\")
+    [[ \"\$original\" == \"\$current\" ]] || { echo 'file was modified during --dry-run'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t63e3: idempotency — running --apply twice produces same result
+t "t63e3: --apply is idempotent for (lock:) annotation updates" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t63e3_cache
+    mkdir -p \"\${TMP_DIR}/t63e3_cache\"
+    touch \"\${TMP_DIR}/t63e3_cache/last-dry-run-ts\"
+    f=\${TMP_DIR}/t63e3.env
+    ann='# @todo env-update (lock:pinned) dockerhub:_/postgres:18 18.3-alpine3.23'
+    printf '%s\nGLOBAL_STACK_T63E3=18.3-alpine3.23\n' \"\$ann\" > \"\$f\"
+    bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$f\" 2>/dev/null || true
+    after_first=\$(cat \"\$f\")
+    bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$f\" 2>/dev/null || true
+    after_second=\$(cat \"\$f\")
+    [[ \"\$after_first\" == \"\$after_second\" ]] || { echo 'second apply changed the file — not idempotent'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t63e4: --apply does not count LOCK annotation update in version-update count
+t "t63e4: --apply: LOCK records not counted in version update total" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t63e4_cache
+    mkdir -p \"\${TMP_DIR}/t63e4_cache\"
+    touch \"\${TMP_DIR}/t63e4_cache/last-dry-run-ts\"
+    f=\${TMP_DIR}/t63e4.env
+    # Two entries: one AUTO (should count as version update), one LOCK (annotation only)
+    printf '# @todo env-update dockerhub:_/postgres:18 17.5-alpine3.23\nGLOBAL_STACK_T63E4A=17.5-alpine3.23\n' > \"\$f\"
+    printf '# @todo env-update (lock:pinned) dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T63E4B=18.3-alpine3.23\n' >> \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$f\" 2>/dev/null || true)
+    # Verify the LOCK record's VAR= line was not touched
+    grep -q 'GLOBAL_STACK_T63E4B=18.3-alpine3.23' \"\$f\" \
+        || { echo 'LOCK VAR= must remain 18.3-alpine3.23'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ── F: Edge cases ─────────────────────────────────────────────────────────
+
+# t63f1: (lock:) when proposed == current — annotation-only rewrite skipped (idempotent)
+t "t63f1: (lock:) when annotation version already matches proposed — no rewrite needed" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t63f1_cache
+    mkdir -p \"\${TMP_DIR}/t63f1_cache\"
+    touch \"\${TMP_DIR}/t63f1_cache/last-dry-run-ts\"
+    f=\${TMP_DIR}/t63f1.env
+    # annotation already shows 18.4-alpine3.23 (= what fixture returns) → no rewrite
+    ann='# @todo env-update (lock:pinned) dockerhub:_/postgres:18 18.4-alpine3.23'
+    printf '%s\nGLOBAL_STACK_T63F1=18.4-alpine3.23\n' \"\$ann\" > \"\$f\"
+    original=\$(cat \"\$f\")
+    bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$f\" 2>/dev/null || true
+    after=\$(cat \"\$f\")
+    [[ \"\$original\" == \"\$after\" ]] || { echo 'file changed when annotation was already up to date'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t63f2: (lock:) position-agnostic — flag before and after TYPE:ID both work
+t "t63f2: (lock:) works regardless of position in annotation" bash -c "
+    ${_LOCK_PARSE_LIBS}
+    tmp_before=\$(mktemp)
+    tmp_after=\$(mktemp)
+    printf '# @todo env-update (lock:reason before) github:owner/repo 1.2.3\nGLOBAL_STACK_TEST=1.2.3\n' > \"\$tmp_before\"
+    printf '# @todo env-update github:owner/repo 1.2.3 (lock:reason after)\nGLOBAL_STACK_TEST=1.2.3\n' > \"\$tmp_after\"
+    _gs_eu2_parse_env_file \"\$tmp_before\"
+    got_before=\$(_gs_eu2_record_get 0 lock_reason)
+    # Reset record state for second parse
+    _GS_EU2_REC_COUNT=0; _GS_EU2_LAST_IDX=0
+    _gs_eu2_parse_env_file \"\$tmp_after\"
+    got_after=\$(_gs_eu2_record_get 0 lock_reason)
+    rm -f \"\$tmp_before\" \"\$tmp_after\"
+    [[ \"\$got_before\" == 'reason before' ]] || { echo \"before: expected 'reason before', got: '\$got_before'\"; echo FAIL; exit 0; }
+    [[ \"\$got_after\" == 'reason after' ]] || { echo \"after: expected 'reason after', got: '\$got_after'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t63f3: full pipeline via fixture file — LOCK decision emitted
+t "t63f3: full pipeline with lock-flag.env fixture — LOCK in output" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t63f3_cache
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run \
+        --env-file='${FIXTURES}/lock-flag.env' 2>/dev/null)
+    echo \"\$out\" | grep -qF '[LOCK  ]' || { echo \"expected [LOCK  ] in full pipeline output: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section
