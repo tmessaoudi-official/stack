@@ -481,7 +481,6 @@ fields as string keys. Empty fields are present as empty strings (`""`), not `nu
     "fetch_json": "",
     "url_probe": "",
     "url_probe_depth": "",
-    "pecl_ref": "",
     "depends_on": "",
     "urls": "",
     "git_fallback_url": "",
@@ -495,8 +494,7 @@ fields as string keys. Empty fields are present as empty strings (`""`), not `nu
     "alt_version": "",
     "annotation_sha": "",
     "proposed_sha": "",
-    "use_sha": "",
-    "commit_date": ""
+    "use_sha": ""
   }
 ]
 ```

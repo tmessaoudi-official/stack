@@ -21,11 +21,11 @@ _gs_eu2_record_fields() {
     tag_extract tag_replace_from tag_replace_to tag_suffix \
     fetch_extract fetch_json \
     url_probe url_probe_depth \
-    pecl_ref git_repo depends_on urls \
+    git_repo depends_on urls \
     git_fallback_url git_fallback_sha \
     hint note line_number raw_annotation \
     proposed_version decision error_message alt_version \
-    annotation_sha proposed_sha use_sha commit_date \
+    annotation_sha proposed_sha use_sha \
     proposed_sha_date annotation_sha_date \
     unstable_proposed stable_proposed \
     watch_major_depth latest_unconstrained
