@@ -444,6 +444,8 @@ _gs_eu2_run_check() {
   printf '%-80s\n' "──────────────────────────────────────────────────────────────────────────────"
   printf '  Summary: %d AUTO, %d SHA, %d HOLD, %d MANUAL, %d SKIP, %d ERROR  (%d checked)\n' \
     "${_n_auto}" "${_n_sha}" "${_n_hold}" "${_n_manual}" "${_n_skip}" "${_n_error}" "${_total}"
+  # Exit non-zero when any ERROR decisions were recorded — callers can detect fetch failures.
+  (( _n_error > 0 )) && return 1 || return 0
 }
 
 _gs_eu2_main() {
@@ -554,7 +556,8 @@ _gs_eu2_main() {
   if [[ "true" == "${_GS_EU2_CFG[dump]}" ]]; then
     _gs_eu2_dump_records "${_GS_EU2_CFG[format]}"
   elif [[ "true" == "${_GS_EU2_CFG[check]}" ]]; then
-    _gs_eu2_run_check
+    local _check_rc=0
+    _gs_eu2_run_check || _check_rc=$?
 
     # After a successful dry-run check, write the timestamp marker so a subsequent
     # --apply knows a recent preview was done (incident prevention: 2026-04-23).
@@ -592,6 +595,9 @@ _gs_eu2_main() {
         fi
       fi
     fi
+    # Propagate non-zero return from _gs_eu2_run_check (errors present) without
+    # triggering the ERR trap — the error was already reported in the output.
+    return "${_check_rc}"
   else
     _gs_eu2_print_summary "${_env_file}"
   fi

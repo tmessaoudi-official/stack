@@ -16,4 +16,7 @@ trap 'printf "env-update: error in %s at line %d: %s\n" "${BASH_SOURCE[0]}" "${L
 # shellcheck source=./lib/env-update/main.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib/env-update/main.sh"
 
-_gs_eu2_main "${@}"
+# Capture the exit code from _gs_eu2_main to allow intentional non-zero returns
+# (e.g. _gs_eu2_run_check returns 1 when ERROR decisions are present) without
+# triggering the ERR trap, which is reserved for unexpected failures.
+_gs_eu2_main "${@}" || exit $?

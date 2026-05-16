@@ -448,6 +448,19 @@ t "t07e: duplicate @todo before same variable → non-zero exit + message" bash 
     echo PASS
 "
 
+t "t07f: --check exits 1 when ERROR decisions are present (no spurious ERR trap message)" bash -c "
+    f=\${TMP_DIR}/t07f.env
+    printf '# @todo env-update dockerhub:_/no-such-image-xyzzy999 1.0.0\nGLOBAL_STACK_EXITCODE_TEST_VERSION=1.0.0\n' > \"\$f\"
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" --no-cache 2>&1)
+    code=\$?
+    unset _GS_EU2_HTTP_FIXTURE_DIR
+    [[ \"\$code\" -eq 1 ]] || { echo \"expected exit 1, got: \$code\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qiF '[ERROR' || { echo \"expected [ERROR] in output; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qiF 'error in bin/' && { echo \"got spurious ERR trap message; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Section 8 — --dump output
 # ═══════════════════════════════════════════════════════════════════════════
