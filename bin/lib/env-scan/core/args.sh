@@ -69,7 +69,7 @@ gs_es_parse_args() {
 			exit 0
 			;;
 		*)
-			echo -e "\n ---- Unknown option passed: '${1}' \n" >&2
+			printf '\n ---- Unknown option passed: '"'"'%s'"'"' \n\n' "${1}" >&2
 			gs_es_show_help
 			exit 1
 			;;

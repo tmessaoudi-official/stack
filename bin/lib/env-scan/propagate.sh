@@ -46,7 +46,7 @@ gs_es_propagate_to_dockerfiles() {
   fi
 
   # ── Build env map: VAR → value (skip comments, empty, expansion-dependent) ─
-  declare -A _prop_env_map
+  local -A _prop_env_map
   local _line _var _val
   while IFS= read -r _line; do
     # Skip comment lines and blank lines

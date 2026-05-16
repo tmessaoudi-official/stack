@@ -20,16 +20,16 @@ gs_es_show_inconsistency() {
 	[[ "${_GS_ES_CFG[quiet]}" == "true" ]] && return 0
 
 	local added_entries
-	added_entries=$(awk -F "=" -v exclude_pattern="${exclude_pattern}" 'NR == FNR { original[$1]; next } !($1 in original) && $1 !~ /^#|^\s*$/ && (exclude_pattern == "" || !($1 ~ exclude_pattern)) { print $1 "=" $2 }' "${dest_file}" "${src_file}")
+	added_entries=$(awk -v exclude_pattern="${exclude_pattern}" 'NR == FNR { key=$0; sub(/=.*/,"",key); original[key]; next } { key=$0; sub(/=.*/,"",key) } !(key in original) && key !~ /^#|^\s*$/ && (exclude_pattern == "" || !(key ~ exclude_pattern)) { print $0 }' "${dest_file}" "${src_file}")
 	if [[ -n "${added_entries}" ]]; then
 		if [[ "add" = "${operation}" ]]; then
-			echo -e "\n ---- (gs_es_show_inconsistency): New entries added to ${dest_file} from ${src_file}:\n${added_entries}\n"
+			printf '\n ---- (gs_es_show_inconsistency): New entries added to %s from %s:\n%s\n\n' "${dest_file}" "${src_file}" "${added_entries}"
 		else
-			echo -e "\n ---- (gs_es_show_inconsistency): Entries missing in ${dest_file} from ${src_file}:\n${added_entries}\n"
+			printf '\n ---- (gs_es_show_inconsistency): Entries missing in %s from %s:\n%s\n\n' "${dest_file}" "${src_file}" "${added_entries}"
 		fi
 	else
 		if [[ "true" = "${_GS_ES_CFG[debug]}" ]]; then
-			echo -e "\n ---- (gs_es_show_inconsistency): All ${src_file} variables are present in ${dest_file}\n"
+			printf '\n ---- (gs_es_show_inconsistency): All %s variables are present in %s\n\n' "${src_file}" "${dest_file}"
 		fi
 	fi
 }
@@ -46,21 +46,40 @@ gs_es_show_differences() {
 	[[ "${_GS_ES_CFG[quiet]}" == "true" ]] && return 0
 
 	local different_entries
-	different_entries=$(awk -F "=" -v exclude_pattern="${_GS_ES_CFG[exclude_different_pattern]}" 'NR == FNR { source[$1]=$2; next } ($1 in source) && ($2 != source[$1]) && (exclude_pattern == "" || !($1 ~ exclude_pattern)) { print $1 "=" $2 "\n(--------- is : \"" source[$1] "\" in source)\n" }' "${src_file}" "${dest_file}")
+	different_entries=$(awk -v exclude_pattern="${_GS_ES_CFG[exclude_different_pattern]}" '
+		{
+			key=$0; sub(/=.*/,"",key)
+			val=substr($0,length(key)+2)
+			# Normalize trailing whitespace for comparison (env files may have it)
+			nval=val; gsub(/[[:space:]]+$/, "", nval)
+		}
+		NR == FNR { source[key]=nval; next }
+		(key in source) && (nval != source[key]) && (exclude_pattern == "" || !(key ~ exclude_pattern)) {
+			print key "=" val "\n(--------- is : \"" source[key] "\" in source)\n"
+		}' "${src_file}" "${dest_file}")
 	if [[ "true" = "${_GS_ES_CFG[show_different_entries]}" ]]; then
 		if [[ -n "${different_entries}" ]]; then
-			echo -e "\n ---- (gs_es_show_differences): Entries in ${dest_file} differ from ${src_file}:\n${different_entries}\n"
+			printf '\n ---- (gs_es_show_differences): Entries in %s differ from %s:\n%s\n\n' "${dest_file}" "${src_file}" "${different_entries}"
 		else
 			if [[ "true" = "${_GS_ES_CFG[debug]}" ]]; then
-				echo -e "\n ---- (gs_es_show_differences): ${dest_file} values are in sync with source file ${src_file}\n"
+				printf '\n ---- (gs_es_show_differences): %s values are in sync with source file %s\n\n' "${dest_file}" "${src_file}"
 			fi
 		fi
 	fi
 
 	if [[ -n "${different_entries}" && "true" = "${_GS_ES_CFG[sync_values]}" && "${_GS_ES_CFG[dry_run]:-false}" != "true" ]]; then
-		awk -F "=" -v exclude_pattern="${_GS_ES_CFG[exclude_different_pattern]}" 'NR == FNR { source[$1] = $2; next } (exclude_pattern != "" && $1 ~ exclude_pattern) { print $0; next } ($1 in source) && ($2 != source[$1]) { print $1 "=" source[$1]; next } { print $0; next }' "${src_file}" "${dest_file}" >"${dest_file}.updated.tmp.${count}" && mv "${dest_file}.updated.tmp.${count}" "${dest_file}"
+		awk -v exclude_pattern="${_GS_ES_CFG[exclude_different_pattern]}" '
+			{
+				key=$0; sub(/=.*/,"",key)
+				val=substr($0,length(key)+2)
+				nval=val; gsub(/[[:space:]]+$/, "", nval)
+			}
+			NR == FNR { source[key]=nval; next }
+			(exclude_pattern != "" && key ~ exclude_pattern) { print $0; next }
+			(key in source) && (nval != source[key]) { print key "=" source[key]; next }
+			{ print $0; next }' "${src_file}" "${dest_file}" >"${dest_file}.updated.tmp.${count}" && mv "${dest_file}.updated.tmp.${count}" "${dest_file}"
 		if [[ "true" = "${_GS_ES_CFG[debug]}" ]]; then
-			echo -e "\n ---- (gs_es_show_differences): ${dest_file} values updated to match with values from source ${src_file}\n"
+			printf '\n ---- (gs_es_show_differences): %s values updated to match with values from source %s\n\n' "${dest_file}" "${src_file}"
 		fi
 	fi
 }

@@ -40,16 +40,16 @@ gs_es_check_missing_variables() {
 
 	if [[ -n "${missing_variables}" ]]; then
 		if [[ "true" = "${reverse_checking}" ]]; then
-			echo -e "\n ---- (gs_es_check_missing_variables: reverse=${reverse_checking}): Missing variables from ${target_file} in ${_GS_ES_CFG[scan_path]}:\n${missing_variables}\n"
+			printf '\n ---- (gs_es_check_missing_variables: reverse=%s): Missing variables from %s in %s:\n%s\n\n' "${reverse_checking}" "${target_file}" "${_GS_ES_CFG[scan_path]}" "${missing_variables}"
 		else
-			echo -e "\n ---- (gs_es_check_missing_variables: reverse=${reverse_checking}): Missing variables from ${_GS_ES_CFG[scan_path]} in ${target_file}:\n${missing_variables}\n"
+			printf '\n ---- (gs_es_check_missing_variables: reverse=%s): Missing variables from %s in %s:\n%s\n\n' "${reverse_checking}" "${_GS_ES_CFG[scan_path]}" "${target_file}" "${missing_variables}"
 		fi
 	else
 		if [[ "true" = "${_GS_ES_CFG[debug]}" ]]; then
 			if [[ "true" = "${reverse_checking}" ]]; then
-				echo -e "\n ---- (gs_es_check_missing_variables: reverse=${reverse_checking}): All the environment variables present in ${target_file} are in ${_GS_ES_CFG[scan_path]}\n"
+				printf '\n ---- (gs_es_check_missing_variables: reverse=%s): All the environment variables present in %s are in %s\n\n' "${reverse_checking}" "${target_file}" "${_GS_ES_CFG[scan_path]}"
 			else
-				echo -e "\n ---- (gs_es_check_missing_variables: reverse=${reverse_checking}): All the environment variables present in ${_GS_ES_CFG[scan_path]} are in ${target_file}\n"
+				printf '\n ---- (gs_es_check_missing_variables: reverse=%s): All the environment variables present in %s are in %s\n\n' "${reverse_checking}" "${_GS_ES_CFG[scan_path]}" "${target_file}"
 			fi
 		fi
 	fi

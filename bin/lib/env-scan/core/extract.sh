@@ -64,13 +64,13 @@ gs_es_detect_multiple_defaults() {
 			if (unique_values[key] == "") {
 				unique_values[key] = value; # First unique value
 			} else {
-				unique_values[key] = unique_values[key] ";" value; # Append with a delimiter
+				unique_values[key] = unique_values[key] "\001" value; # Append with SOH delimiter (safe — not present in env values)
 			}
 		}
 	}
 	END {
 		for (key in unique_values) {
-			split(unique_values[key], vals, ";");  # Split values into an array
+			split(unique_values[key], vals, "\001");  # Split on SOH delimiter
 			if (length(vals) > 1) {                 # Check if there are multiple values
 				printf "%s has values: ", key;
 				for (i in vals) {
@@ -89,7 +89,7 @@ gs_es_detect_multiple_defaults() {
 	fi
 
 	if [[ -n "${multiple_default_values}" ]]; then
-		echo -e "\n ---- (gs_es_detect_multiple_defaults): Entries defined multiple times in ${current_file} with multiple values:\n${multiple_default_values}\n"
+		printf '\n ---- (gs_es_detect_multiple_defaults): Entries defined multiple times in %s with multiple values:\n%s\n\n' "${current_file}" "${multiple_default_values}"
 	fi
 
 	rm -rf \
@@ -115,13 +115,13 @@ gs_es_search_and_extract() {
 	_ignore_re="$(printf '%s' "${_GS_ES_CFG[scan_ignore_pattern]}" | sed '/^\s*$/d' | paste -sd '|')"
 	if [[ -n "${_ignore_re}" && "${current_file}" =~ ${_ignore_re} ]]; then
 		if [[ "true" = "${_GS_ES_CFG[debug]}" ]]; then
-			echo -e "\n ---- (gs_es_search_and_extract): Ignoring path: ${current_file}\n"
+			printf '\n ---- (gs_es_search_and_extract): Ignoring path: %s\n\n' "${current_file}"
 		fi
 		return 0
 	fi
 
 	if [[ "true" = "${_GS_ES_CFG[debug]}" && "true" = "${_GS_ES_CFG[debug_show_extracted_files]}" ]]; then
-		echo -e "\n ---- (gs_es_search_and_extract): Extracting env variables from ${current_file}\n"
+		printf '\n ---- (gs_es_search_and_extract): Extracting env variables from %s\n\n' "${current_file}"
 	fi
 
 	# Per-file output goes into the session temp dir to avoid collisions
@@ -245,7 +245,7 @@ gs_es_search_and_extract() {
 
 	if [[ "true" = "${_GS_ES_CFG[debug]}" && "true" = "${_GS_ES_CFG[debug_show_extracted_files]}" ]]; then
 		cat "${_out_file}"
-		echo -e "\n"
+		printf '\n\n'
 	fi
 
 	gs_es_detect_multiple_defaults "${_out_file}" "${current_file}"
@@ -279,7 +279,7 @@ _gs_es_run_extraction() {
 		done
 		[[ "${failed}" -eq 0 ]] || { echo "gs_es_search_and_extract: ${failed} background job(s) failed" >&2; exit 1; }
 	else
-		echo -e "\n ---- (gs_es_main): ${_GS_ES_CFG[scan_path]} is neither a file nor a directory, exiting !\n\n" >&2
+		printf '\n ---- (gs_es_main): %s is neither a file nor a directory, exiting !\n\n\n' "${_GS_ES_CFG[scan_path]}" >&2
 		exit 1
 	fi
 

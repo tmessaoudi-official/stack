@@ -45,12 +45,10 @@ gs_es_process_file() {
 			touch "${dest_file}"
 		fi
 
-		# A7: Unset associative arrays before (re)declaring to prevent bleed-through
-		# when gs_es_process_file is called multiple times in the same shell.
-		unset _gs_es_dest_vals _gs_es_dest_emitted
 		# Build associative array of dest values keyed by variable name
-		declare -A _gs_es_dest_vals=()
-		declare -A _gs_es_dest_emitted=()
+		# (local -A: function-scoped; no bleed-through on repeated calls)
+		local -A _gs_es_dest_vals=()
+		local -A _gs_es_dest_emitted=()
 		while IFS= read -r _line || [[ -n "${_line}" ]]; do
 			# Only record KEY=value lines (skip blank lines and comments)
 			if [[ "${_line}" =~ ^([A-Za-z_][A-Za-z0-9_]*)= ]]; then
