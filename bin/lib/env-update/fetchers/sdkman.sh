@@ -126,6 +126,12 @@ _gs_eu2_fetch_sdkman() {
 
   local _identifier _channel _major_hint _current _no_cache
   _identifier="$(_gs_eu2_record_get "${_idx}" identifier)"
+  # NOTE: channel flag is read but effectively ignored for all SDKMAN candidates.
+  # The SDKMAN API does not expose a pre-release channel — all versions (stable,
+  # rc, beta, alpha, ea) are returned by the same endpoint.  The fetcher then
+  # filters out pre-releases (rc/beta/alpha/ea in the numeric base) when
+  # channel != unstable.  There is no way to request ONLY pre-releases from SDKMAN.
+  # Java specifically: alpha/beta/ea/rc are excluded in stable mode; no API gate exists.
   _channel="$(_gs_eu2_record_get "${_idx}" channel)"
   _major_hint="$(_gs_eu2_record_get "${_idx}" major_hint)"
   _current="$(_gs_eu2_record_get "${_idx}" current_version)"

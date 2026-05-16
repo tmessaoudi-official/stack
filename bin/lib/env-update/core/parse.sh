@@ -220,6 +220,19 @@ _gs_eu2_dispatch_flag() {
   esac
 }
 
+# ── Adding a new CLI annotation flag checklist ─────────────────────────────
+# When adding a new (flag-name:value) annotation:
+# 1. Add validation in _gs_eu2_parse_hoist_flag() above: "flag-name) return 0 ;;"
+# 2. Add dispatch in _gs_eu2_parse_hoist_dispatch() above: "flag-name) _gs_eu2_record_set ... ;;"
+# 3. Add the new field to _gs_eu2_record_fields() in core/records.sh (if needed)
+# 4. Add banner in main.sh (if it is a global mode flag like --unstable/--stable)
+# 5. Add --dump serialization if the flag affects record state (it's automatic
+#    if it's a record field — dump.sh iterates _gs_eu2_record_fields())
+# 6. Update templates/tips/env-update.md §5 flag reference table
+# 7. Add at least two tests:
+#    - flag is parsed and stored (record field matches expected value)
+#    - flag is effective (fetcher or decide.sh behaves differently with it)
+
 # ── Main parser: reads .env file, populates records ────────────────────────
 _gs_eu2_parse_env_file() {
   local _env_file="${1}"

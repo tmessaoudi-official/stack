@@ -1004,7 +1004,7 @@ GLOBAL_STACK_BUNDLER_VERSION=2.6.3
 
 **No tag flags** — the version list is extracted via regex from the raw text response, not as structured tags.
 
-**Channel support:** Yes — `_gs_eu2_channel_select_best` is called on the extracted version list.
+**Channel support:** Nominal — `_gs_eu2_channel_select_best` is called on the extracted version list, but the SDKMAN API does not expose a pre-release channel. All versions (stable, rc, beta, alpha, ea) are returned by the same endpoint. Stable mode excludes pre-releases in the numeric base (`rc`, `beta`, `alpha`, `ea`). There is no "beta-only" mode and no way to request exclusively pre-release candidates. Setting `channel:unstable` will include these versions but cannot isolate them.
 
 **When not installed:** If both HTTP endpoints fail and the fixture dir is not set and `SDKMAN_DIR` (`/stack/tools/sdkman` default) is absent, sets `error_message` to "sdkman not installed" and returns without a proposed version. This results in SKIP (not ERROR).
 

@@ -239,6 +239,14 @@ _gs_eu2_fetch_github() {
   fi
 
   # ── (tag-channel-prefix) — round-trip strip before pipeline ─────────────────
+  # The round-trip: tag-with-prefix → strip → compare → re-prepend on output.
+  # WHY: some repos use a prefix to distinguish channel releases (e.g. "dev-1.2.3")
+  # from stable releases ("1.2.3").  Stripping the prefix before comparison lets
+  # SemVer comparison and tag-filter/tag-strip-prefix logic work on bare version
+  # strings without knowing the prefix.  Re-prepending at output ensures the full
+  # original tag name is written to proposed_version (not a stripped artefact).
+  # Stable tags (no prefix) are never re-prepended — only pre-release ones are.
+  #
   # Capture the original (raw) tags BEFORE stripping so we can conditionally
   # re-prepend the prefix on the winner (only when the winning raw tag had it).
   # Also strips _tcp from _releases_out so the version-gap fix block (which reads

@@ -36,7 +36,14 @@ _gs_eu2_pecl_fetch_allreleases() {
 
 # _gs_eu2_pecl_parse_stable XML [CHANNEL]
 # Parses allreleases XML and returns the highest acceptable version, or empty.
-# CHANNEL defaults to "stable"; when "unstable", accepts stable, beta, alpha, devel.
+#
+# PECL CHANNEL MODEL — BINARY, NOT GRADUATED:
+#   The PECL channel model is binary. Either:
+#   - channel = "stable" (default): only releases with stability == "stable" are accepted.
+#   - channel = "unstable": ALL stability levels are accepted (stable, beta, alpha, devel).
+#   There is no "beta-only" or "alpha-only" mode — unstable means ALL non-stable included.
+#   If the annotation uses (channel:unstable), the highest version across all stabilities
+#   is returned, which may be a stable release if it is the newest.
 _gs_eu2_pecl_parse_stable() {
   local _xml="${1}"
   local _channel="${2:-stable}"

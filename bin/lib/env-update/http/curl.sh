@@ -48,7 +48,14 @@ _gs_eu2_http_get() {
     return 1
   fi
 
-  # D4: Add retry logic and explicit User-Agent; detect HTTP 429 (rate-limit) specifically.
+  # Two-level retry strategy (D4):
+  # - Inner: curl --retry 3 --retry-delay 2 handles transient network failures
+  #   (connection reset, DNS timeout, brief server hiccups) at the TCP/HTTP level.
+  # - Outer: the for-loop (3 attempts) specifically handles HTTP 429 rate-limiting
+  #   with exponential back-off (5s, 10s). This is layered on top of curl's retry
+  #   because curl does not retry 429 by default (it only retries on connection
+  #   errors and transient HTTP 5xx per --retry-all-errors).
+  # Together: up to 3*3 = 9 curl attempts, with outer back-off on 429 only.
   local _body_tmp
   _body_tmp="$(mktemp)"
   local _attempt _http_status _curl_exit
@@ -108,6 +115,7 @@ _gs_eu2_http_get_auth() {
     return 1
   fi
 
+  # Same two-level retry strategy as _gs_eu2_http_get (see above).
   local _body_tmp
   _body_tmp="$(mktemp)"
   local _attempt _http_status _curl_exit
