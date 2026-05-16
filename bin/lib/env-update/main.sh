@@ -496,7 +496,7 @@ _gs_eu2_main() {
       fi
     done
     if [[ "${_unstable_overrides}" -gt 0 ]]; then
-      printf '[UNSTABLE MODE] channel forced unstable for %d record(s)\n' "${_unstable_overrides}"
+      printf '[UNSTABLE MODE] channel forced unstable for %d record(s)\n' "${_unstable_overrides}" >&2
     fi
   fi
 
@@ -516,24 +516,26 @@ _gs_eu2_main() {
       fi
     done
     if [[ "${_stable_overrides}" -gt 0 ]]; then
-      printf '[STABLE MODE] channel forced stable for %d record(s)\n' "${_stable_overrides}"
+      printf '[STABLE MODE] channel forced stable for %d record(s)\n' "${_stable_overrides}" >&2
     fi
   fi
 
+  # Mode banners always go to stderr — this ensures --format=json output is clean JSON on
+  # stdout, parseable directly by jq. Tests that grep for banners use 2>&1 so they still work.
   if [[ "${_GS_EU2_CFG[force_auto]:-false}" == "true" ]]; then
-    printf '[FORCE-AUTO MODE] (manual) and (override) gates bypassed\n'
+    printf '[FORCE-AUTO MODE] (manual) and (override) gates bypassed\n' >&2
   fi
   if [[ "${_GS_EU2_CFG[no_notes]:-false}" == "true" ]]; then
-    printf '[NO-NOTES MODE] note sub-lines suppressed\n'
+    printf '[NO-NOTES MODE] note sub-lines suppressed\n' >&2
   fi
   if [[ "${_GS_EU2_CFG[no_cache]:-false}" == "true" ]]; then
-    printf '[NO-CACHE] cache bypassed — all fetches hit network\n'
+    printf '[NO-CACHE] cache bypassed — all fetches hit network\n' >&2
   fi
   if [[ "${_GS_EU2_CFG[with_tags]:-false}" == "true" ]]; then
-    printf '[WITH-TAGS] tags API merged for all github records\n'
+    printf '[WITH-TAGS] tags API merged for all github records\n' >&2
   fi
   if [[ -n "${_GS_EU2_CFG[filter]:-}" ]]; then
-    printf '[FILTER: %s]\n' "${_GS_EU2_CFG[filter]}"
+    printf '[FILTER: %s]\n' "${_GS_EU2_CFG[filter]}" >&2
   fi
 
   if [[ "true" == "${_GS_EU2_CFG[dump]}" ]]; then

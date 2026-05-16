@@ -5358,6 +5358,19 @@ t "t60f: --dump --format=json serializes stable_proposed field (record_fields co
     echo PASS
 "
 
+# t60g: --dump --format=json output is clean JSON (no banner lines) when --no-cache and
+# --filter are also passed. Regression guard: banners previously went to stdout, corrupting
+# the JSON array and causing jq parse errors on any combined invocation.
+t "t60g: --dump --format=json stdout is clean JSON even with --no-cache and --filter" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t60g_cache
+    out=\$(bash '${ENV_UPDATE_V2}' --dump --format=json --no-cache --filter=POSTGRES \
+        --env-file='${FIXTURES}/basic-dockerhub.env' 2>/dev/null)
+    echo \"\$out\" | jq empty 2>/dev/null || { echo \"invalid JSON (banners on stdout?): \$(echo \"\$out\" | head -3)\"; echo FAIL; exit 0; }
+    echo \"\$out\" | jq -e 'type == \"array\"' >/dev/null 2>&1 || { echo \"expected JSON array\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Section 58b — pypi + rubygems (watch-major)
 # ═══════════════════════════════════════════════════════════════════════════
