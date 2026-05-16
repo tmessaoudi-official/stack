@@ -5638,7 +5638,7 @@ t "t52b-b: --unstable=full promotes stable→prerelease to AUTO (guard bypassed)
 # ═══════════════════════════════════════════════════════════════════════════
 # Section 53 — (tag-channel-prefix) flag
 # ═══════════════════════════════════════════════════════════════════════════
-section "53 — tag-channel-prefix flag"
+section "62 — tag-channel-prefix flag"
 
 _TCP_LIBS="
 source '/stack/bin/lib/env-update/config/defaults.sh'
