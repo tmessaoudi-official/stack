@@ -191,7 +191,7 @@ flags. Flags are **position-agnostic** — they can appear anywhere in the annot
 - `unstable`: picks the highest pre-release version. Falls back to stable if no pre-release exists. **Promotion guard**: if the highest stable has surpassed the highest pre-release (e.g. stable=3.1.1 vs prerelease=3.0.0-rc4), the stable version is returned instead — it is not a downgrade.
 - `rc`, `beta`, `alpha`: picks the highest version matching that channel keyword. Falls back to the highest pre-release if no exact match, then stable if the stable has surpassed the channel version.
 - `nightly`: for the `url` fetcher's Tier 4, treats the identifier as a directory listing of nightly build directories.
-- `(skip:REASON)` — forces a SKIP decision with the provided reason string stored in `skip_reason`. The fetcher still runs, but the decision is overridden. Useful for temporarily pausing a variable.
+- `(skip:REASON)` — forces a SKIP decision immediately. The fetcher does **not** run; no network request is made. The reason string is stored in `skip_reason` and appears in `--check` output as `skip flag: REASON`. Useful for temporarily pausing a variable without removing its annotation.
 
 ### Valued flags — tag manipulation pipeline
 
@@ -374,6 +374,15 @@ the fetch is in progress.
 ──────────────────────────────────────────────────────────────────────────────
   Summary: 1 AUTO, 2 HOLD, 1 MANUAL, 2 SKIP, 1 ERROR  (7 checked)
 ```
+
+### --check exit code
+
+`--check` (and `--apply`, which implies `--check`) exits with:
+
+- **`0`** — all records processed; no ERROR decisions.
+- **`1`** — one or more records ended with `[ERROR ]` decision (fetch failure, rate limit, etc.). The summary line is still printed; the non-zero exit allows scripts to detect fetch failures: `bin/env-update.sh --check || echo "some fetches failed"`.
+
+`SKIP`, `HOLD`, `MANUAL`, and `AUTO` decisions do not affect the exit code.
 
 ### Column layout and spacing
 
@@ -1494,6 +1503,7 @@ These do not abort the tool — they set `decision=ERROR` and move to the next r
 | `env-update: --dry-run and --apply are mutually exclusive` | Both flags given simultaneously. |
 | `env-update: --dump is mutually exclusive with --check and --apply` | `--dump` combined with action flags. |
 | `env-update: --cache-ttl requires a positive integer, got: VALUE` | Non-numeric value after `--cache-ttl=`. |
+| `env-update: invalid --filter regex: VALUE` | `--filter=VALUE` is not a valid ERE regex (`grep -E` returned exit 2). Does not apply to `type:TYPENAME` prefix filters, which bypass regex validation. |
 | `env-update: unknown option: --OPTION` | Unrecognized CLI flag. |
 | `env-update: env file not found: PATH` | The `--env-file` path does not exist. |
 | `env-update: unknown --format value: VALUE (valid: text, json)` | Invalid value for `--format`. |

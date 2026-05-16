@@ -270,16 +270,24 @@ _gs_eu2_run_check() {
       _gs_eu2_record_set "${_i}" decision "SHA"
     fi
 
-    # Annotate SKIP on a floating-reference current with a human-readable reason
-    if [[ "$(_gs_eu2_record_get "${_i}" decision)" == "SKIP" && \
+    # Annotate SKIP on a floating-reference current with a human-readable reason.
+    # Guard: skip-gated records already have error_message set by the skip gate above;
+    # do not overwrite it (for skip-gated records _prop is empty, so _prop != _cur is
+    # vacuously true and would fire incorrectly without this guard).
+    if [[ -z "${_skip_reason}" && \
+          "$(_gs_eu2_record_get "${_i}" decision)" == "SKIP" && \
           "${_prop}" != "${_cur}" ]] && \
        _gs_eu2_is_unversioned "${_cur}"; then
       _gs_eu2_record_set "${_i}" error_message \
         "floating reference (${_cur}) — pin manually to adopt proposed version"
     fi
 
-    # Annotate SKIP when proposed is prerelease but current is stable
-    if [[ "$(_gs_eu2_record_get "${_i}" decision)" == "SKIP" && \
+    # Annotate SKIP when proposed is prerelease but current is stable.
+    # Guard: skip-gated records already have error_message set; -z check below would
+    # prevent overwrite anyway, but the explicit _skip_reason guard is consistent and
+    # avoids calling _gs_eu2_is_prerelease with an empty _prop (which fetcher never set).
+    if [[ -z "${_skip_reason}" && \
+          "$(_gs_eu2_record_get "${_i}" decision)" == "SKIP" && \
           -z "$(_gs_eu2_record_get "${_i}" error_message)" && \
           -n "${_prop}" && "${_prop}" != "${_cur}" ]] && \
        _gs_eu2_is_prerelease "${_prop}" && ! _gs_eu2_is_prerelease "${_cur}"; then
