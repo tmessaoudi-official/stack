@@ -15,12 +15,13 @@ source "$(dirname "${BASH_SOURCE[0]}")/records.sh"
 # Finds " curval" as a literal word boundary — immune to trailing urls: extras.
 _gs_eu2_apply_single() {
   local _file="${1}" _var="${2}" _new="${3}" _raw_ann="${4:-}" _cur="${5:-}" \
-        _cur_sha="${6:-}" _new_sha="${7:-}" _use_sha="${8:-false}"
+        _cur_sha="${6:-}" _new_sha="${7:-}" _use_sha="${8:-false}" \
+        _annotation_only="${9:-false}"
   local _tmp
   _tmp="$(mktemp)" || { printf 'env-update/apply: mktemp failed\n' >&2; return 1; }
   awk -v var="${_var}" -v newval="${_new}" -v raw_ann="${_raw_ann}" \
       -v curval="${_cur}" -v cur_sha="${_cur_sha}" -v new_sha="${_new_sha}" \
-      -v use_sha="${_use_sha}" '
+      -v use_sha="${_use_sha}" -v annotation_only="${_annotation_only}" '
     /^[[:space:]]*#/ {
       if (raw_ann != "" && $0 == raw_ann) {
         line = $0
@@ -42,9 +43,9 @@ _gs_eu2_apply_single() {
       print; next
     }
     index($0, var "=") == 1 {
-      # Skip VAR= rewrite when newval is empty and use_sha is not set.
-      # This handles SHA-only updates where only the annotation comment changes.
-      if (newval == "" && use_sha != "true") { print; next }
+      # Skip VAR= rewrite when newval is empty and use_sha is not set,
+      # OR when annotation_only is set (LOCK: annotation updated, VAR= untouched).
+      if ((newval == "" && use_sha != "true") || annotation_only == "true") { print; next }
       val = (use_sha == "true" && new_sha != "") ? new_sha : newval
       print var "=" val; next
     }
@@ -90,6 +91,27 @@ _gs_eu2_apply_updates() {
                               "${_old_sha_tok}" "${_new_sha_tok}" "false"
         printf '  [SHA]      %-55s  sha:%s → sha:%s\n' "${_var}" "${_ann_sha:0:8}" "${_new_sha:0:8}"
         (( ++_n_sha_applied )) || true
+      fi
+      continue
+    fi
+
+    # ── Lock annotation-only update path (LOCK decisions) ────────────────
+    if [[ "${_decision}" == "LOCK" ]]; then
+      _var="$(_gs_eu2_record_get "${_i}" env_var)"
+      _cur="$(_gs_eu2_record_get "${_i}" current_version)"
+      _prop="$(_gs_eu2_record_get "${_i}" proposed_version)"
+      _raw_ann="$(_gs_eu2_record_get "${_i}" raw_annotation)"
+      # Only rewrite annotation when proposed differs from annotation version (idempotency).
+      [[ -z "${_prop}" || "${_prop}" == "${_cur}" ]] && continue
+      if [[ "${_dry_run}" == "true" ]]; then
+        printf '  [DRY-RUN]  %-55s  annotation: %s → %s (locked — VAR= untouched)\n' \
+          "${_var}" "${_cur}" "${_prop}"
+        (( ++_n_would )) || true
+      else
+        _gs_eu2_apply_single "${_env_file}" "${_var}" "${_prop}" "${_raw_ann}" "${_cur}" \
+                              "" "" "false" "true"
+        printf '  [LOCK]     %-55s  annotation: %s → %s\n' "${_var}" "${_cur}" "${_prop}"
+        (( ++_n_applied )) || true
       fi
       continue
     fi
