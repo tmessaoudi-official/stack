@@ -192,6 +192,7 @@ flags. Flags are **position-agnostic** — they can appear anywhere in the annot
 - `rc`, `beta`, `alpha`: picks the highest version matching that channel keyword. Falls back to the highest pre-release if no exact match, then stable if the stable has surpassed the channel version.
 - `nightly`: for the `url` fetcher's Tier 4, treats the identifier as a directory listing of nightly build directories.
 - `(skip:REASON)` — forces a SKIP decision immediately. The fetcher does **not** run; no network request is made. The reason string is stored in `skip_reason` and appears in `--check` output as `skip flag: REASON`. Useful for temporarily pausing a variable without removing its annotation.
+- `(lock:REASON)` — **annotation-tracking lock.** The fetcher **does** run and `proposed_version` is populated, but the decision is forced to `LOCK` (never AUTO/HOLD/MANUAL). On `--apply`, **only the annotation comment version token is updated** — the `VAR=` line is not touched. The reason string is displayed in `--check` output. Use when a variable must stay at a fixed value permanently but you still want the annotation to track what the latest upstream is. **Immune to `--force-auto`** — the lock gate fires after the force-auto HOLD→AUTO upgrade, so `--force-auto` cannot override it. **Does not override ERROR** — fetch failures still surface. **Compatible with `(manual)`** — when both are present, LOCK wins silently; `(manual)` is redundant and ignored. Requires a non-empty reason (same validation as `skip`).
 
 ### Valued flags — tag manipulation pipeline
 
@@ -370,9 +371,10 @@ the fetch is in progress.
 [SKIP  ]  GLOBAL_STACK_NGINX_VERSION                   (up to date)
 [SKIP  ]  GLOBAL_STACK_OLD_VERSION                     (would downgrade)
 [MANUAL]  GLOBAL_STACK_ANDROID_BUILD_TOOLS_VERSION     18.3 → 19.0  ← manual flag
+[LOCK  ]  GLOBAL_STACK_MODSEC_MOD_VERSION              v0.0.9-beta1 → v0.0.12-beta1  ← locked: Pinned to master — no stable release
 [ERROR ]  GLOBAL_STACK_SOME_VERSION                    (fetch failed for github:owner/repo)
 ──────────────────────────────────────────────────────────────────────────────
-  Summary: 1 AUTO, 2 HOLD, 1 MANUAL, 2 SKIP, 1 ERROR  (7 checked)
+  Summary: 1 AUTO, 0 SHA, 2 HOLD, 1 MANUAL, 1 LOCK, 2 SKIP, 1 ERROR  (8 checked)
 ```
 
 ### --check exit code
@@ -382,7 +384,7 @@ the fetch is in progress.
 - **`0`** — all records processed; no ERROR decisions.
 - **`1`** — one or more records ended with `[ERROR ]` decision (fetch failure, rate limit, etc.). The summary line is still printed; the non-zero exit allows scripts to detect fetch failures: `bin/env-update.sh --check || echo "some fetches failed"`.
 
-`SKIP`, `HOLD`, `MANUAL`, and `AUTO` decisions do not affect the exit code.
+`SKIP`, `HOLD`, `MANUAL`, `LOCK`, and `AUTO` decisions do not affect the exit code.
 
 ### Column layout and spacing
 
@@ -392,7 +394,7 @@ Each output line follows this `printf` template:
 printf "%s  %-${_max_var_len}s%s\n" "${_tag}" "${_env_var}" "${_change}"
 ```
 
-- `_tag` — 8 characters wide (e.g. `[AUTO  ]`, `[HOLD  ]`, `[SKIP  ]`, `[ERROR ]`, `[MANUAL]`). Note the **two trailing spaces** after the bracket content for all 4-letter decisions (`AUTO`, `HOLD`, `SKIP`) to align with the 6-char `[MANUAL]`. The actual tag strings are `[AUTO  ]`, `[HOLD  ]`, `[SKIP  ]`, `[ERROR ]`, `[MANUAL]`.
+- `_tag` — 8 characters wide (e.g. `[AUTO  ]`, `[HOLD  ]`, `[SKIP  ]`, `[ERROR ]`, `[MANUAL]`, `[LOCK  ]`, `[SHA   ]`). Note the **two trailing spaces** after the bracket content for all 4-letter decisions (`AUTO`, `HOLD`, `SKIP`, `LOCK`) to align with the 6-char `[MANUAL]`. The actual tag strings are `[AUTO  ]`, `[HOLD  ]`, `[SKIP  ]`, `[ERROR ]`, `[MANUAL]`, `[LOCK  ]`, `[SHA   ]`.
 - Two spaces between tag and variable name.
 - `_env_var` — left-padded to `_max_var_len` characters (dynamic — see below).
 - `_change` — appended directly after, starting with two spaces.
@@ -403,7 +405,7 @@ width is 40 characters. This ensures the `→` arrow (or reason label) appears a
 column across all lines in the output, regardless of variable name length.
 
 **Why are there multiple spaces between `[MANUAL]` and the variable name?**
-The tag itself is always exactly 8 characters: `[` + 6-char content + `]`. Content is padded to 6 chars, so `AUTO` becomes `AUTO  ` (2 trailing spaces), `HOLD` becomes `HOLD  `, `SKIP` becomes `SKIP  `, `ERROR` becomes `ERROR ` (1 trailing space), and `MANUAL` is exactly 6 chars with no padding. After the tag come **2 fixed spaces** (the `  ` in the format string), then the variable name in a dynamic-width field. The visual appearance of "extra spaces" between `[AUTO  ]` and the variable name comes from the 2 trailing spaces inside the tag brackets plus the 2 fixed spaces = 4 spaces before the variable.
+The tag itself is always exactly 8 characters: `[` + 6-char content + `]`. Content is padded to 6 chars, so `AUTO` becomes `AUTO  ` (2 trailing spaces), `HOLD` becomes `HOLD  `, `SKIP` becomes `SKIP  `, `LOCK` becomes `LOCK  `, `SHA` becomes `SHA   ` (3 trailing spaces), `ERROR` becomes `ERROR ` (1 trailing space), and `MANUAL` is exactly 6 chars with no padding. After the tag come **2 fixed spaces** (the `  ` in the format string), then the variable name in a dynamic-width field. The visual appearance of "extra spaces" between `[AUTO  ]` and the variable name comes from the 2 trailing spaces inside the tag brackets plus the 2 fixed spaces = 4 spaces before the variable.
 
 ### The `_change` field
 
@@ -416,6 +418,8 @@ The `_change` suffix is built from the decision and record state:
 | `SKIP` downgrade detected | `  (would downgrade)` |
 | `SKIP` without error (up to date) | `  (up to date)` |
 | `HOLD` / `AUTO` / `MANUAL` with `proposed != current` | `  current_version → proposed_version[reason]` |
+| `LOCK` with `proposed != current` | `  current_version → proposed_version  ← locked: REASON` |
+| `LOCK` with `proposed == current` (or no proposed) | `  (REASON)` where REASON is the lock_reason value |
 | Any decision with `error_message` (no proposed) | `  (error_message text)` |
 | Otherwise | `` (empty) |
 
@@ -430,6 +434,7 @@ inspect the record.
 | `[HOLD  ]` | Major bump, no `major_hint` pin | `  ← major bump (X→Y)` where X=current major, Y=proposed major |
 | `[HOLD  ]` | Proposed version escapes `major_hint` pin | `  ← major pin (Y.x available)` where Y=proposed major |
 | `[MANUAL]` | `(override)` or `(manual)` annotation flag | `  ← manual flag` |
+| `[LOCK  ]` | `(lock:REASON)` annotation flag | `  ← locked: REASON` appended to version arrow; or `  (REASON)` when up to date |
 | `[SKIP  ]` | Proposed is a prerelease, current is stable | `  (proposed is prerelease — pin manually when stable ships)` |
 | `[SKIP  ]` | Proposed is older than current (downgrade) | `  (would downgrade)` in place of arrow |
 | `[SKIP  ]` | Up to date | `  (up to date)` — no label needed |
@@ -446,6 +451,7 @@ than showing a placeholder.
 | `[AUTO  ]` | The fetcher found a newer version within the same major (or within the major_hint pin), and no `override` or `manual` flag is set. Safe to apply automatically. |
 | `[HOLD  ]` | A newer version exists but it crosses a major version boundary, or the proposed version escapes the major_hint pin. Requires human review before upgrading. Reason label explains which case triggered. |
 | `[MANUAL]` | The annotation has `(override)` or `(manual)` flag, OR the fetcher (e.g. `sdkmanager`) explicitly sets `manual=true`. The proposed version is shown but will never be auto-applied. |
+| `[LOCK  ]` | The annotation has `(lock:REASON)`. The fetcher ran and `proposed_version` is populated, but the variable is locked — `--apply` updates only the annotation version token; the `VAR=` line is never touched. Immune to `--force-auto`. Does not fire when the fetcher returned ERROR or a skip-gate `(skip:)` was active. |
 | `[SKIP  ]` | The variable is already at the latest version (`current == proposed`), or the fetcher returned no viable candidates, or the current version is a floating reference (`latest`, `nightly`, etc.), or the proposed would downgrade the current version, or the proposed is a prerelease while the current is stable. Also used when a fetcher sets `error_message` but no `decision`. |
 | `[ERROR ]` | Network failure, HTTP error (4xx/5xx), rate limiting after 3 retries, or a parse failure in the API response. The fetch was attempted and definitively failed. |
 
@@ -539,15 +545,19 @@ When `--apply` is active:
 Backup: /stack/.env.bak.1716123456
 [APPLIED]  GLOBAL_STACK_POSTGRES18_VERSION              18.3-alpine3.23 → 18.4-alpine3.23
 [APPLIED]  GLOBAL_STACK_NODE22_VERSION                  22.13.0 → 22.14.0
-  2 update(s) applied to /stack/.env
+[LOCK]     GLOBAL_STACK_MODSEC_MOD_VERSION              annotation: v0.0.9-beta1 → v0.0.12-beta1
+  3 update(s) applied to /stack/.env (2 version, 1 SHA)
 ```
+
+For `[LOCK  ]` records, `--apply` updates **only the annotation comment** (the `# @todo env-update` version token) — the `VAR=` line is never touched. The summary counts a LOCK annotation update alongside version and SHA updates. When `proposed_version == current_version` in the annotation, no write occurs (idempotent).
 
 When `--dry-run --apply`:
 
 ```
 Apply preview (--dry-run):
   [DRY-RUN]  GLOBAL_STACK_POSTGRES18_VERSION              18.3-alpine3.23 → 18.4-alpine3.23
-  1 update(s) would be applied (--dry-run — no writes)
+  [DRY-RUN]  GLOBAL_STACK_MODSEC_MOD_VERSION              annotation: v0.0.9-beta1 → v0.0.12-beta1 (locked — VAR= untouched)
+  2 update(s) would be applied (--dry-run — no writes)
 ```
 
 ---
@@ -562,21 +572,34 @@ but if `decision` is `AUTO` or empty, `decide.sh` makes the final call.
 ### Full decision path
 
 ```
-proposed_version empty?        → SKIP
-current is unversioned?        → SKIP  (floating ref: nightly/latest/edge/master/next/head/main)
-current == proposed?           → SKIP  (up to date — fires before manual/override to suppress noise)
-proposed is prerelease AND
-  current is stable?           → SKIP  (prerelease guard — "proposed is prerelease")
-proposed sorts before current? → SKIP  (downgrade protection, via sort -V)
-                                        NOTE: downgrade check fires BEFORE manual/override so that
-                                        a fetcher returning an older version is always suppressed,
-                                        even for (manual) or (override) annotations.
-override=true OR manual=true?  → MANUAL  (only reached for genuine forward version changes)
-semver_delta = major?
-  major_hint empty?            → HOLD  (major jump, no pin — requires review)
-  major_hint set but proposed
-  does not start with hint?    → HOLD  (escapes the pin — C3 rule)
-                               → AUTO  (within major, safe to apply)
+① skip gate: skip_reason set?  → SKIP  (skip flag fires; fetcher never runs)
+
+[fetcher dispatch — runs for all non-SKIP records]
+
+② force-auto: (manual)/(override) cleared if --force-auto set
+③ classify_decision (decide.sh):
+   proposed_version empty?        → SKIP
+   current is unversioned?        → SKIP  (floating ref: nightly/latest/edge/master/next/head/main)
+   current == proposed?           → SKIP  (up to date — fires before manual/override)
+   proposed is prerelease AND
+     current is stable?           → SKIP  (prerelease guard — "proposed is prerelease")
+   proposed sorts before current? → SKIP  (downgrade protection, via sort -V)
+   override=true OR manual=true?  → MANUAL  (only reached for genuine forward version changes)
+   semver_delta = major?
+     major_hint empty?            → HOLD  (major jump, no pin — requires review)
+     major_hint set but proposed
+     does not start with hint?    → HOLD  (escapes the pin — C3 rule)
+                                  → AUTO  (within major, safe to apply)
+④ force-auto: HOLD → AUTO upgrade (if --force-auto set)
+
+⑤ lock gate: lock_reason set AND decision != ERROR AND skip_reason empty?
+                               → LOCK  (overrides AUTO/HOLD/MANUAL/classifier-SKIP;
+                                        does NOT override skip-gate SKIP or ERROR;
+                                        immune to --force-auto because it fires after ④)
+
+⑥ SHA classification (independent path):
+   annotation_sha differs from proposed_sha? → SHA
+   (SHA decision only fires if classifier-SKIP was set; overrides it)
 ```
 
 **Order matters**: The downgrade check runs *before* the manual/override check. This prevents
