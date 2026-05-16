@@ -2,7 +2,7 @@
 # sdkmanager.sh — Android SDK Manager version fetcher using the record-index contract
 #
 # Input:  record index — reads type/identifier/channel etc.
-# Output: writes proposed_version + error_message + manual=true back into record
+# Output: writes proposed_version + error_message back into record
 #
 # Strategy:
 #   1. If _GS_EU2_SDKMANAGER_CMD_FIXTURE is set, cat that file (test seam).
@@ -13,8 +13,9 @@
 #        d. ${ANDROID_HOME:-...}/tools/bin/sdkmanager
 #   3. Run: sdkmanager --list (or cat fixture) and parse.
 #
-# Classification: always sets manual=true so decide.sh emits MANUAL.
-# Reason: sdkmanager versions are platform/tool-dependent and cannot be auto-applied.
+# Classification: this fetcher does NOT set manual=true. Classification is owned by
+# decide.sh, which checks the (manual) annotation flag set by parse.sh. If a variable
+# should always produce MANUAL, annotate it with (manual) in .env.
 # The fetcher NEVER writes the decision field — that is owned by decide.sh.
 #
 # When sdkmanager is not found, error_message is set and proposed_version stays empty.

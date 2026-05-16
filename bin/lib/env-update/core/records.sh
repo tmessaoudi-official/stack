@@ -27,7 +27,7 @@ _gs_eu2_record_fields() {
     proposed_version decision error_message alt_version \
     annotation_sha proposed_sha use_sha commit_date \
     proposed_sha_date annotation_sha_date \
-    unstable_proposed \
+    unstable_proposed stable_proposed \
     watch_major_depth latest_unconstrained
 }
 

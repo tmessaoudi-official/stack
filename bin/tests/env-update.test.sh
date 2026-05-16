@@ -2799,6 +2799,32 @@ t "t33g: cache hit skips cmd fixture (proposed_version from cache)" bash -c "
     echo PASS
 "
 
+# t33h: sdkmanager classification contract — (manual) annotation is required for MANUAL
+# decision; without it the full pipeline produces AUTO (not MANUAL). This makes the
+# design explicit: the fetcher is responsible for proposed_version only; classification
+# is owned by decide.sh via the annotation-set manual field.
+t "t33h: sdkmanager without (manual) annotation produces AUTO (not MANUAL) via full pipeline" bash -c "
+    ${_SDKMGR_LIBS}
+    source '/stack/bin/lib/env-update/core/decide.sh'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/sdkmgr_h_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'sdkmanager'
+    _gs_eu2_record_set \$idx identifier      'platform-tools'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_PLATFORM_TOOLS_VERSION'
+    _gs_eu2_record_set \$idx current_version '36.0.0'
+    # No (manual) annotation — manual field stays empty
+    _gs_eu2_fetch_sdkmanager \$idx
+    proposed=\$(_gs_eu2_record_get \$idx proposed_version)
+    manual=\$(_gs_eu2_record_get \$idx manual)
+    override=\$(_gs_eu2_record_get \$idx override)
+    major=\$(_gs_eu2_record_get \$idx major_hint)
+    [[ -z \"\$manual\" ]] || { echo \"fetcher must not set manual field; got: '\$manual'\"; echo FAIL; exit 0; }
+    # Full classification: with no (manual) flag, a newer version should yield AUTO
+    decision=\$(_gs_eu2_classify_decision '36.0.0' \"\$proposed\" \"\$override\" \"\$manual\" \"\$major\")
+    [[ \"\$decision\" != 'MANUAL' ]] || { echo \"got MANUAL without (manual) annotation — add (manual) to annotation instead\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Section 34 — pecl helper functions (pecl.sh)
 # ═══════════════════════════════════════════════════════════════════════════
@@ -5250,6 +5276,36 @@ t "t60e: --dump --format=text produces human-readable text (not JSON)" bash -c "
         --env-file='${FIXTURES}/basic-dockerhub.env' 2>/dev/null)
     echo \"\$out\" | grep -qF 'env_var:' || { echo \"text format missing env_var: field\"; echo FAIL; exit 0; }
     echo \"\$out\" | jq empty 2>/dev/null && { echo \"output is JSON (expected text)\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t60f: --dump --format=json serializes stable_proposed field (non-vacuous: field must
+# appear with a non-empty value). Because --dump runs the parse phase only (fetchers are
+# not invoked), stable_proposed is populated directly via the record API before dumping.
+# This tests the dump path end-to-end: record_set → dump.sh iterates record_fields →
+# JSON key appears. Without the Finding 4.4 fix (missing from record_fields), the key
+# would be absent from the output even when the value was set.
+t "t60f: --dump --format=json serializes stable_proposed field (record_fields coverage)" bash -c "
+    source '/stack/bin/lib/env-update/config/defaults.sh'
+    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+    source '/stack/bin/lib/env-update/core/records.sh'
+    source '/stack/bin/lib/env-update/core/semver.sh'
+    source '/stack/bin/lib/env-update/core/channel.sh'
+    source '/stack/bin/lib/env-update/core/tag_flags.sh'
+    source '/stack/bin/lib/env-update/core/cache.sh'
+    source '/stack/bin/lib/env-update/reporting/dump.sh'
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_T60F_VERSION'
+    _gs_eu2_record_set \$idx type            'github'
+    _gs_eu2_record_set \$idx identifier      'testowner/prerelease-repo'
+    _gs_eu2_record_set \$idx current_version 'v1.8.4'
+    _gs_eu2_record_set \$idx channel         'unstable'
+    _gs_eu2_record_set \$idx proposed_version 'v1.9.0-rc2'
+    _gs_eu2_record_set \$idx stable_proposed  'v1.8.5'
+    out=\$(_gs_eu2_dump_json)
+    echo \"\$out\" | jq empty 2>/dev/null || { echo \"invalid JSON: \$out\"; echo FAIL; exit 0; }
+    val=\$(echo \"\$out\" | jq -r '.[0].stable_proposed' 2>/dev/null)
+    [[ \"\$val\" == 'v1.8.5' ]] || { echo \"stable_proposed wrong in JSON dump — expected v1.8.5 got: '\$val'\"; echo FAIL; exit 0; }
     echo PASS
 "
 
