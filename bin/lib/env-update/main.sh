@@ -549,7 +549,15 @@ _gs_eu2_main() {
     printf '[FORCE-AUTO MODE] (manual) and (override) gates bypassed\n' >&2
   fi
   if [[ "${_GS_EU2_CFG[no_notes]:-false}" == "true" ]]; then
-    printf '[NO-NOTES MODE] note sub-lines suppressed\n' >&2
+    local _nn_count _nn_i _nn_total
+    _nn_total="$(_gs_eu2_record_count)"
+    _nn_count=0
+    for (( _nn_i = 0; _nn_i < _nn_total; _nn_i++ )); do
+      local _nn_note
+      _nn_note="$(_gs_eu2_record_get "${_nn_i}" note)"
+      [[ -n "${_nn_note}" ]] && (( _nn_count++ )) || true
+    done
+    printf '[NO-NOTES MODE] note sub-lines suppressed for %d record(s)\n' "${_nn_count}" >&2
   fi
   if [[ "${_GS_EU2_CFG[no_cache]:-false}" == "true" ]]; then
     printf '[NO-CACHE] cache bypassed — all fetches hit network\n' >&2

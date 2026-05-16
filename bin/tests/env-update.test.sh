@@ -4631,13 +4631,13 @@ t "t55d: --no-notes is accepted without error (args parsing)" bash -c "
     echo PASS
 "
 
-t "t55e: --no-notes prints [NO-NOTES MODE] banner" bash -c "
+t "t55e: --no-notes prints [NO-NOTES MODE] banner with record count" bash -c "
     export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t55e_cache
     f=\${TMP_DIR}/t55e.env
-    printf '# @todo env-update dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T55E=18.3-alpine3.23\n' > \"\$f\"
+    printf '# @todo env-update (note:sync with setup.sh) dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T55E=18.3-alpine3.23\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --no-notes --env-file=\"\$f\" 2>&1)
-    echo \"\$out\" | grep -qi 'NO-NOTES MODE' || { echo \"expected [NO-NOTES MODE] banner, got: '\$out'\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '[NO-NOTES MODE] note sub-lines suppressed for 1 record(s)' || { echo \"expected count banner, got: '\$out'\"; echo FAIL; exit 0; }
     echo PASS
 "
 
