@@ -32,12 +32,17 @@ readonly _GS_EU2_PRERELEASE_MARKERS_SH_LOADED=1
 
 _GS_EU2_PRERELEASE_MARKERS=(
   # D5: Use [0-9.]* to match both rc1 and rc.1 patterns
-  'alpha[0-9.]*' 'beta[0-9.]*' 'rc[0-9.]*' 'preview' 'pre'
+  'alpha[0-9.]*' 'beta[0-9.]*' 'rc[0-9.]*' 'preview'
+  # 'pre' and 'next' use word-boundary guards to prevent false positives on tags
+  # like 'nextcloud-1.0' or '1.0.0-prepare'. Pattern: non-letter (or start) before
+  # the word, non-letter (or end) after. [^a-zA-Z] used explicitly for grep -iE safety.
+  # Bare 'next' (e.g. GLOBAL_STACK_PHPEDGE_VERSION=next) still matches via ^next$.
+  '(^|[^a-zA-Z])pre([^a-zA-Z]|$)' '(^|[^a-zA-Z])next([^a-zA-Z]|$)'
   'nightly' 'edge' 'canary' 'snapshot' 'experimental' 'insiders'
   '\.dev' '-dev([0-9.]|$)'
   '[0-9]a[0-9]' '[0-9]b[0-9]'
   'milestone' '[.-]m[0-9]' '-cr[0-9]' '-ea'
-  '-next\.' 'next'
+  '-next\.'
 )
 readonly _GS_EU2_PRERELEASE_MARKERS
 

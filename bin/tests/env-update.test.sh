@@ -722,6 +722,23 @@ t "t12e: is_prerelease detects rc, beta, alpha" bash -c "
     echo PASS
 "
 
+t "t12e2: pre/next word-boundary — no false positives on tag substrings" bash -c "
+    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+    source '/stack/bin/lib/env-update/core/semver.sh'
+    # False positives that were fixed (substring matches in stable tags)
+    _gs_eu2_is_prerelease 'nextcloud-1.0'  && { echo 'nextcloud-1.0 wrongly flagged as prerelease'; echo FAIL; exit 0; }
+    _gs_eu2_is_prerelease 'prepared-1.0'   && { echo 'prepared-1.0 wrongly flagged as prerelease'; echo FAIL; exit 0; }
+    _gs_eu2_is_prerelease '1.0.0-prepare'  && { echo '1.0.0-prepare wrongly flagged as prerelease'; echo FAIL; exit 0; }
+    _gs_eu2_is_prerelease '3.9.0-preprod'  && { echo '3.9.0-preprod wrongly flagged as prerelease'; echo FAIL; exit 0; }
+    # True positives that must still be detected
+    _gs_eu2_is_prerelease 'next'          || { echo 'bare next not detected (PHPEDGE channel)'; echo FAIL; exit 0; }
+    _gs_eu2_is_prerelease '1.0.0-next.1'  || { echo '1.0.0-next.1 not detected'; echo FAIL; exit 0; }
+    _gs_eu2_is_prerelease '1.0.0-pre1'    || { echo '1.0.0-pre1 not detected'; echo FAIL; exit 0; }
+    _gs_eu2_is_prerelease '1.0.0-pre'     || { echo '1.0.0-pre not detected'; echo FAIL; exit 0; }
+    _gs_eu2_is_prerelease '4.0.0-preview2' || { echo '4.0.0-preview2 not detected'; echo FAIL; exit 0; }
+    echo PASS
+"
+
 t "t12f: v-prefixed tags accepted by channel filter (B2)" bash -c "
     source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
     source '/stack/bin/lib/env-update/core/semver.sh'
