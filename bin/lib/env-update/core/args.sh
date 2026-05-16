@@ -22,6 +22,7 @@ _gs_eu2_parse_args() {
         ;;
       --env-file=*)   _GS_EU2_CFG[env_file]="${1#*=}" ;;
       --filter=*)     _GS_EU2_CFG[filter]="${1#*=}" ;;
+      --exclude=*)    _GS_EU2_CFG[exclude]="${1#*=}" ;;
       --dump)         _GS_EU2_CFG[dump]="true" ;;
       --format=*)     _GS_EU2_CFG[format]="${1#*=}" ;;
       --dry-run)      _GS_EU2_CFG[dry_run]="true" ;;
@@ -66,6 +67,7 @@ _gs_eu2_parse_args() {
 
   [[ -z "${_GS_EU2_CFG[env_file]+set}" ]]  && _GS_EU2_CFG[env_file]="/stack/.env"
   [[ -z "${_GS_EU2_CFG[filter]+set}" ]]    && _GS_EU2_CFG[filter]=""
+  [[ -z "${_GS_EU2_CFG[exclude]+set}" ]]   && _GS_EU2_CFG[exclude]=""
   [[ -z "${_GS_EU2_CFG[dump]+set}" ]]      && _GS_EU2_CFG[dump]="false"
   [[ -z "${_GS_EU2_CFG[format]+set}" ]]    && _GS_EU2_CFG[format]="text"
   [[ -z "${_GS_EU2_CFG[dry_run]+set}" ]]   && _GS_EU2_CFG[dry_run]="false"
@@ -89,6 +91,17 @@ _gs_eu2_parse_args() {
       local _grep_rc=$?
       if [[ "${_grep_rc}" -ge 2 ]]; then
         printf 'env-update: invalid --filter regex: %s\n' "${_GS_EU2_CFG[filter]}" >&2
+        exit 1
+      fi
+    }
+  fi
+
+  # Validate --exclude regex (same pattern: only reject grep exit code ≥ 2).
+  if [[ -n "${_GS_EU2_CFG[exclude]}" ]]; then
+    printf '' | grep -E "${_GS_EU2_CFG[exclude]}" >/dev/null 2>&1 || {
+      local _excl_rc=$?
+      if [[ "${_excl_rc}" -ge 2 ]]; then
+        printf 'env-update: invalid --exclude regex: %s\n' "${_GS_EU2_CFG[exclude]}" >&2
         exit 1
       fi
     }

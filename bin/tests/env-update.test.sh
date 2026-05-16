@@ -6358,6 +6358,96 @@ t "t63f3: full pipeline with lock-flag.env fixture — LOCK in output" bash -c "
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Section 64 — --exclude=REGEX flag
+# ═══════════════════════════════════════════════════════════════════════════
+section "64 — --exclude=REGEX flag"
+
+_EXCL_PARSE_LIBS="
+source '/stack/bin/lib/env-update/config/defaults.sh'
+source '/stack/bin/lib/env-update/core/records.sh'
+source '/stack/bin/lib/env-update/core/semver.sh'
+source '/stack/bin/lib/env-update/core/parse.sh'
+"
+
+# t64a1: --exclude skips matching vars; unmatched vars still parsed
+t "t64a1: --exclude=SELENIUM skips both Selenium vars, all others run" bash -c "
+    out=\$(bash '${ENV_UPDATE_V2}' --dump --exclude='SELENIUM' \
+        --env-file='${FIXTURES}/combined-real-world.env' 2>&1)
+    echo \"\$out\" | grep -qF 'GLOBAL_STACK_IMAGE_MYSQL9_VERSION' \
+        || { echo \"mysql9 should be in output; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'GLOBAL_STACK_FLUTTER3_VERSION' \
+        || { echo \"flutter3 should be in output; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t64a2: --exclude with a pattern that matches nothing — all records run
+t "t64a2: --exclude=NONEXISTENT_XYZ matches nothing, all vars run normally" bash -c "
+    out=\$(bash '${ENV_UPDATE_V2}' --dump --exclude='NONEXISTENT_XYZ' \
+        --env-file='${FIXTURES}/combined-real-world.env' 2>&1)
+    echo \"\$out\" | grep -qF 'GLOBAL_STACK_IMAGE_MYSQL9_VERSION' \
+        || { echo \"mysql9 should be in output; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'GLOBAL_STACK_FLUTTER3_VERSION' \
+        || { echo \"flutter3 should be in output; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t64a3: --filter + --exclude compose correctly
+t "t64a3: --filter=GLOBAL_STACK --exclude=FLUTTER3 keeps mysql but drops flutter" bash -c "
+    out=\$(bash '${ENV_UPDATE_V2}' --dump --filter='GLOBAL_STACK' --exclude='FLUTTER3' \
+        --env-file='${FIXTURES}/combined-real-world.env' 2>&1)
+    echo \"\$out\" | grep -qF 'GLOBAL_STACK_IMAGE_MYSQL9_VERSION' \
+        || { echo \"mysql9 should be in output; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'GLOBAL_STACK_FLUTTER3_VERSION' \
+        && { echo \"flutter3 should be excluded; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t64a4: invalid --exclude regex → non-zero exit with error message
+t "t64a4: invalid --exclude regex exits non-zero with error message" bash -c "
+    out=\$(bash '${ENV_UPDATE_V2}' --dump --exclude='((' \
+        --env-file='${FIXTURES}/combined-real-world.env' 2>&1)
+    code=\$?
+    [[ \"\$code\" -ne 0 ]] || { echo \"expected non-zero exit, got 0; output: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qiF 'invalid --exclude' \
+        || { echo \"expected 'invalid --exclude' in error; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t64a5: --exclude= (empty string) is a no-op — all vars run
+t "t64a5: --exclude= (empty string) is a no-op, all vars run" bash -c "
+    out=\$(bash '${ENV_UPDATE_V2}' --dump --exclude='' \
+        --env-file='${FIXTURES}/combined-real-world.env' 2>&1)
+    echo \"\$out\" | grep -qF 'GLOBAL_STACK_IMAGE_MYSQL9_VERSION' \
+        || { echo \"mysql9 should be in output; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'GLOBAL_STACK_FLUTTER3_VERSION' \
+        || { echo \"flutter3 should be in output; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t64a6: [EXCLUDE: REGEX] banner emitted to stderr
+t "t64a6: [EXCLUDE: REGEX] banner emitted to stderr" bash -c "
+    err=\$(bash '${ENV_UPDATE_V2}' --dump --exclude='SELENIUM' \
+        --env-file='${FIXTURES}/combined-real-world.env' 2>&1 >/dev/null)
+    echo \"\$err\" | grep -qF '[EXCLUDE: SELENIUM]' \
+        || { echo \"expected [EXCLUDE: SELENIUM] in stderr; got: \$err\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t64a7: parse-level exclusion — excluded record's pending state is reset (no contamination)
+t "t64a7: excluded record pending state is reset (no contamination of next record)" bash -c "
+    ${_EXCL_PARSE_LIBS}
+    tmp=\$(mktemp)
+    printf '# @todo env-update github:owner/repo 1.0.0\nEXCLUDE_ME=1.0.0\n# @todo env-update github:owner/repo2 2.0.0\nKEEP_ME=2.0.0\n' > \"\$tmp\"
+    _gs_eu2_parse_env_file \"\$tmp\" '' 'EXCLUDE_ME'
+    rm -f \"\$tmp\"
+    count=\$(_gs_eu2_record_count)
+    [[ \"\$count\" -eq 1 ]] || { echo \"expected 1 record, got: \$count\"; echo FAIL; exit 0; }
+    got=\$(_gs_eu2_record_get 0 env_var)
+    [[ \"\$got\" == 'KEEP_ME' ]] || { echo \"expected KEEP_ME, got: '\$got'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section

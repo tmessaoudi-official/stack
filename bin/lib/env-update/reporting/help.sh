@@ -18,6 +18,9 @@ Options:
   --help                  Show this help and exit
   --env-file=<path>       Source .env file (default: /stack/.env)
   --filter=<regex>        Only parse records whose env_var matches regex
+  --exclude=<regex>       Skip records whose env_var matches regex. Composable
+                          with --filter: --filter=NODE --exclude=NODEEDGE means
+                          all Node vars except NODEEDGE. Empty value is a no-op.
   --dump                  Emit parsed records to stdout
   --format=<text|json>    Dump format (default: text)
   --check                 Fetch latest versions and stream [AUTO|HOLD|SKIP|ERROR] report
@@ -70,6 +73,7 @@ Examples:
   bin/env-update.sh                                # parser summary (no network)
   bin/env-update.sh --check                        # fetch all, stream report
   bin/env-update.sh --check --filter=POSTGRES      # fetch only POSTGRES* vars
+  bin/env-update.sh --check --filter=NODE --exclude=NODEEDGE  # Node vars except NODEEDGE
   bin/env-update.sh --check --no-cache             # bypass cache
   bin/env-update.sh --dump --format=json | jq .    # structured record dump
   bin/env-update.sh --check --apply                # fetch + apply all AUTO updates

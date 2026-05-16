@@ -517,7 +517,7 @@ _gs_eu2_main() {
     exit 1
   fi
 
-  _gs_eu2_parse_env_file "${_env_file}" "${_GS_EU2_CFG[filter]}"
+  _gs_eu2_parse_env_file "${_env_file}" "${_GS_EU2_CFG[filter]}" "${_GS_EU2_CFG[exclude]}"
 
   # --unstable full: inject channel=unstable on records that don't already have it.
   # This causes fetchers to return the highest prerelease as proposed_version, and
@@ -585,6 +585,9 @@ _gs_eu2_main() {
   fi
   if [[ -n "${_GS_EU2_CFG[filter]:-}" ]]; then
     printf '[FILTER: %s]\n' "${_GS_EU2_CFG[filter]}" >&2
+  fi
+  if [[ -n "${_GS_EU2_CFG[exclude]:-}" ]]; then
+    printf '[EXCLUDE: %s]\n' "${_GS_EU2_CFG[exclude]}" >&2
   fi
 
   if [[ "true" == "${_GS_EU2_CFG[dump]}" ]]; then

@@ -238,6 +238,7 @@ _gs_eu2_dispatch_flag() {
 _gs_eu2_parse_env_file() {
   local _env_file="${1}"
   local _filter="${2:-}"
+  local _exclude="${3:-}"
 
   local _state="IDLE"
   local _pending_annotation="" _pending_lnum=0
@@ -417,6 +418,14 @@ _gs_eu2_parse_env_file() {
             _pending_git_url="" _pending_git_sha=""
             continue
           fi
+        fi
+
+        # Exclude: skip vars whose name matches --exclude regex.
+        if [[ -n "${_exclude}" && "${_var_name}" =~ ${_exclude} ]]; then
+          _state="IDLE"
+          _pending_sha="" _pending_sha_date=""
+          _pending_git_url="" _pending_git_sha=""
+          continue
         fi
 
         local _final_version="${_pending_version}"
