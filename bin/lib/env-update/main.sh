@@ -76,30 +76,42 @@ _gs_eu2_run_check() {
     printf '\r  [%d/%d] fetching %-55s' \
       "$(( _i + 1 ))" "${_count}" "${_env_var:0:55}" >&2
 
+    # Skip gate: (skip:REASON) annotation forces SKIP before any fetch.
+    # Sets decision + error_message on the record; display code below handles output.
+    local _skip_reason
+    _skip_reason="$(_gs_eu2_record_get "${_i}" skip_reason)"
+    if [[ -n "${_skip_reason}" ]]; then
+      _gs_eu2_record_set "${_i}" decision      "SKIP"
+      _gs_eu2_record_set "${_i}" error_message "skip flag: ${_skip_reason}"
+    fi
+
     _type="$(_gs_eu2_record_get "${_i}" type)"
-    case "${_type}" in
-      codeberg)  _gs_eu2_fetch_codeberg  "${_i}" ;;
-      dockerhub) _gs_eu2_fetch_dockerhub "${_i}" ;;
-      github)    _gs_eu2_fetch_github    "${_i}" ;;
-      quay)      _gs_eu2_fetch_quay      "${_i}" ;;
-      npm)        _gs_eu2_fetch_npm        "${_i}" ;;
-      pypi)       _gs_eu2_fetch_pypi       "${_i}" ;;
-      rubygems)   _gs_eu2_fetch_rubygems   "${_i}" ;;
-      sdkman)     _gs_eu2_fetch_sdkman     "${_i}" ;;
-      sdkmanager) _gs_eu2_fetch_sdkmanager "${_i}" ;;
-      pecl)       _gs_eu2_fetch_pecl       "${_i}" ;;
-      url)        _gs_eu2_fetch_url        "${_i}" ;;
-      # All 11 fetcher types implemented:
-      #   codeberg, dockerhub, github, quay   — fetchers/{codeberg,dockerhub,github,quay}.sh
-      #   npm, pypi, rubygems                 — fetchers/{npm,pypi,rubygems}.sh
-      #   sdkman, sdkmanager                  — fetchers/{sdkman,sdkmanager}.sh
-      #   pecl                                — fetchers/pecl.sh (use git:owner/repo flag for SHA tracking)
-      #   url                                 — fetchers/url.sh + core/ubuntu.sh
-      *)
-        _gs_eu2_record_set "${_i}" decision      "SKIP"
-        _gs_eu2_record_set "${_i}" error_message "unknown fetcher type '${_type}' — check annotation syntax"
-        ;;
-    esac
+    # Skip gate fires: bypass all fetcher dispatch and second-pass blocks.
+    # The record already has decision=SKIP and error_message set; display code below handles output.
+    if [[ -z "${_skip_reason}" ]]; then
+      case "${_type}" in
+        codeberg)  _gs_eu2_fetch_codeberg  "${_i}" ;;
+        dockerhub) _gs_eu2_fetch_dockerhub "${_i}" ;;
+        github)    _gs_eu2_fetch_github    "${_i}" ;;
+        quay)      _gs_eu2_fetch_quay      "${_i}" ;;
+        npm)        _gs_eu2_fetch_npm        "${_i}" ;;
+        pypi)       _gs_eu2_fetch_pypi       "${_i}" ;;
+        rubygems)   _gs_eu2_fetch_rubygems   "${_i}" ;;
+        sdkman)     _gs_eu2_fetch_sdkman     "${_i}" ;;
+        sdkmanager) _gs_eu2_fetch_sdkmanager "${_i}" ;;
+        pecl)       _gs_eu2_fetch_pecl       "${_i}" ;;
+        url)        _gs_eu2_fetch_url        "${_i}" ;;
+        # All 11 fetcher types implemented:
+        #   codeberg, dockerhub, github, quay   — fetchers/{codeberg,dockerhub,github,quay}.sh
+        #   npm, pypi, rubygems                 — fetchers/{npm,pypi,rubygems}.sh
+        #   sdkman, sdkmanager                  — fetchers/{sdkman,sdkmanager}.sh
+        #   pecl                                — fetchers/pecl.sh (use git:owner/repo flag for SHA tracking)
+        #   url                                 — fetchers/url.sh + core/ubuntu.sh
+        *)
+          _gs_eu2_record_set "${_i}" decision      "SKIP"
+          _gs_eu2_record_set "${_i}" error_message "unknown fetcher type '${_type}' — check annotation syntax"
+          ;;
+      esac
 
     # --unstable=info second-pass: temporarily swap channel→unstable, re-run the
     # same fetcher (cache hit — no extra HTTP), capture proposed as unstable_proposed,
@@ -207,6 +219,7 @@ _gs_eu2_run_check() {
         fi
       fi
     fi
+    fi  # end: if [[ -z "${_skip_reason}" ]] (skip gate — bypass all fetcher dispatch)
 
     # Apply decision classifier (refines any AUTO decision the fetcher set)
     local _cur _prop _override _manual _major _note _fetcher_decision

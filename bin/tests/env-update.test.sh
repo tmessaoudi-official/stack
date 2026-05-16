@@ -193,6 +193,16 @@ t "t03b: skip flag" bash -c "
     echo PASS
 "
 
+t "t03b2: (skip:REASON) forces SKIP decision in --check output (not AUTO/ERROR)" bash -c "
+    f=\${TMP_DIR}/t03b2.env
+    printf '# @todo env-update (skip:test-skip-reason) dockerhub:_/myimage 1.0.0\nGLOBAL_STACK_TEST_VERSION=1.0.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" --no-cache 2>&1)
+    echo \"\$out\" | grep -qiE '\\[SKIP' || { echo \"expected [SKIP] in output; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qiF 'test-skip-reason' || { echo \"expected reason in output; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qiE '\\[AUTO|\\[ERROR' && { echo \"got AUTO/ERROR when expecting SKIP; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
 t "t03c: tag-filter flag" bash -c "
     out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file='${FIXTURES}/github-major-pin.env' 2>&1)
     echo \"\$out\" | grep -qF 'tag_filter: ^[0-9\.]' || { echo \"tag_filter not found\"; echo FAIL; exit 0; }
