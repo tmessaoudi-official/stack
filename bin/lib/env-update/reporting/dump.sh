@@ -32,11 +32,11 @@ _gs_eu2_dump_json() {
     while IFS= read -r _field; do
       _val="$(_gs_eu2_record_get "${_i}" "${_field}")"
       [[ "${_first}" == "true" ]] && _first=false || printf ',\n'
-      # Escape backslashes and double-quotes for JSON
-      local _escaped
-      _escaped="${_val//\\/\\\\}"
-      _escaped="${_escaped//\"/\\\"}"
-      printf '    %s: %s' "$(printf '"%s"' "${_field}")" "$(printf '"%s"' "${_escaped}")"
+      # Use jq for correct JSON string escaping (handles \n, \t, \r, control chars, etc.)
+      local _json_key _json_val
+      _json_key="$(printf '%s' "${_field}" | jq -Rs '.')"
+      _json_val="$(printf '%s' "${_val}"   | jq -Rs '.')"
+      printf '    %s: %s' "${_json_key}" "${_json_val}"
     done < <(_gs_eu2_record_fields)
     printf '\n  }'
   done

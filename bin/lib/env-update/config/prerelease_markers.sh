@@ -1,5 +1,31 @@
 #!/bin/bash
 # prerelease_markers.sh — pre-release detection regex (ported from v1 verbatim)
+#
+# PURPOSE
+# -------
+# _GS_EU2_PRERELEASE_MARKERS is an array of ERE fragments.  They are joined with
+# '|' into _GS_EU2_PRERELEASE_REGEX and used (case-insensitively) to decide
+# whether a version string is a pre-release.
+#
+# HOW PRERELEASE DETECTION WORKS
+# --------------------------------
+# A version is a pre-release if it matches: grep -iE "${_GS_EU2_PRERELEASE_REGEX}"
+# Each marker fragment is matched against the full version string.  Fragments
+# are anchored implicitly by the context they appear in (e.g. '3.9.0beta1'
+# contains 'beta', matching the 'beta[0-9.]*' fragment).
+#
+# HOW TO ADD A NEW MARKER
+# -------------------------
+# 1. Add one ERE fragment to _GS_EU2_PRERELEASE_MARKERS below.
+#    - Use [0-9.]* to match both "rcX" and "rc.X" variants.
+#    - Use [.-] prefix to avoid false positives on substrings (e.g. '[.-]m[0-9]').
+#    - Anchor with $ when the marker must appear at the very end ('-ea$' style).
+# 2. Run `bash bin/tests/env-update.test.sh` — section 3 covers prerelease detection.
+# 3. Add a test case to section 3 for the new marker (at minimum: one version
+#    that SHOULD match and one that should NOT).
+#
+# EXAMPLE ENTRY:
+#   '-milestone[0-9]*'   # matches "1.0.0-milestone3" but not "1.milestone.3"
 
 [[ -n "${_GS_EU2_PRERELEASE_MARKERS_SH_LOADED:-}" ]] && return 0
 readonly _GS_EU2_PRERELEASE_MARKERS_SH_LOADED=1

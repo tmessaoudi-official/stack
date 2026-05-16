@@ -2542,6 +2542,40 @@ t "t31q: channel-selection-empty with prerelease current_version → decision=SK
     echo PASS
 "
 
+t "t31r: no releases AND no tags → decision=ERROR with diagnostic message" bash -c "
+    ${_GH_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/gh_r_cache
+    # fake/no-tags-repo fixture: releases=[] and tags=[] — both APIs return empty
+    # With manual=false (default), fetcher must set ERROR not SKIP
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'github'
+    _gs_eu2_record_set \$idx identifier      'fake/no-tags-repo'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_NOTAGS_VERSION'
+    _gs_eu2_record_set \$idx current_version '1.0.0'
+    _gs_eu2_fetch_github \$idx
+    dec=\$(_gs_eu2_record_get \$idx decision)
+    err=\$(_gs_eu2_record_get \$idx error_message)
+    [[ \"\$dec\" == 'ERROR' ]] || { echo \"expected ERROR for empty releases+tags, got: '\$dec'\"; echo FAIL; exit 0; }
+    [[ -n \"\$err\" ]] || { echo 'error_message must be non-empty'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t31s: no releases AND no tags with manual=true → decision=SKIP (not ERROR)" bash -c "
+    ${_GH_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/gh_s_cache
+    # Same fixture but manual=true — manual repos with no releases are expected → SKIP
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'github'
+    _gs_eu2_record_set \$idx identifier      'fake/no-tags-repo'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_NOTAGS_VERSION'
+    _gs_eu2_record_set \$idx current_version '1.0.0'
+    _gs_eu2_record_set \$idx manual          'true'
+    _gs_eu2_fetch_github \$idx
+    dec=\$(_gs_eu2_record_get \$idx decision)
+    [[ \"\$dec\" == 'SKIP' ]] || { echo \"expected SKIP for manual+no-tags, got: '\$dec'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Section 32 — sdkman fetcher
 # ═══════════════════════════════════════════════════════════════════════════
