@@ -14,7 +14,7 @@ _gs_eu2_record_fields() {
   printf '%s\n' \
     env_var current_version type identifier major_hint \
     override manual propagate \
-    channel skip_reason \
+    channel skip_reason lock_reason \
     version_prefix \
     prefer_specific check_tags \
     tag_filter tag_exclude tag_strip_prefix tag_strip_suffix \
