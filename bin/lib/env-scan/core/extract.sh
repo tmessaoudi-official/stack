@@ -26,9 +26,11 @@ gs_es_detect_multiple_defaults() {
 	cat "${input_file}" >> "${input_file_merge}"
 
 	# P4: single awk pass replaces per-key grep (eliminates ~N grep forks)
+	# Skip source lines whose value contains ${ — they depend on shell expansion
+	# and cannot be compared literally (mirrors the guard in propagate.sh line 64).
 	awk -F'=' '
 		NR==FNR { if ($1!="" && substr($1,1,1)!="#") keys[$1]=1; next }
-		($1 in keys)
+		($1 in keys) && (index(substr($0, length($1)+2), "${") == 0)
 	' "${input_file}" "${_GS_ES_CFG[source_merged_file]}" >> "${input_file_merge}"
 
 	envsubst < "${input_file_merge}" > "${input_file_merge}.expanded"
