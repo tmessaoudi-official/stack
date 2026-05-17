@@ -28,8 +28,8 @@ default: help
 	login-02dpage-pgadmin4 login-02fvm login-02keycloak-keycloak \
 	login-02mongoclient-mongoclient login-02nvm login-02phpbrew login-02pyenv \
 	login-02rbenv login-02rust login-02sdkman login-02sonarqube \
-	login-03java17-zulu login-03flutter3 login-03java21-zulu login-03java25-zulu \
-	login-03node22 login-03node24 login-03nodeedge \
+	login-03java17-zulu login-03flutter3 login-03java21-zulu login-03java25-zulu login-03java26-zulu \
+	login-03node22 login-03node24 login-03node26 login-03nodeedge \
 	login-03php8-2 login-03php8-3 login-03php8-4 login-03php8-5 login-03phpedge \
 	login-03python3 login-03ruby3 login-03ruby4 \
 	login-04android login-04phpmyadmin login-04serverless-framework \
@@ -43,8 +43,8 @@ default: help
 	log-02dpage-pgadmin4 log-02fvm log-02keycloak-keycloak \
 	log-02mongoclient-mongoclient log-02nvm log-02phpbrew log-02pyenv \
 	log-02rbenv log-02rust log-02sdkman log-02sonarqube \
-	log-03flutter3 log-03java17-zulu log-03java21-zulu log-03java25-zulu \
-	log-03node22 log-03node24 log-03nodeedge \
+	log-03flutter3 log-03java17-zulu log-03java21-zulu log-03java25-zulu log-03java26-zulu \
+	log-03node22 log-03node24 log-03node26 log-03nodeedge \
 	log-03php8-2 log-03php8-3 log-03php8-4 log-03php8-5 log-03phpedge \
 	log-03python3 log-03ruby3 log-03ruby4 \
 	log-04android log-04phpmyadmin log-04serverless-framework \
@@ -58,8 +58,8 @@ default: help
 	log-follow-02dpage-pgadmin4 log-follow-02fvm log-follow-02keycloak-keycloak \
 	log-follow-02mongoclient-mongoclient log-follow-02nvm log-follow-02phpbrew log-follow-02pyenv \
 	log-follow-02rbenv log-follow-02rust log-follow-02sdkman log-follow-02sonarqube \
-	log-follow-03flutter3 log-follow-03java17-zulu log-follow-03java21-zulu log-follow-03java25-zulu \
-	log-follow-03node22 log-follow-03node24 log-follow-03nodeedge \
+	log-follow-03flutter3 log-follow-03java17-zulu log-follow-03java21-zulu log-follow-03java25-zulu log-follow-03java26-zulu \
+	log-follow-03node22 log-follow-03node24 log-follow-03node26 log-follow-03nodeedge \
 	log-follow-03php8-2 log-follow-03php8-3 log-follow-03php8-4 log-follow-03php8-5 log-follow-03phpedge \
 	log-follow-03python3 log-follow-03ruby3 log-follow-03ruby4 \
 	log-follow-04android log-follow-04phpmyadmin log-follow-04serverless-framework \
@@ -73,8 +73,8 @@ default: help
 	restart-02dpage-pgadmin4 restart-02fvm restart-02keycloak-keycloak \
 	restart-02mongoclient-mongoclient restart-02nvm restart-02phpbrew restart-02pyenv \
 	restart-02rbenv restart-02rust restart-02sdkman restart-02sonarqube \
-	restart-03flutter3 restart-03java17-zulu restart-03java21-zulu restart-03java25-zulu \
-	restart-03node22 restart-03node24 restart-03nodeedge \
+	restart-03flutter3 restart-03java17-zulu restart-03java21-zulu restart-03java25-zulu restart-03java26-zulu \
+	restart-03node22 restart-03node24 restart-03node26 restart-03nodeedge \
 	restart-03php8-2 restart-03php8-3 restart-03php8-4 restart-03php8-5 restart-03phpedge \
 	restart-03python3 restart-03ruby3 restart-03ruby4 \
 	restart-04android restart-04phpmyadmin restart-04serverless-framework \
@@ -138,7 +138,9 @@ $(eval $(call login-service-shell,03flutter3))
 $(eval $(call login-service-shell,03java17-zulu))
 $(eval $(call login-service-shell,03java21-zulu))
 $(eval $(call login-service-shell,03java25-zulu))
+$(eval $(call login-service-shell,03java26-zulu))
 $(eval $(call login-service-shell,03node22))
+$(eval $(call login-service-shell,03node26))
 $(eval $(call login-service-shell,03node24))
 $(eval $(call login-service-shell,03nodeedge))
 $(eval $(call login-service-shell,03php8-2))
@@ -193,7 +195,9 @@ $(eval $(call log-service,03flutter3))
 $(eval $(call log-service,03java17-zulu))
 $(eval $(call log-service,03java21-zulu))
 $(eval $(call log-service,03java25-zulu))
+$(eval $(call log-service,03java26-zulu))
 $(eval $(call log-service,03node22))
+$(eval $(call log-service,03node26))
 $(eval $(call log-service,03node24))
 $(eval $(call log-service,03nodeedge))
 $(eval $(call log-service,03php8-2))
@@ -242,7 +246,9 @@ $(eval $(call log-follow-service,03flutter3))
 $(eval $(call log-follow-service,03java17-zulu))
 $(eval $(call log-follow-service,03java21-zulu))
 $(eval $(call log-follow-service,03java25-zulu))
+$(eval $(call log-follow-service,03java26-zulu))
 $(eval $(call log-follow-service,03node22))
+$(eval $(call log-follow-service,03node26))
 $(eval $(call log-follow-service,03node24))
 $(eval $(call log-follow-service,03nodeedge))
 $(eval $(call log-follow-service,03php8-2))
@@ -291,7 +297,9 @@ $(eval $(call restart-service,03flutter3))
 $(eval $(call restart-service,03java17-zulu))
 $(eval $(call restart-service,03java21-zulu))
 $(eval $(call restart-service,03java25-zulu))
+$(eval $(call restart-service,03java26-zulu))
 $(eval $(call restart-service,03node22))
+$(eval $(call restart-service,03node26))
 $(eval $(call restart-service,03node24))
 $(eval $(call restart-service,03nodeedge))
 $(eval $(call restart-service,03php8-2))

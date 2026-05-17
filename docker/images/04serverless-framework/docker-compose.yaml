@@ -153,6 +153,9 @@ services:
       03java25-zulu:
         condition: service_healthy
         required: true
+      03java26-zulu:
+        condition: service_healthy
+        required: true
       03ruby4:
         condition: service_healthy
         required: true

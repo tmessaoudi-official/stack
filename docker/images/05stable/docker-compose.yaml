@@ -42,10 +42,16 @@ services:
       03node24:
         condition: service_healthy
         required: true
+      03node26:
+        condition: service_healthy
+        required: true
       03flutter3:
         condition: service_healthy
         required: true
       03java25-zulu:
+        condition: service_healthy
+        required: true
+      03java26-zulu:
         condition: service_healthy
         required: true
       03ruby4:

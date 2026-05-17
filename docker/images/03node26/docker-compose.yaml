@@ -1,6 +1,6 @@
 ---
 services:
-  03nodeedge:
+  03node26:
     extends:
       file: docker/config/compose-fragments/node-packages.compose.yaml
       service: node-packages
@@ -11,7 +11,7 @@ services:
         GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_PORT_5000: ${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_PORT_5000}
         GLOBAL_STACK_VERSION: ${GLOBAL_STACK_VERSION}
       context: ./
-      dockerfile: ./docker/images/03nodeedge/Dockerfile
+      dockerfile: ./docker/images/03node26/Dockerfile
     depends_on:
       00base:
         condition: service_healthy
@@ -21,7 +21,7 @@ services:
         required: true
     environment:
       - NVM_MODE=setup
-      - NVM_NODEJS_ORG_MIRROR=https://nodejs.org/download/nightly
+      # - NVM_NODEJS_ORG_MIRROR=https://nodejs.org/download/nightly/
       - GLOBAL_STACK_DENO_ALEPH_VERSION=${GLOBAL_STACK_DENO_ALEPH_VERSION}
       - GLOBAL_STACK_DENO_MANDARINETS_VERSION=${GLOBAL_STACK_DENO_MANDARINETS_VERSION}
       - GLOBAL_STACK_DENO_VERSION=${GLOBAL_STACK_DENO_VERSION}
@@ -40,21 +40,21 @@ services:
       - GLOBAL_STACK_PNPM_STORE_DIR=${GLOBAL_STACK_PNPM_STORE_DIR}
       - NPM_CACHE_DIR=${GLOBAL_STACK_NPM_CACHE_DIR}
       - CYPRESS_CACHE_FOLDER=${GLOBAL_STACK_CYPRESS_CACHE_FOLDER}
-      - NODE_VERSION_AS=${GLOBAL_STACK_NODEEDGE_VERSION_AS}
-      - NODE_VERSION=${GLOBAL_STACK_NODEEDGE_VERSION}
-      - GLOBAL_STACK_NODE_UPGRADE=${GLOBAL_STACK_NODEEDGE_UPGRADE}
+      - NODE_VERSION_AS=${GLOBAL_STACK_NODE26_VERSION_AS}
+      - NODE_VERSION=${GLOBAL_STACK_NODE26_VERSION}
+      - GLOBAL_STACK_NODE_UPGRADE=${GLOBAL_STACK_NODE26_UPGRADE}
       - GLOBAL_STACK_NODE_UPGRADE_ALL=${GLOBAL_STACK_NODE_UPGRADE_ALL}
-      - GLOBAL_STACK_ERROR_TOKEN=node.${GLOBAL_STACK_NODEEDGE_VERSION_AS}
-      # @types/node:27 dist-tag not yet published; track :25 until node 27 types ship
-      - NODE_INSTALL_PACKAGE_TYPES_NODE_VERSION=${GLOBAL_STACK_NODEEDGE_INSTALL_PACKAGE_TYPES_NODE_VERSION}
-    image: ${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}:${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_PORT_5000}/local_global_stack_03nodeedge:${GLOBAL_STACK_VERSION}
+      - GLOBAL_STACK_ERROR_TOKEN=node.${GLOBAL_STACK_NODE26_VERSION_AS}
+      # @types/node must match the Node major — override the shared fragment's omitted value
+      - NODE_INSTALL_PACKAGE_TYPES_NODE_VERSION=${GLOBAL_STACK_NODE26_INSTALL_PACKAGE_TYPES_NODE_VERSION}
+    image: ${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}:${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_PORT_5000}/local_global_stack_03node26:${GLOBAL_STACK_VERSION}
     healthcheck:
-      test: ["CMD-SHELL", "! test -f ${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}/node.${GLOBAL_STACK_NODEEDGE_VERSION_AS} && test -f ${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/node.${GLOBAL_STACK_NODEEDGE_VERSION_AS} || exit 1"]
+      test: ["CMD-SHELL", "! test -f ${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}/node.${GLOBAL_STACK_NODE26_VERSION_AS} && test -f ${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/node.${GLOBAL_STACK_NODE26_VERSION_AS} || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 99999
       start_period: 24h
     labels:
-      stack.service: "03nodeedge"
+      stack.service: "03node26"
       stack.tier: "runtime"
       stack.version: "${GLOBAL_STACK_VERSION}"
