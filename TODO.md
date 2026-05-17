@@ -87,3 +87,9 @@ Items carried over from the original `@todo.md` notes file.
 - [ ] **Nginx OIDC integration** — install `cjose` from source (required by `mod_auth_openidc`), install `liboauth2 ≥ 2.0` from source, then configure OIDC auth for Nginx. See `docker/images/01nginx/` for the Nginx service. Dependencies must be compiled against the container's OpenSSL version.
 
 - [ ] **`05edge` Java version** — currently `05edge` depends on `03java26-zulu` (waits for tools setup) but activates `JAVA_VERSION=${GLOBAL_STACK_JAVA25_VERSION}` (Java 25). Decide: should `05edge` use Java 26 as its active runtime? If yes, update `JAVA_VERSION*` vars in `docker/images/05edge/docker-compose.yaml`.
+
+- [ ] **Maven VX3 vestigial slot** — `java-packages.compose.yaml` still carries slot `SDKMAN_CONFIG/INSTALL_PACKAGE_04_MAVEN_VX3_*` even though the version is disabled (`=` empty) in `.env`. The slot is dead code: SDKMAN startup skips empty versions, so it never installs. Safe to remove in a cleanup sprint (delete the two VX3 lines from `java-packages.compose.yaml` and the two var lines from `.env`). Not urgent — removing vestigial slot is purely cosmetic.
+
+- [ ] **TDR image Maven version** — `local.05clts-grdf-tdr-b6tdr/docker-compose.yaml` intentionally uses `SDKMAN_INSTALL_PACKAGE_04_MAVEN_VERSION=${GLOBAL_STACK_JAVA_INSTALL_PACKAGE_MAVEN_VX2_VERSION}` (Maven 3.9.x) rather than VX1 (Maven 4.0.0-rc-5). Add a comment in that file explaining why (e.g., `# Maven 3.9.x (VX2) — b6tdr project requires Maven 3.x; 4.0.x RC not yet stable for this project`).
+
+- [ ] **Spark 3.5.3 (VX2) retirement** — EOL since April 2026, excluded from Java 25/26 tiers, only runs on Java 17/21. Once Spark 4.x lands on SDKMAN stable, remove VX2 slot entirely. Until then it's harmless but carrying dead weight.
