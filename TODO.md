@@ -65,3 +65,25 @@ Run these manually after the next rebuild. Each has a specific command.
   GLOBAL_STACK_NODE_DEFAULT_YARN_VERSION=4.9.1
   ```
   Test with a project that has `nodeLinker: node-modules` in `.yarnrc.yml` before committing.
+
+- [ ] **pomchecker 1.15.0 on SDKMAN** — `1.15.0-SNAPSHOT` is the in-development version; SDKMAN stable may only have `1.14.0`. Verify before next rebuild:
+  ```bash
+  make login-03java25-zulu
+  sdk list pomchecker
+  ```
+  If `1.15.0` is not listed as a SDKMAN candidate, downgrade in `.env`:
+  ```bash
+  GLOBAL_STACK_JAVA_DEFAULT_POMCHECKER_VERSION=1.14.0
+  ```
+
+---
+
+## 🔮 Backlog — no timeline
+
+Items carried over from the original `@todo.md` notes file.
+
+- [ ] **Add Amazon CloudFront + CloudWatch to LocalStack** — extend the LocalStack service or add a dedicated AWS simulation service for CloudFront distribution testing and CloudWatch metrics. Check LocalStack Pro tier requirements.
+
+- [ ] **Nginx OIDC integration** — install `cjose` from source (required by `mod_auth_openidc`), install `liboauth2 ≥ 2.0` from source, then configure OIDC auth for Nginx. See `docker/images/01nginx/` for the Nginx service. Dependencies must be compiled against the container's OpenSSL version.
+
+- [ ] **`05edge` Java version** — currently `05edge` depends on `03java26-zulu` (waits for tools setup) but activates `JAVA_VERSION=${GLOBAL_STACK_JAVA25_VERSION}` (Java 25). Decide: should `05edge` use Java 26 as its active runtime? If yes, update `JAVA_VERSION*` vars in `docker/images/05edge/docker-compose.yaml`.
