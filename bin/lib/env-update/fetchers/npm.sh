@@ -72,8 +72,10 @@ _gs_eu2_fetch_npm() {
   # Gate: fixture mode forces API path to keep tests deterministic.
   # Gate: watch-major vars require the full API path so latest_unconstrained is populated;
   #       skip CLI fast path when watch_major_depth is set (correctness over speed).
+  # Gate: major_hint requires the full version list so the major-pin filter can run;
+  #       dist-tags.latest bypasses the filter and would return the wrong major.
   if [[ -z "${_GS_EU2_HTTP_FIXTURE_DIR:-}" ]] && command -v npm >/dev/null 2>&1 \
-      && [[ -z "${_wm_depth_ck}" ]]; then
+      && [[ -z "${_wm_depth_ck}" ]] && [[ -z "${_major_hint}" ]]; then
     local _cli_out
     if [[ -z "${_channel}" || "${_channel}" == "stable" ]]; then
       if _cli_out="$(npm view "${_identifier}" dist-tags.latest 2>/dev/null)" \
@@ -97,7 +99,10 @@ _gs_eu2_fetch_npm() {
   # Stable fast path via dist-tags.latest when no special channel requested.
   # Skipped for watch-major vars: they need the full version list to populate
   # latest_unconstrained — returning early here would silently suppress [WATCH].
-  if [[ -z "${_wm_depth_ck}" ]] && [[ -z "${_channel}" || "${_channel}" == "stable" ]]; then
+  # Skipped when major_hint is set: must fall through to the full version list so
+  # the major-pin filter can constrain the result to the requested major.
+  if [[ -z "${_wm_depth_ck}" ]] && [[ -z "${_major_hint}" ]] \
+      && [[ -z "${_channel}" || "${_channel}" == "stable" ]]; then
     local _latest
     _latest="$(printf '%s\n' "${_resp}" | jq -r '."dist-tags".latest // empty' 2>/dev/null || true)"
     if [[ -n "${_latest}" ]]; then
@@ -147,6 +152,9 @@ _gs_eu2_fetch_npm() {
       _gs_eu2_record_set "${_idx}" latest_unconstrained "${_unconstrained_best}"
   fi
 
+  # Save pre-filter version list for latest_unconstrained capture below.
+  local _versions_premajor="${_versions}"
+
   # Major-pin filter
   if [[ -n "${_major_hint}" ]]; then
     _versions="$(printf '%s\n' "${_versions}" | grep -E "^v?${_major_hint}([.^-]|\$)" 2>/dev/null \
@@ -155,6 +163,13 @@ _gs_eu2_fetch_npm() {
   fi
 
   if [[ -z "${_versions}" ]]; then
+    # Capture latest_unconstrained from pre-filter list when major_hint yielded no results
+    # and this is NOT a watch-major run (watch-major already sets it above).
+    if [[ -n "${_major_hint}" && -z "${_wm_depth}" ]]; then
+      local _uc_best
+      _uc_best="$(_gs_eu2_channel_select_best "${_versions_premajor}" "${_channel}")"
+      [[ -n "${_uc_best}" ]] && _gs_eu2_record_set "${_idx}" latest_unconstrained "${_uc_best}"
+    fi
     _gs_eu2_record_set "${_idx}" decision      "SKIP"
     _gs_eu2_record_set "${_idx}" error_message "no versions matched filters for npm:${_identifier}"
     return 0

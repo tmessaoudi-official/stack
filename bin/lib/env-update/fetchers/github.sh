@@ -295,6 +295,9 @@ _gs_eu2_fetch_github() {
     fi
   fi
 
+  # Save pre-filter tag list for latest_unconstrained capture below.
+  local _tags_premajor="${_tags}"
+
   # ── Major-pin filter ───────────────────────────────────────────────────────
   if [[ -n "${_major_hint}" ]]; then
     local _filtered_major
@@ -326,6 +329,18 @@ _gs_eu2_fetch_github() {
   fi
 
   if [[ -z "$(printf '%s\n' "${_tags}" | grep -v '^$' || true)" ]]; then
+    # Capture latest_unconstrained from pre-filter list when major_hint yielded no results
+    # and this is NOT a watch-major run (watch-major already sets it above).
+    if [[ -n "${_major_hint}" && -z "${_wm_depth}" ]]; then
+      local _uc_best_gh
+      _uc_best_gh="$(_gs_eu2_channel_select_best "${_tags_premajor}" "${_channel}")"
+      if [[ -n "${_uc_best_gh}" ]]; then
+        local _vp_uc
+        _vp_uc="$(_gs_eu2_record_get "${_idx}" version_prefix)"
+        [[ -n "${_vp_uc}" ]] && _uc_best_gh="${_vp_uc}${_uc_best_gh}"
+        _gs_eu2_record_set "${_idx}" latest_unconstrained "${_uc_best_gh}"
+      fi
+    fi
     # Heuristic: stable current + no tags found = fetcher failure, not a legitimate no-stable case.
     local _cur0 _decision0="SKIP"
     _cur0="$(_gs_eu2_record_get "${_idx}" current_version)"

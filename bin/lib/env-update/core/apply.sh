@@ -10,18 +10,23 @@ source "$(dirname "${BASH_SOURCE[0]}")/records.sh"
 # Rewrite a VAR=value line and its @todo annotation comment in one awk pass (atomic via tmp+mv).
 # $4 = raw_annotation (exact comment line to match); $5 = current version token to replace.
 # $6 = current annotation SHA (for sha: keyword replacement in annotation).
-# $7 = new SHA to write into sha: keyword.
+# $7 = new SHA to write into sha: keyword (may include date suffix, e.g. "HASH (YYYY-MM-DD)").
 # $8 = use_sha flag ("true" → write new SHA to VAR= instead of new version).
+# $9 = annotation_only flag ("true" → skip VAR= rewrite, update annotation only).
+# $10 = bare_sha: the raw 40-char SHA without date — used for the VAR= line only.
+#        Keeping the date out of VAR= (Bug E fix): new_sha carries "HASH (DATE)" for the
+#        annotation sha: keyword; bare_sha carries just "HASH" for the VAR= value.
 # Finds " curval" as a literal word boundary — immune to trailing urls: extras.
 _gs_eu2_apply_single() {
   local _file="${1}" _var="${2}" _new="${3}" _raw_ann="${4:-}" _cur="${5:-}" \
         _cur_sha="${6:-}" _new_sha="${7:-}" _use_sha="${8:-false}" \
-        _annotation_only="${9:-false}"
+        _annotation_only="${9:-false}" _bare_sha="${10:-}"
   local _tmp
   _tmp="$(mktemp)" || { printf 'env-update/apply: mktemp failed\n' >&2; return 1; }
   awk -v var="${_var}" -v newval="${_new}" -v raw_ann="${_raw_ann}" \
       -v curval="${_cur}" -v cur_sha="${_cur_sha}" -v new_sha="${_new_sha}" \
-      -v use_sha="${_use_sha}" -v annotation_only="${_annotation_only}" '
+      -v use_sha="${_use_sha}" -v annotation_only="${_annotation_only}" \
+      -v bare_sha="${_bare_sha}" '
     /^[[:space:]]*#/ {
       if (raw_ann != "" && $0 == raw_ann) {
         line = $0
@@ -31,7 +36,7 @@ _gs_eu2_apply_single() {
           if (idx > 0)
             line = substr(line, 1, idx) newval substr(line, idx + 1 + length(curval))
         }
-        # Update sha: keyword (literal replacement)
+        # Update sha: keyword in annotation (uses new_sha which may include date)
         if (cur_sha != "" && new_sha != "") {
           sha_idx = index(line, "sha:" cur_sha)
           if (sha_idx > 0)
@@ -46,7 +51,10 @@ _gs_eu2_apply_single() {
       # Skip VAR= rewrite when newval is empty and use_sha is not set,
       # OR when annotation_only is set (LOCK: annotation updated, VAR= untouched).
       if ((newval == "" && use_sha != "true") || annotation_only == "true") { print; next }
-      val = (use_sha == "true" && new_sha != "") ? new_sha : newval
+      # Use bare_sha (no date) for the VAR= value when use_sha is active.
+      # new_sha may carry "HASH (YYYY-MM-DD)" for the annotation line — do not leak the date
+      # into the variable value itself.
+      val = (use_sha == "true" && bare_sha != "") ? bare_sha : newval
       print var "=" val; next
     }
     { print }
@@ -87,8 +95,9 @@ _gs_eu2_apply_updates() {
       else
         # For SHA-only: pass empty _prop/_cur/_new (version line untouched);
         # reuse apply_single with cur_sha=old_sha_tok and new_sha=new_sha_tok.
+        # 10th arg bare_sha: unused here (use_sha=false), pass "".
         _gs_eu2_apply_single "${_env_file}" "${_var}" "" "${_raw_ann}" "" \
-                              "${_old_sha_tok}" "${_new_sha_tok}" "false"
+                              "${_old_sha_tok}" "${_new_sha_tok}" "false" "false" ""
         printf '  [SHA]      %-55s  sha:%s → sha:%s\n' "${_var}" "${_ann_sha:0:8}" "${_new_sha:0:8}"
         (( ++_n_sha_applied )) || true
       fi
@@ -108,8 +117,9 @@ _gs_eu2_apply_updates() {
           "${_var}" "${_cur}" "${_prop}"
         (( ++_n_would )) || true
       else
+        # 10th arg bare_sha: unused (annotation_only=true, VAR= untouched), pass "".
         _gs_eu2_apply_single "${_env_file}" "${_var}" "${_prop}" "${_raw_ann}" "${_cur}" \
-                              "" "" "false" "true"
+                              "" "" "false" "true" ""
         printf '  [LOCK]     %-55s  annotation: %s → %s\n' "${_var}" "${_cur}" "${_prop}"
         (( ++_n_applied )) || true
       fi
@@ -141,8 +151,9 @@ _gs_eu2_apply_updates() {
       printf '  [DRY-RUN]  %-55s  %s → %s\n' "${_var}" "${_cur}" "${_display_proposed}"
       (( ++_n_would )) || true
     else
+      # 10th arg bare_sha: raw SHA without date, for the VAR= line when use_sha=true.
       _gs_eu2_apply_single "${_env_file}" "${_var}" "${_prop}" "${_raw_ann}" "${_cur}" \
-                            "${_old_sha_tok2}" "${_new_sha_tok2}" "${_use_sha:-false}"
+                            "${_old_sha_tok2}" "${_new_sha_tok2}" "${_use_sha:-false}" "false" "${_new_sha}"
       printf '  [APPLIED]  %-55s  %s → %s\n' "${_var}" "${_cur}" "${_prop}"
       (( ++_n_applied )) || true
     fi

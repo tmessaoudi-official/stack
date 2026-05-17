@@ -6448,6 +6448,171 @@ t "t64a7: excluded record pending state is reset (no contamination of next recor
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Section 65 — Bug D: npm major_hint not bypassed by fast-paths
+# ═══════════════════════════════════════════════════════════════════════════
+section "65 — Bug D: npm major_hint fast-path bypass"
+
+_NPM_D_LIBS="
+source '/stack/bin/lib/env-update/config/defaults.sh'
+source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update/core/records.sh'
+source '/stack/bin/lib/env-update/core/semver.sh'
+source '/stack/bin/lib/env-update/core/channel.sh'
+source '/stack/bin/lib/env-update/core/tag_flags.sh'
+source '/stack/bin/lib/env-update/core/cache.sh'
+source '/stack/bin/lib/env-update/http/curl.sh'
+source '/stack/bin/lib/env-update/fetchers/npm.sh'
+export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+"
+
+# t65a: major_hint=24 with @types/node fixture (dist-tags.latest=25.8.0)
+# Before fix: fast-paths return 25.8.0. After fix: major-pin filter returns 24.1.0.
+t "t65a: npm major_hint=24 bypasses dist-tags.latest fast-path, returns 24.x" bash -c "
+    ${_NPM_D_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t65a_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'npm'
+    _gs_eu2_record_set \$idx identifier      '@types/node'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_TYPES_NODE_VERSION'
+    _gs_eu2_record_set \$idx current_version '24.0.0'
+    _gs_eu2_record_set \$idx major_hint      '24'
+    _gs_eu2_fetch_npm \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$val\" == '24.1.0' ]] || { echo \"expected 24.1.0 (major-pinned), got: '\$val' (dist-tags.latest=25.8.0 — fast-path not bypassed?)\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t65b: major_hint=25 gets 25.8.0 from the same fixture
+t "t65b: npm major_hint=25 returns 25.8.0 from same @types/node fixture" bash -c "
+    ${_NPM_D_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t65b_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'npm'
+    _gs_eu2_record_set \$idx identifier      '@types/node'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_TYPES_NODE_25_VERSION'
+    _gs_eu2_record_set \$idx current_version '25.0.0'
+    _gs_eu2_record_set \$idx major_hint      '25'
+    _gs_eu2_fetch_npm \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$val\" == '25.8.0' ]] || { echo \"expected 25.8.0, got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t65c: major_hint=22 returns 22.1.0 — there are two 22.x versions in the fixture
+t "t65c: npm major_hint=22 returns highest 22.x version (22.1.0)" bash -c "
+    ${_NPM_D_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t65c_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'npm'
+    _gs_eu2_record_set \$idx identifier      '@types/node'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_TYPES_NODE_22_VERSION'
+    _gs_eu2_record_set \$idx current_version '22.0.0'
+    _gs_eu2_record_set \$idx major_hint      '22'
+    _gs_eu2_fetch_npm \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$val\" == '22.1.0' ]] || { echo \"expected 22.1.0, got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t65d: no major_hint → dist-tags.latest fast-path returns 25.8.0 (regression guard)
+t "t65d: npm without major_hint returns dist-tags.latest (25.8.0) via full list (fixture path)" bash -c "
+    ${_NPM_D_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t65d_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'npm'
+    _gs_eu2_record_set \$idx identifier      '@types/node'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_TYPES_NODE_NOHINT_VERSION'
+    _gs_eu2_record_set \$idx current_version '24.0.0'
+    _gs_eu2_fetch_npm \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    # Without major_hint, the stable path should return the highest stable version (25.8.0)
+    [[ \"\$val\" == '25.8.0' ]] || { echo \"expected 25.8.0 (no major_hint), got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 66 — Bug E: use-sha VAR= receives bare SHA only (no date bleed)
+# ═══════════════════════════════════════════════════════════════════════════
+section "66 — Bug E: use-sha date bleed in VAR="
+
+_APPLY_E_LIBS="
+source '/stack/bin/lib/env-update/config/defaults.sh'
+source '/stack/bin/lib/env-update/core/records.sh'
+source '/stack/bin/lib/env-update/core/apply.sh'
+"
+
+# t66a: use_sha=true — VAR= receives bare SHA, annotation sha: receives SHA with date
+t "t66a: use-sha apply — VAR= gets bare SHA, annotation sha: gets SHA with date" bash -c "
+    ${_APPLY_E_LIBS}
+    f=\${TMP_DIR}/t66a.env
+    old_sha='aaaa0000bbbb1111cccc2222dddd3333eeee4444'
+    new_sha='1111aaaa2222bbbb3333cccc4444dddd5555eeee'
+    sha_date='2026-05-18'
+    ann=\"# @todo env-update (use-sha) pecl:uuid (git:php/test-pkg) 1.2.0 sha:\${old_sha}\"
+    printf '%s\nGLOBAL_STACK_SHA_TEST=%s\n' \"\$ann\" \"\$old_sha\" > \"\$f\"
+    _gs_eu2_record_new; idx=\$_GS_EU2_LAST_IDX
+    _gs_eu2_record_set \$idx env_var           'GLOBAL_STACK_SHA_TEST'
+    _gs_eu2_record_set \$idx current_version   '1.2.0'
+    _gs_eu2_record_set \$idx proposed_version  '1.3.0'
+    _gs_eu2_record_set \$idx raw_annotation    \"\$ann\"
+    _gs_eu2_record_set \$idx annotation_sha    \"\$old_sha\"
+    _gs_eu2_record_set \$idx proposed_sha      \"\$new_sha\"
+    _gs_eu2_record_set \$idx proposed_sha_date \"\$sha_date\"
+    _gs_eu2_record_set \$idx use_sha           'true'
+    _gs_eu2_record_set \$idx decision          'AUTO'
+    _gs_eu2_apply_updates \"\$f\" 'false' > /dev/null
+    # VAR= must contain only the bare SHA (no date, no parentheses)
+    grep -qF \"GLOBAL_STACK_SHA_TEST=\${new_sha}\" \"\$f\" || { echo \"VAR= not bare SHA; file: \$(cat \$f)\"; echo FAIL; exit 0; }
+    grep -qF 'GLOBAL_STACK_SHA_TEST=' \"\$f\" | grep -qF '(' 2>/dev/null && { echo 'VAR= contains date parentheses'; echo FAIL; exit 0; } || true
+    # Annotation sha: must contain SHA with date
+    grep -qF \"sha:\${new_sha} (\${sha_date})\" \"\$f\" || { echo \"annotation sha: missing date; file: \$(cat \$f)\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t66b: use_sha=true with empty sha_date — VAR= still bare SHA (no trailing space/empty parens)
+t "t66b: use-sha with no sha_date — VAR= gets bare SHA (no trailing artifacts)" bash -c "
+    ${_APPLY_E_LIBS}
+    f=\${TMP_DIR}/t66b.env
+    old_sha='cccc0000dddd1111eeee2222ffff3333aaaa4444'
+    new_sha='2222bbbb3333cccc4444dddd5555eeee6666ffff'
+    ann=\"# @todo env-update (use-sha) pecl:test (git:php/test-pkg2) 1.0.0 sha:\${old_sha}\"
+    printf '%s\nGLOBAL_STACK_SHA_B=%s\n' \"\$ann\" \"\$old_sha\" > \"\$f\"
+    _gs_eu2_record_new; idx=\$_GS_EU2_LAST_IDX
+    _gs_eu2_record_set \$idx env_var           'GLOBAL_STACK_SHA_B'
+    _gs_eu2_record_set \$idx current_version   '1.0.0'
+    _gs_eu2_record_set \$idx proposed_version  '1.1.0'
+    _gs_eu2_record_set \$idx raw_annotation    \"\$ann\"
+    _gs_eu2_record_set \$idx annotation_sha    \"\$old_sha\"
+    _gs_eu2_record_set \$idx proposed_sha      \"\$new_sha\"
+    _gs_eu2_record_set \$idx use_sha           'true'
+    _gs_eu2_record_set \$idx decision          'AUTO'
+    _gs_eu2_apply_updates \"\$f\" 'false' > /dev/null
+    # VAR= must be exactly the bare SHA
+    grep -qF \"GLOBAL_STACK_SHA_B=\${new_sha}\" \"\$f\" || { echo \"VAR= not bare SHA; file: \$(cat \$f)\"; echo FAIL; exit 0; }
+    # Must NOT have date artifacts
+    grep 'GLOBAL_STACK_SHA_B=.*(' \"\$f\" && { echo 'VAR= has unexpected parentheses'; echo FAIL; exit 0; } || true
+    echo PASS
+"
+
+# t66c: use_sha=false — VAR= receives version (not SHA) — regression guard
+t "t66c: use_sha=false — VAR= gets proposed version, not SHA (regression guard)" bash -c "
+    ${_APPLY_E_LIBS}
+    f=\${TMP_DIR}/t66c.env
+    ann=\"# @todo env-update github:test/repo 1.0.0\"
+    printf '%s\nGLOBAL_STACK_VER_C=1.0.0\n' \"\$ann\" > \"\$f\"
+    _gs_eu2_record_new; idx=\$_GS_EU2_LAST_IDX
+    _gs_eu2_record_set \$idx env_var           'GLOBAL_STACK_VER_C'
+    _gs_eu2_record_set \$idx current_version   '1.0.0'
+    _gs_eu2_record_set \$idx proposed_version  '1.2.0'
+    _gs_eu2_record_set \$idx raw_annotation    \"\$ann\"
+    _gs_eu2_record_set \$idx use_sha           'false'
+    _gs_eu2_record_set \$idx decision          'AUTO'
+    _gs_eu2_apply_updates \"\$f\" 'false' > /dev/null
+    grep -qF 'GLOBAL_STACK_VER_C=1.2.0' \"\$f\" || { echo \"VAR= not updated to 1.2.0; file: \$(cat \$f)\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section
