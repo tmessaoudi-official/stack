@@ -449,8 +449,9 @@ _gs_eu2_run_check() {
           fi
         fi
       fi
-      # [UNSTABLE] info sub-line signal
-      if [[ "${_should_hide}" == "true" && "${_GS_EU2_CFG[unstable]:-}" == "info" ]]; then
+      # [UNSTABLE] info sub-line signal: mirror the exact display condition (including stable!=full guard)
+      if [[ "${_should_hide}" == "true" && "${_GS_EU2_CFG[unstable]:-}" == "info" \
+            && "${_GS_EU2_CFG[stable]:-}" != "full" ]]; then
         local _co_unstable
         _co_unstable="$(_gs_eu2_record_get "${_i}" unstable_proposed)"
         [[ -n "${_co_unstable}" && "${_co_unstable}" != "${_cur}" ]] && _should_hide=false
@@ -483,6 +484,7 @@ _gs_eu2_run_check() {
     fi
     if [[ "${_should_hide}" == "true" ]]; then
       (( ++_n_hidden )) || true
+      printf '\r%*s\r' "$(( _max_var_len + 20 ))" "" >&2
       continue
     fi
 

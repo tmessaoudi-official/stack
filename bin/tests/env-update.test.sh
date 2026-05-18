@@ -7285,6 +7285,85 @@ t "t76f: mixed batch — AUTO visible, SKIP hidden; summary shows (1 hidden)" ba
     echo PASS
 "
 
+# t76g: WATCH signal prevents hiding — SKIP + (watch-major) with new generation available
+# Fixture: testorg/watchrepo-newer (v4.0.0, v3.1.0, v3.0.5). Pin major=3, current=v3.1.0.
+# Result: SKIP (up-to-date on major 3) + [WATCH] (v4.0.0 new generation detected).
+# Expected: record stays visible; no "hidden" in summary.
+t "t76g: SKIP + [WATCH] signal — stays visible (WATCH prevents hiding)" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t76g_cache
+    f=\${TMP_DIR}/t76g.env
+    printf '# @todo env-update (watch-major) github:testorg/watchrepo-newer:3 v3.1.0\nGLOBAL_STACK_T76G=v3.1.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --changes-only --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[SKIP' || { echo \"[SKIP] must appear (WATCH prevents hiding); got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '[WATCH]' || { echo \"[WATCH] sub-line must appear; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'hidden' && { echo \"'hidden' must NOT appear in summary; got: \$out\"; echo FAIL; exit 0; } || true
+    echo PASS
+"
+
+# t76h: FALLBACK signal on SKIP record prevents hiding
+# Fixture: @types/node (25.8.0 max, no 26.x). Range annotation :25-26, current=25.8.0.
+# Result: SKIP (25.8.0 up-to-date on fallback major=25) + [FALLBACK] sub-line.
+# Expected: record stays visible; no "hidden" in summary.
+t "t76h: SKIP + [FALLBACK] signal — stays visible (FALLBACK prevents hiding)" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t76h_cache
+    f=\${TMP_DIR}/t76h.env
+    printf '# @todo env-update npm:@types/node:25-26 25.8.0\nGLOBAL_STACK_T76H=25.8.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --changes-only --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[SKIP' || { echo \"[SKIP] must appear (FALLBACK prevents hiding); got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '[FALLBACK]' || { echo \"[FALLBACK] sub-line must appear; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'hidden' && { echo \"'hidden' must NOT appear in summary; got: \$out\"; echo FAIL; exit 0; } || true
+    echo PASS
+"
+
+# t76i: LOCK decision always visible (decision gate: LOCK != SKIP)
+# Annotation: (lock:deprecated) npm:@types/node:25 25.8.0, current=25.8.0.
+# Result: LOCK decision → decision gate fails → always visible.
+# Expected: [LOCK] line present, no "hidden" in summary.
+t "t76i: LOCK decision always visible — decision gate fails (LOCK != SKIP)" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t76i_cache
+    f=\${TMP_DIR}/t76i.env
+    printf '# @todo env-update (lock:deprecated) npm:@types/node:25 25.8.0\nGLOBAL_STACK_T76I=25.8.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --changes-only --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[LOCK' || { echo \"[LOCK] must appear (lock always visible); got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'hidden' && { echo \"'hidden' must NOT appear in summary; got: \$out\"; echo FAIL; exit 0; } || true
+    echo PASS
+"
+
+# t76j: --unstable=info prevents hiding when prerelease is newer than current stable
+# Fixture: testowner/rc-ahead (v1.1.0-rc1 prerelease, v1.0.0 stable).
+# current=v1.0.0 → SKIP (up-to-date on stable). unstable=info → [UNSTABLE] sub-line fires.
+# Expected: record stays visible (UNSTABLE signal prevents hiding).
+t "t76j: SKIP + --unstable=info [UNSTABLE] sub-line — stays visible" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t76j_cache
+    f=\${TMP_DIR}/t76j.env
+    printf '# @todo env-update github:testowner/rc-ahead v1.0.0\nGLOBAL_STACK_T76J=v1.0.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --changes-only --unstable=info --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[SKIP' || { echo \"[SKIP] must appear (UNSTABLE prevents hiding); got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '[UNSTABLE]' || { echo \"[UNSTABLE] sub-line must appear; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'hidden' && { echo \"'hidden' must NOT appear in summary; got: \$out\"; echo FAIL; exit 0; } || true
+    echo PASS
+"
+
+# t76k: --no-drift + --changes-only — drift exists but display suppressed; record still visible
+# Fixture: @types/node. Annotation current=25.8.0, VAR=25.0.0 → SKIP (up-to-date on 25.x)
+# with --no-drift: [DRIFT] sub-line suppressed. But drift condition exists → NOT hidden.
+# (The drift data is checked from record fields, independent of --no-drift display flag.)
+t "t76k: --no-drift + --changes-only: drift condition keeps record visible despite display suppression" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t76k_cache
+    f=\${TMP_DIR}/t76k.env
+    printf '# @todo env-update npm:@types/node:25 25.8.0\nGLOBAL_STACK_T76K=25.0.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --changes-only --no-drift --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[SKIP' || { echo \"[SKIP] must appear (drift keeps record visible); got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '[DRIFT]' && { echo \"[DRIFT] must NOT appear with --no-drift; got: \$out\"; echo FAIL; exit 0; } || true
+    echo \"\$out\" | grep -qF 'hidden' && { echo \"'hidden' must NOT appear (drift exists, record visible); got: \$out\"; echo FAIL; exit 0; } || true
+    echo PASS
+"
+
 # ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
