@@ -81,6 +81,7 @@ _gs_eu2_apply_updates() {
       _ann_sha="$(_gs_eu2_record_get "${_i}" annotation_sha)"
       _new_sha="$(_gs_eu2_record_get "${_i}" proposed_sha)"
       _new_sha_date="$(_gs_eu2_record_get "${_i}" proposed_sha_date)"
+      _use_sha="$(_gs_eu2_record_get "${_i}" use_sha)"
       # Construct new sha token: sha:FULLHASH (YYYY-MM-DD)
       local _new_sha_tok="${_new_sha}"
       [[ -n "${_new_sha_date}" ]] && _new_sha_tok="${_new_sha} (${_new_sha_date})"
@@ -93,11 +94,11 @@ _gs_eu2_apply_updates() {
         printf '  [DRY-RUN]  %-55s  sha:%s → sha:%s\n' "${_var}" "${_ann_sha:0:8}" "${_new_sha:0:8}"
         (( ++_n_sha_would )) || true
       else
-        # For SHA-only: pass empty _prop/_cur/_new (version line untouched);
-        # reuse apply_single with cur_sha=old_sha_tok and new_sha=new_sha_tok.
-        # 10th arg bare_sha: unused here (use_sha=false), pass "".
+        # Annotation sha: is always updated.
+        # When use_sha=true (e.g. PECL use-sha), VAR= is also updated with the new bare SHA
+        # so that [DRIFT] does not immediately re-fire after --apply.
         _gs_eu2_apply_single "${_env_file}" "${_var}" "" "${_raw_ann}" "" \
-                              "${_old_sha_tok}" "${_new_sha_tok}" "false" "false" ""
+                              "${_old_sha_tok}" "${_new_sha_tok}" "${_use_sha:-false}" "false" "${_new_sha}"
         printf '  [SHA]      %-55s  sha:%s → sha:%s\n' "${_var}" "${_ann_sha:0:8}" "${_new_sha:0:8}"
         (( ++_n_sha_applied )) || true
       fi

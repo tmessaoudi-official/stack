@@ -6651,7 +6651,7 @@ t "t66a: use-sha apply — VAR= gets bare SHA, annotation sha: gets SHA with dat
     _gs_eu2_apply_updates \"\$f\" 'false' > /dev/null
     # VAR= must contain only the bare SHA (no date, no parentheses)
     grep -qF \"GLOBAL_STACK_SHA_TEST=\${new_sha}\" \"\$f\" || { echo \"VAR= not bare SHA; file: \$(cat \$f)\"; echo FAIL; exit 0; }
-    grep -qF 'GLOBAL_STACK_SHA_TEST=' \"\$f\" | grep -qF '(' 2>/dev/null && { echo 'VAR= contains date parentheses'; echo FAIL; exit 0; } || true
+    grep 'GLOBAL_STACK_SHA_TEST=.*(' \"\$f\" 2>/dev/null && { echo 'VAR= contains date parentheses'; echo FAIL; exit 0; } || true
     # Annotation sha: must contain SHA with date
     grep -qF \"sha:\${new_sha} (\${sha_date})\" \"\$f\" || { echo \"annotation sha: missing date; file: \$(cat \$f)\"; echo FAIL; exit 0; }
     echo PASS
@@ -6697,6 +6697,33 @@ t "t66c: use_sha=false — VAR= gets proposed version, not SHA (regression guard
     _gs_eu2_record_set \$idx decision          'AUTO'
     _gs_eu2_apply_updates \"\$f\" 'false' > /dev/null
     grep -qF 'GLOBAL_STACK_VER_C=1.2.0' \"\$f\" || { echo \"VAR= not updated to 1.2.0; file: \$(cat \$f)\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t66d: decision=SHA + use_sha=true — VAR= must also receive the new bare SHA
+# (SHA-only path must not skip VAR= when the var stores the SHA as its value)
+t "t66d: SHA decision + use_sha=true — VAR= updated with new bare SHA (no DRIFT loop)" bash -c "
+    ${_APPLY_E_LIBS}
+    f=\${TMP_DIR}/t66d.env
+    old_sha='aaaa1111bbbb2222cccc3333dddd4444eeee5555'
+    new_sha='5555eeee4444dddd3333cccc2222bbbb1111aaaa'
+    sha_date='2026-05-18'
+    ann=\"# @todo env-update (use-sha) pecl:uuid (git:php/test-uuid) sha:\${old_sha}\"
+    printf '%s\nGLOBAL_STACK_SHA_D=%s\n' \"\$ann\" \"\$old_sha\" > \"\$f\"
+    _gs_eu2_record_new; idx=\$_GS_EU2_LAST_IDX
+    _gs_eu2_record_set \$idx env_var           'GLOBAL_STACK_SHA_D'
+    _gs_eu2_record_set \$idx raw_annotation    \"\$ann\"
+    _gs_eu2_record_set \$idx annotation_sha    \"\$old_sha\"
+    _gs_eu2_record_set \$idx proposed_sha      \"\$new_sha\"
+    _gs_eu2_record_set \$idx proposed_sha_date \"\$sha_date\"
+    _gs_eu2_record_set \$idx use_sha           'true'
+    _gs_eu2_record_set \$idx decision          'SHA'
+    _gs_eu2_apply_updates \"\$f\" 'false' > /dev/null
+    # VAR= must have the new bare SHA (not old, not with date)
+    grep -qF \"GLOBAL_STACK_SHA_D=\${new_sha}\" \"\$f\" || { echo \"VAR= not updated to new SHA; file: \$(cat \$f)\"; echo FAIL; exit 0; }
+    grep 'GLOBAL_STACK_SHA_D=.*(' \"\$f\" 2>/dev/null && { echo 'VAR= contains date parentheses'; echo FAIL; exit 0; } || true
+    # Annotation sha: must have new SHA with date
+    grep -qF \"sha:\${new_sha} (\${sha_date})\" \"\$f\" || { echo \"annotation sha: not updated; file: \$(cat \$f)\"; echo FAIL; exit 0; }
     echo PASS
 "
 
