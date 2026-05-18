@@ -6701,6 +6701,63 @@ t "t66c: use_sha=false — VAR= gets proposed version, not SHA (regression guard
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Section 68 — HTTP memo: URL-level in-session deduplication
+# ═══════════════════════════════════════════════════════════════════════════
+section "68 — HTTP memo: URL-level in-session dedup"
+
+# Note: the memo is populated only on real HTTP fetches, NOT fixture responses.
+# Fixture injection short-circuits before the memo store. Tests simulate the
+# memo by pre-populating _GS_EU2_HTTP_MEMO directly — this is the correct
+# way to test the memo read path without making real network calls.
+
+_MEMO_LIBS="
+source '/stack/bin/lib/env-update/http/curl.sh'
+"
+
+# t68a: pre-seeded memo entry is returned by _gs_eu2_http_get (no fixture dir, no network)
+t "t68a: pre-seeded memo entry returned without network call" bash -c "
+    unset _GS_EU2_HTTP_FIXTURE_DIR
+    ${_MEMO_LIBS}
+    url='https://test.example/no-such-fixture-98765'
+    # Pre-seed the memo — with no fixture dir and no real server, memo is the only source
+    _GS_EU2_HTTP_MEMO[\"\$url\"]='memo-body-sentinel'
+    out=\$(_gs_eu2_http_get \"\$url\")
+    [[ \"\$out\" == 'memo-body-sentinel' ]] || { echo \"expected memo-body-sentinel, got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t68b: memo is declared as a global associative array (declare -gA)
+t "t68b: _GS_EU2_HTTP_MEMO is an associative array available after source" bash -c "
+    ${_MEMO_LIBS}
+    # Array should be usable immediately after sourcing
+    _GS_EU2_HTTP_MEMO['key1']='val1'
+    [[ \"\${_GS_EU2_HTTP_MEMO[key1]}\" == 'val1' ]] || { echo 'memo array not writable'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t68c: distinct URLs have distinct memo entries (no cross-contamination)
+t "t68c: distinct URLs in memo are independent" bash -c "
+    ${_MEMO_LIBS}
+    _GS_EU2_HTTP_MEMO['https://a.example/v1']='body-a'
+    _GS_EU2_HTTP_MEMO['https://b.example/v1']='body-b'
+    [[ \"\${_GS_EU2_HTTP_MEMO['https://a.example/v1']}\" == 'body-a' ]] || { echo 'a wrong'; echo FAIL; exit 0; }
+    [[ \"\${_GS_EU2_HTTP_MEMO['https://b.example/v1']}\" == 'body-b' ]] || { echo 'b wrong'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t68d: _gs_eu2_http_get_auth with empty token delegates to _gs_eu2_http_get which hits memo
+t "t68d: http_get_auth with empty token hits memo via plain-get delegation" bash -c "
+    unset _GS_EU2_HTTP_FIXTURE_DIR
+    ${_MEMO_LIBS}
+    url='https://test.example/no-such-fixture-memo-auth'
+    _GS_EU2_HTTP_MEMO[\"\$url\"]='auth-memo-body'
+    # Empty token → delegates to _gs_eu2_http_get → hits memo (no fixture dir, no network)
+    out=\$(_gs_eu2_http_get_auth \"\$url\" '')
+    [[ \"\$out\" == 'auth-memo-body' ]] || { echo \"expected auth-memo-body, got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section

@@ -14,6 +14,14 @@
 [[ -n "${_GS_EU2_CURL_SH_LOADED:-}" ]] && return 0
 readonly _GS_EU2_CURL_SH_LOADED=1
 
+# In-session URL memo: avoids redundant HTTP round-trips for the same URL within one run.
+# Example: npm:@types/node with major_hint=22 and major_hint=24 both fetch the same registry
+# URL — the second call returns the cached body instantly instead of making a network request.
+# Scope: process lifetime only. NOT written to the TTL cache (cross-run deduplication handled
+# by cache.sh independently). git ls-remote calls in github.sh use a separate code path and
+# are naturally excluded.
+declare -gA _GS_EU2_HTTP_MEMO=()
+
 # _gs_eu2_fixture_path URL
 # Derive the fixture filename from a URL.  Shared by _gs_eu2_http_get and
 # _gs_eu2_http_get_auth so the logic stays in exactly one place.
@@ -46,6 +54,12 @@ _gs_eu2_http_get() {
     fi
     printf 'env-update: HTTP fixture not found: %s\n' "${_f}" >&2
     return 1
+  fi
+
+  # In-session URL memo: return cached body immediately if this URL was already fetched.
+  if [[ -n "${_GS_EU2_HTTP_MEMO[${_url}]+x}" ]]; then
+    printf '%s' "${_GS_EU2_HTTP_MEMO[${_url}]}"
+    return 0
   fi
 
   # Two-level retry strategy (D4):
@@ -85,8 +99,12 @@ _gs_eu2_http_get() {
     return 1
   fi
 
-  cat "${_body_tmp}"
+  local _resp_body
+  _resp_body="$(cat "${_body_tmp}")"
   rm -f "${_body_tmp}"
+  # Store in memo for this session (process lifetime only — not persisted to TTL cache).
+  _GS_EU2_HTTP_MEMO["${_url}"]="${_resp_body}"
+  printf '%s' "${_resp_body}"
 }
 
 # Authenticated HTTP GET — injects Authorization: Bearer <token>.
@@ -113,6 +131,12 @@ _gs_eu2_http_get_auth() {
     fi
     printf 'env-update: HTTP fixture not found: %s\n' "${_f}" >&2
     return 1
+  fi
+
+  # In-session URL memo: return cached body if this URL was already fetched in this session.
+  if [[ -n "${_GS_EU2_HTTP_MEMO[${_url}]+x}" ]]; then
+    printf '%s' "${_GS_EU2_HTTP_MEMO[${_url}]}"
+    return 0
   fi
 
   # Same two-level retry strategy as _gs_eu2_http_get (see above).
@@ -146,6 +170,10 @@ _gs_eu2_http_get_auth() {
     return 1
   fi
 
-  cat "${_body_tmp}"
+  local _auth_resp_body
+  _auth_resp_body="$(cat "${_body_tmp}")"
   rm -f "${_body_tmp}"
+  # Store in memo for this session (process lifetime only — not persisted to TTL cache).
+  _GS_EU2_HTTP_MEMO["${_url}"]="${_auth_resp_body}"
+  printf '%s' "${_auth_resp_body}"
 }
