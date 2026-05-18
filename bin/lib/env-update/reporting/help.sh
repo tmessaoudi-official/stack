@@ -77,6 +77,16 @@ Default (no flags): print a parser summary with per-type breakdown and hints.
 Fetcher types: dockerhub, github, npm, pecl, pypi, quay, rubygems,
 sdkman, sdkmanager, url, codeberg.
 pecl supports an optional (git:owner/repo) flag for HEAD SHA tracking.
+pecl and sdkmanager do not support major_hint filtering; range syntax is
+unsupported for those types.
+
+Major range annotation: TYPE:IDENTIFIER:LOW-HIGH (e.g. npm:@types/node:25-26)
+  LOW  = fallback major — used when HIGH has no versions yet.
+  HIGH = desired major — used as soon as any version in that major ships.
+  LOW must be < HIGH (parse-time validation; dotted ranges not supported).
+  When running on LOW because HIGH is unavailable, a [FALLBACK] sub-line is
+  emitted (not suppressed by --no-notes). Once HIGH versions appear, the
+  fetcher automatically promotes to them and [FALLBACK] disappears.
 
 Examples:
   bin/env-update.sh                                # parser summary (no network)

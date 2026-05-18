@@ -242,7 +242,7 @@ _gs_eu2_parse_env_file() {
 
   local _state="IDLE"
   local _pending_annotation="" _pending_lnum=0
-  local _pending_type="" _pending_identifier="" _pending_major_hint=""
+  local _pending_type="" _pending_identifier="" _pending_major_hint="" _pending_major_hint_min=""
   local _pending_flags="" _pending_version="" _pending_hint=""
   local _pending_sha="" _pending_sha_date=""
   local _pending_git_url="" _pending_git_sha=""
@@ -276,7 +276,7 @@ _gs_eu2_parse_env_file() {
       _state="AWAITING_VARIABLE"
       _pending_lnum="${_line_number}"
       _pending_annotation="${_line}"
-      _pending_type="" _pending_identifier="" _pending_major_hint=""
+      _pending_type="" _pending_identifier="" _pending_major_hint="" _pending_major_hint_min=""
       _pending_flags="" _pending_version="" _pending_hint=""
       _pending_sha="" _pending_sha_date=""
       _pend_urls=""
@@ -317,9 +317,23 @@ _gs_eu2_parse_env_file() {
       local _type_rest="${_type_token#*:}"
       _pending_identifier="${_type_rest}"
       _pending_major_hint=""
+      _pending_major_hint_min=""
       if [[ "${_type_rest}" == *:* ]]; then
         local _maybe_major="${_type_rest##*:}"
-        if [[ "${_maybe_major}" =~ ^[0-9]+(\.[0-9]+)*$ ]]; then
+        if [[ "${_maybe_major}" =~ ^([0-9]+)-([0-9]+)$ ]]; then
+          # Range syntax: TYPE:IDENTIFIER:LOW-HIGH
+          # LOW = fallback major (use until HIGH ships), HIGH = desired major.
+          # Parse time validation: LOW must be < HIGH (integers only).
+          local _range_low="${BASH_REMATCH[1]}" _range_high="${BASH_REMATCH[2]}"
+          if (( _range_low >= _range_high )); then
+            printf 'env-update: %s:%s: range annotation requires LOW < HIGH (got %s-%s)\n' \
+              "${_env_file}" "${_line_number}" "${_range_low}" "${_range_high}" >&2
+            exit 1
+          fi
+          _pending_major_hint="${_range_high}"
+          _pending_major_hint_min="${_range_low}"
+          _pending_identifier="${_type_rest%:*}"
+        elif [[ "${_maybe_major}" =~ ^[0-9]+(\.[0-9]+)*$ ]]; then
           _pending_major_hint="${_maybe_major}"
           _pending_identifier="${_type_rest%:*}"
         fi
@@ -439,6 +453,7 @@ _gs_eu2_parse_env_file() {
         _gs_eu2_record_set "${_idx}" type "${_pending_type}"
         _gs_eu2_record_set "${_idx}" identifier "${_pending_identifier}"
         _gs_eu2_record_set "${_idx}" major_hint "${_pending_major_hint}"
+        _gs_eu2_record_set "${_idx}" major_hint_min "${_pending_major_hint_min}"
         _gs_eu2_record_set "${_idx}" hint "${_pending_hint}"
         _gs_eu2_record_set "${_idx}" line_number "${_pending_lnum}"
         _gs_eu2_record_set "${_idx}" raw_annotation "${_pending_annotation}"

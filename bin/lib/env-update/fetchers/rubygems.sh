@@ -29,10 +29,11 @@ source "$(dirname "${BASH_SOURCE[0]}")/../http/curl.sh"
 _gs_eu2_fetch_rubygems() {
   local _idx="${1}"
 
-  local _identifier _channel _major_hint _no_cache
+  local _identifier _channel _major_hint _major_hint_min _no_cache
   _identifier="$(_gs_eu2_record_get "${_idx}" identifier)"
   _channel="$(_gs_eu2_record_get "${_idx}" channel)"
   _major_hint="$(_gs_eu2_record_get "${_idx}" major_hint)"
+  _major_hint_min="$(_gs_eu2_record_get "${_idx}" major_hint_min)"
   _no_cache="${_GS_EU2_CFG[no_cache]:-false}"
 
   # watch_major_depth read early for cache key: watch-major runs must not share
@@ -41,13 +42,18 @@ _gs_eu2_fetch_rubygems() {
   local _wm_depth_ck
   _wm_depth_ck="$(_gs_eu2_record_get "${_idx}" watch_major_depth)"
 
-  # Build cache key
-  local _cache_key="rubygems:${_identifier}:${_major_hint}:${_channel}:${_wm_depth_ck}"
+  # Build cache key — include major_hint_min so range annotations don't collide.
+  local _cache_key="rubygems:${_identifier}:${_major_hint}:${_major_hint_min}:${_channel}:${_wm_depth_ck}"
 
   # Cache read
   if [[ "${_no_cache}" != "true" ]]; then
     local _cached
     if _cached="$(_gs_eu2_cache_read "${_cache_key}")" && [[ -n "${_cached}" ]]; then
+      if [[ -n "${_major_hint_min}" && -n "${_cached}" \
+            && "${_cached}" =~ ^v?"${_major_hint_min}"([.^_-]|$) \
+            && ! "${_cached}" =~ ^v?"${_major_hint}"([.^_-]|$) ]]; then
+        _gs_eu2_record_set "${_idx}" using_fallback_major "true"
+      fi
       _gs_eu2_record_set "${_idx}" proposed_version "${_cached}"
       return 0
     fi
@@ -142,6 +148,9 @@ _gs_eu2_fetch_rubygems() {
       _gs_eu2_record_set "${_idx}" latest_unconstrained "${_unconstrained_best}"
   fi
 
+  # Save pre-filter version list for fallback-major retry below.
+  local _versions_premajor="${_versions}"
+
   # Major-pin filter
   if [[ -n "${_major_hint}" ]]; then
     _versions="$(printf '%s\n' "${_versions}" | grep -E "^v?${_major_hint}([.^-]|\$)" 2>/dev/null \
@@ -150,9 +159,24 @@ _gs_eu2_fetch_rubygems() {
   fi
 
   if [[ -z "${_versions}" ]]; then
-    _gs_eu2_record_set "${_idx}" decision      "SKIP"
-    _gs_eu2_record_set "${_idx}" error_message "no versions matched filters for rubygems:${_identifier}"
-    return 0
+    if [[ -n "${_major_hint_min}" ]]; then
+      local _fallback_versions
+      _fallback_versions="$(printf '%s\n' "${_versions_premajor}" \
+        | grep -E "^v?${_major_hint_min}([.^-]|\$)" 2>/dev/null \
+        || printf '%s\n' "${_versions_premajor}" \
+           | awk -F'[v.-]' -v m="${_major_hint_min}" \
+               '{ v=$0; sub(/^v/,"",v); split(v,a,"[.-]"); if(a[1]==m) print $0 }' \
+        || true)"
+      if [[ -n "${_fallback_versions}" ]]; then
+        _versions="${_fallback_versions}"
+        _gs_eu2_record_set "${_idx}" using_fallback_major "true"
+      fi
+    fi
+    if [[ -z "${_versions}" ]]; then
+      _gs_eu2_record_set "${_idx}" decision      "SKIP"
+      _gs_eu2_record_set "${_idx}" error_message "no versions matched filters for rubygems:${_identifier}"
+      return 0
+    fi
   fi
 
   # Channel selection → proposed

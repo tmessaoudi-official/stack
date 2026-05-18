@@ -251,7 +251,7 @@ _gs_eu2_fetch_sdkman() {
     else
       local _all_versions _unconstrained_best
       _all_versions="$(_gs_eu2_sdkman_extract_versions "${_raw}" "")"
-      _unconstrained_best="$(_gs_eu2_channel_select_best "${_all_versions}" "stable")"
+      _unconstrained_best="$(_gs_eu2_channel_select_best "${_all_versions}" "${_channel:-stable}")"
       [[ -n "${_unconstrained_best}" ]] && _gs_eu2_record_set "${_idx}" latest_unconstrained "${_unconstrained_best}"
     fi
   fi

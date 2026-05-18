@@ -658,6 +658,34 @@ Examples:
 - `major_hint=8.2`, proposed=`8.2.28` → matches `^8.2([.^_-]|$)` → AUTO (D1 rule: dotted hints work)
 - `major_hint=8.2`, proposed=`8.3.0` → does not match → HOLD
 
+### Major range annotation (LOW-HIGH syntax)
+
+When the next major version is not yet published, use a range annotation instead of a plain
+major hint. Syntax: `TYPE:IDENTIFIER:LOW-HIGH` (e.g. `npm:@types/node:25-26`).
+
+- **LOW** = fallback major — used when HIGH has no versions yet.
+- **HIGH** = desired major — used as soon as any version in that major ships.
+- LOW must be strictly less than HIGH (parse-time validation; dotted ranges not supported).
+
+Behaviour:
+1. The fetcher first tries to find versions matching HIGH. If found, they are used normally
+   (same decisions as a plain `:HIGH` pin — AUTO, HOLD, SKIP as usual).
+2. If HIGH yields nothing, the fetcher retries with LOW. On success, the record is marked
+   `using_fallback_major=true` and a `[FALLBACK]` sub-line is emitted:
+   ```
+   [SKIP  ]  GLOBAL_STACK_NODE26_INSTALL_PACKAGE_TYPES_NODE_VERSION  (up to date)
+              ↳ [FALLBACK] major=26 not yet in registry — using fallback major=25
+   ```
+3. When `using_fallback_major=true`, `classify_decision` receives LOW (not HIGH) as the
+   major pin, so a 25.x result with range `:25-26` produces AUTO, not HOLD.
+4. Once HIGH versions appear in the registry, the fetcher automatically promotes to them
+   and the `[FALLBACK]` sub-line disappears.
+5. If neither HIGH nor LOW yields versions, the record gets a normal SKIP with PIN-MISS
+   (if `latest_unconstrained` is set). No `[FALLBACK]` sub-line in that case.
+
+Supported fetcher types: npm, dockerhub, github, codeberg, quay, pypi, rubygems.
+Not supported: pecl, sdkmanager (those types have no major_hint filtering at all).
+
 ### Semver comparison details (`core/semver.sh`)
 
 **`_gs_eu2_semver_compare`** — strips `v` prefix, checks for pre-release suffix (`-alpha`,

@@ -136,10 +136,11 @@ _gs_eu2_github_fetch_tags_paginated() {
 _gs_eu2_fetch_github() {
   local _idx="${1}"
 
-  local _identifier _channel _major_hint _no_cache _manual _tcp
+  local _identifier _channel _major_hint _major_hint_min _no_cache _manual _tcp
   _identifier="$(_gs_eu2_record_get "${_idx}" identifier)"
   _channel="$(_gs_eu2_record_get "${_idx}" channel)"
   _major_hint="$(_gs_eu2_record_get "${_idx}" major_hint)"
+  _major_hint_min="$(_gs_eu2_record_get "${_idx}" major_hint_min)"
   _no_cache="${_GS_EU2_CFG[no_cache]:-false}"
   _manual="$(_gs_eu2_record_get "${_idx}" manual)"
   _tcp="$(_gs_eu2_record_get "${_idx}" tag_channel_prefix)"
@@ -159,9 +160,9 @@ _gs_eu2_fetch_github() {
   local _wm_depth_ck
   _wm_depth_ck="$(_gs_eu2_record_get "${_idx}" watch_major_depth)"
 
-  # Build cache key — include merge_mode, watch depth, and channel prefix to avoid
-  # poisoning a non-tcp cache entry with tcp-stripped results (or vice versa).
-  local _cache_key="github:${_identifier}:${_major_hint}:${_channel}:${_wm_depth_ck}"
+  # Build cache key — include merge_mode, watch depth, channel prefix, and major_hint_min
+  # so range annotations (:LOW-HIGH) don't collide with plain major-pin annotations (:HIGH).
+  local _cache_key="github:${_identifier}:${_major_hint}:${_major_hint_min}:${_channel}:${_wm_depth_ck}"
   [[ -n "${_tcp}" ]] && _cache_key="${_cache_key}:tcp_${_tcp}"
   [[ "${_merge_mode}" == "true" ]] && _cache_key="${_cache_key}:tags"
 
@@ -169,6 +170,11 @@ _gs_eu2_fetch_github() {
   if [[ "${_no_cache}" != "true" ]]; then
     local _cached
     if _cached="$(_gs_eu2_cache_read "${_cache_key}")" && [[ -n "${_cached}" ]]; then
+      if [[ -n "${_major_hint_min}" && -n "${_cached}" \
+            && "${_cached}" =~ ^v?"${_major_hint_min}"([.^_-]|$) \
+            && ! "${_cached}" =~ ^v?"${_major_hint}"([.^_-]|$) ]]; then
+        _gs_eu2_record_set "${_idx}" using_fallback_major "true"
+      fi
       _gs_eu2_record_set "${_idx}" proposed_version "${_cached}"
       return 0
     fi
@@ -326,6 +332,20 @@ _gs_eu2_fetch_github() {
     fi
 
     _tags="${_filtered_major}"
+  fi
+
+  if [[ -z "$(printf '%s\n' "${_tags}" | grep -v '^$' || true)" ]]; then
+    # Range annotation fallback: when the desired major (HIGH) produced no results but
+    # a fallback major (LOW) is defined, retry the filter using LOW.
+    if [[ -n "${_major_hint_min}" ]]; then
+      local _fallback_tags
+      _fallback_tags="$(printf '%s\n' "${_tags_premajor}" \
+        | grep -E "^v?${_major_hint_min}([.^_-]|\$)" 2>/dev/null || true)"
+      if [[ -n "$(printf '%s\n' "${_fallback_tags}" | grep -v '^$' || true)" ]]; then
+        _tags="${_fallback_tags}"
+        _gs_eu2_record_set "${_idx}" using_fallback_major "true"
+      fi
+    fi
   fi
 
   if [[ -z "$(printf '%s\n' "${_tags}" | grep -v '^$' || true)" ]]; then

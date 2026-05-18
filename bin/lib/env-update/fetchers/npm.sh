@@ -39,10 +39,11 @@ _gs_eu2_npm_encode_pkg() {
 _gs_eu2_fetch_npm() {
   local _idx="${1}"
 
-  local _identifier _channel _major_hint _no_cache
+  local _identifier _channel _major_hint _major_hint_min _no_cache
   _identifier="$(_gs_eu2_record_get "${_idx}" identifier)"
   _channel="$(_gs_eu2_record_get "${_idx}" channel)"
   _major_hint="$(_gs_eu2_record_get "${_idx}" major_hint)"
+  _major_hint_min="$(_gs_eu2_record_get "${_idx}" major_hint_min)"
   _no_cache="${_GS_EU2_CFG[no_cache]:-false}"
 
   # watch_major_depth read early for cache key: watch-major runs must not share
@@ -51,13 +52,22 @@ _gs_eu2_fetch_npm() {
   local _wm_depth_ck
   _wm_depth_ck="$(_gs_eu2_record_get "${_idx}" watch_major_depth)"
 
-  # Build cache key
-  local _cache_key="npm:${_identifier}:${_major_hint}:${_channel}:${_wm_depth_ck}"
+  # Build cache key — include major_hint_min so range annotations (:LOW-HIGH) don't
+  # collide with plain major-pin annotations (:HIGH) that share the same HIGH.
+  local _cache_key="npm:${_identifier}:${_major_hint}:${_major_hint_min}:${_channel}:${_wm_depth_ck}"
 
   # Cache read
   if [[ "${_no_cache}" != "true" ]]; then
     local _cached
     if _cached="$(_gs_eu2_cache_read "${_cache_key}")" && [[ -n "${_cached}" ]]; then
+      # Re-derive using_fallback_major from the cached result: if the cached version
+      # matches the fallback (min) major rather than the desired (high) major, the
+      # fallback path was used in the original fetch.
+      if [[ -n "${_major_hint_min}" && -n "${_cached}" \
+            && "${_cached}" =~ ^v?"${_major_hint_min}"([.^_-]|$) \
+            && ! "${_cached}" =~ ^v?"${_major_hint}"([.^_-]|$) ]]; then
+        _gs_eu2_record_set "${_idx}" using_fallback_major "true"
+      fi
       _gs_eu2_record_set "${_idx}" proposed_version "${_cached}"
       return 0
     fi
@@ -163,16 +173,35 @@ _gs_eu2_fetch_npm() {
   fi
 
   if [[ -z "${_versions}" ]]; then
-    # Capture latest_unconstrained from pre-filter list when major_hint yielded no results
-    # and this is NOT a watch-major run (watch-major already sets it above).
-    if [[ -n "${_major_hint}" && -z "${_wm_depth}" ]]; then
-      local _uc_best
-      _uc_best="$(_gs_eu2_channel_select_best "${_versions_premajor}" "${_channel}")"
-      [[ -n "${_uc_best}" ]] && _gs_eu2_record_set "${_idx}" latest_unconstrained "${_uc_best}"
+    # Range annotation fallback: when the desired major (HIGH) produced no results but
+    # a fallback major (LOW) is defined, retry the filter using LOW.
+    if [[ -n "${_major_hint_min}" ]]; then
+      local _fallback_versions
+      _fallback_versions="$(printf '%s\n' "${_versions_premajor}" \
+        | grep -E "^v?${_major_hint_min}([.^-]|\$)" 2>/dev/null \
+        || printf '%s\n' "${_versions_premajor}" \
+           | awk -F'[v.-]' -v m="${_major_hint_min}" \
+               '{ v=$0; sub(/^v/,"",v); split(v,a,"[.-]"); if(a[1]==m) print $0 }' \
+        || true)"
+      if [[ -n "${_fallback_versions}" ]]; then
+        # Fallback succeeded: use the fallback major and mark the record so
+        # main.sh can emit [FALLBACK] and pass major_hint_min to classify_decision.
+        _versions="${_fallback_versions}"
+        _gs_eu2_record_set "${_idx}" using_fallback_major "true"
+      fi
     fi
-    _gs_eu2_record_set "${_idx}" decision      "SKIP"
-    _gs_eu2_record_set "${_idx}" error_message "no versions matched filters for npm:${_identifier}"
-    return 0
+    if [[ -z "${_versions}" ]]; then
+      # Capture latest_unconstrained from pre-filter list when major_hint yielded no results
+      # and this is NOT a watch-major run (watch-major already sets it above).
+      if [[ -n "${_major_hint}" && -z "${_wm_depth}" ]]; then
+        local _uc_best
+        _uc_best="$(_gs_eu2_channel_select_best "${_versions_premajor}" "${_channel}")"
+        [[ -n "${_uc_best}" ]] && _gs_eu2_record_set "${_idx}" latest_unconstrained "${_uc_best}"
+      fi
+      _gs_eu2_record_set "${_idx}" decision      "SKIP"
+      _gs_eu2_record_set "${_idx}" error_message "no versions matched filters for npm:${_identifier}"
+      return 0
+    fi
   fi
 
   # Channel selection → proposed

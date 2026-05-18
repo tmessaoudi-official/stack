@@ -59,10 +59,11 @@ _gs_eu2_dh_fetch_tags() {
 _gs_eu2_fetch_dockerhub() {
   local _idx="${1}"
 
-  local _identifier _channel _major_hint _current _no_cache
+  local _identifier _channel _major_hint _major_hint_min _current _no_cache
   _identifier="$(_gs_eu2_record_get "${_idx}" identifier)"
   _channel="$(_gs_eu2_record_get "${_idx}" channel)"
   _major_hint="$(_gs_eu2_record_get "${_idx}" major_hint)"
+  _major_hint_min="$(_gs_eu2_record_get "${_idx}" major_hint_min)"
   _current="$(_gs_eu2_record_get "${_idx}" current_version)"
   _no_cache="${_GS_EU2_CFG[no_cache]:-false}"
 
@@ -83,13 +84,19 @@ _gs_eu2_fetch_dockerhub() {
   local _wm_depth_ck
   _wm_depth_ck="$(_gs_eu2_record_get "${_idx}" watch_major_depth)"
 
-  # Build cache key — include prefer_specific and watch depth so flag-on/off runs don't share entries
-  local _cache_key="dockerhub:${_ns}:${_tag_suffix}:${_major_hint}:${_channel}:${_prefer_specific}:${_wm_depth_ck}"
+  # Build cache key — include prefer_specific, watch depth, and major_hint_min so range
+  # annotations (:LOW-HIGH) don't collide with plain major-pin annotations (:HIGH).
+  local _cache_key="dockerhub:${_ns}:${_tag_suffix}:${_major_hint}:${_major_hint_min}:${_channel}:${_prefer_specific}:${_wm_depth_ck}"
 
   # Cache read
   if [[ "${_no_cache}" != "true" ]]; then
     local _cached
     if _cached="$(_gs_eu2_cache_read "${_cache_key}")" && [[ -n "${_cached}" ]]; then
+      if [[ -n "${_major_hint_min}" && -n "${_cached}" \
+            && "${_cached}" =~ ^v?"${_major_hint_min}"([.^_-]|$) \
+            && ! "${_cached}" =~ ^v?"${_major_hint}"([.^_-]|$) ]]; then
+        _gs_eu2_record_set "${_idx}" using_fallback_major "true"
+      fi
       _gs_eu2_record_set "${_idx}" proposed_version "${_cached}"
       # decision intentionally not set here — decide.sh (via main.sh) owns classification
       return 0
@@ -148,6 +155,9 @@ _gs_eu2_fetch_dockerhub() {
     fi
   fi
 
+  # Save pre-filter tag list for fallback-major retry below.
+  local _tags_premajor="${_tags}"
+
   # C3: Major-pin filter — anchor end of major component with ([.^-]|$) to prevent
   # major_hint="18" from matching "180.0" (the | was missing the $ end-of-string case).
   if [[ -n "${_major_hint}" ]]; then
@@ -156,9 +166,23 @@ _gs_eu2_fetch_dockerhub() {
   fi
 
   if [[ -z "${_tags}" ]]; then
-    _gs_eu2_record_set "${_idx}" decision "SKIP"
-    _gs_eu2_record_set "${_idx}" error_message "no tags matched filters for ${_ns}"
-    return 0
+    if [[ -n "${_major_hint_min}" ]]; then
+      local _fallback_tags
+      _fallback_tags="$(printf '%s\n' "${_tags_premajor}" \
+        | grep -E "^${_major_hint_min}([.^-]|\$)" 2>/dev/null \
+        || printf '%s\n' "${_tags_premajor}" \
+           | awk -F'[.-]' -v m="${_major_hint_min}" '$1 == m' \
+        || true)"
+      if [[ -n "${_fallback_tags}" ]]; then
+        _tags="${_fallback_tags}"
+        _gs_eu2_record_set "${_idx}" using_fallback_major "true"
+      fi
+    fi
+    if [[ -z "${_tags}" ]]; then
+      _gs_eu2_record_set "${_idx}" decision "SKIP"
+      _gs_eu2_record_set "${_idx}" error_message "no tags matched filters for ${_ns}"
+      return 0
+    fi
   fi
 
   # prefer-specific: drop floating tags (X or X.Y form) when flag is set.

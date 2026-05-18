@@ -222,12 +222,13 @@ _gs_eu2_run_check() {
     fi  # end: if [[ -z "${_skip_reason}" ]] (skip gate — bypass all fetcher dispatch)
 
     # Apply decision classifier (refines any AUTO decision the fetcher set)
-    local _cur _prop _override _manual _major _note _fetcher_decision
+    local _cur _prop _override _manual _major _major_min _note _fetcher_decision
     _cur="$(_gs_eu2_record_get "${_i}" current_version)"
     _prop="$(_gs_eu2_record_get "${_i}" proposed_version)"
     _override="$(_gs_eu2_record_get "${_i}" override)"
     _manual="$(_gs_eu2_record_get "${_i}" manual)"
     _major="$(_gs_eu2_record_get "${_i}" major_hint)"
+    _major_min="$(_gs_eu2_record_get "${_i}" major_hint_min)"
     _note="$(_gs_eu2_record_get "${_i}" note)"
     _fetcher_decision="$(_gs_eu2_record_get "${_i}" decision)"
 
@@ -249,7 +250,15 @@ _gs_eu2_run_check() {
         _cur_cls="${_cur_cls#v}"; _cur_cls="${_cur_cls#"${_tcp_cls}"}"
         _prop_cls="${_prop_cls#v}"; _prop_cls="${_prop_cls#"${_tcp_cls}"}"
       fi
-      _classified="$(_gs_eu2_classify_decision "${_cur_cls}" "${_prop_cls}" "${_eff_override}" "${_eff_manual}" "${_major}" "${_GS_EU2_CFG[unstable]:-}")"
+      # Range annotation: when the fetcher fell back to the LOW major, pass major_hint_min
+      # to classify_decision so the HOLD guard accepts the fallback version (e.g., 25.x
+      # is valid against pin=25, not pin=26 which would HOLD).
+      local _using_fallback _major_cls="${_major}"
+      _using_fallback="$(_gs_eu2_record_get "${_i}" using_fallback_major)"
+      if [[ "${_using_fallback}" == "true" && -n "${_major_min}" ]]; then
+        _major_cls="${_major_min}"
+      fi
+      _classified="$(_gs_eu2_classify_decision "${_cur_cls}" "${_prop_cls}" "${_eff_override}" "${_eff_manual}" "${_major_cls}" "${_GS_EU2_CFG[unstable]:-}")"
       # --force-auto: upgrade HOLD to AUTO (bypasses major-bump guard / major_hint pin guard)
       if [[ "${_GS_EU2_CFG[force_auto]:-false}" == "true" && "${_classified}" == "HOLD" ]]; then
         _classified="AUTO"
@@ -407,11 +416,24 @@ _gs_eu2_run_check() {
     [[ -n "${_note}" && "${_GS_EU2_CFG[no_notes]:-false}" != "true" ]] && \
       printf '%10s↳ %s\n' "" "${_note}"
 
+    # [FALLBACK] sub-line: emitted when a range annotation (LOW-HIGH) fell back to
+    # the LOW major because HIGH had no versions yet. NOT suppressed by --no-notes.
+    # Guard: only when using_fallback_major is set by the fetcher.
+    local _using_fallback_disp
+    _using_fallback_disp="$(_gs_eu2_record_get "${_i}" using_fallback_major)"
+    if [[ "${_using_fallback_disp}" == "true" && -n "${_major_min}" ]]; then
+      printf '%10s↳ [FALLBACK] major=%s not yet in registry — using fallback major=%s\n' \
+        "" "${_major}" "${_major_min}"
+    fi
+
     # major-pin no-match sub-line: when a major_hint filter produced zero results (decision=SKIP)
     # and latest_unconstrained is known, show it so the user knows what exists without the pin.
-    # Guard: only when major_hint is set and latest_unconstrained is populated (fetchers set this
-    # specifically for the "pin yielded nothing" case). NOT suppressed by --no-notes.
-    if [[ "${_decision}" == "SKIP" && -n "${_major}" ]]; then
+    # Guard: only when major_hint is set AND error_message is non-empty (fetcher SKIP from
+    # "no versions matched" — not from same-version up-to-date SKIP where error_message is empty).
+    # NOT suppressed by --no-notes.
+    local _skip_err_disp
+    _skip_err_disp="$(_gs_eu2_record_get "${_i}" error_message)"
+    if [[ "${_decision}" == "SKIP" && -n "${_major}" && -n "${_skip_err_disp}" ]]; then
       local _pin_uc
       _pin_uc="$(_gs_eu2_record_get "${_i}" latest_unconstrained)"
       if [[ -n "${_pin_uc}" ]]; then

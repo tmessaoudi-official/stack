@@ -968,8 +968,8 @@ t "t15c: tag-suffix filter applied" bash -c "
 
 t "t15d: cache hit skips HTTP call (sets proposed_version from cache)" bash -c "
     ${_DH_LIBS}
-    # Key must match what fetcher computes: dockerhub:<ns>:<tag_suffix>:<major_hint>:<channel>:<prefer_specific>:<watch_major_depth>
-    _gs_eu2_cache_write 'dockerhub:library/postgres:::::' '18.3-alpine3.23-CACHED'
+    # Key must match what fetcher computes: dockerhub:<ns>:<tag_suffix>:<major_hint>:<major_hint_min>:<channel>:<prefer_specific>:<watch_major_depth>
+    _gs_eu2_cache_write 'dockerhub:library/postgres::::::' '18.3-alpine3.23-CACHED'
     _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
     _gs_eu2_record_set \$idx type       'dockerhub'
     _gs_eu2_record_set \$idx identifier '_/postgres'
@@ -7005,6 +7005,90 @@ t "t72b: (manual) at same version shows '(up to date — manual)'" bash -c "
     out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null)
     echo \"\$out\" | grep -qF 'up to date — manual' || { echo \"expected 'up to date — manual'; got: \$out\"; echo FAIL; exit 0; }
     echo \"\$out\" | grep -qF 'up to date — override' && { echo \"should show 'manual' not 'override'; got: \$out\"; echo FAIL; exit 0; } || true
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 73 — Fix 1: PIN-MISS guard — only fires on "no versions matched" SKIP
+# ═══════════════════════════════════════════════════════════════════════════
+section "73 — Fix 1: PIN-MISS guard (error_message gate)"
+
+# t73a: SKIP(up-to-date) with major_hint — should NOT emit [PIN-MISS]
+# Before fix: [PIN-MISS] fired on any SKIP with major_hint set.
+# After fix: [PIN-MISS] only fires when error_message is non-empty (fetcher SKIP).
+t "t73a: SKIP(up-to-date) with major_hint=22 — no [PIN-MISS] sub-line" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t73a_cache
+    f=\${TMP_DIR}/t73a.env
+    # current=22.1.0 is the highest 22.x in fixture → classify_decision → SKIP (up to date)
+    printf '# @todo env-update npm:@types/node:22 22.1.0\nGLOBAL_STACK_T73A=22.1.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[PIN-MISS]' && { echo \"[PIN-MISS] must NOT appear for up-to-date SKIP; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '[SKIP' || { echo \"expected [SKIP line; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t73b: SKIP(no-versions) with major_hint=23 — MUST emit [PIN-MISS]
+# The @types/node fixture has no 23.x versions; fetcher sets error_message → [PIN-MISS] fires.
+t "t73b: SKIP(no versions matched) with major_hint=23 — [PIN-MISS] fires" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t73b_cache
+    f=\${TMP_DIR}/t73b.env
+    printf '# @todo env-update npm:@types/node:23 22.0.0\nGLOBAL_STACK_T73B=22.0.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[PIN-MISS]' || { echo \"[PIN-MISS] must appear when no versions matched; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'major=23' || { echo \"expected 'major=23' in [PIN-MISS] line; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 74 — Fix 3: Major range annotation (LOW-HIGH syntax)
+# ═══════════════════════════════════════════════════════════════════════════
+section "74 — Fix 3: Major range annotation (LOW-HIGH syntax)"
+
+# t74a: range 25-26, v26 absent → AUTO to 25.x + [FALLBACK] sub-line
+# Fixture: @types/node (22,22.1,24,24.1,25,25.8 — no 26.x)
+t "t74a: range :25-26, v26 absent — AUTO to 25.8.0 + [FALLBACK] sub-line" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t74a_cache
+    f=\${TMP_DIR}/t74a.env
+    # current=25.0.0, annotation uses range 25-26 → HIGH(26) absent → fallback to LOW(25)
+    printf '# @todo env-update npm:@types/node:25-26 25.0.0\nGLOBAL_STACK_T74A=25.0.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[AUTO' || { echo \"expected [AUTO decision; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '25.8.0' || { echo \"expected proposed 25.8.0 in output; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '[FALLBACK]' || { echo \"expected [FALLBACK] sub-line; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'major=26' || { echo \"expected 'major=26' in [FALLBACK] line; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'fallback major=25' || { echo \"expected 'fallback major=25' in [FALLBACK] line; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '[PIN-MISS]' && { echo \"[PIN-MISS] must NOT appear when fallback succeeded; got: \$out\"; echo FAIL; exit 0; } || true
+    echo PASS
+"
+
+# t74b: range 25-26, v26 available → AUTO to 26.x, no [FALLBACK]
+# Fixture: @types/range-test-pkg-with26 (25.0,25.8,26.0,26.1)
+t "t74b: range :25-26, v26 available — AUTO to 26.1.0, no [FALLBACK]" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t74b_cache
+    f=\${TMP_DIR}/t74b.env
+    printf '# @todo env-update npm:@types/range-test-pkg-with26:25-26 25.8.0\nGLOBAL_STACK_T74B=25.8.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[AUTO' || { echo \"expected [AUTO decision; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '26.1.0' || { echo \"expected proposed 26.1.0 in output; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '[FALLBACK]' && { echo \"[FALLBACK] must NOT appear when HIGH(26) has versions; got: \$out\"; echo FAIL; exit 0; } || true
+    echo PASS
+"
+
+# t74c: range 30-31, both absent → SKIP, [PIN-MISS] fires, no [FALLBACK]
+# No 30.x or 31.x in the @types/node fixture.
+t "t74c: range :30-31, both absent — SKIP + [PIN-MISS], no [FALLBACK]" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t74c_cache
+    f=\${TMP_DIR}/t74c.env
+    printf '# @todo env-update npm:@types/node:30-31 25.0.0\nGLOBAL_STACK_T74C=25.0.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[SKIP' || { echo \"expected [SKIP decision; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '[PIN-MISS]' || { echo \"[PIN-MISS] must appear when neither major found; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '[FALLBACK]' && { echo \"[FALLBACK] must NOT appear when both majors absent; got: \$out\"; echo FAIL; exit 0; } || true
     echo PASS
 "
 
