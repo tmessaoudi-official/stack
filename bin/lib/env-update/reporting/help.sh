@@ -53,8 +53,11 @@ Options:
                                   records on non-stable channels. Does not change decisions.
                                   Compatible with --unstable=full (shown below main line).
   --no-notes                      Suppress annotation (note: TEXT) sub-lines — for minimal
-                                  output. Does NOT suppress SHA, unstable INFO, or stable
-                                  INFO sub-lines.
+                                  output. Does NOT suppress SHA, unstable INFO, stable
+                                  INFO, or [DRIFT] sub-lines.
+  --no-drift                      Suppress [DRIFT] sub-lines — emitted when the VAR= value
+                                  in the env file differs from what the annotation claims as
+                                  current. Does NOT affect (note:TEXT) or other sub-lines.
   --force-auto                    Override (manual) and (override) annotation flags and HOLD
                                   decisions — treats them as AUTO-eligible. Useful for
                                   scripted environments where human gates are not appropriate.
@@ -87,6 +90,7 @@ Examples:
   bin/env-update.sh --stable=info --check          # info mode: show stable sub-line for non-stable-channel records
   bin/env-update.sh --stable=info --unstable=full --check  # unstable decisions + stable sub-line for each
   bin/env-update.sh --check --no-notes                    # suppress (note: ...) sub-lines
+  bin/env-update.sh --check --no-drift                    # suppress [DRIFT] sub-lines
   bin/env-update.sh --check --force-auto                  # preview: (manual)/(hold) treated as AUTO
   bin/env-update.sh --apply --force-auto --confirm="Confirm override"  # apply with force-auto
 EOF

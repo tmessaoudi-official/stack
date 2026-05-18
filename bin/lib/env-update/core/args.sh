@@ -32,6 +32,7 @@ _gs_eu2_parse_args() {
       --no-cache)     _GS_EU2_CFG[no_cache]="true" ;;
       --with-tags)    _GS_EU2_CFG[with_tags]="true" ;;
       --no-notes)     _GS_EU2_CFG[no_notes]="true" ;;
+      --no-drift)     _GS_EU2_CFG[no_drift]="true" ;;
       --force-auto)   _GS_EU2_CFG[force_auto]="true" ;;
       --confirm=*)    _GS_EU2_CFG[confirm]="${1#*=}" ;;
       --stable)     _GS_EU2_CFG[stable]="full" ;;
@@ -80,6 +81,7 @@ _gs_eu2_parse_args() {
   [[ -z "${_GS_EU2_CFG[unstable]+set}" ]]  && _GS_EU2_CFG[unstable]=""
   [[ -z "${_GS_EU2_CFG[stable]+set}" ]]   && _GS_EU2_CFG[stable]=""
   [[ -z "${_GS_EU2_CFG[no_notes]+set}" ]]   && _GS_EU2_CFG[no_notes]="false"
+  [[ -z "${_GS_EU2_CFG[no_drift]+set}" ]]   && _GS_EU2_CFG[no_drift]="false"
   [[ -z "${_GS_EU2_CFG[force_auto]+set}" ]] && _GS_EU2_CFG[force_auto]="false"
   [[ -z "${_GS_EU2_CFG[confirm]+set}" ]]    && _GS_EU2_CFG[confirm]=""
 

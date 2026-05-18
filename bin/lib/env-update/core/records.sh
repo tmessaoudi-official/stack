@@ -28,7 +28,7 @@ _gs_eu2_record_fields() {
     annotation_sha proposed_sha use_sha \
     proposed_sha_date annotation_sha_date \
     unstable_proposed stable_proposed \
-    watch_major_depth latest_unconstrained
+    watch_major_depth latest_unconstrained actual_var_value
 }
 
 # Allocate next record index.

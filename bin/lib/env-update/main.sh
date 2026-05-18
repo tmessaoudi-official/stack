@@ -464,6 +464,38 @@ _gs_eu2_run_check() {
         printf '%10s↳ [INFO] stable: %s\n' "" "${_stable_disp}"
       fi
     fi
+
+    # [DRIFT] sub-line: emitted when the actual VAR= value in the env file differs from
+    # what the annotation records as the current version (or SHA for use-sha records).
+    # This signals that --apply was not run after a manual edit, or the annotation was
+    # updated but the variable was not, or vice versa.
+    # NOT suppressed by --no-notes. ONLY suppressed by --no-drift.
+    if [[ "${_GS_EU2_CFG[no_drift]:-false}" != "true" ]]; then
+      local _drift_actual _drift_ann_ver _drift_ann_sha _drift_use_sha
+      _drift_actual="$(_gs_eu2_record_get "${_i}" actual_var_value)"
+      _drift_ann_ver="$(_gs_eu2_record_get "${_i}" current_version)"
+      _drift_ann_sha="$(_gs_eu2_record_get "${_i}" annotation_sha)"
+      _drift_use_sha="$(_gs_eu2_record_get "${_i}" use_sha)"
+      if [[ "${_drift_use_sha}" == "true" ]]; then
+        # Case 3: use-sha record — compare VAR= value vs. annotation sha:
+        if [[ -n "${_drift_actual}" && -n "${_drift_ann_sha}" \
+              && "${_drift_actual}" != "${_drift_ann_sha}" ]]; then
+          printf '%10s↳ [DRIFT] var SHA (%s) differs from annotation sha:(%s) — re-run --apply or update annotation\n' \
+            "" "${_drift_actual:0:8}" "${_drift_ann_sha:0:8}"
+        fi
+      else
+        if [[ -z "${_drift_actual}" && -n "${_drift_ann_ver}" ]]; then
+          # Case 1: empty var but annotation has a version (feature disabled?)
+          printf '%10s↳ [DRIFT] var is empty — annotation tracks %s (feature disabled?)\n' \
+            "" "${_drift_ann_ver}"
+        elif [[ -n "${_drift_actual}" && -n "${_drift_ann_ver}" \
+                && "${_drift_actual}" != "${_drift_ann_ver}" ]]; then
+          # Case 2: both non-empty but differ
+          printf '%10s↳ [DRIFT] annotation says %s but VAR=%s — re-run --apply or update annotation\n' \
+            "" "${_drift_ann_ver}" "${_drift_actual}"
+        fi
+      fi
+    fi
   done
 
   local _total=$(( _n_auto + _n_hold + _n_skip + _n_error + _n_manual + _n_sha + _n_lock ))

@@ -6448,6 +6448,94 @@ t "t64a7: excluded record pending state is reset (no contamination of next recor
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Section 67 — Drift detection — [DRIFT] sub-line
+# ═══════════════════════════════════════════════════════════════════════════
+section "67 — Drift detection — [DRIFT] sub-line"
+
+_DRIFT_LIBS="
+source '/stack/bin/lib/env-update/config/defaults.sh'
+source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update/core/records.sh'
+source '/stack/bin/lib/env-update/core/semver.sh'
+source '/stack/bin/lib/env-update/core/channel.sh'
+source '/stack/bin/lib/env-update/core/tag_flags.sh'
+source '/stack/bin/lib/env-update/core/cache.sh'
+source '/stack/bin/lib/env-update/http/curl.sh'
+source '/stack/bin/lib/env-update/fetchers/npm.sh'
+export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+"
+
+# t67a: Case 1 — empty var, annotation has version → [DRIFT] emitted
+t "t67a: [DRIFT] emitted when VAR= is empty but annotation has version" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t67a_cache
+    f=\${TMP_DIR}/t67a.env
+    printf '# @todo env-update github:testowner/testrepo 1.0.0\nGLOBAL_STACK_T67A=\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[DRIFT]' || { echo \"expected [DRIFT] in output; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'annotation tracks 1.0.0' || { echo \"expected 'annotation tracks 1.0.0' in output; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t67b: Case 2 — var set but differs from annotation version → [DRIFT] emitted
+t "t67b: [DRIFT] emitted when VAR= differs from annotation version" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t67b_cache
+    f=\${TMP_DIR}/t67b.env
+    printf '# @todo env-update github:testowner/testrepo 1.0.0\nGLOBAL_STACK_T67B=0.9.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[DRIFT]' || { echo \"expected [DRIFT] in output; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'annotation says 1.0.0' || { echo \"expected 'annotation says 1.0.0' in drift line; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'VAR=0.9.0' || { echo \"expected 'VAR=0.9.0' in drift line; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t67c: --no-drift suppresses [DRIFT] sub-line
+t "t67c: --no-drift suppresses [DRIFT] sub-line" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t67c_cache
+    f=\${TMP_DIR}/t67c.env
+    printf '# @todo env-update github:testowner/testrepo 1.0.0\nGLOBAL_STACK_T67C=0.9.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --no-drift --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[DRIFT]' && { echo \"[DRIFT] should be suppressed by --no-drift; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t67d: --no-notes does NOT suppress [DRIFT]
+t "t67d: --no-notes does not suppress [DRIFT] sub-line" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t67d_cache
+    f=\${TMP_DIR}/t67d.env
+    printf '# @todo env-update github:testowner/testrepo 1.0.0\nGLOBAL_STACK_T67D=0.9.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --no-notes --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[DRIFT]' || { echo \"[DRIFT] should NOT be suppressed by --no-notes; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t67e: no drift when var matches annotation version — no [DRIFT] emitted
+t "t67e: no [DRIFT] when VAR= matches annotation version" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t67e_cache
+    f=\${TMP_DIR}/t67e.env
+    printf '# @todo env-update github:testowner/testrepo 1.0.0\nGLOBAL_STACK_T67E=1.0.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[DRIFT]' && { echo \"[DRIFT] emitted spuriously when var matches annotation; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t67f: --no-drift flag is accepted (no unknown-option error)
+t "t67f: --no-drift flag is accepted without error" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t67f_cache
+    f=\${TMP_DIR}/t67f.env
+    printf '# @todo env-update github:testowner/testrepo 1.0.0\nGLOBAL_STACK_T67F=1.0.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --no-drift --env-file=\"\$f\" 2>&1); code=\$?
+    [[ \$code -eq 0 ]] || { echo \"--no-drift caused non-zero exit: \$code; output: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qi 'unknown option' && { echo '--no-drift not recognized; got: \$out'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Section 65 — Bug D: npm major_hint not bypassed by fast-paths
 # ═══════════════════════════════════════════════════════════════════════════
 section "65 — Bug D: npm major_hint fast-path bypass"

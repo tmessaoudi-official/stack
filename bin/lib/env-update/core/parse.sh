@@ -447,6 +447,9 @@ _gs_eu2_parse_env_file() {
         _gs_eu2_record_set "${_idx}" urls "${_pend_urls}"
         _gs_eu2_record_set "${_idx}" annotation_sha "${_pending_sha}"
         _gs_eu2_record_set "${_idx}" annotation_sha_date "${_pending_sha_date}"
+        # actual_var_value: raw VAR= value before any processing — used by drift detection
+        # to compare what the env file actually contains vs. what the annotation claims.
+        _gs_eu2_record_set "${_idx}" actual_var_value "${_var_value}"
 
         # Dispatch all hoisted flags (position-agnostic)
         if [[ -n "${_pending_flags}" ]]; then
