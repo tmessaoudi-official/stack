@@ -7364,6 +7364,87 @@ t "t76k: --no-drift + --changes-only: drift condition keeps record visible despi
     echo PASS
 "
 
+section "77 — --no-fail flag"
+
+# t77a: --no-fail accepted — no parse error on valid usage
+t "t77a: --no-fail accepted — exits 0 (no errors)" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t77a_cache
+    f=\${TMP_DIR}/t77a.env
+    printf '# @todo env-update npm:@types/node:25 25.8.0\nGLOBAL_STACK_T77A=25.8.0\n' > \"\$f\"
+    bash '${ENV_UPDATE_V2}' --check --no-fail --env-file=\"\$f\" >/dev/null 2>&1
+    rc=\$?
+    [[ \$rc -eq 0 ]] || { echo \"expected exit 0, got: \$rc\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t77b: ERROR decision → exit 1 WITHOUT --no-fail (baseline: flag has real effect)
+t "t77b: ERROR → exit 1 without --no-fail" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t77b_cache
+    f=\${TMP_DIR}/t77b.env
+    printf '# @todo env-update dockerhub:_/nonexistent-repo-xyz 1.0.0\nGLOBAL_STACK_T77B=1.0.0\n' > \"\$f\"
+    bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" >/dev/null 2>/dev/null
+    rc=\$?
+    [[ \$rc -ne 0 ]] || { echo \"expected non-zero exit (ERROR without --no-fail), got: \$rc\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t77c: ERROR decision → exit 0 WITH --no-fail
+t "t77c: ERROR → exit 0 with --no-fail" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t77c_cache
+    f=\${TMP_DIR}/t77c.env
+    printf '# @todo env-update dockerhub:_/nonexistent-repo-xyz 1.0.0\nGLOBAL_STACK_T77C=1.0.0\n' > \"\$f\"
+    bash '${ENV_UPDATE_V2}' --check --dry-run --no-fail --env-file=\"\$f\" >/dev/null 2>/dev/null
+    rc=\$?
+    [[ \$rc -eq 0 ]] || { echo \"expected exit 0 with --no-fail, got: \$rc\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t77d: --no-fail does NOT suppress [ERROR] output — decision lines still visible
+t "t77d: --no-fail: [ERROR] lines still appear in output" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t77d_cache
+    f=\${TMP_DIR}/t77d.env
+    printf '# @todo env-update dockerhub:_/nonexistent-repo-xyz 1.0.0\nGLOBAL_STACK_T77D=1.0.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --no-fail --env-file=\"\$f\" 2>&1 || true)
+    echo \"\$out\" | grep -qF '[ERROR' || { echo \"[ERROR] must still appear in output; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t77e: no errors present → exit 0 still (--no-fail has no negative effect on clean runs)
+t "t77e: no errors → exit 0 still with --no-fail" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t77e_cache
+    f=\${TMP_DIR}/t77e.env
+    printf '# @todo env-update npm:@types/node:25 25.8.0\nGLOBAL_STACK_T77E=25.8.0\n' > \"\$f\"
+    bash '${ENV_UPDATE_V2}' --check --no-fail --env-file=\"\$f\" >/dev/null 2>&1
+    rc=\$?
+    [[ \$rc -eq 0 ]] || { echo \"expected exit 0 (no errors, --no-fail), got: \$rc\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t77f: usage/parse error → exit 1 even with --no-fail (args errors are fatal)
+# --no-fail only intercepts ERROR fetch decisions, not argument validation failures.
+t "t77f: usage error stays fatal even with --no-fail" bash -c "
+    bash '${ENV_UPDATE_V2}' --no-fail --check --unknown-invalid-option 2>/dev/null
+    rc=\$?
+    [[ \$rc -ne 0 ]] || { echo \"expected non-zero exit (usage error must be fatal), got: \$rc\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t77g: --no-fail prints a stderr notice when it suppresses non-zero exit code
+t "t77g: --no-fail prints stderr notice when exit code suppressed" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t77g_cache
+    f=\${TMP_DIR}/t77g.env
+    printf '# @todo env-update dockerhub:_/nonexistent-repo-xyz 1.0.0\nGLOBAL_STACK_T77G=1.0.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --no-fail --env-file=\"\$f\" 2>&1 || true)
+    echo \"\$out\" | grep -qF 'no-fail' || { echo \"stderr notice missing (expected 'no-fail' in output); got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
 # ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════

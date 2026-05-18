@@ -902,6 +902,13 @@ _gs_eu2_main() {
         fi
       fi
     fi
+    # --no-fail: suppress non-zero exit from ERROR fetch decisions.
+    # Usage errors (args.sh exit 1), backup failures, and env-file errors are unaffected
+    # because they return/exit before reaching this point.
+    if [[ "${_check_rc}" -ne 0 && "${_GS_EU2_CFG[no_fail]:-false}" == "true" ]]; then
+      printf '(--no-fail: fetch errors present — exit code forced to 0)\n' >&2
+      _check_rc=0
+    fi
     # Propagate non-zero return from _gs_eu2_run_check (errors present) without
     # triggering the ERR trap — the error was already reported in the output.
     return "${_check_rc}"

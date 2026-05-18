@@ -66,6 +66,16 @@ Options:
                                   not signals. (skip:REASON) and (lock:REASON) records are
                                   always visible. Summary counts all checked records; adds
                                   "(N hidden)" when any records are suppressed.
+  --no-fail                       Always exit 0, even when ERROR decisions are present.
+                                  Useful in pipeline scripts where you want the output
+                                  without letting fetch failures abort the pipeline.
+                                  Scope: only ERROR fetch decisions are suppressed. Usage
+                                  errors (bad flags, bad env file), backup failures during
+                                  --apply, and env-file-not-found remain fatal. When errors
+                                  are suppressed a stderr notice is printed:
+                                  "(--no-fail: fetch errors present — exit code forced to 0)"
+                                  Note: with --apply --no-fail, AUTO decisions are still
+                                  applied even when some records have ERROR.
   --force-auto                    Override (manual) and (override) annotation flags and HOLD
                                   decisions — treats them as AUTO-eligible. Useful for
                                   scripted environments where human gates are not appropriate.
@@ -130,6 +140,7 @@ Examples:
   bin/env-update.sh --check --no-notes                    # suppress (note: ...) sub-lines
   bin/env-update.sh --check --no-drift                    # suppress [DRIFT] sub-lines
   bin/env-update.sh --check --changes-only                # hide up-to-date records; show only actionable/informational
+  bin/env-update.sh --check --no-fail                     # always exit 0 even if some fetchers error
   bin/env-update.sh --check --force-auto                  # preview: (manual)/(hold) treated as AUTO
   bin/env-update.sh --apply --force-auto --confirm="Confirm override"  # apply with force-auto
 EOF
