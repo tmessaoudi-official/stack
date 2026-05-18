@@ -74,6 +74,20 @@ Options:
 
 Default (no flags): print a parser summary with per-type breakdown and hints.
 
+Summary line format (shown after --check):
+  Summary: N AUTO, N SHA, N HOLD, N MANUAL, N LOCK, N SKIP, N FROZEN, N FALLBACK, N ERROR  (N checked)
+    ↳ N WATCH · N DRIFT (N fixable) · N DOWNGRADE
+
+  FALLBACK   — records that fell back to LOW major (range annotation, HIGH not yet in registry).
+               Overlay counter: the record is also counted as AUTO or SKIP; not added to total.
+  The secondary ↳ line is omitted when all three signals are zero.
+  WATCH      — new runtime generation detected (watch-major annotation).
+  DRIFT      — VAR= in the env file differs from the annotation's current version.
+               (N fixable): how many DRIFT records are on AUTO, HOLD, MANUAL, or SHA decisions
+               (--apply or --force-auto --apply can resolve them).
+  DOWNGRADE  — subset of DRIFT: VAR= is ahead of annotation (downgrade risk). Not fixable.
+  --no-drift suppresses DRIFT and DOWNGRADE from the secondary line; WATCH is unaffected.
+
 Fetcher types: dockerhub, github, npm, pecl, pypi, quay, rubygems,
 sdkman, sdkmanager, url, codeberg.
 pecl supports an optional (git:owner/repo) flag for HEAD SHA tracking.

@@ -55,6 +55,7 @@ _gs_eu2_run_check() {
   _GS_EU2_CACHE_TTL="${_GS_EU2_CFG[cache_ttl]:-3600}"
 
   local _n_auto=0 _n_hold=0 _n_skip=0 _n_error=0 _n_manual=0 _n_sha=0 _n_lock=0 _n_frozen=0
+  local _n_fallback=0 _n_watch=0 _n_drift=0 _n_drift_fixable=0 _n_downgrade=0
 
   # Dynamic column width: pre-scan all env_var names so the → arrow aligns
   # across every record in this run, regardless of variable name length.
@@ -424,6 +425,7 @@ _gs_eu2_run_check() {
     if [[ "${_using_fallback_disp}" == "true" && -n "${_major_min}" ]]; then
       printf '%10s↳ [FALLBACK] major=%s not yet in registry — using fallback major=%s\n' \
         "" "${_major}" "${_major_min}"
+      (( ++_n_fallback )) || true
     fi
 
     # major-pin no-match sub-line: when a major_hint filter produced zero results (decision=SKIP)
@@ -466,6 +468,7 @@ _gs_eu2_run_check() {
             if [[ "${_wm_higher}" == "${_wm_lat_pfx}" ]]; then
               printf '%10s↳ [WATCH] New generation available: %s (depth %s: %s → %s)\n' \
                 "" "${_wm_latest}" "${_wm_depth_r}" "${_wm_cur_pfx}" "${_wm_lat_pfx}"
+              (( ++_n_watch )) || true
             fi
           fi
         fi
@@ -523,6 +526,7 @@ _gs_eu2_run_check() {
     #   auto-written; the empty state is intentional (feature disabled by design).
     # Empty VAR + other decisions: enable-warning — --apply will write the fetched version.
     # NOT suppressed by --no-notes. ONLY suppressed by --no-drift.
+    local _drift_fired=false _drift_dir_downgrade=false
     if [[ "${_GS_EU2_CFG[no_drift]:-false}" != "true" ]]; then
       local _drift_actual _drift_ann_ver _drift_ann_sha _drift_use_sha
       _drift_actual="$(_gs_eu2_record_get "${_i}" actual_var_value)"
@@ -535,6 +539,7 @@ _gs_eu2_run_check() {
               && "${_drift_actual}" != "${_drift_ann_sha}" ]]; then
           printf '%10s↳ [DRIFT] var SHA (%s) differs from annotation sha:(%s) — re-run --apply or update annotation\n' \
             "" "${_drift_actual:0:8}" "${_drift_ann_sha:0:8}"
+          _drift_fired=true
         fi
       else
         if [[ -z "${_drift_actual}" && -n "${_drift_ann_ver}" ]]; then
@@ -543,6 +548,7 @@ _gs_eu2_run_check() {
           if [[ "${_decision}" == "LOCK" ]]; then
             printf '%10s↳ [DRIFT] var is empty — annotation locked at %s; feature disabled (set VAR= manually to re-enable — lock blocks --apply and --force-auto)\n' \
               "" "${_drift_ann_ver}"
+            _drift_fired=true
           # FROZEN (skip-gate SKIP): skip gate also blocks --apply — suppress drift noise
           elif [[ -n "${_skip_reason}" ]]; then
             : # skip-gate blocks apply; empty var is intentional — no drift message
@@ -550,18 +556,22 @@ _gs_eu2_run_check() {
           elif [[ "${_decision}" == "HOLD" ]]; then
             printf '%10s↳ [DRIFT] var is empty — annotation tracks %s (feature disabled? --force-auto --apply will write it to enable)\n' \
               "" "${_drift_ann_ver}"
+            _drift_fired=true
           # MANUAL: --force-auto --apply required; manual flag blocks plain --apply
           elif [[ "${_decision}" == "MANUAL" ]]; then
             printf '%10s↳ [DRIFT] var is empty — annotation tracks %s (feature disabled? --force-auto --apply will write it to enable)\n' \
               "" "${_drift_ann_ver}"
+            _drift_fired=true
           # AUTO/SHA: --apply will resolve
           elif [[ "${_decision}" == "AUTO" || "${_decision}" == "SHA" ]]; then
             printf '%10s↳ [DRIFT] var is empty — annotation tracks %s (feature disabled? --apply will write %s to enable it)\n' \
               "" "${_drift_ann_ver}" "${_prop:-${_drift_ann_ver}}"
+            _drift_fired=true
           # SKIP (up-to-date, not skip-gate) or ERROR: informational only
           else
             printf '%10s↳ [DRIFT] var is empty — annotation tracks %s (feature disabled?)\n' \
               "" "${_drift_ann_ver}"
+            _drift_fired=true
           fi
         elif [[ -n "${_drift_actual}" && -n "${_drift_ann_ver}" \
                 && "${_drift_actual}" != "${_drift_ann_ver}" ]]; then
@@ -579,42 +589,77 @@ _gs_eu2_run_check() {
             else
               # VAR is AHEAD of annotation (downgrade risk: VAR newer than annotation)
               _drift_dir_msg=" — VAR is ahead of annotation (downgrade risk: run --apply only if intentional)"
+              _drift_dir_downgrade=true
             fi
           fi
           # Decision-aware suffix when no direction message or to override neutral
           if [[ "${_decision}" == "LOCK" ]]; then
             printf '%10s↳ [DRIFT] annotation says %s but VAR=%s — locked; update annotation manually to resolve\n' \
               "" "${_drift_ann_ver}" "${_drift_actual}"
+            _drift_fired=true
           elif [[ -n "${_skip_reason}" ]]; then
             printf '%10s↳ [DRIFT] annotation says %s but VAR=%s — frozen by skip flag; update annotation manually to resolve\n' \
               "" "${_drift_ann_ver}" "${_drift_actual}"
+            _drift_fired=true
           elif [[ "${_decision}" == "HOLD" ]]; then
             printf '%10s↳ [DRIFT] annotation says %s but VAR=%s%s — --force-auto --apply to resolve\n' \
               "" "${_drift_ann_ver}" "${_drift_actual}" "${_drift_dir_msg}"
+            _drift_fired=true
           elif [[ "${_decision}" == "MANUAL" ]]; then
             printf '%10s↳ [DRIFT] annotation says %s but VAR=%s%s — --force-auto --apply to resolve\n' \
               "" "${_drift_ann_ver}" "${_drift_actual}" "${_drift_dir_msg}"
+            _drift_fired=true
           elif [[ "${_decision}" == "ERROR" ]]; then
             printf '%10s↳ [DRIFT] annotation says %s but VAR=%s — fetch failed; fix error then re-run --apply\n' \
               "" "${_drift_ann_ver}" "${_drift_actual}"
+            _drift_fired=true
           elif [[ "${_decision}" == "SKIP" && -z "${_skip_reason}" ]]; then
             # Regular SKIP (up-to-date by classifier): annotation and VAR disagree
             printf '%10s↳ [DRIFT] annotation says %s but VAR=%s — re-run --apply or update annotation\n' \
               "" "${_drift_ann_ver}" "${_drift_actual}"
+            _drift_fired=true
           else
             # AUTO, SHA, or any other decision
             printf '%10s↳ [DRIFT] annotation says %s but VAR=%s%s\n' \
               "" "${_drift_ann_ver}" "${_drift_actual}" "${_drift_dir_msg:-}"
+            _drift_fired=true
           fi
         fi
+      fi
+    fi
+
+    # Post-drift counter updates (outside the no_drift guard — drift_fired is false when suppressed)
+    if [[ "${_drift_fired}" == "true" ]]; then
+      (( ++_n_drift )) || true
+      if [[ "${_drift_dir_downgrade}" == "true" ]]; then
+        (( ++_n_downgrade )) || true
+      elif [[ "${_decision}" == "AUTO" || "${_decision}" == "HOLD" \
+              || "${_decision}" == "MANUAL" || "${_decision}" == "SHA" ]]; then
+        (( ++_n_drift_fixable )) || true
       fi
     fi
   done
 
   local _total=$(( _n_auto + _n_hold + _n_skip + _n_error + _n_manual + _n_sha + _n_lock + _n_frozen ))
   printf '%-80s\n' "──────────────────────────────────────────────────────────────────────────────"
-  printf '  Summary: %d AUTO, %d SHA, %d HOLD, %d MANUAL, %d LOCK, %d SKIP, %d FROZEN, %d ERROR  (%d checked)\n' \
-    "${_n_auto}" "${_n_sha}" "${_n_hold}" "${_n_manual}" "${_n_lock}" "${_n_skip}" "${_n_frozen}" "${_n_error}" "${_total}"
+  printf '  Summary: %d AUTO, %d SHA, %d HOLD, %d MANUAL, %d LOCK, %d SKIP, %d FROZEN, %d FALLBACK, %d ERROR  (%d checked)\n' \
+    "${_n_auto}" "${_n_sha}" "${_n_hold}" "${_n_manual}" "${_n_lock}" "${_n_skip}" "${_n_frozen}" "${_n_fallback}" "${_n_error}" "${_total}"
+
+  # Secondary signals sub-line: WATCH, DRIFT (with fixable count), DOWNGRADE.
+  # DRIFT and DOWNGRADE suppressed when --no-drift is active.
+  # Entire line omitted when all relevant signals are zero.
+  local _sec_watch="${_n_watch}"
+  local _sec_drift=0 _sec_fixable=0 _sec_down=0
+  if [[ "${_GS_EU2_CFG[no_drift]:-false}" != "true" ]]; then
+    _sec_drift="${_n_drift}"
+    _sec_fixable="${_n_drift_fixable}"
+    _sec_down="${_n_downgrade}"
+  fi
+  if (( _sec_watch > 0 || _sec_drift > 0 || _sec_down > 0 )); then
+    printf '    ↳ %d WATCH · %d DRIFT (%d fixable) · %d DOWNGRADE\n' \
+      "${_sec_watch}" "${_sec_drift}" "${_sec_fixable}" "${_sec_down}"
+  fi
+
   # Exit non-zero when any ERROR decisions were recorded — callers can detect fetch failures.
   (( _n_error > 0 )) && return 1 || return 0
 }

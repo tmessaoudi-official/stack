@@ -7093,6 +7093,107 @@ t "t74c: range :30-31, both absent — SKIP + [PIN-MISS], no [FALLBACK]" bash -c
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Section 75 — Summary line: FALLBACK, WATCH, DRIFT, DOWNGRADE counters
+# ═══════════════════════════════════════════════════════════════════════════
+section "75 — Summary line: FALLBACK, WATCH, DRIFT, DOWNGRADE counters"
+
+# t75a: FALLBACK counter appears in summary when range falls back to LOW major.
+# Fixture: @types/node (22,22.1,24,24.1,25,25.8 — no 26.x)
+# Annotation: npm:@types/node:25-26 25.0.0, VAR=25.0.0
+# Expected: 1 FALLBACK in Summary line.
+t "t75a: FALLBACK counter — summary shows 1 FALLBACK when range falls back to LOW major" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t75a_cache
+    f=\${TMP_DIR}/t75a.env
+    printf '# @todo env-update npm:@types/node:25-26 25.0.0\nGLOBAL_STACK_T75A=25.0.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '1 FALLBACK' || { echo \"Summary must show 1 FALLBACK; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '[FALLBACK]' || { echo \"[FALLBACK] sub-line must still appear; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t75b: WATCH counter appears in secondary sub-line.
+# Fixture: testorg/watchrepo-newer (v4.0.0, v3.1.0, v3.0.5). Pin major 3.
+# Current=3.0.5 → proposed=v3.1.0, unconstrained=v4.0.0 → WATCH fires.
+# Expected: secondary sub-line shows 1 WATCH.
+t "t75b: WATCH counter — secondary sub-line shows 1 WATCH when newer generation available" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t75b_cache
+    f=\${TMP_DIR}/t75b.env
+    printf '# @todo env-update (watch-major) github:testorg/watchrepo-newer:3 3.0.5\nGLOBAL_STACK_T75B=3.0.5\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[WATCH]' || { echo \"[WATCH] sub-line must appear; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qE '1 WATCH' || { echo \"secondary sub-line must show 1 WATCH; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t75c: DRIFT counter (fixable) — VAR behind annotation, AUTO decision.
+# Fixture: testowner/testrepo (v2.5.0, v2.4.0, v2.3.0-rc1).
+# Annotation current=1.0.0, VAR=0.9.0. No major pin → AUTO (2.5.0 > 1.0.0).
+# Drift: annotation says 1.0.0, VAR=0.9.0 → drift fires. AUTO decision → fixable.
+# Expected: 1 DRIFT (1 fixable) in secondary sub-line, 0 DOWNGRADE.
+t "t75c: DRIFT fixable counter — 1 DRIFT (1 fixable) when VAR behind annotation, AUTO decision" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t75c_cache
+    f=\${TMP_DIR}/t75c.env
+    printf '# @todo env-update github:testowner/testrepo 1.0.0\nGLOBAL_STACK_T75C=0.9.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[DRIFT]' || { echo \"[DRIFT] sub-line must appear; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qE '1 DRIFT \(1 fixable\)' || { echo \"secondary sub-line must show 1 DRIFT (1 fixable); got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qE '0 DOWNGRADE' || { echo \"secondary sub-line must show 0 DOWNGRADE; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t75d: --no-drift suppresses DRIFT+DOWNGRADE from secondary sub-line.
+# Same scenario as t75c but with --no-drift.
+# Expected: no [DRIFT] sub-line, no secondary ↳ line (all signals zero).
+t "t75d: --no-drift suppresses DRIFT from secondary sub-line (WATCH zero → line omitted)" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t75d_cache
+    f=\${TMP_DIR}/t75d.env
+    printf '# @todo env-update github:testowner/testrepo 1.0.0\nGLOBAL_STACK_T75D=0.9.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --no-drift --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[DRIFT]' && { echo \"[DRIFT] sub-line must NOT appear with --no-drift; got: \$out\"; echo FAIL; exit 0; } || true
+    # Secondary line omitted when all signals (WATCH=0 here, DRIFT/DOWNGRADE suppressed) are zero
+    echo \"\$out\" | grep -qF 'WATCH' && { echo \"secondary WATCH line must not appear (WATCH=0); got: \$out\"; echo FAIL; exit 0; } || true
+    echo PASS
+"
+
+# t75e: DOWNGRADE counter — VAR ahead of annotation, pure semver, direction detected.
+# Fixture: @types/node (22,22.1,24,24.1,25,25.8). Pin to major 22.
+# Annotation current=22.1.0, VAR=25.8.0. Fetcher proposes 22.1.0 (same) → SKIP.
+# Drift: annotation says 22.1.0, VAR=25.8.0 → both pure semver → VAR ahead → DOWNGRADE.
+# SKIP is not in the fixable set → fixable=0, downgrade=1.
+# Expected: 1 DRIFT (0 fixable), 1 DOWNGRADE in secondary sub-line.
+t "t75e: DOWNGRADE counter — 1 DOWNGRADE when VAR ahead of annotation (pure semver, SKIP decision)" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t75e_cache
+    f=\${TMP_DIR}/t75e.env
+    printf '# @todo env-update npm:@types/node:22 22.1.0\nGLOBAL_STACK_T75E=25.8.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[DRIFT]' || { echo \"[DRIFT] sub-line must appear; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qE '1 DRIFT \(0 fixable\)' || { echo \"secondary sub-line must show 1 DRIFT (0 fixable); got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qE '1 DOWNGRADE' || { echo \"secondary sub-line must show 1 DOWNGRADE; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t75f: Clean run — all signals zero, secondary sub-line omitted.
+# Fixture: @types/node. Annotation current=25.8.0, VAR=25.8.0.
+# No WATCH (no watch-major), no drift (VAR matches annotation), up-to-date → SKIP.
+# Expected: no secondary ↳ line in output; 0 FALLBACK in summary.
+t "t75f: clean run — no secondary sub-line when all signals are zero" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t75f_cache
+    f=\${TMP_DIR}/t75f.env
+    printf '# @todo env-update npm:@types/node:25 25.8.0\nGLOBAL_STACK_T75F=25.8.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '0 FALLBACK' || { echo \"Summary must show 0 FALLBACK; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'WATCH' && { echo \"secondary sub-line must NOT appear when all signals are zero; got: \$out\"; echo FAIL; exit 0; } || true
+    echo \"\$out\" | grep -qF 'DRIFT' && { echo \"secondary sub-line must NOT appear when all signals are zero; got: \$out\"; echo FAIL; exit 0; } || true
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section
