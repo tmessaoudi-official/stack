@@ -398,6 +398,19 @@ _gs_eu2_run_check() {
     [[ -n "${_note}" && "${_GS_EU2_CFG[no_notes]:-false}" != "true" ]] && \
       printf '%10s↳ %s\n' "" "${_note}"
 
+    # major-pin no-match sub-line: when a major_hint filter produced zero results (decision=SKIP)
+    # and latest_unconstrained is known, show it so the user knows what exists without the pin.
+    # Guard: only when major_hint is set and latest_unconstrained is populated (fetchers set this
+    # specifically for the "pin yielded nothing" case). NOT suppressed by --no-notes.
+    if [[ "${_decision}" == "SKIP" && -n "${_major}" ]]; then
+      local _pin_uc
+      _pin_uc="$(_gs_eu2_record_get "${_i}" latest_unconstrained)"
+      if [[ -n "${_pin_uc}" ]]; then
+        printf '%10s↳ [INFO] no major=%s versions found — latest without pin: %s\n' \
+          "" "${_major}" "${_pin_uc}"
+      fi
+    fi
+
     # (watch-major) sub-line: emit when a new runtime generation is available.
     # Uses latest_unconstrained (set by fetchers from the pre-major-pin tag set),
     # falling back to proposed_version for fetcher types with no major-pin concept.

@@ -54,7 +54,7 @@ Options:
                                   Compatible with --unstable=full (shown below main line).
   --no-notes                      Suppress annotation (note: TEXT) sub-lines — for minimal
                                   output. Does NOT suppress SHA, unstable INFO, stable
-                                  INFO, or [DRIFT] sub-lines.
+                                  INFO, [DRIFT], or major-pin no-match [INFO] sub-lines.
   --no-drift                      Suppress [DRIFT] sub-lines — emitted when the VAR= value
                                   in the env file differs from what the annotation claims as
                                   current. Does NOT affect (note:TEXT) or other sub-lines.

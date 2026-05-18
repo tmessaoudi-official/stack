@@ -6701,6 +6701,75 @@ t "t66c: use_sha=false — VAR= gets proposed version, not SHA (regression guard
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Section 69 — Sprint 5: Enhanced SKIP message — major_hint no-match sub-line
+# ═══════════════════════════════════════════════════════════════════════════
+section "69 — major_hint no-match: [INFO] sub-line with latest_unconstrained"
+
+# t69a: major_hint=23 → no 23.x in @types/node fixture → [INFO] shows 25.8.0
+# Annotation format: npm:@types/node:23 embeds the major_hint inside the type:identifier token
+t "t69a: major_hint=23 SKIP emits [INFO] sub-line with latest available (25.8.0)" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t69a_cache
+    f=\${TMP_DIR}/t69a.env
+    printf '# @todo env-update npm:@types/node:23 22.0.0\nGLOBAL_STACK_TYPES_NODE_23=22.0.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[INFO]' || { echo \"expected [INFO] sub-line in output; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'no major=23' || { echo \"expected 'no major=23' in [INFO] line; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '25.8.0' || { echo \"expected '25.8.0' (latest_unconstrained) in [INFO] line; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t69b: major_hint=22 has matches → no [INFO] no-match sub-line emitted
+t "t69b: major_hint=22 has matches — no [INFO] no-match sub-line" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t69b_cache
+    f=\${TMP_DIR}/t69b.env
+    printf '# @todo env-update npm:@types/node:22 22.0.0\nGLOBAL_STACK_TYPES_NODE_22=22.0.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF 'no major=22' && { echo \"[INFO] no-match sub-line should NOT appear when 22.x versions exist; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t69c: no major_hint → SKIP is current-is-latest (no [INFO] no-match sub-line)
+t "t69c: no major_hint + up-to-date → no [INFO] no-match sub-line" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t69c_cache
+    f=\${TMP_DIR}/t69c.env
+    printf '# @todo env-update npm:@types/node 25.8.0\nGLOBAL_STACK_TYPES_NODE=25.8.0\n' > \"\$f\"
+    # No major_hint in annotation — only plain npm:@types/node
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF 'no major=' && { echo \"[INFO] no-match sub-line should NOT appear without major_hint; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t69d: major_hint=23 latest_unconstrained field set in record (unit-level check via fetcher)
+t "t69d: npm fetcher sets latest_unconstrained when major_hint=23 yields no results" bash -c "
+    source '/stack/bin/lib/env-update/config/defaults.sh'
+    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+    source '/stack/bin/lib/env-update/core/records.sh'
+    source '/stack/bin/lib/env-update/core/semver.sh'
+    source '/stack/bin/lib/env-update/core/channel.sh'
+    source '/stack/bin/lib/env-update/core/tag_flags.sh'
+    source '/stack/bin/lib/env-update/core/cache.sh'
+    source '/stack/bin/lib/env-update/http/curl.sh'
+    source '/stack/bin/lib/env-update/fetchers/npm.sh'
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t69d_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'npm'
+    _gs_eu2_record_set \$idx identifier      '@types/node'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_TYPES_NODE_23'
+    _gs_eu2_record_set \$idx current_version '22.0.0'
+    _gs_eu2_record_set \$idx major_hint      '23'
+    _gs_eu2_fetch_npm \$idx
+    dec=\$(_gs_eu2_record_get \$idx decision)
+    uc=\$(_gs_eu2_record_get \$idx latest_unconstrained)
+    [[ \"\$dec\" == 'SKIP' ]] || { echo \"expected SKIP, got: \$dec\"; echo FAIL; exit 0; }
+    [[ \"\$uc\" == '25.8.0' ]] || { echo \"expected latest_unconstrained=25.8.0, got: '\$uc'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Section 68 — HTTP memo: URL-level in-session deduplication
 # ═══════════════════════════════════════════════════════════════════════════
 section "68 — HTTP memo: URL-level in-session dedup"
