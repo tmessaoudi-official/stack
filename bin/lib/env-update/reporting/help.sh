@@ -42,25 +42,31 @@ Options:
                           decide.sh is bypassed: stable→prerelease classifies
                           as AUTO. (manual) and (hold) still apply.
   --unstable=info         Informational only — after each fetch, shows the latest
-                          prerelease as a "↳ [INFO] unstable: <version>" sub-line.
+                          prerelease as a "↳ [UNSTABLE] unstable: <version>" sub-line.
                           Does not change AUTO/HOLD/SKIP logic.
   --stable / --stable=full        Force channel=stable on all records with a non-stable
                                   channel (rc, beta, alpha, nightly, unstable → stable).
                                   Records already on stable/default are unchanged.
                                   Mutually exclusive with --unstable=full only.
   --stable=info                   Informational only — after each fetch, shows the stable
-                                  version as a "↳ [INFO] stable: <version>" sub-line for
+                                  version as a "↳ [STABLE] stable: <version>" sub-line for
                                   records on non-stable channels. Does not change decisions.
                                   Compatible with --unstable=full (shown below main line).
   --no-notes                      Suppress annotation (note: TEXT) sub-lines — for minimal
-                                  output. Does NOT suppress SHA, unstable INFO, stable
-                                  INFO, [DRIFT], or major-pin no-match [INFO] sub-lines.
+                                  output. Does NOT suppress SHA, [UNSTABLE], [STABLE],
+                                  [DRIFT], or [PIN-MISS] sub-lines.
   --no-drift                      Suppress [DRIFT] sub-lines — emitted when the VAR= value
                                   in the env file differs from what the annotation claims as
                                   current. Does NOT affect (note:TEXT) or other sub-lines.
   --force-auto                    Override (manual) and (override) annotation flags and HOLD
                                   decisions — treats them as AUTO-eligible. Useful for
                                   scripted environments where human gates are not appropriate.
+                                  NOTE: (lock:REASON) and (skip:REASON) annotation flags are
+                                  immune to --force-auto — they cannot be overridden. The
+                                  (manual) flag CAN be overridden; the annotation text is NOT
+                                  rewritten. (lock:REASON) cannot be overridden at all;
+                                  annotation-only updates via --apply still work for locked
+                                  records (version bump without --force-auto).
                                   When used with --apply, requires --confirm="Confirm override"
                                   to proceed (safety gate — prevents accidental use).
   --confirm=TEXT                  Confirmation string required by --force-auto --apply.

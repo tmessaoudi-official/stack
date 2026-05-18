@@ -54,7 +54,7 @@ _gs_eu2_run_check() {
   # Propagate cache settings from CFG to env vars consumed by cache.sh
   _GS_EU2_CACHE_TTL="${_GS_EU2_CFG[cache_ttl]:-3600}"
 
-  local _n_auto=0 _n_hold=0 _n_skip=0 _n_error=0 _n_manual=0 _n_sha=0 _n_lock=0
+  local _n_auto=0 _n_hold=0 _n_skip=0 _n_error=0 _n_manual=0 _n_sha=0 _n_lock=0 _n_frozen=0
 
   # Dynamic column width: pre-scan all env_var names so the → arrow aligns
   # across every record in this run, regardless of variable name length.
@@ -317,7 +317,14 @@ _gs_eu2_run_check() {
     case "${_decision}" in
       AUTO)   _tag="[AUTO  ]"; (( ++_n_auto ))   || true ;;
       HOLD)   _tag="[HOLD  ]"; (( ++_n_hold ))   || true ;;
-      SKIP)   _tag="[SKIP  ]"; (( ++_n_skip ))   || true ;;
+      SKIP)
+        # skip-gate SKIP (skip:REASON annotation): display as [FROZEN], separate counter
+        if [[ -n "${_skip_reason}" ]]; then
+          _tag="[FROZEN]"; (( ++_n_frozen )) || true
+        else
+          _tag="[SKIP  ]"; (( ++_n_skip ))  || true
+        fi
+        ;;
       ERROR)  _tag="[ERROR ]"; (( ++_n_error ))  || true ;;
       MANUAL) _tag="[MANUAL]"; (( ++_n_manual )) || true ;;
       SHA)    _tag="[SHA   ]"; (( ++_n_sha ))    || true ;;
@@ -382,8 +389,10 @@ _gs_eu2_run_check() {
     elif [[ -n "${_err}" ]]; then
       _change="  (${_err})"
     elif [[ "${_decision}" == "SKIP" ]]; then
-      if [[ "${_manual}" == "true" || "${_override}" == "true" ]]; then
+      if [[ "${_manual}" == "true" ]]; then
         _change="  (up to date — manual)"
+      elif [[ "${_override}" == "true" ]]; then
+        _change="  (up to date — override)"
       else
         _change="  (up to date)"
       fi
@@ -406,7 +415,7 @@ _gs_eu2_run_check() {
       local _pin_uc
       _pin_uc="$(_gs_eu2_record_get "${_i}" latest_unconstrained)"
       if [[ -n "${_pin_uc}" ]]; then
-        printf '%10s↳ [INFO] no major=%s versions found — latest without pin: %s\n' \
+        printf '%10s↳ [PIN-MISS] major=%s not yet in registry — globally latest: %s\n' \
           "" "${_major}" "${_pin_uc}"
       fi
     fi
@@ -464,7 +473,7 @@ _gs_eu2_run_check() {
       local _unstable_disp
       _unstable_disp="$(_gs_eu2_record_get "${_i}" unstable_proposed)"
       if [[ -n "${_unstable_disp}" && "${_unstable_disp}" != "${_cur}" ]]; then
-        printf '%10s↳ [INFO] unstable: %s\n' "" "${_unstable_disp}"
+        printf '%10s↳ [UNSTABLE] unstable: %s\n' "" "${_unstable_disp}"
       fi
     fi
 
@@ -474,14 +483,23 @@ _gs_eu2_run_check() {
       local _stable_disp
       _stable_disp="$(_gs_eu2_record_get "${_i}" stable_proposed)"
       if [[ -n "${_stable_disp}" && "${_stable_disp}" != "${_cur}" ]]; then
-        printf '%10s↳ [INFO] stable: %s\n' "" "${_stable_disp}"
+        printf '%10s↳ [STABLE] stable: %s\n' "" "${_stable_disp}"
       fi
     fi
 
     # [DRIFT] sub-line: emitted when the actual VAR= value in the env file differs from
     # what the annotation records as the current version (or SHA for use-sha records).
-    # This signals that --apply was not run after a manual edit, or the annotation was
-    # updated but the variable was not, or vice versa.
+    # Decision-aware: the message adapts to the current decision so the user knows exactly
+    # what action (if any) will resolve the drift.
+    # - LOCK/FROZEN (skip-gate): drift is informational only — lock and skip gate block --apply.
+    # - HOLD: drift noted; --force-auto --apply required to resolve.
+    # - MANUAL: drift noted; manual flag blocks --apply; --force-auto --apply to override.
+    # - AUTO/SHA: re-run --apply to resolve.
+    # - SKIP (up-to-date, not skip-gate): re-run --apply or update annotation.
+    # - ERROR: drift noted but cannot auto-resolve (fetch failed).
+    # Empty VAR + skip-gate or empty VAR + LOCK: suppressed — skipped/locked vars are never
+    #   auto-written; the empty state is intentional (feature disabled by design).
+    # Empty VAR + other decisions: enable-warning — --apply will write the fetched version.
     # NOT suppressed by --no-notes. ONLY suppressed by --no-drift.
     if [[ "${_GS_EU2_CFG[no_drift]:-false}" != "true" ]]; then
       local _drift_actual _drift_ann_ver _drift_ann_sha _drift_use_sha
@@ -490,7 +508,7 @@ _gs_eu2_run_check() {
       _drift_ann_sha="$(_gs_eu2_record_get "${_i}" annotation_sha)"
       _drift_use_sha="$(_gs_eu2_record_get "${_i}" use_sha)"
       if [[ "${_drift_use_sha}" == "true" ]]; then
-        # Case 3: use-sha record — compare VAR= value vs. annotation sha:
+        # Case 3: use-sha record — compare VAR= value vs. annotation sha
         if [[ -n "${_drift_actual}" && -n "${_drift_ann_sha}" \
               && "${_drift_actual}" != "${_drift_ann_sha}" ]]; then
           printf '%10s↳ [DRIFT] var SHA (%s) differs from annotation sha:(%s) — re-run --apply or update annotation\n' \
@@ -498,23 +516,83 @@ _gs_eu2_run_check() {
         fi
       else
         if [[ -z "${_drift_actual}" && -n "${_drift_ann_ver}" ]]; then
-          # Case 1: empty var but annotation has a version (feature disabled?)
-          printf '%10s↳ [DRIFT] var is empty — annotation tracks %s (feature disabled?)\n' \
-            "" "${_drift_ann_ver}"
+          # Case 1: empty var — decision-aware enable-warning
+          # LOCK: immune to --apply and --force-auto — never auto-written; suppress drift noise
+          if [[ "${_decision}" == "LOCK" ]]; then
+            printf '%10s↳ [DRIFT] var is empty — annotation locked at %s; feature disabled (set VAR= manually to re-enable — lock blocks --apply and --force-auto)\n' \
+              "" "${_drift_ann_ver}"
+          # FROZEN (skip-gate SKIP): skip gate also blocks --apply — suppress drift noise
+          elif [[ -n "${_skip_reason}" ]]; then
+            : # skip-gate blocks apply; empty var is intentional — no drift message
+          # HOLD: both apply and force-auto apply can eventually resolve this
+          elif [[ "${_decision}" == "HOLD" ]]; then
+            printf '%10s↳ [DRIFT] var is empty — annotation tracks %s (feature disabled? --force-auto --apply will write it to enable)\n' \
+              "" "${_drift_ann_ver}"
+          # MANUAL: --force-auto --apply required; manual flag blocks plain --apply
+          elif [[ "${_decision}" == "MANUAL" ]]; then
+            printf '%10s↳ [DRIFT] var is empty — annotation tracks %s (feature disabled? --force-auto --apply will write it to enable)\n' \
+              "" "${_drift_ann_ver}"
+          # AUTO/SHA: --apply will resolve
+          elif [[ "${_decision}" == "AUTO" || "${_decision}" == "SHA" ]]; then
+            printf '%10s↳ [DRIFT] var is empty — annotation tracks %s (feature disabled? --apply will write %s to enable it)\n' \
+              "" "${_drift_ann_ver}" "${_prop:-${_drift_ann_ver}}"
+          # SKIP (up-to-date, not skip-gate) or ERROR: informational only
+          else
+            printf '%10s↳ [DRIFT] var is empty — annotation tracks %s (feature disabled?)\n' \
+              "" "${_drift_ann_ver}"
+          fi
         elif [[ -n "${_drift_actual}" && -n "${_drift_ann_ver}" \
                 && "${_drift_actual}" != "${_drift_ann_ver}" ]]; then
-          # Case 2: both non-empty but differ
-          printf '%10s↳ [DRIFT] annotation says %s but VAR=%s — re-run --apply or update annotation\n' \
-            "" "${_drift_ann_ver}" "${_drift_actual}"
+          # Case 2: both non-empty but differ — direction-aware + decision-aware message
+          # Direction detection: only for clean semver values (vX.Y.Z or X.Y.Z form).
+          # Non-semver (e.g. 18.3-alpine3.23, 2.5.0-rc1, main) use the neutral fallback.
+          local _drift_dir_msg=""
+          if [[ "${_drift_actual}" =~ ^v?[0-9][0-9.]*$ && \
+                "${_drift_ann_ver}" =~ ^v?[0-9][0-9.]*$ ]]; then
+            local _drift_oldest
+            _drift_oldest="$(printf '%s\n%s\n' "${_drift_actual}" "${_drift_ann_ver}" | sort -V | head -1)"
+            if [[ "${_drift_oldest}" == "${_drift_actual}" && "${_drift_actual}" != "${_drift_ann_ver}" ]]; then
+              # VAR is BEHIND annotation (normal drift: annotation advanced, apply not run)
+              _drift_dir_msg=" — re-run --apply or update annotation"
+            else
+              # VAR is AHEAD of annotation (downgrade risk: VAR newer than annotation)
+              _drift_dir_msg=" — VAR is ahead of annotation (downgrade risk: run --apply only if intentional)"
+            fi
+          fi
+          # Decision-aware suffix when no direction message or to override neutral
+          if [[ "${_decision}" == "LOCK" ]]; then
+            printf '%10s↳ [DRIFT] annotation says %s but VAR=%s — locked; update annotation manually to resolve\n' \
+              "" "${_drift_ann_ver}" "${_drift_actual}"
+          elif [[ -n "${_skip_reason}" ]]; then
+            printf '%10s↳ [DRIFT] annotation says %s but VAR=%s — frozen by skip flag; update annotation manually to resolve\n' \
+              "" "${_drift_ann_ver}" "${_drift_actual}"
+          elif [[ "${_decision}" == "HOLD" ]]; then
+            printf '%10s↳ [DRIFT] annotation says %s but VAR=%s%s — --force-auto --apply to resolve\n' \
+              "" "${_drift_ann_ver}" "${_drift_actual}" "${_drift_dir_msg}"
+          elif [[ "${_decision}" == "MANUAL" ]]; then
+            printf '%10s↳ [DRIFT] annotation says %s but VAR=%s%s — --force-auto --apply to resolve\n' \
+              "" "${_drift_ann_ver}" "${_drift_actual}" "${_drift_dir_msg}"
+          elif [[ "${_decision}" == "ERROR" ]]; then
+            printf '%10s↳ [DRIFT] annotation says %s but VAR=%s — fetch failed; fix error then re-run --apply\n' \
+              "" "${_drift_ann_ver}" "${_drift_actual}"
+          elif [[ "${_decision}" == "SKIP" && -z "${_skip_reason}" ]]; then
+            # Regular SKIP (up-to-date by classifier): annotation and VAR disagree
+            printf '%10s↳ [DRIFT] annotation says %s but VAR=%s — re-run --apply or update annotation\n' \
+              "" "${_drift_ann_ver}" "${_drift_actual}"
+          else
+            # AUTO, SHA, or any other decision
+            printf '%10s↳ [DRIFT] annotation says %s but VAR=%s%s\n' \
+              "" "${_drift_ann_ver}" "${_drift_actual}" "${_drift_dir_msg:-}"
+          fi
         fi
       fi
     fi
   done
 
-  local _total=$(( _n_auto + _n_hold + _n_skip + _n_error + _n_manual + _n_sha + _n_lock ))
+  local _total=$(( _n_auto + _n_hold + _n_skip + _n_error + _n_manual + _n_sha + _n_lock + _n_frozen ))
   printf '%-80s\n' "──────────────────────────────────────────────────────────────────────────────"
-  printf '  Summary: %d AUTO, %d SHA, %d HOLD, %d MANUAL, %d LOCK, %d SKIP, %d ERROR  (%d checked)\n' \
-    "${_n_auto}" "${_n_sha}" "${_n_hold}" "${_n_manual}" "${_n_lock}" "${_n_skip}" "${_n_error}" "${_total}"
+  printf '  Summary: %d AUTO, %d SHA, %d HOLD, %d MANUAL, %d LOCK, %d SKIP, %d FROZEN, %d ERROR  (%d checked)\n' \
+    "${_n_auto}" "${_n_sha}" "${_n_hold}" "${_n_manual}" "${_n_lock}" "${_n_skip}" "${_n_frozen}" "${_n_error}" "${_total}"
   # Exit non-zero when any ERROR decisions were recorded — callers can detect fetch failures.
   (( _n_error > 0 )) && return 1 || return 0
 }

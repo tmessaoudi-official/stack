@@ -193,13 +193,13 @@ t "t03b: skip flag" bash -c "
     echo PASS
 "
 
-t "t03b2: (skip:REASON) forces SKIP decision in --check output (not AUTO/ERROR)" bash -c "
+t "t03b2: (skip:REASON) forces SKIP/FROZEN decision in --check output (not AUTO/ERROR)" bash -c "
     f=\${TMP_DIR}/t03b2.env
     printf '# @todo env-update (skip:test-skip-reason) dockerhub:_/myimage 1.0.0\nGLOBAL_STACK_TEST_VERSION=1.0.0\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" --no-cache 2>&1)
-    echo \"\$out\" | grep -qiE '\\[SKIP' || { echo \"expected [SKIP] in output; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qiE '\\[SKIP|\\[FROZEN' || { echo \"expected [SKIP] or [FROZEN] in output; got: \$out\"; echo FAIL; exit 0; }
     echo \"\$out\" | grep -qiF 'test-skip-reason' || { echo \"expected reason in output; got: \$out\"; echo FAIL; exit 0; }
-    echo \"\$out\" | grep -qiE '\\[AUTO|\\[ERROR' && { echo \"got AUTO/ERROR when expecting SKIP; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qiE '\\[AUTO|\\[ERROR' && { echo \"got AUTO/ERROR when expecting SKIP/FROZEN; got: \$out\"; echo FAIL; exit 0; }
     echo PASS
 "
 
@@ -3766,7 +3766,7 @@ t "t46c: classify — override=true but version changed → still MANUAL" bash -
     echo PASS
 "
 
-t "t46d: display — (override) at same version shows '(up to date — manual)' not '← manual flag'" bash -c "
+t "t46d: display — (override) at same version shows '(up to date — override)' not '← manual flag'" bash -c "
     export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t46d_cache
     f=\${TMP_DIR}/t46d.env
@@ -3774,7 +3774,7 @@ t "t46d: display — (override) at same version shows '(up to date — manual)' 
     printf '# @todo env-update (override) dockerhub:_/postgres\nGLOBAL_STACK_POSTGRES_OVR=18.4-alpine3.23\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null)
     echo \"\$out\" | grep -qF 'up to date' || { echo \"expected 'up to date' in SKIP output: \$out\"; echo FAIL; exit 0; }
-    echo \"\$out\" | grep -qF 'manual'     || { echo \"expected 'manual' hint in SKIP output: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'override'   || { echo \"expected 'override' hint in SKIP output: \$out\"; echo FAIL; exit 0; }
     echo \"\$out\" | grep -qvF '[MANUAL]'  || { echo \"should show [SKIP] not [MANUAL]: \$out\"; echo FAIL; exit 0; }
     echo PASS
 "
@@ -6149,16 +6149,16 @@ t "t63b2: without (lock:), --force-auto produces AUTO (control test)" bash -c "
 
 # ── C: Flag interactions ──────────────────────────────────────────────────
 
-# t63c1: (lock:) + (skip:) — skip gate fires first, decision=SKIP not LOCK
-t "t63c1: (lock:) does not override SKIP — skip gate wins" bash -c "
+# t63c1: (lock:) + (skip:) — skip gate fires first, decision=FROZEN (skip-gate) not LOCK
+t "t63c1: (lock:) does not override skip gate — [FROZEN] wins over [LOCK]" bash -c "
     export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t63c1_cache
     f=\${TMP_DIR}/t63c1.env
     # Both (skip:) and (lock:) present — skip fires first, lock gate must not override it
     printf '# @todo env-update (skip:skip reason) (lock:lock reason) dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T63C1=18.3-alpine3.23\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null)
-    echo \"\$out\" | grep -qF '[SKIP  ]' || { echo \"expected SKIP, got: \$out\"; echo FAIL; exit 0; }
-    echo \"\$out\" | grep -qF '[LOCK  ]' && { echo \"LOCK must not override SKIP\"; echo FAIL; exit 0; } || true
+    echo \"\$out\" | grep -qF '[FROZEN]' || { echo \"expected FROZEN (skip-gate wins), got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '[LOCK  ]' && { echo \"LOCK must not override skip gate\"; echo FAIL; exit 0; } || true
     echo PASS
 "
 
@@ -6730,42 +6730,42 @@ t "t66d: SHA decision + use_sha=true — VAR= updated with new bare SHA (no DRIF
 # ═══════════════════════════════════════════════════════════════════════════
 # Section 69 — Sprint 5: Enhanced SKIP message — major_hint no-match sub-line
 # ═══════════════════════════════════════════════════════════════════════════
-section "69 — major_hint no-match: [INFO] sub-line with latest_unconstrained"
+section "69 — major_hint no-match: [PIN-MISS] sub-line with latest_unconstrained"
 
-# t69a: major_hint=23 → no 23.x in @types/node fixture → [INFO] shows 25.8.0
+# t69a: major_hint=23 → no 23.x in @types/node fixture → [PIN-MISS] shows 25.8.0
 # Annotation format: npm:@types/node:23 embeds the major_hint inside the type:identifier token
-t "t69a: major_hint=23 SKIP emits [INFO] sub-line with latest available (25.8.0)" bash -c "
+t "t69a: major_hint=23 SKIP emits [PIN-MISS] sub-line with latest available (25.8.0)" bash -c "
     export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t69a_cache
     f=\${TMP_DIR}/t69a.env
     printf '# @todo env-update npm:@types/node:23 22.0.0\nGLOBAL_STACK_TYPES_NODE_23=22.0.0\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
-    echo \"\$out\" | grep -qF '[INFO]' || { echo \"expected [INFO] sub-line in output; got: \$out\"; echo FAIL; exit 0; }
-    echo \"\$out\" | grep -qF 'no major=23' || { echo \"expected 'no major=23' in [INFO] line; got: \$out\"; echo FAIL; exit 0; }
-    echo \"\$out\" | grep -qF '25.8.0' || { echo \"expected '25.8.0' (latest_unconstrained) in [INFO] line; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '[PIN-MISS]' || { echo \"expected [PIN-MISS] sub-line in output; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'major=23' || { echo \"expected 'major=23' in [PIN-MISS] line; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '25.8.0' || { echo \"expected '25.8.0' (latest_unconstrained) in [PIN-MISS] line; got: \$out\"; echo FAIL; exit 0; }
     echo PASS
 "
 
-# t69b: major_hint=22 has matches → no [INFO] no-match sub-line emitted
-t "t69b: major_hint=22 has matches — no [INFO] no-match sub-line" bash -c "
+# t69b: major_hint=22 has matches → no [PIN-MISS] no-match sub-line emitted
+t "t69b: major_hint=22 has matches — no [PIN-MISS] no-match sub-line" bash -c "
     export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t69b_cache
     f=\${TMP_DIR}/t69b.env
     printf '# @todo env-update npm:@types/node:22 22.0.0\nGLOBAL_STACK_TYPES_NODE_22=22.0.0\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
-    echo \"\$out\" | grep -qF 'no major=22' && { echo \"[INFO] no-match sub-line should NOT appear when 22.x versions exist; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '[PIN-MISS]' && { echo \"[PIN-MISS] sub-line should NOT appear when 22.x versions exist; got: \$out\"; echo FAIL; exit 0; }
     echo PASS
 "
 
-# t69c: no major_hint → SKIP is current-is-latest (no [INFO] no-match sub-line)
-t "t69c: no major_hint + up-to-date → no [INFO] no-match sub-line" bash -c "
+# t69c: no major_hint → SKIP is current-is-latest (no [PIN-MISS] sub-line)
+t "t69c: no major_hint + up-to-date → no [PIN-MISS] sub-line" bash -c "
     export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t69c_cache
     f=\${TMP_DIR}/t69c.env
     printf '# @todo env-update npm:@types/node 25.8.0\nGLOBAL_STACK_TYPES_NODE=25.8.0\n' > \"\$f\"
     # No major_hint in annotation — only plain npm:@types/node
     out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
-    echo \"\$out\" | grep -qF 'no major=' && { echo \"[INFO] no-match sub-line should NOT appear without major_hint; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '[PIN-MISS]' && { echo \"[PIN-MISS] sub-line should NOT appear without major_hint; got: \$out\"; echo FAIL; exit 0; }
     echo PASS
 "
 
@@ -6850,6 +6850,161 @@ t "t68d: http_get_auth with empty token hits memo via plain-get delegation" bash
     # Empty token → delegates to _gs_eu2_http_get → hits memo (no fixture dir, no network)
     out=\$(_gs_eu2_http_get_auth \"\$url\" '')
     [[ \"\$out\" == 'auth-memo-body' ]] || { echo \"expected auth-memo-body, got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 70 — Decision-aware DRIFT messages
+# ═══════════════════════════════════════════════════════════════════════════
+section "70 — decision-aware [DRIFT] messages"
+
+# t70a: LOCK + non-empty VAR differs from annotation → locked drift message
+t "t70a: [DRIFT] LOCK + non-empty VAR diff → 'locked; update annotation manually'" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t70a_cache
+    f=\${TMP_DIR}/t70a.env
+    # lock-flag.env has lock:Pinned to master, annotation tracks 18.3-alpine3.23
+    # Set VAR to a different value to trigger drift
+    printf '# @todo env-update (lock:Pinned to master) dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_LOCK_T70A=17.0-alpine3.20\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[DRIFT]' || { echo \"expected [DRIFT] in output; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'locked' || { echo \"expected 'locked' in drift message; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'update annotation manually' || { echo \"expected 'update annotation manually'; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t70b: LOCK + empty VAR → non-empty drift message (not suppressed — LOCK special case)
+t "t70b: [DRIFT] LOCK + empty VAR → drift message mentions lock" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t70b_cache
+    f=\${TMP_DIR}/t70b.env
+    printf '# @todo env-update (lock:Pinned to master) dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_LOCK_T70B=\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[DRIFT]' || { echo \"expected [DRIFT] in output; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'lock blocks' || { echo \"expected 'lock blocks' in drift message; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t70c: HOLD + non-empty VAR differs → HOLD drift message with --force-auto hint
+t "t70c: [DRIFT] HOLD + non-empty VAR diff → '--force-auto --apply to resolve'" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t70c_cache
+    f=\${TMP_DIR}/t70c.env
+    # github:testowner/testrepo returns v2.5.0; annotation says 1.0.0 (major bump → HOLD); VAR=0.5.0
+    printf '# @todo env-update github:testowner/testrepo 1.0.0\nGLOBAL_STACK_T70C=0.5.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[DRIFT]' || { echo \"expected [DRIFT] in output; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'force-auto' || { echo \"expected '--force-auto' in HOLD drift message; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t70d: MANUAL + non-empty VAR differs → MANUAL drift message with --force-auto hint
+t "t70d: [DRIFT] MANUAL + non-empty VAR diff → '--force-auto --apply to resolve'" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t70d_cache
+    f=\${TMP_DIR}/t70d.env
+    # (manual) flag → MANUAL decision; VAR differs from annotation
+    printf '# @todo env-update (manual) github:testowner/testrepo 1.0.0\nGLOBAL_STACK_T70D=0.5.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[DRIFT]' || { echo \"expected [DRIFT] in output; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'force-auto' || { echo \"expected '--force-auto' in MANUAL drift message; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t70e: FROZEN (skip-gate) + non-empty VAR → frozen drift message
+t "t70e: [DRIFT] FROZEN (skip-gate) + non-empty VAR diff → 'frozen by skip flag'" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t70e_cache
+    f=\${TMP_DIR}/t70e.env
+    printf '# @todo env-update (skip:frozen for now) dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T70E=17.0-alpine3.20\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[DRIFT]' || { echo \"expected [DRIFT] in output; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'frozen by skip flag' || { echo \"expected 'frozen by skip flag' in drift message; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t70f: FROZEN (skip-gate) + empty VAR → drift suppressed (no [DRIFT])
+t "t70f: [DRIFT] FROZEN + empty VAR → drift suppressed (skip gate blocks apply)" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t70f_cache
+    f=\${TMP_DIR}/t70f.env
+    printf '# @todo env-update (skip:frozen for now) dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T70F=\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[DRIFT]' && { echo \"[DRIFT] should be suppressed for FROZEN + empty VAR; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t70g: AUTO + VAR is AHEAD of annotation → direction-aware drift (downgrade risk)
+t "t70g: [DRIFT] AUTO + VAR ahead of annotation → 'VAR is ahead of annotation (downgrade risk)'" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t70g_cache
+    f=\${TMP_DIR}/t70g.env
+    # annotation says 1.0.0 but VAR=3.0.0 (VAR is AHEAD of annotation)
+    printf '# @todo env-update github:testowner/testrepo 1.0.0\nGLOBAL_STACK_T70G=3.0.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[DRIFT]' || { echo \"expected [DRIFT] in output; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'VAR is ahead' || { echo \"expected 'VAR is ahead' in drift message; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'downgrade risk' || { echo \"expected 'downgrade risk' in drift message; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 71 — [FROZEN] tag and counter for skip-gate records
+# ═══════════════════════════════════════════════════════════════════════════
+section "71 — [FROZEN] tag and frozen= summary counter"
+
+# t71a: skip-gate record shows [FROZEN] tag in output
+t "t71a: (skip:REASON) annotation shows [FROZEN] tag" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t71a_cache
+    f=\${TMP_DIR}/t71a.env
+    printf '# @todo env-update (skip:frozen for now) dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T71A=18.3-alpine3.23\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[FROZEN]' || { echo \"expected [FROZEN] tag in output; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '[SKIP  ]' && { echo \"[SKIP] should not appear for skip-gate record; got: \$out\"; echo FAIL; exit 0; } || true
+    echo PASS
+"
+
+# t71b: summary line includes FROZEN count for one skip-gate record
+t "t71b: summary line shows '1 FROZEN' for one (skip:REASON) record" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t71b_cache
+    f=\${TMP_DIR}/t71b.env
+    printf '# @todo env-update (skip:frozen for now) dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T71B=18.3-alpine3.23\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF 'FROZEN' || { echo \"expected 'FROZEN' in summary line; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '1 FROZEN' || { echo \"expected '1 FROZEN' in summary line; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 72 — (override) vs (manual) display split
+# ═══════════════════════════════════════════════════════════════════════════
+section "72 — (override) vs (manual) up-to-date display"
+
+# t72a: (override) flag at same version → shows '(up to date — override)'
+t "t72a: (override) at same version shows '(up to date — override)'" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t72a_cache
+    f=\${TMP_DIR}/t72a.env
+    # dockerhub:_/postgres fixture returns 18.4-alpine3.23; set current to same
+    printf '# @todo env-update (override) dockerhub:_/postgres\nGLOBAL_STACK_T72A=18.4-alpine3.23\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null)
+    echo \"\$out\" | grep -qF 'up to date — override' || { echo \"expected 'up to date — override'; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'up to date — manual' && { echo \"should show 'override' not 'manual'; got: \$out\"; echo FAIL; exit 0; } || true
+    echo PASS
+"
+
+# t72b: (manual) flag at same version → shows '(up to date — manual)'
+t "t72b: (manual) at same version shows '(up to date — manual)'" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t72b_cache
+    f=\${TMP_DIR}/t72b.env
+    # (manual) flag + same version: MANUAL decision, no change → up to date — manual
+    printf '# @todo env-update (manual) dockerhub:_/postgres\nGLOBAL_STACK_T72B=18.4-alpine3.23\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null)
+    echo \"\$out\" | grep -qF 'up to date — manual' || { echo \"expected 'up to date — manual'; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'up to date — override' && { echo \"should show 'manual' not 'override'; got: \$out\"; echo FAIL; exit 0; } || true
     echo PASS
 "
 
