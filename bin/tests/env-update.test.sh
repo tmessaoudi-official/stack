@@ -7194,6 +7194,98 @@ t "t75f: clean run — no secondary sub-line when all signals are zero" bash -c 
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Section 76 — --changes-only flag
+# ═══════════════════════════════════════════════════════════════════════════
+section "76 — --changes-only flag"
+
+# t76a: pure up-to-date record (no signals) is hidden; summary shows "(1 hidden)"
+# Fixture: @types/node (25.8.0 is highest 25.x). Annotation current=25.8.0, VAR=25.8.0.
+# Expected: [SKIP] line absent, "1 hidden" in summary.
+t "t76a: pure up-to-date SKIP hidden — (1 hidden) in summary" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t76a_cache
+    f=\${TMP_DIR}/t76a.env
+    printf '# @todo env-update npm:@types/node:25 25.8.0\nGLOBAL_STACK_T76A=25.8.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --changes-only --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[SKIP' && { echo \"[SKIP] line must NOT appear when hidden; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '1 hidden' || { echo \"summary must show '1 hidden'; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t76b: up-to-date + (note:TEXT) only → still hidden (note is metadata, not a signal)
+# Fixture: @types/node. Annotation: (note:must match node major) npm:@types/node:25 25.8.0.
+# Expected: hidden, (1 hidden) in summary.
+t "t76b: up-to-date SKIP + note-only → still hidden" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t76b_cache
+    f=\${TMP_DIR}/t76b.env
+    printf '# @todo env-update (note:must match node major) npm:@types/node:25 25.8.0\nGLOBAL_STACK_T76B=25.8.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --changes-only --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[SKIP' && { echo \"[SKIP] must not appear (note-only record hidden); got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '1 hidden' || { echo \"summary must show '1 hidden'; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t76c: SKIP with DRIFT (VAR behind annotation) → stays visible
+# Fixture: @types/node. Annotation current=25.8.0, VAR=25.0.0 (behind).
+# Fetcher proposes 25.8.0 (same as annotation current) → SKIP (up-to-date).
+# Drift: annotation says 25.8.0 but VAR=25.0.0 → drift fires → NOT hidden.
+t "t76c: SKIP + DRIFT → stays visible (drift prevents hiding)" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t76c_cache
+    f=\${TMP_DIR}/t76c.env
+    printf '# @todo env-update npm:@types/node:25 25.8.0\nGLOBAL_STACK_T76C=25.0.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --changes-only --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[SKIP' || { echo \"[SKIP] must appear (drift prevents hiding); got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '[DRIFT]' || { echo \"[DRIFT] sub-line must appear; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'hidden' && { echo \"'hidden' must NOT appear in summary (record visible); got: \$out\"; echo FAIL; exit 0; } || true
+    echo PASS
+"
+
+# t76d: AUTO decision (update available) → always visible, not in (hidden) count
+# Fixture: @types/node. Annotation current=25.0.0, proposed=25.8.0 → AUTO.
+# Expected: [AUTO] line visible, no "hidden" in summary.
+t "t76d: AUTO decision always visible — no 'hidden' in summary" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t76d_cache
+    f=\${TMP_DIR}/t76d.env
+    printf '# @todo env-update npm:@types/node:25 25.0.0\nGLOBAL_STACK_T76D=25.0.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --changes-only --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[AUTO' || { echo \"[AUTO] line must appear; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'hidden' && { echo \"'hidden' must NOT appear in summary (AUTO record visible); got: \$out\"; echo FAIL; exit 0; } || true
+    echo PASS
+"
+
+# t76e: (skip:REASON)/FROZEN record always visible (non-empty error_message → gate fails)
+# Fixture: @types/node. Annotation: (skip:deprecated) npm:@types/node:25 25.8.0.
+# Expected: [FROZEN] visible, no "hidden".
+t "t76e: (skip:REASON) FROZEN always visible — not hidden" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t76e_cache
+    f=\${TMP_DIR}/t76e.env
+    printf '# @todo env-update (skip:deprecated) npm:@types/node:25 25.8.0\nGLOBAL_STACK_T76E=25.8.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --changes-only --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[FROZEN' || { echo \"[FROZEN] must appear (skip-gate always visible); got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'hidden' && { echo \"'hidden' must NOT appear in summary; got: \$out\"; echo FAIL; exit 0; } || true
+    echo PASS
+"
+
+# t76f: mixed batch — 1 AUTO + 1 SKIP(up-to-date) → only AUTO shown, summary (1 hidden)
+# Fixture: @types/node. Two vars: T76F1 (auto: 25.0.0→25.8.0), T76F2 (skip: 25.8.0 up-to-date).
+t "t76f: mixed batch — AUTO visible, SKIP hidden; summary shows (1 hidden)" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t76f_cache
+    f=\${TMP_DIR}/t76f.env
+    printf '# @todo env-update npm:@types/node:25 25.0.0\nGLOBAL_STACK_T76F1=25.0.0\n# @todo env-update npm:@types/node:25 25.8.0\nGLOBAL_STACK_T76F2=25.8.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --changes-only --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[AUTO' || { echo \"[AUTO] line must appear; got: \$out\"; echo FAIL; exit 0; }
+    # Progress indicator contains the var name (stderr) — check the decision line specifically
+    echo \"\$out\" | grep -qE '^\[SKIP.*GLOBAL_STACK_T76F2' && { echo \"T76F2 SKIP decision line must be hidden; got: \$out\"; echo FAIL; exit 0; } || true
+    echo \"\$out\" | grep -qF '1 hidden' || { echo \"summary must show '1 hidden'; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section

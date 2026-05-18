@@ -55,7 +55,7 @@ _gs_eu2_run_check() {
   _GS_EU2_CACHE_TTL="${_GS_EU2_CFG[cache_ttl]:-3600}"
 
   local _n_auto=0 _n_hold=0 _n_skip=0 _n_error=0 _n_manual=0 _n_sha=0 _n_lock=0 _n_frozen=0
-  local _n_fallback=0 _n_watch=0 _n_drift=0 _n_drift_fixable=0 _n_downgrade=0
+  local _n_fallback=0 _n_watch=0 _n_drift=0 _n_drift_fixable=0 _n_downgrade=0 _n_hidden=0
 
   # Dynamic column width: pre-scan all env_var names so the → arrow aligns
   # across every record in this run, regardless of variable name length.
@@ -410,6 +410,82 @@ _gs_eu2_run_check() {
       _change="${_reason}"
     fi
 
+    # --changes-only hide gate: suppress purely up-to-date records from output.
+    # A record is hidden only when ALL of the following hold:
+    #   • decision=SKIP, error_message empty (genuine up-to-date — not FROZEN/skip-gate)
+    #   • no [DRIFT] condition (checked from record fields, independent of --no-drift display)
+    #   • no [WATCH] signal
+    #   • no [FALLBACK] signal
+    #   • no [UNSTABLE]/[STABLE] info sub-lines
+    # (note:TEXT) is the only sub-line that does NOT prevent hiding — it is metadata.
+    # Signals are pre-computed from record fields so the gate is atomic: either the
+    # full record (main line + all sub-lines) prints or nothing does.
+    local _should_hide=false
+    if [[ "${_GS_EU2_CFG[changes_only]:-false}" == "true" \
+          && "${_decision}" == "SKIP" && -z "${_err}" && -z "${_skip_reason}" ]]; then
+      _should_hide=true
+      # [FALLBACK] signal: range annotation fell back to LOW major
+      local _co_fallback
+      _co_fallback="$(_gs_eu2_record_get "${_i}" using_fallback_major)"
+      [[ "${_co_fallback}" == "true" && -n "${_major_min}" ]] && _should_hide=false
+      # [WATCH] signal: new runtime generation detected
+      if [[ "${_should_hide}" == "true" ]]; then
+        local _co_wm_depth
+        _co_wm_depth="$(_gs_eu2_record_get "${_i}" watch_major_depth)"
+        if [[ -n "${_co_wm_depth}" ]]; then
+          local _co_wm_lat
+          _co_wm_lat="$(_gs_eu2_record_get "${_i}" latest_unconstrained)"
+          [[ -z "${_co_wm_lat}" ]] && _co_wm_lat="${_prop}"
+          if [[ -n "${_co_wm_lat}" && -n "${_cur}" ]]; then
+            local _co_wm_cpfx _co_wm_lpfx
+            _co_wm_cpfx="$(_gs_eu2_version_prefix "${_cur}" "${_co_wm_depth}")"
+            _co_wm_lpfx="$(_gs_eu2_version_prefix "${_co_wm_lat}" "${_co_wm_depth}")"
+            if [[ -n "${_co_wm_cpfx}" && -n "${_co_wm_lpfx}" \
+                  && "${_co_wm_cpfx}" != "${_co_wm_lpfx}" ]]; then
+              local _co_wm_hi
+              _co_wm_hi="$(printf '%s\n%s\n' "${_co_wm_cpfx}" "${_co_wm_lpfx}" | sort -V | tail -1)"
+              [[ "${_co_wm_hi}" == "${_co_wm_lpfx}" ]] && _should_hide=false
+            fi
+          fi
+        fi
+      fi
+      # [UNSTABLE] info sub-line signal
+      if [[ "${_should_hide}" == "true" && "${_GS_EU2_CFG[unstable]:-}" == "info" ]]; then
+        local _co_unstable
+        _co_unstable="$(_gs_eu2_record_get "${_i}" unstable_proposed)"
+        [[ -n "${_co_unstable}" && "${_co_unstable}" != "${_cur}" ]] && _should_hide=false
+      fi
+      # [STABLE] info sub-line signal
+      if [[ "${_should_hide}" == "true" && "${_GS_EU2_CFG[stable]:-}" == "info" ]]; then
+        local _co_stable
+        _co_stable="$(_gs_eu2_record_get "${_i}" stable_proposed)"
+        [[ -n "${_co_stable}" && "${_co_stable}" != "${_cur}" ]] && _should_hide=false
+      fi
+      # [DRIFT] signal: checked independently of --no-drift (drift exists even when display suppressed)
+      if [[ "${_should_hide}" == "true" ]]; then
+        local _co_actual _co_ann_ver _co_use_sha _co_ann_sha
+        _co_actual="$(_gs_eu2_record_get "${_i}" actual_var_value)"
+        _co_ann_ver="$(_gs_eu2_record_get "${_i}" current_version)"
+        _co_use_sha="$(_gs_eu2_record_get "${_i}" use_sha)"
+        _co_ann_sha="$(_gs_eu2_record_get "${_i}" annotation_sha)"
+        if [[ "${_co_use_sha}" == "true" ]]; then
+          [[ -n "${_co_actual}" && -n "${_co_ann_sha}" \
+             && "${_co_actual}" != "${_co_ann_sha}" ]] && _should_hide=false
+        else
+          if [[ -z "${_co_actual}" && -n "${_co_ann_ver}" ]]; then
+            _should_hide=false
+          elif [[ -n "${_co_actual}" && -n "${_co_ann_ver}" \
+                  && "${_co_actual}" != "${_co_ann_ver}" ]]; then
+            _should_hide=false
+          fi
+        fi
+      fi
+    fi
+    if [[ "${_should_hide}" == "true" ]]; then
+      (( ++_n_hidden )) || true
+      continue
+    fi
+
     # Clear the progress line then print the result
     # Width: tag(8) + 2 spaces + var field + some margin for change text
     printf '\r%*s\r' "$(( _max_var_len + 20 ))" "" >&2
@@ -642,8 +718,10 @@ _gs_eu2_run_check() {
 
   local _total=$(( _n_auto + _n_hold + _n_skip + _n_error + _n_manual + _n_sha + _n_lock + _n_frozen ))
   printf '%-80s\n' "──────────────────────────────────────────────────────────────────────────────"
-  printf '  Summary: %d AUTO, %d SHA, %d HOLD, %d MANUAL, %d LOCK, %d SKIP, %d FROZEN, %d FALLBACK, %d ERROR  (%d checked)\n' \
-    "${_n_auto}" "${_n_sha}" "${_n_hold}" "${_n_manual}" "${_n_lock}" "${_n_skip}" "${_n_frozen}" "${_n_fallback}" "${_n_error}" "${_total}"
+  local _checked_suffix="${_total} checked"
+  (( _n_hidden > 0 )) && _checked_suffix="${_total} checked, ${_n_hidden} hidden"
+  printf '  Summary: %d AUTO, %d SHA, %d HOLD, %d MANUAL, %d LOCK, %d SKIP, %d FROZEN, %d FALLBACK, %d ERROR  (%s)\n' \
+    "${_n_auto}" "${_n_sha}" "${_n_hold}" "${_n_manual}" "${_n_lock}" "${_n_skip}" "${_n_frozen}" "${_n_fallback}" "${_n_error}" "${_checked_suffix}"
 
   # Secondary signals sub-line: WATCH, DRIFT (with fixable count), DOWNGRADE.
   # DRIFT and DOWNGRADE suppressed when --no-drift is active.

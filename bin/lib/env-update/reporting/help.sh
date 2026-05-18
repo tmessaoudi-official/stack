@@ -58,6 +58,14 @@ Options:
   --no-drift                      Suppress [DRIFT] sub-lines — emitted when the VAR= value
                                   in the env file differs from what the annotation claims as
                                   current. Does NOT affect (note:TEXT) or other sub-lines.
+  --changes-only                  Hide purely up-to-date records (SKIP + no signals) from
+                                  output. A record is hidden only when: decision=SKIP
+                                  (genuine up-to-date), no [DRIFT], no [WATCH], no
+                                  [FALLBACK], no [UNSTABLE]/[STABLE] info sub-lines.
+                                  (note:TEXT) records are still hidden — notes are metadata,
+                                  not signals. (skip:REASON) and (lock:REASON) records are
+                                  always visible. Summary counts all checked records; adds
+                                  "(N hidden)" when any records are suppressed.
   --force-auto                    Override (manual) and (override) annotation flags and HOLD
                                   decisions — treats them as AUTO-eligible. Useful for
                                   scripted environments where human gates are not appropriate.
@@ -121,6 +129,7 @@ Examples:
   bin/env-update.sh --stable=info --unstable=full --check  # unstable decisions + stable sub-line for each
   bin/env-update.sh --check --no-notes                    # suppress (note: ...) sub-lines
   bin/env-update.sh --check --no-drift                    # suppress [DRIFT] sub-lines
+  bin/env-update.sh --check --changes-only                # hide up-to-date records; show only actionable/informational
   bin/env-update.sh --check --force-auto                  # preview: (manual)/(hold) treated as AUTO
   bin/env-update.sh --apply --force-auto --confirm="Confirm override"  # apply with force-auto
 EOF

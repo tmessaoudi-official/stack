@@ -31,9 +31,10 @@ _gs_eu2_parse_args() {
       --scan)         _GS_EU2_CFG[scan]="true" ;;
       --no-cache)     _GS_EU2_CFG[no_cache]="true" ;;
       --with-tags)    _GS_EU2_CFG[with_tags]="true" ;;
-      --no-notes)     _GS_EU2_CFG[no_notes]="true" ;;
-      --no-drift)     _GS_EU2_CFG[no_drift]="true" ;;
-      --force-auto)   _GS_EU2_CFG[force_auto]="true" ;;
+      --no-notes)       _GS_EU2_CFG[no_notes]="true" ;;
+      --no-drift)       _GS_EU2_CFG[no_drift]="true" ;;
+      --force-auto)     _GS_EU2_CFG[force_auto]="true" ;;
+      --changes-only)   _GS_EU2_CFG[changes_only]="true" ;;
       --confirm=*)    _GS_EU2_CFG[confirm]="${1#*=}" ;;
       --stable)     _GS_EU2_CFG[stable]="full" ;;
       --stable=*)
@@ -80,9 +81,10 @@ _gs_eu2_parse_args() {
   [[ -z "${_GS_EU2_CFG[cache_ttl]+set}" ]] && _GS_EU2_CFG[cache_ttl]="3600"
   [[ -z "${_GS_EU2_CFG[unstable]+set}" ]]  && _GS_EU2_CFG[unstable]=""
   [[ -z "${_GS_EU2_CFG[stable]+set}" ]]   && _GS_EU2_CFG[stable]=""
-  [[ -z "${_GS_EU2_CFG[no_notes]+set}" ]]   && _GS_EU2_CFG[no_notes]="false"
-  [[ -z "${_GS_EU2_CFG[no_drift]+set}" ]]   && _GS_EU2_CFG[no_drift]="false"
-  [[ -z "${_GS_EU2_CFG[force_auto]+set}" ]] && _GS_EU2_CFG[force_auto]="false"
+  [[ -z "${_GS_EU2_CFG[no_notes]+set}" ]]     && _GS_EU2_CFG[no_notes]="false"
+  [[ -z "${_GS_EU2_CFG[no_drift]+set}" ]]     && _GS_EU2_CFG[no_drift]="false"
+  [[ -z "${_GS_EU2_CFG[force_auto]+set}" ]]   && _GS_EU2_CFG[force_auto]="false"
+  [[ -z "${_GS_EU2_CFG[changes_only]+set}" ]] && _GS_EU2_CFG[changes_only]="false"
   [[ -z "${_GS_EU2_CFG[confirm]+set}" ]]    && _GS_EU2_CFG[confirm]=""
 
   # Validate --filter regex early: invalid ERE causes per-record bash errors and silent
