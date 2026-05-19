@@ -36,6 +36,8 @@ _gs_eu2_parse_args() {
       --force-auto)     _GS_EU2_CFG[force_auto]="true" ;;
       --changes-only)   _GS_EU2_CFG[changes_only]="true" ;;
       --no-fail)        _GS_EU2_CFG[no_fail]="true" ;;
+      --profile|--profile=true)  _GS_EU2_CFG[profile]="true" ;;
+      --profile=false)           _GS_EU2_CFG[profile]="false" ;;
       --confirm=*)    _GS_EU2_CFG[confirm]="${1#*=}" ;;
       --stable)     _GS_EU2_CFG[stable]="full" ;;
       --stable=*)
@@ -88,6 +90,7 @@ _gs_eu2_parse_args() {
   [[ -z "${_GS_EU2_CFG[changes_only]+set}" ]] && _GS_EU2_CFG[changes_only]="false"
   [[ -z "${_GS_EU2_CFG[no_fail]+set}" ]]    && _GS_EU2_CFG[no_fail]="false"
   [[ -z "${_GS_EU2_CFG[confirm]+set}" ]]    && _GS_EU2_CFG[confirm]=""
+  [[ -z "${_GS_EU2_CFG[profile]+set}" ]]    && _GS_EU2_CFG[profile]="false"
 
   # Validate --filter regex early: invalid ERE causes per-record bash errors and silent
   # empty output. type: prefixes are not regex — skip validation for those.

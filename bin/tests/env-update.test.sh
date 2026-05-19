@@ -7536,6 +7536,53 @@ t "t78d: no mode flags — no mode banners in output" bash -c "
     echo PASS
 "
 
+section "79 — --profile flag"
+
+# t79a: --profile flag accepted — exits 0 (not rejected as unknown option)
+t "t79a: --profile flag accepted — exits 0" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t79a_cache
+    f=\${TMP_DIR}/t79a.env
+    printf '# @todo env-update npm:@types/node:25 25.8.0\nGLOBAL_STACK_T79A=25.8.0\n' > \"\$f\"
+    bash '${ENV_UPDATE_V2}' --check --profile --env-file=\"\$f\" >/dev/null 2>&1
+    rc=\$?
+    [[ \$rc -eq 0 ]] || { echo \"expected exit 0, got: \$rc\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t79b: --profile flag → output contains a profile phase name (e.g. 'Parse args')
+t "t79b: --profile flag — output contains profile table with phase names" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t79b_cache
+    f=\${TMP_DIR}/t79b.env
+    printf '# @todo env-update npm:@types/node:25 25.8.0\nGLOBAL_STACK_T79B=25.8.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --profile --env-file=\"\$f\" 2>&1 || true)
+    echo \"\$out\" | grep -qF 'Parse args' || { echo \"phase 'Parse args' missing from profile output; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t79c: --profile flag → output contains timing (ms or s) for a phase row
+t "t79c: --profile flag — output contains timing column (ms or s)" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t79c_cache
+    f=\${TMP_DIR}/t79c.env
+    printf '# @todo env-update npm:@types/node:25 25.8.0\nGLOBAL_STACK_T79C=25.8.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --profile --env-file=\"\$f\" 2>&1 || true)
+    echo \"\$out\" | grep -qE '[0-9]+ ms|[0-9]+\.[0-9]+ +s' || { echo \"no timing found in profile output; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t79d: no --profile flag → output does NOT contain profile table header ('Profile')
+t "t79d: no --profile flag — profile table absent from output" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t79d_cache
+    f=\${TMP_DIR}/t79d.env
+    printf '# @todo env-update npm:@types/node:25 25.8.0\nGLOBAL_STACK_T79D=25.8.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1 || true)
+    echo \"\$out\" | grep -qF 'Parse args' && { echo \"profile table must NOT appear without --profile; got: \$out\"; echo FAIL; exit 0; } || true
+    echo PASS
+"
+
 # ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════

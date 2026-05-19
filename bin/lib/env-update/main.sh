@@ -44,6 +44,8 @@ source "$(dirname "${BASH_SOURCE[0]}")/reporting/help.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/reporting/dump.sh"
 # shellcheck source=./reporting/summary.sh
 source "$(dirname "${BASH_SOURCE[0]}")/reporting/summary.sh"
+# shellcheck source=./reporting/profile.sh
+source "$(dirname "${BASH_SOURCE[0]}")/reporting/profile.sh"
 # shellcheck source=./core/apply.sh
 source "$(dirname "${BASH_SOURCE[0]}")/core/apply.sh"
 
@@ -760,7 +762,10 @@ _gs_eu2_run_check() {
 }
 
 _gs_eu2_main() {
+  _gs_eu2_profile_init   # records total start time before we know --profile value
+  _gs_eu2_profile_start
   _gs_eu2_parse_args "${@}"
+  _gs_eu2_profile_end "Parse args"
 
   if [[ "${_GS_EU2_CFG[dump]}" == "true" && \
         ( "${_GS_EU2_CFG[check]}" == "true" || "${_GS_EU2_CFG[apply]}" == "true" ) ]]; then
@@ -802,7 +807,9 @@ _gs_eu2_main() {
     exit 1
   fi
 
+  _gs_eu2_profile_start
   _gs_eu2_parse_env_file "${_env_file}" "${_GS_EU2_CFG[filter]}" "${_GS_EU2_CFG[exclude]}"
+  _gs_eu2_profile_end "Parse env file"
 
   # --unstable full: inject channel=unstable on records that don't already have it.
   # This causes fetchers to return the highest prerelease as proposed_version, and
@@ -888,7 +895,9 @@ _gs_eu2_main() {
     _gs_eu2_dump_records "${_GS_EU2_CFG[format]}"
   elif [[ "true" == "${_GS_EU2_CFG[check]}" ]]; then
     local _check_rc=0
+    _gs_eu2_profile_start
     _gs_eu2_run_check || _check_rc=$?
+    _gs_eu2_profile_end "Fetch + classify"
 
     # After a successful dry-run check, write the timestamp marker so a subsequent
     # --apply knows a recent preview was done (incident prevention: 2026-04-23).
@@ -902,7 +911,9 @@ _gs_eu2_main() {
       printf '\n'
       if [[ "${_GS_EU2_CFG[dry_run]}" == "true" ]]; then
         printf 'Apply preview (--dry-run):\n'
+        _gs_eu2_profile_start
         _gs_eu2_apply_updates "${_env_file}" "true"
+        _gs_eu2_profile_end "Apply"
       else
         local _backup
         _backup="${_env_file}.bak.$(date +%s)"
@@ -911,7 +922,9 @@ _gs_eu2_main() {
           return 1
         fi
         printf 'Backup: %s\n' "${_backup}" >&2
+        _gs_eu2_profile_start
         _gs_eu2_apply_updates "${_env_file}" "false"
+        _gs_eu2_profile_end "Apply"
         if [[ "${_GS_EU2_CFG[scan]}" == "true" ]]; then
           local _env_scan
           _env_scan="$(dirname "${BASH_SOURCE[0]}")/../../env-scan.sh"
@@ -919,7 +932,9 @@ _gs_eu2_main() {
             printf 'Running env-scan.sh to propagate changes...\n' >&2
             local _scan_flags=()
             [[ "${_GS_EU2_CFG[no_fail]:-false}" == "true" ]] && _scan_flags+=("--no-fail")
+            _gs_eu2_profile_start
             bash "${_env_scan}" "${_scan_flags[@]}" 2>&1 || printf 'WARNING: env-scan failed — .env updated but .env.local and Dockerfiles may be stale. Run bin/env-scan.sh manually.\n' >&2
+            _gs_eu2_profile_end "env-scan"
           else
             printf 'WARNING: --scan requested but env-scan.sh not found at %s\n' "${_env_scan}" >&2
           fi
@@ -935,6 +950,8 @@ _gs_eu2_main() {
       printf '[NO-FAIL] fetch errors present — exit code forced to 0\n' >&2
       _check_rc=0
     fi
+    # ── Print profile report if requested ─────────────────────────────────────
+    [[ "true" == "${_GS_EU2_CFG[profile]}" ]] && _gs_eu2_profile_report
     # Propagate non-zero return from _gs_eu2_run_check (errors present) without
     # triggering the ERR trap — the error was already reported in the output.
     return "${_check_rc}"

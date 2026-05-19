@@ -91,6 +91,10 @@ Options:
                                   to proceed (safety gate — prevents accidental use).
   --confirm=TEXT                  Confirmation string required by --force-auto --apply.
                                   Must be exactly: Confirm override
+  --profile                       Show phase timing and memory usage table after run
+                                  (default: false). Phases: Parse args, Parse env file,
+                                  Fetch + classify, Apply (when --apply), env-scan
+                                  (when --apply --scan).
 
 Default (no flags): print a parser summary with per-type breakdown and hints.
 
