@@ -1569,7 +1569,94 @@ t "--no-fail prints notice to stderr when exit code suppressed" bash -c "
     D=\${TMP_DIR:-${TMP_DIR}}/t27f; mkdir -p \"\$D\"
     err=\$(bash '${ENV_SCAN}' --dir=\"\$D\" --source-files= --scan-sources=false \
         --backup=false --quiet=true --no-fail 2>&1 >/dev/null || true)
-    echo \"\$err\" | grep -qF 'no-fail' \
+    echo \"\$err\" | grep -qF '[NO-FAIL]' \
+        && echo PASS || { echo \"\$err\"; echo FAIL; }
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 28 — mode banners
+# ═══════════════════════════════════════════════════════════════════════════
+section "28 — mode banners"
+
+t "t28a: --dry-run banner appears on stderr" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t28a; mkdir -p \"\$D\"
+    printf 'GLOBAL_STACK_X=1.0\n' > \"\$D/.env\"
+    cp \"\$D/.env\" \"\$D/.env.local\"
+    err=\$(bash '${ENV_SCAN}' --dir=\"\$D\" --dry-run --scan-sources=false \
+        --backup=false 2>&1 >/dev/null || true)
+    echo \"\$err\" | grep -qF '[DRY-RUN MODE]' \
+        && echo PASS || { echo \"\$err\"; echo FAIL; }
+"
+
+t "t28b: --no-fail banner appears on stderr" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t28b; mkdir -p \"\$D\"
+    printf 'GLOBAL_STACK_X=1.0\n' > \"\$D/.env\"
+    cp \"\$D/.env\" \"\$D/.env.local\"
+    err=\$(bash '${ENV_SCAN}' --dir=\"\$D\" --no-fail --scan-sources=false \
+        --backup=false 2>&1 >/dev/null || true)
+    echo \"\$err\" | grep -qF '[NO-FAIL MODE]' \
+        && echo PASS || { echo \"\$err\"; echo FAIL; }
+"
+
+t "t28c: --sync-values=false banner appears on stderr" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t28c; mkdir -p \"\$D\"
+    printf 'GLOBAL_STACK_X=1.0\n' > \"\$D/.env\"
+    cp \"\$D/.env\" \"\$D/.env.local\"
+    err=\$(bash '${ENV_SCAN}' --dir=\"\$D\" --sync-values=false --scan-sources=false \
+        --backup=false 2>&1 >/dev/null || true)
+    echo \"\$err\" | grep -qF '[SYNC-VALUES=OFF MODE]' \
+        && echo PASS || { echo \"\$err\"; echo FAIL; }
+"
+
+t "t28d: --backup=false banner appears on stderr" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t28d; mkdir -p \"\$D\"
+    printf 'GLOBAL_STACK_X=1.0\n' > \"\$D/.env\"
+    cp \"\$D/.env\" \"\$D/.env.local\"
+    err=\$(bash '${ENV_SCAN}' --dir=\"\$D\" --backup=false --scan-sources=false \
+        2>&1 >/dev/null || true)
+    echo \"\$err\" | grep -qF '[NO-BACKUP MODE]' \
+        && echo PASS || { echo \"\$err\"; echo FAIL; }
+"
+
+t "t28e: --backup-purge=true banner appears on stderr" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t28e; mkdir -p \"\$D\"
+    printf 'GLOBAL_STACK_X=1.0\n' > \"\$D/.env\"
+    cp \"\$D/.env\" \"\$D/.env.local\"
+    err=\$(bash '${ENV_SCAN}' --dir=\"\$D\" --backup-purge=true --scan-sources=false \
+        --backup=false 2>&1 >/dev/null || true)
+    echo \"\$err\" | grep -qF '[BACKUP-PURGE MODE]' \
+        && echo PASS || { echo \"\$err\"; echo FAIL; }
+"
+
+t "t28f: --prune-removed=true banner appears on stderr" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t28f; mkdir -p \"\$D\"
+    printf 'GLOBAL_STACK_X=1.0\n' > \"\$D/.env\"
+    cp \"\$D/.env\" \"\$D/.env.local\"
+    err=\$(bash '${ENV_SCAN}' --dir=\"\$D\" --prune-removed=true --scan-sources=false \
+        --backup=false 2>&1 >/dev/null || true)
+    echo \"\$err\" | grep -qF '[PRUNE-REMOVED MODE]' \
+        && echo PASS || { echo \"\$err\"; echo FAIL; }
+"
+
+t "t28g: no mode flags — no banners printed on stderr" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t28g; mkdir -p \"\$D\"
+    printf 'GLOBAL_STACK_X=1.0\n' > \"\$D/.env\"
+    cp \"\$D/.env\" \"\$D/.env.local\"
+    err=\$(bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=false \
+        2>&1 >/dev/null || true)
+    for banner in '[DRY-RUN MODE]' '[NO-FAIL MODE]' '[SYNC-VALUES=OFF MODE]' '[NO-BACKUP MODE]' '[BACKUP-PURGE MODE]' '[PRUNE-REMOVED MODE]'; do
+        echo \"\$err\" | grep -qF \"\$banner\" && { echo \"unexpected banner: \$banner\"; echo FAIL; exit 0; }
+    done
+    echo PASS
+"
+
+t "t28h: --dry-run --quiet=true — DRY-RUN banner still appears on stderr" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t28h; mkdir -p \"\$D\"
+    printf 'GLOBAL_STACK_X=1.0\n' > \"\$D/.env\"
+    cp \"\$D/.env\" \"\$D/.env.local\"
+    err=\$(bash '${ENV_SCAN}' --dir=\"\$D\" --dry-run --quiet=true --scan-sources=false \
+        --backup=false 2>&1 >/dev/null || true)
+    echo \"\$err\" | grep -qF '[DRY-RUN MODE]' \
         && echo PASS || { echo \"\$err\"; echo FAIL; }
 "
 

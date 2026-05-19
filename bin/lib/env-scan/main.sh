@@ -31,6 +31,14 @@ gs_es_main() {
 	gs_es_parse_args "${@}"
 	_gs_es_profile_end "Parse args"
 
+	# Mode banners — always printed to stderr regardless of --quiet
+	[[ "${_GS_ES_CFG[dry_run]:-false}" == "true" ]] && printf '[DRY-RUN MODE] no files will be written\n' >&2
+	[[ "${_GS_ES_CFG[no_fail]:-false}" == "true" ]] && printf '[NO-FAIL MODE] scan errors will not abort — exit code forced to 0\n' >&2
+	[[ "${_GS_ES_CFG[sync_values]:-true}" == "false" ]] && printf '[SYNC-VALUES=OFF MODE] destination values will not be overwritten\n' >&2
+	[[ "${_GS_ES_CFG[backup]:-true}" == "false" ]] && printf '[NO-BACKUP MODE] backup step skipped\n' >&2
+	[[ "${_GS_ES_CFG[backup_purge]:-false}" == "true" ]] && printf '[BACKUP-PURGE MODE] all existing backups will be deleted before run\n' >&2
+	[[ "${_GS_ES_CFG[prune_removed]:-false}" == "true" ]] && printf '[PRUNE-REMOVED MODE] vars absent from source will be removed from dest\n' >&2
+
 	# ── Session temp directory (infrastructure — not a profiled phase) ─────────
 	_GS_ES_SESSION_TMP="$(mktemp -d)" || { printf 'env-scan: mktemp failed\n' >&2; exit 1; }
 	# A4: Wait for any background jobs before cleaning up temp dir,
@@ -130,7 +138,7 @@ gs_es_main() {
 		"${_GS_ES_CFG[dry_run]}" || _propagate_rc=$?
 	if [[ "${_propagate_rc}" -ne 0 ]]; then
 		if [[ "${_GS_ES_CFG[no_fail]:-false}" == "true" ]]; then
-			printf '(--no-fail: scan error present — exit code forced to 0)\n' >&2
+			printf '[NO-FAIL] scan error present — exit code forced to 0\n' >&2
 		else
 			return "${_propagate_rc}"
 		fi
