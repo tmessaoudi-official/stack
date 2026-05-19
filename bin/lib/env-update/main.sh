@@ -553,8 +553,8 @@ _gs_eu2_run_check() {
       fi
     fi
 
-    # SHA sub-line: show short SHA (8 chars) + date for AUTO and SHA decisions
-    if [[ "${_decision}" == "AUTO" || "${_decision}" == "SHA" ]]; then
+    # SHA sub-line: show short SHA (8 chars) + date for AUTO, SHA, and MANUAL decisions
+    if [[ "${_decision}" == "AUTO" || "${_decision}" == "SHA" || "${_decision}" == "MANUAL" ]]; then
       local _disp_prop_sha _disp_ann_sha _disp_sha_date
       _disp_prop_sha="$(_gs_eu2_record_get "${_i}" proposed_sha)"
       _disp_ann_sha="$(_gs_eu2_record_get "${_i}" annotation_sha)"
