@@ -893,7 +893,9 @@ _gs_eu2_main() {
           _env_scan="$(dirname "${BASH_SOURCE[0]}")/../../env-scan.sh"
           if [[ -x "${_env_scan}" ]]; then
             printf 'Running env-scan.sh to propagate changes...\n' >&2
-            bash "${_env_scan}" 2>&1 || printf 'WARNING: env-scan failed — .env updated but .env.local and Dockerfiles may be stale. Run bin/env-scan.sh manually.\n' >&2
+            local _scan_flags=()
+            [[ "${_GS_EU2_CFG[no_fail]:-false}" == "true" ]] && _scan_flags+=("--no-fail")
+            bash "${_env_scan}" "${_scan_flags[@]}" 2>&1 || printf 'WARNING: env-scan failed — .env updated but .env.local and Dockerfiles may be stale. Run bin/env-scan.sh manually.\n' >&2
           else
             printf 'WARNING: --scan requested but env-scan.sh not found at %s\n' "${_env_scan}" >&2
           fi

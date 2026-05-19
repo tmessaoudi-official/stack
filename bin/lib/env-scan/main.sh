@@ -122,11 +122,19 @@ gs_es_main() {
 
 	# Phase 6: Propagate canonical values to Dockerfiles
 	_gs_es_profile_start
+	local _propagate_rc=0
 	gs_es_propagate_to_dockerfiles \
 		"${_GS_ES_CFG[source_files]}" \
 		"${_GS_ES_CFG[scan_path]}" \
 		"${_GS_ES_CFG[exclude_multiple_values_pattern]:-}" \
-		"${_GS_ES_CFG[dry_run]}" || return 1
+		"${_GS_ES_CFG[dry_run]}" || _propagate_rc=$?
+	if [[ "${_propagate_rc}" -ne 0 ]]; then
+		if [[ "${_GS_ES_CFG[no_fail]:-false}" == "true" ]]; then
+			printf '(--no-fail: scan error present — exit code forced to 0)\n' >&2
+		else
+			return "${_propagate_rc}"
+		fi
+	fi
 	_gs_es_profile_end "Propagate to Dockerfiles"
 
 	# Phase 6.5: Backup retention prune

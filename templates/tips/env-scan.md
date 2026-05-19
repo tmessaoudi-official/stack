@@ -100,6 +100,7 @@ All options use `--key=value` form. Boolean options accept `true` or `false`.
 | `--debug=true\|false` | `false` | Enable verbose diagnostic messages |
 | `--profile=true\|false` | `false` | Print per-phase execution time and memory usage after run |
 | `--dry-run` | `false` | Report what would change but suppress all filesystem writes (env file sync, Dockerfile propagation, and backups) |
+| `--no-fail` | `false` | Always exit 0, even when a Phase 6 propagation error occurs (source env file not found). Infrastructure errors (mktemp failure), backup failures, and usage errors remain fatal. Prints `(--no-fail: scan error present — exit code forced to 0)` to stderr when suppressing. |
 | `--version` | — | Print version string (`1.0.0`) and exit 0 |
 | `--help` | — | Show usage and exit 0 |
 
@@ -211,6 +212,9 @@ bin/env-scan.sh --backup-keep=0              # unlimited retention (never prune)
 bin/env-scan.sh --backup-purge=true          # delete all old backups then create fresh one
 bin/env-scan.sh --backup=false --backup-purge=true  # delete all old backups, no new one
 bin/env-scan.sh --backup-suffix=.snapshot    # use .snapshot.<ts> instead of .bak.<ts>
+
+# Pipeline-friendly: always exit 0 even on propagation error
+bin/env-scan.sh --no-fail
 ```
 
 ---

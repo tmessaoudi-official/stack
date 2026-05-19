@@ -1521,6 +1521,59 @@ t "merge.sh — _gs_es_dest_vals does not leak to caller" bash -c "
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Section 27 — --no-fail flag
+# ═══════════════════════════════════════════════════════════════════════════
+section "27 — --no-fail flag"
+
+t "--no-fail accepted — clean run exits 0" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t27a; mkdir -p \"\$D\"
+    printf 'GLOBAL_STACK_X=1.0\n' > \"\$D/.env\"
+    cp \"\$D/.env\" \"\$D/.env.local\"
+    rc=0
+    bash '${ENV_SCAN}' --dir=\"\$D\" --no-fail --scan-sources=false --backup=false \
+        --quiet=true 2>/dev/null || rc=\$?
+    [[ \"\$rc\" -eq 0 ]] && echo PASS || { echo \"exit code: \$rc\"; echo FAIL; }
+"
+
+t "propagation failure exits 1 WITHOUT --no-fail (baseline)" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t27b; mkdir -p \"\$D\"
+    rc=0
+    bash '${ENV_SCAN}' --dir=\"\$D\" --source-files= --scan-sources=false \
+        --backup=false --quiet=true 2>/dev/null || rc=\$?
+    [[ \"\$rc\" -ne 0 ]] && echo PASS || { echo \"expected non-zero exit, got 0\"; echo FAIL; }
+"
+
+t "propagation failure exits 0 WITH --no-fail" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t27c; mkdir -p \"\$D\"
+    rc=0
+    bash '${ENV_SCAN}' --dir=\"\$D\" --source-files= --scan-sources=false \
+        --backup=false --quiet=true --no-fail 2>/dev/null || rc=\$?
+    [[ \"\$rc\" -eq 0 ]] && echo PASS || { echo \"exit code: \$rc\"; echo FAIL; }
+"
+
+t "--no-fail does not suppress error messages" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t27d; mkdir -p \"\$D\"
+    err=\$(bash '${ENV_SCAN}' --dir=\"\$D\" --source-files= --scan-sources=false \
+        --backup=false --quiet=true --no-fail 2>&1 >/dev/null || true)
+    echo \"\$err\" | grep -qF 'env file not found' \
+        && echo PASS || { echo \"\$err\"; echo FAIL; }
+"
+
+t "usage error still exits 1 even with --no-fail" bash -c "
+    rc=0
+    bash '${ENV_SCAN}' --no-fail --unknown-option-xyz 2>/dev/null || rc=\$?
+    [[ \"\$rc\" -ne 0 ]] && echo PASS || { echo \"expected non-zero exit, got 0\"; echo FAIL; }
+"
+
+t "--no-fail prints notice to stderr when exit code suppressed" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t27f; mkdir -p \"\$D\"
+    err=\$(bash '${ENV_SCAN}' --dir=\"\$D\" --source-files= --scan-sources=false \
+        --backup=false --quiet=true --no-fail 2>&1 >/dev/null || true)
+    echo \"\$err\" | grep -qF 'no-fail' \
+        && echo PASS || { echo \"\$err\"; echo FAIL; }
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section

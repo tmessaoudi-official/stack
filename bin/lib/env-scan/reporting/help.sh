@@ -29,6 +29,11 @@ Options:
   --destination-file-merged-suffix=<value>   Merged file suffix for destination files (default: .merged)
   --sync-values=<value>                      Sync destination values to match source when they differ (default: true)
   --dry-run                                  Report what would change but suppress all filesystem writes (env file sync and Dockerfile propagation) (default: false)
+  --no-fail                                  Always exit 0, even when a propagation error occurs (source env file not found).
+                                             Scope: only suppresses return 1 from Phase 6 propagation. Infrastructure errors
+                                             (mktemp failure), backup failures, and usage errors remain fatal.
+                                             When suppressed a stderr notice is printed:
+                                             "(--no-fail: scan error present — exit code forced to 0)"
   --scan-var-prefix=<value>                  Prefix pattern for environment variable extraction (default: "(GLOBAL_STACK_)")
   --exclude-different-pattern=<value>        Pattern to exclude from difference detection (default: predefined regex)
   --scan-exclude-pattern=<value>             Pattern to exclude from variable extraction (default: predefined regex)
@@ -60,6 +65,7 @@ Examples:
   ./env-scan.sh --scan-path=/config --sync-values=true
   bin/env-scan.sh --orphan-exclude-pattern='GLOBAL_STACK_LOCAL_'  # silence machine-local vars
   bin/env-scan.sh --orphan-quiet=true                              # silence all orphan warnings
+  bin/env-scan.sh --no-fail                                        # always exit 0 even on propagation error
 
 Description:
   This script processes environment variable files, performing operations like:

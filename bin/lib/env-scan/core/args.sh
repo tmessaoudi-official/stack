@@ -47,6 +47,7 @@ gs_es_parse_args() {
 		--quiet=*)                        _GS_ES_CFG[quiet]="${1#*=}";                        _GS_ES_CFG[quiet]="${_GS_ES_CFG[quiet],,}" ;;
 		--profile=*)                      _GS_ES_CFG[profile]="${1#*=}";                      _GS_ES_CFG[profile]="${_GS_ES_CFG[profile],,}" ;;
 		--dry-run)                        _GS_ES_CFG[dry_run]="true" ;;
+		--no-fail)                        _GS_ES_CFG[no_fail]="true" ;;
 		--backup=*)                       _GS_ES_CFG[backup]="${1#*=}";                       _GS_ES_CFG[backup]="${_GS_ES_CFG[backup],,}" ;;
 		--backup-purge=*)                 _GS_ES_CFG[backup_purge]="${1#*=}";                 _GS_ES_CFG[backup_purge]="${_GS_ES_CFG[backup_purge],,}" ;;
 		--backup-keep=*)
@@ -101,6 +102,7 @@ gs_es_parse_args() {
 		[backup_purge]=false
 		[prune_removed]=false
 		[orphan_quiet]=false
+		[no_fail]=false
 	)
 	local _key
 	for _key in "${!_bool_defaults[@]}"; do

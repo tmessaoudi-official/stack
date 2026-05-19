@@ -76,6 +76,8 @@ Options:
                                   "(--no-fail: fetch errors present — exit code forced to 0)"
                                   Note: with --apply --no-fail, AUTO decisions are still
                                   applied even when some records have ERROR.
+                                  Note: with --scan --no-fail, the --no-fail flag is passed
+                                  through to env-scan.sh (suppresses its propagation errors too).
   --force-auto                    Override (manual) and (override) annotation flags and HOLD
                                   decisions — treats them as AUTO-eligible. Useful for
                                   scripted environments where human gates are not appropriate.
