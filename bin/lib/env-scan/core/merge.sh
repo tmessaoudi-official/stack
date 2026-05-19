@@ -17,7 +17,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/missing.sh"
 # Reads from _GS_ES_CFG: destination_file_tmp_suffix, destination_file_merged_suffix,
 #                        strip_comments, remove_empty_lines, remove_trailing_spaces,
 #                        show_added_entries, check_missing, exclude_local_pattern,
-#                        exclude_source_check_pattern, exclude_check_missing,
+#                        reverse_check_ignore_pattern, forward_check_ignore_pattern,
 #                        cleanup_tmp, debug, show_different_entries,
 #                        sync_values, scan_output_file,
 #                        dir, scan_path
@@ -85,7 +85,7 @@ gs_es_process_file() {
 					local _dkey="${BASH_REMATCH[1]}"
 					if [[ -z "${_gs_es_dest_emitted[${_dkey}]:-}" ]]; then
 						if [[ "${_GS_ES_CFG[orphan_quiet]:-false}" != "true" ]]; then
-							local _orphan_exclude="${_GS_ES_CFG[orphan_exclude_pattern]:-}"
+							local _orphan_exclude="${_GS_ES_CFG[orphan_ignore_pattern]:-}"
 							if [[ -z "${_orphan_exclude}" || ! "${_dkey}" =~ ${_orphan_exclude} ]]; then
 								printf 'env-scan: local-only var %s not in source (orphaned)\n' "${_dkey}" >&2
 							fi
@@ -131,23 +131,29 @@ gs_es_process_file() {
 		"${dest_file}" \
 		"${count}"
 
+	# FORWARD Check 1 (scan → .env): vars found in scan output absent from source.
+	# Suggests new GLOBAL_STACK_* usages in Docker files not yet declared in .env.
 	[[ "true" = "${_GS_ES_CFG[check_missing]}" ]] &&
 		gs_es_check_missing_variables \
 			"${src_file}" \
 			"src.${count}" \
-			"${_GS_ES_CFG[exclude_check_missing]}|${_GS_ES_CFG[exclude_local_pattern]}" \
+			"${_GS_ES_CFG[forward_check_ignore_pattern]}|${_GS_ES_CFG[exclude_local_pattern]}" \
 			"false"
+	# FORWARD Check 2 (scan → .env.local): vars found in scan output absent from destination.
+	# Suggests entries in .env not yet propagated to .env.local.
 	[[ "true" = "${_GS_ES_CFG[check_missing]}" ]] &&
 		gs_es_check_missing_variables \
 			"${dest_file}" \
 			"dest.${count}" \
-			"${_GS_ES_CFG[exclude_check_missing]}" \
+			"${_GS_ES_CFG[forward_check_ignore_pattern]}" \
 			"false"
+	# REVERSE Check 3 (.env.local → scan): vars in destination absent from scan output.
+	# Suggests stale/orphaned entries in .env.local with no corresponding Docker usage.
 	[[ "true" = "${_GS_ES_CFG[check_missing]}" ]] &&
 		gs_es_check_missing_variables \
 			"${dest_file}" \
 			"dest.${count}" \
-			"${_GS_ES_CFG[exclude_source_check_pattern]}" \
+			"${_GS_ES_CFG[reverse_check_ignore_pattern]}" \
 			"true"
 
 	[[ "true" = "${_GS_ES_CFG[show_added_entries]}" ]] &&

@@ -272,7 +272,7 @@ t "exclude-check-missing: excluded pattern not reported" bash -c "
     printf 'GLOBAL_STACK_A=1\nGLOBAL_STACK_SKIP_ME=x\n' > \"\$D/.env\"
     printf 'GLOBAL_STACK_A=1\n' > \"\$D/.env.local\"
     out=\$(bash '${ENV_SCAN}' --dir=\"\$D\" --check-missing=true \
-        --exclude-check-missing='GLOBAL_STACK_SKIP_ME' \
+        --forward-check-ignore-pattern='GLOBAL_STACK_SKIP_ME' \
         --show-added-entries=false --show-different-entries=false 2>&1)
     echo \"\$out\" | grep -q 'GLOBAL_STACK_SKIP_ME' && echo FAIL || echo PASS
 "
@@ -797,7 +797,7 @@ t "Quoted Dockerfile ENV vs compose pass-through: not reported as conflict" bash
     echo \"\$out\" | grep -q 'GLOBAL_STACK_COLLATE_TEST' && echo FAIL || echo PASS
 "
 
-t "--exclude-multiple-values-pattern: excluded key not reported" bash -c "
+t "--conflict-ignore-pattern: excluded key not reported" bash -c "
     D=\${TMP_DIR:-${TMP_DIR}}/t15d; mkdir -p \"\$D/docker/images/svc1\" \"\$D/docker/images/svc2\"
     printf 'GLOBAL_STACK_NOISY_VAR=placeholder\n' > \"\$D/.env\"
     cp \"\$D/.env\" \"\$D/.env.local\"
@@ -805,7 +805,7 @@ t "--exclude-multiple-values-pattern: excluded key not reported" bash -c "
     printf '%s\n' '- GLOBAL_STACK_NOISY_VAR=noise_two' > \"\$D/docker/images/svc2/docker-compose.yaml\"
     out=\$(bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=true \
         --scan-delete-output=false \
-        --exclude-multiple-values-pattern='GLOBAL_STACK_NOISY_VAR' \
+        --conflict-ignore-pattern='GLOBAL_STACK_NOISY_VAR' \
         --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1)
     echo \"\$out\" | grep -q 'GLOBAL_STACK_NOISY_VAR' && echo FAIL || echo PASS
 "
@@ -851,18 +851,18 @@ t "--quiet=true: suppresses informational output" bash -c "
         && echo FAIL || echo PASS
 "
 
-t "--exclude-different-pattern: matched key skipped in diff report" bash -c "
+t "--diff-ignore-pattern: matched key skipped in diff report" bash -c "
     D=\${TMP_DIR:-${TMP_DIR}}/t16b; mkdir -p \"\$D\"
     printf 'GLOBAL_STACK_COMPOSE_FILE=val1\n' > \"\$D/.env\"
     printf 'GLOBAL_STACK_COMPOSE_FILE=val2\n' > \"\$D/.env.local\"
     out=\$(bash '${ENV_SCAN}' --dir=\"\$D\" \
         --scan-sources=false \
-        --exclude-different-pattern='GLOBAL_STACK_COMPOSE_FILE' \
+        --diff-ignore-pattern='GLOBAL_STACK_COMPOSE_FILE' \
         --show-added-entries=false --show-different-entries=true --check-missing=false 2>&1)
     echo \"\$out\" | grep -q 'GLOBAL_STACK_COMPOSE_FILE' && echo FAIL || echo PASS
 "
 
-t "--extract-all-exclude-pattern: matched prefix not extracted" bash -c "
+t "--scan-var-ignore-pattern: matched prefix not extracted" bash -c "
     D=\${TMP_DIR:-${TMP_DIR}}/t16c; mkdir -p \"\$D/docker/images/test\"
     printf 'GLOBAL_STACK_SKIP_THIS=x\nGLOBAL_STACK_KEEP_THIS=y\n' > \"\$D/.env\"
     cp \"\$D/.env\" \"\$D/.env.local\"
@@ -870,13 +870,13 @@ t "--extract-all-exclude-pattern: matched prefix not extracted" bash -c "
         > \"\$D/docker/images/test/Dockerfile\"
     bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=true \
         --scan-delete-output=false \
-        --scan-exclude-pattern='GLOBAL_STACK_SKIP_THIS' \
+        --scan-var-ignore-pattern='GLOBAL_STACK_SKIP_THIS' \
         --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
     grep -q 'GLOBAL_STACK_KEEP_THIS' \"\$D/.env.all.local\" || { echo FAIL; exit 0; }
     grep -q 'GLOBAL_STACK_SKIP_THIS' \"\$D/.env.all.local\" 2>/dev/null && echo FAIL || echo PASS
 "
 
-t "--exclude-reverse-check-missing: excluded pattern skipped" bash -c "
+t "--reverse-check-ignore-pattern: excluded pattern skipped" bash -c "
     D=\${TMP_DIR:-${TMP_DIR}}/t16d; mkdir -p \"\$D/docker/images/test\"
     printf 'GLOBAL_STACK_NORMAL=1\n' > \"\$D/.env\"
     cp \"\$D/.env\" \"\$D/.env.local\"
@@ -884,7 +884,7 @@ t "--exclude-reverse-check-missing: excluded pattern skipped" bash -c "
         > \"\$D/docker/images/test/Dockerfile\"
     out=\$(bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=true \
         --scan-delete-output=false \
-        --exclude-source-check-pattern='GLOBAL_STACK_DOCKER_ONLY' \
+        --reverse-check-ignore-pattern='GLOBAL_STACK_DOCKER_ONLY' \
         --check-missing=true --show-added-entries=false --show-different-entries=false 2>&1)
     echo \"\$out\" | grep -q 'GLOBAL_STACK_DOCKER_ONLY' && echo FAIL || echo PASS
 "
@@ -1485,8 +1485,8 @@ t "merge.sh — _gs_es_dest_vals does not leak to caller" bash -c "
         [show_added_entries]='false'
         [check_missing]='false'
         [exclude_local_pattern]=''
-        [exclude_source_check_pattern]=''
-        [exclude_check_missing]=''
+        [reverse_check_ignore_pattern]=''
+        [forward_check_ignore_pattern]=''
         [cleanup_tmp]='true'
         [debug]='false'
         [show_different_entries]='false'

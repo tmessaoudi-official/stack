@@ -35,10 +35,10 @@ Options:
                                              When suppressed a stderr notice is printed:
                                              "(--no-fail: scan error present — exit code forced to 0)"
   --scan-var-prefix=<value>                  Prefix pattern for environment variable extraction (default: "(GLOBAL_STACK_)")
-  --exclude-different-pattern=<value>        Pattern to exclude from difference detection (default: predefined regex)
-  --scan-exclude-pattern=<value>             Pattern to exclude from variable extraction (default: predefined regex)
-  --exclude-source-check-pattern=<value>     Pattern to exclude from reverse missing check (default: predefined regex)
-  --exclude-check-missing=<value>            Pattern to exclude from missing checks (default: predefined regex)
+  --diff-ignore-pattern=<value>              Pattern to suppress from "different value" warnings (default: predefined regex)
+  --scan-var-ignore-pattern=<value>          Pattern to suppress VARIABLE NAMES (not file paths) from scan extraction (default: predefined regex)
+  --reverse-check-ignore-pattern=<value>     Pattern for REVERSE check (.env.local → scan): vars absent from scan output (default: predefined regex)
+  --forward-check-ignore-pattern=<value>     Pattern for FORWARD checks (scan → .env / .env.local): vars absent from env files (default: predefined regex)
   --scan-path=<value>                        Search path for environment variable files (default: "<working-dir>/docker")
   --scan-ignore-pattern=<value>              Ignore specific paths during search (default: predefined paths)
   --source-files=<value>                     Source environment files for processing (default: "<working-dir>/.env")
@@ -48,7 +48,7 @@ Options:
   --source-merged-file=<value>               Path of the file where all source env files will be merged (default: <working-dir>/.env.src.all.merged)
   --exclude-implicit-empty=<value>           Exclude implicit empty from multiple default values (default: true)
   --exclude-explicit-empty=<value>           Exclude explicit empty from multiple default values (default: true)
-  --exclude-multiple-values-pattern=<value>  Pattern to exclude vars from multiple-values detection (default: predefined regex)
+  --conflict-ignore-pattern=<value>          Pattern to exclude vars from conflicting-defaults detection (default: predefined regex)
   --quiet=<value>                            Suppress informational output; errors still print (default: false)
   --profile=<value>                          Show execution time and memory usage per phase (default: false)
   --backup=<bool>                            Create a timestamped backup of destination files before overwriting (default: true)
@@ -56,14 +56,14 @@ Options:
   --backup-purge=<bool>                      Delete ALL existing <file>.bak.* backups before the run (default: false)
   --backup-suffix=<str>                      Suffix anchor for backup files; full name: <file><suffix>.<YYYYMMDD-HHMMSS> (default: .bak)
   --prune-removed=<bool>                     Drop orphaned (local-only) vars from .env.local instead of keeping them (default: false)
-  --orphan-exclude-pattern=<regex>           ERE regex: suppress orphaned-var warnings for matching var names (default: "")
+  --orphan-ignore-pattern=<regex>            ERE regex: suppress orphaned-var warnings for matching var names (default: "")
   --orphan-quiet=<bool>                      Suppress ALL orphaned-var warnings; vars are still kept in .env.local (default: false)
 
 Examples:
   ./env-scan.sh --debug=true --dir=/stack/.env --show-added-entries=false
   ./env-scan.sh --source-files="file1.env file2.env" --destination-files="dest1.env dest2.env"
   ./env-scan.sh --scan-path=/config --sync-values=true
-  bin/env-scan.sh --orphan-exclude-pattern='GLOBAL_STACK_LOCAL_'  # silence machine-local vars
+  bin/env-scan.sh --orphan-ignore-pattern='GLOBAL_STACK_LOCAL_'   # silence machine-local vars
   bin/env-scan.sh --orphan-quiet=true                              # silence all orphan warnings
   bin/env-scan.sh --no-fail                                        # always exit 0 even on propagation error
 

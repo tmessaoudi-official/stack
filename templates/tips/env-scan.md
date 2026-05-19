@@ -49,8 +49,8 @@ All options use `--key=value` form. Boolean options accept `true` or `false`.
 | `--scan-var-prefix=PATTERN` | `(GLOBAL_STACK_)` | Regex prefix for variables to extract |
 | `--scan-output-file=PATH` | `<dir>/.env.all.local` | Where to write all extracted variable definitions |
 | `--scan-delete-output=true\|false` | `true` | Delete the scan output file after processing |
-| `--scan-exclude-pattern=REGEX` | predefined | Variables to exclude from extraction |
-| `--scan-ignore-pattern=LINES` | predefined paths | Newline-separated list of path regexes to skip during scan |
+| `--scan-var-ignore-pattern=REGEX` | predefined | VARIABLE NAMES to suppress from extraction (distinct from `--scan-ignore-pattern` which skips file paths) |
+| `--scan-ignore-pattern=LINES` | predefined paths | Newline-separated list of FILE PATH regexes to skip during scan |
 | `--include-docker-args=true\|false` | `true` | Include `ARG VAR=value` lines from Dockerfiles when scanning |
 | `--debug-show-extracted-files=true\|false` | `false` | Print each file path as it is scanned (requires `--debug=true`) |
 
@@ -67,10 +67,10 @@ All options use `--key=value` form. Boolean options accept `true` or `false`.
 
 | Option | Default | Description |
 |---|---|---|
-| `--exclude-different-pattern=REGEX` | predefined | Vars to skip in difference reporting (e.g. credentials, ports) |
-| `--exclude-source-check-pattern=REGEX` | predefined | Vars to exclude from reverse missing check (dest → scan) |
-| `--exclude-check-missing=REGEX` | predefined | Vars to exclude from the forward missing check (scan → dest) |
-| `--exclude-multiple-values-pattern=REGEX` | predefined | Vars to exclude from conflicting-defaults detection |
+| `--diff-ignore-pattern=REGEX` | predefined | Vars to suppress from "different value" warnings (e.g. credentials, ports) |
+| `--reverse-check-ignore-pattern=REGEX` | predefined | REVERSE check (dest → scan): vars in .env.local absent from scan output |
+| `--forward-check-ignore-pattern=REGEX` | predefined | FORWARD checks (scan → .env / .env.local): vars absent from env files |
+| `--conflict-ignore-pattern=REGEX` | predefined | Vars to exclude from conflicting-defaults detection |
 | `--exclude-local-pattern=REGEX` | derived from prefix | Vars to exclude when checking for entries missing from dest |
 | `--exclude-implicit-empty=true\|false` | `true` | Ignore `KEY=` (implicit empty) when detecting conflicting defaults |
 | `--exclude-explicit-empty=true\|false` | `true` | Ignore `KEY=${KEY:-}` (explicit empty passthrough) when detecting conflicts |
@@ -295,7 +295,7 @@ bin/env-update.sh --apply --scan   # apply + run env-scan automatically
 **What is skipped:**
 - `ARG VAR` (no `=` default) — no value to compare.
 - Vars whose `.env` value contains `${` (shell expansion) — cannot be embedded literally.
-- Vars matching `_GS_ES_CFG[exclude_multiple_values_pattern]` — protected from structural
+- Vars matching `_GS_ES_CFG[conflict_ignore_pattern]` — protected from structural
   divergence (e.g. `GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS` uses a shell-expanded form
   in `.env` but a literal hostname in Dockerfiles).
 

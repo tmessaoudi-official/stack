@@ -36,7 +36,7 @@ gs_es_show_inconsistency() {
 
 # ── gs_es_show_differences ───────────────────────────────────────────────────────
 # Args: src_file  dest_file  count
-# Reads from _GS_ES_CFG: exclude_different_pattern, show_different_entries,
+# Reads from _GS_ES_CFG: diff_ignore_pattern, show_different_entries,
 #                        debug, sync_values, quiet
 gs_es_show_differences() {
 	local src_file="${1}"
@@ -46,7 +46,7 @@ gs_es_show_differences() {
 	[[ "${_GS_ES_CFG[quiet]}" == "true" ]] && return 0
 
 	local different_entries
-	different_entries=$(awk -v exclude_pattern="${_GS_ES_CFG[exclude_different_pattern]}" '
+	different_entries=$(awk -v exclude_pattern="${_GS_ES_CFG[diff_ignore_pattern]}" '
 		{
 			key=$0; sub(/=.*/,"",key)
 			val=substr($0,length(key)+2)
@@ -68,7 +68,7 @@ gs_es_show_differences() {
 	fi
 
 	if [[ -n "${different_entries}" && "true" = "${_GS_ES_CFG[sync_values]}" && "${_GS_ES_CFG[dry_run]:-false}" != "true" ]]; then
-		awk -v exclude_pattern="${_GS_ES_CFG[exclude_different_pattern]}" '
+		awk -v exclude_pattern="${_GS_ES_CFG[diff_ignore_pattern]}" '
 			{
 				key=$0; sub(/=.*/,"",key)
 				val=substr($0,length(key)+2)

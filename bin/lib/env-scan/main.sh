@@ -126,7 +126,7 @@ gs_es_main() {
 	gs_es_propagate_to_dockerfiles \
 		"${_GS_ES_CFG[source_files]}" \
 		"${_GS_ES_CFG[scan_path]}" \
-		"${_GS_ES_CFG[exclude_multiple_values_pattern]:-}" \
+		"${_GS_ES_CFG[conflict_ignore_pattern]:-}" \
 		"${_GS_ES_CFG[dry_run]}" || _propagate_rc=$?
 	if [[ "${_propagate_rc}" -ne 0 ]]; then
 		if [[ "${_GS_ES_CFG[no_fail]:-false}" == "true" ]]; then

@@ -66,11 +66,18 @@ _gs_eu2_apply_single() {
 _gs_eu2_apply_updates() {
   local _env_file="${1}" _dry_run="${2:-false}"
   local _count; _count="$(_gs_eu2_record_count)"
-  local _n_applied=0 _n_would=0
+  # Four non-overlapping counters — sum to the reported total:
+  #   version-only : AUTO records where only VAR= (and annotation version) changed
+  #   version+sha  : AUTO records where VAR= AND sha: annotation both changed
+  #   sha          : SHA-decision records (SKIP but sha advanced; use_sha may also update VAR=)
+  #   lock         : LOCK records (annotation version bumped, VAR= untouched)
+  local _n_auto_only_applied=0 _n_auto_only_would=0
+  local _n_auto_sha_applied=0  _n_auto_sha_would=0
+  local _n_sha_applied=0       _n_sha_would=0
+  local _n_lock_applied=0      _n_lock_would=0
 
   local _i _var _cur _prop _decision _raw_ann
   local _ann_sha _ann_sha_date _new_sha _new_sha_date _use_sha
-  local _n_sha_applied=0 _n_sha_would=0
   for (( _i = 0; _i < _count; _i++ )); do
     _decision="$(_gs_eu2_record_get "${_i}" decision)"
 
@@ -116,13 +123,13 @@ _gs_eu2_apply_updates() {
       if [[ "${_dry_run}" == "true" ]]; then
         printf '  [DRY-RUN]  %-55s  annotation: %s → %s (locked — VAR= untouched)\n' \
           "${_var}" "${_cur}" "${_prop}"
-        (( ++_n_would )) || true
+        (( ++_n_lock_would )) || true
       else
         # 10th arg bare_sha: unused (annotation_only=true, VAR= untouched), pass "".
         _gs_eu2_apply_single "${_env_file}" "${_var}" "${_prop}" "${_raw_ann}" "${_cur}" \
                               "" "" "false" "true" ""
         printf '  [LOCK]     %-55s  annotation: %s → %s\n' "${_var}" "${_cur}" "${_prop}"
-        (( ++_n_applied )) || true
+        (( ++_n_lock_applied )) || true
       fi
       continue
     fi
@@ -146,27 +153,41 @@ _gs_eu2_apply_updates() {
     local _new_sha_tok2="${_new_sha}"
     [[ -n "${_new_sha_date}" ]] && _new_sha_tok2="${_new_sha} (${_new_sha_date})"
 
+    # sha: annotation also updated when both tokens are present and differ.
+    # This is a silent side-effect of the AUTO path — surfaced in the summary as "version+sha".
+    local _auto_has_sha_update="false"
+    [[ -n "${_ann_sha}" && -n "${_new_sha}" && "${_old_sha_tok2}" != "${_new_sha_tok2}" ]] \
+      && _auto_has_sha_update="true"
+
     if [[ "${_dry_run}" == "true" ]]; then
       local _display_proposed="${_prop}"
       [[ "${_use_sha:-false}" == "true" && -n "${_new_sha}" ]] && _display_proposed="${_new_sha}"
       printf '  [DRY-RUN]  %-55s  %s → %s\n' "${_var}" "${_cur}" "${_display_proposed}"
-      (( ++_n_would )) || true
+      if [[ "${_auto_has_sha_update}" == "true" ]]; then
+        (( ++_n_auto_sha_would )) || true
+      else
+        (( ++_n_auto_only_would )) || true
+      fi
     else
       # 10th arg bare_sha: raw SHA without date, for the VAR= line when use_sha=true.
       _gs_eu2_apply_single "${_env_file}" "${_var}" "${_prop}" "${_raw_ann}" "${_cur}" \
                             "${_old_sha_tok2}" "${_new_sha_tok2}" "${_use_sha:-false}" "false" "${_new_sha}"
       printf '  [APPLIED]  %-55s  %s → %s\n' "${_var}" "${_cur}" "${_prop}"
-      (( ++_n_applied )) || true
+      if [[ "${_auto_has_sha_update}" == "true" ]]; then
+        (( ++_n_auto_sha_applied )) || true
+      else
+        (( ++_n_auto_only_applied )) || true
+      fi
     fi
   done
 
   if [[ "${_dry_run}" == "true" ]]; then
-    local _total_would=$(( _n_would + _n_sha_would ))
-    printf '  %d update(s) would be applied (%d version, %d SHA) (--dry-run — no writes)\n' \
-      "${_total_would}" "${_n_would}" "${_n_sha_would}"
+    local _total_would=$(( _n_auto_only_would + _n_auto_sha_would + _n_sha_would + _n_lock_would ))
+    printf '  %d update(s) would be applied (%d version-only, %d version+sha, %d sha, %d lock) (--dry-run — no writes)\n' \
+      "${_total_would}" "${_n_auto_only_would}" "${_n_auto_sha_would}" "${_n_sha_would}" "${_n_lock_would}"
   else
-    local _total_applied=$(( _n_applied + _n_sha_applied ))
-    printf '  %d update(s) applied to %s (%d version, %d SHA)\n' \
-      "${_total_applied}" "${_env_file}" "${_n_applied}" "${_n_sha_applied}"
+    local _total_applied=$(( _n_auto_only_applied + _n_auto_sha_applied + _n_sha_applied + _n_lock_applied ))
+    printf '  %d update(s) applied to %s (%d version-only, %d version+sha, %d sha, %d lock)\n' \
+      "${_total_applied}" "${_env_file}" "${_n_auto_only_applied}" "${_n_auto_sha_applied}" "${_n_sha_applied}" "${_n_lock_applied}"
   fi
 }

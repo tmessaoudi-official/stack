@@ -30,10 +30,10 @@ gs_es_parse_args() {
 		--destination-file-merged-suffix=*) _GS_ES_CFG[destination_file_merged_suffix]="${1#*=}" ;;
 		--sync-values=*)                  _GS_ES_CFG[sync_values]="${1#*=}";                  _GS_ES_CFG[sync_values]="${_GS_ES_CFG[sync_values],,}" ;;
 		--scan-var-prefix=*)              _GS_ES_CFG[scan_var_prefix]="${1#*=}" ;;
-		--exclude-different-pattern=*)    _GS_ES_CFG[exclude_different_pattern]="${1#*=}" ;;
-		--scan-exclude-pattern=*)         _GS_ES_CFG[scan_exclude_pattern]="${1#*=}" ;;
-		--exclude-source-check-pattern=*) _GS_ES_CFG[exclude_source_check_pattern]="${1#*=}" ;;
-		--exclude-check-missing=*)        _GS_ES_CFG[exclude_check_missing]="${1#*=}" ;;
+		--diff-ignore-pattern=*)           _GS_ES_CFG[diff_ignore_pattern]="${1#*=}" ;;
+		--scan-var-ignore-pattern=*)       _GS_ES_CFG[scan_var_ignore_pattern]="${1#*=}" ;;
+		--reverse-check-ignore-pattern=*)  _GS_ES_CFG[reverse_check_ignore_pattern]="${1#*=}" ;;
+		--forward-check-ignore-pattern=*)  _GS_ES_CFG[forward_check_ignore_pattern]="${1#*=}" ;;
 		--scan-path=*)                    _GS_ES_CFG[scan_path]="${1#*=}" ;;
 		--scan-ignore-pattern=*)          _GS_ES_CFG[scan_ignore_pattern]="${1#*=}" ;;
 		--source-files=*)                 _GS_ES_CFG[source_files]="${1#*=}" ;;
@@ -43,7 +43,7 @@ gs_es_parse_args() {
 		--source-merged-file=*)           _GS_ES_CFG[source_merged_file]="${1#*=}" ;;
 		--exclude-implicit-empty=*)       _GS_ES_CFG[exclude_implicit_empty]="${1#*=}";       _GS_ES_CFG[exclude_implicit_empty]="${_GS_ES_CFG[exclude_implicit_empty],,}" ;;
 		--exclude-explicit-empty=*)       _GS_ES_CFG[exclude_explicit_empty]="${1#*=}";       _GS_ES_CFG[exclude_explicit_empty]="${_GS_ES_CFG[exclude_explicit_empty],,}" ;;
-		--exclude-multiple-values-pattern=*) _GS_ES_CFG[exclude_multiple_values_pattern]="${1#*=}" ;;
+		--conflict-ignore-pattern=*)       _GS_ES_CFG[conflict_ignore_pattern]="${1#*=}" ;;
 		--quiet=*)                        _GS_ES_CFG[quiet]="${1#*=}";                        _GS_ES_CFG[quiet]="${_GS_ES_CFG[quiet],,}" ;;
 		--profile=*)                      _GS_ES_CFG[profile]="${1#*=}";                      _GS_ES_CFG[profile]="${_GS_ES_CFG[profile],,}" ;;
 		--dry-run)                        _GS_ES_CFG[dry_run]="true" ;;
@@ -59,7 +59,7 @@ gs_es_parse_args() {
 			;;
 		--backup-suffix=*)                _GS_ES_CFG[backup_suffix]="${1#*=}" ;;
 		--prune-removed=*)                _GS_ES_CFG[prune_removed]="${1#*=}";               _GS_ES_CFG[prune_removed]="${_GS_ES_CFG[prune_removed],,}" ;;
-		--orphan-exclude-pattern=*)       _GS_ES_CFG[orphan_exclude_pattern]="${1#*=}" ;;
+		--orphan-ignore-pattern=*)         _GS_ES_CFG[orphan_ignore_pattern]="${1#*=}" ;;
 		--orphan-quiet=*)                 _GS_ES_CFG[orphan_quiet]="${1#*=}";                _GS_ES_CFG[orphan_quiet]="${_GS_ES_CFG[orphan_quiet],,}" ;;
 		--version)
 			printf '%s\n' "${_GS_ES_VERSION}"
@@ -122,11 +122,11 @@ gs_es_parse_args() {
 	[[ -z "${_GS_ES_CFG[destination_file_tmp_suffix]+set}" ]]  && _GS_ES_CFG[destination_file_tmp_suffix]=".tmp"
 	[[ -z "${_GS_ES_CFG[destination_file_merged_suffix]+set}" ]] && _GS_ES_CFG[destination_file_merged_suffix]=".merged"
 	[[ -z "${_GS_ES_CFG[scan_var_prefix]+set}" ]]              && _GS_ES_CFG[scan_var_prefix]="(GLOBAL_STACK_)"
-	[[ -z "${_GS_ES_CFG[exclude_different_pattern]+set}" ]]    && _GS_ES_CFG[exclude_different_pattern]="${_GS_ES_PATTERN_EXCLUDE_DIFFERENT}"
-	[[ -z "${_GS_ES_CFG[scan_exclude_pattern]+set}" ]]         && _GS_ES_CFG[scan_exclude_pattern]="${_GS_ES_PATTERN_SCAN_EXCLUDE}"
-	[[ -z "${_GS_ES_CFG[exclude_source_check_pattern]+set}" ]] && _GS_ES_CFG[exclude_source_check_pattern]="${_GS_ES_PATTERN_EXCLUDE_SOURCE_CHECK}"
-	[[ -z "${_GS_ES_CFG[exclude_check_missing]+set}" ]]        && _GS_ES_CFG[exclude_check_missing]="${_GS_ES_PATTERN_EXCLUDE_CHECK_MISSING}"
-	[[ -z "${_GS_ES_CFG[exclude_multiple_values_pattern]+set}" ]] && _GS_ES_CFG[exclude_multiple_values_pattern]="${_GS_ES_PATTERN_EXCLUDE_MULTIPLE_VALUES}"
+	[[ -z "${_GS_ES_CFG[diff_ignore_pattern]+set}" ]]            && _GS_ES_CFG[diff_ignore_pattern]="${_GS_ES_PATTERN_DIFF_IGNORE}"
+	[[ -z "${_GS_ES_CFG[scan_var_ignore_pattern]+set}" ]]       && _GS_ES_CFG[scan_var_ignore_pattern]="${_GS_ES_PATTERN_SCAN_VAR_IGNORE}"
+	[[ -z "${_GS_ES_CFG[reverse_check_ignore_pattern]+set}" ]]  && _GS_ES_CFG[reverse_check_ignore_pattern]="${_GS_ES_PATTERN_REVERSE_CHECK_IGNORE}"
+	[[ -z "${_GS_ES_CFG[forward_check_ignore_pattern]+set}" ]]  && _GS_ES_CFG[forward_check_ignore_pattern]="${_GS_ES_PATTERN_FORWARD_CHECK_IGNORE}"
+	[[ -z "${_GS_ES_CFG[conflict_ignore_pattern]+set}" ]]       && _GS_ES_CFG[conflict_ignore_pattern]="${_GS_ES_PATTERN_CONFLICT_IGNORE}"
 
 	# ── Dependent defaults (require dir / scan_var_prefix to be set first) ───
 	if [[ -z "${_GS_ES_CFG[scan_path]+set}" ]]; then
@@ -151,5 +151,5 @@ gs_es_parse_args() {
 	[[ -z "${_GS_ES_CFG[source_merged_file]+set}" ]]         && _GS_ES_CFG[source_merged_file]="${_GS_ES_CFG[dir]}/.env.src.all.merged"
 	[[ -z "${_GS_ES_CFG[backup_keep]+set}" ]]               && _GS_ES_CFG[backup_keep]="10"
 	[[ -z "${_GS_ES_CFG[backup_suffix]+set}" ]]             && _GS_ES_CFG[backup_suffix]=".bak"
-	[[ -z "${_GS_ES_CFG[orphan_exclude_pattern]+set}" ]]   && _GS_ES_CFG[orphan_exclude_pattern]="${_GS_ES_PATTERN_ORPHAN_EXCLUDE}"
+	[[ -z "${_GS_ES_CFG[orphan_ignore_pattern]+set}" ]]    && _GS_ES_CFG[orphan_ignore_pattern]="${_GS_ES_PATTERN_ORPHAN_IGNORE}"
 }

@@ -86,8 +86,8 @@ gs_es_detect_multiple_defaults() {
 		}
 	}' "${input_file_merge}.expanded")
 
-	if [[ -n "${_GS_ES_CFG[exclude_multiple_values_pattern]}" && -n "${multiple_default_values}" ]]; then
-		multiple_default_values=$(echo "${multiple_default_values}" | grep -vE "${_GS_ES_CFG[exclude_multiple_values_pattern]}" || true)
+	if [[ -n "${_GS_ES_CFG[conflict_ignore_pattern]}" && -n "${multiple_default_values}" ]]; then
+		multiple_default_values=$(echo "${multiple_default_values}" | grep -vE "${_GS_ES_CFG[conflict_ignore_pattern]}" || true)
 	fi
 
 	if [[ -n "${multiple_default_values}" ]]; then
@@ -101,7 +101,7 @@ gs_es_detect_multiple_defaults() {
 
 # ── gs_es_search_and_extract ─────────────────────────────────────────────────────
 # Args: current_file  count
-# Reads from _GS_ES_CFG: scan_ignore_pattern, scan_exclude_pattern,
+# Reads from _GS_ES_CFG: scan_ignore_pattern (file paths), scan_var_ignore_pattern (variable names),
 #                        debug, debug_show_extracted_files, include_docker_args,
 #                        scan_var_prefix, scan_output_file,
 #                        scan_delete_output, cleanup_tmp,
@@ -239,8 +239,8 @@ gs_es_search_and_extract() {
 			sub(/=$/, "=|implicit_empty|")      # KEY= → KEY=|implicit_empty|
 			print
 		}' |
-		if [[ -n "${_GS_ES_CFG[scan_exclude_pattern]}" ]]; then
-			grep -vE "${_GS_ES_CFG[scan_exclude_pattern]}" || true
+		if [[ -n "${_GS_ES_CFG[scan_var_ignore_pattern]}" ]]; then
+			grep -vE "${_GS_ES_CFG[scan_var_ignore_pattern]}" || true
 		else
 			cat
 		fi | tee -a "${_out_file}" >/dev/null
