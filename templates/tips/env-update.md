@@ -379,14 +379,14 @@ the fetch is in progress.
 [ERROR ]  GLOBAL_STACK_SOME_VERSION                    (fetch failed for github:owner/repo)
 ──────────────────────────────────────────────────────────────────────────────
   Summary: 1 AUTO, 0 SHA, 2 HOLD, 1 MANUAL, 1 LOCK, 2 SKIP, 0 FROZEN, 0 FALLBACK, 1 ERROR  (8 checked)
-    ↳ 0 WATCH · 0 DRIFT (0 fixable) · 0 DOWNGRADE
+    ↳ 0 WATCH · 0 DRIFT (0 fixable) · 0 DOWNGRADE · 0 +sha
 ```
 
 When signals are non-zero the secondary line appears:
 
 ```
   Summary: 2 AUTO, 0 SHA, 1 HOLD, 0 MANUAL, 0 LOCK, 1 SKIP, 0 FROZEN, 1 FALLBACK, 0 ERROR  (4 checked)
-    ↳ 1 WATCH · 2 DRIFT (1 fixable) · 1 DOWNGRADE
+    ↳ 1 WATCH · 2 DRIFT (1 fixable) · 1 DOWNGRADE · 3 +sha
 ```
 
 #### Summary line signals
@@ -405,13 +405,14 @@ When signals are non-zero the secondary line appears:
 | `FALLBACK` | Overlay: range annotation fell back to LOW major (HIGH not yet in registry). **Not added to total** — the record is also counted as AUTO or SKIP. |
 | `ERROR` | Fetch failed (network, rate limit, parse error) |
 
-**Secondary sub-line signals** (shown only when at least one is > 0; `--no-drift` suppresses DRIFT and DOWNGRADE but not WATCH):
+**Secondary sub-line signals** (shown only when at least one is > 0; `--no-drift` suppresses DRIFT and DOWNGRADE but not WATCH or `+sha`):
 
 | Signal | Meaning |
 |--------|---------|
 | `WATCH` | A new runtime generation is available (watch-major annotation detected a higher major/minor prefix in the registry) |
 | `DRIFT` | VAR= in the env file differs from what the annotation records as current version. `(N fixable)` = how many drift records are on AUTO, HOLD, MANUAL, or SHA decisions; `--apply` or `--force-auto --apply` can resolve them. |
 | `DOWNGRADE` | Subset of DRIFT: VAR= is ahead of annotation (the env file has a newer version than what the annotation tracks — running `--apply` would downgrade). Not counted as fixable. |
+| `+sha` | AUTO or MANUAL decisions that also carry a sha annotation update (a `↳ sha:` sub-line was emitted). Pure SHA decisions (decision=SHA) are excluded — they are already counted in the primary `SHA` counter. |
 
 ### --check exit code
 

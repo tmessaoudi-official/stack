@@ -55,7 +55,7 @@ _gs_eu2_run_check() {
   _GS_EU2_CACHE_TTL="${_GS_EU2_CFG[cache_ttl]:-3600}"
 
   local _n_auto=0 _n_hold=0 _n_skip=0 _n_error=0 _n_manual=0 _n_sha=0 _n_lock=0 _n_frozen=0
-  local _n_fallback=0 _n_watch=0 _n_drift=0 _n_drift_fixable=0 _n_downgrade=0 _n_hidden=0
+  local _n_fallback=0 _n_watch=0 _n_drift=0 _n_drift_fixable=0 _n_downgrade=0 _n_hidden=0 _n_sha_anno=0
 
   # Dynamic column width: pre-scan all env_var names so the → arrow aligns
   # across every record in this run, regardless of variable name length.
@@ -567,6 +567,20 @@ _gs_eu2_run_check() {
       fi
     fi
 
+    # +sha counter: AUTO or MANUAL decisions that also carry a sha annotation update.
+    # Counted independently of display — uses record fields directly so MANUAL would
+    # count if it ever carries a proposed_sha diff (forward-compatible).
+    # Pure SHA decisions (decision=SHA) are already reflected in the primary SHA counter
+    # and are intentionally excluded here.
+    if [[ "${_decision}" == "AUTO" || "${_decision}" == "MANUAL" ]]; then
+      local _sha_anno_prop _sha_anno_ann
+      _sha_anno_prop="$(_gs_eu2_record_get "${_i}" proposed_sha)"
+      _sha_anno_ann="$(_gs_eu2_record_get "${_i}" annotation_sha)"
+      if [[ -n "${_sha_anno_prop}" && "${_sha_anno_prop}" != "${_sha_anno_ann}" ]]; then
+        (( ++_n_sha_anno )) || true
+      fi
+    fi
+
     # --unstable=info sub-line: show what the unstable version would be (informational only).
     # Only shown when: unstable=info mode, unstable_proposed is set, and it differs from
     # both the stable proposed_version and the current version.
@@ -725,19 +739,20 @@ _gs_eu2_run_check() {
   printf '  Summary: %d AUTO, %d SHA, %d HOLD, %d MANUAL, %d LOCK, %d SKIP, %d FROZEN, %d FALLBACK, %d ERROR  (%s)\n' \
     "${_n_auto}" "${_n_sha}" "${_n_hold}" "${_n_manual}" "${_n_lock}" "${_n_skip}" "${_n_frozen}" "${_n_fallback}" "${_n_error}" "${_checked_suffix}"
 
-  # Secondary signals sub-line: WATCH, DRIFT (with fixable count), DOWNGRADE.
+  # Secondary signals sub-line: WATCH, DRIFT (with fixable count), DOWNGRADE, +sha.
   # DRIFT and DOWNGRADE suppressed when --no-drift is active.
+  # +sha follows WATCH (unconditional — not suppressed by --no-drift).
   # Entire line omitted when all relevant signals are zero.
   local _sec_watch="${_n_watch}"
-  local _sec_drift=0 _sec_fixable=0 _sec_down=0
+  local _sec_drift=0 _sec_fixable=0 _sec_down=0 _sec_sha_anno="${_n_sha_anno}"
   if [[ "${_GS_EU2_CFG[no_drift]:-false}" != "true" ]]; then
     _sec_drift="${_n_drift}"
     _sec_fixable="${_n_drift_fixable}"
     _sec_down="${_n_downgrade}"
   fi
-  if (( _sec_watch > 0 || _sec_drift > 0 || _sec_down > 0 )); then
-    printf '    ↳ %d WATCH · %d DRIFT (%d fixable) · %d DOWNGRADE\n' \
-      "${_sec_watch}" "${_sec_drift}" "${_sec_fixable}" "${_sec_down}"
+  if (( _sec_watch > 0 || _sec_drift > 0 || _sec_down > 0 || _sec_sha_anno > 0 )); then
+    printf '    ↳ %d WATCH · %d DRIFT (%d fixable) · %d DOWNGRADE · %d +sha\n' \
+      "${_sec_watch}" "${_sec_drift}" "${_sec_fixable}" "${_sec_down}" "${_sec_sha_anno}"
   fi
 
   # Exit non-zero when any ERROR decisions were recorded — callers can detect fetch failures.

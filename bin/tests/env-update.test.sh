@@ -7193,6 +7193,49 @@ t "t75f: clean run — no secondary sub-line when all signals are zero" bash -c 
     echo PASS
 "
 
+# t75g: +sha counter — AUTO decision with sha sub-line → 1 +sha in secondary sub-line.
+# Fixture: pecl:zmq (git:zeromq/php-zmq). PECL proposes 1.1.3 (> 1.1.2 → AUTO).
+# Commits fixture: sha=616b6c64... Annotation sha=<old_sha> ≠ proposed sha → sha sub-line fires.
+# The pecl fetcher is the only one that populates proposed_sha; github fetcher does not.
+# Expected: secondary sub-line shows · 1 +sha.
+t "t75g: +sha counter — AUTO decision with sha annotation update shows 1 +sha in secondary sub-line" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t75g_cache
+    f=\${TMP_DIR}/t75g.env
+    old_sha='aaaa0000bbbb1111cccc2222dddd3333eeee4444aaaa0000bbbb1111cccc2222dd'
+    printf '# @todo env-update pecl:zmq (git:zeromq/php-zmq) 1.1.2 sha:%s\nGLOBAL_STACK_T75G=1.1.2\n' \"\$old_sha\" > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qE '[+]sha' || { echo \"secondary sub-line must show +sha; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qE '1 [+]sha' || { echo \"secondary sub-line must show '1 +sha'; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t75h: +sha counter — WATCH only (no sha annotation) → 0 +sha in secondary sub-line.
+# Fixture: testorg/watchrepo-newer. No sha annotation.
+# Expected: secondary sub-line shows 1 WATCH · ... · 0 +sha.
+t "t75h: +sha counter — 0 +sha when no sha annotation present (WATCH-only scenario)" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t75h_cache
+    f=\${TMP_DIR}/t75h.env
+    printf '# @todo env-update (watch-major) github:testorg/watchrepo-newer:3 3.0.5\nGLOBAL_STACK_T75H=3.0.5\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qE '[+]sha' || { echo \"secondary sub-line must show +sha even when 0; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qE '0 [+]sha' || { echo \"secondary sub-line must show '0 +sha'; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t75f-upd: clean run — secondary sub-line still omitted when all signals including +sha are zero.
+# (Confirms that 0 +sha alone does not force the secondary line to appear.)
+t "t75f-upd: clean run — no secondary sub-line when ALL signals including +sha are zero" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t75fupd_cache
+    f=\${TMP_DIR}/t75fupd.env
+    printf '# @todo env-update npm:@types/node:25 25.8.0\nGLOBAL_STACK_T75FUPD=25.8.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '+sha' && { echo \"secondary sub-line must NOT appear when all signals are zero; got: \$out\"; echo FAIL; exit 0; } || true
+    echo PASS
+"
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Section 76 — --changes-only flag
 # ═══════════════════════════════════════════════════════════════════════════
