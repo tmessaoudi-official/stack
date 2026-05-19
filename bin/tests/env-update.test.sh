@@ -7484,7 +7484,55 @@ t "t77g: --no-fail prints stderr notice when exit code suppressed" bash -c "
     f=\${TMP_DIR}/t77g.env
     printf '# @todo env-update dockerhub:_/nonexistent-repo-xyz 1.0.0\nGLOBAL_STACK_T77G=1.0.0\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --no-fail --env-file=\"\$f\" 2>&1 || true)
-    echo \"\$out\" | grep -qF 'no-fail' || { echo \"stderr notice missing (expected 'no-fail' in output); got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '[NO-FAIL] fetch errors present' || { echo \"stderr notice missing (expected '[NO-FAIL] fetch errors present' in output); got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+section "78 — mode banners"
+
+# t78a: --no-drift flag → stderr contains [NO-DRIFT MODE]
+t "t78a: --no-drift flag prints [NO-DRIFT MODE] banner" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t78a_cache
+    f=\${TMP_DIR}/t78a.env
+    printf '# @todo env-update npm:@types/node:25 25.8.0\nGLOBAL_STACK_T78A=25.8.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --no-drift --env-file=\"\$f\" 2>&1 || true)
+    echo \"\$out\" | grep -qF '[NO-DRIFT MODE]' || { echo \"banner missing; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t78b: --changes-only flag → stderr contains [CHANGES-ONLY MODE]
+t "t78b: --changes-only flag prints [CHANGES-ONLY MODE] banner" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t78b_cache
+    f=\${TMP_DIR}/t78b.env
+    printf '# @todo env-update npm:@types/node:25 25.8.0\nGLOBAL_STACK_T78B=25.8.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --changes-only --env-file=\"\$f\" 2>&1 || true)
+    echo \"\$out\" | grep -qF '[CHANGES-ONLY MODE]' || { echo \"banner missing; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t78c: --no-fail flag → stderr contains [NO-FAIL MODE] (clean fixture — no ERROR, only the upfront banner)
+t "t78c: --no-fail flag prints [NO-FAIL MODE] banner" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t78c_cache
+    f=\${TMP_DIR}/t78c.env
+    printf '# @todo env-update npm:@types/node:25 25.8.0\nGLOBAL_STACK_T78C=25.8.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --no-fail --env-file=\"\$f\" 2>&1 || true)
+    echo \"\$out\" | grep -qF '[NO-FAIL MODE]' || { echo \"banner missing; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t78d: no mode flags → stderr does NOT contain any of the three mode banners
+t "t78d: no mode flags — no mode banners in output" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t78d_cache
+    f=\${TMP_DIR}/t78d.env
+    printf '# @todo env-update npm:@types/node:25 25.8.0\nGLOBAL_STACK_T78D=25.8.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1 || true)
+    echo \"\$out\" | grep -qF '[NO-DRIFT MODE]'    && { echo \"unexpected [NO-DRIFT MODE] banner; got: \$out\"; echo FAIL; exit 0; } || true
+    echo \"\$out\" | grep -qF '[CHANGES-ONLY MODE]' && { echo \"unexpected [CHANGES-ONLY MODE] banner; got: \$out\"; echo FAIL; exit 0; } || true
+    echo \"\$out\" | grep -qF '[NO-FAIL MODE]'     && { echo \"unexpected [NO-FAIL MODE] banner; got: \$out\"; echo FAIL; exit 0; } || true
     echo PASS
 "
 

@@ -874,6 +874,15 @@ _gs_eu2_main() {
   if [[ -n "${_GS_EU2_CFG[exclude]:-}" ]]; then
     printf '[EXCLUDE: %s]\n' "${_GS_EU2_CFG[exclude]}" >&2
   fi
+  if [[ "${_GS_EU2_CFG[no_drift]:-false}" == "true" ]]; then
+    printf '[NO-DRIFT MODE] drift sub-lines and drift/downgrade secondary counters suppressed\n' >&2
+  fi
+  if [[ "${_GS_EU2_CFG[changes_only]:-false}" == "true" ]]; then
+    printf '[CHANGES-ONLY MODE] purely up-to-date SKIP records suppressed from output\n' >&2
+  fi
+  if [[ "${_GS_EU2_CFG[no_fail]:-false}" == "true" ]]; then
+    printf '[NO-FAIL MODE] ERROR decisions will not abort — exit code forced to 0\n' >&2
+  fi
 
   if [[ "true" == "${_GS_EU2_CFG[dump]}" ]]; then
     _gs_eu2_dump_records "${_GS_EU2_CFG[format]}"
@@ -923,7 +932,7 @@ _gs_eu2_main() {
     # Usage errors (args.sh exit 1), backup failures, and env-file errors are unaffected
     # because they return/exit before reaching this point.
     if [[ "${_check_rc}" -ne 0 && "${_GS_EU2_CFG[no_fail]:-false}" == "true" ]]; then
-      printf '(--no-fail: fetch errors present — exit code forced to 0)\n' >&2
+      printf '[NO-FAIL] fetch errors present — exit code forced to 0\n' >&2
       _check_rc=0
     fi
     # Propagate non-zero return from _gs_eu2_run_check (errors present) without
