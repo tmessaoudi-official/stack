@@ -34,7 +34,7 @@ services:
       - ./docker/data/dumps/postgres/18:/opt/dumps:rw
       - 01postgres18_var_lib_postgresql:/var/lib/postgresql:rw,delegated
         # - ./var/database-history/.psql_history:/root/.psql_history:rw,delegated
-        # - source: ./docker/logs/postgresql/17
+        # - source: ./docker/logs/postgresql/18
         #   target: /var/log/postgresql
         #   type: bind
 volumes:

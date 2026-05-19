@@ -44,10 +44,10 @@ local.*Makefile
 Makefile*.local
 Taskfile.yaml
 
-local.* image directories are project-specific customizations and are intentionally
-not tracked by git. Back these up manually or store them in a separate private repo.
-Existing local images on this machine: local.01postgres13, local.01postgres14,
-local.01postgres15, local.03flutter3-35-4, local.03node10, local.05stable variants.
+#local.* image directories are project-specific customizations and are intentionally 
+# not tracked by git. Back these up manually or store them in a separate private repo. 
+# Existing local images on this machine: 
+# local.01postgres13, local.01postgres14, local.01postgres15, local.03flutter3-41-9, local.03node10, local.05stable variants.
 /docker/images/local.*/*
 /docker/images/*.local/*
 /docker/images/**/*.local.sh
