@@ -3267,12 +3267,14 @@ t "t39a: HOLD unpinned major bump has 'major bump' reason label" bash -c "
 
 # ── Reason label: HOLD (pin escape — proposed escapes major_hint) ─────────
 
-t "t39b: HOLD pin escape has 'major pin' reason label" bash -c "
+t "t39b: major_hint=3 + best-in-pin v3.5.1 → AUTO (pin satisfied, no HOLD)" bash -c "
     f=\${TMP_DIR}/t39b.env
-    # major_hint embedded in type token (colon-separated) — proposed v4.0.0 escapes pin=3
+    # major_hint=3 embedded in type token; fixture has v3.5.1 (within pin) → AUTO
+    # (t82b tests the classify_decision HOLD path for pin-escape directly)
     printf '# @todo env-update github:testowner/majorpin-repo:3 3.4.0\nGLOBAL_STACK_TEST_PINNED=3.4.0\n' > \"\$f\"
     out=\$(export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'; export _GS_EU2_CACHE_DIR=\"\${TMP_DIR}/t39b_cache\"; bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null)
-    echo \"\$out\" | grep -qF 'major pin' || { echo \"no 'major pin' in HOLD output: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '[AUTO' || { echo \"expected AUTO (pin satisfied by v3.5.1); got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '3.4.0' || { echo \"expected current version 3.4.0 in output; got: \$out\"; echo FAIL; exit 0; }
     echo PASS
 "
 
@@ -7743,6 +7745,274 @@ t "t82c: no v-prefix + major_hint within same major → AUTO (baseline)" bash -c
     ${_DC_LIBS82}
     result=\$(_gs_eu2_classify_decision '17.5' '17.6' '' '' '17')
     [[ \"\$result\" == 'AUTO' ]] || { echo \"got: \$result (expected AUTO)\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 83 — --scan flag: env-scan.sh invocation + passthrough
+# ═══════════════════════════════════════════════════════════════════════════
+section "83 — --scan flag: env-scan invocation + passthrough"
+
+# Helper env: postgres 18.x is always AUTO (18.3→18.4 via dockerhub fixture)
+_T83_ENV='# @todo env-update dockerhub:_/postgres:18 18.3-alpine3.23
+GLOBAL_STACK_PG18_T83=18.3-alpine3.23'
+
+# t83a: --apply --scan → mock env-scan invoked (sentinel file written)
+t "t83a: --apply --scan — mock env-scan.sh is invoked" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t83a_cache
+    mkdir -p \"\${TMP_DIR}/t83a_cache\"
+    touch \"\${TMP_DIR}/t83a_cache/last-dry-run-ts\"
+    f=\${TMP_DIR}/t83a.env
+    printf '%s\n' '${_T83_ENV}' > \"\$f\"
+    # Mock env-scan.sh: writes a sentinel file and exits 0
+    mock=\${TMP_DIR}/t83a_mock_env_scan.sh
+    sentinel=\${TMP_DIR}/t83a_sentinel
+    printf '#!/bin/bash\ntouch \"%s\"\nexit 0\n' \"\$sentinel\" > \"\$mock\"
+    chmod +x \"\$mock\"
+    export _GS_EU2_ENV_SCAN_PATH=\"\$mock\"
+    bash '${ENV_UPDATE_V2}' --apply --scan --env-file=\"\$f\" >/dev/null 2>&1 || true
+    [[ -f \"\$sentinel\" ]] || { echo \"mock env-scan was not invoked (sentinel absent)\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t83b: --apply --scan --no-fail → mock env-scan receives --no-fail in its args
+t "t83b: --apply --scan --no-fail — env-scan receives --no-fail flag" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t83b_cache
+    mkdir -p \"\${TMP_DIR}/t83b_cache\"
+    touch \"\${TMP_DIR}/t83b_cache/last-dry-run-ts\"
+    f=\${TMP_DIR}/t83b.env
+    printf '%s\n' '${_T83_ENV}' > \"\$f\"
+    args_file=\${TMP_DIR}/t83b_args
+    mock=\${TMP_DIR}/t83b_mock_env_scan.sh
+    printf '#!/bin/bash\nprintf \"%%s\n\" \"\$@\" > \"%s\"\nexit 0\n' \"\$args_file\" > \"\$mock\"
+    chmod +x \"\$mock\"
+    export _GS_EU2_ENV_SCAN_PATH=\"\$mock\"
+    bash '${ENV_UPDATE_V2}' --apply --scan --no-fail --env-file=\"\$f\" >/dev/null 2>&1 || true
+    [[ -f \"\$args_file\" ]] || { echo \"mock env-scan was not invoked\"; echo FAIL; exit 0; }
+    grep -qF -- '--no-fail' \"\$args_file\" || { echo \"--no-fail not in env-scan args: \$(cat \"\$args_file\")\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t83c: --apply --scan --backup=false → mock env-scan receives --backup=false in its args
+t "t83c: --apply --scan --backup=false — env-scan receives --backup=false flag" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t83c_cache
+    mkdir -p \"\${TMP_DIR}/t83c_cache\"
+    touch \"\${TMP_DIR}/t83c_cache/last-dry-run-ts\"
+    f=\${TMP_DIR}/t83c.env
+    printf '%s\n' '${_T83_ENV}' > \"\$f\"
+    args_file=\${TMP_DIR}/t83c_args
+    mock=\${TMP_DIR}/t83c_mock_env_scan.sh
+    printf '#!/bin/bash\nprintf \"%%s\n\" \"\$@\" > \"%s\"\nexit 0\n' \"\$args_file\" > \"\$mock\"
+    chmod +x \"\$mock\"
+    export _GS_EU2_ENV_SCAN_PATH=\"\$mock\"
+    bash '${ENV_UPDATE_V2}' --apply --scan --backup=false --env-file=\"\$f\" >/dev/null 2>&1 || true
+    [[ -f \"\$args_file\" ]] || { echo \"mock env-scan was not invoked\"; echo FAIL; exit 0; }
+    grep -qF -- '--backup=false' \"\$args_file\" || { echo \"--backup=false not in env-scan args: \$(cat \"\$args_file\")\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t83d: --scan without --apply → env-scan NOT invoked (scan only runs after successful apply)
+t "t83d: --scan without --apply — env-scan not invoked, exit 0" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t83d_cache
+    f=\${TMP_DIR}/t83d.env
+    printf '%s\n' '${_T83_ENV}' > \"\$f\"
+    sentinel=\${TMP_DIR}/t83d_sentinel
+    mock=\${TMP_DIR}/t83d_mock_env_scan.sh
+    printf '#!/bin/bash\ntouch \"%s\"\nexit 0\n' \"\$sentinel\" > \"\$mock\"
+    chmod +x \"\$mock\"
+    export _GS_EU2_ENV_SCAN_PATH=\"\$mock\"
+    bash '${ENV_UPDATE_V2}' --scan --env-file=\"\$f\" >/dev/null 2>&1
+    rc=\$?
+    [[ \$rc -eq 0 ]] || { echo \"expected exit 0, got \$rc\"; echo FAIL; exit 0; }
+    [[ ! -f \"\$sentinel\" ]] || { echo \"mock env-scan must NOT be invoked without --apply\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t83e: --apply --scan when env-scan path missing (not executable) → stderr warning, exit 0
+# (apply succeeded; scan failure is non-fatal — only a WARNING is emitted)
+# Note: fixture has 18.3-alpine3.23 (already up-to-date on 18.x), so apply writes 0 changes
+# but still completes successfully — exit code from apply itself, not from scan warning.
+t "t83e: --apply --scan with missing env-scan → WARNING in stderr, exit still 0" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t83e_cache
+    mkdir -p \"\${TMP_DIR}/t83e_cache\"
+    touch \"\${TMP_DIR}/t83e_cache/last-dry-run-ts\"
+    f=\${TMP_DIR}/t83e.env
+    printf '%s\n' '${_T83_ENV}' > \"\$f\"
+    export _GS_EU2_ENV_SCAN_PATH=\"/nonexistent/env-scan.sh\"
+    rc_file=\${TMP_DIR}/t83e_rc
+    err=\$(bash '${ENV_UPDATE_V2}' --apply --scan --env-file=\"\$f\" 2>&1 >/dev/null; echo \$? > \"\$rc_file\")
+    rc=\$(cat \"\$rc_file\" 2>/dev/null || echo 99)
+    [[ \$rc -eq 0 ]] || { echo \"expected exit 0 after apply success (scan warning non-fatal), got \$rc\"; echo FAIL; exit 0; }
+    echo \"\$err\" | grep -qF 'WARNING: --scan requested but env-scan.sh not found' || { echo \"expected WARNING in stderr; got: \$err\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 80 extension — additional backup edge cases (t80g, t80h, t80i)
+# ═══════════════════════════════════════════════════════════════════════════
+section "80b — backup edge cases: keep=0 (unlimited), keep=2 with 5 pre-seeds, purge+keep"
+
+# t80g: --apply --backup-keep=0 with 5 pre-seeded backups → all 6 exist (unlimited, no prune)
+t "t80g: --apply --backup-keep=0 — unlimited mode, 5 pre-seeded + 1 new = 6 total" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t80g_cache
+    mkdir -p \"\${TMP_DIR}/t80g_cache\"
+    touch \"\${TMP_DIR}/t80g_cache/last-dry-run-ts\"
+    f=\${TMP_DIR}/t80g.env
+    printf '# @todo env-update dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_PG18_T80G=18.3-alpine3.23\n' > \"\$f\"
+    # Pre-seed 5 old backups
+    touch \"\${TMP_DIR}/t80g.env.bak.20200101-000001-99\"
+    touch \"\${TMP_DIR}/t80g.env.bak.20200101-000002-99\"
+    touch \"\${TMP_DIR}/t80g.env.bak.20200101-000003-99\"
+    touch \"\${TMP_DIR}/t80g.env.bak.20200101-000004-99\"
+    touch \"\${TMP_DIR}/t80g.env.bak.20200101-000005-99\"
+    bash '${ENV_UPDATE_V2}' --apply --backup-keep=0 --env-file=\"\$f\" 2>/dev/null || true
+    count=\$(find \"\${TMP_DIR}\" -maxdepth 1 -name 't80g.env.bak*' -type f 2>/dev/null | wc -l)
+    # keep=0 = unlimited: no pruning; 5 pre-seeded + 1 new = 6
+    [[ \$count -eq 6 ]] || { echo \"expected 6 backups (unlimited keep=0), found \$count\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t80h: --apply --backup-keep=2 with 5 pre-seeded → oldest 4 deleted, 2 newest pre-seeded + new = nope
+# Actually: 5 pre-seeded + 1 new = 6 total; keep=2 prunes oldest 4, leaving 2 newest.
+# Verify by file count AND that oldest is gone and newest is kept.
+t "t80h: --apply --backup-keep=2 with 5 pre-seeds — exactly 2 remain, oldest pruned" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t80h_cache
+    mkdir -p \"\${TMP_DIR}/t80h_cache\"
+    touch \"\${TMP_DIR}/t80h_cache/last-dry-run-ts\"
+    f=\${TMP_DIR}/t80h.env
+    printf '# @todo env-update dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_PG18_T80H=18.3-alpine3.23\n' > \"\$f\"
+    # Pre-seed 5 backups with deterministic ascending timestamps (sort -V ordering)
+    touch \"\${TMP_DIR}/t80h.env.bak.20200101-000001-99\"
+    touch \"\${TMP_DIR}/t80h.env.bak.20200101-000002-99\"
+    touch \"\${TMP_DIR}/t80h.env.bak.20200101-000003-99\"
+    touch \"\${TMP_DIR}/t80h.env.bak.20200101-000004-99\"
+    touch \"\${TMP_DIR}/t80h.env.bak.20200101-000005-99\"
+    bash '${ENV_UPDATE_V2}' --apply --backup-keep=2 --env-file=\"\$f\" 2>/dev/null || true
+    count=\$(find \"\${TMP_DIR}\" -maxdepth 1 -name 't80h.env.bak*' -type f 2>/dev/null | wc -l)
+    [[ \$count -eq 2 ]] || { echo \"expected exactly 2 backups after pruning 4, found \$count\"; echo FAIL; exit 0; }
+    # Oldest (000001) and early ones should be gone
+    [[ ! -f \"\${TMP_DIR}/t80h.env.bak.20200101-000001-99\" ]] || { echo \"oldest backup should be deleted\"; echo FAIL; exit 0; }
+    [[ ! -f \"\${TMP_DIR}/t80h.env.bak.20200101-000002-99\" ]] || { echo \"second-oldest backup should be deleted\"; echo FAIL; exit 0; }
+    # The two newest of the pre-seeded ones (000004, 000005) OR the new backup should remain
+    # At minimum: the newest pre-seeded (000005) should survive
+    [[ -f \"\${TMP_DIR}/t80h.env.bak.20200101-000005-99\" ]] || { echo \"newest pre-seeded backup (000005) should be kept\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t80i: --apply --backup-purge=true --backup-keep=2 → purge clears all pre-existing,
+# 1 new backup created, keep=2 does not prune (only 1 exists after purge+create)
+t "t80i: --apply --backup-purge=true --backup-keep=2 — purge clears all, 1 new survives" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t80i_cache
+    mkdir -p \"\${TMP_DIR}/t80i_cache\"
+    touch \"\${TMP_DIR}/t80i_cache/last-dry-run-ts\"
+    f=\${TMP_DIR}/t80i.env
+    printf '# @todo env-update dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_PG18_T80I=18.3-alpine3.23\n' > \"\$f\"
+    # Pre-seed 5 old backups that purge should clear
+    touch \"\${TMP_DIR}/t80i.env.bak.20200101-000001-99\"
+    touch \"\${TMP_DIR}/t80i.env.bak.20200101-000002-99\"
+    touch \"\${TMP_DIR}/t80i.env.bak.20200101-000003-99\"
+    touch \"\${TMP_DIR}/t80i.env.bak.20200101-000004-99\"
+    touch \"\${TMP_DIR}/t80i.env.bak.20200101-000005-99\"
+    bash '${ENV_UPDATE_V2}' --apply --backup-purge=true --backup-keep=2 --env-file=\"\$f\" 2>/dev/null || true
+    count=\$(find \"\${TMP_DIR}\" -maxdepth 1 -name 't80i.env.bak*' -type f 2>/dev/null | wc -l)
+    # purge removed all 5 old; 1 new created; keep=2 does not prune (only 1 ≤ 2)
+    [[ \$count -eq 1 ]] || { echo \"expected exactly 1 backup after purge+create (keep=2 does not prune 1 file), found \$count\"; echo FAIL; exit 0; }
+    # All old (pre-purge) files should be gone
+    [[ ! -f \"\${TMP_DIR}/t80i.env.bak.20200101-000001-99\" ]] || { echo \"old backup 000001 should have been purged\"; echo FAIL; exit 0; }
+    [[ ! -f \"\${TMP_DIR}/t80i.env.bak.20200101-000005-99\" ]] || { echo \"old backup 000005 should have been purged\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 84 — dry-run guard: missing and stale marker cases
+# ═══════════════════════════════════════════════════════════════════════════
+section "84 — dry-run guard: missing and stale marker"
+
+_T84_ENV='# @todo env-update dockerhub:_/postgres:18 18.3-alpine3.23
+GLOBAL_STACK_PG18_T84=18.3-alpine3.23'
+
+# t84a: --apply with NO marker file → exit non-zero; stderr contains guard warning
+t "t84a: --apply with no last-dry-run-ts marker → exit 1, guard warning in stderr" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t84a_cache
+    mkdir -p \"\${TMP_DIR}/t84a_cache\"
+    # Deliberately do NOT create last-dry-run-ts
+    f=\${TMP_DIR}/t84a.env
+    printf '%s\n' '${_T84_ENV}' > \"\$f\"
+    err=\$(bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$f\" 2>&1 >/dev/null || true)
+    rc=\$(bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$f\" 2>/dev/null; echo \$?)
+    [[ \$rc -ne 0 ]] || { echo \"expected non-zero exit (no dry-run marker), got 0\"; echo FAIL; exit 0; }
+    echo \"\$err\" | grep -qF '[WARN] --apply requires a recent --dry-run' || { echo \"expected guard warning in stderr; got: \$err\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t84b: --apply with stale marker (>1800 s old) → same guard fires
+t "t84b: --apply with stale marker (>30 min) → exit 1, guard warning in stderr" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t84b_cache
+    mkdir -p \"\${TMP_DIR}/t84b_cache\"
+    # Create a marker backdated to 40 minutes ago
+    marker=\${TMP_DIR}/t84b_cache/last-dry-run-ts
+    touch \"\$marker\"
+    # Set mtime to 40 min (2400 s) ago using touch -d
+    touch -d '-2400 seconds' \"\$marker\" 2>/dev/null || \
+        touch -t \"\$(date -d '-2400 seconds' +%Y%m%d%H%M.%S 2>/dev/null || date -v-2400S +%Y%m%d%H%M.%S)\" \"\$marker\" 2>/dev/null || \
+        printf '0\n' > \"\$marker\"  # fallback: write epoch 0 (always stale)
+    f=\${TMP_DIR}/t84b.env
+    printf '%s\n' '${_T84_ENV}' > \"\$f\"
+    err=\$(bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$f\" 2>&1 >/dev/null || true)
+    rc=\$(bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$f\" 2>/dev/null; echo \$?)
+    [[ \$rc -ne 0 ]] || { echo \"expected non-zero exit (stale marker), got 0\"; echo FAIL; exit 0; }
+    echo \"\$err\" | grep -qF '[WARN] --apply requires a recent --dry-run' || { echo \"expected guard warning in stderr; got: \$err\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t84c: --check --dry-run → guard only fires for --apply; check mode exits 0 even without marker
+t "t84c: --check --dry-run — guard does not apply to check mode, exit 0 without marker" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t84c_cache
+    mkdir -p \"\${TMP_DIR}/t84c_cache\"
+    # Deliberately do NOT create last-dry-run-ts — guard is --apply-only, check is exempt
+    f=\${TMP_DIR}/t84c.env
+    printf '%s\n' '${_T84_ENV}' > \"\$f\"
+    bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" >/dev/null 2>&1
+    rc=\$?
+    [[ \$rc -eq 0 ]] || { echo \"expected exit 0 (guard is --apply-only, check is exempt), got \$rc\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 85 — --dump mutual exclusion with --check / --apply
+# ═══════════════════════════════════════════════════════════════════════════
+section "85 — --dump mutual exclusion with --check / --apply"
+
+# t85a: --dump --check → exit 1; stderr contains 'mutually exclusive'
+t "t85a: --dump --check — exit 1; stderr contains 'mutually exclusive'" bash -c "
+    f=\${TMP_DIR}/t85a.env
+    printf '# @todo env-update dockerhub:_/postgres 18.3\nGLOBAL_STACK_T85A=18.3\n' > \"\$f\"
+    err=\$(bash '${ENV_UPDATE_V2}' --dump --check --env-file=\"\$f\" 2>&1 || true)
+    rc=\$(bash '${ENV_UPDATE_V2}' --dump --check --env-file=\"\$f\" 2>/dev/null; echo \$?)
+    [[ \$rc -ne 0 ]] || { echo \"expected non-zero exit, got 0\"; echo FAIL; exit 0; }
+    echo \"\$err\" | grep -qF 'mutually exclusive' || { echo \"expected 'mutually exclusive' in stderr; got: \$err\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t85b: --dump --apply → exit 1; same mutual exclusion message
+t "t85b: --dump --apply — exit 1; stderr contains 'mutually exclusive'" bash -c "
+    f=\${TMP_DIR}/t85b.env
+    printf '# @todo env-update dockerhub:_/postgres 18.3\nGLOBAL_STACK_T85B=18.3\n' > \"\$f\"
+    err=\$(bash '${ENV_UPDATE_V2}' --dump --apply --env-file=\"\$f\" 2>&1 || true)
+    rc=\$(bash '${ENV_UPDATE_V2}' --dump --apply --env-file=\"\$f\" 2>/dev/null; echo \$?)
+    [[ \$rc -ne 0 ]] || { echo \"expected non-zero exit, got 0\"; echo FAIL; exit 0; }
+    echo \"\$err\" | grep -qF 'mutually exclusive' || { echo \"expected 'mutually exclusive' in stderr; got: \$err\"; echo FAIL; exit 0; }
     echo PASS
 "
 

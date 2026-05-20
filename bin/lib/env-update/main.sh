@@ -978,7 +978,12 @@ _gs_eu2_main() {
 
         if [[ "${_GS_EU2_CFG[scan]}" == "true" ]]; then
           local _env_scan
-          _env_scan="$(dirname "${BASH_SOURCE[0]}")/../../env-scan.sh"
+          # _GS_EU2_ENV_SCAN_PATH overrides the default path (used in tests to inject a mock)
+          if [[ -n "${_GS_EU2_ENV_SCAN_PATH:-}" ]]; then
+            _env_scan="${_GS_EU2_ENV_SCAN_PATH}"
+          else
+            _env_scan="$(dirname "${BASH_SOURCE[0]}")/../../env-scan.sh"
+          fi
           if [[ -x "${_env_scan}" ]]; then
             printf 'Running env-scan.sh to propagate changes...\n' >&2
             local _scan_flags=()
