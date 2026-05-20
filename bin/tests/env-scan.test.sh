@@ -905,6 +905,7 @@ t "--reverse-check-ignore-pattern: excluded pattern skipped" bash -c "
         > \"\$D/docker/images/test/Dockerfile\"
     out=\$(bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=true \
         --scan-delete-output=false \
+        --forward-check-ignore-pattern='GLOBAL_STACK_DOCKER_ONLY' \
         --reverse-check-ignore-pattern='GLOBAL_STACK_DOCKER_ONLY' \
         --check-missing=true --show-added-entries=false --show-different-entries=false 2>&1)
     echo \"\$out\" | grep -q 'GLOBAL_STACK_DOCKER_ONLY' && echo FAIL || echo PASS
