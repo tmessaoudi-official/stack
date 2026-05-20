@@ -7583,6 +7583,134 @@ t "t79d: no --profile flag — profile table absent from output" bash -c "
     echo PASS
 "
 
+section "80 — backup flags (--backup, --backup-purge, --backup-suffix, --backup-keep)"
+
+# t80a: --apply --backup=false → no .bak.* file created
+t "t80a: --apply --backup=false — no backup file created" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t80a_cache
+    mkdir -p \"\${TMP_DIR}/t80a_cache\"
+    touch \"\${TMP_DIR}/t80a_cache/last-dry-run-ts\"
+    f=\${TMP_DIR}/t80a.env
+    printf '# @todo env-update dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_PG18_T80A=18.3-alpine3.23\n' > \"\$f\"
+    bash '${ENV_UPDATE_V2}' --apply --backup=false --env-file=\"\$f\" 2>/dev/null || true
+    count=\$(find \"\${TMP_DIR}\" -maxdepth 1 -name 't80a.env.bak*' -type f 2>/dev/null | wc -l)
+    [[ \$count -eq 0 ]] || { echo \"expected 0 backup files, found \$count\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t80b: --apply (default) → exactly one backup file matching .bak. pattern
+t "t80b: --apply (default) — exactly one .bak. file created" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t80b_cache
+    mkdir -p \"\${TMP_DIR}/t80b_cache\"
+    touch \"\${TMP_DIR}/t80b_cache/last-dry-run-ts\"
+    f=\${TMP_DIR}/t80b.env
+    printf '# @todo env-update dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_PG18_T80B=18.3-alpine3.23\n' > \"\$f\"
+    bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$f\" 2>/dev/null || true
+    count=\$(find \"\${TMP_DIR}\" -maxdepth 1 -name 't80b.env.bak*' -type f 2>/dev/null | wc -l)
+    [[ \$count -ge 1 ]] || { echo \"expected >=1 backup file, found \$count\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t80c: --apply --backup-suffix=.mybak → backup filename contains .mybak.; .bak. pattern absent
+t "t80c: --apply --backup-suffix=.mybak — backup uses custom suffix" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t80c_cache
+    mkdir -p \"\${TMP_DIR}/t80c_cache\"
+    touch \"\${TMP_DIR}/t80c_cache/last-dry-run-ts\"
+    f=\${TMP_DIR}/t80c.env
+    printf '# @todo env-update dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_PG18_T80C=18.3-alpine3.23\n' > \"\$f\"
+    bash '${ENV_UPDATE_V2}' --apply --backup-suffix=.mybak --env-file=\"\$f\" 2>/dev/null || true
+    count_mybak=\$(find \"\${TMP_DIR}\" -maxdepth 1 -name 't80c.env.mybak.*' -type f 2>/dev/null | wc -l)
+    count_bak=\$(find \"\${TMP_DIR}\" -maxdepth 1 -name 't80c.env.bak.*' -type f 2>/dev/null | wc -l)
+    [[ \$count_mybak -ge 1 ]] || { echo \"expected >=1 .mybak.* file, found \$count_mybak\"; echo FAIL; exit 0; }
+    [[ \$count_bak -eq 0 ]]   || { echo \"expected 0 .bak.* files, found \$count_bak\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t80d: --apply --backup-keep=2 (pre-seed 3 old backups) → exactly 2 backups remain after run (oldest deleted)
+t "t80d: --apply --backup-keep=2 — prunes oldest; exactly 2 backups remain" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t80d_cache
+    mkdir -p \"\${TMP_DIR}/t80d_cache\"
+    touch \"\${TMP_DIR}/t80d_cache/last-dry-run-ts\"
+    f=\${TMP_DIR}/t80d.env
+    printf '# @todo env-update dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_PG18_T80D=18.3-alpine3.23\n' > \"\$f\"
+    # Pre-seed 3 old backups with artificial old timestamps
+    touch \"\${TMP_DIR}/t80d.env.bak.20200101-000001-99\"
+    touch \"\${TMP_DIR}/t80d.env.bak.20200101-000002-99\"
+    touch \"\${TMP_DIR}/t80d.env.bak.20200101-000003-99\"
+    bash '${ENV_UPDATE_V2}' --apply --backup-keep=2 --env-file=\"\$f\" 2>/dev/null || true
+    count=\$(find \"\${TMP_DIR}\" -maxdepth 1 -name 't80d.env.bak*' -type f 2>/dev/null | wc -l)
+    [[ \$count -eq 2 ]] || { echo \"expected 2 backups after pruning, found \$count\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t80e: --apply --backup-purge=true (pre-seed 3 old backups) → 3 old ones deleted; 1 new one exists (total = 1)
+t "t80e: --apply --backup-purge=true — purges old backups; 1 new backup remains" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t80e_cache
+    mkdir -p \"\${TMP_DIR}/t80e_cache\"
+    touch \"\${TMP_DIR}/t80e_cache/last-dry-run-ts\"
+    f=\${TMP_DIR}/t80e.env
+    printf '# @todo env-update dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_PG18_T80E=18.3-alpine3.23\n' > \"\$f\"
+    # Pre-seed 3 old backups
+    touch \"\${TMP_DIR}/t80e.env.bak.20200101-000001-99\"
+    touch \"\${TMP_DIR}/t80e.env.bak.20200101-000002-99\"
+    touch \"\${TMP_DIR}/t80e.env.bak.20200101-000003-99\"
+    bash '${ENV_UPDATE_V2}' --apply --backup-purge=true --env-file=\"\$f\" 2>/dev/null || true
+    count=\$(find \"\${TMP_DIR}\" -maxdepth 1 -name 't80e.env.bak*' -type f 2>/dev/null | wc -l)
+    [[ \$count -eq 1 ]] || { echo \"expected exactly 1 backup after purge+create, found \$count\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t80f: --backup-keep=abc → exits non-zero; stderr contains "non-negative integer"
+t "t80f: --backup-keep=abc — rejected; stderr contains 'non-negative integer'" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    f=\${TMP_DIR}/t80f.env
+    printf '# @todo env-update dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_PG18_T80F=18.3-alpine3.23\n' > \"\$f\"
+    err=\$(bash '${ENV_UPDATE_V2}' --apply --backup-keep=abc --env-file=\"\$f\" 2>&1 || true)
+    rc=\$(bash '${ENV_UPDATE_V2}' --apply --backup-keep=abc --env-file=\"\$f\" 2>/dev/null; echo \$?)
+    [[ \$rc -ne 0 ]] || { echo \"expected non-zero exit, got 0\"; echo FAIL; exit 0; }
+    echo \"\$err\" | grep -q 'non-negative integer' || { echo \"stderr missing 'non-negative integer'; got: \$err\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+section "81 — --annotations flag"
+
+# t81a: --annotations exits 0
+t "t81a: --annotations — exits 0" bash -c "
+    bash '${ENV_UPDATE_V2}' --annotations >/dev/null 2>&1
+    rc=\$?
+    [[ \$rc -eq 0 ]] || { echo \"expected exit 0, got: \$rc\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t81b: --annotations output contains 'FETCHER TYPES'
+t "t81b: --annotations — output contains FETCHER TYPES section" bash -c "
+    out=\$(bash '${ENV_UPDATE_V2}' --annotations 2>&1 || true)
+    echo \"\$out\" | grep -qF 'FETCHER TYPES' || { echo \"missing FETCHER TYPES; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t81c: --annotations output contains 'ANNOTATION FLAGS'
+t "t81c: --annotations — output contains ANNOTATION FLAGS section" bash -c "
+    out=\$(bash '${ENV_UPDATE_V2}' --annotations 2>&1 || true)
+    echo \"\$out\" | grep -qF 'ANNOTATION FLAGS' || { echo \"missing ANNOTATION FLAGS; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t81d: --annotations exits before requiring an env file (works without --env-file pointing to a real file)
+t "t81d: --annotations — exits without requiring an env file" bash -c "
+    bash '${ENV_UPDATE_V2}' --annotations --env-file=/nonexistent/path.env >/dev/null 2>&1
+    rc=\$?
+    [[ \$rc -eq 0 ]] || { echo \"expected exit 0, got \$rc (should exit before env file check)\"; echo FAIL; exit 0; }
+    out=\$(bash '${ENV_UPDATE_V2}' --annotations --env-file=/nonexistent/path.env 2>&1 || true)
+    echo \"\$out\" | grep -qF 'ANNOTATION FLAGS' || { echo \"missing reference output\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
 # ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════

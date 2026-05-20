@@ -16,6 +16,8 @@ Usage: env-update.sh [OPTIONS]
 Options:
   --version               Print version and exit
   --help                  Show this help and exit
+  --annotations           Print a structured reference of all supported annotation
+                          flags, fetcher types, and inline syntax, then exit.
   --env-file=<path>       Source .env file (default: /stack/.env)
   --filter=<regex>        Only parse records whose env_var matches regex
   --exclude=<regex>       Skip records whose env_var matches regex. Composable
@@ -78,6 +80,16 @@ Options:
                                   applied even when some records have ERROR.
                                   Note: with --scan --no-fail, the --no-fail flag is passed
                                   through to env-scan.sh (suppresses its propagation errors too).
+  Backup (--apply only — ignored with --dry-run):
+  --backup=<true|false>           Create a timestamped backup before applying changes.
+                                  (default: true). Pass --backup=false to skip.
+  --backup-keep=<N>               Keep the N newest backup files; delete older ones.
+                                  0 = keep all (no pruning). (default: 10)
+  --backup-purge=<true|false>     Delete ALL existing backups matching the backup pattern
+                                  BEFORE creating the new backup. (default: false)
+  --backup-suffix=<str>           Suffix anchor for backup filenames; full name is
+                                  <file><suffix>.<YYYYMMDD-HHMMSS-PID>. (default: .bak)
+
   --force-auto                    Override (manual) and (override) annotation flags and HOLD
                                   decisions — treats them as AUTO-eligible. Useful for
                                   scripted environments where human gates are not appropriate.
@@ -151,5 +163,13 @@ Examples:
   bin/env-update.sh --check --no-fail                     # always exit 0 even if some fetchers error
   bin/env-update.sh --check --force-auto                  # preview: (manual)/(hold) treated as AUTO
   bin/env-update.sh --apply --force-auto --confirm="Confirm override"  # apply with force-auto
+  bin/env-update.sh --apply --backup=false                            # apply without backup
+  bin/env-update.sh --apply --backup-keep=3                           # keep only 3 newest backups
+  bin/env-update.sh --apply --backup-purge=true                       # purge old backups then create new
+  bin/env-update.sh --apply --backup-suffix=.snap                     # custom backup suffix
+
+  bin/env-update.sh --annotations                                     # print annotation syntax reference
+
+Tip: run --annotations to see all supported annotation flags, fetcher types, and inline syntax.
 EOF
 }

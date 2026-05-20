@@ -40,6 +40,8 @@ source "$(dirname "${BASH_SOURCE[0]}")/fetchers/pecl.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/fetchers/url.sh"
 # shellcheck source=./reporting/help.sh
 source "$(dirname "${BASH_SOURCE[0]}")/reporting/help.sh"
+# shellcheck source=./reporting/annotations-ref.sh
+source "$(dirname "${BASH_SOURCE[0]}")/reporting/annotations-ref.sh"
 # shellcheck source=./reporting/dump.sh
 source "$(dirname "${BASH_SOURCE[0]}")/reporting/dump.sh"
 # shellcheck source=./reporting/summary.sh
@@ -767,6 +769,12 @@ _gs_eu2_main() {
   _gs_eu2_parse_args "${@}"
   _gs_eu2_profile_end "Parse args"
 
+  # --annotations: print annotation reference and exit (before any env file access)
+  if [[ "${_GS_EU2_CFG[annotations]:-false}" == "true" ]]; then
+    _gs_eu2_show_annotations_ref
+    exit 0
+  fi
+
   if [[ "${_GS_EU2_CFG[dump]}" == "true" && \
         ( "${_GS_EU2_CFG[check]}" == "true" || "${_GS_EU2_CFG[apply]}" == "true" ) ]]; then
     printf 'env-update: --dump is mutually exclusive with --check and --apply\n' >&2
@@ -816,9 +824,9 @@ _gs_eu2_main() {
   # classify_decision will promote stable→prerelease to AUTO (prerelease guard bypassed).
   # Note: --unstable=info does NOT inject here — it does a separate second-pass fetch
   # after each record to populate unstable_proposed without touching the main decision.
+  local _unstable_overrides=0
   if [[ "${_GS_EU2_CFG[unstable]:-}" == "full" ]]; then
-    local _uc _ucount _unstable_overrides
-    _unstable_overrides=0
+    local _uc _ucount
     _ucount="$(_gs_eu2_record_count)"
     for (( _uc = 0; _uc < _ucount; _uc++ )); do
       local _existing_channel
@@ -828,17 +836,14 @@ _gs_eu2_main() {
         (( _unstable_overrides++ )) || true
       fi
     done
-    if [[ "${_unstable_overrides}" -gt 0 ]]; then
-      printf '[UNSTABLE MODE] channel forced unstable for %d record(s)\n' "${_unstable_overrides}" >&2
-    fi
   fi
 
   # --stable: force channel=stable on all records that have an explicit non-stable channel.
   # Overrides channel:rc, channel:beta, channel:alpha, channel:nightly, channel:unstable, etc.
   # Records already at channel="" or channel="stable" are untouched.
+  local _stable_overrides=0
   if [[ "${_GS_EU2_CFG[stable]:-}" == "full" ]]; then
-    local _sc _scount _stable_overrides
-    _stable_overrides=0
+    local _sc _scount
     _scount="$(_gs_eu2_record_count)"
     for (( _sc = 0; _sc < _scount; _sc++ )); do
       local _existing_sc_channel
@@ -848,13 +853,16 @@ _gs_eu2_main() {
         (( _stable_overrides++ )) || true
       fi
     done
-    if [[ "${_stable_overrides}" -gt 0 ]]; then
-      printf '[STABLE MODE] channel forced stable for %d record(s)\n' "${_stable_overrides}" >&2
-    fi
   fi
 
   # Mode banners always go to stderr — this ensures --format=json output is clean JSON on
   # stdout, parseable directly by jq. Tests that grep for banners use 2>&1 so they still work.
+  if [[ "${_unstable_overrides}" -gt 0 ]]; then
+    printf '[UNSTABLE MODE] channel forced unstable for %d record(s)\n' "${_unstable_overrides}" >&2
+  fi
+  if [[ "${_stable_overrides}" -gt 0 ]]; then
+    printf '[STABLE MODE] channel forced stable for %d record(s)\n' "${_stable_overrides}" >&2
+  fi
   if [[ "${_GS_EU2_CFG[force_auto]:-false}" == "true" ]]; then
     printf '[FORCE-AUTO MODE] (manual) and (override) gates bypassed\n' >&2
   fi
@@ -890,6 +898,15 @@ _gs_eu2_main() {
   if [[ "${_GS_EU2_CFG[no_fail]:-false}" == "true" ]]; then
     printf '[NO-FAIL MODE] ERROR decisions will not abort — exit code forced to 0\n' >&2
   fi
+  # Backup banners — only relevant when --apply is active and not --dry-run
+  if [[ "${_GS_EU2_CFG[apply]:-false}" == "true" && "${_GS_EU2_CFG[dry_run]:-false}" != "true" ]]; then
+    if [[ "${_GS_EU2_CFG[backup]:-true}" == "false" ]]; then
+      printf '[NO-BACKUP MODE] backup skipped — env file will be modified without a backup\n' >&2
+    fi
+    if [[ "${_GS_EU2_CFG[backup_purge]:-false}" == "true" ]]; then
+      printf '[BACKUP-PURGE MODE] existing backups will be deleted before creating new backup\n' >&2
+    fi
+  fi
 
   if [[ "true" == "${_GS_EU2_CFG[dump]}" ]]; then
     _gs_eu2_dump_records "${_GS_EU2_CFG[format]}"
@@ -915,23 +932,63 @@ _gs_eu2_main() {
         _gs_eu2_apply_updates "${_env_file}" "true"
         _gs_eu2_profile_end "Apply"
       else
-        local _backup
-        _backup="${_env_file}.bak.$(date +%s)"
-        if ! cp -a "${_env_file}" "${_backup}"; then
-          printf 'env-update: backup failed (%s) — aborting apply to protect source file\n' "${_backup}" >&2
-          return 1
+        # ── Configurable backup (A2) ────────────────────────────────────────
+        local _bk_suffix="${_GS_EU2_CFG[backup_suffix]:-.bak}"
+        local _bk_keep="${_GS_EU2_CFG[backup_keep]:-10}"
+        local _bk_purge="${_GS_EU2_CFG[backup_purge]:-false}"
+        local _bk_enabled="${_GS_EU2_CFG[backup]:-true}"
+
+        if [[ "${_bk_enabled}" == "true" ]]; then
+          # Step 1: purge existing backups if requested
+          if [[ "${_bk_purge}" == "true" ]]; then
+            while IFS= read -r _old_bak; do
+              [[ -f "${_old_bak}" ]] && rm -f "${_old_bak}"
+            done < <(find "$(dirname "${_env_file}")" -maxdepth 1 \
+              -name "$(basename "${_env_file}")${_bk_suffix}.*" -type f 2>/dev/null | sort)
+          fi
+          # Step 2: create new timestamped backup
+          local _backup_ts
+          _backup_ts="$(date +%Y%m%d-%H%M%S)-$$"
+          local _backup="${_env_file}${_bk_suffix}.${_backup_ts}"
+          if ! cp -a "${_env_file}" "${_backup}"; then
+            printf 'env-update: backup failed (%s) — aborting apply to protect source file\n' "${_backup}" >&2
+            return 1
+          fi
+          printf 'Backup: %s\n' "${_backup}" >&2
         fi
-        printf 'Backup: %s\n' "${_backup}" >&2
+
         _gs_eu2_profile_start
         _gs_eu2_apply_updates "${_env_file}" "false"
         _gs_eu2_profile_end "Apply"
+
+        # Step 3: retention prune (keep N newest backups; 0 = unlimited)
+        if [[ "${_bk_enabled}" == "true" && "${_bk_keep}" -gt 0 ]]; then
+          local -a _all_baks=()
+          mapfile -t _all_baks < <(find "$(dirname "${_env_file}")" -maxdepth 1 \
+            -name "$(basename "${_env_file}")${_bk_suffix}.*" -type f 2>/dev/null | sort)
+          local _bk_total="${#_all_baks[@]}"
+          if [[ "${_bk_total}" -gt "${_bk_keep}" ]]; then
+            local _bk_remove=$(( _bk_total - _bk_keep ))
+            local _bk_i
+            for (( _bk_i = 0; _bk_i < _bk_remove; _bk_i++ )); do
+              rm -f "${_all_baks[${_bk_i}]}"
+            done
+          fi
+        fi
+
         if [[ "${_GS_EU2_CFG[scan]}" == "true" ]]; then
           local _env_scan
           _env_scan="$(dirname "${BASH_SOURCE[0]}")/../../env-scan.sh"
           if [[ -x "${_env_scan}" ]]; then
             printf 'Running env-scan.sh to propagate changes...\n' >&2
             local _scan_flags=()
-            [[ "${_GS_EU2_CFG[no_fail]:-false}" == "true" ]] && _scan_flags+=("--no-fail")
+            [[ "${_GS_EU2_CFG[no_fail]:-false}" == "true" ]]        && _scan_flags+=("--no-fail")
+            [[ "${_GS_EU2_CFG[backup]:-true}" == "false" ]]         && _scan_flags+=("--backup=false")
+            [[ "${_GS_EU2_CFG[backup_purge]:-false}" == "true" ]]   && _scan_flags+=("--backup-purge=true")
+            [[ -n "${_GS_EU2_CFG[backup_suffix]:-}" && "${_GS_EU2_CFG[backup_suffix]}" != ".bak" ]] \
+              && _scan_flags+=("--backup-suffix=${_GS_EU2_CFG[backup_suffix]}")
+            [[ -n "${_GS_EU2_CFG[backup_keep]:-}" && "${_GS_EU2_CFG[backup_keep]}" != "10" ]] \
+              && _scan_flags+=("--backup-keep=${_GS_EU2_CFG[backup_keep]}")
             _gs_eu2_profile_start
             bash "${_env_scan}" "${_scan_flags[@]}" 2>&1 || printf 'WARNING: env-scan failed — .env updated but .env.local and Dockerfiles may be stale. Run bin/env-scan.sh manually.\n' >&2
             _gs_eu2_profile_end "env-scan"

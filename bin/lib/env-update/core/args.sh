@@ -39,6 +39,24 @@ _gs_eu2_parse_args() {
       --profile|--profile=true)  _GS_EU2_CFG[profile]="true" ;;
       --profile=false)           _GS_EU2_CFG[profile]="false" ;;
       --confirm=*)    _GS_EU2_CFG[confirm]="${1#*=}" ;;
+      --backup=*)
+        local _bval="${1#*=}"
+        _GS_EU2_CFG[backup]="${_bval,,}"
+        ;;
+      --backup-purge=*)
+        local _bpval="${1#*=}"
+        _GS_EU2_CFG[backup_purge]="${_bpval,,}"
+        ;;
+      --backup-suffix=*)  _GS_EU2_CFG[backup_suffix]="${1#*=}" ;;
+      --backup-keep=*)
+        local _bkval="${1#*=}"
+        if [[ ! "${_bkval}" =~ ^[0-9]+$ ]]; then
+          printf 'env-update: --backup-keep requires a non-negative integer, got: %s\n' "${_bkval}" >&2
+          exit 1
+        fi
+        _GS_EU2_CFG[backup_keep]="${_bkval}"
+        ;;
+      --annotations)  _GS_EU2_CFG[annotations]="true" ;;
       --stable)     _GS_EU2_CFG[stable]="full" ;;
       --stable=*)
         local _sval="${1#*=}"
@@ -89,8 +107,13 @@ _gs_eu2_parse_args() {
   [[ -z "${_GS_EU2_CFG[force_auto]+set}" ]]   && _GS_EU2_CFG[force_auto]="false"
   [[ -z "${_GS_EU2_CFG[changes_only]+set}" ]] && _GS_EU2_CFG[changes_only]="false"
   [[ -z "${_GS_EU2_CFG[no_fail]+set}" ]]    && _GS_EU2_CFG[no_fail]="false"
-  [[ -z "${_GS_EU2_CFG[confirm]+set}" ]]    && _GS_EU2_CFG[confirm]=""
-  [[ -z "${_GS_EU2_CFG[profile]+set}" ]]    && _GS_EU2_CFG[profile]="false"
+  [[ -z "${_GS_EU2_CFG[confirm]+set}" ]]       && _GS_EU2_CFG[confirm]=""
+  [[ -z "${_GS_EU2_CFG[profile]+set}" ]]       && _GS_EU2_CFG[profile]="false"
+  [[ -z "${_GS_EU2_CFG[backup]+set}" ]]        && _GS_EU2_CFG[backup]="true"
+  [[ -z "${_GS_EU2_CFG[backup_purge]+set}" ]]  && _GS_EU2_CFG[backup_purge]="false"
+  [[ -z "${_GS_EU2_CFG[backup_suffix]+set}" ]] && _GS_EU2_CFG[backup_suffix]=".bak"
+  [[ -z "${_GS_EU2_CFG[backup_keep]+set}" ]]   && _GS_EU2_CFG[backup_keep]="10"
+  [[ -z "${_GS_EU2_CFG[annotations]+set}" ]]   && _GS_EU2_CFG[annotations]="false"
 
   # Validate --filter regex early: invalid ERE causes per-record bash errors and silent
   # empty output. type: prefixes are not regex — skip validation for those.

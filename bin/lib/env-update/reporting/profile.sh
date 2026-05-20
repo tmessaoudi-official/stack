@@ -97,9 +97,9 @@ _gs_eu2_fmt_mem() {
 
 # ── _gs_eu2_profile_report: print the pretty summary table ────────────────────
 _gs_eu2_profile_report() {
-  # ANSI codes — only when stdout is a tty
+  # ANSI codes — only when stderr is a tty (profile output goes to stderr)
   local R="" DIM="" BOLD="" GREEN="" YELLOW="" RED="" CYAN="" DIMCYAN=""
-  if [[ -t 1 ]]; then
+  if [[ -t 2 ]]; then
     R="\033[0m"
     DIM="\033[2m"
     BOLD="\033[1m"
@@ -119,10 +119,10 @@ _gs_eu2_profile_report() {
   local _border_inner="──────────────────────────────────────────────────────────────"
   local _header_line="─ Profile ────────────────────────────────────────────────────"
 
-  printf "\n"
-  printf "  ${DIM}┌${_header_line}┐${R}\n"
-  printf "  ${DIM}│${R}  %-32s %9s   %10s     ${DIM}│${R}\n" "Phase" "Duration" "Memory"
-  printf "  ${DIM}├${_border_inner}┤${R}\n"
+  printf "\n" >&2
+  printf "  ${DIM}┌${_header_line}┐${R}\n" >&2
+  printf "  ${DIM}│${R}  %-32s %9s   %10s     ${DIM}│${R}\n" "Phase" "Duration" "Memory" >&2
+  printf "  ${DIM}├${_border_inner}┤${R}\n" >&2
 
   local _i
   for _i in "${!_GS_EU2_PROFILE_PHASES[@]}"; do
@@ -147,10 +147,10 @@ _gs_eu2_profile_report() {
     _mem_str=$(_gs_eu2_fmt_mem "${_kb}")
 
     printf "  ${DIM}│${R}  %-32s ${_dur_color}%9s${R}   ${_mem_color}%10s${R}     ${DIM}│${R}\n" \
-      "${_name}" "${_dur_str}" "${_mem_str}"
+      "${_name}" "${_dur_str}" "${_mem_str}" >&2
   done
 
-  printf "  ${DIM}├${_border_inner}┤${R}\n"
+  printf "  ${DIM}├${_border_inner}┤${R}\n" >&2
 
   # Total row
   local _total_dur_str
@@ -161,8 +161,8 @@ _gs_eu2_profile_report() {
   _peak_str=$(printf "Peak: %d.%d MB" "${_peak_mb_int}" "${_peak_mb_frac}")
 
   printf "  ${DIM}│${R}  ${BOLD}%-32s %9s   %12s${R}   ${DIM}│${R}\n" \
-    "Total" "${_total_dur_str}" "${_peak_str}"
+    "Total" "${_total_dur_str}" "${_peak_str}" >&2
 
-  printf "  ${DIM}└${_border_inner}┘${R}\n"
-  printf "\n"
+  printf "  ${DIM}└${_border_inner}┘${R}\n" >&2
+  printf "\n" >&2
 }

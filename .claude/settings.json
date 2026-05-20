@@ -27,7 +27,6 @@
       "Bash(make start-local-registry)",
       "Bash(bin/env-scan.sh)",
       "Bash(bin/env-update.sh)",
-      "Bash(bin/env-update.sh --check *)",
       "Bash(bin/env-update.sh --apply *)"
     ]
   },
