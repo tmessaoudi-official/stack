@@ -77,6 +77,7 @@ gs_es_main() {
 	_gs_es_profile_end "Detect conflicting values"
 
 	# Phase 4.5: Backup pre-flight (purge + snapshot)
+	_gs_es_profile_start
 	local _backup_ts
 	# A3: Append PID to avoid timestamp collisions when two runs start in the same second
 	_backup_ts="$(date +%Y%m%d-%H%M%S)-$$"
@@ -109,6 +110,7 @@ gs_es_main() {
 			echo " [backup] (dry-run) would back up ${_bk_dest} → ${_bk_dest}${_GS_ES_CFG[backup_suffix]}.${_backup_ts}"
 		done
 	fi
+	_gs_es_profile_end "Backup pre-flight"
 
 	# Phase 5: Sync env files
 	local _count_src=0
@@ -146,6 +148,7 @@ gs_es_main() {
 	_gs_es_profile_end "Propagate to Dockerfiles"
 
 	# Phase 6.5: Backup retention prune
+	_gs_es_profile_start
 	if [[ "true" == "${_GS_ES_CFG[backup]}" && "true" != "${_GS_ES_CFG[dry_run]}" ]]; then
 		local _pr_dest
 		for _pr_dest in ${_GS_ES_CFG[destination_files]//[\"\'\`]/}; do
@@ -156,6 +159,7 @@ gs_es_main() {
 				"${_GS_ES_CFG[quiet]}"
 		done
 	fi
+	_gs_es_profile_end "Backup retention prune"
 
 	# Phase 7: Cleanup
 	_gs_es_profile_start

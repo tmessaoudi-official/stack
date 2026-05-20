@@ -51,8 +51,36 @@ source "$(dirname "${BASH_SOURCE[0]}")/reporting/profile.sh"
 # shellcheck source=./core/apply.sh
 source "$(dirname "${BASH_SOURCE[0]}")/core/apply.sh"
 
+# ── _gs_eu2_dispatch_fetcher ─────────────────────────────────────────────────
+# I2: DRY helper — replaces three identical 11-fetcher case blocks.
+# Args: record_index
+# Calls the appropriate fetcher based on the record's type field.
+# Unknown types are classified as SKIP with an error message.
+_gs_eu2_dispatch_fetcher() {
+  local _df_i="${1}"
+  local _df_type
+  _df_type="$(_gs_eu2_record_get "${_df_i}" type)"
+  case "${_df_type}" in
+    codeberg)   _gs_eu2_fetch_codeberg   "${_df_i}" ;;
+    dockerhub)  _gs_eu2_fetch_dockerhub  "${_df_i}" ;;
+    github)     _gs_eu2_fetch_github     "${_df_i}" ;;
+    quay)       _gs_eu2_fetch_quay       "${_df_i}" ;;
+    npm)        _gs_eu2_fetch_npm        "${_df_i}" ;;
+    pypi)       _gs_eu2_fetch_pypi       "${_df_i}" ;;
+    rubygems)   _gs_eu2_fetch_rubygems   "${_df_i}" ;;
+    sdkman)     _gs_eu2_fetch_sdkman     "${_df_i}" ;;
+    sdkmanager) _gs_eu2_fetch_sdkmanager "${_df_i}" ;;
+    pecl)       _gs_eu2_fetch_pecl       "${_df_i}" ;;
+    url)        _gs_eu2_fetch_url        "${_df_i}" ;;
+    *)
+      _gs_eu2_record_set "${_df_i}" decision      "SKIP"
+      _gs_eu2_record_set "${_df_i}" error_message "unknown fetcher type '${_df_type}' — check annotation syntax"
+      ;;
+  esac
+}
+
 _gs_eu2_run_check() {
-  local _count _i _type
+  local _count _i
   _count="$(_gs_eu2_record_count)"
 
   # Propagate cache settings from CFG to env vars consumed by cache.sh
@@ -90,33 +118,11 @@ _gs_eu2_run_check() {
       _gs_eu2_record_set "${_i}" error_message "skip flag: ${_skip_reason}"
     fi
 
-    _type="$(_gs_eu2_record_get "${_i}" type)"
     # Skip gate fires: bypass all fetcher dispatch and second-pass blocks.
     # The record already has decision=SKIP and error_message set; display code below handles output.
     if [[ -z "${_skip_reason}" ]]; then
-      case "${_type}" in
-        codeberg)  _gs_eu2_fetch_codeberg  "${_i}" ;;
-        dockerhub) _gs_eu2_fetch_dockerhub "${_i}" ;;
-        github)    _gs_eu2_fetch_github    "${_i}" ;;
-        quay)      _gs_eu2_fetch_quay      "${_i}" ;;
-        npm)        _gs_eu2_fetch_npm        "${_i}" ;;
-        pypi)       _gs_eu2_fetch_pypi       "${_i}" ;;
-        rubygems)   _gs_eu2_fetch_rubygems   "${_i}" ;;
-        sdkman)     _gs_eu2_fetch_sdkman     "${_i}" ;;
-        sdkmanager) _gs_eu2_fetch_sdkmanager "${_i}" ;;
-        pecl)       _gs_eu2_fetch_pecl       "${_i}" ;;
-        url)        _gs_eu2_fetch_url        "${_i}" ;;
-        # All 11 fetcher types implemented:
-        #   codeberg, dockerhub, github, quay   — fetchers/{codeberg,dockerhub,github,quay}.sh
-        #   npm, pypi, rubygems                 — fetchers/{npm,pypi,rubygems}.sh
-        #   sdkman, sdkmanager                  — fetchers/{sdkman,sdkmanager}.sh
-        #   pecl                                — fetchers/pecl.sh (use git:owner/repo flag for SHA tracking)
-        #   url                                 — fetchers/url.sh + core/ubuntu.sh
-        *)
-          _gs_eu2_record_set "${_i}" decision      "SKIP"
-          _gs_eu2_record_set "${_i}" error_message "unknown fetcher type '${_type}' — check annotation syntax"
-          ;;
-      esac
+      # I2: dispatch via helper — all 11 fetcher types handled in _gs_eu2_dispatch_fetcher
+      _gs_eu2_dispatch_fetcher "${_i}"
 
     # --unstable=info second-pass: temporarily swap channel→unstable, re-run the
     # same fetcher (cache hit — no extra HTTP), capture proposed as unstable_proposed,
@@ -141,19 +147,8 @@ _gs_eu2_run_check() {
         _gs_eu2_record_set "${_i}" proposed_version ""
         _gs_eu2_record_set "${_i}" decision ""
         _gs_eu2_record_set "${_i}" error_message ""
-        case "${_type}" in
-          codeberg)  _gs_eu2_fetch_codeberg  "${_i}" ;;
-          dockerhub) _gs_eu2_fetch_dockerhub "${_i}" ;;
-          github)    _gs_eu2_fetch_github    "${_i}" ;;
-          quay)      _gs_eu2_fetch_quay      "${_i}" ;;
-          npm)        _gs_eu2_fetch_npm        "${_i}" ;;
-          pypi)       _gs_eu2_fetch_pypi       "${_i}" ;;
-          rubygems)   _gs_eu2_fetch_rubygems   "${_i}" ;;
-          sdkman)     _gs_eu2_fetch_sdkman     "${_i}" ;;
-          sdkmanager) _gs_eu2_fetch_sdkmanager "${_i}" ;;
-          pecl)       _gs_eu2_fetch_pecl       "${_i}" ;;
-          url)        _gs_eu2_fetch_url        "${_i}" ;;
-        esac
+        # I2: dispatch via helper
+        _gs_eu2_dispatch_fetcher "${_i}"
         local _unstable_ver
         _unstable_ver="$(_gs_eu2_record_get "${_i}" proposed_version)"
         # Restore original state (including error_message to avoid info-pass errors bleeding through)
@@ -197,19 +192,8 @@ _gs_eu2_run_check() {
         _gs_eu2_record_set "${_i}" proposed_version ""
         _gs_eu2_record_set "${_i}" decision ""
         _gs_eu2_record_set "${_i}" error_message ""
-        case "${_type}" in
-          codeberg)   _gs_eu2_fetch_codeberg   "${_i}" ;;
-          dockerhub)  _gs_eu2_fetch_dockerhub  "${_i}" ;;
-          github)     _gs_eu2_fetch_github     "${_i}" ;;
-          quay)       _gs_eu2_fetch_quay       "${_i}" ;;
-          npm)        _gs_eu2_fetch_npm        "${_i}" ;;
-          pypi)       _gs_eu2_fetch_pypi       "${_i}" ;;
-          rubygems)   _gs_eu2_fetch_rubygems   "${_i}" ;;
-          sdkman)     _gs_eu2_fetch_sdkman     "${_i}" ;;
-          sdkmanager) _gs_eu2_fetch_sdkmanager "${_i}" ;;
-          pecl)       _gs_eu2_fetch_pecl       "${_i}" ;;
-          url)        _gs_eu2_fetch_url        "${_i}" ;;
-        esac
+        # I2: dispatch via helper
+        _gs_eu2_dispatch_fetcher "${_i}"
         local _stable_ver
         _stable_ver="$(_gs_eu2_record_get "${_i}" proposed_version)"
         _gs_eu2_record_set "${_i}" channel "${_si_saved_chan}"

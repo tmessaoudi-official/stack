@@ -1911,6 +1911,84 @@ t "t32b: --quiet=true --dry-run — DRY-RUN banner still present on stderr" bash
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Section 33 — GAP-2 (comments-only source guard) + GAP-3 (same-path guard)
+# ═══════════════════════════════════════════════════════════════════════════
+section "33 — GAP-2 comments-only source + GAP-3 same-path guard"
+
+# t33a: source file contains only comments (no KEY=value lines) → exit 0,
+#       dest file unchanged, stderr contains "no active variables after stripping".
+t "t33a: comments-only source — skips gracefully, dest unchanged, stderr note" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t33a; mkdir -p \"\$D\"
+    # Source: only comments and blank lines
+    printf '# this is a comment\n# another comment\n\n' > \"\$D/.env\"
+    # Dest: has one real variable
+    printf 'GLOBAL_STACK_X=1.0\n' > \"\$D/.env.local\"
+    err=\$(bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=false \
+        --check-missing=false --show-added-entries=false --show-different-entries=false \
+        --backup=false 2>&1 >/dev/null)
+    # Dest must be unchanged
+    content=\$(cat \"\$D/.env.local\")
+    [[ \"\$content\" == 'GLOBAL_STACK_X=1.0' ]] || { echo \"dest changed unexpectedly: \$content\"; echo FAIL; exit 0; }
+    # Stderr must mention the skip
+    echo \"\$err\" | grep -qi 'no active variables' || { echo \"expected 'no active variables' in stderr; got: \$err\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t33b: two source files; first is comments-only, second is normal.
+#       First is skipped (comments-only guard), second is processed — new key appears in dest.
+t "t33b: first source comments-only — skipped; second source normal — processed" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t33b; mkdir -p \"\$D\"
+    # Source 1: comments only
+    printf '# only a comment\n' > \"\$D/.env.comments\"
+    # Source 2: has real variables
+    printf 'GLOBAL_STACK_Y=2.0\n' > \"\$D/.env\"
+    # Dest: initially empty
+    : > \"\$D/.env.local\"
+    bash '${ENV_SCAN}' --dir=\"\$D\" \
+        --source-files=\"\$D/.env.comments \$D/.env\" \
+        --destination-files=\"\$D/.env.local\" \
+        --scan-sources=false \
+        --check-missing=false --show-added-entries=false --show-different-entries=false \
+        --backup=false 2>/dev/null
+    grep -q 'GLOBAL_STACK_Y=2.0' \"\$D/.env.local\" || { echo \"GLOBAL_STACK_Y missing from dest\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t33c: same path for source and dest → exit 1, stderr contains 'same' path/file.
+t "t33c: same source and dest path — hard stop, exit 1" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t33c; mkdir -p \"\$D\"
+    printf 'GLOBAL_STACK_Z=3.0\n' > \"\$D/.env\"
+    cp \"\$D/.env\" \"\$D/.env.local\"
+    err=\$(bash '${ENV_SCAN}' --dir=\"\$D\" \
+        --source-files=\"\$D/.env\" \
+        --destination-files=\"\$D/.env\" \
+        --scan-sources=false \
+        --check-missing=false --show-added-entries=false --show-different-entries=false \
+        --backup=false 2>&1; echo \"exit:\$?\")
+    echo \"\$err\" | grep -q 'exit:1' || { echo \"expected exit 1; got: \$err\"; echo FAIL; exit 0; }
+    echo \"\$err\" | grep -qi 'same' || { echo \"expected 'same' in stderr; got: \$err\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t33d: symlink source resolving to same real file as dest → exit 1 (realpath resolves both).
+t "t33d: symlink source resolving to same file as dest — hard stop via realpath" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t33d; mkdir -p \"\$D\"
+    printf 'GLOBAL_STACK_W=4.0\n' > \"\$D/.env\"
+    cp \"\$D/.env\" \"\$D/.env.local\"
+    # Create a symlink pointing to the same file as dest
+    ln -sf \"\$D/.env\" \"\$D/.env.symlink\"
+    err=\$(bash '${ENV_SCAN}' --dir=\"\$D\" \
+        --source-files=\"\$D/.env.symlink\" \
+        --destination-files=\"\$D/.env\" \
+        --scan-sources=false \
+        --check-missing=false --show-added-entries=false --show-different-entries=false \
+        --backup=false 2>&1; echo \"exit:\$?\")
+    echo \"\$err\" | grep -q 'exit:1' || { echo \"expected exit 1 for symlink same-path; got: \$err\"; echo FAIL; exit 0; }
+    echo \"\$err\" | grep -qi 'same' || { echo \"expected 'same' in stderr for symlink; got: \$err\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section

@@ -35,6 +35,16 @@ gs_es_process_file() {
 	local merged_file
 	merged_file="${dest_file}${_GS_ES_CFG[destination_file_merged_suffix]}.${count}"
 
+	# GAP-3: Same-path guard — src and dest must not resolve to the same file.
+	# realpath resolves symlinks; fall back to raw path if realpath is unavailable.
+	local _src_real _dest_real
+	_src_real="$(realpath -- "${src_file}" 2>/dev/null || printf '%s' "${src_file}")"
+	_dest_real="$(realpath -- "${dest_file}" 2>/dev/null || printf '%s' "${dest_file}")"
+	if [[ "${_src_real}" == "${_dest_real}" ]]; then
+		printf 'env-scan: source and destination resolve to the same file: %s\n' "${_src_real}" >&2
+		return 1
+	fi
+
 	if [[ "${dry_run}" != "true" ]]; then
 		# A6: Guard source file — must exist and be non-empty before proceeding
 		if [[ ! -f "${src_file}" ]] || [[ ! -s "${src_file}" ]]; then
@@ -44,6 +54,14 @@ gs_es_process_file() {
 		if [[ ! -f "${dest_file}" ]]; then
 			printf 'env-scan: creating new destination file: %s\n' "${dest_file}" >&2
 			touch "${dest_file}"
+		fi
+
+		# GAP-2: Comments-only source guard — if src has no active KEY=value lines
+		# (contains only comments, blanks, or is structurally empty after scanning),
+		# skip silently rather than overwriting dest with a comment-only file.
+		if ! grep -m1 -qE '^[A-Za-z_][A-Za-z0-9_]*=' "${src_file}" 2>/dev/null; then
+			printf 'env-scan: source has no active variables after stripping (comments only) — skipping: %s\n' "${src_file}" >&2
+			return 0
 		fi
 
 		# Build associative array of dest values keyed by variable name

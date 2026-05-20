@@ -4526,6 +4526,22 @@ t "t53n: --stable=full injection still works (== full check regression guard)" b
     echo PASS
 "
 
+# t53o: --stable=info fires [STABLE] sub-line for a channel:rc record.
+#       Uses fixture testowner/rc-ahead: v1.1.0-rc1 (prerelease, newest) + v1.0.0 (stable).
+#       The main fetch (channel=rc) proposes v1.1.0-rc1; the stable=info second pass
+#       finds v1.0.0 and stores it as stable_proposed → [STABLE] sub-line must appear.
+t "t53o: --stable=info fires [STABLE] sub-line for channel:rc record (stable newer than current)" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/chk53o
+    _tf53o=\"\${TMP_DIR}/t53o.env\"
+    printf '# @todo env-update (channel:rc) github:testowner/rc-ahead v0.9.0\nGLOBAL_STACK_T53O=v0.9.0\n' > \"\${_tf53o}\"
+    out=\$(bash '${ENV_UPDATE_V2}' --stable=info --check \
+        --env-file=\"\${_tf53o}\" 2>/dev/null)
+    echo \"\$out\" | grep -q '\[STABLE\]' || { echo \"expected [STABLE] sub-line; got: '\$out'\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -q 'stable: v1.0.0' || { echo \"expected 'stable: v1.0.0'; got: '\$out'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Section 54 — unstable promotion guard (channel.sh)
 # ═══════════════════════════════════════════════════════════════════════════

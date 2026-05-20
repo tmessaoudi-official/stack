@@ -84,7 +84,7 @@ gs_es_detect_multiple_defaults() {
 				# printf "%s has a single value: '"'"'%s'"'"'\n", key, vals[1];
 			}
 		}
-	}' "${input_file_merge}.expanded")
+	}' "${input_file_merge}.expanded" | LC_ALL=C sort)
 
 	if [[ -n "${_GS_ES_CFG[conflict_ignore_pattern]}" && -n "${multiple_default_values}" ]]; then
 		multiple_default_values=$(echo "${multiple_default_values}" | grep -vE "${_GS_ES_CFG[conflict_ignore_pattern]}" || true)
@@ -251,9 +251,8 @@ gs_es_search_and_extract() {
 	fi
 
 	gs_es_detect_multiple_defaults "${_out_file}" "${current_file}"
-
-	cat "${_out_file}" >> "${_GS_ES_CFG[scan_output_file]}"
-	[[ "true" = "${_GS_ES_CFG[scan_delete_output]}" && "true" = "${_GS_ES_CFG[cleanup_tmp]}" ]] && rm -rf "${_out_file}"
+	# I1: Per-file output stays in extract.N — consolidated sequentially by
+	# _gs_es_run_extraction after all background jobs complete (race fix).
 }
 
 # ── _gs_es_run_extraction ────────────────────────────────────────────────────────
@@ -261,11 +260,15 @@ gs_es_search_and_extract() {
 _gs_es_run_extraction() {
 	true > "${_GS_ES_CFG[scan_output_file]}"
 
+	# I1: count declared here (outside the if/elif) so the consolidation loop
+	# below covers both the single-file path (count=0 → extract.0) and the
+	# directory path (count=1..N from background jobs).
+	local count=0
+
 	if [[ -f "${_GS_ES_CFG[scan_path]}" ]]; then
 		gs_es_search_and_extract "${_GS_ES_CFG[scan_path]}" 0
 	elif [[ -d "${_GS_ES_CFG[scan_path]}" ]]; then
 		local _file
-		local count=0
 		local -a pids=()
 
 		while IFS= read -r _file; do
@@ -286,9 +289,17 @@ _gs_es_run_extraction() {
 		return 1
 	fi
 
-	# Merge all per-file outputs into the final output file (parallel jobs each
-	# appended to their own extract.N file; consolidate now that all are done).
+	# I1: Sequential consolidation — collect each per-file extract.N into the
+	# final output file now that all background jobs have completed.
+	# This replaces the old concurrent cat >> approach (race fix).
 	# P9: sort -u deduplicates across multiple files
+	local _ci
+	for (( _ci = 0; _ci <= count; _ci++ )); do
+		local _cf="${_GS_ES_SESSION_TMP}/extract.${_ci}"
+		[[ -f "${_cf}" ]] && cat "${_cf}" >> "${_GS_ES_CFG[scan_output_file]}"
+		[[ "true" = "${_GS_ES_CFG[scan_delete_output]}" && "true" = "${_GS_ES_CFG[cleanup_tmp]}" ]] \
+			&& rm -rf "${_cf}"
+	done
 	LC_ALL=C sort -u "${_GS_ES_CFG[scan_output_file]}" \
 		-o "${_GS_ES_CFG[scan_output_file]}" 2>/dev/null || true
 }
