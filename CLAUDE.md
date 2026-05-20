@@ -105,7 +105,6 @@ Propagation is automatic: any `ARG VAR=value` line in a Dockerfile whose value d
   readonly _GS_EU2_MODULENAME_SH_LOADED=1
   ```
 - **Error propagation across subshells**: write to temp files, read back in parent — stdout is reserved for return values
-- **Sentinel return values**: `__hold_newer_major__:...`, `__pecl_promotion__:ext:ver`, `__codename_upgrade_hint__:...` signal complex decisions from fetcher to caller
 - **Parallel arrays** instead of objects (bash limitation): records indexed by count
 - **Function naming**: `_gs_eu2_<module>_<action>` for env-update; `es_<action>` or `_gs_es_<action>` for env-scan
 - **CLI-first with API fallback**: activates the correct runtime (nvm/pyenv/rbenv), tries CLI in subshell, falls back to API

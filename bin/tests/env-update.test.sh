@@ -4182,13 +4182,14 @@ t "t51h: apply SHA-only update rewrites sha: in annotation but leaves VAR= untou
     _gs_eu2_record_set \$idx proposed_sha_date \"\$new_date\"
     _gs_eu2_record_set \$idx decision         'SHA'
     _gs_eu2_apply_updates \"\$f\" 'false' > /dev/null
-    grep -qF \"sha:\${new_sha} (\${new_date})\" \"\$f\" || { echo \"new sha+date not written; content:\"; cat \"\$f\"; echo FAIL; exit 0; }
+    grep -qF \"sha:\${new_sha}\" \"\$f\" || { echo \"new sha not in annotation; content:\"; cat \"\$f\"; echo FAIL; exit 0; }
+    grep -qE \"sha:[0-9a-f]+ +\\([0-9]{4}-[0-9]{2}-[0-9]{2}\\)\" \"\$f\" && { echo \"date suffix written to annotation (unexpected)\"; cat \"\$f\"; echo FAIL; exit 0; } || true
     grep -qF \"sha:\${old_sha}\" \"\$f\" && { echo 'old sha still present'; cat \"\$f\"; echo FAIL; exit 0; }
     grep -qF 'GLOBAL_STACK_PHP_APCU_VERSION=5.1.24' \"\$f\" || { echo 'VAR= should be unchanged'; cat \"\$f\"; echo FAIL; exit 0; }
     echo PASS
 "
 
-t "t51i: apply SHA-only update with date rewrites sha:HASH (OLD-DATE) to sha:HASH (NEW-DATE)" bash -c "
+t "t51i: apply SHA-only update — old annotation with date replaced by bare sha only" bash -c "
     source '/stack/bin/lib/env-update/config/defaults.sh'
     source '/stack/bin/lib/env-update/core/records.sh'
     source '/stack/bin/lib/env-update/core/apply.sh'
@@ -4209,7 +4210,8 @@ t "t51i: apply SHA-only update with date rewrites sha:HASH (OLD-DATE) to sha:HAS
     _gs_eu2_record_set \$idx proposed_sha_date  \"\$new_date\"
     _gs_eu2_record_set \$idx decision           'SHA'
     _gs_eu2_apply_updates \"\$f\" 'false' > /dev/null
-    grep -qF \"sha:\${new_sha} (\${new_date})\" \"\$f\" || { echo \"new sha+date not written; content:\"; cat \"\$f\"; echo FAIL; exit 0; }
+    grep -qF \"sha:\${new_sha}\" \"\$f\" || { echo \"new sha not in annotation; content:\"; cat \"\$f\"; echo FAIL; exit 0; }
+    grep -qE \"sha:[0-9a-f]+ +\\([0-9]{4}-[0-9]{2}-[0-9]{2}\\)\" \"\$f\" && { echo \"date suffix written to annotation (unexpected)\"; cat \"\$f\"; echo FAIL; exit 0; } || true
     grep -qF \"\${old_sha}\" \"\$f\" && { echo 'old sha still present'; cat \"\$f\"; echo FAIL; exit 0; }
     grep -qF \"\${old_date}\" \"\$f\" && { echo 'old date still present'; cat \"\$f\"; echo FAIL; exit 0; }
     grep -qF 'GLOBAL_STACK_PHP_APCU_VERSION=5.1.24' \"\$f\" || { echo 'VAR= should be unchanged'; cat \"\$f\"; echo FAIL; exit 0; }
@@ -4232,7 +4234,7 @@ t "t51j: (pecl-ref:ext) no longer sets pecl_ref field — treated as hint (passt
     echo PASS
 "
 
-t "t51k: AUTO version update also rewrites sha: in annotation with new date" bash -c "
+t "t51k: AUTO version update also rewrites sha: in annotation — new sha is bare (no date)" bash -c "
     source '/stack/bin/lib/env-update/config/defaults.sh'
     source '/stack/bin/lib/env-update/core/records.sh'
     source '/stack/bin/lib/env-update/core/apply.sh'
@@ -4255,7 +4257,8 @@ t "t51k: AUTO version update also rewrites sha: in annotation with new date" bas
     _gs_eu2_record_set \$idx decision           'AUTO'
     _gs_eu2_apply_updates \"\$f\" 'false' > /dev/null
     grep -qF 'GLOBAL_STACK_PHP_APCU_VERSION=5.1.24' \"\$f\" || { echo 'version not updated'; cat \"\$f\"; echo FAIL; exit 0; }
-    grep -qF \"sha:\${new_sha} (\${new_date})\" \"\$f\" || { echo 'new sha+date not written'; cat \"\$f\"; echo FAIL; exit 0; }
+    grep -qF \"sha:\${new_sha}\" \"\$f\" || { echo 'new sha not in annotation'; cat \"\$f\"; echo FAIL; exit 0; }
+    grep -qE \"sha:[0-9a-f]+ +\\([0-9]{4}-[0-9]{2}-[0-9]{2}\\)\" \"\$f\" && { echo 'date suffix written to annotation (unexpected)'; cat \"\$f\"; echo FAIL; exit 0; } || true
     grep -qF \"\${old_sha}\" \"\$f\" && { echo 'old sha still present'; cat \"\$f\"; echo FAIL; exit 0; }
     echo PASS
 "
@@ -6648,7 +6651,7 @@ source '/stack/bin/lib/env-update/core/apply.sh'
 "
 
 # t66a: use_sha=true — VAR= receives bare SHA, annotation sha: receives SHA with date
-t "t66a: use-sha apply — VAR= gets bare SHA, annotation sha: gets SHA with date" bash -c "
+t "t66a: use-sha apply — VAR= gets bare SHA, annotation sha: gets bare sha (no date)" bash -c "
     ${_APPLY_E_LIBS}
     f=\${TMP_DIR}/t66a.env
     old_sha='aaaa0000bbbb1111cccc2222dddd3333eeee4444'
@@ -6670,8 +6673,9 @@ t "t66a: use-sha apply — VAR= gets bare SHA, annotation sha: gets SHA with dat
     # VAR= must contain only the bare SHA (no date, no parentheses)
     grep -qF \"GLOBAL_STACK_SHA_TEST=\${new_sha}\" \"\$f\" || { echo \"VAR= not bare SHA; file: \$(cat \$f)\"; echo FAIL; exit 0; }
     grep 'GLOBAL_STACK_SHA_TEST=.*(' \"\$f\" 2>/dev/null && { echo 'VAR= contains date parentheses'; echo FAIL; exit 0; } || true
-    # Annotation sha: must contain SHA with date
-    grep -qF \"sha:\${new_sha} (\${sha_date})\" \"\$f\" || { echo \"annotation sha: missing date; file: \$(cat \$f)\"; echo FAIL; exit 0; }
+    # Annotation sha: must contain bare sha only (no date suffix)
+    grep -qF \"sha:\${new_sha}\" \"\$f\" || { echo \"annotation sha: missing; file: \$(cat \$f)\"; echo FAIL; exit 0; }
+    grep -qE \"sha:[0-9a-f]+ +\\([0-9]{4}-[0-9]{2}-[0-9]{2}\\)\" \"\$f\" && { echo \"date suffix in annotation sha: (unexpected); file: \$(cat \$f)\"; echo FAIL; exit 0; } || true
     echo PASS
 "
 
@@ -6740,8 +6744,9 @@ t "t66d: SHA decision + use_sha=true — VAR= updated with new bare SHA (no DRIF
     # VAR= must have the new bare SHA (not old, not with date)
     grep -qF \"GLOBAL_STACK_SHA_D=\${new_sha}\" \"\$f\" || { echo \"VAR= not updated to new SHA; file: \$(cat \$f)\"; echo FAIL; exit 0; }
     grep 'GLOBAL_STACK_SHA_D=.*(' \"\$f\" 2>/dev/null && { echo 'VAR= contains date parentheses'; echo FAIL; exit 0; } || true
-    # Annotation sha: must have new SHA with date
-    grep -qF \"sha:\${new_sha} (\${sha_date})\" \"\$f\" || { echo \"annotation sha: not updated; file: \$(cat \$f)\"; echo FAIL; exit 0; }
+    # Annotation sha: must have bare sha only (no date suffix)
+    grep -qF \"sha:\${new_sha}\" \"\$f\" || { echo \"annotation sha: not updated; file: \$(cat \$f)\"; echo FAIL; exit 0; }
+    grep -qE \"sha:[0-9a-f]+ +\\([0-9]{4}-[0-9]{2}-[0-9]{2}\\)\" \"\$f\" && { echo \"date suffix in annotation sha: (unexpected); file: \$(cat \$f)\"; echo FAIL; exit 0; } || true
     echo PASS
 "
 
@@ -7177,21 +7182,43 @@ t "t75d: --no-drift suppresses DRIFT from secondary sub-line (WATCH zero → lin
     echo PASS
 "
 
-# t75e: DOWNGRADE counter — VAR ahead of annotation, pure semver, direction detected.
+# t75e: DOWNGRADE counter — SKIP + VAR ahead: drift shown but counter stays 0.
 # Fixture: @types/node (22,22.1,24,24.1,25,25.8). Pin to major 22.
 # Annotation current=22.1.0, VAR=25.8.0. Fetcher proposes 22.1.0 (same) → SKIP.
-# Drift: annotation says 22.1.0, VAR=25.8.0 → both pure semver → VAR ahead → DOWNGRADE.
-# SKIP is not in the fixable set → fixable=0, downgrade=1.
-# Expected: 1 DRIFT (0 fixable), 1 DOWNGRADE in secondary sub-line.
-t "t75e: DOWNGRADE counter — 1 DOWNGRADE when VAR ahead of annotation (pure semver, SKIP decision)" bash -c "
+# Drift: annotation says 22.1.0, VAR=25.8.0 → both pure semver → VAR ahead.
+# SKIP cannot be written by --apply → downgrade counter stays 0 (B5/B6 fix).
+# Drift message must say "update annotation or revert VAR= manually" (B4/B10 fix).
+# Expected: 1 DRIFT (0 fixable), 0 DOWNGRADE in secondary sub-line.
+t "t75e: DOWNGRADE counter — SKIP + VAR ahead shows 0 DOWNGRADE (not actionable by --apply)" bash -c "
     export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t75e_cache
     f=\${TMP_DIR}/t75e.env
     printf '# @todo env-update npm:@types/node:22 22.1.0\nGLOBAL_STACK_T75E=25.8.0\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
     echo \"\$out\" | grep -qF '[DRIFT]' || { echo \"[DRIFT] sub-line must appear; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'update annotation or revert VAR= manually' || { echo \"drift message must say update annotation or revert VAR= manually; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '--apply will' && { echo \"drift message must NOT mention --apply will (SKIP cannot be written); got: \$out\"; echo FAIL; exit 0; } || true
     echo \"\$out\" | grep -qE '1 DRIFT \(0 fixable\)' || { echo \"secondary sub-line must show 1 DRIFT (0 fixable); got: \$out\"; echo FAIL; exit 0; }
-    echo \"\$out\" | grep -qE '1 DOWNGRADE' || { echo \"secondary sub-line must show 1 DOWNGRADE; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qE '0 DOWNGRADE' || { echo \"secondary sub-line must show 0 DOWNGRADE (SKIP excluded from counter); got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t75e2: DOWNGRADE counter — AUTO + VAR ahead still counts as 1 DOWNGRADE.
+# Same direction detection, but decision is AUTO → --apply CAN write it → counts.
+# Fixture: @types/node latest=25.8.0. Annotation current=22.1.0, VAR=25.8.0.
+# With no major pin, fetcher returns 25.8.0 (same as VAR) → SKIP actually.
+# Use a pin-forward: annotation current=25.8.0, VAR=99.0.0 → annotation < VAR → downgrade.
+# Fetcher proposes 25.8.0 > 25.8.0? No. Let's set annotation=22.1.0, proposed=25.8.0, VAR=99.0.0.
+# With pin :25, fetcher returns 25.8.0 > 22.1.0 → AUTO. VAR=99.0.0 > ann=22.1.0 → downgrade.
+t "t75e2: DOWNGRADE counter — AUTO + VAR ahead shows 1 DOWNGRADE (apply can write)" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t75e2_cache
+    f=\${TMP_DIR}/t75e2.env
+    printf '# @todo env-update npm:@types/node:25 22.1.0\nGLOBAL_STACK_T75E2=99.0.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[DRIFT]' || { echo \"[DRIFT] sub-line must appear; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'VAR is ahead of annotation' || { echo \"drift must mention VAR is ahead; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qE '1 DOWNGRADE' || { echo \"secondary sub-line must show 1 DOWNGRADE for AUTO decision; got: \$out\"; echo FAIL; exit 0; }
     echo PASS
 "
 
@@ -8132,6 +8159,114 @@ t "t87c: tracked+clean .env — apply is not blocked" bash -c "
     # Must NOT contain the dirty-file warning
     echo \"\$out\" | grep -qiE '(uncommitted|stash)' \
         && { echo \"false-positive block on clean file: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
+section "88 — SHA annotation written without date suffix"
+# ═══════════════════════════════════════════════════════════════════════════
+
+# t88a: apply_single with bare new SHA writes sha:HASH with no date suffix in annotation
+t "t88a: SHA annotation contains no date suffix after SHA update" bash -c "
+    f=\${TMP_DIR}/t88a.env
+    printf '# @todo env-update pecl:testpkg (git:owner/repo) 1.0.0 sha:aaaa1111bbbb2222cccc3333dddd4444eeee5555\nGLOBAL_TEST_SHA_PKG=1.0.0\n' > \"\$f\"
+    (
+      source '${SCRIPT_DIR}/../lib/env-update/core/apply.sh'
+      # \$7 = new_sha (bare hash — no date), \$10 = bare_sha (same)
+      _gs_eu2_apply_single \"\$f\" 'GLOBAL_TEST_SHA_PKG' '1.1.0' \
+        '# @todo env-update pecl:testpkg (git:owner/repo) 1.0.0 sha:aaaa1111bbbb2222cccc3333dddd4444eeee5555' \
+        '1.0.0' \
+        'aaaa1111bbbb2222cccc3333dddd4444eeee5555' \
+        'bbbb2222cccc3333dddd4444eeee5555ffff6666' \
+        'false' 'false' 'bbbb2222cccc3333dddd4444eeee5555ffff6666'
+    )
+    ann=\$(grep '@todo' \"\$f\")
+    var=\$(grep '^GLOBAL_TEST_SHA_PKG=' \"\$f\")
+    rm -f \"\$f\"
+    echo \"\$ann\" | grep -qF 'sha:bbbb2222cccc3333dddd4444eeee5555ffff6666' || { echo \"new SHA not in annotation: \$ann\"; echo FAIL; exit 0; }
+    echo \"\$ann\" | grep -qE 'sha:[0-9a-f]+ +\([0-9]{4}-[0-9]{2}-[0-9]{2}\)' && { echo \"date suffix after sha: found in annotation: \$ann\"; echo FAIL; exit 0; } || true
+    echo \"\$var\" | grep -qF '1.1.0' || { echo \"VAR= not updated: \$var\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t88b: apply_single with OLD annotation carrying a date suffix — old is matched and stripped,
+#        new annotation carries sha:HASH only (no date)
+t "t88b: SHA annotation with existing date suffix — new annotation has no date" bash -c "
+    f=\${TMP_DIR}/t88b.env
+    old_ann='# @todo env-update pecl:testpkg (git:owner/repo) 1.0.0 sha:aaaa1111bbbb2222cccc3333dddd4444eeee5555 (2024-01-01)'
+    printf '%s\nGLOBAL_TEST_SHA_PKG2=1.0.0\n' \"\$old_ann\" > \"\$f\"
+    (
+      source '${SCRIPT_DIR}/../lib/env-update/core/apply.sh'
+      # old_sha_tok must include the date to match the annotation; new_sha_tok is bare
+      _gs_eu2_apply_single \"\$f\" 'GLOBAL_TEST_SHA_PKG2' '1.1.0' \
+        \"\$old_ann\" \
+        '1.0.0' \
+        'aaaa1111bbbb2222cccc3333dddd4444eeee5555 (2024-01-01)' \
+        'bbbb2222cccc3333dddd4444eeee5555ffff6666' \
+        'false' 'false' 'bbbb2222cccc3333dddd4444eeee5555ffff6666'
+    )
+    ann=\$(grep '@todo' \"\$f\")
+    rm -f \"\$f\"
+    echo \"\$ann\" | grep -qF 'sha:bbbb2222cccc3333dddd4444eeee5555ffff6666' || { echo \"new SHA not in annotation: \$ann\"; echo FAIL; exit 0; }
+    echo \"\$ann\" | grep -qF '(2024-01-01)' && { echo \"old date suffix not stripped: \$ann\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
+section "89 — --scan warning without --apply"
+# ═══════════════════════════════════════════════════════════════════════════
+
+_T89_ENV='# @todo env-update dockerhub:_/postgres:18 18.3-alpine3.23
+GLOBAL_STACK_PG18_T89=18.3-alpine3.23'
+
+# t89a: --scan alone (no --check, no --apply) → warning emitted
+t "t89a: --scan without --apply warns on stderr" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    f=\${TMP_DIR}/t89a.env
+    printf '%s\n' '${_T89_ENV}' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --scan --env-file=\"\$f\" 2>&1 || true)
+    echo \"\$out\" | grep -qF 'WARNING: --scan has no effect without --apply' \
+        || { echo \"expected --scan warning; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t89b: --check alone (no --scan) → no scan warning emitted
+t "t89b: --check without --scan does not emit scan warning" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    f=\${TMP_DIR}/t89b.env
+    printf '%s\n' '${_T89_ENV}' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --no-cache --env-file=\"\$f\" 2>&1 || true)
+    echo \"\$out\" | grep -qF '--scan has no effect' \
+        && { echo \"unexpected --scan warning in --check-only output: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t89c: --dry-run --scan (--dry-run does not imply --apply) → warning emitted
+t "t89c: --dry-run --scan without --apply warns on stderr" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    f=\${TMP_DIR}/t89c.env
+    printf '%s\n' '${_T89_ENV}' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --dry-run --scan --env-file=\"\$f\" 2>&1 || true)
+    echo \"\$out\" | grep -qF 'WARNING: --scan has no effect without --apply' \
+        || { echo \"expected --scan warning on --dry-run --scan; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t89d: --apply --scan → NO scan warning (--apply satisfies the condition)
+t "t89d: --apply --scan does not emit the scan warning" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t89d_cache
+    mkdir -p \"\${TMP_DIR}/t89d_cache\"
+    touch \"\${TMP_DIR}/t89d_cache/last-dry-run-ts\"
+    f=\${TMP_DIR}/t89d.env
+    printf '%s\n' '${_T89_ENV}' > \"\$f\"
+    mock=\${TMP_DIR}/t89d_mock_env_scan.sh
+    printf '#!/bin/bash\nexit 0\n' > \"\$mock\"
+    chmod +x \"\$mock\"
+    export _GS_EU2_ENV_SCAN_PATH=\"\$mock\"
+    out=\$(bash '${ENV_UPDATE_V2}' --apply --scan --env-file=\"\$f\" 2>&1 || true)
+    echo \"\$out\" | grep -qF '--scan has no effect' \
+        && { echo \"unexpected --scan warning when --apply is active: \$out\"; echo FAIL; exit 0; }
     echo PASS
 "
 

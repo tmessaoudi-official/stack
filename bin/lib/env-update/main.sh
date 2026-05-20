@@ -618,8 +618,27 @@ _gs_eu2_run_check() {
         # Case 3: use-sha record — compare VAR= value vs. annotation sha
         if [[ -n "${_drift_actual}" && -n "${_drift_ann_sha}" \
               && "${_drift_actual}" != "${_drift_ann_sha}" ]]; then
-          printf '%10s↳ [DRIFT] var SHA (%s) differs from annotation sha:(%s) — re-run --apply or update annotation\n' \
-            "" "${_drift_actual:0:8}" "${_drift_ann_sha:0:8}"
+          # Decision-aware: LOCK/FROZEN/SKIP cannot be written by --apply; others can.
+          if [[ "${_decision}" == "LOCK" ]]; then
+            printf '%10s↳ [DRIFT] var SHA (%s) differs from annotation sha:(%s) — locked; update annotation or revert VAR= manually\n' \
+              "" "${_drift_actual:0:8}" "${_drift_ann_sha:0:8}"
+          elif [[ -n "${_skip_reason}" ]]; then
+            printf '%10s↳ [DRIFT] var SHA (%s) differs from annotation sha:(%s) — frozen by skip flag; update annotation or revert VAR= manually\n' \
+              "" "${_drift_actual:0:8}" "${_drift_ann_sha:0:8}"
+          elif [[ "${_decision}" == "SKIP" ]]; then
+            printf '%10s↳ [DRIFT] var SHA (%s) differs from annotation sha:(%s) — update annotation or revert VAR= manually (--apply skips up-to-date records)\n' \
+              "" "${_drift_actual:0:8}" "${_drift_ann_sha:0:8}"
+          elif [[ "${_decision}" == "HOLD" || "${_decision}" == "MANUAL" ]]; then
+            printf '%10s↳ [DRIFT] var SHA (%s) differs from annotation sha:(%s) — --force-auto --apply to resolve\n' \
+              "" "${_drift_actual:0:8}" "${_drift_ann_sha:0:8}"
+          elif [[ "${_decision}" == "ERROR" ]]; then
+            printf '%10s↳ [DRIFT] var SHA (%s) differs from annotation sha:(%s) — fetch failed; fix error then re-run\n' \
+              "" "${_drift_actual:0:8}" "${_drift_ann_sha:0:8}"
+          else
+            # AUTO or SHA: --apply can resolve
+            printf '%10s↳ [DRIFT] var SHA (%s) differs from annotation sha:(%s) — re-run --apply to resolve\n' \
+              "" "${_drift_actual:0:8}" "${_drift_ann_sha:0:8}"
+          fi
           _drift_fired=true
         fi
       else
@@ -643,10 +662,15 @@ _gs_eu2_run_check() {
             printf '%10s↳ [DRIFT] var is empty — annotation tracks %s (feature disabled? --force-auto --apply will write it to enable)\n' \
               "" "${_drift_ann_ver}"
             _drift_fired=true
-          # AUTO/SHA: --apply will resolve
-          elif [[ "${_decision}" == "AUTO" || "${_decision}" == "SHA" ]]; then
+          # AUTO: --apply will write the proposed version to VAR= and enable the feature
+          elif [[ "${_decision}" == "AUTO" ]]; then
             printf '%10s↳ [DRIFT] var is empty — annotation tracks %s (feature disabled? --apply will write %s to enable it)\n' \
               "" "${_drift_ann_ver}" "${_prop:-${_drift_ann_ver}}"
+            _drift_fired=true
+          # SHA: --apply updates annotation sha only; VAR= must be set manually to enable
+          elif [[ "${_decision}" == "SHA" ]]; then
+            printf '%10s↳ [DRIFT] var is empty — annotation tracks %s (feature disabled? set VAR= manually to enable)\n' \
+              "" "${_drift_ann_ver}"
             _drift_fired=true
           # SKIP (up-to-date, not skip-gate) or ERROR: informational only
           else
@@ -673,7 +697,7 @@ _gs_eu2_run_check() {
               _drift_dir_downgrade=true
             fi
           fi
-          # Decision-aware suffix when no direction message or to override neutral
+          # Decision-aware message (B2-B11)
           if [[ "${_decision}" == "LOCK" ]]; then
             printf '%10s↳ [DRIFT] annotation says %s but VAR=%s — locked; update annotation manually to resolve\n' \
               "" "${_drift_ann_ver}" "${_drift_actual}"
@@ -683,26 +707,39 @@ _gs_eu2_run_check() {
               "" "${_drift_ann_ver}" "${_drift_actual}"
             _drift_fired=true
           elif [[ "${_decision}" == "HOLD" ]]; then
-            printf '%10s↳ [DRIFT] annotation says %s but VAR=%s%s — --force-auto --apply to resolve\n' \
-              "" "${_drift_ann_ver}" "${_drift_actual}" "${_drift_dir_msg}"
+            # B2/B7: downgrade → direction-only (would worsen it); VAR behind → --force-auto action
+            if [[ "${_drift_dir_downgrade}" == "true" ]]; then
+              printf '%10s↳ [DRIFT] annotation says %s but VAR=%s%s\n' \
+                "" "${_drift_ann_ver}" "${_drift_actual}" "${_drift_dir_msg}"
+            else
+              printf '%10s↳ [DRIFT] annotation says %s but VAR=%s — --force-auto --apply to resolve\n' \
+                "" "${_drift_ann_ver}" "${_drift_actual}"
+            fi
             _drift_fired=true
           elif [[ "${_decision}" == "MANUAL" ]]; then
-            printf '%10s↳ [DRIFT] annotation says %s but VAR=%s%s — --force-auto --apply to resolve\n' \
-              "" "${_drift_ann_ver}" "${_drift_actual}" "${_drift_dir_msg}"
+            # B3/B8: downgrade → direction-only; VAR behind → --force-auto action
+            if [[ "${_drift_dir_downgrade}" == "true" ]]; then
+              printf '%10s↳ [DRIFT] annotation says %s but VAR=%s%s\n' \
+                "" "${_drift_ann_ver}" "${_drift_actual}" "${_drift_dir_msg}"
+            else
+              printf '%10s↳ [DRIFT] annotation says %s but VAR=%s — --force-auto --apply to resolve\n' \
+                "" "${_drift_ann_ver}" "${_drift_actual}"
+            fi
             _drift_fired=true
           elif [[ "${_decision}" == "ERROR" ]]; then
-            printf '%10s↳ [DRIFT] annotation says %s but VAR=%s — fetch failed; fix error then re-run --apply\n' \
-              "" "${_drift_ann_ver}" "${_drift_actual}"
+            # B9: include direction message when VAR is ahead of annotation
+            printf '%10s↳ [DRIFT] annotation says %s but VAR=%s%s — fetch failed; fix error then re-run\n' \
+              "" "${_drift_ann_ver}" "${_drift_actual}" "${_drift_dir_msg:-}"
             _drift_fired=true
           elif [[ "${_decision}" == "SKIP" && -z "${_skip_reason}" ]]; then
-            # Regular SKIP (up-to-date by classifier): annotation and VAR disagree
-            printf '%10s↳ [DRIFT] annotation says %s but VAR=%s — re-run --apply or update annotation\n' \
-              "" "${_drift_ann_ver}" "${_drift_actual}"
+            # B4/B10: up-to-date SKIP — --apply will not write; include direction for downgrade awareness
+            printf '%10s↳ [DRIFT] annotation says %s but VAR=%s%s — update annotation or revert VAR= manually (--apply skips up-to-date records)\n' \
+              "" "${_drift_ann_ver}" "${_drift_actual}" "${_drift_dir_msg:-}"
             _drift_fired=true
           else
-            # AUTO, SHA, or any other decision
+            # B11: AUTO, SHA — neutral fallback when non-semver (no _drift_dir_msg)
             printf '%10s↳ [DRIFT] annotation says %s but VAR=%s%s\n' \
-              "" "${_drift_ann_ver}" "${_drift_actual}" "${_drift_dir_msg:-}"
+              "" "${_drift_ann_ver}" "${_drift_actual}" "${_drift_dir_msg:- — re-run --apply or update annotation}"
             _drift_fired=true
           fi
         fi
@@ -713,7 +750,12 @@ _gs_eu2_run_check() {
     if [[ "${_drift_fired}" == "true" ]]; then
       (( ++_n_drift )) || true
       if [[ "${_drift_dir_downgrade}" == "true" ]]; then
-        (( ++_n_downgrade )) || true
+        # B5/B6: count downgrade only when --apply CAN write VAR=
+        # LOCK/FROZEN/SKIP/ERROR drift is informational — downgrade not actionable by --apply
+        if [[ "${_decision}" != "LOCK" && -z "${_skip_reason}" \
+              && "${_decision}" != "SKIP" && "${_decision}" != "ERROR" ]]; then
+          (( ++_n_downgrade )) || true
+        fi
       elif [[ "${_decision}" == "AUTO" || "${_decision}" == "HOLD" \
               || "${_decision}" == "MANUAL" || "${_decision}" == "SHA" ]]; then
         (( ++_n_drift_fixable )) || true
@@ -891,6 +933,10 @@ _gs_eu2_main() {
     if [[ "${_GS_EU2_CFG[backup_purge]:-false}" == "true" ]]; then
       printf '[BACKUP-PURGE MODE] existing backups will be deleted before creating new backup\n' >&2
     fi
+  fi
+  # --scan requires --apply to take effect: env-scan only runs after env file is written.
+  if [[ "${_GS_EU2_CFG[scan]:-false}" == "true" && "${_GS_EU2_CFG[apply]:-false}" != "true" ]]; then
+    printf 'WARNING: --scan has no effect without --apply — env-scan runs only after the env file is rewritten\n' >&2
   fi
 
   if [[ "true" == "${_GS_EU2_CFG[dump]}" ]]; then

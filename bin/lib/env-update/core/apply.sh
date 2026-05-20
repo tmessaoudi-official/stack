@@ -107,9 +107,8 @@ _gs_eu2_apply_updates() {
       _new_sha="$(_gs_eu2_record_get "${_i}" proposed_sha)"
       _new_sha_date="$(_gs_eu2_record_get "${_i}" proposed_sha_date)"
       _use_sha="$(_gs_eu2_record_get "${_i}" use_sha)"
-      # Construct new sha token: sha:FULLHASH (YYYY-MM-DD)
       local _new_sha_tok="${_new_sha}"
-      [[ -n "${_new_sha_date}" ]] && _new_sha_tok="${_new_sha} (${_new_sha_date})"
+      # _new_sha_date is available but intentionally omitted — annotation carries sha:HASH only
       # Build old sha token to replace in annotation (match bare or with date)
       local _old_sha_tok="${_ann_sha}"
       _ann_sha_date="$(_gs_eu2_record_get "${_i}" annotation_sha_date)"
@@ -165,11 +164,12 @@ _gs_eu2_apply_updates() {
     _use_sha="$(_gs_eu2_record_get "${_i}" use_sha)"
     [[ -z "${_prop}" || "${_prop}" == "${_cur}" ]] && continue
 
-    # Build sha tokens for annotation rewrite (include date when available)
+    # Build sha tokens for annotation rewrite
+    # old_sha_tok2 preserves date suffix for matching existing annotations that carry dates
     local _old_sha_tok2="${_ann_sha}"
     [[ -n "${_ann_sha_date}" ]] && _old_sha_tok2="${_ann_sha} (${_ann_sha_date})"
     local _new_sha_tok2="${_new_sha}"
-    [[ -n "${_new_sha_date}" ]] && _new_sha_tok2="${_new_sha} (${_new_sha_date})"
+    # _new_sha_date intentionally omitted — annotation carries sha:HASH only (no date)
 
     # sha: annotation also updated when both tokens are present and differ.
     # This is a silent side-effect of the AUTO path — surfaced in the summary as "version+sha".
