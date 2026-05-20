@@ -31,6 +31,8 @@ Options:
                           Use with --dry-run to preview without writing.
   --scan                  After --apply, run bin/env-scan.sh to propagate changes to
                           .env.local and Dockerfiles. Off by default.
+                          When --profile is also active, --profile=true is forwarded
+                          to env-scan so its internal phase timing is also shown.
   --no-cache              Bypass the fetch cache
   --cache-ttl=<seconds>   Cache TTL in seconds (default: 3600)
   --dry-run               No writes (gates cache, .env, and Dockerfile propagation).

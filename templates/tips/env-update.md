@@ -283,6 +283,7 @@ bin/env-update.sh [OPTIONS]
 - `--dump` and `--apply` are mutually exclusive — exit 1 if both are given.
 - `--apply` implies `--check` — no need to specify both; `--apply` alone triggers a check first.
 - `--scan` is a no-op unless `--apply` is also specified and not `--dry-run`.
+- `--scan` + `--profile`: when both are active, `--profile=true` is forwarded to env-scan so its internal phase timing also appears in the output.
 - `--stable=full` and `--unstable=full` are mutually exclusive — exit 1 if both are given (contradictory: cannot force stable and force unstable simultaneously).
 - All other `--stable` / `--unstable` combos are allowed:
   - `--stable=full + --unstable=info` ✓ (force stable decisions, show prerelease sub-line)

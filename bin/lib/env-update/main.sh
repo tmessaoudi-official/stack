@@ -978,6 +978,7 @@ _gs_eu2_main() {
               && _scan_flags+=("--backup-suffix=${_GS_EU2_CFG[backup_suffix]}")
             [[ -n "${_GS_EU2_CFG[backup_keep]:-}" && "${_GS_EU2_CFG[backup_keep]}" != "10" ]] \
               && _scan_flags+=("--backup-keep=${_GS_EU2_CFG[backup_keep]}")
+            [[ "${_GS_EU2_CFG[profile]:-false}" == "true" ]] && _scan_flags+=("--profile=true")
             _gs_eu2_profile_start
             bash "${_env_scan}" "${_scan_flags[@]}" 2>&1 || printf 'WARNING: env-scan failed — .env updated but .env.local and Dockerfiles may be stale. Run bin/env-scan.sh manually.\n' >&2
             _gs_eu2_profile_end "env-scan"

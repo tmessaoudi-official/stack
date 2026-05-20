@@ -7868,6 +7868,25 @@ t "t83e: --apply --scan with missing env-scan → WARNING in stderr, exit still 
     echo PASS
 "
 
+# t83f: --apply --scan --profile → mock env-scan receives --profile=true in its args
+t "t83f: --apply --scan --profile — env-scan receives --profile=true flag" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t83f_cache
+    mkdir -p \"\${TMP_DIR}/t83f_cache\"
+    touch \"\${TMP_DIR}/t83f_cache/last-dry-run-ts\"
+    f=\${TMP_DIR}/t83f.env
+    printf '%s\n' '${_T83_ENV}' > \"\$f\"
+    args_file=\${TMP_DIR}/t83f_args
+    mock=\${TMP_DIR}/t83f_mock_env_scan.sh
+    printf '#!/bin/bash\nprintf \"%%s\n\" \"\$@\" > \"%s\"\nexit 0\n' \"\$args_file\" > \"\$mock\"
+    chmod +x \"\$mock\"
+    export _GS_EU2_ENV_SCAN_PATH=\"\$mock\"
+    bash '${ENV_UPDATE_V2}' --apply --scan --profile --env-file=\"\$f\" >/dev/null 2>&1 || true
+    [[ -f \"\$args_file\" ]] || { echo \"mock env-scan was not invoked\"; echo FAIL; exit 0; }
+    grep -qF -- '--profile=true' \"\$args_file\" || { echo \"--profile=true not in env-scan args: \$(cat \"\$args_file\")\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Section 80 extension — additional backup edge cases (t80g, t80h, t80i)
 # ═══════════════════════════════════════════════════════════════════════════
