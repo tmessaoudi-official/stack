@@ -300,6 +300,9 @@ _gs_es_run_extraction() {
 		[[ "true" = "${_GS_ES_CFG[scan_delete_output]}" && "true" = "${_GS_ES_CFG[cleanup_tmp]}" ]] \
 			&& rm -rf "${_cf}"
 	done
+	# GNU sort supports -u -o with same input/output file; POSIX does not guarantee this.
+	# 2>/dev/null: suppress "unrecognized option" on non-GNU sort.
+	# || true: empty file causes sort to exit 1; treat as no-op.
 	LC_ALL=C sort -u "${_GS_ES_CFG[scan_output_file]}" \
 		-o "${_GS_ES_CFG[scan_output_file]}" 2>/dev/null || true
 }

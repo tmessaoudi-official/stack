@@ -1,5 +1,6 @@
 #!/bin/bash
 # main.sh — orchestration
+set -eEuo pipefail
 
 [[ -n "${_GS_EU2_MAIN_SH_LOADED:-}" ]] && return 0
 readonly _GS_EU2_MAIN_SH_LOADED=1

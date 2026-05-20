@@ -8052,6 +8052,90 @@ t "t85b: --dump --apply — exit 1; stderr contains 'mutually exclusive'" bash -
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
+section "86 — --version flag"
+# ═══════════════════════════════════════════════════════════════════════════
+
+# t86a: --version outputs a semver string (MAJOR.MINOR.PATCH)
+t "t86a: --version outputs semver string" bash -c "
+    out=\$(bash '${ENV_UPDATE_V2}' --version 2>&1)
+    [[ \"\${out}\" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] \
+        || { echo \"expected semver, got: \${out}\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
+section "87 — Rule 8: git-state check before .env overwrite"
+# ═══════════════════════════════════════════════════════════════════════════
+
+# t87a: apply against a tracked+dirty .env → non-zero exit OR warning; file NOT overwritten
+t "t87a: tracked+dirty .env — apply aborts with warning" bash -c "
+    D=\"\${TMP_DIR}/t87a\"; mkdir -p \"\$D\"
+    git -C \"\$D\" init -q
+    git -C \"\$D\" -c user.email=t@t -c user.name=t config user.email t@t
+    git -C \"\$D\" -c user.email=t@t -c user.name=t config user.name t
+    # Create and commit a valid .env with one AUTO annotation
+    printf '# @todo env-update dockerhub:_/alpine 3.19\nGLOBAL_STACK_T87A=3.19\n' > \"\$D/.env\"
+    git -C \"\$D\" add .env
+    git -C \"\$D\" -c user.email=t@t -c user.name=t commit -m init -q
+    # Make an uncommitted change
+    printf '\n# dirty line\n' >> \"\$D/.env\"
+    original_content=\$(cat \"\$D/.env\")
+    # Use offline fixture mode so no real HTTP is needed
+    export _GS_EU2_HTTP_FIXTURE_DIR=\"\${TMP_DIR}/no_fixtures_t87a\"
+    mkdir -p \"\$_GS_EU2_HTTP_FIXTURE_DIR\"
+    # --apply should warn and NOT overwrite the file
+    out=\$(bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$D/.env\" 2>&1 || true)
+    after_content=\$(cat \"\$D/.env\")
+    # File content must be unchanged
+    [[ \"\${original_content}\" == \"\${after_content}\" ]] \
+        || { echo \"file was modified despite dirty state\"; echo FAIL; exit 0; }
+    # Warning must be present
+    echo \"\$out\" | grep -qiE '(uncommitted|WARN|dirty|stash)' \
+        || { echo \"expected uncommitted-changes warning; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t87b: apply against a .env NOT in any git repo → succeeds (no git error)
+t "t87b: .env in non-git directory — apply proceeds without git error" bash -c "
+    D=\"\${TMP_DIR}/t87b\"; mkdir -p \"\$D\"
+    # Deliberately NOT git-init'd
+    printf '# @todo env-update dockerhub:_/alpine 3.19\nGLOBAL_STACK_T87B=3.19\n' > \"\$D/.env\"
+    # Use fixture dir with a response that returns same version (SKIP outcome, no write needed)
+    FDIR=\"\${TMP_DIR}/fixtures_t87b\"; mkdir -p \"\$FDIR\"
+    # Provide a dockerhub tags fixture so the fetch succeeds
+    printf '{\"results\":[{\"name\":\"3.19\"}]}' \
+        > \"\$FDIR/registry.hub.docker.com_v2_repositories___alpine_tags_page_size=100\"
+    export _GS_EU2_HTTP_FIXTURE_DIR=\"\$FDIR\"
+    out=\$(bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$D/.env\" 2>&1)
+    rc=\$?
+    # Should not contain any git-related error
+    echo \"\$out\" | grep -qiE '(not a git repo|git error|fatal:.*git)' \
+        && { echo \"unexpected git error: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t87c: apply against a tracked+clean .env → proceeds normally (no false-positive block)
+t "t87c: tracked+clean .env — apply is not blocked" bash -c "
+    D=\"\${TMP_DIR}/t87c\"; mkdir -p \"\$D\"
+    git -C \"\$D\" init -q
+    git -C \"\$D\" config user.email t@t
+    git -C \"\$D\" config user.name t
+    printf '# @todo env-update dockerhub:_/alpine 3.19\nGLOBAL_STACK_T87C=3.19\n' > \"\$D/.env\"
+    git -C \"\$D\" add .env
+    git -C \"\$D\" -c user.email=t@t -c user.name=t commit -m init -q
+    # File is clean; use a fixture that returns same version → SKIP (no actual write)
+    FDIR=\"\${TMP_DIR}/fixtures_t87c\"; mkdir -p \"\$FDIR\"
+    printf '{\"results\":[{\"name\":\"3.19\"}]}' \
+        > \"\$FDIR/registry.hub.docker.com_v2_repositories___alpine_tags_page_size=100\"
+    export _GS_EU2_HTTP_FIXTURE_DIR=\"\$FDIR\"
+    out=\$(bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$D/.env\" 2>&1)
+    # Must NOT contain the dirty-file warning
+    echo \"\$out\" | grep -qiE '(uncommitted|stash)' \
+        && { echo \"false-positive block on clean file: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section

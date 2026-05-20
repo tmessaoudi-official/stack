@@ -6,6 +6,8 @@ readonly _GS_EU2_APPLY_SH_LOADED=1
 
 # shellcheck source=./records.sh
 source "$(dirname "${BASH_SOURCE[0]}")/records.sh"
+# shellcheck source=./git.sh
+source "$(dirname "${BASH_SOURCE[0]}")/git.sh"
 
 # Rewrite a VAR=value line and its @todo annotation comment in one awk pass (atomic via tmp+mv).
 # $4 = raw_annotation (exact comment line to match); $5 = current version token to replace.
@@ -66,6 +68,21 @@ _gs_eu2_apply_single() {
 # Args: $1 = env_file, $2 = dry_run ("true" → no writes)
 _gs_eu2_apply_updates() {
   local _env_file="${1}" _dry_run="${2:-false}"
+
+  # Rule 8: guard against overwriting a tracked file with uncommitted changes.
+  # Skip in dry-run mode — no writes occur so the check is noise.
+  if [[ "${_dry_run}" != "true" ]]; then
+    if ! _gs_eu2_check_tracked_file_state "${_env_file}"; then
+      # Warning already emitted by the helper.
+      if [[ "${_GS_EU2_CFG[no_fail]:-false}" == "true" ]]; then
+        printf '[SKIP] env-update apply: skipping %s due to uncommitted changes (--no-fail active)\n' \
+          "${_env_file}" >&2
+        return 0
+      fi
+      return 1
+    fi
+  fi
+
   local _count; _count="$(_gs_eu2_record_count)"
   # Four non-overlapping counters — sum to the reported total:
   #   version-only : AUTO records where only VAR= (and annotation version) changed

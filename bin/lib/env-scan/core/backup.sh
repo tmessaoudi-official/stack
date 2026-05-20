@@ -21,7 +21,7 @@ _gs_es_backup_unconditional() {
   local _dest="${_file}${_suffix}.${_ts}"
 
   if [[ "${_dry_run}" == "true" ]]; then
-    [[ "${_quiet}" == "true" ]] || echo " [backup] (dry-run) would back up ${_file} → ${_dest}"
+    [[ "${_quiet}" == "true" ]] || echo " [backup] (dry-run) would back up ${_file} → ${_dest}" >&2
     return 0
   fi
 
@@ -30,7 +30,7 @@ _gs_es_backup_unconditional() {
     printf 'env-scan: backup failed for %s → %s (disk full?)\n' "${_file}" "${_dest}" >&2
     return 1
   fi
-  [[ "${_quiet}" == "true" ]] || echo " [backup] ${_file} → ${_dest}"
+  [[ "${_quiet}" == "true" ]] || echo " [backup] ${_file} → ${_dest}" >&2
 }
 
 # ── _gs_es_backup_if_gitignored ──────────────────────────────────────────────
@@ -46,7 +46,7 @@ _gs_es_backup_if_gitignored() {
   local _quiet="${6:-false}"
 
   if ! git -C "${_dir}" rev-parse --git-dir >/dev/null 2>&1; then
-    [[ "${_quiet}" == "true" ]] || echo " [backup] warning: ${_dir} is not a git repo — skipping Dockerfile backup"
+    [[ "${_quiet}" == "true" ]] || echo " [backup] warning: ${_dir} is not a git repo — skipping Dockerfile backup" >&2
     return 0
   fi
 
@@ -65,7 +65,7 @@ _gs_es_backup_prune() {
   local _keep="${3}"
   local _quiet="${4:-false}"
 
-  [[ "${_keep}" -eq 0 ]] 2>/dev/null && return 0
+  [[ "${_keep}" -eq 0 ]] && return 0
 
   local -a _baks
   while IFS= read -r -d '' _b; do
@@ -81,7 +81,7 @@ _gs_es_backup_prune() {
   local _remove=$((_total - _keep))
   local _i
   for ((_i = 0; _i < _remove; _i++)); do
-    [[ "${_quiet}" == "true" ]] || echo " [backup] pruning old backup: ${_baks[${_i}]}"
+    [[ "${_quiet}" == "true" ]] || echo " [backup] pruning old backup: ${_baks[${_i}]}" >&2
     rm -f -- "${_baks[${_i}]}"
   done
 }
@@ -100,7 +100,7 @@ _gs_es_backup_purge_all() {
   local _f
   for _f in ${_files_list//[\"\'\`]/}; do
     while IFS= read -r -d '' _b; do
-      [[ "${_quiet}" == "true" ]] || echo " [backup] purging: ${_b}"
+      [[ "${_quiet}" == "true" ]] || echo " [backup] purging: ${_b}" >&2
       rm -f -- "${_b}"
     done < <(find "$(dirname "${_f}")" -maxdepth 1 \
       -name "$(basename "${_f}")${_suffix}.*" -print0 2>/dev/null)
@@ -111,7 +111,7 @@ _gs_es_backup_purge_all() {
     while IFS= read -r _dockerfile; do
       if git -C "${_dir}" check-ignore -q "${_dockerfile}" 2>/dev/null; then
         while IFS= read -r -d '' _b; do
-          [[ "${_quiet}" == "true" ]] || echo " [backup] purging: ${_b}"
+          [[ "${_quiet}" == "true" ]] || echo " [backup] purging: ${_b}" >&2
           rm -f -- "${_b}"
         done < <(find "$(dirname "${_dockerfile}")" -maxdepth 1 \
           -name "$(basename "${_dockerfile}")${_suffix}.*" -print0 2>/dev/null)

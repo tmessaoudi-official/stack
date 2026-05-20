@@ -1990,6 +1990,133 @@ t "t33d: symlink source resolving to same file as dest — hard stop via realpat
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
+section "20. Rule 8: git-state check before Dockerfile overwrite"
+# ═══════════════════════════════════════════════════════════════════════════
+
+# t20a: tracked+dirty Dockerfile → propagation skips that file, warns on stderr
+t "t20a: tracked+dirty Dockerfile — propagation skipped with warning" bash -c "
+    D='${TMP_DIR}/t20a'; mkdir -p \"\$D/docker/images/svc\"
+    git -C \"\$D\" init -q
+    git -C \"\$D\" config user.email t@t
+    git -C \"\$D\" config user.name t
+    printf 'GLOBAL_STACK_T20A=1.0\n' > \"\$D/.env\"
+    cp \"\$D/.env\" \"\$D/.env.local\"
+    printf 'ARG GLOBAL_STACK_T20A=0.9\n' > \"\$D/docker/images/svc/Dockerfile\"
+    git -C \"\$D\" add .
+    git -C \"\$D\" -c user.email=t@t -c user.name=t commit -m init -q
+    # Make an uncommitted change to the Dockerfile
+    printf '# dirty\n' >> \"\$D/docker/images/svc/Dockerfile\"
+    df_before=\$(cat \"\$D/docker/images/svc/Dockerfile\")
+    err=\$(bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=false \
+        --check-missing=false --show-added-entries=false --show-different-entries=false \
+        --backup=false 2>&1 || true)
+    df_after=\$(cat \"\$D/docker/images/svc/Dockerfile\")
+    # Dockerfile must not have been modified
+    [[ \"\${df_before}\" == \"\${df_after}\" ]] \
+        || { echo \"Dockerfile was modified despite dirty state\"; echo FAIL; exit 0; }
+    # Warning must appear on combined output (stderr captured via 2>&1)
+    echo \"\${err}\" | grep -qiE '(uncommitted|WARN|stash)' \
+        || { echo \"expected uncommitted-changes warning; got: \${err}\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t20b: Dockerfile NOT in any git repo → propagation proceeds normally
+t "t20b: Dockerfile in non-git directory — propagation proceeds" bash -c "
+    D='${TMP_DIR}/t20b'; mkdir -p \"\$D/docker/images/svc\"
+    # NOT git-init'd
+    printf 'GLOBAL_STACK_T20B=1.0\n' > \"\$D/.env\"
+    cp \"\$D/.env\" \"\$D/.env.local\"
+    printf 'ARG GLOBAL_STACK_T20B=0.9\n' > \"\$D/docker/images/svc/Dockerfile\"
+    bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=false \
+        --check-missing=false --show-added-entries=false --show-different-entries=false \
+        --backup=false 2>&1 >/dev/null
+    df_after=\$(cat \"\$D/docker/images/svc/Dockerfile\")
+    echo \"\${df_after}\" | grep -qF '1.0' \
+        || { echo \"expected propagated value 1.0; got: \${df_after}\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t20c: tracked+clean Dockerfile → propagation proceeds (no false-positive block)
+t "t20c: tracked+clean Dockerfile — propagation is not blocked" bash -c "
+    D='${TMP_DIR}/t20c'; mkdir -p \"\$D/docker/images/svc\"
+    git -C \"\$D\" init -q
+    git -C \"\$D\" config user.email t@t
+    git -C \"\$D\" config user.name t
+    printf 'GLOBAL_STACK_T20C=1.0\n' > \"\$D/.env\"
+    cp \"\$D/.env\" \"\$D/.env.local\"
+    printf 'ARG GLOBAL_STACK_T20C=0.9\n' > \"\$D/docker/images/svc/Dockerfile\"
+    git -C \"\$D\" add .
+    git -C \"\$D\" -c user.email=t@t -c user.name=t commit -m init -q
+    # Dockerfile is clean; env says 1.0, Dockerfile says 0.9 → should propagate
+    bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=false \
+        --check-missing=false --show-added-entries=false --show-different-entries=false \
+        --backup=false 2>&1 >/dev/null
+    df_after=\$(cat \"\$D/docker/images/svc/Dockerfile\")
+    echo \"\${df_after}\" | grep -qF '1.0' \
+        || { echo \"expected propagated value 1.0; got: \${df_after}\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
+section "21. Smoke tests — untested flags"
+# ═══════════════════════════════════════════════════════════════════════════
+
+# t21a: --debug=true — flag accepted, no error on minimal input
+t "t21a: --debug=true accepted without error" bash -c "
+    D='${TMP_DIR}/t21a'; mkdir -p \"\$D\"
+    printf 'GLOBAL_STACK_T21A=1\n' > \"\$D/.env\"
+    cp \"\$D/.env\" \"\$D/.env.local\"
+    bash '${ENV_SCAN}' --dir=\"\$D\" --debug=true --scan-sources=false \
+        --check-missing=false --show-added-entries=false --show-different-entries=false \
+        --backup=false 2>&1 >/dev/null
+    echo PASS
+"
+
+# t21b: --debug-show-extracted-files=true — flag accepted, no error
+t "t21b: --debug-show-extracted-files=true accepted without error" bash -c "
+    D='${TMP_DIR}/t21b'; mkdir -p \"\$D\"
+    printf 'GLOBAL_STACK_T21B=1\n' > \"\$D/.env\"
+    cp \"\$D/.env\" \"\$D/.env.local\"
+    bash '${ENV_SCAN}' --dir=\"\$D\" --debug-show-extracted-files=true --scan-sources=false \
+        --check-missing=false --show-added-entries=false --show-different-entries=false \
+        --backup=false 2>&1 >/dev/null
+    echo PASS
+"
+
+# t21c: --scan-output-file — file is created at the specified path
+# Note: --scan-delete-output=false is required to preserve the file after the run
+# (default scan_delete_output=true removes it during Phase 7 cleanup).
+t "t21c: --scan-output-file creates file at specified path" bash -c "
+    D='${TMP_DIR}/t21c'; mkdir -p \"\$D/docker/images/svc\"
+    printf 'GLOBAL_STACK_T21C=1\n' > \"\$D/.env\"
+    cp \"\$D/.env\" \"\$D/.env.local\"
+    # Provide a Dockerfile so the scan phase has something to extract
+    printf 'ARG GLOBAL_STACK_T21C=1\nARG GLOBAL_STACK_OTHER=abc\n' > \"\$D/docker/images/svc/Dockerfile\"
+    out_file='${TMP_DIR}/gs_t21c_scan_out.txt'
+    rm -f \"\${out_file}\"
+    bash '${ENV_SCAN}' --dir=\"\$D\" \
+        --scan-sources=true \
+        --scan-delete-output=false \
+        --scan-output-file=\"\${out_file}\" \
+        --check-missing=false --show-added-entries=false --show-different-entries=false \
+        --backup=false 2>&1 >/dev/null
+    [[ -f \"\${out_file}\" ]] \
+        || { echo \"scan-output-file not created at: \${out_file}\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t21d: --destination-file-tmp-suffix — flag accepted, no error
+t "t21d: --destination-file-tmp-suffix accepted without error" bash -c "
+    D='${TMP_DIR}/t21d'; mkdir -p \"\$D\"
+    printf 'GLOBAL_STACK_T21D=1\n' > \"\$D/.env\"
+    cp \"\$D/.env\" \"\$D/.env.local\"
+    bash '${ENV_SCAN}' --dir=\"\$D\" --destination-file-tmp-suffix=.tmptmp --scan-sources=false \
+        --check-missing=false --show-added-entries=false --show-different-entries=false \
+        --backup=false 2>&1 >/dev/null
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section

@@ -70,8 +70,9 @@ _gs_eu2_http_get() {
   #   because curl does not retry 429 by default (it only retries on connection
   #   errors and transient HTTP 5xx per --retry-all-errors).
   # Together: up to 3*3 = 9 curl attempts, with outer back-off on 429 only.
-  local _body_tmp
+  local _body_tmp _curl_stderr_file
   _body_tmp="$(mktemp)"
+  _curl_stderr_file="$(mktemp)"
   local _attempt _http_status _curl_exit
   for _attempt in 1 2 3; do
     _http_status="$(curl --silent --max-time 15 --connect-timeout 5 --location \
@@ -79,7 +80,7 @@ _gs_eu2_http_get() {
       -H "User-Agent: global-stack-env-update/2.0.0" \
       -w "%{http_code}" \
       -o "${_body_tmp}" \
-      "${_url}" 2>/dev/null)"
+      "${_url}" 2>"${_curl_stderr_file}")"
     _curl_exit=$?
     [[ "${_http_status}" != "429" ]] && break
     [[ $_attempt -lt 3 ]] && {
@@ -90,18 +91,22 @@ _gs_eu2_http_get() {
 
   if [[ "${_http_status}" == "429" ]]; then
     printf 'env-update: rate-limited by %s after 3 attempts — try again later\n' "${_url}" >&2
-    rm -f "${_body_tmp}"
+    rm -f "${_body_tmp}" "${_curl_stderr_file}"
     return 1
   fi
 
-  if [[ "${_curl_exit}" -ne 0 || "${_http_status}" -ge 400 ]] 2>/dev/null; then
-    rm -f "${_body_tmp}"
+  local _http_status_safe="${_http_status:-0}"
+  if [[ "${_curl_exit}" -ne 0 || "${_http_status_safe}" -ge 400 ]]; then
+    local _curl_detail
+    _curl_detail="$(head -3 "${_curl_stderr_file}" 2>/dev/null || true)"
+    [[ -n "${_curl_detail}" ]] && printf 'env-update: curl failed: %s\n' "${_curl_detail}" >&2
+    rm -f "${_body_tmp}" "${_curl_stderr_file}"
     return 1
   fi
 
   local _resp_body
   _resp_body="$(cat "${_body_tmp}")"
-  rm -f "${_body_tmp}"
+  rm -f "${_body_tmp}" "${_curl_stderr_file}"
   # Store in memo for this session (process lifetime only — not persisted to TTL cache).
   _GS_EU2_HTTP_MEMO["${_url}"]="${_resp_body}"
   printf '%s' "${_resp_body}"
@@ -140,8 +145,9 @@ _gs_eu2_http_get_auth() {
   fi
 
   # Same two-level retry strategy as _gs_eu2_http_get (see above).
-  local _body_tmp
+  local _body_tmp _curl_stderr_file
   _body_tmp="$(mktemp)"
+  _curl_stderr_file="$(mktemp)"
   local _attempt _http_status _curl_exit
   for _attempt in 1 2 3; do
     _http_status="$(curl --silent --max-time 15 --connect-timeout 5 --location \
@@ -150,7 +156,7 @@ _gs_eu2_http_get_auth() {
       -H "Authorization: Bearer ${_token}" \
       -w "%{http_code}" \
       -o "${_body_tmp}" \
-      "${_url}" 2>/dev/null)"
+      "${_url}" 2>"${_curl_stderr_file}")"
     _curl_exit=$?
     [[ "${_http_status}" != "429" ]] && break
     [[ $_attempt -lt 3 ]] && {
@@ -161,18 +167,22 @@ _gs_eu2_http_get_auth() {
 
   if [[ "${_http_status}" == "429" ]]; then
     printf 'env-update: rate-limited by %s after 3 attempts — try again later\n' "${_url}" >&2
-    rm -f "${_body_tmp}"
+    rm -f "${_body_tmp}" "${_curl_stderr_file}"
     return 1
   fi
 
-  if [[ "${_curl_exit}" -ne 0 || "${_http_status}" -ge 400 ]] 2>/dev/null; then
-    rm -f "${_body_tmp}"
+  local _http_status_safe="${_http_status:-0}"
+  if [[ "${_curl_exit}" -ne 0 || "${_http_status_safe}" -ge 400 ]]; then
+    local _curl_detail
+    _curl_detail="$(head -3 "${_curl_stderr_file}" 2>/dev/null || true)"
+    [[ -n "${_curl_detail}" ]] && printf 'env-update: curl failed: %s\n' "${_curl_detail}" >&2
+    rm -f "${_body_tmp}" "${_curl_stderr_file}"
     return 1
   fi
 
   local _auth_resp_body
   _auth_resp_body="$(cat "${_body_tmp}")"
-  rm -f "${_body_tmp}"
+  rm -f "${_body_tmp}" "${_curl_stderr_file}"
   # Store in memo for this session (process lifetime only — not persisted to TTL cache).
   _GS_EU2_HTTP_MEMO["${_url}"]="${_auth_resp_body}"
   printf '%s' "${_auth_resp_body}"

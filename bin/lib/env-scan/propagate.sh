@@ -18,6 +18,8 @@ readonly _GS_ES_PROPAGATE_SH_LOADED=1
 
 # shellcheck source=./core/backup.sh
 source "$(dirname "${BASH_SOURCE[0]}")/core/backup.sh"
+# shellcheck source=./core/git.sh
+source "$(dirname "${BASH_SOURCE[0]}")/core/git.sh"
 
 # ── gs_es_propagate_to_dockerfiles ───────────────────────────────────────────
 # Args:
@@ -87,6 +89,14 @@ gs_es_propagate_to_dockerfiles() {
     local _file_changed=0
     local _file_values=0
     local _file_backed_up=0
+
+    # Rule 8: skip in dry-run (no writes) and skip dirty tracked Dockerfiles.
+    if [[ "${dry_run}" != "true" ]]; then
+      if ! _gs_es_check_tracked_file_state "${_dockerfile}"; then
+        printf ' [propagate] [SKIP] %s — uncommitted changes, skipping\n' "${_dockerfile}" >&2
+        continue
+      fi
+    fi
 
     while IFS= read -r _arg_line; do
       # Match lines of the form: ARG VAR=value
