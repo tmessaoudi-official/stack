@@ -264,6 +264,7 @@ _gs_es_run_extraction() {
 	if [[ -f "${_GS_ES_CFG[scan_path]}" ]]; then
 		gs_es_search_and_extract "${_GS_ES_CFG[scan_path]}" 0
 	elif [[ -d "${_GS_ES_CFG[scan_path]}" ]]; then
+		local _file
 		local count=0
 		local -a pids=()
 
@@ -279,10 +280,10 @@ _gs_es_run_extraction() {
 		for pid in "${pids[@]}"; do
 			wait "${pid}" || (( ++failed ))
 		done
-		[[ "${failed}" -eq 0 ]] || { echo "gs_es_search_and_extract: ${failed} background job(s) failed" >&2; exit 1; }
+		[[ "${failed}" -eq 0 ]] || { printf 'gs_es_search_and_extract: %d background job(s) failed\n' "${failed}" >&2; return 1; }
 	else
 		printf '\n ---- (gs_es_main): %s is neither a file nor a directory, exiting !\n\n\n' "${_GS_ES_CFG[scan_path]}" >&2
-		exit 1
+		return 1
 	fi
 
 	# Merge all per-file outputs into the final output file (parallel jobs each

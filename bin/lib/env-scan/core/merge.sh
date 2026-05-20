@@ -28,6 +28,7 @@ gs_es_process_file() {
 	local dest_file="${2}"
 	local count="${3}"
 	local dry_run="${4:-false}"
+	local _line
 
 	local tmp_file
 	tmp_file="${dest_file}${_GS_ES_CFG[destination_file_tmp_suffix]}.${count}"

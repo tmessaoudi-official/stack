@@ -58,7 +58,8 @@ _gs_eu2_apply_single() {
       print var "=" val; next
     }
     { print }
-  ' "${_file}" > "${_tmp}" && mv "${_tmp}" "${_file}"
+  ' "${_file}" > "${_tmp}" || { rm -f "${_tmp}"; return 1; }
+  mv "${_tmp}" "${_file}" || { rm -f "${_tmp}"; return 1; }
 }
 
 # Apply all AUTO decisions from records to the env file.

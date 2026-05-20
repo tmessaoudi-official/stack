@@ -259,8 +259,9 @@ _gs_eu2_fetch_github() {
   # _releases_out directly) operates on already-stripped data.
   local _orig_tags="${_raw_tags}"
   if [[ -n "${_tcp}" ]]; then
-    _raw_tags="$(printf '%s\n' "${_raw_tags}" | sed "s/^${_tcp}//")"
-    _releases_out="$(printf '%s\n' "${_releases_out}" | sed "s/^${_tcp}//")"
+    local _tcp_esc; _tcp_esc="$(printf '%s' "${_tcp}" | sed 's/[/&]/\\&/g')"
+    _raw_tags="$(printf '%s\n' "${_raw_tags}" | sed "s/^${_tcp_esc}//")"
+    _releases_out="$(printf '%s\n' "${_releases_out}" | sed "s/^${_tcp_esc}//")"
   fi
 
   # ── Apply tag_flags pipeline ───────────────────────────────────────────────
@@ -409,8 +410,10 @@ _gs_eu2_fetch_github() {
         if [[ -n "$(printf '%s\n' "${_gap_raw}" | grep -v '^$' || true)" ]]; then
           # Strip _tcp from gap raw tags before merging with already-stripped _releases_out
           local _gap_raw_stripped="${_gap_raw}"
-          [[ -n "${_tcp}" ]] && \
-            _gap_raw_stripped="$(printf '%s\n' "${_gap_raw}" | sed "s/^${_tcp}//")"
+          if [[ -n "${_tcp}" ]]; then
+            local _tcp_esc2; _tcp_esc2="$(printf '%s' "${_tcp}" | sed 's/[/&]/\\&/g')"
+            _gap_raw_stripped="$(printf '%s\n' "${_gap_raw}" | sed "s/^${_tcp_esc2}//")"
+          fi
           local _merged_raw="${_releases_out}"$'\n'"${_gap_raw_stripped}"
           local _merged_filtered
           _merged_filtered="$(printf '%s\n' "${_merged_raw}" | _gs_eu2_apply_tag_flags_from_record "${_idx}")"

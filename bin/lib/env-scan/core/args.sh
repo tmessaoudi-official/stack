@@ -109,7 +109,9 @@ gs_es_parse_args() {
 		if [[ -z "${_GS_ES_CFG[${_key}]+set}" ]]; then
 			_GS_ES_CFG[${_key}]="${_bool_defaults[${_key}]}"
 		elif [[ "true" != "${_GS_ES_CFG[${_key}]}" && "false" != "${_GS_ES_CFG[${_key}]}" ]]; then
-			_GS_ES_CFG[${_key}]="${_bool_defaults[${_key}]}"
+			printf 'env-scan: invalid value for --%s: %s (expected true or false)\n' \
+				"${_key//_/-}" "${_GS_ES_CFG[${_key}]}" >&2
+			exit 1
 		fi
 	done
 

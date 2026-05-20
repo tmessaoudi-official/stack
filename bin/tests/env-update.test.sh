@@ -7712,6 +7712,41 @@ t "t81d: --annotations — exits without requiring an env file" bash -c "
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
+# 82 — decide.sh: v-prefix + major_hint regression
+# ═══════════════════════════════════════════════════════════════════════════
+section "82 — decide.sh: v-prefix + major_hint regression"
+
+_DC_LIBS82="
+source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update/core/semver.sh'
+source '/stack/bin/lib/env-update/core/decide.sh'
+"
+
+# t82a: v-prefixed proposed within same major → should be AUTO not HOLD
+t "t82a: v-prefixed proposed + major_hint within same major → AUTO" bash -c "
+    ${_DC_LIBS82}
+    result=\$(_gs_eu2_classify_decision '17.5' 'v17.6' '' '' '17')
+    [[ \"\$result\" == 'AUTO' ]] || { echo \"got: \$result (expected AUTO)\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t82b: v-prefixed proposed with different major → should be HOLD
+t "t82b: v-prefixed proposed + major_hint different major → HOLD" bash -c "
+    ${_DC_LIBS82}
+    result=\$(_gs_eu2_classify_decision '17.5' 'v18.0' '' '' '17')
+    [[ \"\$result\" == 'HOLD' ]] || { echo \"got: \$result (expected HOLD)\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t82c: no v-prefix (baseline) — must remain AUTO
+t "t82c: no v-prefix + major_hint within same major → AUTO (baseline)" bash -c "
+    ${_DC_LIBS82}
+    result=\$(_gs_eu2_classify_decision '17.5' '17.6' '' '' '17')
+    [[ \"\$result\" == 'AUTO' ]] || { echo \"got: \$result (expected AUTO)\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section

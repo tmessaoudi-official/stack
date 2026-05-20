@@ -36,12 +36,12 @@ gs_es_propagate_to_dockerfiles() {
   local dry_run="${4}"
 
   if [[ ! -f "${env_file}" ]]; then
-    echo " ---- (gs_es_propagate_to_dockerfiles): env file not found: ${env_file}" >&2
+    printf ' ---- (gs_es_propagate_to_dockerfiles): env file not found: %s\n' "${env_file}" >&2
     return 1
   fi
 
   if [[ ! -d "${docker_search_root}" ]]; then
-    echo " ---- (gs_es_propagate_to_dockerfiles): docker search root not found: ${docker_search_root} (skipping)" >&2
+    printf ' ---- (gs_es_propagate_to_dockerfiles): docker search root not found: %s (skipping)\n' "${docker_search_root}" >&2
     return 0
   fi
 
@@ -77,7 +77,7 @@ gs_es_propagate_to_dockerfiles() {
   # ── Walk all Dockerfiles under docker_search_root ────────────────────────
   local _total_values=0
   local _total_files=0
-  local _dockerfile _arg_line _df_var _df_val _env_val _new_line
+  local _dockerfile _arg_line _df_var _df_val _env_val
   local _backup_enabled="${_GS_ES_CFG[backup]:-true}"
   local _backup_suffix="${_GS_ES_CFG[backup_suffix]:-.bak}"
   local _backup_ts="${_GS_ES_CFG[_backup_ts]:-}"
@@ -99,7 +99,7 @@ gs_es_propagate_to_dockerfiles() {
           _env_val="${_prop_env_map[${_df_var}]}"
 
           if [[ "${_df_val}" != "${_env_val}" ]]; then
-            echo " [propagate] ${_dockerfile}: ${_df_var}: '${_df_val}' → '${_env_val}'"
+            printf ' [propagate] %s: %s: '\''%s'\'' → '\''%s'\''\n' "${_dockerfile}" "${_df_var}" "${_df_val}" "${_env_val}"
             if [[ "${dry_run}" != "true" ]]; then
               # Back up gitignored Dockerfile once before first rewrite
               if [[ "${_file_backed_up}" -eq 0 && "${_backup_enabled}" == "true" && -n "${_backup_ts}" ]]; then
@@ -142,8 +142,8 @@ gs_es_propagate_to_dockerfiles() {
   done < <(find "${docker_search_root}" -type f -name "Dockerfile*" 2>/dev/null | LC_ALL=C sort)
 
   if [[ "${dry_run}" == "true" ]]; then
-    echo " [propagate] (dry-run) would propagate ${_total_values} value(s) across ${_total_files} file(s)"
+    printf ' [propagate] (dry-run) would propagate %d value(s) across %d file(s)\n' "${_total_values}" "${_total_files}"
   else
-    echo " [propagate] propagated ${_total_values} value(s) across ${_total_files} file(s)"
+    printf ' [propagate] propagated %d value(s) across %d file(s)\n' "${_total_values}" "${_total_files}"
   fi
 }

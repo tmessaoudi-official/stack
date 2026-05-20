@@ -33,7 +33,7 @@ Options:
                                              Scope: only suppresses return 1 from Phase 6 propagation. Infrastructure errors
                                              (mktemp failure), backup failures, and usage errors remain fatal.
                                              When suppressed a stderr notice is printed:
-                                             "[NO-FAIL] scan error present — exit code forced to 0"
+                                             "[NO-FAIL] Phase 6 propagation error suppressed — exit code forced to 0"
   --scan-var-prefix=<value>                  Prefix pattern for environment variable extraction (default: "(GLOBAL_STACK_)")
   --diff-ignore-pattern=<value>              Pattern to suppress from "different value" warnings (default: predefined regex)
   --scan-var-ignore-pattern=<value>          Pattern to suppress VARIABLE NAMES (not file paths) from scan extraction (default: predefined regex)

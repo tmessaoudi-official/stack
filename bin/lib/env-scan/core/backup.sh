@@ -99,7 +99,6 @@ _gs_es_backup_purge_all() {
 
   local _f
   for _f in ${_files_list//[\"\'\`]/}; do
-    local _pat
     while IFS= read -r -d '' _b; do
       [[ "${_quiet}" == "true" ]] || echo " [backup] purging: ${_b}"
       rm -f -- "${_b}"

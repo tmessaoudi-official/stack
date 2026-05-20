@@ -33,7 +33,7 @@ gs_es_main() {
 
 	# Mode banners — always printed to stderr regardless of --quiet
 	[[ "${_GS_ES_CFG[dry_run]:-false}" == "true" ]] && printf '[DRY-RUN MODE] no files will be written\n' >&2
-	[[ "${_GS_ES_CFG[no_fail]:-false}" == "true" ]] && printf '[NO-FAIL MODE] scan errors will not abort — exit code forced to 0\n' >&2
+	[[ "${_GS_ES_CFG[no_fail]:-false}" == "true" ]] && printf '[NO-FAIL MODE] Phase 6 propagation errors will not abort — exit code forced to 0\n' >&2
 	[[ "${_GS_ES_CFG[sync_values]:-true}" == "false" ]] && printf '[SYNC-VALUES=OFF MODE] destination values will not be overwritten\n' >&2
 	[[ "${_GS_ES_CFG[backup]:-true}" == "false" ]] && printf '[NO-BACKUP MODE] backup step skipped\n' >&2
 	[[ "${_GS_ES_CFG[backup_purge]:-false}" == "true" ]] && printf '[BACKUP-PURGE MODE] all existing backups will be deleted before run\n' >&2
@@ -138,7 +138,7 @@ gs_es_main() {
 		"${_GS_ES_CFG[dry_run]}" || _propagate_rc=$?
 	if [[ "${_propagate_rc}" -ne 0 ]]; then
 		if [[ "${_GS_ES_CFG[no_fail]:-false}" == "true" ]]; then
-			printf '[NO-FAIL] scan error present — exit code forced to 0\n' >&2
+			printf '[NO-FAIL] Phase 6 propagation error suppressed — exit code forced to 0\n' >&2
 		else
 			return "${_propagate_rc}"
 		fi

@@ -87,7 +87,7 @@ _gs_eu2_classify_decision() {
 
   # C3: Major jump with pin but proposed escapes the pin → HOLD
   # Use ([.^_-]|$) anchor to prevent "18" matching "180.x"; _ for Ruby-style tags.
-  if [[ -n "${_major_hint}" && ! "${_prop}" =~ ^${_major_hint}([.^_-]|$) ]]; then
+  if [[ -n "${_major_hint}" && ! "${_pv}" =~ ^${_major_hint}([.^_-]|$) ]]; then
     echo "HOLD"; return 0
   fi
 
