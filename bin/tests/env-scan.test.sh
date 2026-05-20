@@ -332,9 +332,11 @@ t "multiple source files: no crash" bash -c "
     printf 'GLOBAL_STACK_A=1\n' > \"\$D/a.env\"
     printf 'GLOBAL_STACK_B=2\n' > \"\$D/b.env\"
     printf 'GLOBAL_STACK_A=1\nGLOBAL_STACK_B=2\n' > \"\$D/.env.local\"
-    bash '${ENV_SCAN}' --dir=\"\$D\" \
+    bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=false --no-fail \
         --source-files=\"\$D/a.env \$D/b.env\" --destination-files=\"\$D/.env.local\" \
         --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
+    rc=\$?
+    [[ \"\$rc\" -eq 0 ]] || { echo \"expected rc=0, got \$rc\"; echo FAIL; exit 0; }
     echo PASS
 "
 
@@ -362,9 +364,11 @@ t "same key with different values across source files: no crash" bash -c "
     printf 'GLOBAL_STACK_FOO=1.0\n' > \"\$D/a.env\"
     printf 'GLOBAL_STACK_FOO=2.0\n' > \"\$D/b.env\"
     printf 'GLOBAL_STACK_FOO=1.0\n' > \"\$D/.env.local\"
-    bash '${ENV_SCAN}' --dir=\"\$D\" \
+    bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=false --no-fail \
         --source-files=\"\$D/a.env \$D/b.env\" --destination-files=\"\$D/.env.local\" \
         --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
+    rc=\$?
+    [[ \"\$rc\" -eq 0 ]] || { echo \"expected rc=0, got \$rc\"; echo FAIL; exit 0; }
     echo PASS
 "
 
@@ -373,10 +377,12 @@ t "exclude-implicit-empty=true: empty default not flagged as conflict" bash -c "
     printf 'GLOBAL_STACK_OPT=\n'          > \"\$D/a.env\"
     printf 'GLOBAL_STACK_OPT=real_value\n' > \"\$D/b.env\"
     printf 'GLOBAL_STACK_OPT=real_value\n' > \"\$D/.env.local\"
-    bash '${ENV_SCAN}' --dir=\"\$D\" \
+    bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=false --no-fail \
         --source-files=\"\$D/a.env \$D/b.env\" --destination-files=\"\$D/.env.local\" \
         --exclude-implicit-empty=true \
         --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
+    rc=\$?
+    [[ \"\$rc\" -eq 0 ]] || { echo \"expected rc=0, got \$rc\"; echo FAIL; exit 0; }
     echo PASS
 "
 
@@ -407,12 +413,17 @@ t "cleanup-tmp=true: no .tmp or .merged files left in dst dir" bash -c "
     ls \"\$D\" | grep -E '\\.tmp|\\.merged' && echo FAIL || echo PASS
 "
 
-t "cleanup-tmp=false: .tmp file remains after run" bash -c "
+t "cleanup-tmp=false: exits 0 (tmp_file is never written so no observable delta)" bash -c "
+    # Note: merge.sh declares tmp_file but never writes it — only merged_file is written then mv'd.
+    # --cleanup-tmp=false therefore has no observable filesystem effect in this fixture.
+    # This test verifies the flag is accepted without error (rc==0).
     D='${TMP_DIR}/t9b'; mkdir -p \"\$D\"
     printf 'GLOBAL_STACK_A=1\n' > \"\$D/.env\"; cp \"\$D/.env\" \"\$D/.env.local\"
-    bash '${ENV_SCAN}' --dir=\"\$D\" --cleanup-tmp=false \
+    bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=false --cleanup-tmp=false \
         --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
-    ls \"\$D\" | grep -qE '\\.tmp' && echo PASS || echo PASS  # .tmp may or may not exist depending on flow
+    rc=\$?
+    [[ \"\$rc\" -eq 0 ]] || { echo \"expected rc=0, got \$rc\"; echo FAIL; exit 0; }
+    echo PASS
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -463,38 +474,46 @@ t "quoted value with spaces preserved" bash -c "
     grep -q 'GLOBAL_STACK_MSG=' \"\$D/.env.local\" && echo PASS || echo FAIL
 "
 
-t "duplicate keys in source: no crash" bash -c "
+t "duplicate keys in source: exits 0" bash -c "
     D='${TMP_DIR}/t11c'; mkdir -p \"\$D\"
     printf 'GLOBAL_STACK_DUP=first\nGLOBAL_STACK_DUP=second\n' > \"\$D/.env\"
     cp \"\$D/.env\" \"\$D/.env.local\"
-    bash '${ENV_SCAN}' --dir=\"\$D\" \
+    bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=false \
         --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
+    rc=\$?
+    [[ \"\$rc\" -eq 0 ]] || { echo \"expected rc=0, got \$rc\"; echo FAIL; exit 0; }
     echo PASS
 "
 
-t "empty source file: no crash" bash -c "
+t "empty source file: exits 1 with clear error message" bash -c "
     D='${TMP_DIR}/t11d'; mkdir -p \"\$D\"
     printf '' > \"\$D/.env\"
     printf 'GLOBAL_STACK_A=1\n' > \"\$D/.env.local\"
-    bash '${ENV_SCAN}' --dir=\"\$D\" \
-        --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
+    stderr=\$(bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=false \
+        --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null)
+    rc=\$?
+    [[ \"\$rc\" -ne 0 ]] || { echo \"expected rc!=0 for empty source, got rc=0\"; echo FAIL; exit 0; }
+    echo \"\$stderr\" | grep -qi 'empty\|not found' || { echo \"expected error msg, got: \$stderr\"; echo FAIL; exit 0; }
     echo PASS
 "
 
 t "missing destination file: created automatically" bash -c "
     D='${TMP_DIR}/t11e'; mkdir -p \"\$D\"
     printf 'GLOBAL_STACK_A=1\n' > \"\$D/.env\"
-    bash '${ENV_SCAN}' --dir=\"\$D\" \
+    bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=false \
         --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null || true
+    [[ -f \"\$D/.env.local\" ]] || { echo 'dest file not created'; echo FAIL; exit 0; }
     echo PASS
 "
 
-t "variable referencing another variable (envsubst): no crash" bash -c "
+t "variable referencing another variable (envsubst): exits 0" bash -c "
     D='${TMP_DIR}/t11f'; mkdir -p \"\$D\"
     printf 'GLOBAL_STACK_BASE=/stack\nGLOBAL_STACK_TOOLS=\${GLOBAL_STACK_BASE}/tools\n' > \"\$D/.env\"
     cp \"\$D/.env\" \"\$D/.env.local\"
-    bash '${ENV_SCAN}' --dir=\"\$D\" \
+    bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=false \
         --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
+    rc=\$?
+    [[ \"\$rc\" -eq 0 ]] || { echo \"expected rc=0, got \$rc\"; echo FAIL; exit 0; }
     echo PASS
 "
 
@@ -502,15 +521,17 @@ t "variable referencing another variable (envsubst): no crash" bash -c "
 section "12. All-Src-Env-Merged"
 # ═══════════════════════════════════════════════════════════════════════════
 
-t "all-src-env-merged-name: custom path accepted without crash" bash -c "
+t "all-src-env-merged-name: custom path accepted, exits 0" bash -c "
     D='${TMP_DIR}/t12a'; mkdir -p \"\$D\"
     printf 'GLOBAL_STACK_A=1\n' > \"\$D/a.env\"
     printf 'GLOBAL_STACK_B=2\n' > \"\$D/b.env\"
     printf 'GLOBAL_STACK_A=1\nGLOBAL_STACK_B=2\n' > \"\$D/.env.local\"
-    bash '${ENV_SCAN}' --dir=\"\$D\" \
+    bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=false --no-fail \
         --source-files=\"\$D/a.env \$D/b.env\" --destination-files=\"\$D/.env.local\" \
         --source-merged-file=\"\$D/custom.merged\" --cleanup-tmp=false \
         --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
+    rc=\$?
+    [[ \"\$rc\" -eq 0 ]] || { echo \"expected rc=0, got \$rc\"; echo FAIL; exit 0; }
     echo PASS
 "
 
@@ -1238,6 +1259,36 @@ t "t19l: Phase 6 tracked Dockerfile does NOT get a .bak.* file" bash -c "
     echo PASS
 "
 
+t "t19m: --backup-keep=1 with 3 pre-seeded backups retains exactly 1 (oldest 2 pruned)" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t19m; mkdir -p \"\$D\"
+    printf 'GLOBAL_STACK_T19M=val\n' > \"\$D/.env\"
+    printf 'GLOBAL_STACK_T19M=val\n' > \"\$D/.env.local\"
+    # Seed 3 old backups; lex sort: 20200101 < 20200102 < 20200103 — all before today's run
+    touch \"\$D/.env.local.bak.20200101-000000-1\"
+    touch \"\$D/.env.local.bak.20200102-000000-1\"
+    touch \"\$D/.env.local.bak.20200103-000000-1\"
+    bash '${ENV_SCAN}' --dir=\"\$D\" --backup-keep=1 --scan-sources=false \
+        --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
+    # After run: 3 old + 1 new = 4 total; keep=1 prunes oldest 3, leaving exactly 1
+    baks=\$(ls \"\$D/.env.local.bak\".* 2>/dev/null | wc -l)
+    [[ \"\$baks\" -eq 1 ]] || { echo \"expected 1 bak after keep=1, got \$baks\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t19n: --backup-purge=true with zero pre-existing backups exits 0 and creates exactly 1 new backup" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t19n; mkdir -p \"\$D\"
+    printf 'GLOBAL_STACK_T19N=val\n' > \"\$D/.env\"
+    printf 'GLOBAL_STACK_T19N=val\n' > \"\$D/.env.local\"
+    # No pre-existing backups — purge of an empty set must not fail
+    bash '${ENV_SCAN}' --dir=\"\$D\" --backup-purge=true --scan-sources=false \
+        --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
+    rc=\$?
+    [[ \"\$rc\" -eq 0 ]] || { echo \"expected rc=0, got \$rc\"; echo FAIL; exit 0; }
+    baks=\$(ls \"\$D/.env.local.bak\".* 2>/dev/null | wc -l)
+    [[ \"\$baks\" -eq 1 ]] || { echo \"expected exactly 1 new bak after purge+run, got \$baks\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Section 20 — Version flag
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1355,6 +1406,32 @@ t "--profile=false produces no timing output" bash -c "
         --scan-sources=false \
         --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1)
     echo \"\$out\" | grep -qiE 'Phase.*ms|Profile' && { echo \"unexpected timing output with --profile=false: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "--profile=true: timing output goes to stderr, not stdout" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t22d; mkdir -p \"\$D\"
+    printf 'GLOBAL_STACK_FOO=1\n' > \"\$D/.env\"
+    cp \"\$D/.env\" \"\$D/.env.local\"
+    # Capture stdout only (stderr sent to /dev/null); timing must not appear on stdout
+    stdout_only=\$(bash '${ENV_SCAN}' --dir=\"\$D\" --profile=true \
+        --scan-sources=false \
+        --check-missing=false --show-added-entries=false --show-different-entries=false 2>/dev/null)
+    echo \"\$stdout_only\" | grep -qiE 'Phase|ms|elapsed|Profile' \
+        && { echo \"timing output leaked to stdout: \$stdout_only\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "--profile=true: timing output present on stderr (not lost)" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t22e; mkdir -p \"\$D\"
+    printf 'GLOBAL_STACK_FOO=1\n' > \"\$D/.env\"
+    cp \"\$D/.env\" \"\$D/.env.local\"
+    # Capture stderr only: redirect stderr first to capture fd, then silence stdout
+    stderr_only=\$(bash '${ENV_SCAN}' --dir=\"\$D\" --profile=true \
+        --scan-sources=false \
+        --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null)
+    echo \"\$stderr_only\" | grep -qiE 'Phase|ms|elapsed|Profile' \
+        || { echo \"timing output absent from stderr: \$stderr_only\"; echo FAIL; exit 0; }
     echo PASS
 "
 
@@ -1658,6 +1735,179 @@ t "t28h: --dry-run --quiet=true — DRY-RUN banner still appears on stderr" bash
         --backup=false 2>&1 >/dev/null || true)
     echo \"\$err\" | grep -qF '[DRY-RUN MODE]' \
         && echo PASS || { echo \"\$err\"; echo FAIL; }
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 29 — --prune-removed functional behavior
+# ═══════════════════════════════════════════════════════════════════════════
+section "29 — --prune-removed functional behavior"
+
+t "t29a: --prune-removed=true removes orphan key from dest" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t29a; mkdir -p \"\$D\"
+    # src has only KEY_A; dest has KEY_A + KEY_ORPHAN (not in src)
+    printf 'GLOBAL_STACK_KEY_A=1\n' > \"\$D/.env\"
+    printf 'GLOBAL_STACK_KEY_A=1\nGLOBAL_STACK_KEY_ORPHAN=orphan_val\n' > \"\$D/.env.local\"
+    bash '${ENV_SCAN}' --dir=\"\$D\" --prune-removed=true --scan-sources=false \
+        --check-missing=false --show-added-entries=false --show-different-entries=false \
+        --orphan-ignore-pattern='' 2>&1 >/dev/null
+    grep -q 'GLOBAL_STACK_KEY_ORPHAN' \"\$D/.env.local\" \
+        && { echo 'orphan key survived prune-removed=true'; echo FAIL; exit 0; }
+    grep -q 'GLOBAL_STACK_KEY_A=1' \"\$D/.env.local\" \
+        || { echo 'src key missing from dest after prune'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t29b: without --prune-removed, orphan key preserved in dest footer" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t29b; mkdir -p \"\$D\"
+    printf 'GLOBAL_STACK_KEY_A=1\n' > \"\$D/.env\"
+    printf 'GLOBAL_STACK_KEY_A=1\nGLOBAL_STACK_KEY_ORPHAN=orphan_val\n' > \"\$D/.env.local\"
+    bash '${ENV_SCAN}' --dir=\"\$D\" --prune-removed=false --scan-sources=false \
+        --check-missing=false --show-added-entries=false --show-different-entries=false \
+        --orphan-ignore-pattern='' --orphan-quiet=true 2>&1 >/dev/null
+    grep -q 'GLOBAL_STACK_KEY_ORPHAN' \"\$D/.env.local\" \
+        || { echo 'orphan key missing from dest without prune-removed'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t29c: --dry-run suppresses orphan removal (dest file unchanged)" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t29c; mkdir -p \"\$D\"
+    printf 'GLOBAL_STACK_KEY_A=1\n' > \"\$D/.env\"
+    printf 'GLOBAL_STACK_KEY_A=1\nGLOBAL_STACK_KEY_ORPHAN=orphan_val\n' > \"\$D/.env.local\"
+    bash '${ENV_SCAN}' --dir=\"\$D\" --prune-removed=true --dry-run --scan-sources=false \
+        --check-missing=false --show-added-entries=false --show-different-entries=false \
+        --orphan-ignore-pattern='' --backup=false 2>&1 >/dev/null
+    grep -q 'GLOBAL_STACK_KEY_ORPHAN' \"\$D/.env.local\" \
+        || { echo 'orphan removed under --dry-run (should not be)'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 30 — --orphan-quiet flag
+# ═══════════════════════════════════════════════════════════════════════════
+section "30 — --orphan-quiet flag"
+
+t "t30a: without --orphan-quiet, orphan warning present on stderr" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t30a; mkdir -p \"\$D\"
+    printf 'GLOBAL_STACK_KEY_A=1\n' > \"\$D/.env\"
+    printf 'GLOBAL_STACK_KEY_A=1\nGLOBAL_STACK_KEY_ORPHAN=orphan_val\n' > \"\$D/.env.local\"
+    err=\$(bash '${ENV_SCAN}' --dir=\"\$D\" --orphan-quiet=false --scan-sources=false \
+        --check-missing=false --show-added-entries=false --show-different-entries=false \
+        --orphan-ignore-pattern='' 2>&1 >/dev/null)
+    echo \"\$err\" | grep -qF 'GLOBAL_STACK_KEY_ORPHAN' \
+        || { echo \"orphan warning absent without --orphan-quiet; got: \$err\"; echo FAIL; exit 0; }
+    echo \"\$err\" | grep -qF 'not in source (orphaned)' \
+        || { echo \"expected 'not in source (orphaned)' in warning; got: \$err\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t30b: --orphan-quiet=true suppresses orphan warning on stderr" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t30b; mkdir -p \"\$D\"
+    printf 'GLOBAL_STACK_KEY_A=1\n' > \"\$D/.env\"
+    printf 'GLOBAL_STACK_KEY_A=1\nGLOBAL_STACK_KEY_ORPHAN=orphan_val\n' > \"\$D/.env.local\"
+    err=\$(bash '${ENV_SCAN}' --dir=\"\$D\" --orphan-quiet=true --scan-sources=false \
+        --check-missing=false --show-added-entries=false --show-different-entries=false \
+        --orphan-ignore-pattern='' 2>&1 >/dev/null)
+    echo \"\$err\" | grep -qF 'not in source (orphaned)' \
+        && { echo \"orphan warning present despite --orphan-quiet=true; got: \$err\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t30c: --orphan-quiet=true still preserves orphan key in dest file (suppresses warning only)" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t30c; mkdir -p \"\$D\"
+    printf 'GLOBAL_STACK_KEY_A=1\n' > \"\$D/.env\"
+    printf 'GLOBAL_STACK_KEY_A=1\nGLOBAL_STACK_KEY_ORPHAN=orphan_val\n' > \"\$D/.env.local\"
+    bash '${ENV_SCAN}' --dir=\"\$D\" --orphan-quiet=true --scan-sources=false \
+        --check-missing=false --show-added-entries=false --show-different-entries=false \
+        --orphan-ignore-pattern='' 2>&1 >/dev/null
+    grep -q 'GLOBAL_STACK_KEY_ORPHAN' \"\$D/.env.local\" \
+        || { echo 'orphan key removed despite orphan-quiet=true (should be kept)'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 31 — --orphan-ignore-pattern flag
+# ═══════════════════════════════════════════════════════════════════════════
+section "31 — --orphan-ignore-pattern flag"
+
+t "t31a: custom pattern suppresses matching vars, non-matching still warned" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t31a; mkdir -p \"\$D\"
+    # src has nothing; dest has SKIP_ME (matches pattern) + WARN_ME (does not match)
+    printf 'GLOBAL_STACK_KEY_A=1\n' > \"\$D/.env\"
+    printf 'GLOBAL_STACK_KEY_A=1\nGLOBAL_STACK_SKIP_ME=val\nGLOBAL_STACK_WARN_ME=val\n' > \"\$D/.env.local\"
+    err=\$(bash '${ENV_SCAN}' --dir=\"\$D\" --orphan-ignore-pattern='^GLOBAL_STACK_SKIP_ME' \
+        --orphan-quiet=false --scan-sources=false \
+        --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null)
+    # SKIP_ME matches the pattern — must NOT appear in warning
+    echo \"\$err\" | grep -qF 'GLOBAL_STACK_SKIP_ME' \
+        && { echo \"SKIP_ME appeared in warning despite matching ignore-pattern; got: \$err\"; echo FAIL; exit 0; }
+    # WARN_ME does not match — must appear in warning
+    echo \"\$err\" | grep -qF 'GLOBAL_STACK_WARN_ME' \
+        || { echo \"WARN_ME missing from warning (expected); got: \$err\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t31b: default pattern suppresses GLOBAL_STACK_LOCAL_* orphan warnings" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t31b; mkdir -p \"\$D\"
+    printf 'GLOBAL_STACK_KEY_A=1\n' > \"\$D/.env\"
+    # GLOBAL_STACK_LOCAL_MY_CUSTOM matches default pattern '^(GLOBAL_STACK_LOCAL_(.*))'
+    printf 'GLOBAL_STACK_KEY_A=1\nGLOBAL_STACK_LOCAL_MY_CUSTOM=local_val\n' > \"\$D/.env.local\"
+    # Do NOT pass --orphan-ignore-pattern so the default applies
+    err=\$(bash '${ENV_SCAN}' --dir=\"\$D\" --orphan-quiet=false --scan-sources=false \
+        --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null)
+    echo \"\$err\" | grep -qF 'GLOBAL_STACK_LOCAL_MY_CUSTOM' \
+        && { echo \"GLOBAL_STACK_LOCAL_* orphan warning not suppressed by default pattern; got: \$err\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t31c: empty --orphan-ignore-pattern — all orphan warnings appear" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t31c; mkdir -p \"\$D\"
+    printf 'GLOBAL_STACK_KEY_A=1\n' > \"\$D/.env\"
+    # GLOBAL_STACK_LOCAL_* would normally be suppressed by default; with empty pattern it should warn
+    printf 'GLOBAL_STACK_KEY_A=1\nGLOBAL_STACK_LOCAL_VISIBLE=val\n' > \"\$D/.env.local\"
+    err=\$(bash '${ENV_SCAN}' --dir=\"\$D\" --orphan-ignore-pattern='' \
+        --orphan-quiet=false --scan-sources=false \
+        --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null)
+    echo \"\$err\" | grep -qF 'GLOBAL_STACK_LOCAL_VISIBLE' \
+        || { echo \"orphan warning absent with empty ignore-pattern; got: \$err\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 32 — flag combinations
+# ═══════════════════════════════════════════════════════════════════════════
+section "32 — flag combinations"
+
+t "t32a: --dry-run --no-fail — both banners present, no file modified, exit 0" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t32a; mkdir -p \"\$D\"
+    printf 'GLOBAL_STACK_X=1.0\n' > \"\$D/.env\"
+    printf 'GLOBAL_STACK_X=1.0\n' > \"\$D/.env.local\"
+    before=\$(cat \"\$D/.env.local\")
+    err=\$(bash '${ENV_SCAN}' --dir=\"\$D\" --dry-run --no-fail --scan-sources=false \
+        --check-missing=false --show-added-entries=false --show-different-entries=false \
+        --backup=false 2>&1 >/dev/null)
+    rc=\$?
+    [[ \"\$rc\" -eq 0 ]] || { echo \"expected rc=0, got \$rc\"; echo FAIL; exit 0; }
+    echo \"\$err\" | grep -qF '[DRY-RUN MODE]' \
+        || { echo \"DRY-RUN banner absent; got: \$err\"; echo FAIL; exit 0; }
+    echo \"\$err\" | grep -qF '[NO-FAIL MODE]' \
+        || { echo \"NO-FAIL banner absent; got: \$err\"; echo FAIL; exit 0; }
+    after=\$(cat \"\$D/.env.local\")
+    [[ \"\$before\" == \"\$after\" ]] \
+        || { echo \"dest file modified under --dry-run --no-fail\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t32b: --quiet=true --dry-run — DRY-RUN banner still present on stderr" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t32b; mkdir -p \"\$D\"
+    printf 'GLOBAL_STACK_X=1.0\n' > \"\$D/.env\"
+    cp \"\$D/.env\" \"\$D/.env.local\"
+    # Mode banners are printed 'regardless of --quiet' (per main.sh comments)
+    err=\$(bash '${ENV_SCAN}' --dir=\"\$D\" --quiet=true --dry-run --scan-sources=false \
+        --check-missing=false --show-added-entries=false --show-different-entries=false \
+        --backup=false 2>&1 >/dev/null)
+    echo \"\$err\" | grep -qF '[DRY-RUN MODE]' \
+        || { echo \"DRY-RUN banner absent with --quiet=true; got: \$err\"; echo FAIL; exit 0; }
+    echo PASS
 "
 
 # ═══════════════════════════════════════════════════════════════════════════

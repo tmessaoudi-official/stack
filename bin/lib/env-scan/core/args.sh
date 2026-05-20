@@ -154,4 +154,7 @@ gs_es_parse_args() {
 	[[ -z "${_GS_ES_CFG[backup_keep]+set}" ]]               && _GS_ES_CFG[backup_keep]="10"
 	[[ -z "${_GS_ES_CFG[backup_suffix]+set}" ]]             && _GS_ES_CFG[backup_suffix]=".bak"
 	[[ -z "${_GS_ES_CFG[orphan_ignore_pattern]+set}" ]]    && _GS_ES_CFG[orphan_ignore_pattern]="${_GS_ES_PATTERN_ORPHAN_IGNORE}"
+	# Explicit return 0 — guards against bash set -e treating a false [[ ]] && pattern
+	# on the last line of a function as a non-zero function exit (surfaced by Sprint H tests).
+	return 0
 }

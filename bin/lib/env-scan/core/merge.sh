@@ -167,4 +167,7 @@ gs_es_process_file() {
 	[[ "true" = "${_GS_ES_CFG[cleanup_tmp]}" ]] &&
 		rm -rf \
 			"${tmp_file}"
+	# Explicit return 0 — guards against bash set -e treating a false [[ ]] && pattern
+	# on the last line of a function as a non-zero function exit (same class as args.sh P1 fix).
+	return 0
 }
