@@ -77,7 +77,7 @@ Options:
                                   errors (bad flags, bad env file), backup failures during
                                   --apply, and env-file-not-found remain fatal. When errors
                                   are suppressed a stderr notice is printed:
-                                  "[NO-FAIL] fetch errors present — exit code forced to 0"
+                                  "[NO-FAIL MODE] ERROR decisions will not abort — exit code forced to 0"
                                   Note: with --apply --no-fail, AUTO decisions are still
                                   applied even when some records have ERROR.
                                   Note: with --scan --no-fail, the --no-fail flag is passed

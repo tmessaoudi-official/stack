@@ -7529,7 +7529,7 @@ t "t77g: --no-fail prints stderr notice when exit code suppressed" bash -c "
     f=\${TMP_DIR}/t77g.env
     printf '# @todo env-update dockerhub:_/nonexistent-repo-xyz 1.0.0\nGLOBAL_STACK_T77G=1.0.0\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --no-fail --env-file=\"\$f\" 2>&1 || true)
-    echo \"\$out\" | grep -qF '[NO-FAIL] fetch errors present' || { echo \"stderr notice missing (expected '[NO-FAIL] fetch errors present' in output); got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '[NO-FAIL MODE] ERROR decisions will not abort' || { echo \"stderr notice missing (expected '[NO-FAIL MODE] ERROR decisions will not abort' in output); got: \$out\"; echo FAIL; exit 0; }
     echo PASS
 "
 
@@ -7557,8 +7557,8 @@ t "t78b: --changes-only flag prints [CHANGES-ONLY MODE] banner" bash -c "
     echo PASS
 "
 
-# t78c: --no-fail flag → stderr contains [NO-FAIL MODE] (clean fixture — no ERROR, only the upfront banner)
-t "t78c: --no-fail flag prints [NO-FAIL MODE] banner" bash -c "
+# t78c: --no-fail flag + clean fixture (no ERROR) → [NO-FAIL MODE] banner fires upfront (unconditional)
+t "t78c: --no-fail flag + no errors — [NO-FAIL MODE] banner present (fires upfront, not gated on errors)" bash -c "
     export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t78c_cache
     f=\${TMP_DIR}/t78c.env

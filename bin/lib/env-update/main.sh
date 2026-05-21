@@ -1041,7 +1041,6 @@ _gs_eu2_main() {
     # Usage errors (args.sh exit 1), backup failures, and env-file errors are unaffected
     # because they return/exit before reaching this point.
     if [[ "${_check_rc}" -ne 0 && "${_GS_EU2_CFG[no_fail]:-false}" == "true" ]]; then
-      printf '[NO-FAIL] fetch errors present — exit code forced to 0\n' >&2
       _check_rc=0
     fi
     # ── Print profile report if requested ─────────────────────────────────────
