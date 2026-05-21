@@ -4450,15 +4450,16 @@ t "t53d: --stable forces channel to stable on channel:unstable records (via --du
     echo PASS
 "
 
-# t53e: --stable leaves already-stable (channel="") records unchanged — no STABLE MODE header
-t "t53e: --stable leaves channel-unset records unchanged (no override header)" bash -c "
+# t53e: --stable leaves already-stable (channel="") records unchanged — banner still fires with 0 overrides
+t "t53e: --stable with all-stable input — banner fires with 0 record(s) (unconditional)" bash -c "
     export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/chk53e
     _tf53e=\"\${TMP_DIR}/t53e.env\"
     printf '# @todo env-update dockerhub:_/alpine:3 3.21.0\nGLOBAL_STACK_X=3.21.0\n' > \"\${_tf53e}\"
     out=\$(bash '${ENV_UPDATE_V2}' --stable --dump \
         --env-file=\"\${_tf53e}\" 2>&1)
-    echo \"\$out\" | grep -qi 'STABLE MODE' && { echo 'unexpected STABLE MODE header for all-stable input'; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '[STABLE MODE]' || { echo \"expected [STABLE MODE] banner even with 0 overrides; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '0 record(s)' || { echo \"expected 0 record(s) count; got: \$out\"; echo FAIL; exit 0; }
     echo PASS
 "
 
