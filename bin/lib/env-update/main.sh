@@ -88,7 +88,7 @@ _gs_eu2_run_check() {
   _GS_EU2_CACHE_TTL="${_GS_EU2_CFG[cache_ttl]:-3600}"
 
   local _n_auto=0 _n_hold=0 _n_skip=0 _n_error=0 _n_manual=0 _n_sha=0 _n_lock=0 _n_frozen=0
-  local _n_fallback=0 _n_watch=0 _n_drift=0 _n_drift_fixable=0 _n_downgrade=0 _n_hidden=0 _n_sha_anno=0
+  local _n_fallback=0 _n_watch=0 _n_drift=0 _n_drift_fixable=0 _n_downgrade=0 _n_downgrade_force=0 _n_hidden=0 _n_sha_anno=0
 
   # Dynamic column width: pre-scan all env_var names so the → arrow aligns
   # across every record in this run, regardless of variable name length.
@@ -754,7 +754,13 @@ _gs_eu2_run_check() {
         # LOCK/FROZEN/SKIP/ERROR drift is informational — downgrade not actionable by --apply
         if [[ "${_decision}" != "LOCK" && -z "${_skip_reason}" \
               && "${_decision}" != "SKIP" && "${_decision}" != "ERROR" ]]; then
-          (( ++_n_downgrade )) || true
+          # MANUAL/HOLD: only actionable with --force-auto --apply
+          if [[ "${_decision}" == "MANUAL" || "${_decision}" == "HOLD" ]]; then
+            (( ++_n_downgrade_force )) || true
+          else
+            # AUTO/SHA: actionable by plain --apply
+            (( ++_n_downgrade )) || true
+          fi
         fi
       elif [[ "${_decision}" == "AUTO" || "${_decision}" == "HOLD" \
               || "${_decision}" == "MANUAL" || "${_decision}" == "SHA" ]]; then
@@ -775,15 +781,16 @@ _gs_eu2_run_check() {
   # +sha follows WATCH (unconditional — not suppressed by --no-drift).
   # Entire line omitted when all relevant signals are zero.
   local _sec_watch="${_n_watch}"
-  local _sec_drift=0 _sec_fixable=0 _sec_down=0 _sec_sha_anno="${_n_sha_anno}"
+  local _sec_drift=0 _sec_fixable=0 _sec_down=0 _sec_down_force=0 _sec_sha_anno="${_n_sha_anno}"
   if [[ "${_GS_EU2_CFG[no_drift]:-false}" != "true" ]]; then
     _sec_drift="${_n_drift}"
     _sec_fixable="${_n_drift_fixable}"
     _sec_down="${_n_downgrade}"
+    _sec_down_force="${_n_downgrade_force}"
   fi
-  if (( _sec_watch > 0 || _sec_drift > 0 || _sec_down > 0 || _sec_sha_anno > 0 )); then
-    printf '    ↳ %d WATCH · %d DRIFT (%d fixable) · %d DOWNGRADE · %d +sha\n' \
-      "${_sec_watch}" "${_sec_drift}" "${_sec_fixable}" "${_sec_down}" "${_sec_sha_anno}"
+  if (( _sec_watch > 0 || _sec_drift > 0 || _sec_down > 0 || _sec_down_force > 0 || _sec_sha_anno > 0 )); then
+    printf '    ↳ %d WATCH · %d DRIFT (%d fixable) · %d DOWNGRADE · %d FORCE-DOWNGRADE · %d +sha\n' \
+      "${_sec_watch}" "${_sec_drift}" "${_sec_fixable}" "${_sec_down}" "${_sec_down_force}" "${_sec_sha_anno}"
   fi
 
   # Exit non-zero when any ERROR decisions were recorded — callers can detect fetch failures.

@@ -8733,27 +8733,31 @@ t "t90_ctr_error: counter ERROR+downgrade → 0 DOWNGRADE (excluded: fetch faile
     echo PASS
 "
 
-# HOLD + downgrade → 1 DOWNGRADE (--force-auto --apply CAN write it)
-t "t90_ctr_hold: counter HOLD+downgrade → 1 DOWNGRADE (actionable via --force-auto --apply)" bash -c "
+# HOLD + downgrade → 0 DOWNGRADE · 1 FORCE-DOWNGRADE (only --force-auto --apply CAN write it)
+t "t90_ctr_hold: counter HOLD+downgrade → 0 DOWNGRADE · 1 FORCE-DOWNGRADE (force-auto only)" bash -c "
     export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t90ctrho_c
     f=\${TMP_DIR}/t90ctrho.env
     printf '# @todo env-update github:testowner/testrepo 1.0.0\nGLOBAL_STACK_T90CTRHO=5.0.0\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
-    echo \"\$out\" | grep -qE '1 DOWNGRADE' \
-        || { echo \"HOLD+downgrade must show 1 DOWNGRADE in summary; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qE '0 DOWNGRADE' \
+        || { echo \"HOLD+downgrade must show 0 DOWNGRADE (not plain-apply actionable); got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qE '1 FORCE-DOWNGRADE' \
+        || { echo \"HOLD+downgrade must show 1 FORCE-DOWNGRADE in summary; got: \$out\"; echo FAIL; exit 0; }
     echo PASS
 "
 
-# MANUAL + downgrade → 1 DOWNGRADE (--force-auto --apply CAN write it)
-t "t90_ctr_manual: counter MANUAL+downgrade → 1 DOWNGRADE (actionable via --force-auto --apply)" bash -c "
+# MANUAL + downgrade → 0 DOWNGRADE · 1 FORCE-DOWNGRADE (only --force-auto --apply CAN write it)
+t "t90_ctr_manual: counter MANUAL+downgrade → 0 DOWNGRADE · 1 FORCE-DOWNGRADE (force-auto only)" bash -c "
     export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t90ctrmn_c
     f=\${TMP_DIR}/t90ctrmn.env
     printf '# @todo env-update (manual) github:testowner/testrepo 1.0.0\nGLOBAL_STACK_T90CTRMN=5.0.0\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
-    echo \"\$out\" | grep -qE '1 DOWNGRADE' \
-        || { echo \"MANUAL+downgrade must show 1 DOWNGRADE in summary; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qE '0 DOWNGRADE' \
+        || { echo \"MANUAL+downgrade must show 0 DOWNGRADE (not plain-apply actionable); got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qE '1 FORCE-DOWNGRADE' \
+        || { echo \"MANUAL+downgrade must show 1 FORCE-DOWNGRADE in summary; got: \$out\"; echo FAIL; exit 0; }
     echo PASS
 "
 
