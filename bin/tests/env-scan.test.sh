@@ -1643,11 +1643,11 @@ t "usage error still exits 1 even with --no-fail" bash -c "
     [[ \"\$rc\" -ne 0 ]] && echo PASS || { echo \"expected non-zero exit, got 0\"; echo FAIL; }
 "
 
-t "--no-fail prints notice to stderr when exit code suppressed" bash -c "
+t "--no-fail banner present on stderr even when propagation fails" bash -c "
     D=\${TMP_DIR:-${TMP_DIR}}/t27f; mkdir -p \"\$D\"
     err=\$(bash '${ENV_SCAN}' --dir=\"\$D\" --source-files= --scan-sources=false \
         --backup=false --quiet=true --no-fail 2>&1 >/dev/null || true)
-    echo \"\$err\" | grep -qF '[NO-FAIL]' \
+    echo \"\$err\" | grep -qF '[NO-FAIL MODE]' \
         && echo PASS || { echo \"\$err\"; echo FAIL; }
 "
 

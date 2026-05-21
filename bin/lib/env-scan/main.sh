@@ -138,12 +138,8 @@ gs_es_main() {
 		"${_GS_ES_CFG[scan_path]}" \
 		"${_GS_ES_CFG[conflict_ignore_pattern]:-}" \
 		"${_GS_ES_CFG[dry_run]}" || _propagate_rc=$?
-	if [[ "${_propagate_rc}" -ne 0 ]]; then
-		if [[ "${_GS_ES_CFG[no_fail]:-false}" == "true" ]]; then
-			printf '[NO-FAIL] Phase 6 propagation error suppressed — exit code forced to 0\n' >&2
-		else
-			return "${_propagate_rc}"
-		fi
+	if [[ "${_propagate_rc}" -ne 0 && "${_GS_ES_CFG[no_fail]:-false}" != "true" ]]; then
+		return "${_propagate_rc}"
 	fi
 	_gs_es_profile_end "Propagate to Dockerfiles"
 
