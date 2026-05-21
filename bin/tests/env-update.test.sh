@@ -7579,6 +7579,9 @@ t "t78d: no mode flags — no mode banners in output" bash -c "
     echo \"\$out\" | grep -qF '[CHANGES-ONLY MODE]' && { echo \"unexpected [CHANGES-ONLY MODE] banner; got: \$out\"; echo FAIL; exit 0; } || true
     echo \"\$out\" | grep -qF '[NO-FAIL MODE]'     && { echo \"unexpected [NO-FAIL MODE] banner; got: \$out\"; echo FAIL; exit 0; } || true
     echo \"\$out\" | grep -qF '[DRY-RUN MODE]'     && { echo \"unexpected [DRY-RUN MODE] banner; got: \$out\"; echo FAIL; exit 0; } || true
+    echo \"\$out\" | grep -qF '[UNSTABLE MODE]'    && { echo \"unexpected [UNSTABLE MODE] banner; got: \$out\"; echo FAIL; exit 0; } || true
+    echo \"\$out\" | grep -qF '[STABLE MODE]'      && { echo \"unexpected [STABLE MODE] banner; got: \$out\"; echo FAIL; exit 0; } || true
+    echo \"\$out\" | grep -qF '[NO-NOTES MODE]'    && { echo \"unexpected [NO-NOTES MODE] banner; got: \$out\"; echo FAIL; exit 0; } || true
     echo PASS
 "
 
@@ -7590,6 +7593,39 @@ t "t78e: --dry-run flag prints [DRY-RUN MODE] banner" bash -c "
     printf '# @todo env-update npm:@types/node:25 25.8.0\nGLOBAL_STACK_T78E=25.8.0\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>&1 || true)
     echo \"\$out\" | grep -qF '[DRY-RUN MODE]' || { echo \"banner missing; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t78f: --unstable=full with no non-stable records → banner fires with 0 record(s)
+t "t78f: --unstable=full with stable-only fixture — banner fires with 0 record(s)" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t78f_cache
+    f=\${TMP_DIR}/t78f.env
+    printf '# @todo env-update npm:@types/node:25 25.8.0\nGLOBAL_STACK_T78F=25.8.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --unstable=full --env-file=\"\$f\" 2>&1 || true)
+    echo \"\$out\" | grep -qF '[UNSTABLE MODE]' || { echo \"banner missing; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t78g: --stable=full with no non-stable records → banner fires with 0 record(s)
+t "t78g: --stable=full with no non-stable records — banner fires with 0 record(s)" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t78g_cache
+    f=\${TMP_DIR}/t78g.env
+    printf '# @todo env-update npm:@types/node:25 25.8.0\nGLOBAL_STACK_T78G=25.8.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --stable=full --env-file=\"\$f\" 2>&1 || true)
+    echo \"\$out\" | grep -qF '[STABLE MODE]' || { echo \"banner missing; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t78h: --no-notes with a fixture that has no note annotations → banner fires with 0 record(s)
+t "t78h: --no-notes with no note annotations — banner fires with 0 record(s)" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t78h_cache
+    f=\${TMP_DIR}/t78h.env
+    printf '# @todo env-update npm:@types/node:25 25.8.0\nGLOBAL_STACK_T78H=25.8.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --no-notes --env-file=\"\$f\" 2>&1 || true)
+    echo \"\$out\" | grep -qF '[NO-NOTES MODE]' || { echo \"banner missing; got: \$out\"; echo FAIL; exit 0; }
     echo PASS
 "
 

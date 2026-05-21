@@ -894,10 +894,10 @@ _gs_eu2_main() {
   if [[ "${_GS_EU2_CFG[dry_run]:-false}" == "true" ]]; then
     printf '[DRY-RUN MODE] no writes — cache, .env, and Dockerfile propagation suppressed\n' >&2
   fi
-  if [[ "${_unstable_overrides}" -gt 0 ]]; then
+  if [[ "${_GS_EU2_CFG[unstable]:-}" == "full" ]]; then
     printf '[UNSTABLE MODE] channel forced unstable for %d record(s)\n' "${_unstable_overrides}" >&2
   fi
-  if [[ "${_stable_overrides}" -gt 0 ]]; then
+  if [[ "${_GS_EU2_CFG[stable]:-}" == "full" ]]; then
     printf '[STABLE MODE] channel forced stable for %d record(s)\n' "${_stable_overrides}" >&2
   fi
   if [[ "${_GS_EU2_CFG[force_auto]:-false}" == "true" ]]; then
