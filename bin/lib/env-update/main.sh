@@ -839,10 +839,6 @@ _gs_eu2_main() {
     fi
   fi
 
-  if [[ "true" == "${_GS_EU2_CFG[dry_run]}" ]]; then
-    printf 'env-update: --dry-run active (no writes — cache, .env, and Dockerfile propagation all gated)\n' >&2
-  fi
-
   local _env_file="${_GS_EU2_CFG[env_file]}"
   if [[ ! -f "${_env_file}" ]]; then
     printf 'env-update: env file not found: %s\n' "${_env_file}" >&2

@@ -7623,14 +7623,15 @@ t "t78d: no mode flags — no mode banners in output" bash -c "
     echo PASS
 "
 
-# t78e: --dry-run flag → stderr contains [DRY-RUN MODE]
-t "t78e: --dry-run flag prints [DRY-RUN MODE] banner" bash -c "
+# t78e: --dry-run flag → [DRY-RUN MODE] banner present, legacy prose notice absent
+t "t78e: --dry-run flag prints [DRY-RUN MODE] banner and suppresses legacy prose notice" bash -c "
     export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t78e_cache
     f=\${TMP_DIR}/t78e.env
     printf '# @todo env-update npm:@types/node:25 25.8.0\nGLOBAL_STACK_T78E=25.8.0\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>&1 || true)
     echo \"\$out\" | grep -qF '[DRY-RUN MODE]' || { echo \"banner missing; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'dry-run active' && { echo \"legacy prose notice still present; got: \$out\"; echo FAIL; exit 0; } || true
     echo PASS
 "
 
