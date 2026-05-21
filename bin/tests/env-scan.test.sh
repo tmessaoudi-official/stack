@@ -27,9 +27,24 @@ declare -a SECTION_NAMES=()
 declare -a SECTION_PASS_COUNTS=()
 declare -a SECTION_FAIL_COUNTS=()
 
+# ─── --section filter ──────────────────────────────────────────────────────
+SECTION_FILTER=""
+for _arg in "$@"; do
+    case "${_arg}" in
+        --section=*) SECTION_FILTER="${_arg#*=}" ;;
+    esac
+done
+unset _arg
+SECTION_ACTIVE=true
+
 # ─── section management ────────────────────────────────────────────────────
 _flush_section() {
     [[ -z "${CURRENT_SECTION}" ]] && return
+    # Skip recording sections where no tests ran (filtered out)
+    if [[ $(( SECTION_PASS + SECTION_FAIL )) -eq 0 ]]; then
+        CURRENT_SECTION=""
+        return
+    fi
     SECTION_NAMES+=("${CURRENT_SECTION}")
     SECTION_PASS_COUNTS+=("${SECTION_PASS}")
     SECTION_FAIL_COUNTS+=("${SECTION_FAIL}")
@@ -45,6 +60,26 @@ section() {
     _flush_section
     CURRENT_SECTION="$1"
     SECTION_PASS=0; SECTION_FAIL=0
+
+    # Extract leading integer as section key
+    local _sec_key
+    _sec_key="${1%%[^0-9]*}"
+
+    if [[ -n "${SECTION_FILTER}" ]]; then
+        SECTION_ACTIVE=false
+        local IFS=','
+        local _f
+        # shellcheck disable=SC2086
+        for _f in ${SECTION_FILTER}; do
+            if [[ "${_sec_key}" == "${_f}" ]]; then
+                SECTION_ACTIVE=true
+                break
+            fi
+        done
+    else
+        SECTION_ACTIVE=true
+    fi
+
     echo ""
     printf "${C_BOLD}${C_CYAN}  ┌─  %s${C_RESET}\n" "$1"
 }
@@ -92,6 +127,7 @@ assert_file_not_exists() {
 # t "label" bash -c "..."
 # The subshell must print PASS or FAIL as its last line.
 t() {
+    [[ "${SECTION_ACTIVE:-true}" == "false" ]] && return 0
     local label="$1"; shift
     local output last
     output="$("$@" 2>&1)" || true
@@ -116,6 +152,7 @@ make_dockerfile() { mkdir -p "$(dirname "$1")"; printf '%s\n' "$2" > "$1"; }
 echo ""
 printf "${C_BOLD}  env-scan.sh — test suite${C_RESET}\n"
 printf "  script : %s\n" "${ENV_SCAN}"
+[[ -n "${SECTION_FILTER}" ]] && printf "  sections: %s (filtered)\n" "${SECTION_FILTER}"
 echo ""
 
 BASE_SRC="${TMP_DIR}/src/.env"
@@ -2156,6 +2193,8 @@ if [[ ${#FAILURES[@]} -gt 0 ]]; then
         printf "    ${C_RED}•${C_RESET} %s\n" "${f}"
     done
 fi
+
+[[ -n "${SECTION_FILTER}" ]] && printf "  ${C_DIM}(section filter active: %s — full suite not run)${C_RESET}\n" "${SECTION_FILTER}"
 
 echo ""
 printf "${C_BOLD}%s${C_RESET}\n" "${BAR}"
