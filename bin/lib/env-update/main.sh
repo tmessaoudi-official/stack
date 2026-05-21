@@ -912,16 +912,16 @@ _gs_eu2_main() {
     printf '[NO-NOTES MODE] note sub-lines suppressed for %d record(s)\n' "${_nn_count}" >&2
   fi
   if [[ "${_GS_EU2_CFG[no_cache]:-false}" == "true" ]]; then
-    printf '[NO-CACHE] cache bypassed — all fetches hit network\n' >&2
+    printf '[NO-CACHE MODE] cache bypassed — all fetches hit network\n' >&2
   fi
   if [[ "${_GS_EU2_CFG[with_tags]:-false}" == "true" ]]; then
-    printf '[WITH-TAGS] tags API merged for all github records\n' >&2
+    printf '[WITH-TAGS MODE] tags API merged for all github records\n' >&2
   fi
   if [[ -n "${_GS_EU2_CFG[filter]:-}" ]]; then
-    printf '[FILTER: %s]\n' "${_GS_EU2_CFG[filter]}" >&2
+    printf '[FILTER MODE: %s]\n' "${_GS_EU2_CFG[filter]}" >&2
   fi
   if [[ -n "${_GS_EU2_CFG[exclude]:-}" ]]; then
-    printf '[EXCLUDE: %s]\n' "${_GS_EU2_CFG[exclude]}" >&2
+    printf '[EXCLUDE MODE: %s]\n' "${_GS_EU2_CFG[exclude]}" >&2
   fi
   if [[ "${_GS_EU2_CFG[no_drift]:-false}" == "true" ]]; then
     printf '[NO-DRIFT MODE] drift sub-lines and drift/downgrade secondary counters suppressed\n' >&2
