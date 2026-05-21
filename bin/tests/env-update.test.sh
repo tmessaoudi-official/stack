@@ -8271,6 +8271,493 @@ t "t89d: --apply --scan does not emit the scan warning" bash -c "
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Section 90 — Drift display: exhaustive decision × direction matrix
+# Regression guards for B1–B12 (all 12 drift bugs fixed in 3f60239b).
+#
+# Decision setup via github:testowner/testrepo (fixture returns v2.5.0):
+#   current=1.0.0  → major bump    → HOLD (no annotation flags)
+#   current=2.4.0  → minor bump    → AUTO
+#   current=2.5.0  → same version  → SKIP
+#   + (lock:...)   → LOCK (any current)
+#   + (skip:...)   → FROZEN (any current)
+#   + (manual)     → MANUAL (any current)
+#   dockerhub:_/no-such-image-xyzzy999 → ERROR (no fixture → fetch fails)
+#
+# Matrix coverage:
+#   Case 1  — empty VAR:                 AUTO, HOLD, MANUAL, SKIP, ERROR (5)
+#   Case 2a — VAR behind annotation:     AUTO, HOLD, MANUAL, SKIP, ERROR (5)
+#   Case 2b — VAR ahead (downgrade):     AUTO, HOLD, MANUAL, SKIP, ERROR, LOCK, FROZEN (7)
+#   Case 2c — non-semver divergence:     AUTO, HOLD, SKIP (3)
+#   Case 3  — use-sha drift:             LOCK, FROZEN, SKIP, HOLD, MANUAL, ERROR, AUTO (7)
+#   Counter — downgrade counter cells:   LOCK, FROZEN, ERROR=0; HOLD, MANUAL=1 (5)
+# ═══════════════════════════════════════════════════════════════════════════
+section "90 — drift decision matrix (B1–B12 regression guards)"
+
+_T90_OLD_SHA='aaaa0000bbbb1111cccc2222dddd3333eeee4444'
+_T90_NEW_VAR_SHA='5555eeee4444dddd3333cccc2222bbbb1111aaaa'
+
+# ── Case 1: empty VAR ─────────────────────────────────────────────────────
+
+# AUTO + empty VAR → "--apply will write X to enable it" (not --force-auto) [B1 contrast]
+t "t90_c1_auto: Case1 AUTO+emptyVAR → '--apply will write' (no --force-auto)" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t90c1auto_c
+    f=\${TMP_DIR}/t90c1auto.env
+    printf '# @todo env-update github:testowner/testrepo 2.4.0\nGLOBAL_STACK_T90C1AUTO=\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[DRIFT]' || { echo \"expected [DRIFT]; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF -- '--apply will write' || { echo \"must say '--apply will write'; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'force-auto' && { echo \"must NOT say force-auto for AUTO; got: \$out\"; echo FAIL; exit 0; } || true
+    echo PASS
+"
+
+# HOLD + empty VAR → "--force-auto --apply will write it to enable"
+t "t90_c1_hold: Case1 HOLD+emptyVAR → '--force-auto --apply will write it'" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t90c1hold_c
+    f=\${TMP_DIR}/t90c1hold.env
+    printf '# @todo env-update github:testowner/testrepo 1.0.0\nGLOBAL_STACK_T90C1HOLD=\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[DRIFT]' || { echo \"expected [DRIFT]; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'force-auto' || { echo \"must say force-auto for HOLD+emptyVAR; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'disabled? --apply will write' && { echo \"must NOT say plain '--apply will write' without --force-auto; got: \$out\"; echo FAIL; exit 0; } || true
+    echo PASS
+"
+
+# MANUAL + empty VAR → "--force-auto --apply will write it to enable"
+t "t90_c1_manual: Case1 MANUAL+emptyVAR → '--force-auto --apply will write it'" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t90c1man_c
+    f=\${TMP_DIR}/t90c1man.env
+    printf '# @todo env-update (manual) github:testowner/testrepo 1.0.0\nGLOBAL_STACK_T90C1MAN=\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[DRIFT]' || { echo \"expected [DRIFT]; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'force-auto' || { echo \"must say force-auto for MANUAL+emptyVAR; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# SKIP + empty VAR → "(feature disabled?)" with NO action advice (else branch) [B4 contrast]
+t "t90_c1_skip: Case1 SKIP+emptyVAR → 'feature disabled?' no --apply action [B4]" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t90c1skip_c
+    f=\${TMP_DIR}/t90c1skip.env
+    printf '# @todo env-update github:testowner/testrepo v2.5.0\nGLOBAL_STACK_T90C1SKIP=\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[DRIFT]' || { echo \"expected [DRIFT]; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'feature disabled?' || { echo \"must say 'feature disabled?'; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF -- '--apply will' && { echo \"must NOT say '--apply will' for SKIP (B4); got: \$out\"; echo FAIL; exit 0; } || true
+    echo \"\$out\" | grep -qF 'force-auto' && { echo \"must NOT say force-auto for SKIP; got: \$out\"; echo FAIL; exit 0; } || true
+    echo PASS
+"
+
+# ERROR + empty VAR → "(feature disabled?)" with NO action advice (else branch)
+t "t90_c1_error: Case1 ERROR+emptyVAR → 'feature disabled?' no --apply action" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t90c1err_c
+    f=\${TMP_DIR}/t90c1err.env
+    printf '# @todo env-update dockerhub:_/no-such-image-xyzzy999 1.0.0\nGLOBAL_STACK_T90C1ERR=\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --no-fail --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[DRIFT]' || { echo \"expected [DRIFT]; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'feature disabled?' || { echo \"must say 'feature disabled?'; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF -- '--apply will' && { echo \"must NOT say '--apply will' for ERROR; got: \$out\"; echo FAIL; exit 0; } || true
+    echo PASS
+"
+
+# ── Case 2a: VAR behind annotation (semver: VAR < annotation) ─────────────
+
+# HOLD + VAR behind → "--force-auto --apply to resolve" ONLY — no redundant dir_msg [B2]
+t "t90_c2a_hold: Case2a HOLD+VARbehind → '--force-auto --apply' only, no dir_msg [B2]" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t90c2ah_c
+    f=\${TMP_DIR}/t90c2ah.env
+    # ann=1.0.0, fetcher→2.5.0 (major→HOLD), VAR=0.5.0 (behind annotation)
+    printf '# @todo env-update github:testowner/testrepo 1.0.0\nGLOBAL_STACK_T90C2AH=0.5.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[DRIFT]' || { echo \"expected [DRIFT]; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'force-auto' || { echo \"must say force-auto; got: \$out\"; echo FAIL; exit 0; }
+    # B2 regression: old code showed 're-run --apply or update annotation' (dir_msg) + '--force-auto --apply'
+    echo \"\$out\" | grep -qF 're-run --apply or update annotation' \
+        && { echo \"B2 regression: must NOT include redundant dir_msg for HOLD+behind; got: \$out\"; echo FAIL; exit 0; } || true
+    echo PASS
+"
+
+# MANUAL + VAR behind → "--force-auto --apply to resolve" ONLY [B3]
+t "t90_c2a_manual: Case2a MANUAL+VARbehind → '--force-auto --apply' only, no dir_msg [B3]" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t90c2am_c
+    f=\${TMP_DIR}/t90c2am.env
+    printf '# @todo env-update (manual) github:testowner/testrepo 1.0.0\nGLOBAL_STACK_T90C2AM=0.5.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[DRIFT]' || { echo \"expected [DRIFT]; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'force-auto' || { echo \"must say force-auto; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 're-run --apply or update annotation' \
+        && { echo \"B3 regression: must NOT include dir_msg for MANUAL+behind; got: \$out\"; echo FAIL; exit 0; } || true
+    echo PASS
+"
+
+# SKIP + VAR behind → "update annotation or revert VAR= manually" NOT "--apply" [B4]
+t "t90_c2a_skip: Case2a SKIP+VARbehind → 'update annotation or revert VAR= manually' [B4]" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t90c2as_c
+    f=\${TMP_DIR}/t90c2as.env
+    # ann=v2.5.0, fetcher→v2.5.0 (same→SKIP), VAR=2.4.0 (behind annotation)
+    printf '# @todo env-update github:testowner/testrepo v2.5.0\nGLOBAL_STACK_T90C2AS=2.4.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[DRIFT]' || { echo \"expected [DRIFT]; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'update annotation or revert VAR= manually' \
+        || { echo \"B4: must say 'update annotation or revert VAR= manually'; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'skips up-to-date records' \
+        || { echo \"B4: must mention 'skips up-to-date records'; got: \$out\"; echo FAIL; exit 0; }
+    # B4 regression guard: old code said 're-run --apply or update annotation'
+    echo \"\$out\" | grep -qF -- '--apply will' \
+        && { echo \"B4 regression: must NOT say '--apply will' for SKIP; got: \$out\"; echo FAIL; exit 0; } || true
+    echo PASS
+"
+
+# ERROR + VAR behind → direction msg + "fetch failed; fix error then re-run" [B9]
+t "t90_c2a_error: Case2a ERROR+VARbehind → dir_msg + 'fetch failed' [B9]" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t90c2ae_c
+    f=\${TMP_DIR}/t90c2ae.env
+    # ERROR decision, ann=1.0.0, VAR=0.5.0 (behind)
+    printf '# @todo env-update dockerhub:_/no-such-image-xyzzy999 1.0.0\nGLOBAL_STACK_T90C2AE=0.5.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --no-fail --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[DRIFT]' || { echo \"expected [DRIFT]; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'fetch failed' || { echo \"B9: must say 'fetch failed'; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 're-run --apply or update annotation' \
+        || { echo \"B9: must include behind dir_msg for ERROR+behind; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# AUTO + VAR behind → "re-run --apply or update annotation" (else branch, B11 semver path)
+t "t90_c2a_auto: Case2a AUTO+VARbehind → 're-run --apply or update annotation'" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t90c2aa_c
+    f=\${TMP_DIR}/t90c2aa.env
+    # ann=2.4.0, fetcher→2.5.0 (minor→AUTO), VAR=2.3.0 (behind annotation)
+    printf '# @todo env-update github:testowner/testrepo 2.4.0\nGLOBAL_STACK_T90C2AA=2.3.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[DRIFT]' || { echo \"expected [DRIFT]; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 're-run --apply or update annotation' \
+        || { echo \"must say 're-run --apply or update annotation' for AUTO+behind; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ── Case 2b: VAR ahead (downgrade, semver: VAR > annotation) ──────────────
+
+# AUTO + downgrade → direction msg in output (else branch — already tested in t70g; confirm
+# fixable counter excludes it as downgrade, not fixable)
+# (Covered by t70g + t75e2 — skip duplicate here, add the novel cells below.)
+
+# HOLD + downgrade → direction msg ONLY, NOT "--force-auto --apply to resolve" [B7]
+t "t90_c2b_hold: Case2b HOLD+downgrade → direction only, NOT '--force-auto --apply' [B7]" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t90c2bh_c
+    f=\${TMP_DIR}/t90c2bh.env
+    # ann=1.0.0, fetcher→2.5.0 (major→HOLD), VAR=5.0.0 (AHEAD of annotation)
+    printf '# @todo env-update github:testowner/testrepo 1.0.0\nGLOBAL_STACK_T90C2BH=5.0.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[DRIFT]' || { echo \"expected [DRIFT]; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'VAR is ahead' || { echo \"must say 'VAR is ahead'; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'downgrade risk' || { echo \"must say 'downgrade risk'; got: \$out\"; echo FAIL; exit 0; }
+    # B7 regression: old code appended '--force-auto --apply to resolve' after direction
+    echo \"\$out\" | grep -qF 'force-auto --apply to resolve' \
+        && { echo \"B7 regression: must NOT say '--force-auto --apply to resolve' for HOLD+downgrade; got: \$out\"; echo FAIL; exit 0; } || true
+    echo PASS
+"
+
+# MANUAL + downgrade → direction msg ONLY, NOT "--force-auto --apply to resolve" [B8]
+t "t90_c2b_manual: Case2b MANUAL+downgrade → direction only, NOT '--force-auto --apply' [B8]" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t90c2bm_c
+    f=\${TMP_DIR}/t90c2bm.env
+    printf '# @todo env-update (manual) github:testowner/testrepo 1.0.0\nGLOBAL_STACK_T90C2BM=5.0.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[DRIFT]' || { echo \"expected [DRIFT]; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'VAR is ahead' || { echo \"must say 'VAR is ahead'; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'force-auto --apply to resolve' \
+        && { echo \"B8 regression: must NOT say '--force-auto --apply to resolve' for MANUAL+downgrade; got: \$out\"; echo FAIL; exit 0; } || true
+    echo PASS
+"
+
+# SKIP + downgrade → direction + "update annotation or revert VAR= manually" [B10]
+t "t90_c2b_skip: Case2b SKIP+downgrade → 'VAR is ahead' + 'update annotation or revert' [B10]" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t90c2bs_c
+    f=\${TMP_DIR}/t90c2bs.env
+    # ann=v2.5.0, fetcher→v2.5.0 (SKIP), VAR=v9.9.9 (AHEAD — v prefix keeps sort-V consistent)
+    printf '# @todo env-update github:testowner/testrepo v2.5.0\nGLOBAL_STACK_T90C2BS=v9.9.9\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[DRIFT]' || { echo \"expected [DRIFT]; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'VAR is ahead' || { echo \"B10: must say 'VAR is ahead'; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'update annotation or revert VAR= manually' \
+        || { echo \"B10: must say 'update annotation or revert VAR= manually'; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'skips up-to-date records' \
+        || { echo \"B10: must mention 'skips up-to-date records'; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ERROR + downgrade → direction msg + "fetch failed" [B9]
+t "t90_c2b_error: Case2b ERROR+downgrade → 'VAR is ahead' + 'fetch failed' [B9]" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t90c2be_c
+    f=\${TMP_DIR}/t90c2be.env
+    printf '# @todo env-update dockerhub:_/no-such-image-xyzzy999 1.0.0\nGLOBAL_STACK_T90C2BE=5.0.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --no-fail --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[DRIFT]' || { echo \"expected [DRIFT]; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'VAR is ahead' || { echo \"B9: must show direction for ERROR+downgrade; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'fetch failed' || { echo \"B9: must say 'fetch failed'; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# LOCK + downgrade → "locked; update annotation manually" — LOCK ignores direction
+t "t90_c2b_lock: Case2b LOCK+downgrade → static 'locked' msg, NOT 'VAR is ahead'" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t90c2bl_c
+    f=\${TMP_DIR}/t90c2bl.env
+    printf '# @todo env-update (lock:hold at 1.x) github:testowner/testrepo 1.0.0\nGLOBAL_STACK_T90C2BL=5.0.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[DRIFT]' || { echo \"expected [DRIFT]; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'locked' || { echo \"must say 'locked'; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'update annotation manually' || { echo \"must say 'update annotation manually'; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'VAR is ahead' \
+        && { echo \"LOCK must NOT show direction msg (ignores _drift_dir_msg); got: \$out\"; echo FAIL; exit 0; } || true
+    echo PASS
+"
+
+# FROZEN + downgrade → "frozen by skip flag" — FROZEN ignores direction
+t "t90_c2b_frozen: Case2b FROZEN+downgrade → 'frozen by skip flag', NOT 'VAR is ahead'" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t90c2bf_c
+    f=\${TMP_DIR}/t90c2bf.env
+    printf '# @todo env-update (skip:hold at 1.x) github:testowner/testrepo 1.0.0\nGLOBAL_STACK_T90C2BF=5.0.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[DRIFT]' || { echo \"expected [DRIFT]; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'frozen by skip flag' || { echo \"must say 'frozen by skip flag'; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'VAR is ahead' \
+        && { echo \"FROZEN must NOT show direction msg; got: \$out\"; echo FAIL; exit 0; } || true
+    echo PASS
+"
+
+# ── Case 2c: non-semver divergence (_drift_dir_msg stays empty) ───────────
+
+# AUTO + non-semver VAR → "re-run --apply or update annotation" (B11 fallback default)
+t "t90_c2c_auto: Case2c AUTO+nonSemverVAR → 're-run --apply or update annotation' [B11]" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t90c2ca_c
+    f=\${TMP_DIR}/t90c2ca.env
+    # ann=2.4.0, fetcher→2.5.0 (AUTO), VAR=2.3.0-alpine3.20 (non-semver — no direction)
+    printf '# @todo env-update github:testowner/testrepo 2.4.0\nGLOBAL_STACK_T90C2CA=2.3.0-alpine3.20\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[DRIFT]' || { echo \"expected [DRIFT]; got: \$out\"; echo FAIL; exit 0; }
+    # B11: old code printed empty suffix when _drift_dir_msg="" (no action advice at all)
+    echo \"\$out\" | grep -qF 're-run --apply or update annotation' \
+        || { echo \"B11: must say 're-run --apply or update annotation' (fallback for non-semver); got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# HOLD + non-semver VAR → "--force-auto --apply to resolve" (no direction since non-semver)
+t "t90_c2c_hold: Case2c HOLD+nonSemverVAR → '--force-auto --apply', no direction msg" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t90c2ch_c
+    f=\${TMP_DIR}/t90c2ch.env
+    # ann=1.0.0 (major→HOLD), VAR=0.9-alpine (non-semver)
+    printf '# @todo env-update github:testowner/testrepo 1.0.0\nGLOBAL_STACK_T90C2CH=0.9-alpine\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[DRIFT]' || { echo \"expected [DRIFT]; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'force-auto' || { echo \"must say '--force-auto --apply'; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'VAR is ahead' \
+        && { echo \"must NOT show direction for non-semver HOLD; got: \$out\"; echo FAIL; exit 0; } || true
+    echo PASS
+"
+
+# SKIP + non-semver VAR → "update annotation or revert VAR= manually (--apply skips up-to-date)"
+t "t90_c2c_skip: Case2c SKIP+nonSemverVAR → 'update annotation or revert VAR= manually'" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t90c2cs_c
+    f=\${TMP_DIR}/t90c2cs.env
+    # ann=v2.5.0 (SKIP), VAR=2.5.0-alpine3.20 (non-semver, differs from annotation)
+    printf '# @todo env-update github:testowner/testrepo v2.5.0\nGLOBAL_STACK_T90C2CS=2.5.0-alpine3.20\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[DRIFT]' || { echo \"expected [DRIFT]; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'update annotation or revert VAR= manually' \
+        || { echo \"must say 'update annotation or revert VAR= manually'; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'skips up-to-date records' \
+        || { echo \"must mention 'skips up-to-date records'; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ── Case 3: use-sha drift (VAR SHA ≠ annotation sha:HASH) ─────────────────
+# Annotation: (use-sha) + sha:OLD_SHA, VAR=DIFFERENT_SHA → Case 3 drift fires.
+# Decision is set by annotation flags + version comparison as usual.
+
+# LOCK + use-sha drift → "locked; update annotation or revert VAR= manually" [B12]
+t "t90_c3_lock: Case3 LOCK+useSha drift → 'locked; update annotation or revert VAR= manually' [B12]" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t90c3lk_c
+    f=\${TMP_DIR}/t90c3lk.env
+    printf '# @todo env-update (lock:hold) (use-sha) github:testowner/testrepo 1.0.0 sha:${_T90_OLD_SHA}\nGLOBAL_STACK_T90C3LK=${_T90_NEW_VAR_SHA}\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[DRIFT]' || { echo \"expected [DRIFT] for use-sha drift; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'locked' || { echo \"B12: must say 'locked'; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'update annotation or revert VAR= manually' \
+        || { echo \"B12: must say 'update annotation or revert VAR= manually'; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# FROZEN + use-sha drift → "frozen by skip flag; update annotation or revert VAR= manually" [B12]
+t "t90_c3_frozen: Case3 FROZEN+useSha drift → 'frozen by skip flag; update annotation or revert' [B12]" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t90c3fz_c
+    f=\${TMP_DIR}/t90c3fz.env
+    printf '# @todo env-update (skip:hold) (use-sha) github:testowner/testrepo 1.0.0 sha:${_T90_OLD_SHA}\nGLOBAL_STACK_T90C3FZ=${_T90_NEW_VAR_SHA}\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[DRIFT]' || { echo \"expected [DRIFT]; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'frozen by skip flag' \
+        || { echo \"B12: must say 'frozen by skip flag'; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'update annotation or revert VAR= manually' \
+        || { echo \"B12: must say 'update annotation or revert VAR= manually'; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# SKIP + use-sha drift → "update annotation or revert VAR= manually (--apply skips up-to-date)" [B12]
+t "t90_c3_skip: Case3 SKIP+useSha drift → 'update annotation or revert VAR= manually' [B12]" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t90c3sk_c
+    f=\${TMP_DIR}/t90c3sk.env
+    # ann=v2.5.0 (same as fixture→SKIP) + (use-sha) + sha:OLD, VAR=DIFFERENTSHA
+    printf '# @todo env-update (use-sha) github:testowner/testrepo v2.5.0 sha:${_T90_OLD_SHA}\nGLOBAL_STACK_T90C3SK=${_T90_NEW_VAR_SHA}\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[DRIFT]' || { echo \"expected [DRIFT]; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'update annotation or revert VAR= manually' \
+        || { echo \"B12: must say 'update annotation or revert VAR= manually'; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'skips up-to-date records' \
+        || { echo \"B12: must mention 'skips up-to-date records'; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF -- '--apply will' \
+        && { echo \"B12: must NOT say '--apply will' for SKIP use-sha; got: \$out\"; echo FAIL; exit 0; } || true
+    echo PASS
+"
+
+# HOLD + use-sha drift → "--force-auto --apply to resolve" [B12]
+t "t90_c3_hold: Case3 HOLD+useSha drift → '--force-auto --apply to resolve' [B12]" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t90c3ho_c
+    f=\${TMP_DIR}/t90c3ho.env
+    # ann=1.0.0 (major→HOLD) + (use-sha) + sha:OLD, VAR=DIFFERENTSHA
+    printf '# @todo env-update (use-sha) github:testowner/testrepo 1.0.0 sha:${_T90_OLD_SHA}\nGLOBAL_STACK_T90C3HO=${_T90_NEW_VAR_SHA}\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[DRIFT]' || { echo \"expected [DRIFT]; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'force-auto' \
+        || { echo \"B12: must say '--force-auto --apply to resolve'; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# MANUAL + use-sha drift → "--force-auto --apply to resolve" [B12]
+t "t90_c3_manual: Case3 MANUAL+useSha drift → '--force-auto --apply to resolve' [B12]" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t90c3mn_c
+    f=\${TMP_DIR}/t90c3mn.env
+    printf '# @todo env-update (manual) (use-sha) github:testowner/testrepo 1.0.0 sha:${_T90_OLD_SHA}\nGLOBAL_STACK_T90C3MN=${_T90_NEW_VAR_SHA}\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[DRIFT]' || { echo \"expected [DRIFT]; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'force-auto' \
+        || { echo \"B12: must say '--force-auto --apply to resolve'; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ERROR + use-sha drift → "fetch failed; fix error then re-run" [B12]
+t "t90_c3_error: Case3 ERROR+useSha drift → 'fetch failed; fix error then re-run' [B12]" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t90c3er_c
+    f=\${TMP_DIR}/t90c3er.env
+    printf '# @todo env-update (use-sha) dockerhub:_/no-such-image-xyzzy999 1.0.0 sha:${_T90_OLD_SHA}\nGLOBAL_STACK_T90C3ER=${_T90_NEW_VAR_SHA}\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --no-fail --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[DRIFT]' || { echo \"expected [DRIFT]; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'fetch failed' \
+        || { echo \"B12: must say 'fetch failed'; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'fix error then re-run' \
+        || { echo \"B12: must say 'fix error then re-run'; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# AUTO + use-sha drift → "re-run --apply to resolve" (not "re-run --apply or update annotation") [B12]
+t "t90_c3_auto: Case3 AUTO+useSha drift → 're-run --apply to resolve' [B12]" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t90c3au_c
+    f=\${TMP_DIR}/t90c3au.env
+    # ann=2.4.0 (minor→AUTO) + (use-sha) + sha:OLD, VAR=DIFFERENTSHA
+    printf '# @todo env-update (use-sha) github:testowner/testrepo 2.4.0 sha:${_T90_OLD_SHA}\nGLOBAL_STACK_T90C3AU=${_T90_NEW_VAR_SHA}\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[DRIFT]' || { echo \"expected [DRIFT]; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 're-run --apply to resolve' \
+        || { echo \"B12: must say 're-run --apply to resolve'; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ── Downgrade counter: LOCK/FROZEN/ERROR=0, HOLD/MANUAL=1 ────────────────
+
+# LOCK + downgrade → 0 DOWNGRADE (LOCK excluded from counter) [B5]
+t "t90_ctr_lock: counter LOCK+downgrade → 0 DOWNGRADE (excluded: --apply cannot write) [B5]" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t90ctrlk_c
+    f=\${TMP_DIR}/t90ctrlk.env
+    printf '# @todo env-update (lock:hold) github:testowner/testrepo 1.0.0\nGLOBAL_STACK_T90CTRLK=5.0.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    # Secondary line must show 0 DOWNGRADE (LOCK excluded from counter per B5)
+    echo \"\$out\" | grep -qE '0 DOWNGRADE' \
+        || { echo \"B5: LOCK+downgrade must show 0 DOWNGRADE; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# FROZEN + downgrade → 0 DOWNGRADE [B6]
+t "t90_ctr_frozen: counter FROZEN+downgrade → 0 DOWNGRADE (excluded: --apply cannot write) [B6]" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t90ctrfz_c
+    f=\${TMP_DIR}/t90ctrfz.env
+    printf '# @todo env-update (skip:hold) github:testowner/testrepo 1.0.0\nGLOBAL_STACK_T90CTRFZ=5.0.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qE '0 DOWNGRADE' \
+        || { echo \"B6: FROZEN+downgrade must show 0 DOWNGRADE; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ERROR + downgrade → 0 DOWNGRADE (fetch failed — cannot apply until error resolved)
+t "t90_ctr_error: counter ERROR+downgrade → 0 DOWNGRADE (excluded: fetch failed)" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t90ctrer_c
+    f=\${TMP_DIR}/t90ctrer.env
+    printf '# @todo env-update dockerhub:_/no-such-image-xyzzy999 1.0.0\nGLOBAL_STACK_T90CTRER=5.0.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --no-fail --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qE '0 DOWNGRADE' \
+        || { echo \"ERROR+downgrade must show 0 DOWNGRADE; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# HOLD + downgrade → 1 DOWNGRADE (--force-auto --apply CAN write it)
+t "t90_ctr_hold: counter HOLD+downgrade → 1 DOWNGRADE (actionable via --force-auto --apply)" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t90ctrho_c
+    f=\${TMP_DIR}/t90ctrho.env
+    printf '# @todo env-update github:testowner/testrepo 1.0.0\nGLOBAL_STACK_T90CTRHO=5.0.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qE '1 DOWNGRADE' \
+        || { echo \"HOLD+downgrade must show 1 DOWNGRADE in summary; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# MANUAL + downgrade → 1 DOWNGRADE (--force-auto --apply CAN write it)
+t "t90_ctr_manual: counter MANUAL+downgrade → 1 DOWNGRADE (actionable via --force-auto --apply)" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t90ctrmn_c
+    f=\${TMP_DIR}/t90ctrmn.env
+    printf '# @todo env-update (manual) github:testowner/testrepo 1.0.0\nGLOBAL_STACK_T90CTRMN=5.0.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qE '1 DOWNGRADE' \
+        || { echo \"MANUAL+downgrade must show 1 DOWNGRADE in summary; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section
