@@ -891,6 +891,9 @@ _gs_eu2_main() {
 
   # Mode banners always go to stderr — this ensures --format=json output is clean JSON on
   # stdout, parseable directly by jq. Tests that grep for banners use 2>&1 so they still work.
+  if [[ "${_GS_EU2_CFG[dry_run]:-false}" == "true" ]]; then
+    printf '[DRY-RUN MODE] no writes — cache, .env, and Dockerfile propagation suppressed\n' >&2
+  fi
   if [[ "${_unstable_overrides}" -gt 0 ]]; then
     printf '[UNSTABLE MODE] channel forced unstable for %d record(s)\n' "${_unstable_overrides}" >&2
   fi
