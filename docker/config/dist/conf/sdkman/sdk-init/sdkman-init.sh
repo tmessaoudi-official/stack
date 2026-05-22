@@ -18,11 +18,11 @@
 
 # set env vars if not set
 if [ -z "$SDKMAN_CANDIDATES_API" ]; then
-	export SDKMAN_CANDIDATES_API="@SDKMAN_CANDIDATES_API@"
+	export SDKMAN_CANDIDATES_API="https://api.sdkman.io/2"
 fi
 
 if [ -z "$SDKMAN_BROKER_API" ]; then
-	export SDKMAN_BROKER_API="@SDKMAN_BROKER_API@"
+	export SDKMAN_BROKER_API="https://broker.sdkman.io"
 fi
 
 if [ -z "$SDKMAN_DIR" ]; then
@@ -32,6 +32,11 @@ fi
 # Load the sdkman config if it exists.
 if [ -f "${SDKMAN_DIR}/etc/config" ]; then
 	source "${SDKMAN_DIR}/etc/config"
+fi
+
+# @changed stack
+if [ -f "${HOME}/.sdkman/etc/config" ]; then
+	source "${HOME}/.sdkman/etc/config"
 fi
 
 # Read the platform file

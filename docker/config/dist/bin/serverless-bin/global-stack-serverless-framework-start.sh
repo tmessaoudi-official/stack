@@ -81,9 +81,14 @@ echo -e 'eval "$(pyenv init --path)"' >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/$
 echo -e 'eval "$(pyenv init --path)"' >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/.profile"
 
 echo -e "\n \033[0;31m Setting up java ${JAVA_VERSION}"
-sdk offline enable
+
+mkdir -p "${HOME}/.sdkman/etc/"
+touch "${HOME}/.sdkman/etc/config"
+echo "sdkman_healthcheck_enable=false" > "${HOME}/.sdkman/etc/config"
+
+source "${HOME}/.sdkman/etc/config"
+
 sdk use java "${JAVA_VERSION}"
-echo "sdk offline enable" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 echo "sdk use java '${JAVA_VERSION}'" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 
 source /usr/local/bin/global-stack-base-setup-packages.sh

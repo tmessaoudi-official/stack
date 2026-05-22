@@ -205,7 +205,12 @@ if [[ -f "${SDKMAN_DIR}/bin/sdkman-init.sh" ]]; then
 	source "${SDKMAN_DIR}/bin/sdkman-init.sh"
 fi
 if [[ "" != "$(command -v sdk)" ]]; then
-	sdk offline enable
+	mkdir -p "${HOME}/.sdkman/etc/"
+	touch "${HOME}/.sdkman/etc/config"
+	echo "sdkman_healthcheck_enable=false" > "${HOME}/.sdkman/etc/config"
+
+	source "${HOME}/.sdkman/etc/config"
+
 	sdk use java ${GLOBAL_STACK_JAVA25_VERSION}
 
 	source "${GLOBAL_STACK_DOCKER_ROOT_PATH}"/docker/config/dist/bin/base-bin/global-stack-base-setup-packages.sh

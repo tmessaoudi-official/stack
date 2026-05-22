@@ -26,5 +26,6 @@ function __sdk_config() {
 		return 1
 	fi
 
+	# @changed stack @todo add home config to override per machine/container !
 	"${editor[@]}" "${SDKMAN_DIR}/etc/config"
 }

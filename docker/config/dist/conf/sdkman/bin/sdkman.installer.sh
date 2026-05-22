@@ -16,7 +16,7 @@
 #
 
 
-# install:- channel: stable; cliVersion: 5.21.0; cliNativeVersion: 0.7.21; api: https://api.sdkman.io/2
+# install:- channel: stable; cliVersion: 5.23.0; cliNativeVersion: 0.7.34; api: https://api.sdkman.io/2
 
 set -e
 
@@ -37,8 +37,8 @@ trap echo_failed_command EXIT
 
 # Global variables
 export SDKMAN_SERVICE="https://api.sdkman.io/2"
-export SDKMAN_VERSION="5.21.0"
-export SDKMAN_NATIVE_VERSION="0.7.21"
+export SDKMAN_VERSION="5.23.0"
+export SDKMAN_NATIVE_VERSION="0.7.34"
 
 if [ -z "$SDKMAN_DIR" ]; then
     SDKMAN_DIR="$HOME/.sdkman"
@@ -154,6 +154,24 @@ if [ -d "$SDKMAN_DIR" ]; then
 	exit 0
 fi
 
+echo "Checking Bash version..."
+if [ -n "$BASH_VERSION" ]; then
+	bash_major_version="${BASH_VERSINFO[0]}"
+	if [ "$bash_major_version" -lt 4 ]; then
+		echo ""
+		echo "======================================================================================================"
+		echo " SDKMAN requires Bash 4 or higher, but you are running Bash ${BASH_VERSION}."
+		echo ""
+		echo " Please upgrade Bash using your system's package manager."
+		echo " On macOS, you can install a modern Bash with Homebrew:"
+		echo ""
+		echo "    $ brew install bash"
+		echo "======================================================================================================"
+		echo ""
+		exit 1
+	fi
+fi
+
 echo "Looking for unzip..."
 if ! command -v unzip > /dev/null; then
 	echo "Not found."
@@ -185,6 +203,18 @@ if ! command -v tar > /dev/null; then
 	echo " Please install tar on your system using your favourite package manager."
 	echo ""
 	echo " Restart after installing tar."
+	echo "======================================================================================================"
+	echo ""
+	exit 1
+fi
+
+echo "Looking for find..."
+if ! command -v find > /dev/null; then
+	echo "Not found."
+	echo "======================================================================================================"
+	echo " Please install find on your system using your favourite package manager."
+	echo ""
+	echo " Restart after installing find."
 	echo "======================================================================================================"
 	echo ""
 	exit 1
@@ -341,6 +371,7 @@ echo "sdkman_checksum_enable=true" >> "$sdkman_config_file"
 echo "sdkman_curl_connect_timeout=7" >> "$sdkman_config_file"
 echo "sdkman_curl_max_time=10" >> "$sdkman_config_file"
 echo "sdkman_debug_mode=false" >> "$sdkman_config_file"
+echo "sdkman_healthcheck_enable=true" >> "$sdkman_config_file"
 echo "sdkman_insecure_ssl=false" >> "$sdkman_config_file"
 echo "sdkman_native_enable=true" >> "$sdkman_config_file"
 
@@ -375,7 +406,7 @@ unzip -qo "$sdkman_zip_file" -d "$sdkman_tmp_folder"
 
 # copy in place
 echo "* Copying archive contents..."
-rm -f "$sdkman_src_folder"/*
+[[ -d "$sdkman_src_folder" ]] && find "$sdkman_src_folder" -maxdepth 1 -type f -delete
 cp -rf "${sdkman_tmp_folder}"/sdkman-*/* "$SDKMAN_DIR"
 
 # clean up
@@ -418,7 +449,7 @@ unzip -qo "$sdkman_zip_file" -d "$sdkman_tmp_folder"
 
 # copy in place
 echo "* Copying archive contents..."
-rm -f "$sdkman_libexec_folder"/*
+[[ -d "$sdkman_libexec_folder" ]] && find "$sdkman_libexec_folder" -maxdepth 1 -type f -delete
 cp -rf "${sdkman_tmp_folder}"/sdkman-*/* "$SDKMAN_DIR"
 
 # clean up
@@ -476,4 +507,3 @@ echo ""
 echo "    sdk help"
 echo ""
 echo "Enjoy!!!"
-

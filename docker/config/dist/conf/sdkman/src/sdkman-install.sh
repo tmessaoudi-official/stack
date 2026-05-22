@@ -81,7 +81,7 @@ function __sdkman_install_candidate_version() {
 function __sdkman_install_local_version() {
 	local candidate version folder version_length version_length_max
 
-	version_length_max=15
+	version_length_max=20
 
 	candidate="$1"
 	version="$2"
@@ -178,7 +178,7 @@ function __sdkman_validate_zip() {
 function __sdkman_checksum_zip() {
 	local -r zip_archive="$1"
 	local -r headers_file="$2"
-	local algorithm checksum cmd
+	local algorithm checksum
 	local shasum_avail=false
 	local md5sum_avail=false
 	
@@ -211,18 +211,20 @@ function __sdkman_checksum_zip() {
 		checksum=$(echo $line | sed -n 's/^X-Sdkman-Checksum-.*:\(.*\)$/\1/p' | tr -cd '[:alnum:]')
 		
 		if [[ -n ${algorithm} && -n ${checksum} ]]; then
-			
 			if [[ "$algorithm" =~ 'SHA' && "$shasum_avail" == 'true' ]]; then
-				cmd="echo \"${checksum} *${zip_archive}\" | shasum --check --quiet"
-				
-			elif [[ "$algorithm" =~ 'MD5' && "$md5sum_avail" == 'true' ]]; then
-				cmd="echo \"${checksum} ${zip_archive}\" | md5sum --check --quiet"
-			fi
-			
-			if [[ -n $cmd ]]; then
 				__sdkman_echo_no_colour "Verifying artifact: ${zip_archive} (${algorithm}:${checksum})"
 
-				if ! eval "$cmd"; then
+				if ! printf '%s *%s\n' "$checksum" "$zip_archive" | shasum --check --quiet; then
+					rm -f "$zip_archive"
+					echo ""
+					__sdkman_echo_red "Stop! An invalid checksum was detected and the archive removed! Please try re-installing."
+					return 1
+				fi
+
+			elif [[ "$algorithm" =~ 'MD5' && "$md5sum_avail" == 'true' ]]; then
+				__sdkman_echo_no_colour "Verifying artifact: ${zip_archive} (${algorithm}:${checksum})"
+
+				if ! printf '%s %s\n' "$checksum" "$zip_archive" | md5sum --check --quiet; then
 					rm -f "$zip_archive"
 					echo ""
 					__sdkman_echo_red "Stop! An invalid checksum was detected and the archive removed! Please try re-installing."

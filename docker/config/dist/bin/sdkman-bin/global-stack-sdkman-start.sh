@@ -101,8 +101,11 @@ source "${SDKMAN_DIR}"/bin/sdkman-init.sh
 if [ "${SDKMAN_MODE}" = "setup" ]; then
   echo -e "\n \033[0;31m Setting up java ${JAVA_VERSION}"
   if [ -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/java.$([[ -n "${JAVA_VERSION_AS:-}" && "" != "${JAVA_VERSION_AS:-}" ]] && echo "${JAVA_VERSION_AS}" || echo "${JAVA_VERSION}")" ]; then
-    sdk offline enable
-    echo "sdk offline enable" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
+    mkdir -p "${HOME}/.sdkman/etc/"
+    touch "${HOME}/.sdkman/etc/config"
+    echo "sdkman_healthcheck_enable=false" > "${HOME}/.sdkman/etc/config"
+
+    source "${HOME}/.sdkman/etc/config"
   fi
 
   source /home/"${GLOBAL_STACK_DOCKER_USER_ID}"/${GLOBAL_STACK_SHELL_RC_TARGET} && sdk install java "${JAVA_VERSION}"

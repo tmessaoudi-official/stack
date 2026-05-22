@@ -190,7 +190,15 @@ npm outdated
 cd "${GLOBA_STACK_CURRENT_DIRECTORY}"
 for _GS_EU_MD_PYTHON_VERSION in $(compgen -v | grep -E '^GLOBAL_STACK_PYTHON([0-9]+|EDGE|[0-9]+_[0-9]+)_VERSION$'); do echo ""; echo "Python ${_GS_EU_MD_PYTHON_VERSION}: ${!_GS_EU_MD_PYTHON_VERSION}"; /stack/tools/pyenv/versions/"${!_GS_EU_MD_PYTHON_VERSION}"/bin/pip"${!_GS_EU_MD_PYTHON_VERSION%.*}" list --outdated; done
 sdkmanager --sdk_root="${ANDROID_HOME}" --list
-sdk offline disable
+
+mkdir -p "${HOME}/.sdkman/etc/"
+touch "${HOME}/.sdkman/etc/config"
+
+echo "sdkman_healthcheck_enable=true" > "${HOME}/.sdkman/etc/config"
+
+source "${HOME}/.sdkman/etc/config"
+
+rm -rf ${HOME}/.sdkman/etc/config
 echo "ant";        sdk list ant        | grep ""
 echo "gradle";     sdk list gradle     | grep ""
 echo "kotlin";     sdk list kotlin     | grep ""
@@ -203,6 +211,10 @@ echo "micronaut";  sdk list micronaut  | grep ""
 echo "quarkus";    sdk list quarkus    | grep ""
 echo "spark";      sdk list spark      | grep ""
 echo "java";       sdk list java       | grep ""
+
+echo "sdkman_healthcheck_enable=false" > "${HOME}/.sdkman/etc/config"
+
+source "${HOME}/.sdkman/etc/config"
 
 bin/env-update.sh --check --no-cache
 ```
