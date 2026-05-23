@@ -278,6 +278,66 @@ _gs_eu2_apply_updates() {
     fi
   done
 
+  # ── SKIP replace-only pass ───────────────────────────────────────────────
+  # Plain SKIP decisions (cur==prop, up-to-date) are skipped by the AUTO gate above.
+  # But their (replace:) targets may still be stale (target_actual ≠ expand_template(cur)).
+  # This second pass rewrites stale replace targets for SKIP records.
+  # No-op guard: skip if target_actual already equals the expanded value.
+  local _n_replace_only_applied=0 _n_replace_only_would=0
+  local _skip_rep_targets _skip_rep_tmpls
+  for (( _i = 0; _i < _count; _i++ )); do
+    _decision="$(_gs_eu2_record_get "${_i}" decision)"
+    # Only plain SKIP (not skip-gate / FROZEN — those have _skip_reason set).
+    # Access skip_reason via record field; LOCK/ERROR/HOLD/MANUAL/AUTO/SHA handled elsewhere.
+    [[ "${_decision}" != "SKIP" ]] && continue
+    # Check for skip-gate (frozen by (skip:) annotation) — those must not be written.
+    local _sk_skip_reason
+    _sk_skip_reason="$(_gs_eu2_record_get "${_i}" skip_reason)"
+    [[ -n "${_sk_skip_reason}" ]] && continue
+
+    _skip_rep_targets="$(_gs_eu2_record_get "${_i}" replace_targets)"
+    _skip_rep_tmpls="$(_gs_eu2_record_get "${_i}" replace_templates)"
+    [[ -z "${_skip_rep_targets}" ]] && continue
+
+    local _sk_cur _sk_var
+    _sk_var="$(_gs_eu2_record_get "${_i}" env_var)"
+    _sk_cur="$(_gs_eu2_record_get "${_i}" current_version)"
+
+    local _sk_old_ifs="${IFS}"
+    IFS=$'\x1f'
+    local _sk_rt_arr _sk_rm_arr
+    read -ra _sk_rt_arr <<< "${_skip_rep_targets}"
+    read -ra _sk_rm_arr <<< "${_skip_rep_tmpls}"
+    IFS="${_sk_old_ifs}"
+    local _sk_ri
+    for (( _sk_ri = 0; _sk_ri < ${#_sk_rt_arr[@]}; _sk_ri++ )); do
+      local _sk_rt="${_sk_rt_arr[${_sk_ri}]}"
+      local _sk_rm="${_sk_rm_arr[${_sk_ri}]:-}"
+      local _sk_exp_cur _sk_tgt_actual
+      _sk_exp_cur="$(_gs_eu2_expand_replace_template "${_sk_rm}" "${_sk_cur:-}")"
+      _sk_tgt_actual="$(grep -m1 "^${_sk_rt}=" "${_env_file}" 2>/dev/null | cut -d= -f2-)"
+      # No-op guard: target already matches — skip silently
+      [[ "${_sk_tgt_actual}" == "${_sk_exp_cur}" ]] && continue
+      # Verify target exists in the env file
+      if ! grep -q "^${_sk_rt}=" "${_env_file}" 2>/dev/null; then
+        printf '  [ERROR]    %-55s  replace-only: target %s not found in %s\n' \
+          "${_sk_var}" "${_sk_rt}" "${_env_file}" >&2
+        if [[ "${_GS_EU2_CFG[no_fail]:-false}" != "true" ]]; then
+          return 1
+        fi
+        continue
+      fi
+      if [[ "${_dry_run}" == "true" ]]; then
+        printf '  [DRY-RUN]  %-55s  replace-only ↳ %s → %s\n' "${_sk_var}" "${_sk_rt}" "${_sk_exp_cur}"
+        (( ++_n_replace_only_would )) || true
+      else
+        _gs_eu2_apply_replace_target "${_env_file}" "${_sk_rt}" "${_sk_exp_cur}"
+        printf '  [REPLACE]    ↳ %-51s  → %s  (replace-only)\n' "${_sk_rt}" "${_sk_exp_cur}"
+        (( ++_n_replace_only_applied )) || true
+      fi
+    done
+  done
+
   if [[ "${_dry_run}" == "true" ]]; then
     local _total_would=$(( _n_auto_only_would + _n_auto_sha_would + _n_sha_would + _n_lock_would ))
     printf '  %d update(s) would be applied (%d version-only, %d version+sha, %d sha, %d lock) (--dry-run — no writes)\n' \

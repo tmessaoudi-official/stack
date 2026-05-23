@@ -88,7 +88,7 @@ _gs_eu2_run_check() {
   _GS_EU2_CACHE_TTL="${_GS_EU2_CFG[cache_ttl]:-3600}"
 
   local _n_auto=0 _n_hold=0 _n_skip=0 _n_error=0 _n_manual=0 _n_sha=0 _n_lock=0 _n_frozen=0
-  local _n_fallback=0 _n_watch=0 _n_drift=0 _n_drift_fixable=0 _n_downgrade=0 _n_downgrade_force=0 _n_hidden=0 _n_sha_anno=0
+  local _n_fallback=0 _n_watch=0 _n_drift=0 _n_drift_fixable=0 _n_downgrade=0 _n_downgrade_force=0 _n_hidden=0 _n_sha_anno=0 _n_replace_drift=0
 
   # Dynamic column width: pre-scan all env_var names so the → arrow aligns
   # across every record in this run, regardless of variable name length.
@@ -470,6 +470,35 @@ _gs_eu2_run_check() {
           fi
         fi
       fi
+      # [REPLACE-DRIFT] signal: any replace target whose actual value differs from
+      # expand_template(cur) is a drift condition — reveal SKIP records that would otherwise hide.
+      # Checked independently of --no-drift (same pattern as [DRIFT] gate above).
+      if [[ "${_should_hide}" == "true" ]]; then
+        local _co_rep_tgts _co_rep_tmpls
+        _co_rep_tgts="$(_gs_eu2_record_get "${_i}" replace_targets)"
+        _co_rep_tmpls="$(_gs_eu2_record_get "${_i}" replace_templates)"
+        if [[ -n "${_co_rep_tgts}" ]]; then
+          local _co_old_ifs="${IFS}"
+          IFS=$'\x1f'
+          local _co_rt_arr _co_rm_arr
+          read -ra _co_rt_arr <<< "${_co_rep_tgts}"
+          read -ra _co_rm_arr <<< "${_co_rep_tmpls}"
+          IFS="${_co_old_ifs}"
+          local _co_ri
+          for (( _co_ri = 0; _co_ri < ${#_co_rt_arr[@]}; _co_ri++ )); do
+            local _co_rt="${_co_rt_arr[${_co_ri}]}"
+            local _co_rm="${_co_rm_arr[${_co_ri}]:-}"
+            local _co_tgt_actual _co_exp_cur
+            _co_tgt_actual="$(grep -m1 "^${_co_rt}=" "${_GS_EU2_CFG[env_file]}" 2>/dev/null \
+              | cut -d= -f2-)"
+            _co_exp_cur="$(_gs_eu2_expand_replace_template "${_co_rm}" "${_cur:-}")"
+            if [[ "${_co_tgt_actual}" != "${_co_exp_cur}" ]]; then
+              _should_hide=false
+              break
+            fi
+          done
+        fi
+      fi
     fi
     if [[ "${_should_hide}" == "true" ]]; then
       (( ++_n_hidden )) || true
@@ -746,6 +775,79 @@ _gs_eu2_run_check() {
       fi
     fi
 
+    # [REPLACE-DRIFT] sub-line: for records with (replace:TARGET=template) annotations, compare
+    # each target's actual value against expand_template(cur) and expand_template(prop).
+    # - stale_now  : target_actual ≠ exp_cur  → target is already wrong relative to current primary
+    # - update_pending : exp_cur ≠ exp_prop → proposed version would change the expanded value
+    # Decision-aware display, per-record counter (first stale target fires the counter).
+    # NOT suppressed by --no-notes. ONLY suppressed by --no-drift (consistent with [DRIFT]).
+    local _record_replace_drift_counted=false
+    if [[ "${_GS_EU2_CFG[no_drift]:-false}" != "true" && "${_decision}" != "ERROR" ]]; then
+      local _rd_rep_tgts _rd_rep_tmpls
+      _rd_rep_tgts="$(_gs_eu2_record_get "${_i}" replace_targets)"
+      _rd_rep_tmpls="$(_gs_eu2_record_get "${_i}" replace_templates)"
+      if [[ -n "${_rd_rep_tgts}" ]]; then
+        local _rd_old_ifs="${IFS}"
+        IFS=$'\x1f'
+        local _rd_rt_arr _rd_rm_arr
+        read -ra _rd_rt_arr <<< "${_rd_rep_tgts}"
+        read -ra _rd_rm_arr <<< "${_rd_rep_tmpls}"
+        IFS="${_rd_old_ifs}"
+        local _rd_ri
+        for (( _rd_ri = 0; _rd_ri < ${#_rd_rt_arr[@]}; _rd_ri++ )); do
+          local _rd_rt="${_rd_rt_arr[${_rd_ri}]}"
+          local _rd_rm="${_rd_rm_arr[${_rd_ri}]:-}"
+          local _rd_tgt_actual _rd_exp_cur _rd_exp_prop
+          _rd_tgt_actual="$(grep -m1 "^${_rd_rt}=" "${_GS_EU2_CFG[env_file]}" 2>/dev/null \
+            | cut -d= -f2-)"
+          _rd_exp_cur="$(_gs_eu2_expand_replace_template "${_rd_rm}" "${_cur:-}")"
+          _rd_exp_prop="$(_gs_eu2_expand_replace_template "${_rd_rm}" "${_prop:-}")"
+          local _rd_stale_now=false _rd_update_pending=false
+          [[ "${_rd_tgt_actual}" != "${_rd_exp_cur}" ]] && _rd_stale_now=true
+          [[ "${_rd_exp_cur}" != "${_rd_exp_prop}" ]] && _rd_update_pending=true
+
+          if [[ "${_decision}" == "AUTO" || "${_decision}" == "SHA" ]]; then
+            # AUTO/SHA: always show the replace sub-line; append [REPLACE-DRIFT] if already stale
+            if [[ "${_rd_stale_now}" == "true" ]]; then
+              printf '%10s↳ (replace) %-47s  %s → %s  [REPLACE-DRIFT]\n' \
+                "" "${_rd_rt}" "${_rd_tgt_actual}" "${_rd_exp_prop}"
+            else
+              printf '%10s↳ (replace) %-47s  %s → %s\n' \
+                "" "${_rd_rt}" "${_rd_tgt_actual}" "${_rd_exp_prop}"
+            fi
+          elif [[ "${_decision}" == "SKIP" && -z "${_skip_reason}" && "${_rd_stale_now}" == "true" ]]; then
+            # SKIP + stale: target already wrong; plain --apply can fix replace-only drift
+            printf '%10s↳ [REPLACE-DRIFT] %s  actual=%s ≠ expected=%s — run --apply to fix\n' \
+              "" "${_rd_rt}" "${_rd_tgt_actual}" "${_rd_exp_cur}"
+          elif [[ ( "${_decision}" == "HOLD" || "${_decision}" == "MANUAL" ) \
+                  && "${_rd_stale_now}" == "true" ]]; then
+            # HOLD/MANUAL + stale: --force-auto --apply required
+            printf '%10s↳ [REPLACE-DRIFT] %s  actual=%s ≠ expected=%s — run --force-auto --apply to fix\n' \
+              "" "${_rd_rt}" "${_rd_tgt_actual}" "${_rd_exp_cur}"
+          elif [[ ( "${_decision}" == "HOLD" || "${_decision}" == "MANUAL" ) \
+                  && "${_rd_stale_now}" == "false" && "${_rd_update_pending}" == "true" ]]; then
+            # HOLD/MANUAL + not stale but update pending: informational (force-auto will apply)
+            printf '%10s↳ (replace) %-47s  → %s  (with --force-auto --apply)\n' \
+              "" "${_rd_rt}" "${_rd_exp_prop}"
+          elif [[ -n "${_skip_reason}" && "${_rd_stale_now}" == "true" ]]; then
+            # FROZEN (skip-gate) + stale: informational only — skip gate blocks apply
+            printf '%10s↳ [REPLACE-DRIFT] %s  actual=%s ≠ expected=%s — informational only (frozen)\n' \
+              "" "${_rd_rt}" "${_rd_tgt_actual}" "${_rd_exp_cur}"
+          elif [[ "${_decision}" == "LOCK" && "${_rd_stale_now}" == "true" ]]; then
+            # LOCK + stale: informational only — lock blocks apply
+            printf '%10s↳ [REPLACE-DRIFT] %s  actual=%s ≠ expected=%s — informational only (locked)\n' \
+              "" "${_rd_rt}" "${_rd_tgt_actual}" "${_rd_exp_cur}"
+          fi
+
+          # Per-record counter: increment on first stale target only
+          if [[ "${_rd_stale_now}" == "true" && "${_record_replace_drift_counted}" == "false" ]]; then
+            (( ++_n_replace_drift )) || true
+            _record_replace_drift_counted=true
+          fi
+        done
+      fi
+    fi
+
     # Post-drift counter updates (outside the no_drift guard — drift_fired is false when suppressed)
     if [[ "${_drift_fired}" == "true" ]]; then
       (( ++_n_drift )) || true
@@ -776,21 +878,22 @@ _gs_eu2_run_check() {
   printf '  Summary: %d AUTO, %d SHA, %d HOLD, %d MANUAL, %d LOCK, %d SKIP, %d FROZEN, %d FALLBACK, %d ERROR  (%s)\n' \
     "${_n_auto}" "${_n_sha}" "${_n_hold}" "${_n_manual}" "${_n_lock}" "${_n_skip}" "${_n_frozen}" "${_n_fallback}" "${_n_error}" "${_checked_suffix}"
 
-  # Secondary signals sub-line: WATCH, DRIFT (with fixable count), DOWNGRADE, +sha.
-  # DRIFT and DOWNGRADE suppressed when --no-drift is active.
+  # Secondary signals sub-line: WATCH, DRIFT (with fixable count), DOWNGRADE, REPLACE-DRIFT, +sha.
+  # DRIFT, DOWNGRADE, and REPLACE-DRIFT suppressed when --no-drift is active.
   # +sha follows WATCH (unconditional — not suppressed by --no-drift).
   # Entire line omitted when all relevant signals are zero.
   local _sec_watch="${_n_watch}"
-  local _sec_drift=0 _sec_fixable=0 _sec_down=0 _sec_down_force=0 _sec_sha_anno="${_n_sha_anno}"
+  local _sec_drift=0 _sec_fixable=0 _sec_down=0 _sec_down_force=0 _sec_sha_anno="${_n_sha_anno}" _sec_replace_drift=0
   if [[ "${_GS_EU2_CFG[no_drift]:-false}" != "true" ]]; then
     _sec_drift="${_n_drift}"
     _sec_fixable="${_n_drift_fixable}"
     _sec_down="${_n_downgrade}"
     _sec_down_force="${_n_downgrade_force}"
+    _sec_replace_drift="${_n_replace_drift}"
   fi
-  if (( _sec_watch > 0 || _sec_drift > 0 || _sec_down > 0 || _sec_down_force > 0 || _sec_sha_anno > 0 )); then
-    printf '    ↳ %d WATCH · %d DRIFT (%d fixable) · %d DOWNGRADE · %d FORCE-DOWNGRADE · %d +sha\n' \
-      "${_sec_watch}" "${_sec_drift}" "${_sec_fixable}" "${_sec_down}" "${_sec_down_force}" "${_sec_sha_anno}"
+  if (( _sec_watch > 0 || _sec_drift > 0 || _sec_down > 0 || _sec_down_force > 0 || _sec_sha_anno > 0 || _sec_replace_drift > 0 )); then
+    printf '    ↳ %d WATCH · %d DRIFT (%d fixable) · %d DOWNGRADE · %d FORCE-DOWNGRADE · %d REPLACE-DRIFT · %d +sha\n' \
+      "${_sec_watch}" "${_sec_drift}" "${_sec_fixable}" "${_sec_down}" "${_sec_down_force}" "${_sec_replace_drift}" "${_sec_sha_anno}"
   fi
 
   # Exit non-zero when any ERROR decisions were recorded — callers can detect fetch failures.

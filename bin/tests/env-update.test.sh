@@ -8859,7 +8859,7 @@ t "t90_ctr_manual: counter MANUAL+downgrade → 0 DOWNGRADE · 1 FORCE-DOWNGRADE
 section "91 — (replace:TARGET=template) cascade-update"
 
 # t91a: single (replace:) with --check shows [REPLACE] sub-line; --dry-run prevents file change
-t "t91a: replace check shows [REPLACE] sub-line — dry-run no write" bash -c "
+t "t91a: replace check shows (replace) sub-line — dry-run no write" bash -c "
     export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t91a_c
     f=\${TMP_DIR}/t91a.env
@@ -8867,7 +8867,7 @@ t "t91a: replace check shows [REPLACE] sub-line — dry-run no write" bash -c "
     before=\$(cat \"\$f\")
     out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>&1)
     after=\$(cat \"\$f\")
-    echo \"\$out\" | grep -qF '[REPLACE]' || { echo \"expected [REPLACE] sub-line in check output; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '(replace)' || { echo \"expected (replace) sub-line in check output; got: \$out\"; echo FAIL; exit 0; }
     echo \"\$out\" | grep -qF 'DRY-RUN' || { echo \"expected DRY-RUN mode banner; got: \$out\"; echo FAIL; exit 0; }
     [ \"\$before\" = \"\$after\" ] || { echo \"file was modified in dry-run; diff: \$after\"; echo FAIL; exit 0; }
     echo PASS
@@ -8923,6 +8923,102 @@ t "t91e: missing target → ERROR output; --no-fail lets primary apply succeed" 
     out=\$(bash '${ENV_UPDATE_V2}' --apply --no-fail --env-file=\"\$f\" 2>&1)
     echo \"\$out\" | grep -qiE 'error|not found' || { echo \"expected error about missing target; got: \$out\"; echo FAIL; exit 0; }
     grep -qE '^GLOBAL_STACK_T91E=v?2\.5\.0$' \"\$f\" || { echo \"primary var must still be applied with --no-fail; file: \$(cat \"\$f\")\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+_flush_section
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 92 — (replace:) replace-drift detection and apply matrix
+#
+# Fixture: github:testowner/testrepo — returns v2.5.0.
+# SKIP scenario: annotation current=2.5.0 → SKIP (cur==prop, up-to-date).
+# HOLD scenario: annotation current=1.5.0, fixture=2.5.0 → HOLD (major bump).
+# AUTO+drift: annotation current=2.4.0 (→AUTO), target already wrong.
+# ═══════════════════════════════════════════════════════════════════════════
+section "92 — (replace:) replace-drift detection and apply matrix"
+
+# t92a: SKIP + stale target → [REPLACE-DRIFT] in check output
+# Note: annotation cur must match fixture-returned v2.5.0 exactly for a true SKIP decision.
+t "t92a: SKIP + stale target shows [REPLACE-DRIFT] in check" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t92a_c
+    f=\${TMP_DIR}/t92a.env
+    # cur=v2.5.0 (matches fixture) → SKIP; target should be node2 but is node1 (stale)
+    printf '# @todo env-update (replace:GLOBAL_STACK_T92A_ALIAS=node{major}) github:testowner/testrepo v2.5.0\nGLOBAL_STACK_T92A=v2.5.0\nGLOBAL_STACK_T92A_ALIAS=node1\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[REPLACE-DRIFT]' || { echo \"expected [REPLACE-DRIFT] in check output; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'GLOBAL_STACK_T92A_ALIAS' || { echo \"expected target name in sub-line; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t92b: SKIP + stale target → --apply fixes replace-only drift
+# Note: cur=v2.5.0 (annotation already normalized) + fixture returns v2.5.0 → true SKIP.
+# We set annotation cur to the fixture-normalized form so that cur==prop (SKIP decision).
+t "t92b: SKIP + stale target → --apply rewrites target to correct value" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t92b_c
+    f=\${TMP_DIR}/t92b.env
+    # cur=v2.5.0 (matches what fixture returns) → SKIP; target should be node2 but is node1 (stale)
+    printf '# @todo env-update (replace:GLOBAL_STACK_T92B_ALIAS=node{major}) github:testowner/testrepo v2.5.0\nGLOBAL_STACK_T92B=v2.5.0\nGLOBAL_STACK_T92B_ALIAS=node1\n' > \"\$f\"
+    bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" > /dev/null 2>&1
+    out=\$(bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$f\" 2>&1)
+    grep -qE '^GLOBAL_STACK_T92B=v?2\.5\.0$' \"\$f\" || { echo \"primary must remain unchanged; file: \$(cat \"\$f\")\"; echo FAIL; exit 0; }
+    grep -q '^GLOBAL_STACK_T92B_ALIAS=node2$' \"\$f\" || { echo \"target should now be node2; file: \$(cat \"\$f\")\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '[REPLACE]' || { echo \"expected [REPLACE] in apply output; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t92c: SKIP + fresh target → no [REPLACE-DRIFT] sub-line (no-op guard)
+t "t92c: SKIP + already-correct target → no replace-drift sub-line" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t92c_c
+    f=\${TMP_DIR}/t92c.env
+    # cur=v2.5.0 (matches fixture) → SKIP; target already node2 (exp_cur for v2.5.0) → no drift
+    printf '# @todo env-update (replace:GLOBAL_STACK_T92C_ALIAS=node{major}) github:testowner/testrepo v2.5.0\nGLOBAL_STACK_T92C=v2.5.0\nGLOBAL_STACK_T92C_ALIAS=node2\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[REPLACE-DRIFT]' && { echo \"unexpected [REPLACE-DRIFT] when target is fresh; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t92d: HOLD + stale target → [REPLACE-DRIFT] with --force-auto message
+t "t92d: HOLD + stale target shows [REPLACE-DRIFT] with --force-auto hint" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t92d_c
+    f=\${TMP_DIR}/t92d.env
+    # cur=1.5.0 → fixture returns 2.5.0 → HOLD (major bump); target should be node1 but is node0 (stale)
+    printf '# @todo env-update (replace:GLOBAL_STACK_T92D_ALIAS=node{major}) github:testowner/testrepo 1.5.0\nGLOBAL_STACK_T92D=1.5.0\nGLOBAL_STACK_T92D_ALIAS=node0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[REPLACE-DRIFT]' || { echo \"expected [REPLACE-DRIFT] for HOLD+stale; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'force-auto' || { echo \"expected --force-auto hint in sub-line; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t92e: HOLD + fresh target + update_pending → informational (replace) with force-auto hint
+t "t92e: HOLD + fresh target + update pending → informational (replace) sub-line" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t92e_c
+    f=\${TMP_DIR}/t92e.env
+    # cur=1.5.0 → fixture returns 2.5.0 → HOLD; target is node1 (matches exp_cur) but exp_prop=node2
+    printf '# @todo env-update (replace:GLOBAL_STACK_T92E_ALIAS=node{major}) github:testowner/testrepo 1.5.0\nGLOBAL_STACK_T92E=1.5.0\nGLOBAL_STACK_T92E_ALIAS=node1\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[REPLACE-DRIFT]' && { echo \"no drift expected when target is fresh; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '(replace)' || { echo \"expected informational (replace) sub-line; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'force-auto' || { echo \"expected --force-auto hint; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'node2' || { echo \"expected exp_prop value node2 in sub-line; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t92f: AUTO + stale target → [REPLACE-DRIFT] marker appended to (replace) sub-line
+t "t92f: AUTO + stale target → [REPLACE-DRIFT] marker on (replace) sub-line" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t92f_c
+    f=\${TMP_DIR}/t92f.env
+    # cur=2.4.0 → fixture returns 2.5.0 → AUTO; target should be node2 (exp_cur) but is node1 (stale)
+    printf '# @todo env-update (replace:GLOBAL_STACK_T92F_ALIAS=node{major}) github:testowner/testrepo 2.4.0\nGLOBAL_STACK_T92F=2.4.0\nGLOBAL_STACK_T92F_ALIAS=node1\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[REPLACE-DRIFT]' || { echo \"expected [REPLACE-DRIFT] on AUTO+stale; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '(replace)' || { echo \"expected (replace) sub-line with [REPLACE-DRIFT]; got: \$out\"; echo FAIL; exit 0; }
     echo PASS
 "
 
