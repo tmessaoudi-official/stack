@@ -103,14 +103,14 @@ _gs_eu2_tally_init() {
   if [[ "${_GS_EU2_TALLY_FORCE:-0}" != "1" ]]; then
     [[ ! -t 2 ]] && return 0
   fi
-  # Width gate: full bypasses width check; auto requires cols >= 120
+  # Width gate: full bypasses width check; auto requires cols >= 130
   if [[ "${_t_mode}" == "auto" ]]; then
     local _cols
     _cols="${COLUMNS:-0}"
-    if [[ "${_cols}" -lt 120 ]]; then
+    if [[ "${_cols}" -lt 130 ]]; then
       _cols="$(tput cols 2>/dev/null || printf '0')"
     fi
-    [[ "${_cols}" -lt 120 ]] && return 0
+    [[ "${_cols}" -lt 130 ]] && return 0
   fi
   _GS_EU2_TALLY_ACTIVE=1
 }
@@ -124,6 +124,7 @@ _gs_eu2_tally_draw() {
   local _tma="${7}" _tsha="${8}" _tlk="${9}" _tfr="${10}"
   local _tfa="${11}" _twa="${12}" _tdr="${13}" _tdf="${14}"
   local _tdo="${15}" _tdof="${16}" _trc="${17}"
+  local _tv="${18}" _thid="${19}" _tsa="${20}" _trd="${21}"
 
   # Erase previous tally block: move cursor up (_prev_lines - 1) lines then
   # overwrite each line with \r\033[K (erase to end of line).
@@ -148,19 +149,21 @@ _gs_eu2_tally_draw() {
   local _lines=0
   local _fetching_num=$(( _ti + 1 ))
 
-  # Line 1: progress position
-  printf '\r\033[K  [%d/%d] checking...' "${_fetching_num}" "${_tcount}" >&2
+  # Line A: progress position with variable name
+  printf '\r\033[K  [%d/%d] fetching %-55s' "${_fetching_num}" "${_tcount}" "${_tv:0:55}" >&2
   (( _lines++ )) || true
 
-  # Line 2: decision tallies — always present
-  printf '\n\r\033[K  AUTO:%-3d  SHA:%-3d  HOLD:%-3d  MANUAL:%-3d  LOCK:%-3d  SKIP:%-3d  FROZEN:%-3d  ERR:%-3d' \
-    "${_ta}" "${_tsha}" "${_th}" "${_tma}" "${_tlk}" "${_tsk}" "${_tfr}" "${_te}" >&2
+  # Line B1: decision tallies (Summary: format) — always present
+  local _checked_suf="${_fetching_num} checked"
+  (( _thid > 0 )) && _checked_suf="${_fetching_num} checked, ${_thid} hidden"
+  printf '\n\r\033[K  Summary: %d AUTO, %d SHA, %d HOLD, %d MANUAL, %d LOCK, %d SKIP, %d FROZEN, %d FALLBACK, %d ERROR  (%s)' \
+    "${_ta}" "${_tsha}" "${_th}" "${_tma}" "${_tlk}" "${_tsk}" "${_tfr}" "${_tfa}" "${_te}" "${_checked_suf}" >&2
   (( _lines++ )) || true
 
-  # Line 3 (signals): only when any non-zero
-  if (( _twa > 0 || _tdr > 0 || _tdo > 0 || _tdof > 0 || _trc > 0 || _tfa > 0 )); then
-    printf '\n\r\033[K  WATCH:%-3d  DRIFT:%-3d(%d fixable)  DOWN:%-3d  FORCE-DOWN:%-3d  +replace:%-3d  FALLBACK:%-3d' \
-      "${_twa}" "${_tdr}" "${_tdf}" "${_tdo}" "${_tdof}" "${_trc}" "${_tfa}" >&2
+  # Line B2 (signals): WATCH, DRIFT, DOWNGRADE, REPLACE-DRIFT, +sha, +replace
+  if (( _twa > 0 || _tdr > 0 || _tdo > 0 || _tdof > 0 || _tsa > 0 || _trd > 0 || _trc > 0 )); then
+    printf '\n\r\033[K  ↳ %d WATCH · %d DRIFT (%d fixable) · %d DOWNGRADE · %d FORCE-DOWNGRADE · %d REPLACE-DRIFT · %d +sha · %d +replace' \
+      "${_twa}" "${_tdr}" "${_tdf}" "${_tdo}" "${_tdof}" "${_trd}" "${_tsa}" "${_trc}" >&2
     (( _lines++ )) || true
   fi
 
@@ -231,7 +234,8 @@ _gs_eu2_run_check() {
         "${_n_auto}" "${_n_hold}" "${_n_skip}" "${_n_error}" \
         "${_n_manual}" "${_n_sha}" "${_n_lock}" "${_n_frozen}" \
         "${_n_fallback}" "${_n_watch}" "${_n_drift}" "${_n_drift_fixable}" \
-        "${_n_downgrade}" "${_n_downgrade_force}" "${_n_replace_cascade}"
+        "${_n_downgrade}" "${_n_downgrade_force}" "${_n_replace_cascade}" \
+        "${_env_var}" "${_n_hidden}" "${_n_sha_anno}" "${_n_replace_drift}"
     else
       printf '\r  [%d/%d] fetching %-55s' \
         "$(( _i + 1 ))" "${_count}" "${_env_var:0:55}" >&2
@@ -629,13 +633,19 @@ _gs_eu2_run_check() {
     fi
     if [[ "${_should_hide}" == "true" ]]; then
       (( ++_n_hidden )) || true
-      printf '\r%*s\r' "$(( _max_var_len + 20 ))" "" >&2
+      if [[ "${_GS_EU2_TALLY_ACTIVE}" != "1" ]]; then
+        printf '\r%*s\r' "$(( _max_var_len + 20 ))" "" >&2
+      fi
       continue
     fi
 
     # Clear the progress line then print the result
     # Width: tag(8) + 2 spaces + var field + some margin for change text
-    printf '\r%*s\r' "$(( _max_var_len + 20 ))" "" >&2
+    if [[ "${_GS_EU2_TALLY_ACTIVE}" == "1" ]]; then
+      _gs_eu2_tally_erase
+    else
+      printf '\r%*s\r' "$(( _max_var_len + 20 ))" "" >&2
+    fi
     printf "%s  %-${_max_var_len}s%s\n" "${_tag}" "${_env_var}" "${_change}"
     [[ -n "${_note}" && "${_GS_EU2_CFG[no_notes]:-false}" != "true" ]] && \
       printf '%10s↳ %s\n' "" "${_note}"
