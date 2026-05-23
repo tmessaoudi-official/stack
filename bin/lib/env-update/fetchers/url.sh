@@ -190,7 +190,12 @@ _gs_eu2_fetch_url() {
         grep -E '[0-9]' | \
         grep -v '^$' || true)"
 
-      _proposed="$(printf '%s\n' "${_entries}" | sort -V | tail -1 || true)"
+      _proposed="$(printf '%s\n' "${_entries}" | \
+        perl -ne '
+          chomp; $orig = $_;
+          (my $key = $orig) =~ s/^(v?\d+\.\d+\.\d+-nightly\d{8})[0-9a-f]+$/$1/;
+          print "$key\t$orig\n";
+        ' | sort -V -k1,1 | tail -1 | cut -f2 || true)"
       _proposed="${_proposed%/}"
     fi
 
