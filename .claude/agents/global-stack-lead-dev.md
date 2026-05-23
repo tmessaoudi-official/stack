@@ -49,11 +49,8 @@ For shell script edits involving block nesting: include an indentation diagram s
 
 **Subagent plan surfacing**: emit the plan as readable plaintext in the conversation before Phase 5. The parent must relay it to the user and receive explicit approval. A plan visible only inside the subagent is not an approved plan.
 
-### Phase 5: IMPLEMENT
-Apply expert craftsmanship: ShellCheck-clean scripts, Hadolint-clean Dockerfiles, idempotent operations, `set -eEuo pipefail` in new scripts, proper PATH handling. Surface unexpected discoveries immediately.
-
 ### Phase 6: SECOND SWEEP
-Confidence-gated review — P0 (fix before done), P1 (fix now, explain), P2 (mention, fix if trivial), P3 (skip unless asked). Check: correctness, regressions, secrets, security, side effects, quality (ShellCheck, Hadolint). Verify block nesting (`bash -n`) after any shell edits.
+Global Phase 6 rules from `~/.claude/CLAUDE.md` apply (P0-P3 gates, all check dimensions). Additionally: verify block nesting (`bash -n`) after any shell edits.
 
 **Concrete /stack checklist** — run every applicable item and report each result:
 1. `shellcheck <file>` — zero warnings on every `.sh` file touched
