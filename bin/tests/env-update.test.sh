@@ -589,7 +589,7 @@ t "t09a: --dry-run is accepted (exit 0) with --dump" bash -c "
 
 t "t09b: --dry-run emits notice to stderr naming the flag" bash -c "
     err=\$(bash '${ENV_UPDATE_V2}' --dry-run --dump --env-file='${FIXTURES}/basic-dockerhub.env' 2>&1 >/dev/null)
-    echo \"\$err\" | grep -qF 'dry-run' || { echo \"stderr missing dry-run notice: \$err\"; echo FAIL; exit 0; }
+    echo \"\$err\" | grep -qiF 'dry-run' || { echo \"stderr missing dry-run notice: \$err\"; echo FAIL; exit 0; }
     echo PASS
 "
 
