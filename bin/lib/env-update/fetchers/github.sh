@@ -64,7 +64,8 @@ _gs_eu2_github_ls_remote() {
     # list (ps auxww), shell history, and CI logs.
     local _askpass
     _askpass="$(mktemp)"
-    printf '#!/bin/sh\necho "%s"\n' "${_tok}" > "${_askpass}"
+    printf '%s\n' '#!/bin/sh' > "${_askpass}"
+    printf 'echo "%s"\n' "${_tok}" >> "${_askpass}"
     chmod 700 "${_askpass}"
     GIT_ASKPASS="${_askpass}" git ls-remote \
       "https://x-access-token@github.com/${_repo}.git" 'refs/tags/*' 2>/dev/null || true

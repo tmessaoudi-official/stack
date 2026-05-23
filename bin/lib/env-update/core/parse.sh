@@ -372,8 +372,9 @@ _gs_eu2_parse_env_file() {
         local _before_urls="${_remaining%%urls:*}"
         local _after_urls="${_remaining#*urls:}"
         _after_urls="${_after_urls#"${_after_urls%%[! ]*}"}"
-        local _url_tok _rest_after=""
-        for _url_tok in ${_after_urls}; do
+        local _url_tok _rest_after="" _url_arr=()
+        read -ra _url_arr <<< "${_after_urls}"
+        for _url_tok in "${_url_arr[@]}"; do
           if [[ "${_url_tok}" =~ ^https?:// ]]; then
             _pend_urls+="${_url_tok} "
           else
