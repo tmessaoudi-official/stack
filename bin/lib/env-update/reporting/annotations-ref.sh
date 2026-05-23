@@ -110,10 +110,14 @@ ANNOTATION FLAGS (parenthesised, space-separated, after the @todo keyword)
                       detected. Default depth = 1 (major boundary).
     (replace:TARGET=template)
                       When this var is AUTO-updated, also rewrite TARGET=<expanded>
-                      in the same env file. Template tokens: {major} {minor} {patch}.
+                      in the same env file. Template tokens: {version} {major} {minor} {patch}.
                       Multiple (replace:) flags may be stacked on one annotation.
                       Missing TARGET → ERROR (--no-fail skips without aborting).
                       Dry-run shows sub-lines but writes no files.
+                      Note: tokens are extracted by splitting on '.'. Versions with
+                      distro suffixes (e.g. 18.3-alpine3.23) will produce garbled
+                      {minor}/{patch} tokens. Use {version} or {major} only for
+                      such values.
 
 
 INLINE SYNTAX EXAMPLES

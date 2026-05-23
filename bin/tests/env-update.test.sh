@@ -9022,6 +9022,21 @@ t "t92f: AUTO + stale target → [REPLACE-DRIFT] marker on (replace) sub-line" b
     echo PASS
 "
 
+# t92g: SKIP + stale target → --apply summary includes replace-only count
+# Verifies Fix 1: _n_replace_only_applied is included in the live apply summary line.
+t "t92g: SKIP + stale target → --apply summary includes replace-only count" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t92g_c
+    f=\${TMP_DIR}/t92g.env
+    # cur=v2.5.0 (matches fixture) → SKIP; target node1 is stale (should be node2)
+    printf '# @todo env-update (replace:GLOBAL_STACK_T92G_ALIAS=node{major}) github:testowner/testrepo v2.5.0\nGLOBAL_STACK_T92G=v2.5.0\nGLOBAL_STACK_T92G_ALIAS=node1\n' > \"\$f\"
+    bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" > /dev/null 2>&1
+    out=\$(bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF 'replace-only' || { echo \"expected replace-only in apply summary line; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qE '[1-9][0-9]* replace-only' || { echo \"expected non-zero replace-only count in summary; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
 _flush_section
 
 # ═══════════════════════════════════════════════════════════════════════════

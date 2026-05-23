@@ -329,7 +329,7 @@ _gs_eu2_apply_updates() {
         continue
       fi
       if [[ "${_dry_run}" == "true" ]]; then
-        printf '  [DRY-RUN]  %-55s  replace-only ↳ %s → %s\n' "${_sk_var}" "${_sk_rt}" "${_sk_exp_cur}"
+        printf '  [DRY-RUN]  %-55s  ↳ replace-only %s → %s\n' "${_sk_var}" "${_sk_rt}" "${_sk_exp_cur}"
         (( ++_n_replace_only_would )) || true
       else
         _gs_eu2_apply_replace_target "${_env_file}" "${_sk_rt}" "${_sk_exp_cur}"
@@ -340,12 +340,12 @@ _gs_eu2_apply_updates() {
   done
 
   if [[ "${_dry_run}" == "true" ]]; then
-    local _total_would=$(( _n_auto_only_would + _n_auto_sha_would + _n_sha_would + _n_lock_would ))
-    printf '  %d update(s) would be applied (%d version-only, %d version+sha, %d sha, %d lock) (--dry-run — no writes)\n' \
-      "${_total_would}" "${_n_auto_only_would}" "${_n_auto_sha_would}" "${_n_sha_would}" "${_n_lock_would}"
+    local _total_would=$(( _n_auto_only_would + _n_auto_sha_would + _n_sha_would + _n_lock_would + _n_replace_only_would ))
+    printf '  %d update(s) would be applied (%d version-only, %d version+sha, %d sha, %d lock, %d replace-only) (--dry-run — no writes)\n' \
+      "${_total_would}" "${_n_auto_only_would}" "${_n_auto_sha_would}" "${_n_sha_would}" "${_n_lock_would}" "${_n_replace_only_would}"
   else
-    local _total_applied=$(( _n_auto_only_applied + _n_auto_sha_applied + _n_sha_applied + _n_lock_applied ))
-    printf '  %d update(s) applied to %s (%d version-only, %d version+sha, %d sha, %d lock)\n' \
-      "${_total_applied}" "${_env_file}" "${_n_auto_only_applied}" "${_n_auto_sha_applied}" "${_n_sha_applied}" "${_n_lock_applied}"
+    local _total_applied=$(( _n_auto_only_applied + _n_auto_sha_applied + _n_sha_applied + _n_lock_applied + _n_replace_only_applied ))
+    printf '  %d update(s) applied to %s (%d version-only, %d version+sha, %d sha, %d lock, %d replace-only)\n' \
+      "${_total_applied}" "${_env_file}" "${_n_auto_only_applied}" "${_n_auto_sha_applied}" "${_n_sha_applied}" "${_n_lock_applied}" "${_n_replace_only_applied}"
   fi
 }

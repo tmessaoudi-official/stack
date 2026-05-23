@@ -197,7 +197,7 @@ _gs_eu2_fetch_url() {
           # channel name is irrelevant; only the date+sha suffix causes sort-V
           # to mis-order entries. Non-matching entries pass through unchanged.
           chomp; $orig = $_;
-          (my $key = $orig) =~ s/(\d{8})[0-9a-f]+$/$1/;
+          (my $key = $orig) =~ s/(\d{8})[0-9a-fA-F]+$/$1/;
           print "$key\t$orig\n";
         ' | sort -V -k1,1 | tail -1 | cut -f2 || true)"
       _proposed="${_proposed%/}"
