@@ -20,6 +20,10 @@ readonly _GS_EU2_CURL_SH_LOADED=1
 # Scope: process lifetime only. NOT written to the TTL cache (cross-run deduplication handled
 # by cache.sh independently). git ls-remote calls in github.sh use a separate code path and
 # are naturally excluded.
+#
+# Key format: "${_url}:${auth}" where auth=1 (Bearer token present) or 0 (no token).
+# This prevents an unauthenticated response cached under the bare URL from being returned
+# to an authenticated caller that would receive a richer (or rate-limit-exempt) response.
 declare -gA _GS_EU2_HTTP_MEMO=()
 
 # _gs_eu2_fixture_path URL
@@ -102,7 +106,10 @@ _gs_eu2_http_get_core() {
   _core_body="$(cat "${_body_tmp}")"
   rm -f "${_body_tmp}" "${_curl_stderr_file}"
   # Store in memo for this session (process lifetime only — not persisted to TTL cache).
-  _GS_EU2_HTTP_MEMO["${_url}"]="${_core_body}"
+  # Key includes auth flag to prevent unauthenticated responses being served to auth callers.
+  local _auth_flag=0
+  [[ -n "${_token}" ]] && _auth_flag=1
+  _GS_EU2_HTTP_MEMO["${_url}:${_auth_flag}"]="${_core_body}"
   printf '%s' "${_core_body}"
 }
 
@@ -123,9 +130,9 @@ _gs_eu2_http_get() {
     return 1
   fi
 
-  # In-session URL memo: return cached body immediately if this URL was already fetched.
-  if [[ -n "${_GS_EU2_HTTP_MEMO[${_url}]+x}" ]]; then
-    printf '%s' "${_GS_EU2_HTTP_MEMO[${_url}]}"
+  # In-session URL memo: return cached body if this URL was already fetched without auth.
+  if [[ -n "${_GS_EU2_HTTP_MEMO[${_url}:0]+x}" ]]; then
+    printf '%s' "${_GS_EU2_HTTP_MEMO[${_url}:0]}"
     return 0
   fi
 
@@ -158,9 +165,9 @@ _gs_eu2_http_get_auth() {
     return 1
   fi
 
-  # In-session URL memo: return cached body if this URL was already fetched in this session.
-  if [[ -n "${_GS_EU2_HTTP_MEMO[${_url}]+x}" ]]; then
-    printf '%s' "${_GS_EU2_HTTP_MEMO[${_url}]}"
+  # In-session URL memo: return cached body if this URL was already fetched with auth.
+  if [[ -n "${_GS_EU2_HTTP_MEMO[${_url}:1]+x}" ]]; then
+    printf '%s' "${_GS_EU2_HTTP_MEMO[${_url}:1]}"
     return 0
   fi
 

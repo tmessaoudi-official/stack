@@ -6965,12 +6965,13 @@ source '/stack/bin/lib/env-update/http/curl.sh'
 "
 
 # t68a: pre-seeded memo entry is returned by _gs_eu2_http_get (no fixture dir, no network)
+# Memo key format is "${url}:0" for unauthenticated, "${url}:1" for authenticated.
 t "t68a: pre-seeded memo entry returned without network call" bash -c "
     unset _GS_EU2_HTTP_FIXTURE_DIR
     ${_MEMO_LIBS}
     url='https://test.example/no-such-fixture-98765'
-    # Pre-seed the memo — with no fixture dir and no real server, memo is the only source
-    _GS_EU2_HTTP_MEMO[\"\$url\"]='memo-body-sentinel'
+    # Pre-seed the memo using the unauthenticated key format: url:0
+    _GS_EU2_HTTP_MEMO[\"\${url}:0\"]='memo-body-sentinel'
     out=\$(_gs_eu2_http_get \"\$url\")
     [[ \"\$out\" == 'memo-body-sentinel' ]] || { echo \"expected memo-body-sentinel, got: \$out\"; echo FAIL; exit 0; }
     echo PASS
@@ -6996,11 +6997,13 @@ t "t68c: distinct URLs in memo are independent" bash -c "
 "
 
 # t68d: _gs_eu2_http_get_auth with empty token delegates to _gs_eu2_http_get which hits memo
+# Empty token → delegates to _gs_eu2_http_get → uses url:0 key
 t "t68d: http_get_auth with empty token hits memo via plain-get delegation" bash -c "
     unset _GS_EU2_HTTP_FIXTURE_DIR
     ${_MEMO_LIBS}
     url='https://test.example/no-such-fixture-memo-auth'
-    _GS_EU2_HTTP_MEMO[\"\$url\"]='auth-memo-body'
+    # Pre-seed with unauthenticated key: empty-token delegation goes through _gs_eu2_http_get → url:0
+    _GS_EU2_HTTP_MEMO[\"\${url}:0\"]='auth-memo-body'
     # Empty token → delegates to _gs_eu2_http_get → hits memo (no fixture dir, no network)
     out=\$(_gs_eu2_http_get_auth \"\$url\" '')
     [[ \"\$out\" == 'auth-memo-body' ]] || { echo \"expected auth-memo-body, got: \$out\"; echo FAIL; exit 0; }
@@ -9542,6 +9545,92 @@ t "t96e: env-scan propagate dry-run per-var output contains [DRY-RUN] prefix" ba
     echo \"\$out\" | grep -qF '[DRY-RUN]' || { echo \"expected [DRY-RUN] in dry-run per-var output; got: \$out\"; echo FAIL; exit 0; }
     # File must NOT be modified in dry-run
     grep -qF 'oldvalue' \"\${df_dir}/Dockerfile\" || { echo 'Dockerfile was modified in dry-run'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+_flush_section
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 97 — P2 fetchers: HTTP memo auth key, Quay pagination
+# ═══════════════════════════════════════════════════════════════════════════
+section "97 — HTTP memo auth key collision + Quay pagination"
+
+# eu-F008: HTTP memo auth-key collision.
+# Scenario: unauthenticated call for URL X is cached under key "X".
+# Subsequent authenticated call for the same URL X hits the memo and returns
+# the unauthenticated response — wrong: it should use the authenticated response.
+# Fix: key the memo by "${_url}:${auth}" (auth=1 when token present, 0 when not).
+t "t97a: HTTP memo does not bleed unauthenticated response to authenticated caller" bash -c "
+    source '/stack/bin/lib/env-update/config/defaults.sh'
+    source '/stack/bin/lib/env-update/http/curl.sh'
+    # Simulate: prime the memo with an unauthenticated response for a URL
+    _GS_EU2_HTTP_MEMO=()
+    url='https://api.github.com/repos/test/test/releases'
+    # Manually store as the current (buggy) key — just the URL
+    _GS_EU2_HTTP_MEMO[\"\${url}\"]='[{\"tag_name\":\"v1.0.0-UNAUTH\"}]'
+    # Now call authenticated — it must NOT return the unauthenticated memo entry.
+    # With the fix: auth key is \"\${url}:1\", which is not in the memo → falls through.
+    # With the bug: auth key is \"\${url}\", which IS in the memo → returns wrong data.
+    result=\$(_gs_eu2_http_get_auth \"\${url}\" 'fake-token-xyz' 2>&1 || true)
+    # The auth call must NOT return the UNAUTH-tagged response stored under bare URL key
+    echo \"\$result\" | grep -qF 'UNAUTH' && { echo \"auth call returned unauthenticated memo entry (key collision); got: \$result\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t97b: HTTP memo auth key: authenticated and unauthenticated entries are independent" bash -c "
+    source '/stack/bin/lib/env-update/config/defaults.sh'
+    source '/stack/bin/lib/env-update/http/curl.sh'
+    _GS_EU2_HTTP_MEMO=()
+    url='https://api.github.com/repos/test/test/releases'
+    # Store authenticated response under the auth key (post-fix: url:1)
+    _GS_EU2_HTTP_MEMO[\"\${url}:1\"]='[{\"tag_name\":\"v2.0.0-AUTH\"}]'
+    # Store unauthenticated response under the no-auth key (post-fix: url:0)
+    _GS_EU2_HTTP_MEMO[\"\${url}:0\"]='[{\"tag_name\":\"v1.0.0-UNAUTH\"}]'
+    # Unauthenticated call must return UNAUTH entry
+    unauth=\$(_gs_eu2_http_get \"\${url}\" 2>&1 || true)
+    echo \"\$unauth\" | grep -qF 'UNAUTH' || { echo \"unauth call did not return UNAUTH entry; got: \$unauth\"; echo FAIL; exit 0; }
+    # Authenticated call must return AUTH entry
+    auth=\$(_gs_eu2_http_get_auth \"\${url}\" 'fake-token' 2>&1 || true)
+    echo \"\$auth\" | grep -qF 'AUTH' || { echo \"auth call did not return AUTH entry; got: \$auth\"; echo FAIL; exit 0; }
+    # Authenticated must NOT return UNAUTH
+    echo \"\$auth\" | grep -qF 'UNAUTH' && { echo \"auth returned unauth entry — key collision; got: \$auth\"; echo FAIL; exit 0; } || true
+    echo PASS
+"
+
+# eu-F031: Quay pagination.
+# Current: _gs_eu2_qy_fetch_tags uses ?limit=50 with no pagination loop.
+# Fix: loop while has_additional=true, incrementing page= param.
+# Test: create two page fixtures; page 1 has has_additional=true; assert both pages' tags appear.
+t "t97c: Quay fetcher follows has_additional pagination" bash -c "
+    source '/stack/bin/lib/env-update/config/defaults.sh'
+    source '/stack/bin/lib/env-update/core/records.sh'
+    source '/stack/bin/lib/env-update/core/semver.sh'
+    source '/stack/bin/lib/env-update/core/channel.sh'
+    source '/stack/bin/lib/env-update/core/tag_flags.sh'
+    source '/stack/bin/lib/env-update/core/cache.sh'
+    source '/stack/bin/lib/env-update/http/curl.sh'
+    source '/stack/bin/lib/env-update/fetchers/quay.sh'
+    export _GS_EU2_HTTP_FIXTURE_DIR=\${TMP_DIR}/t97c_fixtures
+    mkdir -p \"\${_GS_EU2_HTTP_FIXTURE_DIR}\"
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t97c_cache
+    # Page 1: has_additional=true (more pages) — contains older tags
+    cat > \"\${_GS_EU2_HTTP_FIXTURE_DIR}/quay.io_api_v1_repository_testpag_myimg_tag__page_1\" <<'FIXTURE'
+{\"has_additional\": true, \"tags\": [{\"name\": \"25.1.0\"}, {\"name\": \"25.0.0\"}]}
+FIXTURE
+    # Page 2: has_additional=false (last page) — contains newer tag
+    cat > \"\${_GS_EU2_HTTP_FIXTURE_DIR}/quay.io_api_v1_repository_testpag_myimg_tag__page_2\" <<'FIXTURE'
+{\"has_additional\": false, \"tags\": [{\"name\": \"26.0.0\"}]}
+FIXTURE
+    _GS_EU2_REC_COUNT=0; _gs_eu2_record_new; idx=\$_GS_EU2_LAST_IDX
+    _gs_eu2_record_set \$idx env_var     'GLOBAL_STACK_T97C'
+    _gs_eu2_record_set \$idx identifier  'testpag/myimg'
+    _gs_eu2_record_set \$idx type        'quay'
+    _gs_eu2_record_set \$idx no_cache    'true'
+    _gs_eu2_fetch_quay \$idx
+    proposed=\$(_gs_eu2_record_get \$idx proposed_version)
+    # Without pagination fix: proposed would be best from page 1 only (25.1.0)
+    # With pagination fix: proposed is best from all pages (26.0.0)
+    [[ \"\$proposed\" == '26.0.0' ]] || { echo \"expected proposed=26.0.0 (from page 2); got: '\$proposed'\"; echo FAIL; exit 0; }
     echo PASS
 "
 

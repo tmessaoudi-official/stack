@@ -23,17 +23,30 @@ source "$(dirname "${BASH_SOURCE[0]}")/../core/cache.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/../http/curl.sh"
 
 # Fetch all tags for an org/image from Quay.io.
+# Follows has_additional pagination (page=1, page=2, ...) until exhausted.
 # Returns newline-separated list of tag names on stdout, non-zero on HTTP failure.
 _gs_eu2_qy_fetch_tags() {
   local _identifier="${1}"
-  local _url="https://quay.io/api/v1/repository/${_identifier}/tag/?limit=50&onlyActiveTags=true"
-  local _resp
+  local _base="https://quay.io/api/v1/repository/${_identifier}/tag/?limit=100&onlyActiveTags=true"
+  local _all_tags="" _resp _page_tags _has_more _page=1
 
-  if ! _resp="$(_gs_eu2_http_get "${_url}" 2>/dev/null)"; then
-    return 1
-  fi
+  while true; do
+    local _url="${_base}&page=${_page}"
+    if ! _resp="$(_gs_eu2_http_get "${_url}" 2>/dev/null)"; then
+      return 1
+    fi
 
-  printf '%s\n' "${_resp}" | jq -r '.tags[].name' 2>/dev/null || true
+    if ! _page_tags="$(printf '%s\n' "${_resp}" | jq -r '.tags[].name' 2>/dev/null)"; then
+      return 1
+    fi
+    _all_tags="${_all_tags}${_page_tags}"$'\n'
+
+    _has_more="$(printf '%s\n' "${_resp}" | jq -r '.has_additional // false' 2>/dev/null || true)"
+    [[ "${_has_more}" != "true" ]] && break
+    (( _page++ ))
+  done
+
+  printf '%s' "${_all_tags}"
 }
 
 # Main fetcher entry point — takes one argument: record index.
