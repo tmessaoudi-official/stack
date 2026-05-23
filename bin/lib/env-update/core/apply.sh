@@ -87,6 +87,7 @@ _gs_eu2_expand_replace_template() {
   local _minor="${_rest%%.*}"
   local _patch="${_rest#*.}"
   _patch="${_patch%%[-+]*}"
+  _tmpl="${_tmpl//\{version\}/${_ver}}"
   _tmpl="${_tmpl//\{major\}/${_major}}"
   _tmpl="${_tmpl//\{minor\}/${_minor}}"
   _tmpl="${_tmpl//\{patch\}/${_patch}}"
