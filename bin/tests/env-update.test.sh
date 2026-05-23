@@ -9199,6 +9199,23 @@ t "t94h: REPLACE-DRIFT and +replace coexist in B2 for AUTO decision + stale targ
     echo PASS
 "
 
+# t94j: multi-target record: target1=update_pending (stale_now=false), target2=stale_now (update_pending=false)
+# Both REPLACE-DRIFT and +replace counters must fire: independent flags prevent one from blocking the other.
+t "t94j: multi-target — independent drift and cascade counters each fire once per record" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t94j_c
+    f=\${TMP_DIR}/t94j.env
+    # target A: node{minor}; cur=v2.4.0→exp_cur=node4, actual=node4 → stale_now=false, update_pending=true
+    # target B: prefix-{major}; cur=v2.4.0→exp_cur=prefix-2, actual=prefix-1 → stale_now=true, update_pending=false
+    printf '# @todo env-update (replace:GLOBAL_STACK_T94J_A=node{minor}) (replace:GLOBAL_STACK_T94J_B=prefix-{major}) github:testowner/testrepo v2.4.0\nGLOBAL_STACK_T94J=v2.4.0\nGLOBAL_STACK_T94J_A=node4\nGLOBAL_STACK_T94J_B=prefix-1\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>&1)
+    # drift counter: stale target B must appear
+    echo \"\$out\" | grep -qF '1 REPLACE-DRIFT' || { echo \"expected 1 REPLACE-DRIFT (target B is stale); got: \$out\"; echo FAIL; exit 0; }
+    # cascade counter: update_pending (target A) + stale (target B) → 1 +replace (per-record, not per-target)
+    echo \"\$out\" | grep -qF '1 +replace' || { echo \"expected 1 +replace (cascade fires once per record); got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
 # t94i: +replace counter fires when update_pending=true AND decision=AUTO, even when stale_now=false
 # Scenario: annotation ver=v2.4.0, template node{minor} → exp_cur=node4. Target actual=node4 (matches)
 # → stale_now=false. proposed=v2.5.0 → exp_prop=node5 ≠ node4 → update_pending=true.

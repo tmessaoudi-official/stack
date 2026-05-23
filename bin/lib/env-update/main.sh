@@ -961,6 +961,7 @@ _gs_eu2_run_check() {
     # Decision-aware display, per-record counter (first stale target fires the counter).
     # NOT suppressed by --no-notes. ONLY suppressed by --no-drift (consistent with [DRIFT]).
     local _record_replace_drift_counted=false
+    local _record_replace_cascade_counted=false
     if [[ "${_GS_EU2_CFG[no_drift]:-false}" != "true" && "${_decision}" != "ERROR" ]]; then
       local _rd_rep_tgts _rd_rep_tmpls
       _rd_rep_tgts="$(_gs_eu2_record_get "${_i}" replace_targets)"
@@ -1018,21 +1019,21 @@ _gs_eu2_run_check() {
               "" "${_rd_rt}" "${_rd_tgt_actual}" "${_rd_exp_cur}"
           fi
 
-          # Per-record counter: increment on first target that triggers a visible sub-line.
+          # Per-record counter: each counter increments at most once per record.
+          # Two independent flags ensure multi-target records are counted correctly even when
+          # the first target triggers cascade (update_pending) but a later target is stale.
           # _n_replace_drift  : stale targets (replace value wrong relative to current primary)
           # _n_replace_cascade: AUTO/SHA decisions where a replace write will occur on --apply
           #                     (stale_now OR update_pending — both result in a write)
-          if [[ "${_record_replace_drift_counted}" == "false" ]]; then
-            if [[ "${_rd_stale_now}" == "true" ]]; then
-              (( ++_n_replace_drift )) || true
-            fi
-            if [[ ( "${_rd_stale_now}" == "true" || "${_rd_update_pending}" == "true" ) \
-                  && ( "${_decision}" == "AUTO" || "${_decision}" == "SHA" ) ]]; then
-              (( ++_n_replace_cascade )) || true
-              _record_replace_drift_counted=true
-            elif [[ "${_rd_stale_now}" == "true" ]]; then
-              _record_replace_drift_counted=true
-            fi
+          if [[ "${_rd_stale_now}" == "true" && "${_record_replace_drift_counted}" == "false" ]]; then
+            (( ++_n_replace_drift )) || true
+            _record_replace_drift_counted=true
+          fi
+          if [[ "${_record_replace_cascade_counted}" == "false" \
+                && ( "${_rd_stale_now}" == "true" || "${_rd_update_pending}" == "true" ) \
+                && ( "${_decision}" == "AUTO" || "${_decision}" == "SHA" ) ]]; then
+            (( ++_n_replace_cascade )) || true
+            _record_replace_cascade_counted=true
           fi
         done
       fi
