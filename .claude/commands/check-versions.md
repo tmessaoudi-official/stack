@@ -1,6 +1,6 @@
 Run the automated version checker in preview mode to find outdated dependencies.
 
-`env-update.sh` covers all fetcher types (dockerhub, github, npm, pecl, pecl-git,
+`env-update.sh` covers all fetcher types (dockerhub, github, npm, pecl,
 pypi, quay, rubygems, sdkman, sdkmanager, url, codeberg). No legacy fallback needed.
 
 ## Step 1 — v2 check (all types)
@@ -23,8 +23,8 @@ Give a single consolidated recommendation:
 - Which entries need manual review
 - Suggested apply command when ready: `bin/env-update.sh --apply`
 
-If `--filter` or `--type` arguments are provided, pass them through.
+If `--filter` arguments are provided, pass them through.
 Common filters:
 - `--filter=NODE` — only Node-related versions
-- `--type=github` — only GitHub-sourced versions
-- `--type=dockerhub` — only Docker Hub images
+- `--filter=type:github` — only GitHub-sourced versions
+- `--filter=type:dockerhub` — only Docker Hub images

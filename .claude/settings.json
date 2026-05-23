@@ -4,6 +4,7 @@
       "Bash(bin/env-scan.sh --dry-run *)",
       "Bash(bin/tests/env-scan.test.sh)",
       "Bash(bin/env-update.sh --version)",
+      "Bash(bin/env-update.sh --check *)",
       "Bash(bin/env-update.sh --dry-run *)",
       "Bash(bin/env-update.sh --dump *)",
       "Bash(bin/tests/env-update.test.sh)",
