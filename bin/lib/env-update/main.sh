@@ -86,9 +86,31 @@ _gs_eu2_dispatch_fetcher() {
 #   AND ( tally == full  OR  cols >= 120 )
 # _GS_EU2_TALLY_FORCE=1 bypasses the TTY check (test hook).
 #
-# Module-level state (set by _gs_eu2_tally_init):
+# Module-level state (set by _gs_eu2_tally_init and the check loop):
 _GS_EU2_TALLY_ACTIVE=0      # 1 when tally is enabled for this run
 _GS_EU2_TALLY_PREV_LINES=0  # how many lines the last draw emitted
+# Per-draw state written by the check loop before each _gs_eu2_tally_draw call:
+_GS_EU2_TALLY_IDX=0         # 0-based current record index
+_GS_EU2_TALLY_COUNT=0       # total record count
+_GS_EU2_TALLY_VARNAME=""    # env_var name being fetched
+_GS_EU2_TALLY_N_AUTO=0
+_GS_EU2_TALLY_N_HOLD=0
+_GS_EU2_TALLY_N_SKIP=0
+_GS_EU2_TALLY_N_ERROR=0
+_GS_EU2_TALLY_N_MANUAL=0
+_GS_EU2_TALLY_N_SHA=0
+_GS_EU2_TALLY_N_LOCK=0
+_GS_EU2_TALLY_N_FROZEN=0
+_GS_EU2_TALLY_N_FALLBACK=0
+_GS_EU2_TALLY_N_WATCH=0
+_GS_EU2_TALLY_N_DRIFT=0
+_GS_EU2_TALLY_N_DRIFT_FIXABLE=0
+_GS_EU2_TALLY_N_DOWNGRADE=0
+_GS_EU2_TALLY_N_DOWNGRADE_FORCE=0
+_GS_EU2_TALLY_N_HIDDEN=0
+_GS_EU2_TALLY_N_SHA_ANNO=0
+_GS_EU2_TALLY_N_REPLACE_DRIFT=0
+_GS_EU2_TALLY_N_REPLACE_CASCADE=0
 
 _gs_eu2_tally_init() {
   _GS_EU2_TALLY_ACTIVE=0
@@ -116,15 +138,10 @@ _gs_eu2_tally_init() {
 }
 
 # _gs_eu2_tally_draw: emit the live tally block.
-# Args: _i (0-based current index), _count (total), all _n_* counters
+# Reads all state from _GS_EU2_TALLY_* module-level vars (set by the check loop).
+# No positional arguments — caller must update state vars before each call.
 _gs_eu2_tally_draw() {
   [[ "${_GS_EU2_TALLY_ACTIVE}" != "1" ]] && return 0
-  local _ti="${1}" _tcount="${2}"
-  local _ta="${3}" _th="${4}" _tsk="${5}" _te="${6}"
-  local _tma="${7}" _tsha="${8}" _tlk="${9}" _tfr="${10}"
-  local _tfa="${11}" _twa="${12}" _tdr="${13}" _tdf="${14}"
-  local _tdo="${15}" _tdof="${16}" _trc="${17}"
-  local _tv="${18}" _thid="${19}" _tsa="${20}" _trd="${21}"
 
   # Erase previous tally block: move cursor up (_prev_lines - 1) lines then
   # overwrite each line with \r\033[K (erase to end of line).
@@ -147,23 +164,32 @@ _gs_eu2_tally_draw() {
   fi
 
   local _lines=0
-  local _fetching_num=$(( _ti + 1 ))
+  local _fetching_num=$(( _GS_EU2_TALLY_IDX + 1 ))
 
   # Line A: progress position with variable name
-  printf '\r\033[K  [%d/%d] fetching %-55s' "${_fetching_num}" "${_tcount}" "${_tv:0:55}" >&2
+  printf '\r\033[K  [%d/%d] fetching %-55s' "${_fetching_num}" "${_GS_EU2_TALLY_COUNT}" "${_GS_EU2_TALLY_VARNAME:0:55}" >&2
   (( _lines++ )) || true
 
   # Line B1: decision tallies (Summary: format) — always present
   local _checked_suf="${_fetching_num} checked"
-  (( _thid > 0 )) && _checked_suf="${_fetching_num} checked, ${_thid} hidden"
+  (( _GS_EU2_TALLY_N_HIDDEN > 0 )) && _checked_suf="${_fetching_num} checked, ${_GS_EU2_TALLY_N_HIDDEN} hidden"
   printf '\n\r\033[K  Summary: %d AUTO, %d SHA, %d HOLD, %d MANUAL, %d LOCK, %d SKIP, %d FROZEN, %d FALLBACK, %d ERROR  (%s)' \
-    "${_ta}" "${_tsha}" "${_th}" "${_tma}" "${_tlk}" "${_tsk}" "${_tfr}" "${_tfa}" "${_te}" "${_checked_suf}" >&2
+    "${_GS_EU2_TALLY_N_AUTO}" "${_GS_EU2_TALLY_N_SHA}" "${_GS_EU2_TALLY_N_HOLD}" \
+    "${_GS_EU2_TALLY_N_MANUAL}" "${_GS_EU2_TALLY_N_LOCK}" "${_GS_EU2_TALLY_N_SKIP}" \
+    "${_GS_EU2_TALLY_N_FROZEN}" "${_GS_EU2_TALLY_N_FALLBACK}" "${_GS_EU2_TALLY_N_ERROR}" \
+    "${_checked_suf}" >&2
   (( _lines++ )) || true
 
   # Line B2 (signals): WATCH, DRIFT, DOWNGRADE, REPLACE-DRIFT, +sha, +replace
-  if (( _twa > 0 || _tdr > 0 || _tdo > 0 || _tdof > 0 || _tsa > 0 || _trd > 0 || _trc > 0 )); then
+  if (( _GS_EU2_TALLY_N_WATCH > 0 || _GS_EU2_TALLY_N_DRIFT > 0 || \
+        _GS_EU2_TALLY_N_DOWNGRADE > 0 || _GS_EU2_TALLY_N_DOWNGRADE_FORCE > 0 || \
+        _GS_EU2_TALLY_N_SHA_ANNO > 0 || _GS_EU2_TALLY_N_REPLACE_DRIFT > 0 || \
+        _GS_EU2_TALLY_N_REPLACE_CASCADE > 0 )); then
     printf '\n\r\033[K  ↳ %d WATCH · %d DRIFT (%d fixable) · %d DOWNGRADE · %d FORCE-DOWNGRADE · %d REPLACE-DRIFT · %d +sha · %d +replace' \
-      "${_twa}" "${_tdr}" "${_tdf}" "${_tdo}" "${_tdof}" "${_trd}" "${_tsa}" "${_trc}" >&2
+      "${_GS_EU2_TALLY_N_WATCH}" "${_GS_EU2_TALLY_N_DRIFT}" "${_GS_EU2_TALLY_N_DRIFT_FIXABLE}" \
+      "${_GS_EU2_TALLY_N_DOWNGRADE}" "${_GS_EU2_TALLY_N_DOWNGRADE_FORCE}" \
+      "${_GS_EU2_TALLY_N_REPLACE_DRIFT}" "${_GS_EU2_TALLY_N_SHA_ANNO}" \
+      "${_GS_EU2_TALLY_N_REPLACE_CASCADE}" >&2
     (( _lines++ )) || true
   fi
 
@@ -230,12 +256,28 @@ _gs_eu2_run_check() {
 
     # Progress indicator: live tally when tally is active; fallback single-line \r when not
     if [[ "${_GS_EU2_TALLY_ACTIVE}" == "1" ]]; then
-      _gs_eu2_tally_draw "${_i}" "${_count}" \
-        "${_n_auto}" "${_n_hold}" "${_n_skip}" "${_n_error}" \
-        "${_n_manual}" "${_n_sha}" "${_n_lock}" "${_n_frozen}" \
-        "${_n_fallback}" "${_n_watch}" "${_n_drift}" "${_n_drift_fixable}" \
-        "${_n_downgrade}" "${_n_downgrade_force}" "${_n_replace_cascade}" \
-        "${_env_var}" "${_n_hidden}" "${_n_sha_anno}" "${_n_replace_drift}"
+      _GS_EU2_TALLY_IDX="${_i}"
+      _GS_EU2_TALLY_COUNT="${_count}"
+      _GS_EU2_TALLY_VARNAME="${_env_var}"
+      _GS_EU2_TALLY_N_AUTO="${_n_auto}"
+      _GS_EU2_TALLY_N_HOLD="${_n_hold}"
+      _GS_EU2_TALLY_N_SKIP="${_n_skip}"
+      _GS_EU2_TALLY_N_ERROR="${_n_error}"
+      _GS_EU2_TALLY_N_MANUAL="${_n_manual}"
+      _GS_EU2_TALLY_N_SHA="${_n_sha}"
+      _GS_EU2_TALLY_N_LOCK="${_n_lock}"
+      _GS_EU2_TALLY_N_FROZEN="${_n_frozen}"
+      _GS_EU2_TALLY_N_FALLBACK="${_n_fallback}"
+      _GS_EU2_TALLY_N_WATCH="${_n_watch}"
+      _GS_EU2_TALLY_N_DRIFT="${_n_drift}"
+      _GS_EU2_TALLY_N_DRIFT_FIXABLE="${_n_drift_fixable}"
+      _GS_EU2_TALLY_N_DOWNGRADE="${_n_downgrade}"
+      _GS_EU2_TALLY_N_DOWNGRADE_FORCE="${_n_downgrade_force}"
+      _GS_EU2_TALLY_N_HIDDEN="${_n_hidden}"
+      _GS_EU2_TALLY_N_SHA_ANNO="${_n_sha_anno}"
+      _GS_EU2_TALLY_N_REPLACE_DRIFT="${_n_replace_drift}"
+      _GS_EU2_TALLY_N_REPLACE_CASCADE="${_n_replace_cascade}"
+      _gs_eu2_tally_draw
     else
       printf '\r  [%d/%d] fetching %-55s' \
         "$(( _i + 1 ))" "${_count}" "${_env_var:0:55}" >&2
