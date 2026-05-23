@@ -21,6 +21,7 @@ _gs_eu2_is_recognized_flag() {
       fetch-extract | fetch-json | \
       url-probe | url-probe-depth | \
       version-prefix | watch-major | \
+      replace | \
       depends-on | git) return 0 ;;
     *) return 1 ;;
   esac
@@ -172,6 +173,13 @@ _gs_eu2_dispatch_flag() {
         exit 1
       fi
       ;;
+    replace)
+      if [[ -z "${_val}" || "${_val}" != *=* ]]; then
+        printf 'env-update: %s:%s: flag replace requires TARGET=template format\n' \
+          "${_env_file}" "${_lnum}" >&2
+        exit 1
+      fi
+      ;;
     depends-on)
       if [[ -z "${_val}" || "${_val}" != *:* ]]; then
         printf 'env-update: %s:%s: malformed depends-on — expected VAR:constraint, got %q\n' \
@@ -217,6 +225,21 @@ _gs_eu2_dispatch_flag() {
     tag-replace)
       _gs_eu2_record_set "${_idx}" tag_replace_from "${_val%%:*}"
       _gs_eu2_record_set "${_idx}" tag_replace_to "${_val#*:}"
+      ;;
+    replace)
+      # Append target and template using $'\x1f' as delimiter (parallel arrays).
+      local _rep_target="${_val%%=*}"
+      local _rep_tmpl="${_val#*=}"
+      local _cur_targets _cur_tmpls
+      _cur_targets="$(_gs_eu2_record_get "${_idx}" replace_targets)"
+      _cur_tmpls="$(_gs_eu2_record_get "${_idx}" replace_templates)"
+      if [[ -n "${_cur_targets}" ]]; then
+        _gs_eu2_record_set "${_idx}" replace_targets "${_cur_targets}"$'\x1f'"${_rep_target}"
+        _gs_eu2_record_set "${_idx}" replace_templates "${_cur_tmpls}"$'\x1f'"${_rep_tmpl}"
+      else
+        _gs_eu2_record_set "${_idx}" replace_targets "${_rep_target}"
+        _gs_eu2_record_set "${_idx}" replace_templates "${_rep_tmpl}"
+      fi
       ;;
   esac
 }

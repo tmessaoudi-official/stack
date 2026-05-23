@@ -29,7 +29,8 @@ _gs_eu2_record_fields() {
     proposed_sha_date annotation_sha_date \
     unstable_proposed stable_proposed \
     watch_major_depth latest_unconstrained actual_var_value \
-    major_hint_min using_fallback_major
+    major_hint_min using_fallback_major \
+    replace_targets replace_templates
 }
 
 # Allocate next record index.

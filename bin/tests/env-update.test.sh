@@ -8849,6 +8849,86 @@ t "t90_ctr_manual: counter MANUAL+downgrade → 0 DOWNGRADE · 1 FORCE-DOWNGRADE
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Section 91 — (replace:TARGET=template) cascade-update feature
+#
+# Fixture: github:testowner/testrepo — returns v2.5.0 (→ 2.5.0).
+# Annotation current=2.4.0 → AUTO (minor bump).
+# The replace flag rewrite a second VAR= line in the same env file.
+# Token expansion: {major}→2 {minor}→5 {patch}→0.
+# ═══════════════════════════════════════════════════════════════════════════
+section "91 — (replace:TARGET=template) cascade-update"
+
+# t91a: single (replace:) with --check shows [REPLACE] sub-line; --dry-run prevents file change
+t "t91a: replace check shows [REPLACE] sub-line — dry-run no write" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t91a_c
+    f=\${TMP_DIR}/t91a.env
+    printf '# @todo env-update (replace:GLOBAL_STACK_T91A_ALIAS=node{major}) github:testowner/testrepo 2.4.0\nGLOBAL_STACK_T91A=2.4.0\nGLOBAL_STACK_T91A_ALIAS=node2\n' > \"\$f\"
+    before=\$(cat \"\$f\")
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>&1)
+    after=\$(cat \"\$f\")
+    echo \"\$out\" | grep -qF '[REPLACE]' || { echo \"expected [REPLACE] sub-line in check output; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'DRY-RUN' || { echo \"expected DRY-RUN mode banner; got: \$out\"; echo FAIL; exit 0; }
+    [ \"\$before\" = \"\$after\" ] || { echo \"file was modified in dry-run; diff: \$after\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t91b: (replace:) apply — primary var and target both rewritten
+# Note: --apply guard requires a prior --dry-run marker; run --check --dry-run first.
+t "t91b: replace apply — primary and target VAR= both updated" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t91b_c
+    f=\${TMP_DIR}/t91b.env
+    printf '# @todo env-update (replace:GLOBAL_STACK_T91B_ALIAS=node{major}) github:testowner/testrepo 2.4.0\nGLOBAL_STACK_T91B=2.4.0\nGLOBAL_STACK_T91B_ALIAS=node2\n' > \"\$f\"
+    bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" > /dev/null 2>&1
+    out=\$(bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$f\" 2>&1)
+    grep -qE '^GLOBAL_STACK_T91B=v?2\.5\.0$' \"\$f\" || { echo \"primary var not updated; file: \$(cat \"\$f\")\"; echo FAIL; exit 0; }
+    grep -q '^GLOBAL_STACK_T91B_ALIAS=node2$' \"\$f\" || { echo \"target var not updated to node2; file: \$(cat \"\$f\")\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '[REPLACE]' || { echo \"expected [REPLACE] sub-line; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t91c: token expansion {major} {minor} {patch} correct from proposed version 2.5.0
+t "t91c: token expansion {major}/{minor}/{patch} from proposed 2.5.0" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t91c_c
+    f=\${TMP_DIR}/t91c.env
+    printf '# @todo env-update (replace:GLOBAL_STACK_T91C_LABEL={major}.{minor}.{patch}-lts) github:testowner/testrepo 2.4.0\nGLOBAL_STACK_T91C=2.4.0\nGLOBAL_STACK_T91C_LABEL=old\n' > \"\$f\"
+    bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" > /dev/null 2>&1
+    bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$f\" 2>&1
+    grep -q '^GLOBAL_STACK_T91C_LABEL=2\.5\.0-lts$' \"\$f\" || { echo \"expected 2.5.0-lts; file: \$(cat \"\$f\")\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t91d: multiple (replace:) flags — all targets updated
+t "t91d: multiple (replace:) flags — all targets updated" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t91d_c
+    f=\${TMP_DIR}/t91d.env
+    printf '# @todo env-update (replace:GLOBAL_STACK_T91D_A=v{major}) (replace:GLOBAL_STACK_T91D_B={major}.{minor}) github:testowner/testrepo 2.4.0\nGLOBAL_STACK_T91D=2.4.0\nGLOBAL_STACK_T91D_A=v2\nGLOBAL_STACK_T91D_B=2.4\n' > \"\$f\"
+    bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" > /dev/null 2>&1
+    bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$f\" 2>&1
+    grep -q '^GLOBAL_STACK_T91D_A=v2$' \"\$f\" || { echo \"target A not updated; file: \$(cat \"\$f\")\"; echo FAIL; exit 0; }
+    grep -q '^GLOBAL_STACK_T91D_B=2.5$' \"\$f\" || { echo \"target B not updated; file: \$(cat \"\$f\")\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t91e: missing target → [ERROR] in output; with --no-fail, primary still applied
+t "t91e: missing target → ERROR output; --no-fail lets primary apply succeed" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t91e_c
+    f=\${TMP_DIR}/t91e.env
+    printf '# @todo env-update (replace:GLOBAL_STACK_T91E_MISSING=val) github:testowner/testrepo 2.4.0\nGLOBAL_STACK_T91E=2.4.0\n' > \"\$f\"
+    bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" > /dev/null 2>&1
+    out=\$(bash '${ENV_UPDATE_V2}' --apply --no-fail --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qiE 'error|not found' || { echo \"expected error about missing target; got: \$out\"; echo FAIL; exit 0; }
+    grep -qE '^GLOBAL_STACK_T91E=v?2\.5\.0$' \"\$f\" || { echo \"primary var must still be applied with --no-fail; file: \$(cat \"\$f\")\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+_flush_section
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section

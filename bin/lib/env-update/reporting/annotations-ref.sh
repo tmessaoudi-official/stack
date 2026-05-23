@@ -108,6 +108,12 @@ ANNOTATION FLAGS (parenthesised, space-separated, after the @todo keyword)
                       even when the var is normally excluded from propagation.
     (watch-major[:N]) Emit a [WATCH] signal when a new major (or N-th level) is
                       detected. Default depth = 1 (major boundary).
+    (replace:TARGET=template)
+                      When this var is AUTO-updated, also rewrite TARGET=<expanded>
+                      in the same env file. Template tokens: {major} {minor} {patch}.
+                      Multiple (replace:) flags may be stacked on one annotation.
+                      Missing TARGET → ERROR (--no-fail skips without aborting).
+                      Dry-run shows sub-lines but writes no files.
 
 
 INLINE SYNTAX EXAMPLES

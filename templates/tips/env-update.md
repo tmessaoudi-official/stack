@@ -174,6 +174,12 @@ flags. Flags are **position-agnostic** — they can appear anywhere in the annot
 | `(prefer-specific)` | `prefer_specific: true` | **dockerhub only.** After all tag filters run, drop any tag whose numeric prefix has fewer than two dots (i.e. `X` or `X.Y` "floating" tags). A tag like `9.1-alpine3.23` has numeric prefix `9.1` (1 dot) and is floating — Docker Hub silently updates it when `9.1.1` ships, making the tag string unchanging and therefore invisible to env-update. A tag like `9.0.4-alpine3.23` has prefix `9.0.4` (2 dots) and is pinnable. Use this flag when you want true version pinning. **Do NOT use for images where `X.Y` is the real specific version** (e.g. `postgres:18.3-alpine3.23` — Postgres has no `X.Y.Z` Docker tags). If all remaining tags are floating after this filter, the record is set to SKIP. |
 | `(check-tags)` | `check_tags: true` | **github only.** Always fetch both the Releases API and the Tags API for this repo, then merge the two candidate pools before applying filters. Use for repos that publish new versions as git tags before (or instead of) creating a GitHub Release — the canonical example is Zig, which had `0.15.2` in tags while the Releases API still returned `0.15.1`. Without this flag, the fetcher uses Releases as primary and only falls back to Tags when Releases returns nothing. See also the automatic [version-gap fix](#version-gap-fix) (fires for every repo; this flag is for repos where the gap is chronic). |
 
+### Cascade-update flag
+
+| Flag | Record field | Description |
+|------|-------------|-------------|
+| `(replace:TARGET=template)` | `replace_targets` / `replace_templates` | When this var receives an AUTO update, also rewrite `TARGET=<expanded>` in the same env file (VAR= line only — annotation comment untouched). Template tokens: `{major}`, `{minor}`, `{patch}` are expanded from the proposed version. Multiple `(replace:)` flags may be stacked on one annotation line. If TARGET is not found in the env file, an ERROR is printed; with `--no-fail`, the error is non-fatal and the remaining targets are still processed. In `--dry-run` mode, sub-lines are shown but no files are written. The `[REPLACE]` sub-line appears under `[AUTO]` in `--check` output. Example: `# @todo env-update (replace:GLOBAL_STACK_NODE22_ALIAS={major}) github:nodejs/node:22 22.12.0` |
+
 ### Generation-watch flag
 
 | Flag | Record field | Description |

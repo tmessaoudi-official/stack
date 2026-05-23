@@ -64,6 +64,35 @@ _gs_eu2_apply_single() {
   mv "${_tmp}" "${_file}" || { rm -f "${_tmp}"; return 1; }
 }
 
+# Rewrite a single VAR=value line in _file (VAR= only — no annotation comment rewrite).
+# $1 = file, $2 = var_name, $3 = new_value
+_gs_eu2_apply_replace_target() {
+  local _file="${1}" _var="${2}" _new="${3}"
+  local _tmp
+  _tmp="$(mktemp)" || { printf 'env-update/apply: mktemp failed\n' >&2; return 1; }
+  awk -v var="${_var}" -v newval="${_new}" '
+    index($0, var "=") == 1 { print var "=" newval; next }
+    { print }
+  ' "${_file}" > "${_tmp}" || { rm -f "${_tmp}"; return 1; }
+  mv "${_tmp}" "${_file}" || { rm -f "${_tmp}"; return 1; }
+}
+
+# Expand {major}, {minor}, {patch} tokens in a template string.
+# $1 = template, $2 = proposed version (used to extract components).
+_gs_eu2_expand_replace_template() {
+  local _tmpl="${1}" _prop="${2}"
+  local _ver="${_prop#v}"
+  local _major="${_ver%%.*}"
+  local _rest="${_ver#*.}"
+  local _minor="${_rest%%.*}"
+  local _patch="${_rest#*.}"
+  _patch="${_patch%%[-+]*}"
+  _tmpl="${_tmpl//\{major\}/${_major}}"
+  _tmpl="${_tmpl//\{minor\}/${_minor}}"
+  _tmpl="${_tmpl//\{patch\}/${_patch}}"
+  printf '%s' "${_tmpl}"
+}
+
 # Apply all AUTO decisions from records to the env file.
 # Args: $1 = env_file, $2 = dry_run ("true" → no writes)
 _gs_eu2_apply_updates() {
@@ -186,6 +215,26 @@ _gs_eu2_apply_updates() {
       else
         (( ++_n_auto_only_would )) || true
       fi
+      # (replace:) dry-run sub-lines
+      local _rep_targets_dr _rep_tmpls_dr
+      _rep_targets_dr="$(_gs_eu2_record_get "${_i}" replace_targets)"
+      _rep_tmpls_dr="$(_gs_eu2_record_get "${_i}" replace_templates)"
+      if [[ -n "${_rep_targets_dr}" ]]; then
+        local _old_ifs_rep_dr="${IFS}"
+        IFS=$'\x1f'
+        local _rt_arr_dr _rm_arr_dr
+        read -ra _rt_arr_dr <<< "${_rep_targets_dr}"
+        read -ra _rm_arr_dr <<< "${_rep_tmpls_dr}"
+        IFS="${_old_ifs_rep_dr}"
+        local _ri_dr
+        for (( _ri_dr = 0; _ri_dr < ${#_rt_arr_dr[@]}; _ri_dr++ )); do
+          local _rt_dr="${_rt_arr_dr[${_ri_dr}]}"
+          local _rm_dr="${_rm_arr_dr[${_ri_dr}]:-}"
+          local _expanded_dr
+          _expanded_dr="$(_gs_eu2_expand_replace_template "${_rm_dr}" "${_prop}")"
+          printf '  [DRY-RUN]    ↳ replace %-51s  → %s\n' "${_rt_dr}" "${_expanded_dr}"
+        done
+      fi
     else
       # 10th arg bare_sha: raw SHA without date, for the VAR= line when use_sha=true.
       _gs_eu2_apply_single "${_env_file}" "${_var}" "${_prop}" "${_raw_ann}" "${_cur}" \
@@ -195,6 +244,36 @@ _gs_eu2_apply_updates() {
         (( ++_n_auto_sha_applied )) || true
       else
         (( ++_n_auto_only_applied )) || true
+      fi
+      # (replace:) cascade: rewrite each target VAR= with the expanded template value.
+      local _rep_targets _rep_tmpls
+      _rep_targets="$(_gs_eu2_record_get "${_i}" replace_targets)"
+      _rep_tmpls="$(_gs_eu2_record_get "${_i}" replace_templates)"
+      if [[ -n "${_rep_targets}" ]]; then
+        local _old_ifs_rep="${IFS}"
+        IFS=$'\x1f'
+        local _rt_arr _rm_arr
+        read -ra _rt_arr <<< "${_rep_targets}"
+        read -ra _rm_arr <<< "${_rep_tmpls}"
+        IFS="${_old_ifs_rep}"
+        local _ri
+        for (( _ri = 0; _ri < ${#_rt_arr[@]}; _ri++ )); do
+          local _rt="${_rt_arr[${_ri}]}"
+          local _rm="${_rm_arr[${_ri}]:-}"
+          local _expanded
+          _expanded="$(_gs_eu2_expand_replace_template "${_rm}" "${_prop}")"
+          # Verify the target VAR exists in the env file before rewriting.
+          if ! grep -q "^${_rt}=" "${_env_file}" 2>/dev/null; then
+            printf '  [ERROR]    %-55s  replace: target %s not found in %s\n' \
+              "${_var}" "${_rt}" "${_env_file}" >&2
+            if [[ "${_GS_EU2_CFG[no_fail]:-false}" != "true" ]]; then
+              return 1
+            fi
+            continue
+          fi
+          _gs_eu2_apply_replace_target "${_env_file}" "${_rt}" "${_expanded}"
+          printf '  [REPLACE]    ↳ %-51s  → %s\n' "${_rt}" "${_expanded}"
+        done
       fi
     fi
   done
