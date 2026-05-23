@@ -8951,12 +8951,15 @@ t "t90_ctr_manual: counter MANUAL+downgrade → 0 DOWNGRADE · 1 FORCE-DOWNGRADE
 # ═══════════════════════════════════════════════════════════════════════════
 section "91 — (replace:TARGET=template) cascade-update"
 
-# t91a: single (replace:) with --check shows [REPLACE] sub-line; --dry-run prevents file change
-t "t91a: replace check shows (replace) sub-line — dry-run no write" bash -c "
+# t91a: single (replace:) with --check shows [REPLACE] sub-line when update_pending=true.
+# Uses cur=1.9.0 (major=1) → AUTO → prop=v2.5.0 (major=2): exp_cur=node1, exp_prop=node2.
+# update_pending=true → (replace) sub-line must appear. --dry-run prevents file change.
+t "t91a: replace check shows (replace) sub-line (update_pending) — dry-run no write" bash -c "
     export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t91a_c
     f=\${TMP_DIR}/t91a.env
-    printf '# @todo env-update (replace:GLOBAL_STACK_T91A_ALIAS=node{major}) github:testowner/testrepo 2.4.0\nGLOBAL_STACK_T91A=2.4.0\nGLOBAL_STACK_T91A_ALIAS=node2\n' > \"\$f\"
+    # cur=1.9.0 (major=1), fixture returns v2.5.0 (major=2) → node{major}: node1→node2
+    printf '# @todo env-update (replace:GLOBAL_STACK_T91A_ALIAS=node{major}) github:testowner/testrepo 1.9.0\nGLOBAL_STACK_T91A=1.9.0\nGLOBAL_STACK_T91A_ALIAS=node1\n' > \"\$f\"
     before=\$(cat \"\$f\")
     out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>&1)
     after=\$(cat \"\$f\")
@@ -9429,6 +9432,116 @@ t "t95d: --force-auto without --apply emits advisory about missing --apply" bash
     # Must contain a warning/advisory mentioning both force-auto and --apply
     echo \"\$err\" | grep -qiE 'force.auto.*apply|apply.*force.auto|no.*write.*effect|no.*effect.*apply' \
       || { echo \"expected force-auto + apply advisory; got: '\$err'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+_flush_section
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 96 — P2 quality: noop replace suppression, null exact-match, dry-run label
+# ═══════════════════════════════════════════════════════════════════════════
+section "96 — noop replace suppression, null exact-match, dry-run label"
+
+# eu-F006: AUTO + stale_now=false AND update_pending=false → no '↳ (replace)' sub-line.
+# Scenario: same major (cur=v2.4.0, prop=v2.5.0, template=node{major}).
+# expand_template(cur)=node2, expand_template(prop)=node2 → update_pending=false.
+# Target is already node2 → stale_now=false. No-op: sub-line must be absent.
+t "t96a: AUTO + noop replace (same expanded value, fresh target) → no (replace) sub-line" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t96a_c
+    f=\${TMP_DIR}/t96a.env
+    # cur=v2.4.0 → fixture returns v2.5.0 → AUTO; node{major} expands to node2 for both
+    printf '# @todo env-update (replace:GLOBAL_STACK_T96A_ALIAS=node{major}) github:testowner/testrepo v2.4.0\nGLOBAL_STACK_T96A=v2.4.0\nGLOBAL_STACK_T96A_ALIAS=node2\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>&1)
+    # stale_now=false (node2==node2) AND update_pending=false (node2==node2) → noop: no sub-line
+    echo \"\$out\" | grep -qF '(replace)' && { echo \"unexpected (replace) sub-line for noop case; got: \$out\"; echo FAIL; exit 0; } || true
+    echo \"\$out\" | grep -qF '[REPLACE-DRIFT]' && { echo \"unexpected [REPLACE-DRIFT] for noop case; got: \$out\"; echo FAIL; exit 0; } || true
+    echo PASS
+"
+
+# eu-F006: Counter: AUTO + stale_now=true OR update_pending=true → sub-line still appears.
+# Regression guard: the suppression must not hide genuine work.
+t "t96b: AUTO + update_pending=true (different major) → (replace) sub-line is present" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t96b_c
+    f=\${TMP_DIR}/t96b.env
+    # cur=v1.9.0 → fixture returns v2.5.0 → AUTO (minor/patch or major bump AUTO allowed);
+    # node{major}: exp_cur=node1, exp_prop=node2 → update_pending=true; target is node1 (fresh)
+    printf '# @todo env-update (replace:GLOBAL_STACK_T96B_ALIAS=node{major}) github:testowner/testrepo v1.9.0\nGLOBAL_STACK_T96B=v1.9.0\nGLOBAL_STACK_T96B_ALIAS=node1\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>&1)
+    # update_pending=true → sub-line must appear
+    echo \"\$out\" | grep -qF '(replace)' || { echo \"expected (replace) sub-line when update_pending=true; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# eu-F010 / eu-F029: url.sh fetch-json: null substring strip must be exact-match only.
+# Bug: '\${_proposed//null/}' strips 'null' as substring — 'null-rc1' becomes '-rc1'.
+# Fix: '[[ \${_proposed} == null ]] && _proposed=""' (exact match only).
+t "t96c: url fetch-json: literal 'null' → empty proposed (exact-match discard)" bash -c "
+    source '/stack/bin/lib/env-update/config/defaults.sh'
+    source '/stack/bin/lib/env-update/core/records.sh'
+    source '/stack/bin/lib/env-update/http/curl.sh'
+    source '/stack/bin/lib/env-update/fetchers/url.sh'
+    export _GS_EU2_HTTP_FIXTURE_DIR=\${TMP_DIR}/t96c_fixtures
+    mkdir -p \"\${_GS_EU2_HTTP_FIXTURE_DIR}\"
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t96c_cache
+    # Fixture returns JSON with a null version field
+    printf '{\"version\":null}' > \"\${_GS_EU2_HTTP_FIXTURE_DIR}/example.com_null-version\"
+    _GS_EU2_REC_COUNT=0; _gs_eu2_record_new; idx=\$_GS_EU2_LAST_IDX
+    _gs_eu2_record_set \$idx env_var       'GLOBAL_STACK_T96C'
+    _gs_eu2_record_set \$idx identifier    'https://example.com/null-version'
+    _gs_eu2_record_set \$idx fetch_json    '.version'
+    _gs_eu2_record_set \$idx type          'url'
+    _gs_eu2_fetch_url \$idx
+    proposed=\$(_gs_eu2_record_get \$idx proposed_version)
+    # null JSON value must produce empty proposed (discarded)
+    [[ -z \"\$proposed\" ]] || { echo \"expected empty proposed for null JSON; got: '\$proposed'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t96d: url fetch-json: 'null-rc1' must NOT be stripped (substring safety)" bash -c "
+    source '/stack/bin/lib/env-update/config/defaults.sh'
+    source '/stack/bin/lib/env-update/core/records.sh'
+    source '/stack/bin/lib/env-update/http/curl.sh'
+    source '/stack/bin/lib/env-update/fetchers/url.sh'
+    export _GS_EU2_HTTP_FIXTURE_DIR=\${TMP_DIR}/t96d_fixtures
+    mkdir -p \"\${_GS_EU2_HTTP_FIXTURE_DIR}\"
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t96d_cache
+    # Fixture returns a version string that starts with 'null' as a substring
+    printf '{\"version\":\"null-rc1\"}' > \"\${_GS_EU2_HTTP_FIXTURE_DIR}/example.com_null-rc1-version\"
+    _GS_EU2_REC_COUNT=0; _gs_eu2_record_new; idx=\$_GS_EU2_LAST_IDX
+    _gs_eu2_record_set \$idx env_var       'GLOBAL_STACK_T96D'
+    _gs_eu2_record_set \$idx identifier    'https://example.com/null-rc1-version'
+    _gs_eu2_record_set \$idx fetch_json    '.version'
+    _gs_eu2_record_set \$idx type          'url'
+    _gs_eu2_fetch_url \$idx
+    proposed=\$(_gs_eu2_record_get \$idx proposed_version)
+    # 'null-rc1' is not the literal string 'null' — must be preserved intact
+    [[ \"\$proposed\" == 'null-rc1' ]] || { echo \"expected proposed='null-rc1' (preserved); got: '\$proposed'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# eu-F018 (env-scan): propagate.sh dry-run output must use '[DRY-RUN]' prefix on per-var lines.
+# Current: line 112 prints ' [propagate] %s: %s: ...' without distinguishing dry-run.
+# Fix: when dry_run=true, prefix the per-var line with '[DRY-RUN]'.
+t "t96e: env-scan propagate dry-run per-var output contains [DRY-RUN] prefix" bash -c "
+    source '/stack/bin/lib/env-scan/core/backup.sh' 2>/dev/null || true
+    source '/stack/bin/lib/env-scan/core/git.sh' 2>/dev/null || true
+    source '/stack/bin/lib/env-scan/propagate.sh'
+    # Minimal _GS_ES_CFG setup
+    declare -A _GS_ES_CFG=([backup]='false' [backup_suffix]='.bak' [_backup_ts]='' [dir]='' [quiet]='false')
+    # Create a minimal env file with one var
+    env_file=\${TMP_DIR}/t96e.env
+    df_dir=\${TMP_DIR}/t96e_docker
+    mkdir -p \"\${df_dir}\"
+    printf 'GLOBAL_STACK_T96E=newvalue\n' > \"\${env_file}\"
+    # Dockerfile with mismatched value
+    printf 'FROM scratch\nARG GLOBAL_STACK_T96E=oldvalue\n' > \"\${df_dir}/Dockerfile\"
+    out=\$(gs_es_propagate_to_dockerfiles \"\${env_file}\" \"\${df_dir}\" '' 'true' 2>&1)
+    # dry-run per-var line must contain '[DRY-RUN]'
+    echo \"\$out\" | grep -qF '[DRY-RUN]' || { echo \"expected [DRY-RUN] in dry-run per-var output; got: \$out\"; echo FAIL; exit 0; }
+    # File must NOT be modified in dry-run
+    grep -qF 'oldvalue' \"\${df_dir}/Dockerfile\" || { echo 'Dockerfile was modified in dry-run'; echo FAIL; exit 0; }
     echo PASS
 "
 

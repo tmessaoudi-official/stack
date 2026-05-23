@@ -11,15 +11,17 @@ source "$(dirname "${BASH_SOURCE[0]}")/semver.sh"
 _gs_eu2_version_matches_channel() {
   local _ver="${1,,}" _chan="${2}"
   [[ "${_chan}" == "unstable" ]] && { _gs_eu2_is_prerelease "${1}"; return; }
-  local _q _IFS="${IFS}"; IFS=','
-  for _q in ${_chan}; do
+  # Split comma-separated channel qualifiers without mutating IFS (fragile on error paths).
+  # Replace commas with newlines, then read into an array via process substitution.
+  local _q_arr=()
+  while IFS= read -r _q; do
+    [[ -z "${_q}" ]] && continue
     _q="${_q,,}"
     # D3: Use ([0-9]|$) as trailing anchor — prevents "rcx" from matching "rc"
     # while still allowing rc1, rc2, rc.1, rc-1, etc.
     local _pat="(^|[-._[:digit:]])${_q}([0-9]|\$)"
-    [[ "${_ver}" =~ ${_pat} ]] && { IFS="${_IFS}"; return 0; }
-  done
-  IFS="${_IFS}"
+    [[ "${_ver}" =~ ${_pat} ]] && return 0
+  done <<<"${_chan//,/$'\n'}"
   return 1
 }
 

@@ -109,7 +109,9 @@ _gs_eu2_fetch_url() {
     local _json
     if _json="$(_gs_eu2_http_get "${_identifier}" 2>/dev/null)"; then
       _proposed="$(printf '%s' "${_json}" | jq -r "${_fetch_json}" 2>/dev/null || true)"
-      _proposed="${_proposed//null/}"
+      # Discard the literal string "null" (jq output when key is JSON null).
+      # Use exact-match only — substring replacement would corrupt versions like "null-rc1".
+      [[ "${_proposed}" == "null" ]] && _proposed=""
       _proposed="${_proposed//$'\n'/}"
     fi
 

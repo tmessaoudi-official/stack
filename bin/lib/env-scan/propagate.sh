@@ -109,7 +109,11 @@ gs_es_propagate_to_dockerfiles() {
           _env_val="${_prop_env_map[${_df_var}]}"
 
           if [[ "${_df_val}" != "${_env_val}" ]]; then
-            printf ' [propagate] %s: %s: '\''%s'\'' → '\''%s'\''\n' "${_dockerfile}" "${_df_var}" "${_df_val}" "${_env_val}"
+            if [[ "${dry_run}" == "true" ]]; then
+              printf ' [DRY-RUN] [propagate] %s: %s: '\''%s'\'' → '\''%s'\''\n' "${_dockerfile}" "${_df_var}" "${_df_val}" "${_env_val}"
+            else
+              printf ' [propagate] %s: %s: '\''%s'\'' → '\''%s'\''\n' "${_dockerfile}" "${_df_var}" "${_df_val}" "${_env_val}"
+            fi
             if [[ "${dry_run}" != "true" ]]; then
               # Back up gitignored Dockerfile once before first rewrite
               if [[ "${_file_backed_up}" -eq 0 && "${_backup_enabled}" == "true" && -n "${_backup_ts}" ]]; then

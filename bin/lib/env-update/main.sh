@@ -987,13 +987,17 @@ _gs_eu2_run_check() {
           [[ "${_rd_exp_cur}" != "${_rd_exp_prop}" ]] && _rd_update_pending=true
 
           if [[ "${_decision}" == "AUTO" || "${_decision}" == "SHA" ]]; then
-            # AUTO/SHA: always show the replace sub-line; append [REPLACE-DRIFT] if already stale
-            if [[ "${_rd_stale_now}" == "true" ]]; then
-              printf '%10s↳ (replace) %-47s  %s → %s  [REPLACE-DRIFT]\n' \
-                "" "${_rd_rt}" "${_rd_tgt_actual}" "${_rd_exp_prop}"
-            else
-              printf '%10s↳ (replace) %-47s  %s → %s\n' \
-                "" "${_rd_rt}" "${_rd_tgt_actual}" "${_rd_exp_prop}"
+            # AUTO/SHA: show the replace sub-line only when there is actual work to do.
+            # Suppress when stale_now=false AND update_pending=false (target already correct,
+            # version bump doesn't change the expanded value — pure no-op).
+            if [[ "${_rd_stale_now}" == "true" || "${_rd_update_pending}" == "true" ]]; then
+              if [[ "${_rd_stale_now}" == "true" ]]; then
+                printf '%10s↳ (replace) %-47s  %s → %s  [REPLACE-DRIFT]\n' \
+                  "" "${_rd_rt}" "${_rd_tgt_actual}" "${_rd_exp_prop}"
+              else
+                printf '%10s↳ (replace) %-47s  %s → %s\n' \
+                  "" "${_rd_rt}" "${_rd_tgt_actual}" "${_rd_exp_prop}"
+              fi
             fi
           elif [[ "${_decision}" == "SKIP" && -z "${_skip_reason}" && "${_rd_stale_now}" == "true" ]]; then
             # SKIP + stale: target already wrong; plain --apply can fix replace-only drift

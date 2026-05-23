@@ -46,6 +46,10 @@ _gs_eu2_record_set() {
 }
 
 _gs_eu2_record_get() {
+  # Returns the field value for the given record index and field name.
+  # Silent-empty contract: if the field was never set, returns "" (empty string, exit 0).
+  # Callers must treat "" as "not set" — use [[ -n "$(...)" ]] to distinguish set-to-empty
+  # from never-set. This is intentional: no fatal on missing fields; record fields are sparse.
   local _idx="${1}" _field="${2}"
   local _varname="_GS_EU2_REC_${_idx}_${_field}"
   printf '%s' "${!_varname:-}"
