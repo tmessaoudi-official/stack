@@ -113,6 +113,17 @@ _gs_eu2_apply_updates() {
     fi
   fi
 
+  # Snapshot the env file so we can roll back if a cascade write fails mid-way.
+  # Covers both the AUTO cascade pass and the SKIP replace-only pass.
+  # Dry-run: no snapshot needed (no writes occur).
+  local _snapshot=""
+  if [[ "${_dry_run}" != "true" ]]; then
+    _snapshot="$(mktemp)" || { printf 'env-update/apply: snapshot mktemp failed\n' >&2; return 1; }
+    cp "${_env_file}" "${_snapshot}" || { rm -f "${_snapshot}"; return 1; }
+    # shellcheck disable=SC2064
+    trap "rm -f '${_snapshot}'" RETURN
+  fi
+
   local _count; _count="$(_gs_eu2_record_count)"
   # Four non-overlapping counters — sum to the reported total:
   #   version-only : AUTO records where only VAR= (and annotation version) changed
@@ -268,11 +279,21 @@ _gs_eu2_apply_updates() {
             printf '  [ERROR]    %-55s  replace: target %s not found in %s\n' \
               "${_var}" "${_rt}" "${_env_file}" >&2
             if [[ "${_GS_EU2_CFG[no_fail]:-false}" != "true" ]]; then
+              # Roll back to pre-apply snapshot — primary var was already written
+              [[ -n "${_snapshot}" ]] && cp "${_snapshot}" "${_env_file}" || true
               return 1
             fi
             continue
           fi
-          _gs_eu2_apply_replace_target "${_env_file}" "${_rt}" "${_expanded}"
+          if ! _gs_eu2_apply_replace_target "${_env_file}" "${_rt}" "${_expanded}"; then
+            printf '  [ERROR]    %-55s  replace: failed to rewrite target %s\n' \
+              "${_var}" "${_rt}" >&2
+            if [[ "${_GS_EU2_CFG[no_fail]:-false}" != "true" ]]; then
+              [[ -n "${_snapshot}" ]] && cp "${_snapshot}" "${_env_file}" || true
+              return 1
+            fi
+            continue
+          fi
           printf '  [REPLACE]    ↳ %-51s  → %s\n' "${_rt}" "${_expanded}"
         done
       fi
@@ -324,6 +345,7 @@ _gs_eu2_apply_updates() {
         printf '  [ERROR]    %-55s  replace-only: target %s not found in %s\n' \
           "${_sk_var}" "${_sk_rt}" "${_env_file}" >&2
         if [[ "${_GS_EU2_CFG[no_fail]:-false}" != "true" ]]; then
+          [[ -n "${_snapshot}" ]] && cp "${_snapshot}" "${_env_file}" || true
           return 1
         fi
         continue

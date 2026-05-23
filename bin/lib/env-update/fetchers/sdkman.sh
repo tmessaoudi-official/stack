@@ -89,14 +89,16 @@ _gs_eu2_sdkman_select_java() {
   while IFS= read -r _ver; do
     [[ -z "${_ver}" ]] && continue
     _ver_base="${_ver%%-*}"
-    # Skip Java pre-releases (rc/beta/alpha/ea in numeric base) in stable mode
+    _ver_dist="${_ver##*-}"
+    # Skip Java pre-releases (rc/beta/alpha/ea) in stable mode.
+    # The EA marker may appear in _ver_base (e.g. "17.0.0-ea" → base="17.0.0" — no EA in base)
+    # OR in _ver_dist after extraction (e.g. "26.0.0-ea.1-zulu" → grep-oE → "26.0.0-ea" → dist="ea").
+    # Check both to catch all forms.
     _is_pre=false
-    if [[ "${_ver_base,,}" =~ (rc|beta|alpha|ea) ]]; then
+    if [[ "${_ver_base,,}" =~ (rc|beta|alpha|ea) || "${_ver_dist,,}" =~ ^(rc|beta|alpha|ea)$ ]]; then
       _is_pre=true
     fi
     [[ "${_is_pre}" == "true" ]] && continue
-
-    _ver_dist="${_ver##*-}"
     if [[ -n "${_preferred}" && "${_ver_dist}" == "${_preferred}" ]]; then
       _preferred_list="${_preferred_list}${_ver}"$'\n'
     elif [[ "${_ver}" == *"-tem" ]]; then

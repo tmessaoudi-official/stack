@@ -75,8 +75,9 @@ _gs_eu2_fetch_url() {
   # Fetch URL body; run perl regex, capture group 1; sort -V; take highest.
   # ────────────────────────────────────────────────────────────────────────
   if [[ -n "${_fetch_extract}" ]]; then
-    local _body
+    local _body _fetch_ok=false
     if _body="$(_gs_eu2_http_get "${_identifier}" 2>/dev/null)"; then
+      _fetch_ok=true
       _proposed="$(printf '%s' "${_body}" | \
         perl -ne "if (/${_fetch_extract}/) { print \"\$1\n\" }" 2>/dev/null | \
         sort -V | tail -1 || true)"
@@ -89,9 +90,14 @@ _gs_eu2_fetch_url() {
       return 0
     fi
 
-    # fetch-extract is the declared strategy — if it matched nothing, error out
-    _gs_eu2_record_set "${_idx}" error_message \
-      "url: fetch-extract pattern '${_fetch_extract}' matched nothing from ${_identifier}"
+    # Distinguish HTTP fetch failure from a regex that matched nothing
+    if [[ "${_fetch_ok}" != "true" ]]; then
+      _gs_eu2_record_set "${_idx}" error_message \
+        "url: fetch failed for ${_identifier}"
+    else
+      _gs_eu2_record_set "${_idx}" error_message \
+        "url: fetch-extract pattern '${_fetch_extract}' matched nothing from ${_identifier}"
+    fi
     return 0
   fi
 

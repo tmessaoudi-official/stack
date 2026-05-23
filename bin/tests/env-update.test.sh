@@ -2676,6 +2676,25 @@ t "t31s: no releases AND no tags with manual=true → decision=SKIP (not ERROR)"
     echo PASS
 "
 
+# eu-F019: GIT_ASKPASS tmpfile cleanup via trap RETURN.
+# Normal path: rm -f always runs after git ls-remote completes.
+# Abnormal path (set -e aborts on printf/chmod failure): only trap RETURN guarantees cleanup.
+# Test: inject a write failure by making TMPDIR a read-only directory; the function must not
+# leave a tmpfile behind even if it exits early via set -e.
+t "t31p: GIT_ASKPASS tmpfile cleaned up after ls-remote returns (trap RETURN)" bash -c "
+    ${_GH_LIBS}
+    export GITHUB_TOKEN='fake-token-for-askpass-cleanup-test'
+    unset _GS_EU2_GIT_LS_REMOTE_FIXTURE
+    # Redirect TMPDIR to a private writable dir so we can count exclusively our tmpfiles
+    askpass_tmp=\"\${TMP_DIR}/t31p_tmpdir\"
+    mkdir -p \"\$askpass_tmp\"
+    # Normal-path cleanup: git ls-remote fails (fake token), but rm -f must still run
+    TMPDIR=\"\$askpass_tmp\" _gs_eu2_github_ls_remote 'testowner/no-such-repo-xyzzy' 2>/dev/null || true
+    leftover=\$(find \"\$askpass_tmp\" -type f 2>/dev/null | wc -l)
+    [[ \"\$leftover\" -eq 0 ]] || { echo \"tmpfile not cleaned up after git failure: \$(ls \"\$askpass_tmp\")\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Section 32 — sdkman fetcher
 # ═══════════════════════════════════════════════════════════════════════════
@@ -2805,6 +2824,38 @@ t "t32g: cache hit skips HTTP (proposed_version from cache)" bash -c "
     _gs_eu2_fetch_sdkman \$idx
     val=\$(_gs_eu2_record_get \$idx proposed_version)
     [[ \"\$val\" == '9.99.0-CACHED' ]] || { echo \"cache not used: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# eu-F023: SDKMAN EA slip-through.
+# "26.0.0-ea.1-zulu" gets extracted as "26.0.0-ea" by the grep-oE regex.
+# _ver_base = "26.0.0", _ver_dist = "ea" — the EA marker is in _ver_dist.
+# Current code only checks _ver_base against (rc|beta|alpha|ea), so ea slips through
+# when there is no -tem and no preferred-dist match (all stable fall to _other_list,
+# but so does the EA — and EA sorts higher than the stable 25.0.2-zulu).
+# Trigger condition: no -tem, no preferred dist → _other_list only → EA wins on sort -V.
+# After fix: also check _ver_dist; "ea" distribution blocks the version.
+t "t32h: sdkman Java EA release (ea distribution suffix) filtered out in stable mode" bash -c "
+    ${_SDK_LIBS}
+    # Build custom fixture: only zulu stable (no -tem), plus EA candidate
+    # Current version has no dist suffix → preferred_dist=\"\" → all go to _tem_list or _other_list
+    # 26.0.0-ea sorts higher than 25.0.2-zulu → EA slips through without the fix
+    ea_fix_dir=\"\${TMP_DIR}/t32h_fixtures/http\"
+    mkdir -p \"\$ea_fix_dir\"
+    printf '%s' '25.0.2-zulu,26.0.0-ea.1-zulu' > \"\${ea_fix_dir}/api.sdkman.io_2_candidates_java_linux_versions_all\"
+    export _GS_EU2_HTTP_FIXTURE_DIR=\"\$ea_fix_dir\"
+    export _GS_EU2_CACHE_DIR=\"\${TMP_DIR}/t32h_cache\"
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'sdkman'
+    _gs_eu2_record_set \$idx identifier      'java'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_JAVA_VERSION'
+    _gs_eu2_record_set \$idx current_version '25.0.2'
+    _gs_eu2_fetch_sdkman \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    # Must NOT select the EA version (26.0.0-ea)
+    case \"\$val\" in
+      *ea*) echo \"EA release slipped through in stable mode: '\$val'\"; echo FAIL; exit 0 ;;
+    esac
     echo PASS
 "
 
@@ -3265,6 +3316,48 @@ t "t37n: no strategy matches — error_message set with 'no extraction strategy 
     _gs_eu2_fetch_url \$idx 2>/dev/null || true
     err=\$(_gs_eu2_record_get \$idx error_message)
     [[ -n \"\$err\" ]] || { echo 'error_message is empty when no strategy matches'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# eu-F027: HTTP failure and regex no-match must produce distinct error messages.
+# These two failure modes are currently conflated — both yield "matched nothing".
+# After fix: HTTP failure → contains "fetch failed"; no-match → contains "matched nothing".
+
+t "t37o: fetch-extract HTTP failure produces 'fetch failed' error (distinct from regex no-match)" bash -c "
+    ${_URL_LIBS}
+    # Point fixture dir to non-existent dir so HTTP fetch fails
+    export _GS_EU2_HTTP_FIXTURE_DIR=\"\${TMP_DIR}/t37o_no_fixtures\"
+    export _GS_EU2_CACHE_DIR=\"\${TMP_DIR}/t37o_cache\"
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type          'url'
+    _gs_eu2_record_set \$idx identifier    'https://example.com/page'
+    _gs_eu2_record_set \$idx fetch_extract 'version-([0-9.]+)'
+    _gs_eu2_record_set \$idx current_version '1.0.0'
+    _gs_eu2_record_set \$idx env_var       'GLOBAL_STACK_TEST_VERSION'
+    _gs_eu2_fetch_url \$idx 2>/dev/null || true
+    err=\$(_gs_eu2_record_get \$idx error_message)
+    # Must contain 'fetch failed' (HTTP error), not 'matched nothing' (regex error)
+    echo \"\$err\" | grep -qiF 'fetch failed' || { echo \"expected 'fetch failed' for HTTP error; got: '\$err'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t37p: fetch-extract regex no-match produces 'matched nothing' error (distinct from HTTP failure)" bash -c "
+    ${_URL_LIBS}
+    # Real fixture that returns body, but a pattern that won't match
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\"\${TMP_DIR}/t37p_cache\"
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type          'url'
+    _gs_eu2_record_set \$idx identifier    'https://developer.android.com/studio'
+    _gs_eu2_record_set \$idx fetch_extract 'THIS_PATTERN_WILL_NEVER_MATCH_XYZZY_([0-9]+)'
+    _gs_eu2_record_set \$idx current_version '14742923'
+    _gs_eu2_record_set \$idx env_var       'GLOBAL_STACK_ANDROID_SDK_VERSION'
+    _gs_eu2_fetch_url \$idx 2>/dev/null || true
+    err=\$(_gs_eu2_record_get \$idx error_message)
+    # Must contain 'matched nothing' (regex no-match), not 'fetch failed' (HTTP error)
+    echo \"\$err\" | grep -qiF 'matched nothing' || { echo \"expected 'matched nothing' for regex no-match; got: '\$err'\"; echo FAIL; exit 0; }
+    # Must NOT contain 'fetch failed' (HTTP succeeded, body was fetched)
+    echo \"\$err\" | grep -qiF 'fetch failed' && { echo \"unexpected 'fetch failed' in regex error; got: '\$err'\"; echo FAIL; exit 0; } || true
     echo PASS
 "
 
@@ -8923,6 +9016,26 @@ t "t91e: missing target → ERROR output; --no-fail lets primary apply succeed" 
     out=\$(bash '${ENV_UPDATE_V2}' --apply --no-fail --env-file=\"\$f\" 2>&1)
     echo \"\$out\" | grep -qiE 'error|not found' || { echo \"expected error about missing target; got: \$out\"; echo FAIL; exit 0; }
     grep -qE '^GLOBAL_STACK_T91E=v?2\.5\.0$' \"\$f\" || { echo \"primary var must still be applied with --no-fail; file: \$(cat \"\$f\")\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# eu-F003: cascade rollback — if a replace target fails (missing), the primary var must
+# be rolled back to its original value (no half-updated state left behind).
+# Without rollback: primary var is written, cascade fails → file is half-updated.
+# After fix: snapshot before any writes; restore on cascade failure.
+t "t91f: cascade failure rolls back primary var to original value (no half-updated state)" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t91f_c
+    f=\${TMP_DIR}/t91f.env
+    # Target GLOBAL_STACK_T91F_MISSING is absent from the file → cascade error
+    printf '# @todo env-update (replace:GLOBAL_STACK_T91F_MISSING=node{major}) github:testowner/testrepo 2.4.0\nGLOBAL_STACK_T91F=2.4.0\n' > \"\$f\"
+    # Capture original primary value
+    orig_val=\$(grep '^GLOBAL_STACK_T91F=' \"\$f\" | cut -d= -f2-)
+    bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" > /dev/null 2>&1
+    bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$f\" 2>/dev/null || true
+    # After cascade failure, primary var must still hold the original value (rollback)
+    cur_val=\$(grep '^GLOBAL_STACK_T91F=' \"\$f\" | cut -d= -f2-)
+    [[ \"\$cur_val\" == \"\$orig_val\" ]] || { echo \"primary var not rolled back: orig='\$orig_val' cur='\$cur_val'; file: \$(cat \"\$f\")\"; echo FAIL; exit 0; }
     echo PASS
 "
 

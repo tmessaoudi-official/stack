@@ -64,6 +64,10 @@ _gs_eu2_github_ls_remote() {
     # list (ps auxww), shell history, and CI logs.
     local _askpass
     _askpass="$(mktemp)"
+    # Guarantee cleanup on all exit paths (normal return, set -e abort, early return).
+    # SIGKILL is the only case this cannot protect against.
+    # shellcheck disable=SC2064
+    trap "rm -f '${_askpass}'" RETURN
     printf '%s\n' '#!/bin/sh' > "${_askpass}"
     printf 'echo "%s"\n' "${_tok}" >> "${_askpass}"
     chmod 700 "${_askpass}"
