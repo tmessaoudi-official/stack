@@ -9025,6 +9025,63 @@ t "t92f: AUTO + stale target → [REPLACE-DRIFT] marker on (replace) sub-line" b
 _flush_section
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Section 93 — url.sh nightly SHA sort normalization
+#
+# The Perl one-liner in url.sh strips hex SHA chars that follow a YYYYMMDD
+# date before sort -V, then recovers the original via cut -f2.
+# Without it, a longer numeric+hex SHA suffix after the same date causes
+# sort -V to rank an older entry higher (the original bug for NODEEDGE).
+# ═══════════════════════════════════════════════════════════════════════════
+section "93 — url nightly SHA sort normalization"
+
+# t93a: regression canary — raw sort-V WITHOUT normalization wrongly ranks older entry higher
+# This documents the exact bug: 20260521614050b657 (older, long numeric SHA) > 202605222f56cd275e (newer)
+t "t93a: raw sort-V mis-ranks older nightly with long numeric SHA above newer (bug canary)" bash -c "
+    result=\$(printf 'v27.0.0-nightly20260521614050b657\nv27.0.0-nightly202605222f56cd275e\n' | sort -V | tail -1)
+    # Without normalization the older entry wins — document this is the known broken behavior
+    [[ \"\$result\" == 'v27.0.0-nightly20260521614050b657' ]] || { echo \"raw sort-V behavior changed; got: \$result\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t93b: normalized sort correctly picks newer nightly despite older having longer numeric SHA
+t "t93b: normalized sort picks newer nightly when older has longer numeric SHA" bash -c "
+    result=\$(printf 'v27.0.0-nightly20260521614050b657\nv27.0.0-nightly202605222f56cd275e\n' | \
+      perl -ne 'chomp; \$orig=\$_; (my \$key=\$orig)=~s/(\d{8})[0-9a-f]+\$/\$1/; print \"\$key\t\$orig\n\";' | \
+      sort -V -k1,1 | tail -1 | cut -f2)
+    [[ \"\$result\" == 'v27.0.0-nightly202605222f56cd275e' ]] || { echo \"expected May-22 nightly; got: \$result\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t93c: non-date+SHA entries pass through unchanged (no false match)
+t "t93c: non-nightly entries (no YYYYMMDD+SHA) pass through sort normalization unchanged" bash -c "
+    result=\$(printf 'v3.0.0\nv18.3-alpine3.23\nv27.0.0\n' | \
+      perl -ne 'chomp; \$orig=\$_; (my \$key=\$orig)=~s/(\d{8})[0-9a-f]+\$/\$1/; print \"\$key\t\$orig\n\";' | \
+      sort -V -k1,1 | tail -1 | cut -f2)
+    [[ \"\$result\" == 'v27.0.0' ]] || { echo \"expected v27.0.0; got: \$result\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t93d: nightly entry without SHA suffix (date only) passes through unchanged
+t "t93d: nightly entry with date but no SHA suffix is not mangled" bash -c "
+    result=\$(printf 'v27.0.0-nightly20260521\nv27.0.0-nightly20260522\n' | \
+      perl -ne 'chomp; \$orig=\$_; (my \$key=\$orig)=~s/(\d{8})[0-9a-f]+\$/\$1/; print \"\$key\t\$orig\n\";' | \
+      sort -V -k1,1 | tail -1 | cut -f2)
+    [[ \"\$result\" == 'v27.0.0-nightly20260522' ]] || { echo \"expected May-22; got: \$result\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t93e: different channel format (canary) normalizes correctly — proves generality
+t "t93e: canary channel with date+SHA normalizes same as nightly" bash -c "
+    result=\$(printf 'v28.0.0-canary20260521614050b657\nv28.0.0-canary202605222f56cd275e\n' | \
+      perl -ne 'chomp; \$orig=\$_; (my \$key=\$orig)=~s/(\d{8})[0-9a-f]+\$/\$1/; print \"\$key\t\$orig\n\";' | \
+      sort -V -k1,1 | tail -1 | cut -f2)
+    [[ \"\$result\" == 'v28.0.0-canary202605222f56cd275e' ]] || { echo \"expected May-22 canary; got: \$result\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+_flush_section
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section
