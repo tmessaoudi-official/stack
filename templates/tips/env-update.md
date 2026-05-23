@@ -43,7 +43,7 @@ fetcher types, classifies each update decision, and can apply AUTO decisions bac
 | `npm` | `package-name` or `@scope/name` | Yes | Yes | No | CLI fast path via `npm view` when available |
 | `pecl` | `extension-name` | No | No | GITHUB_TOKEN (optional, for git: flag) | PECL REST XML API; add `(git:owner/repo)` flag for HEAD SHA tracking from GitHub |
 | `pypi` | `package-name` | Yes | Yes | No | CLI fast path via `pip index versions` when available |
-| `quay` | `org/image` | Yes | Yes | No | 50-tag limit per call; no pagination |
+| `quay` | `org/image` | Yes | Yes | No | Paginated (100 tags/page); follows `has_additional` until exhausted |
 | `rubygems` | `gem-name` | Yes | Yes | No | CLI fast path via `gem search` when available; two-endpoint strategy |
 | `sdkman` | `candidate-name` | Yes | No | No | Java: distribution-aware selection; HTTP-first (no CLI) |
 | `sdkmanager` | `component-name` | No | No | No | Always MANUAL; requires `sdkmanager` binary |
@@ -386,14 +386,14 @@ the fetch is in progress.
 [ERROR ]  GLOBAL_STACK_SOME_VERSION                    (fetch failed for github:owner/repo)
 ──────────────────────────────────────────────────────────────────────────────
   Summary: 1 AUTO, 0 SHA, 2 HOLD, 1 MANUAL, 1 LOCK, 2 SKIP, 0 FROZEN, 0 FALLBACK, 1 ERROR  (8 checked)
-    ↳ 0 WATCH · 0 DRIFT (0 fixable) · 0 DOWNGRADE · 0 +sha
+    ↳ 0 WATCH · 0 DRIFT (0 fixable) · 0 DOWNGRADE · 0 FORCE-DOWNGRADE · 0 REPLACE-DRIFT · 0 +sha · 0 +replace
 ```
 
 When signals are non-zero the secondary line appears:
 
 ```
   Summary: 2 AUTO, 0 SHA, 1 HOLD, 0 MANUAL, 0 LOCK, 1 SKIP, 0 FROZEN, 1 FALLBACK, 0 ERROR  (4 checked)
-    ↳ 1 WATCH · 2 DRIFT (1 fixable) · 1 DOWNGRADE · 3 +sha
+    ↳ 1 WATCH · 2 DRIFT (1 fixable) · 1 DOWNGRADE · 0 FORCE-DOWNGRADE · 1 REPLACE-DRIFT · 3 +sha · 2 +replace
 ```
 
 #### Summary line signals
@@ -412,14 +412,17 @@ When signals are non-zero the secondary line appears:
 | `FALLBACK` | Overlay: range annotation fell back to LOW major (HIGH not yet in registry). **Not added to total** — the record is also counted as AUTO or SKIP. |
 | `ERROR` | Fetch failed (network, rate limit, parse error) |
 
-**Secondary sub-line signals** (shown only when at least one is > 0; `--no-drift` suppresses DRIFT and DOWNGRADE but not WATCH or `+sha`):
+**Secondary sub-line signals** (shown only when at least one is > 0; `--no-drift` suppresses DRIFT, DOWNGRADE, FORCE-DOWNGRADE, and REPLACE-DRIFT but not WATCH, `+sha`, or `+replace`):
 
 | Signal | Meaning |
 |--------|---------|
 | `WATCH` | A new runtime generation is available (watch-major annotation detected a higher major/minor prefix in the registry) |
 | `DRIFT` | VAR= in the env file differs from what the annotation records as current version. `(N fixable)` = how many drift records are on AUTO, HOLD, MANUAL, or SHA decisions; `--apply` or `--force-auto --apply` can resolve them. |
 | `DOWNGRADE` | Subset of DRIFT: VAR= is ahead of annotation (the env file has a newer version than what the annotation tracks — running `--apply` would downgrade). Not counted as fixable. |
+| `FORCE-DOWNGRADE` | Subset of DOWNGRADE: a HOLD/MANUAL/SHA decision where `--apply` or `--force-auto --apply` would actively downgrade the VAR=. Flagged separately because it is actionable (the user chose to `--force-auto` or `--apply` a SHA) but risky. |
+| `REPLACE-DRIFT` | Records with `(replace:TARGET=template)` where the TARGET variable's current value differs from `expand_template(current_primary)`. The target is stale relative to the current primary version — run `--apply` (or `--force-auto --apply` for HOLD/MANUAL) to fix. |
 | `+sha` | AUTO or MANUAL decisions that also carry a sha annotation update (a `↳ sha:` sub-line was emitted). Pure SHA decisions (decision=SHA) are excluded — they are already counted in the primary `SHA` counter. |
+| `+replace` | AUTO or SHA decisions that will also write a `(replace:TARGET=template)` cascade update when `--apply` runs (i.e. the template expansion changes between current and proposed, or the target is already stale). Counted once per record (not per target). Does not include SKIP/HOLD/MANUAL replace records — only records where `--apply` will actually write. |
 
 ### --check exit code
 
