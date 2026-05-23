@@ -4,10 +4,10 @@ set -xeE -o pipefail
 shopt -s extdebug
 IFS=$'\n\t'
 stackCatch() {
-  if [ "${1}" != "0" ] && [ "${1}" != "1" ]; then
+  if [[ "${1}" != "0" ]] && [[ "${1}" != "1" ]]; then
     # error handling goes here
     echo "Error detected !!"
-    echo -e "$(date '+%d-%m-%Y %H:%M:%S'): Error - ** line: ${2} ** ** message: ${3} ** sdkman (${JAVA_VERSION:-}) ${SDKMAN_MODE:-} global-stack-sdkman-start.sh" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/elapsed"
+    printf "$(date '+%d-%m-%Y %H:%M:%S'): Error - ** line: %s ** ** message: %s ** sdkman (%s) %s global-stack-sdkman-start.sh\n" "${2}" "${3}" "${JAVA_VERSION:-}" "${SDKMAN_MODE:-}" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/elapsed"
     [[ -n "${GLOBAL_STACK_ERROR_TOKEN:-}" ]] && touch "${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}/${GLOBAL_STACK_ERROR_TOKEN}"
     exit 1
   fi
@@ -32,7 +32,7 @@ trap 'stackCatch ${?} ${LINENO} "${BASH_COMMAND}"' EXIT ERR PIPE SIGPIPE SIGHUP
 
 SECONDS=0
 
-if [ "${SDKMAN_MODE}" = "install" ]; then
+if [[ "${SDKMAN_MODE}" = "install" ]]; then
   sudo rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}"/sdkman
   rm -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}/${GLOBAL_STACK_ERROR_TOKEN:-}"
   sleep 1
@@ -40,13 +40,13 @@ if [ "${SDKMAN_MODE}" = "install" ]; then
   global-stack-base-wait-for.sh \
     "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/base"
 
-  if [ "${GLOBAL_STACK_RELOAD_SDKMAN}" = "true" ]; then
-    echo -e "\nReloading java ..."
+  if [[ "${GLOBAL_STACK_RELOAD_SDKMAN}" = "true" ]]; then
+    printf '\nReloading java ...\n'
     rm -rf "${SDKMAN_DIR}" "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/java"* "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/sdkman" "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/java"* "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/sdkman" "${GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN}/sdkman.installer.sh" "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/sdkman.shellrc"
   fi
 fi
 
-if [ "${SDKMAN_MODE}" = "setup" ]; then
+if [[ "${SDKMAN_MODE}" = "setup" ]]; then
   sudo rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/java.$([[ -n "${JAVA_VERSION_AS:-}" && "" != "${JAVA_VERSION_AS:-}" ]] && echo "${JAVA_VERSION_AS}" || echo "${JAVA_VERSION}")"
   rm -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}/${GLOBAL_STACK_ERROR_TOKEN:-}"
   sleep 1
@@ -55,26 +55,26 @@ if [ "${SDKMAN_MODE}" = "setup" ]; then
     "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/sdkman"
 
   # if [[ "true" = "${GLOBAL_STACK_USE_LOCKS}" ]]; then
-  echo -e "\nAcquiring sdkman lock ..."
+  printf '\nAcquiring sdkman lock ...\n'
   exec 200>"${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/sdkman.flock"
   flock 200
-  echo -e "Lock acquired"
+  printf 'Lock acquired\n'
   # fi
 
-  if [ "${GLOBAL_STACK_RELOAD_JAVA:-false}" = "true" ]; then
-    echo -e "\nReloading java $([[ -n "${JAVA_VERSION_AS:-}" && "" != "${JAVA_VERSION_AS:-}" ]] && echo "${JAVA_VERSION_AS}" || echo "${JAVA_VERSION}") ..."
+  if [[ "${GLOBAL_STACK_RELOAD_JAVA:-false}" = "true" ]]; then
+    printf '\nReloading java %s ...\n' "$([[ -n "${JAVA_VERSION_AS:-}" && "" != "${JAVA_VERSION_AS:-}" ]] && echo "${JAVA_VERSION_AS}" || echo "${JAVA_VERSION}")"
     rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/java.$([[ -n "${JAVA_VERSION_AS:-}" && "" != "${JAVA_VERSION_AS:-}" ]] && echo "${JAVA_VERSION_AS}" || echo "${JAVA_VERSION}")" "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/java.$([[ -n "${JAVA_VERSION_AS:-}" && "" != "${JAVA_VERSION_AS:-}" ]] && echo "${JAVA_VERSION_AS}" || echo "${JAVA_VERSION}")"
   fi
 fi
 
-echo -e "\n******** Starting sdkman ${SDKMAN_MODE} ${JAVA_VERSION:-} ********"
+printf '\n******** Starting sdkman %s %s ********\n' "${SDKMAN_MODE}" "${JAVA_VERSION:-}"
 
 # @todo check-updates (also dist-bin/dist-src)
 # @todo update manually until i find a better solution to separate current from candidate (to have different envs in different containers in the same machine)
 SDK_LATEST_VERSION=${GLOBAL_STACK_SDKMAN_VERSION}
 SDK_CURRENT_VERSION=$([[ -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/sdkman" ]] && cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/sdkman" || echo "null")
 
-if [ "${SDK_LATEST_VERSION}" != "${SDK_CURRENT_VERSION}" ]; then
+if [[ "${SDK_LATEST_VERSION}" != "${SDK_CURRENT_VERSION}" ]]; then
   rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN}/sdkman.installer.sh"
   #curl -fsSL -o "${GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN}/sdkman.installer.sh" "https://get.sdkman.io"
   cp ${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/conf/sdkman/bin/sdkman.installer.sh "${GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN}"/sdkman.installer.sh
@@ -103,9 +103,9 @@ source "${SDKMAN_DIR}"/bin/sdkman-init.sh
 #source /home/"${GLOBAL_STACK_DOCKER_USER_ID}"/${GLOBAL_STACK_SHELL_RC_TARGET} && sdk update
 
 # @todo refactor
-if [ "${SDKMAN_MODE}" = "setup" ]; then
-  echo -e "\n \033[0;31m Setting up java ${JAVA_VERSION}"
-  if [ -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/java.$([[ -n "${JAVA_VERSION_AS:-}" && "" != "${JAVA_VERSION_AS:-}" ]] && echo "${JAVA_VERSION_AS}" || echo "${JAVA_VERSION}")" ]; then
+if [[ "${SDKMAN_MODE}" = "setup" ]]; then
+  printf '\n \033[0;31m Setting up java %s\n' "${JAVA_VERSION}"
+  if [[ -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/java.$([[ -n "${JAVA_VERSION_AS:-}" && "" != "${JAVA_VERSION_AS:-}" ]] && echo "${JAVA_VERSION_AS}" || echo "${JAVA_VERSION}")" ]]; then
     mkdir -p "${HOME}/.sdkman/etc/"
     touch "${HOME}/.sdkman/etc/config"
     echo "sdkman_healthcheck_enable=false" > "${HOME}/.sdkman/etc/config"
@@ -114,13 +114,13 @@ if [ "${SDKMAN_MODE}" = "setup" ]; then
   fi
 
   source /home/"${GLOBAL_STACK_DOCKER_USER_ID}"/${GLOBAL_STACK_SHELL_RC_TARGET} && sdk install java "${JAVA_VERSION}"
-  [[ -d "${SDKMAN_DIR}/candidates/java/${JAVA_VERSION}" ]] || { echo -e "Error: java ${JAVA_VERSION} directory missing after sdk install"; exit 2; }
+  [[ -d "${SDKMAN_DIR}/candidates/java/${JAVA_VERSION}" ]] || { printf 'Error: java %s directory missing after sdk install\n' "${JAVA_VERSION}"; exit 2; }
   echo "sdk use java '${JAVA_VERSION}'" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 
   source /usr/local/bin/global-stack-base-setup-packages.sh
   source /home/"${GLOBAL_STACK_DOCKER_USER_ID}"/${GLOBAL_STACK_SHELL_RC_TARGET}
 
-  if [ -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/java.$([[ -n "${JAVA_VERSION_AS:-}" && "" != "${JAVA_VERSION_AS:-}" ]] && echo "${JAVA_VERSION_AS}" || echo "${JAVA_VERSION}")" ]; then
+  if [[ -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/java.$([[ -n "${JAVA_VERSION_AS:-}" && "" != "${JAVA_VERSION_AS:-}" ]] && echo "${JAVA_VERSION_AS}" || echo "${JAVA_VERSION}")" ]]; then
     global_stack_base_setup_packages \
       --prefix='SDKMAN' \
       --command='echo -e "**** Using ${PACKAGE_NAME} ${PACKAGE_VERSION} ${PACKAGE_COMMAND_SUFFIX}"' \
@@ -138,8 +138,8 @@ if [ "${SDKMAN_MODE}" = "setup" ]; then
   fi
 fi
 
-if [ "${SDKMAN_MODE}" = "install" ]; then
-  echo -e "\nWriting /shellrc/sdkman.shellrc"
+if [[ "${SDKMAN_MODE}" = "install" ]]; then
+  printf '\nWriting /shellrc/sdkman.shellrc\n'
   echo "export SDKMAN_DIR=${SDKMAN_DIR}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/sdkman.shellrc"
 fi
 
@@ -150,18 +150,18 @@ echo "# global-stack-setup-finished" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${
 DURATION="${SECONDS}"
 global-stack-base-print-success.sh "${DURATION}" "sdkman (${JAVA_VERSION:-})"
 
-if [ "${SDKMAN_MODE}" = "install" ]; then
-  echo -e "\nWriting success"
+if [[ "${SDKMAN_MODE}" = "install" ]]; then
+  printf '\nWriting success\n'
   : > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/sdkman"
 fi
 
-if [ "${SDKMAN_MODE}" = "setup" ]; then
-  echo -e "\nWriting version"
+if [[ "${SDKMAN_MODE}" = "setup" ]]; then
+  printf '\nWriting version\n'
   echo "${JAVA_VERSION}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/java.$([[ -n "${JAVA_VERSION_AS:-}" && "" != "${JAVA_VERSION_AS:-}" ]] && echo "${JAVA_VERSION_AS}" || echo "${JAVA_VERSION}")"
-  echo -e "\nWriting success"
+  printf '\nWriting success\n'
   : > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/java.$([[ -n "${JAVA_VERSION_AS:-}" && "" != "${JAVA_VERSION_AS:-}" ]] && echo "${JAVA_VERSION_AS}" || echo "${JAVA_VERSION}")"
   # if [[ "true" = "${GLOBAL_STACK_USE_LOCKS}" ]]; then
-  echo -e "\nReleasing sdkman lock"
+  printf '\nReleasing sdkman lock\n'
   flock -u 200
   exec 200>&-
   # fi
