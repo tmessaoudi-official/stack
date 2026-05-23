@@ -49,7 +49,7 @@ if [ "${FVM_MODE}" = "setup" ]; then
   global-stack-base-wait-for.sh \
     "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/fvm"
 
-  if [ "${GLOBAL_STACK_RELOAD_FLUTTER3:-false}" = "true" ]; then
+  if [ "${GLOBAL_STACK_RELOAD_FLUTTER:-false}" = "true" ]; then
     echo -e "\nReloading flutter ${FLUTTER_VERSION:-} ..."
     rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/flutter.$([[ -n "${FLUTTER_VERSION_AS:-}" && "" != "${FLUTTER_VERSION_AS:-}" ]] && echo "${FLUTTER_VERSION_AS:-}" || echo "${FLUTTER_VERSION:-}")" "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/flutter.$([[ -n "${FLUTTER_VERSION_AS:-}" && "" != "${FLUTTER_VERSION_AS:-}" ]] && echo "${FLUTTER_VERSION_AS:-}" || echo "${FLUTTER_VERSION:-}")"
   fi

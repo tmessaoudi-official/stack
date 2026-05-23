@@ -61,7 +61,7 @@ if [ "${SDKMAN_MODE}" = "setup" ]; then
   echo -e "Lock acquired"
   # fi
 
-  if [ "${GLOBAL_STACK_RELOAD_JAVA_VERSION:-false}" = "true" ]; then
+  if [ "${GLOBAL_STACK_RELOAD_JAVA:-false}" = "true" ]; then
     echo -e "\nReloading java $([[ -n "${JAVA_VERSION_AS:-}" && "" != "${JAVA_VERSION_AS:-}" ]] && echo "${JAVA_VERSION_AS}" || echo "${JAVA_VERSION}") ..."
     rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/java.$([[ -n "${JAVA_VERSION_AS:-}" && "" != "${JAVA_VERSION_AS:-}" ]] && echo "${JAVA_VERSION_AS}" || echo "${JAVA_VERSION}")" "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/java.$([[ -n "${JAVA_VERSION_AS:-}" && "" != "${JAVA_VERSION_AS:-}" ]] && echo "${JAVA_VERSION_AS}" || echo "${JAVA_VERSION}")"
   fi

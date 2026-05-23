@@ -51,7 +51,7 @@ if [ "${PYENV_MODE}" = "setup" ]; then
     "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/pyenv" \
     "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/rust"
 
-  if [ "${GLOBAL_STACK_RELOAD_PYTHON_VERSION:-false}" = "true" ]; then
+  if [ "${GLOBAL_STACK_RELOAD_PYTHON:-false}" = "true" ]; then
     echo -e "\nReloading python $([[ -n "${PYTHON_VERSION_AS:-}" && "" != "${PYTHON_VERSION_AS:-}" ]] && echo "${PYTHON_VERSION_AS:-}" || echo "${PYTHON_VERSION:-}") ..."
     rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/python.$([[ -n "${PYTHON_VERSION_AS:-}" && "" != "${PYTHON_VERSION_AS:-}" ]] && echo "${PYTHON_VERSION_AS:-}" || echo "${PYTHON_VERSION:-}")" "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/python.$([[ -n "${PYTHON_VERSION_AS:-}" && "" != "${PYTHON_VERSION_AS:-}" ]] && echo "${PYTHON_VERSION_AS:-}" || echo "${PYTHON_VERSION:-}")"
   fi
