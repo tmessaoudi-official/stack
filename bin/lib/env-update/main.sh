@@ -1018,14 +1018,21 @@ _gs_eu2_run_check() {
               "" "${_rd_rt}" "${_rd_tgt_actual}" "${_rd_exp_cur}"
           fi
 
-          # Per-record counter: increment on first stale target only
-          if [[ "${_rd_stale_now}" == "true" && "${_record_replace_drift_counted}" == "false" ]]; then
-            (( ++_n_replace_drift )) || true
-            # _n_replace_cascade: strict subset — only AUTO/SHA decisions with stale replace targets
-            if [[ "${_decision}" == "AUTO" || "${_decision}" == "SHA" ]]; then
-              (( ++_n_replace_cascade )) || true
+          # Per-record counter: increment on first target that triggers a visible sub-line.
+          # _n_replace_drift  : stale targets (replace value wrong relative to current primary)
+          # _n_replace_cascade: AUTO/SHA decisions where a replace write will occur on --apply
+          #                     (stale_now OR update_pending — both result in a write)
+          if [[ "${_record_replace_drift_counted}" == "false" ]]; then
+            if [[ "${_rd_stale_now}" == "true" ]]; then
+              (( ++_n_replace_drift )) || true
             fi
-            _record_replace_drift_counted=true
+            if [[ ( "${_rd_stale_now}" == "true" || "${_rd_update_pending}" == "true" ) \
+                  && ( "${_decision}" == "AUTO" || "${_decision}" == "SHA" ) ]]; then
+              (( ++_n_replace_cascade )) || true
+              _record_replace_drift_counted=true
+            elif [[ "${_rd_stale_now}" == "true" ]]; then
+              _record_replace_drift_counted=true
+            fi
           fi
         done
       fi

@@ -9199,6 +9199,28 @@ t "t94h: REPLACE-DRIFT and +replace coexist in B2 for AUTO decision + stale targ
     echo PASS
 "
 
+# t94i: +replace counter fires when update_pending=true AND decision=AUTO, even when stale_now=false
+# Scenario: annotation ver=v2.4.0, template node{minor} → exp_cur=node4. Target actual=node4 (matches)
+# → stale_now=false. proposed=v2.5.0 → exp_prop=node5 ≠ node4 → update_pending=true.
+# Decision=AUTO (v2.4.0 → v2.5.0). The ↳ (replace) sub-line is displayed (no REPLACE-DRIFT).
+# BUG: current code gates counter on stale_now=true, so +replace stays 0 here.
+# After fix: counter increments on update_pending=true AND AUTO/SHA, so +replace=1.
+t "t94i: +replace counter fires on AUTO+update_pending even when stale_now=false" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t94i_c
+    f=\${TMP_DIR}/t94i.env
+    # annotation says v2.4.0; VAR=v2.4.0 → exp_cur=node4; target actual=node4 (stale_now=false)
+    # github fixture returns v2.5.0 → AUTO; exp_prop=node5 (update_pending=true)
+    printf '# @todo env-update (replace:GLOBAL_STACK_T94I_ALIAS=node{minor}) github:testowner/testrepo v2.4.0\nGLOBAL_STACK_T94I=v2.4.0\nGLOBAL_STACK_T94I_ALIAS=node4\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>&1)
+    # The replace sub-line must appear without [REPLACE-DRIFT] marker (stale_now=false)
+    echo \"\$out\" | grep -qF '↳ (replace)' || { echo \"expected replace sub-line; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '[REPLACE-DRIFT]' && { echo \"unexpected [REPLACE-DRIFT] marker (stale_now should be false); got: \$out\"; echo FAIL; exit 0; } || true
+    # +replace count must be 1 (update_pending=true → counter must increment)
+    echo \"\$out\" | grep -qF '1 +replace' || { echo \"expected '1 +replace' in B2 (update_pending=true); got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
 _flush_section
 
 # ═══════════════════════════════════════════════════════════════════════════
