@@ -133,16 +133,30 @@ gs_es_main() {
   done
   _gs_es_profile_end "Sync env files"
 
-  # Phase 6: Propagate canonical values to Dockerfiles
+  # Phase 6: Propagate canonical values to Dockerfiles.
+  # es-F001: source_files may be space-separated when --source-files has multiple values.
+  # gs_es_propagate_to_dockerfiles expects a single file path — loop over each source file.
   _gs_es_profile_start
   local _propagate_rc=0
-  gs_es_propagate_to_dockerfiles \
-    "${_GS_ES_CFG[source_files]}" \
-    "${_GS_ES_CFG[scan_path]}" \
-    "${_GS_ES_CFG[conflict_ignore_pattern]:-}" \
-    "${_GS_ES_CFG[dry_run]}" || _propagate_rc=$?
-  if [[ "${_propagate_rc}" -ne 0 && "${_GS_ES_CFG[no_fail]:-false}" != "true" ]]; then
-    return "${_propagate_rc}"
+  local _prop_src_file
+  for _prop_src_file in ${_GS_ES_CFG[source_files]//[\"\'\`]/}; do
+    local _one_propagate_rc=0
+    gs_es_propagate_to_dockerfiles \
+      "${_prop_src_file}" \
+      "${_GS_ES_CFG[scan_path]}" \
+      "${_GS_ES_CFG[conflict_ignore_pattern]:-}" \
+      "${_GS_ES_CFG[dry_run]}" || _one_propagate_rc=$?
+    if [[ "${_one_propagate_rc}" -ne 0 ]]; then
+      _propagate_rc="${_one_propagate_rc}"
+    fi
+  done
+  if [[ "${_propagate_rc}" -ne 0 ]]; then
+    if [[ "${_GS_ES_CFG[no_fail]:-false}" == "true" ]]; then
+      printf '[NO-FAIL] Phase 6 propagation error suppressed (exit code %d) — continuing\n' \
+        "${_propagate_rc}" >&2
+    else
+      return "${_propagate_rc}"
+    fi
   fi
   _gs_es_profile_end "Propagate to Dockerfiles"
 

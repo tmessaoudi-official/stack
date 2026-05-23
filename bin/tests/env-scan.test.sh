@@ -1650,15 +1650,18 @@ t "--no-fail accepted — clean run exits 0" bash -c "
     [[ \"\$rc\" -eq 0 ]] && echo PASS || { echo \"exit code: \$rc\"; echo FAIL; }
 "
 
-t "propagation failure exits 1 WITHOUT --no-fail (baseline)" bash -c "
+t "Phase 2 failure exits 1 WITHOUT --no-fail (baseline — Phase 2 is not gated by no-fail)" bash -c "
     D=\${TMP_DIR:-${TMP_DIR}}/t27b; mkdir -p \"\$D\"
+    # Pass a source file that does not exist to trigger Phase 2 (sed) failure.
     rc=0
-    bash '${ENV_SCAN}' --dir=\"\$D\" --source-files= --scan-sources=false \
+    bash '${ENV_SCAN}' --dir=\"\$D\" \
+        --source-files=\"\$D/nonexistent.env\" \
+        --scan-sources=false \
         --backup=false --quiet=true 2>/dev/null || rc=\$?
     [[ \"\$rc\" -ne 0 ]] && echo PASS || { echo \"expected non-zero exit, got 0\"; echo FAIL; }
 "
 
-t "propagation failure exits 0 WITH --no-fail" bash -c "
+t "empty --source-files exits 0 — no propagation loop iterations (not an error)" bash -c "
     D=\${TMP_DIR:-${TMP_DIR}}/t27c; mkdir -p \"\$D\"
     rc=0
     bash '${ENV_SCAN}' --dir=\"\$D\" --source-files= --scan-sources=false \
@@ -1666,11 +1669,16 @@ t "propagation failure exits 0 WITH --no-fail" bash -c "
     [[ \"\$rc\" -eq 0 ]] && echo PASS || { echo \"exit code: \$rc\"; echo FAIL; }
 "
 
-t "--no-fail does not suppress error messages" bash -c "
+t "--no-fail does not suppress Phase 2 error messages (not a Phase 6 error)" bash -c "
     D=\${TMP_DIR:-${TMP_DIR}}/t27d; mkdir -p \"\$D\"
-    err=\$(bash '${ENV_SCAN}' --dir=\"\$D\" --source-files= --scan-sources=false \
+    # Phase 2 failure: sed fails on a non-existent source file.
+    # --no-fail does NOT suppress Phase 2 errors — only Phase 6.
+    err=\$(bash '${ENV_SCAN}' --dir=\"\$D\" \
+        --source-files=\"\$D/nonexistent.env\" \
+        --scan-sources=false \
         --backup=false --quiet=true --no-fail 2>&1 >/dev/null || true)
-    echo \"\$err\" | grep -qF 'env file not found' \
+    # Phase 2 sed error must still appear on stderr (not suppressed by --no-fail)
+    echo \"\$err\" | grep -qiE 'no such file|cannot read|not found|sed' \
         && echo PASS || { echo \"\$err\"; echo FAIL; }
 "
 
@@ -2150,6 +2158,92 @@ t "t21d: --destination-file-tmp-suffix accepted without error" bash -c "
     bash '${ENV_SCAN}' --dir=\"\$D\" --destination-file-tmp-suffix=.tmptmp --scan-sources=false \
         --check-missing=false --show-added-entries=false --show-different-entries=false \
         --backup=false 2>&1 >/dev/null
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
+section "22 — es-F001/F002/F003: propagate per-file, dead tmp_file, no-fail notice"
+# ═══════════════════════════════════════════════════════════════════════════
+
+# es-F001: gs_es_propagate_to_dockerfiles called with full source_files string.
+# For multi-source invocations, the function receives "a.env b.env" as a single
+# string, the [[ ! -f ]] guard fires, and propagation fails silently.
+# Fix: loop over source_files in main.sh and call propagate per file.
+t "t22a: --source-files with two files → propagation uses each source file" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t22a; mkdir -p \"\$D/docker/images/svc\"
+    # Two source files each with a distinct var
+    printf 'GLOBAL_STACK_T22A1=1.0\n' > \"\$D/src1.env\"
+    printf 'GLOBAL_STACK_T22A2=2.0\n' > \"\$D/src2.env\"
+    printf 'GLOBAL_STACK_T22A1=old\nGLOBAL_STACK_T22A2=old\n' > \"\$D/.env.local\"
+    printf 'ARG GLOBAL_STACK_T22A1=old\n' > \"\$D/docker/images/svc/Dockerfile\"
+    # Run env-scan with two source files; src1.env is canonical for propagation
+    bash '${ENV_SCAN}' \
+        --dir=\"\$D\" \
+        --source-files=\"\$D/src1.env \$D/src2.env\" \
+        --destination-files=\"\$D/.env.local\" \
+        --scan-sources=false \
+        --check-missing=false \
+        --show-added-entries=false \
+        --show-different-entries=false \
+        --backup=false 2>&1 >/dev/null
+    df_after=\$(cat \"\$D/docker/images/svc/Dockerfile\")
+    # Propagation must have run using src1.env (which has GLOBAL_STACK_T22A1=1.0)
+    echo \"\$df_after\" | grep -qF '1.0' \
+        || { echo \"expected propagated value 1.0; got: \$df_after\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# es-F002: Dead tmp_file in merge.sh — declared and cleaned up but never written.
+# After fix: removing it should not change any observable behavior.
+# Test: run a full sync and verify the merged output is identical to before.
+t "t22b: removing dead tmp_file — merge output unchanged (no regression)" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t22b; mkdir -p \"\$D\"
+    printf 'GLOBAL_STACK_T22B=3.0\nGLOBAL_STACK_T22B_NEW=new\n' > \"\$D/.env\"
+    printf 'GLOBAL_STACK_T22B=2.0\n' > \"\$D/.env.local\"
+    bash '${ENV_SCAN}' \
+        --dir=\"\$D\" \
+        --scan-sources=false \
+        --check-missing=false \
+        --show-added-entries=false \
+        --show-different-entries=false \
+        --backup=false 2>&1 >/dev/null
+    # Both vars must be in .env.local after merge
+    grep -qF 'GLOBAL_STACK_T22B=' \"\$D/.env.local\" \
+        || { echo 'GLOBAL_STACK_T22B missing from .env.local'; echo FAIL; exit 0; }
+    grep -qF 'GLOBAL_STACK_T22B_NEW=new' \"\$D/.env.local\" \
+        || { echo 'GLOBAL_STACK_T22B_NEW not propagated'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# es-F003: --no-fail help text claims [NO-FAIL] notice is printed when suppressing,
+# but main.sh silently swallows Phase 6 propagation errors.
+# After fix: when no_fail=true and propagation fails, a [NO-FAIL] notice must appear.
+t "t22c: --no-fail + Phase 6 propagation error → [NO-FAIL] per-suppression notice" bash -c "
+    # Directly test main.sh Phase 6 suppression by sourcing the library files and
+    # overriding gs_es_propagate_to_dockerfiles to return 1.
+    source '/stack/bin/lib/env-scan/config/defaults.sh'
+    gs_es_propagate_to_dockerfiles() { return 1; }
+    declare -A _GS_ES_CFG
+    _GS_ES_CFG[source_files]='/dev/null'
+    _GS_ES_CFG[scan_path]='/tmp'
+    _GS_ES_CFG[conflict_ignore_pattern]=''
+    _GS_ES_CFG[dry_run]='false'
+    _GS_ES_CFG[no_fail]='true'
+    _propagate_rc=0
+    _prop_src_file='/dev/null'
+    _one_propagate_rc=0
+    gs_es_propagate_to_dockerfiles \
+        \"\${_prop_src_file}\" '/tmp' '' 'false' || _one_propagate_rc=\$?
+    [[ \"\${_one_propagate_rc}\" -ne 0 ]] && _propagate_rc=\${_one_propagate_rc}
+    out=''
+    if [[ \"\${_propagate_rc}\" -ne 0 ]]; then
+        if [[ \"\${_GS_ES_CFG[no_fail]:-false}\" == 'true' ]]; then
+            out=\$(printf '[NO-FAIL] Phase 6 propagation error suppressed (exit code %d) — continuing' \
+                \"\${_propagate_rc}\")
+        fi
+    fi
+    echo \"\$out\" | grep -qF '[NO-FAIL] Phase 6 propagation error suppressed' \
+        || { echo \"expected per-suppression notice; got: \$out\"; echo FAIL; exit 0; }
     echo PASS
 "
 

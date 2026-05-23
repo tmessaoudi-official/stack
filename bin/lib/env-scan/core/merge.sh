@@ -30,8 +30,6 @@ gs_es_process_file() {
 	local dry_run="${4:-false}"
 	local _line
 
-	local tmp_file
-	tmp_file="${dest_file}${_GS_ES_CFG[destination_file_tmp_suffix]}.${count}"
 	local merged_file
 	merged_file="${dest_file}${_GS_ES_CFG[destination_file_merged_suffix]}.${count}"
 
@@ -182,9 +180,6 @@ gs_es_process_file() {
 			"${_GS_ES_CFG[exclude_local_pattern]}" \
 			""
 
-	[[ "true" = "${_GS_ES_CFG[cleanup_tmp]}" ]] &&
-		rm -rf \
-			"${tmp_file}"
 	# Explicit return 0 — guards against bash set -e treating a false [[ ]] && pattern
 	# on the last line of a function as a non-zero function exit (same class as args.sh P1 fix).
 	return 0
