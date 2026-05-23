@@ -165,5 +165,12 @@ _gs_eu2_parse_args() {
     fi
   fi
 
+  # Advisory: --force-auto has no write effect without --apply.
+  # In --check mode it only affects how HOLD/MANUAL records are classified for display.
+  # This notice helps users who meant to use --apply --force-auto.
+  if [[ "${_GS_EU2_CFG[force_auto]}" == "true" && "${_GS_EU2_CFG[apply]}" != "true" ]]; then
+    printf '[WARN] --force-auto has no write effect without --apply; did you mean --apply --dry-run --force-auto?\n' >&2
+  fi
+
   return 0
 }

@@ -9351,6 +9351,87 @@ t "t94i: +replace counter fires on AUTO+update_pending even when stale_now=false
     echo PASS
 "
 
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 95 — Batch 3 correctness: awk end-anchor, replace format, force-auto guard
+# ═══════════════════════════════════════════════════════════════════════════
+section "95 — awk end-anchor, replace format, force-auto guard"
+
+# eu-F035: awk annotation rewrite uses index(line, " " curval) — first occurrence.
+# Bug: when curval equals the major hint in the annotation, the FIRST " curval" is
+# the major hint position, not the version token at the end.
+# Example: annotation "# @todo env-update github:owner/repo 2 2" → curval="2", newval="3"
+# → current code rewrites " 2" at major-hint position (gives "... repo 3 2")
+# → correct behavior: rewrite the LAST " 2" (version token: gives "... repo 2 3")
+t "t95a: awk annotation rewrite targets LAST version token (not major-hint when equal to curval)" bash -c "
+    source '/stack/bin/lib/env-update/config/defaults.sh'
+    source '/stack/bin/lib/env-update/core/records.sh'
+    source '/stack/bin/lib/env-update/core/git.sh' 2>/dev/null || true
+    source '/stack/bin/lib/env-update/core/apply.sh'
+    f=\"\${TMP_DIR}/t95a.env\"
+    # annotation: major_hint=2 and current version=2 are identical — index() finds major hint first
+    printf '# @todo env-update github:owner/repo 2 2\nGLOBAL_STACK_T95A=2\n' > \"\$f\"
+    _gs_eu2_apply_single \"\$f\" 'GLOBAL_STACK_T95A' '3' \
+      '# @todo env-update github:owner/repo 2 2' '2' '' '' 'false' 'false' ''
+    annotation=\$(grep '^#' \"\$f\")
+    # Correct: major_hint stays 2, version token becomes 3
+    echo \"\$annotation\" | grep -qF '2 3' || { echo \"expected '2 3' in annotation (last token rewritten); got: \$annotation\"; echo FAIL; exit 0; }
+    # Must NOT have rewritten major hint position (which would give '3 2')
+    echo \"\$annotation\" | grep -qF '3 2' && { echo \"major hint was wrongly rewritten: \$annotation\"; echo FAIL; exit 0; } || true
+    echo PASS
+"
+
+# eu-F002: unified replace sub-line format.
+# apply.sh dry-run internal path (called with dry_run=true) must use '↳ (replace)' format.
+# Tested by calling _gs_eu2_apply_updates directly with dry_run="true" and a record that
+# has replace_targets — this is the only way to reach the dry-run replace sub-line in apply.sh
+# (the CLI gate blocks --apply --dry-run as mutually exclusive).
+t "t95b: apply.sh dry-run internal path replace sub-line uses '↳ (replace)' format" bash -c "
+    source '/stack/bin/lib/env-update/config/defaults.sh'
+    source '/stack/bin/lib/env-update/core/records.sh'
+    source '/stack/bin/lib/env-update/core/apply.sh'
+    f=\${TMP_DIR}/t95b.env
+    printf '# @todo env-update (replace:GLOBAL_STACK_T95B_ALIAS=node{major}) github:testowner/testrepo 2.4.0\nGLOBAL_STACK_T95B=2.4.0\nGLOBAL_STACK_T95B_ALIAS=node2\n' > \"\$f\"
+    _gs_eu2_record_new; idx=\$_GS_EU2_LAST_IDX
+    _gs_eu2_record_set \$idx env_var           'GLOBAL_STACK_T95B'
+    _gs_eu2_record_set \$idx current_version   '2.4.0'
+    _gs_eu2_record_set \$idx proposed_version  '3.0.0'
+    _gs_eu2_record_set \$idx decision          'AUTO'
+    _gs_eu2_record_set \$idx replace_targets   'GLOBAL_STACK_T95B_ALIAS'
+    _gs_eu2_record_set \$idx replace_templates 'node{major}'
+    out=\$(_gs_eu2_apply_updates \"\$f\" 'true')
+    # apply.sh dry-run must use '↳ (replace)' not bare '↳ replace'
+    echo \"\$out\" | grep -qF '↳ (replace)' || { echo \"expected '↳ (replace)' in apply dry-run output; got: \$out\"; echo FAIL; exit 0; }
+    # File must NOT be modified
+    grep -qF 'T95B=2.4.0' \"\$f\" || { echo 'file was modified in dry-run'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t95c: apply.sh [REPLACE] line uses '↳ (replace)' format (not bare '↳')" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t95c_c
+    f=\${TMP_DIR}/t95c.env
+    printf '# @todo env-update (replace:GLOBAL_STACK_T95C_ALIAS=node{major}) github:testowner/testrepo 2.4.0\nGLOBAL_STACK_T95C=2.4.0\nGLOBAL_STACK_T95C_ALIAS=node2\n' > \"\$f\"
+    bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" > /dev/null 2>&1
+    out=\$(bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$f\" 2>&1)
+    # The [REPLACE] line from apply.sh must use '↳ (replace)' not bare '↳ VAR'
+    echo \"\$out\" | grep -qF '[REPLACE]' || { echo \"expected [REPLACE] line in apply output; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '[REPLACE]' | grep -qF '↳ (replace)' && echo PASS && exit 0
+    # Specifically: the [REPLACE] sub-line must contain '↳ (replace)' not bare '↳'
+    echo \"\$out\" | grep '\[REPLACE\].*↳' | grep -qF '↳ (replace)' || { echo \"[REPLACE] sub-line uses wrong format; got: \$(echo \"\$out\" | grep '\[REPLACE\].*↳')\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# eu-F041: --force-auto without --apply should warn that the flag has no write effect.
+# Current behavior: [FORCE-AUTO MODE] banner is emitted but no advisory about --apply.
+# After fix: '[WARN] --force-auto has no write effect without --apply' on stderr.
+t "t95d: --force-auto without --apply emits advisory about missing --apply" bash -c "
+    err=\$(bash '${ENV_UPDATE_V2}' --force-auto 2>&1 || true)
+    # Must contain a warning/advisory mentioning both force-auto and --apply
+    echo \"\$err\" | grep -qiE 'force.auto.*apply|apply.*force.auto|no.*write.*effect|no.*effect.*apply' \
+      || { echo \"expected force-auto + apply advisory; got: '\$err'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
 _flush_section
 
 # ═══════════════════════════════════════════════════════════════════════════

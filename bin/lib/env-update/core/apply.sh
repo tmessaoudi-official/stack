@@ -32,9 +32,17 @@ _gs_eu2_apply_single() {
     /^[[:space:]]*#/ {
       if (raw_ann != "" && $0 == raw_ann) {
         line = $0
-        # Update version token (space + version, first occurrence)
+        # Update version token: find the LAST occurrence of " curval" in the annotation.
+        # Using the last occurrence prevents collisions with major-hint tokens that appear
+        # earlier in the annotation (e.g. "... repo 2 2.4.0" → first " 2" is the hint;
+        # the version token is the last " 2.4.0").
         if (curval != "" && newval != "") {
-          idx = index(line, " " curval)
+          idx = 0
+          pos = 1
+          while ((p = index(substr(line, pos), " " curval)) > 0) {
+            idx = pos + p - 1
+            pos = idx + 1
+          }
           if (idx > 0)
             line = substr(line, 1, idx) newval substr(line, idx + 1 + length(curval))
         }
@@ -244,7 +252,7 @@ _gs_eu2_apply_updates() {
           local _rm_dr="${_rm_arr_dr[${_ri_dr}]:-}"
           local _expanded_dr
           _expanded_dr="$(_gs_eu2_expand_replace_template "${_rm_dr}" "${_prop}")"
-          printf '  [DRY-RUN]    ↳ replace %-51s  → %s\n' "${_rt_dr}" "${_expanded_dr}"
+          printf '  [DRY-RUN]    ↳ (replace) %-47s  → %s\n' "${_rt_dr}" "${_expanded_dr}"
         done
       fi
     else
@@ -294,7 +302,7 @@ _gs_eu2_apply_updates() {
             fi
             continue
           fi
-          printf '  [REPLACE]    ↳ %-51s  → %s\n' "${_rt}" "${_expanded}"
+          printf '  [REPLACE]    ↳ (replace) %-47s  → %s\n' "${_rt}" "${_expanded}"
         done
       fi
     fi
@@ -355,7 +363,7 @@ _gs_eu2_apply_updates() {
         (( ++_n_replace_only_would )) || true
       else
         _gs_eu2_apply_replace_target "${_env_file}" "${_sk_rt}" "${_sk_exp_cur}"
-        printf '  [REPLACE]    ↳ %-51s  → %s  (replace-only)\n' "${_sk_rt}" "${_sk_exp_cur}"
+        printf '  [REPLACE]    ↳ (replace) %-47s  → %s  (replace-only)\n' "${_sk_rt}" "${_sk_exp_cur}"
         (( ++_n_replace_only_applied )) || true
       fi
     done
