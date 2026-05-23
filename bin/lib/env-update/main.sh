@@ -105,10 +105,10 @@ _gs_eu2_run_check() {
     local _env_var
     _env_var="$(_gs_eu2_record_get "${_i}" env_var)"
 
-    # Progress indicator: show which record is being fetched (to stderr so it
-    # doesn't mix with structured stdout, and is visible even when piped)
-    printf '\r  [%d/%d] fetching %-55s' \
-      "$(( _i + 1 ))" "${_count}" "${_env_var:0:55}" >&2
+    # Progress indicator: running tally on stderr (only when stderr is a terminal)
+    [[ -t 2 ]] && printf '\r  Checking [AUTO:%d HOLD:%d SKIP:%d ERROR:%d] (%d/%d) ...\r' \
+      "${_n_auto}" "${_n_hold}" "$(( _n_skip + _n_frozen ))" "${_n_error}" \
+      "$(( _i + 1 ))" "${_count}" >&2
 
     # Skip gate: (skip:REASON) annotation forces SKIP before any fetch.
     # Sets decision + error_message on the record; display code below handles output.
@@ -473,7 +473,7 @@ _gs_eu2_run_check() {
     fi
     if [[ "${_should_hide}" == "true" ]]; then
       (( ++_n_hidden )) || true
-      printf '\r%*s\r' "$(( _max_var_len + 20 ))" "" >&2
+      printf '\r%-80s\r' "" >&2
       continue
     fi
 
@@ -767,7 +767,33 @@ _gs_eu2_run_check() {
         (( ++_n_drift_fixable )) || true
       fi
     fi
+
+    # (replace:) sub-lines: show which target vars will be rewritten (AUTO only; others informational)
+    if [[ "${_decision}" == "AUTO" || "${_decision}" == "HOLD" || "${_decision}" == "MANUAL" ]]; then
+      local _rep_disp_targets _rep_disp_tmpls
+      _rep_disp_targets="$(_gs_eu2_record_get "${_i}" replace_targets)"
+      _rep_disp_tmpls="$(_gs_eu2_record_get "${_i}" replace_templates)"
+      if [[ -n "${_rep_disp_targets}" ]]; then
+        local _old_ifs_rd="${IFS}"
+        IFS=$'\x1f'
+        local _rt_disp_arr _rm_disp_arr
+        read -ra _rt_disp_arr <<< "${_rep_disp_targets}"
+        read -ra _rm_disp_arr <<< "${_rep_disp_tmpls}"
+        IFS="${_old_ifs_rd}"
+        local _ri_disp
+        for (( _ri_disp = 0; _ri_disp < ${#_rt_disp_arr[@]}; _ri_disp++ )); do
+          local _rt_d="${_rt_disp_arr[${_ri_disp}]}"
+          local _rm_d="${_rm_disp_arr[${_ri_disp}]:-}"
+          local _expanded_d
+          _expanded_d="$(_gs_eu2_expand_replace_template "${_rm_d}" "${_prop:-}")"
+          printf '%10s↳ [REPLACE] %s → %s\n' "" "${_rt_d}" "${_expanded_d}"
+        done
+      fi
+    fi
   done
+
+  # Clear the running tally line once all results have been printed
+  [[ -t 2 ]] && printf '\r%-80s\r' "" >&2
 
   local _total=$(( _n_auto + _n_hold + _n_skip + _n_error + _n_manual + _n_sha + _n_lock + _n_frozen ))
   printf '%-80s\n' "──────────────────────────────────────────────────────────────────────────────"
