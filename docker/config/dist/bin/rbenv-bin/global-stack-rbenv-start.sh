@@ -51,6 +51,10 @@ if [ "${RBENV_MODE}" = "setup" ]; then
   global-stack-base-wait-for.sh \
     "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/rbenv"
 
+  if [ "${GLOBAL_STACK_RELOAD_RUBY_VERSION:-false}" = "true" ]; then
+    echo -e "\nReloading ruby $([[ -n "${RUBY_VERSION_AS:-}" && "" != "${RUBY_VERSION_AS:-}" ]] && echo "${RUBY_VERSION_AS:-}" || echo "${RUBY_VERSION:-}") ..."
+    rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/ruby.$([[ -n "${RUBY_VERSION_AS:-}" && "" != "${RUBY_VERSION_AS:-}" ]] && echo "${RUBY_VERSION_AS:-}" || echo "${RUBY_VERSION:-}")" "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/ruby.$([[ -n "${RUBY_VERSION_AS:-}" && "" != "${RUBY_VERSION_AS:-}" ]] && echo "${RUBY_VERSION_AS:-}" || echo "${RUBY_VERSION:-}")"
+  fi
 
   if [[ "true" = "${GLOBAL_STACK_USE_LOCKS}" ]]; then
     echo -e "\nAcquiring rbenv lock ..."
