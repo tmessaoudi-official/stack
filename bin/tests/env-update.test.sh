@@ -9097,6 +9097,111 @@ t "t93e: canary channel with date+SHA normalizes same as nightly" bash -c "
 _flush_section
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Section 94 — live tally: --tally flag, gate, +replace counter in B2
+# ═══════════════════════════════════════════════════════════════════════════
+section "94 — live tally flag, gate, and +replace counter"
+
+# t94a: --tally=off is accepted without error
+t "t94a: --tally=off accepted without error" bash -c "
+    f=\${TMP_DIR}/t94a.env
+    printf '# @todo env-update dockerhub:nginx/nginx 1.27.0\nGLOBAL_STACK_NGINX_VERSION=1.27.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --tally=off --check --env-file=\"\$f\" 2>&1) || true
+    echo \"\$out\" | grep -qF 'unknown option' && { echo \"unexpected error: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t94b: --tally=full is accepted without error
+t "t94b: --tally=full accepted without error" bash -c "
+    f=\${TMP_DIR}/t94b.env
+    printf '# @todo env-update dockerhub:nginx/nginx 1.27.0\nGLOBAL_STACK_NGINX_VERSION=1.27.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --tally=full --check --env-file=\"\$f\" 2>&1) || true
+    echo \"\$out\" | grep -qF 'unknown option' && { echo \"unexpected error: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t94c: --tally=invalid is rejected with a clear error message
+t "t94c: --tally=invalid rejected with error" bash -c "
+    f=\${TMP_DIR}/t94c.env
+    printf '# @todo env-update dockerhub:nginx/nginx 1.27.0\nGLOBAL_STACK_NGINX_VERSION=1.27.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --tally=invalid --check --env-file=\"\$f\" 2>&1) || true
+    echo \"\$out\" | grep -qF 'invalid' || { echo \"expected error for invalid tally value; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t94d: NO_COLOR env disables tally even with _GS_EU2_TALLY_FORCE=1
+# Tally is not active so no ANSI sequences appear on stderr.
+t "t94d: NO_COLOR env prevents tally from activating (gate respected)" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t94d_c
+    export NO_COLOR=1
+    export _GS_EU2_TALLY_FORCE=1
+    f=\${TMP_DIR}/t94d.env
+    printf '# @todo env-update github:testowner/testrepo v2.5.0\nGLOBAL_STACK_T94D=v2.5.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --tally=full --env-file=\"\$f\" 2>&1)
+    # If tally were active, ANSI ESC sequences would appear; verify none present
+    printf '%s' \"\$out\" | grep -qP '\x1b\[' && { echo \"ANSI sequences found — tally was not gated by NO_COLOR; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t94e: _GS_EU2_TALLY_FORCE=1 activates tally (ANSI sequences on stderr)
+t "t94e: _GS_EU2_TALLY_FORCE=1 activates tally — ANSI sequences present on stderr" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t94e_c
+    unset NO_COLOR
+    export _GS_EU2_TALLY_FORCE=1
+    f=\${TMP_DIR}/t94e.env
+    printf '# @todo env-update github:testowner/testrepo v2.5.0\nGLOBAL_STACK_T94E=v2.5.0\n' > \"\$f\"
+    err=\$(bash '${ENV_UPDATE_V2}' --check --tally=full --env-file=\"\$f\" 2>&1 1>/dev/null)
+    # tally should emit ANSI escape sequences on stderr
+    printf '%s' \"\$err\" | grep -qP '\x1b\[' || { echo \"no ANSI sequences found — tally not active; err: \$err\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t94f: +replace counter appears in B2 when AUTO record has stale replace target
+t "t94f: B2 shows '+replace' when AUTO record has stale replace target" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t94f_c
+    f=\${TMP_DIR}/t94f.env
+    # cur=v2.4.0 → proposed=v2.5.0 → AUTO; target node1 is stale (should be node2)
+    printf '# @todo env-update (replace:GLOBAL_STACK_T94F_ALIAS=node{major}) github:testowner/testrepo v2\nGLOBAL_STACK_T94F=v2.4.0\nGLOBAL_STACK_T94F_ALIAS=node1\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '+replace' || { echo \"expected '+replace' in B2 secondary signals; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t94g: +replace count is 0 when replace-drift decision is SKIP (not AUTO/SHA)
+# _n_replace_cascade only counts AUTO/SHA — SKIP must not increment it.
+# B2 still prints the token (same as 0 WATCH, 0 DRIFT etc) but the count must be 0.
+t "t94g: +replace shows count 0 in B2 when replace-drift decision is SKIP (not AUTO/SHA)" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t94g_c
+    f=\${TMP_DIR}/t94g.env
+    # cur=v2.5.0 matches proposed → SKIP (up-to-date); stale target — REPLACE-DRIFT but +replace=0
+    printf '# @todo env-update (replace:GLOBAL_STACK_T94G_ALIAS=node{major}) github:testowner/testrepo v2.5.0\nGLOBAL_STACK_T94G=v2.5.0\nGLOBAL_STACK_T94G_ALIAS=node1\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>&1)
+    # REPLACE-DRIFT must appear (tracks all decisions)
+    echo \"\$out\" | grep -qF 'REPLACE-DRIFT' || { echo \"expected REPLACE-DRIFT in B2; got: \$out\"; echo FAIL; exit 0; }
+    # +replace must show 0 (SKIP decision does not increment _n_replace_cascade)
+    echo \"\$out\" | grep -qF '0 +replace' || { echo \"expected '0 +replace' for SKIP decision; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t94h: both REPLACE-DRIFT and +replace coexist in B2 when the record is AUTO+stale
+t "t94h: REPLACE-DRIFT and +replace coexist in B2 for AUTO decision + stale target" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t94h_c
+    f=\${TMP_DIR}/t94h.env
+    # cur=v2.4.0 → proposed=v2.5.0 → AUTO; target node1 is stale
+    printf '# @todo env-update (replace:GLOBAL_STACK_T94H_ALIAS=node{major}) github:testowner/testrepo v2\nGLOBAL_STACK_T94H=v2.4.0\nGLOBAL_STACK_T94H_ALIAS=node1\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF 'REPLACE-DRIFT' || { echo \"expected REPLACE-DRIFT; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '+replace' || { echo \"expected +replace; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+_flush_section
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section

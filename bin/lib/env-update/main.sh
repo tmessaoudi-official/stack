@@ -80,6 +80,122 @@ _gs_eu2_dispatch_fetcher() {
   esac
 }
 
+# ── Tally helpers ────────────────────────────────────────────────────────────
+# Live running tally displayed on stderr during the check loop.
+# Gate: tally != off  AND  stderr is TTY  AND  TERM != dumb  AND  NO_COLOR unset
+#   AND ( tally == full  OR  cols >= 120 )
+# _GS_EU2_TALLY_FORCE=1 bypasses the TTY check (test hook).
+#
+# Module-level state (set by _gs_eu2_tally_init):
+_GS_EU2_TALLY_ACTIVE=0      # 1 when tally is enabled for this run
+_GS_EU2_TALLY_PREV_LINES=0  # how many lines the last draw emitted
+
+_gs_eu2_tally_init() {
+  _GS_EU2_TALLY_ACTIVE=0
+  _GS_EU2_TALLY_PREV_LINES=0
+  local _t_mode="${_GS_EU2_CFG[tally]:-auto}"
+  [[ "${_t_mode}" == "off" ]] && return 0
+  # NO_COLOR gate — machine-level opt-out; even --tally=full must respect it
+  [[ -n "${NO_COLOR:-}" ]] && return 0
+  # TERM gate
+  [[ "${TERM:-}" == "dumb" ]] && return 0
+  # TTY gate — bypass with _GS_EU2_TALLY_FORCE=1
+  if [[ "${_GS_EU2_TALLY_FORCE:-0}" != "1" ]]; then
+    [[ ! -t 2 ]] && return 0
+  fi
+  # Width gate: full bypasses width check; auto requires cols >= 120
+  if [[ "${_t_mode}" == "auto" ]]; then
+    local _cols
+    _cols="${COLUMNS:-0}"
+    if [[ "${_cols}" -lt 120 ]]; then
+      _cols="$(tput cols 2>/dev/null || printf '0')"
+    fi
+    [[ "${_cols}" -lt 120 ]] && return 0
+  fi
+  _GS_EU2_TALLY_ACTIVE=1
+}
+
+# _gs_eu2_tally_draw: emit the live tally block.
+# Args: _i (0-based current index), _count (total), all _n_* counters
+_gs_eu2_tally_draw() {
+  [[ "${_GS_EU2_TALLY_ACTIVE}" != "1" ]] && return 0
+  local _ti="${1}" _tcount="${2}"
+  local _ta="${3}" _th="${4}" _tsk="${5}" _te="${6}"
+  local _tma="${7}" _tsha="${8}" _tlk="${9}" _tfr="${10}"
+  local _tfa="${11}" _twa="${12}" _tdr="${13}" _tdf="${14}"
+  local _tdo="${15}" _tdof="${16}" _trc="${17}"
+
+  # Erase previous tally block: move cursor up (_prev_lines - 1) lines then
+  # overwrite each line with \r\033[K (erase to end of line).
+  if [[ "${_GS_EU2_TALLY_PREV_LINES}" -gt 0 ]]; then
+    local _up=$(( _GS_EU2_TALLY_PREV_LINES - 1 ))
+    if [[ "${_up}" -gt 0 ]]; then
+      printf '\033[%dA' "${_up}" >&2
+    fi
+    local _el
+    for (( _el = 0; _el < _GS_EU2_TALLY_PREV_LINES; _el++ )); do
+      if [[ "${_el}" -gt 0 ]]; then
+        printf '\033[1B' >&2  # move down one line
+      fi
+      printf '\r\033[K' >&2   # erase line
+    done
+    # Move cursor back to top of the block
+    if [[ "${_GS_EU2_TALLY_PREV_LINES}" -gt 1 ]]; then
+      printf '\033[%dA' "$(( _GS_EU2_TALLY_PREV_LINES - 1 ))" >&2
+    fi
+  fi
+
+  local _lines=0
+  local _fetching_num=$(( _ti + 1 ))
+
+  # Line 1: progress position
+  printf '\r\033[K  [%d/%d] checking...' "${_fetching_num}" "${_tcount}" >&2
+  (( _lines++ )) || true
+
+  # Line 2: decision tallies — always present
+  printf '\n\r\033[K  AUTO:%-3d  SHA:%-3d  HOLD:%-3d  MANUAL:%-3d  LOCK:%-3d  SKIP:%-3d  FROZEN:%-3d  ERR:%-3d' \
+    "${_ta}" "${_tsha}" "${_th}" "${_tma}" "${_tlk}" "${_tsk}" "${_tfr}" "${_te}" >&2
+  (( _lines++ )) || true
+
+  # Line 3 (signals): only when any non-zero
+  if (( _twa > 0 || _tdr > 0 || _tdo > 0 || _tdof > 0 || _trc > 0 || _tfa > 0 )); then
+    printf '\n\r\033[K  WATCH:%-3d  DRIFT:%-3d(%d fixable)  DOWN:%-3d  FORCE-DOWN:%-3d  +replace:%-3d  FALLBACK:%-3d' \
+      "${_twa}" "${_tdr}" "${_tdf}" "${_tdo}" "${_tdof}" "${_trc}" "${_tfa}" >&2
+    (( _lines++ )) || true
+  fi
+
+  # Decision B1 (Option B): last line printed WITHOUT trailing \n — cursor stays on it
+  _GS_EU2_TALLY_PREV_LINES="${_lines}"
+}
+
+# _gs_eu2_tally_erase: wipe the tally block entirely (before printing final summary)
+_gs_eu2_tally_erase() {
+  [[ "${_GS_EU2_TALLY_ACTIVE}" != "1" ]] && return 0
+  [[ "${_GS_EU2_TALLY_PREV_LINES}" -eq 0 ]] && return 0
+  local _up=$(( _GS_EU2_TALLY_PREV_LINES - 1 ))
+  if [[ "${_up}" -gt 0 ]]; then
+    printf '\033[%dA' "${_up}" >&2
+  fi
+  local _el
+  for (( _el = 0; _el < _GS_EU2_TALLY_PREV_LINES; _el++ )); do
+    if [[ "${_el}" -gt 0 ]]; then
+      printf '\033[1B' >&2
+    fi
+    printf '\r\033[K' >&2
+  done
+  if [[ "${_GS_EU2_TALLY_PREV_LINES}" -gt 1 ]]; then
+    printf '\033[%dA' "$(( _GS_EU2_TALLY_PREV_LINES - 1 ))" >&2
+  fi
+  printf '\r' >&2
+  _GS_EU2_TALLY_PREV_LINES=0
+}
+
+# _gs_eu2_tally_cleanup: called from INT/ERR trap — erase tally then reset trap
+_gs_eu2_tally_cleanup() {
+  _gs_eu2_tally_erase
+  trap - INT ERR
+}
+
 _gs_eu2_run_check() {
   local _count _i
   _count="$(_gs_eu2_record_count)"
@@ -88,7 +204,11 @@ _gs_eu2_run_check() {
   _GS_EU2_CACHE_TTL="${_GS_EU2_CFG[cache_ttl]:-3600}"
 
   local _n_auto=0 _n_hold=0 _n_skip=0 _n_error=0 _n_manual=0 _n_sha=0 _n_lock=0 _n_frozen=0
-  local _n_fallback=0 _n_watch=0 _n_drift=0 _n_drift_fixable=0 _n_downgrade=0 _n_downgrade_force=0 _n_hidden=0 _n_sha_anno=0 _n_replace_drift=0
+  local _n_fallback=0 _n_watch=0 _n_drift=0 _n_drift_fixable=0 _n_downgrade=0 _n_downgrade_force=0 _n_hidden=0 _n_sha_anno=0 _n_replace_drift=0 _n_replace_cascade=0
+
+  # Initialize and arm live tally (TTY-only, gate checked inside)
+  _gs_eu2_tally_init
+  trap '_gs_eu2_tally_cleanup' INT ERR
 
   # Dynamic column width: pre-scan all env_var names so the → arrow aligns
   # across every record in this run, regardless of variable name length.
@@ -105,10 +225,17 @@ _gs_eu2_run_check() {
     local _env_var
     _env_var="$(_gs_eu2_record_get "${_i}" env_var)"
 
-    # Progress indicator: show which record is being fetched (to stderr so it
-    # doesn't mix with structured stdout, and is visible even when piped)
-    printf '\r  [%d/%d] fetching %-55s' \
-      "$(( _i + 1 ))" "${_count}" "${_env_var:0:55}" >&2
+    # Progress indicator: live tally when tally is active; fallback single-line \r when not
+    if [[ "${_GS_EU2_TALLY_ACTIVE}" == "1" ]]; then
+      _gs_eu2_tally_draw "${_i}" "${_count}" \
+        "${_n_auto}" "${_n_hold}" "${_n_skip}" "${_n_error}" \
+        "${_n_manual}" "${_n_sha}" "${_n_lock}" "${_n_frozen}" \
+        "${_n_fallback}" "${_n_watch}" "${_n_drift}" "${_n_drift_fixable}" \
+        "${_n_downgrade}" "${_n_downgrade_force}" "${_n_replace_cascade}"
+    else
+      printf '\r  [%d/%d] fetching %-55s' \
+        "$(( _i + 1 ))" "${_count}" "${_env_var:0:55}" >&2
+    fi
 
     # Skip gate: (skip:REASON) annotation forces SKIP before any fetch.
     # Sets decision + error_message on the record; display code below handles output.
@@ -842,6 +969,10 @@ _gs_eu2_run_check() {
           # Per-record counter: increment on first stale target only
           if [[ "${_rd_stale_now}" == "true" && "${_record_replace_drift_counted}" == "false" ]]; then
             (( ++_n_replace_drift )) || true
+            # _n_replace_cascade: strict subset — only AUTO/SHA decisions with stale replace targets
+            if [[ "${_decision}" == "AUTO" || "${_decision}" == "SHA" ]]; then
+              (( ++_n_replace_cascade )) || true
+            fi
             _record_replace_drift_counted=true
           fi
         done
@@ -871,6 +1002,10 @@ _gs_eu2_run_check() {
     fi
   done
 
+  # Disarm tally traps and erase live tally block before printing static summary
+  trap - INT ERR
+  _gs_eu2_tally_erase
+
   local _total=$(( _n_auto + _n_hold + _n_skip + _n_error + _n_manual + _n_sha + _n_lock + _n_frozen ))
   printf '%-80s\n' "──────────────────────────────────────────────────────────────────────────────"
   local _checked_suffix="${_total} checked"
@@ -878,22 +1013,23 @@ _gs_eu2_run_check() {
   printf '  Summary: %d AUTO, %d SHA, %d HOLD, %d MANUAL, %d LOCK, %d SKIP, %d FROZEN, %d FALLBACK, %d ERROR  (%s)\n' \
     "${_n_auto}" "${_n_sha}" "${_n_hold}" "${_n_manual}" "${_n_lock}" "${_n_skip}" "${_n_frozen}" "${_n_fallback}" "${_n_error}" "${_checked_suffix}"
 
-  # Secondary signals sub-line: WATCH, DRIFT (with fixable count), DOWNGRADE, REPLACE-DRIFT, +sha.
-  # DRIFT, DOWNGRADE, and REPLACE-DRIFT suppressed when --no-drift is active.
+  # Secondary signals sub-line: WATCH, DRIFT (with fixable count), DOWNGRADE, REPLACE-DRIFT, +sha, +replace.
+  # DRIFT, DOWNGRADE, REPLACE-DRIFT, and +replace suppressed when --no-drift is active.
   # +sha follows WATCH (unconditional — not suppressed by --no-drift).
   # Entire line omitted when all relevant signals are zero.
   local _sec_watch="${_n_watch}"
-  local _sec_drift=0 _sec_fixable=0 _sec_down=0 _sec_down_force=0 _sec_sha_anno="${_n_sha_anno}" _sec_replace_drift=0
+  local _sec_drift=0 _sec_fixable=0 _sec_down=0 _sec_down_force=0 _sec_sha_anno="${_n_sha_anno}" _sec_replace_drift=0 _sec_replace_cascade=0
   if [[ "${_GS_EU2_CFG[no_drift]:-false}" != "true" ]]; then
     _sec_drift="${_n_drift}"
     _sec_fixable="${_n_drift_fixable}"
     _sec_down="${_n_downgrade}"
     _sec_down_force="${_n_downgrade_force}"
     _sec_replace_drift="${_n_replace_drift}"
+    _sec_replace_cascade="${_n_replace_cascade}"
   fi
-  if (( _sec_watch > 0 || _sec_drift > 0 || _sec_down > 0 || _sec_down_force > 0 || _sec_sha_anno > 0 || _sec_replace_drift > 0 )); then
-    printf '    ↳ %d WATCH · %d DRIFT (%d fixable) · %d DOWNGRADE · %d FORCE-DOWNGRADE · %d REPLACE-DRIFT · %d +sha\n' \
-      "${_sec_watch}" "${_sec_drift}" "${_sec_fixable}" "${_sec_down}" "${_sec_down_force}" "${_sec_replace_drift}" "${_sec_sha_anno}"
+  if (( _sec_watch > 0 || _sec_drift > 0 || _sec_down > 0 || _sec_down_force > 0 || _sec_sha_anno > 0 || _sec_replace_drift > 0 || _sec_replace_cascade > 0 )); then
+    printf '    ↳ %d WATCH · %d DRIFT (%d fixable) · %d DOWNGRADE · %d FORCE-DOWNGRADE · %d REPLACE-DRIFT · %d +sha · %d +replace\n' \
+      "${_sec_watch}" "${_sec_drift}" "${_sec_fixable}" "${_sec_down}" "${_sec_down_force}" "${_sec_replace_drift}" "${_sec_sha_anno}" "${_sec_replace_cascade}"
   fi
 
   # Exit non-zero when any ERROR decisions were recorded — callers can detect fetch failures.

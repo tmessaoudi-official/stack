@@ -57,6 +57,14 @@ _gs_eu2_parse_args() {
         _GS_EU2_CFG[backup_keep]="${_bkval}"
         ;;
       --annotations)  _GS_EU2_CFG[annotations]="true" ;;
+      --tally)        _GS_EU2_CFG[tally]="auto" ;;
+      --tally=*)
+        local _tval="${1#*=}"
+        if [[ "${_tval}" != "full" && "${_tval}" != "off" && "${_tval}" != "auto" ]]; then
+          printf 'env-update: --tally accepts "auto", "full", or "off", got: %q\n' "${_tval}" >&2
+          exit 1
+        fi
+        _GS_EU2_CFG[tally]="${_tval}" ;;
       --stable)     _GS_EU2_CFG[stable]="full" ;;
       --stable=*)
         local _sval="${1#*=}"
@@ -114,6 +122,7 @@ _gs_eu2_parse_args() {
   [[ -z "${_GS_EU2_CFG[backup_suffix]+set}" ]] && _GS_EU2_CFG[backup_suffix]=".bak"
   [[ -z "${_GS_EU2_CFG[backup_keep]+set}" ]]   && _GS_EU2_CFG[backup_keep]="10"
   [[ -z "${_GS_EU2_CFG[annotations]+set}" ]]   && _GS_EU2_CFG[annotations]="false"
+  [[ -z "${_GS_EU2_CFG[tally]+set}" ]]        && _GS_EU2_CFG[tally]="auto"
 
   # Validate --filter regex early: invalid ERE causes per-record bash errors and silent
   # empty output. type: prefixes are not regex — skip validation for those.
