@@ -150,12 +150,15 @@ DECISIONS EMITTED BY --check
 
 SUMMARY LINE FORMAT
   Summary: N AUTO, N SHA, N HOLD, N MANUAL, N LOCK, N SKIP, N FROZEN, N FALLBACK, N ERROR  (N checked)
-    ↳ N WATCH · N DRIFT (N fixable) · N DOWNGRADE · N +sha
+    ↳ N WATCH · N DRIFT (N fixable) · N DOWNGRADE · N FORCE-DOWNGRADE · N REPLACE-DRIFT · N +sha · N +replace
 
-  FALLBACK   — currently running on LOW while waiting for HIGH major to ship.
-  DRIFT      — VAR= in env file differs from annotation's claimed current version.
-  DOWNGRADE  — VAR= is ahead of annotation (potential downgrade if AUTO applied).
-  +sha       — AUTO/MANUAL records that also carry a SHA annotation update.
+  FALLBACK       — currently running on LOW while waiting for HIGH major to ship.
+  DRIFT          — VAR= in env file differs from annotation's claimed current version.
+  DOWNGRADE      — VAR= is ahead of annotation (potential downgrade if AUTO applied).
+  FORCE-DOWNGRADE— DOWNGRADE records where --apply/--force-auto would actively write a lower version.
+  REPLACE-DRIFT  — (replace:TARGET) target has wrong value relative to current primary version.
+  +sha           — AUTO/MANUAL records that also carry a SHA annotation update.
+  +replace       — AUTO/SHA records where a (replace:TARGET) cascade write will occur on --apply.
 
 
 SEE ALSO

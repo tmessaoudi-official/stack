@@ -31,6 +31,8 @@ Options:
                           Use with --dry-run to preview without writing.
   --scan                  After --apply, run bin/env-scan.sh to propagate changes to
                           .env.local and Dockerfiles. Off by default.
+                          Note: env-scan runs on the full env file regardless of --filter;
+                          all vars are propagated, not only those matched by the filter.
                           When --profile is also active, --profile=true is forwarded
                           to env-scan so its internal phase timing is also shown.
   --no-cache              Bypass the fetch cache

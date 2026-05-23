@@ -149,7 +149,7 @@ _gs_eu2_parse_args() {
   fi
 
   if [[ "${_GS_EU2_CFG[dry_run]}" == "true" && "${_GS_EU2_CFG[apply]}" == "true" ]]; then
-    printf 'env-update: --dry-run and --apply are mutually exclusive\n' >&2
+    printf 'env-update: --dry-run and --apply are mutually exclusive — --apply implies actual writes; omit --dry-run\n' >&2
     exit 1
   fi
 
