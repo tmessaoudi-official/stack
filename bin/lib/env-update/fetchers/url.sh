@@ -192,8 +192,12 @@ _gs_eu2_fetch_url() {
 
       _proposed="$(printf '%s\n' "${_entries}" | \
         perl -ne '
+          # Normalize sort key: strip hex SHA that follows a YYYYMMDD date.
+          # Applies to any channel format (nightly, canary, dev, ...) — the
+          # channel name is irrelevant; only the date+sha suffix causes sort-V
+          # to mis-order entries. Non-matching entries pass through unchanged.
           chomp; $orig = $_;
-          (my $key = $orig) =~ s/^(v?\d+\.\d+\.\d+-nightly\d{8})[0-9a-f]+$/$1/;
+          (my $key = $orig) =~ s/(\d{8})[0-9a-f]+$/$1/;
           print "$key\t$orig\n";
         ' | sort -V -k1,1 | tail -1 | cut -f2 || true)"
       _proposed="${_proposed%/}"
