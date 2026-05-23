@@ -49,6 +49,11 @@ if [ "${FVM_MODE}" = "setup" ]; then
   global-stack-base-wait-for.sh \
     "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/fvm"
 
+  if [ "${GLOBAL_STACK_RELOAD_FLUTTER3:-false}" = "true" ]; then
+    echo -e "\nReloading flutter ${FLUTTER_VERSION:-} ..."
+    rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/flutter.$([[ -n "${FLUTTER_VERSION_AS:-}" && "" != "${FLUTTER_VERSION_AS:-}" ]] && echo "${FLUTTER_VERSION_AS:-}" || echo "${FLUTTER_VERSION:-}")" "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/flutter.$([[ -n "${FLUTTER_VERSION_AS:-}" && "" != "${FLUTTER_VERSION_AS:-}" ]] && echo "${FLUTTER_VERSION_AS:-}" || echo "${FLUTTER_VERSION:-}")"
+  fi
+
   if [[ "true" = "${GLOBAL_STACK_USE_LOCKS}" ]]; then
     echo -e "\nAcquiring fvm lock ..."
     exec 200>"${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/fvm.flock"

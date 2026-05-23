@@ -258,7 +258,7 @@ RUN --mount=type=secret,id=global_stack_secret_docker_password \
     && pip install --no-cache-dir awscli-local==${GLOBAL_STACK_PYTHON_INSTALL_PACKAGE_AWSCLI_LOCAL_VERSION} --break-system-packages \
     && curl -o /usr/share/keyrings/postgresql.asc --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc \
     # @todo make it $(lsb_release -cs) later
-    && sh -c 'echo "Types: deb\nSigned-By: /usr/share/keyrings/postgresql.asc\nArch: $(dpkg --print-architecture)\nURIs: https://apt.postgresql.org/pub/repos/apt\nSuites: resolute-pgdg\nComponents: main" > /etc/apt/sources.list.d/pgdg.sources' \
+    && sh -c 'echo "Types: deb\nSigned-By: /usr/share/keyrings/postgresql.asc\nArch: $(dpkg --print-architecture)\nURIs: https://apt.postgresql.org/pub/repos/apt\nSuites: $(lsb_release -cs)-pgdg\nComponents: main" > /etc/apt/sources.list.d/pgdg.sources' \
     && curl -fsSL 'https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xF911AB184317630C59970973E363C90F8F1B6217' | gpg --dearmor | tee /usr/share/keyrings/git.gpg \
     && echo -e "Types: deb\nSigned-By: /usr/share/keyrings/git.gpg\nArch: $(dpkg --print-architecture)\nURIs: https://ppa.launchpadcontent.net/git-core/ppa/ubuntu\nSuites: $(lsb_release -cs)\nComponents: main" | dd of=/etc/apt/sources.list.d/git.sources \
     && curl -fsSL https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor | dd of=/usr/share/keyrings/google-chrome.gpg \
@@ -273,7 +273,7 @@ RUN --mount=type=secret,id=global_stack_secret_docker_password \
     libfontconfig1 \
     libxrender1 \
     cmake \
-	libbrotli-dev \
+    libbrotli-dev \
     libstdc++6 \
     libcjose-dev \
     libjansson-dev \
