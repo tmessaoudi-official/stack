@@ -264,8 +264,12 @@ ANNOTATION FLAGS (parenthesised, space-separated, after the @todo keyword)
                       shorter floating tag.
     (version-prefix:STR) Strip leading STR when comparing fetched version to
                       CURRENT_VERSION (e.g. "v" for v1.2.3 → 1.2.3).
-    (propagate)       After --apply, propagate value to .env.local and Dockerfiles
-                      even when the var is normally excluded from propagation.
+    (propagate)       Parsed and stored by env-update. When --scan is used with
+                      --apply, env-scan reads this flag to force-include the var
+                      in propagation to .env.local and Dockerfiles, even when it
+                      would normally be excluded by env-scan's patterns. Direct
+                      propagation within env-update (without --scan) is not
+                      implemented.
     (watch-major[:N]) Emit a [WATCH] signal when a new major (or N-th level) is
                       detected. Default depth = 1 (major boundary).
     (replace:TARGET=template)
@@ -279,11 +283,17 @@ ANNOTATION FLAGS (parenthesised, space-separated, after the @todo keyword)
                       {minor}/{patch} tokens. Use {version} or {major} only for
                       such values.
 
-  Unimplemented stub (parsed but not consumed):
+  Dependency signaling (enforcement unimplemented):
     (depends-on:VAR:constraint)
-                      STUB — parsed and stored, not yet implemented. Intended to
-                      gate this record's update on another variable's value.
-                      Currently a no-op. Do not use in production annotations.
+                      Parsed and stored. At runtime, emits a [WARN] sub-line for
+                      every affected record (NOT suppressed by --no-notes — this
+                      is a safety signal):
+                        ↳ [WARN] (depends-on:VAR:constraint) not enforced —
+                          dependency ordering unimplemented; verify VAR manually
+                          before --apply
+                      The secondary-signals summary shows `· N depends-on-warn`
+                      when count > 0. Enforcement (ordering, blocking on VAR
+                      value) is unimplemented.
 
   Tag pipeline order (matters for composed flags):
     filter → exclude → extract → strip-prefix → strip-suffix → replace
