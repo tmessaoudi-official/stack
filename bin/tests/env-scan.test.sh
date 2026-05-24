@@ -2397,6 +2397,68 @@ t "t29f: GLOBAL_STACK_RELOAD_RUBY (container-internal alias) still suppressed by
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
+# 34. Dead-entry cleanup — scan_var_ignore no longer suppresses removed vars
+# ═══════════════════════════════════════════════════════════════════════════
+section "34 — Dead-entry cleanup: removed vars reach scan output"
+
+# t34a: GLOBAL_STACK_PYTHON_VERSION — removed from scan_var_ignore;
+# if it appears in a docker source, it must reach the forward check pipeline.
+t "t34a: GLOBAL_STACK_PYTHON_VERSION no longer suppressed by scan_var_ignore" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t34a; mkdir -p \"\$D/docker/images/test\"
+    printf 'GLOBAL_STACK_PYTHON_VERSION=3.12\n' > \"\$D/.env\"
+    printf 'GLOBAL_STACK_PYTHON_VERSION=3.12\n' > \"\$D/.env.local\"
+    printf 'ARG GLOBAL_STACK_PYTHON_VERSION\n' > \"\$D/docker/images/test/Dockerfile\"
+    bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=true \
+        --scan-delete-output=false \
+        --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
+    grep -q 'GLOBAL_STACK_PYTHON_VERSION' \"\$D/.env.all.local\" \
+        || { echo 'GLOBAL_STACK_PYTHON_VERSION absent from scan output — still suppressed'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t34b: GLOBAL_STACK_RUBY_VERSION — same as t34a for Ruby.
+t "t34b: GLOBAL_STACK_RUBY_VERSION no longer suppressed by scan_var_ignore" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t34b; mkdir -p \"\$D/docker/images/test\"
+    printf 'GLOBAL_STACK_RUBY_VERSION=3.3.0\n' > \"\$D/.env\"
+    printf 'GLOBAL_STACK_RUBY_VERSION=3.3.0\n' > \"\$D/.env.local\"
+    printf 'ARG GLOBAL_STACK_RUBY_VERSION\n' > \"\$D/docker/images/test/Dockerfile\"
+    bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=true \
+        --scan-delete-output=false \
+        --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
+    grep -q 'GLOBAL_STACK_RUBY_VERSION' \"\$D/.env.all.local\" \
+        || { echo 'GLOBAL_STACK_RUBY_VERSION absent from scan output — still suppressed'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t34c: GLOBAL_STACK_IMAGE_MYSQL_VERSION — removed entry; reaches scan output.
+t "t34c: GLOBAL_STACK_IMAGE_MYSQL_VERSION no longer suppressed by scan_var_ignore" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t34c; mkdir -p \"\$D/docker/images/test\"
+    printf 'GLOBAL_STACK_IMAGE_MYSQL_VERSION=9.3\n' > \"\$D/.env\"
+    printf 'GLOBAL_STACK_IMAGE_MYSQL_VERSION=9.3\n' > \"\$D/.env.local\"
+    printf 'ARG GLOBAL_STACK_IMAGE_MYSQL_VERSION\n' > \"\$D/docker/images/test/Dockerfile\"
+    bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=true \
+        --scan-delete-output=false \
+        --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
+    grep -q 'GLOBAL_STACK_IMAGE_MYSQL_VERSION' \"\$D/.env.all.local\" \
+        || { echo 'GLOBAL_STACK_IMAGE_MYSQL_VERSION absent from scan output — still suppressed'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t34d: GLOBAL_STACK_SHOW_WAITING — removed entry; reaches scan output.
+t "t34d: GLOBAL_STACK_SHOW_WAITING no longer suppressed by scan_var_ignore" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t34d; mkdir -p \"\$D/docker/images/test\"
+    printf 'GLOBAL_STACK_SHOW_WAITING=false\n' > \"\$D/.env\"
+    printf 'GLOBAL_STACK_SHOW_WAITING=false\n' > \"\$D/.env.local\"
+    printf 'ARG GLOBAL_STACK_SHOW_WAITING\n' > \"\$D/docker/images/test/Dockerfile\"
+    bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=true \
+        --scan-delete-output=false \
+        --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
+    grep -q 'GLOBAL_STACK_SHOW_WAITING' \"\$D/.env.all.local\" \
+        || { echo 'GLOBAL_STACK_SHOW_WAITING absent from scan output — still suppressed'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section
