@@ -27,9 +27,9 @@ Options:
   --version               Print version and exit
   --help                  Show this help and exit
   --reference[=SECTION]   Print the annotation/fetcher/decision reference. Optional
-                          SECTION: syntax | flags | fetchers | decisions | matrix |
-                          scenarios | env-scan. Without SECTION, all sections are
-                          printed.
+                          SECTION: syntax | flags | annotations | fetchers | decisions |
+                          matrix | scenarios | env-scan. Without SECTION, all sections
+                          are printed.
   --env-file=<path>       Source .env file (default: /stack/.env)
   --filter=<regex>        Only parse records whose env_var matches regex
   --exclude=<regex>       Skip records whose env_var matches regex. Composable

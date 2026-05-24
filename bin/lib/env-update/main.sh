@@ -100,7 +100,7 @@ _gs_eu2_dispatch_fetcher() {
 # ── Tally helpers ────────────────────────────────────────────────────────────
 # Live running tally displayed on stderr during the check loop.
 # Gate: tally != off  AND  stderr is TTY  AND  TERM != dumb  AND  NO_COLOR unset
-#   AND ( tally == full  OR  cols >= 120 )
+#   AND ( tally == full  OR  cols >= 130 )
 # _GS_EU2_TALLY_FORCE=1 bypasses the TTY check (test hook).
 #
 # Module-level state (set by _gs_eu2_tally_init and the check loop):
