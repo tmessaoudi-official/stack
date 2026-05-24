@@ -182,11 +182,12 @@ gs_es_process_file() {
 			"false"
 	# FORWARD Check 2 (scan → .env.local): vars found in scan output absent from destination.
 	# Suggests entries in .env not yet propagated to .env.local.
+	# exclude_local_pattern suppresses GLOBAL_STACK_LOCAL_* false positives (same as Check 1).
 	[[ "true" = "${_GS_ES_CFG[check_missing]}" ]] &&
 		gs_es_check_missing_variables \
 			"${dest_file}" \
 			"dest.${count}" \
-			"${_GS_ES_CFG[forward_check_ignore_pattern]}" \
+			"${_GS_ES_CFG[forward_check_ignore_pattern]}|${_GS_ES_CFG[exclude_local_pattern]}" \
 			"false"
 	# REVERSE Check 3 (.env.local → scan): vars in destination absent from scan output.
 	# Suggests stale/orphaned entries in .env.local with no corresponding Docker usage.

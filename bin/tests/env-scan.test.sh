@@ -2290,6 +2290,113 @@ t "t28c2: env-scan --reference shows flag documentation" bash -c "
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
+section "29 — Bug fixes: Forward Check 2 exclude_local, RELOAD anchor, RELOAD_RBENV rename"
+# ═══════════════════════════════════════════════════════════════════════════
+
+# t29a: Bug 1 — Forward Check 2 must NOT report GLOBAL_STACK_LOCAL_* as missing
+# from .env.local. Before fix, exclude_local_pattern was applied only to Check 1.
+t "t29a: Forward Check 2 — GLOBAL_STACK_LOCAL_* not reported as missing from .env.local" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t29a; mkdir -p \"\$D/docker/images/test\"
+    # .env and .env.local have a normal key; the LOCAL_ key exists only in docker source
+    printf 'GLOBAL_STACK_FOO=1\n' > \"\$D/.env\"
+    printf 'GLOBAL_STACK_FOO=1\n' > \"\$D/.env.local\"
+    # Docker source uses GLOBAL_STACK_LOCAL_RELOAD_FLUTTER (a machine-local var)
+    printf '%s\n' '- GLOBAL_STACK_LOCAL_RELOAD_FLUTTER=\${GLOBAL_STACK_LOCAL_RELOAD_FLUTTER}' \
+        > \"\$D/docker/images/test/docker-compose.yaml\"
+    out=\$(bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=true \
+        --scan-delete-output=false \
+        --check-missing=true \
+        --show-added-entries=false --show-different-entries=false 2>&1)
+    echo \"\$out\" | grep -q 'GLOBAL_STACK_LOCAL_RELOAD_FLUTTER' \
+        && { echo 'GLOBAL_STACK_LOCAL_RELOAD_FLUTTER falsely reported as missing from .env.local'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t29b: Bug 2 — GLOBAL_STACK_RELOAD_PHPBREW must NOT be suppressed by scan_var_ignore.
+# Before fix the unanchored PHP alternative matched PHPBREW as a prefix.
+t "t29b: scan_var_ignore anchor — GLOBAL_STACK_RELOAD_PHPBREW reaches scan output" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t29b; mkdir -p \"\$D/docker/images/test\"
+    printf 'GLOBAL_STACK_RELOAD_PHPBREW=false\n' > \"\$D/.env\"
+    printf 'GLOBAL_STACK_RELOAD_PHPBREW=false\n' > \"\$D/.env.local\"
+    # Dockerfile ARG for RELOAD_PHPBREW — scanner must extract this
+    printf 'ARG GLOBAL_STACK_RELOAD_PHPBREW\n' > \"\$D/docker/images/test/Dockerfile\"
+    bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=true \
+        --scan-delete-output=false \
+        --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
+    grep -q 'GLOBAL_STACK_RELOAD_PHPBREW' \"\$D/.env.all.local\" \
+        || { echo 'GLOBAL_STACK_RELOAD_PHPBREW absent from scan output (incorrectly suppressed)'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t29c: Bug 2 — GLOBAL_STACK_RELOAD_PHPMYADMIN must NOT be suppressed.
+t "t29c: scan_var_ignore anchor — GLOBAL_STACK_RELOAD_PHPMYADMIN reaches scan output" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t29c; mkdir -p \"\$D/docker/images/test\"
+    printf 'GLOBAL_STACK_RELOAD_PHPMYADMIN=false\n' > \"\$D/.env\"
+    printf 'GLOBAL_STACK_RELOAD_PHPMYADMIN=false\n' > \"\$D/.env.local\"
+    printf 'ARG GLOBAL_STACK_RELOAD_PHPMYADMIN\n' > \"\$D/docker/images/test/Dockerfile\"
+    bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=true \
+        --scan-delete-output=false \
+        --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
+    grep -q 'GLOBAL_STACK_RELOAD_PHPMYADMIN' \"\$D/.env.all.local\" \
+        || { echo 'GLOBAL_STACK_RELOAD_PHPMYADMIN absent from scan output (incorrectly suppressed)'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t29d: Bug 2 — GLOBAL_STACK_RELOAD_PHP (container-internal alias) appears in scan output
+# after the $-anchor fix (the anchor prevents the KEY= line from matching the pattern).
+# It is NOT reported as missing from .env because forward_check_ignore suppresses it.
+t "t29d: GLOBAL_STACK_RELOAD_PHP not falsely reported as missing (forward_check_ignore backstop)" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t29d; mkdir -p \"\$D/docker/images/test\"
+    printf 'GLOBAL_STACK_SOME_OTHER=1\n' > \"\$D/.env\"
+    printf 'GLOBAL_STACK_SOME_OTHER=1\n' > \"\$D/.env.local\"
+    # RELOAD_PHP is a container-internal alias used in 03php* compose files
+    printf 'ARG GLOBAL_STACK_RELOAD_PHP\n' > \"\$D/docker/images/test/Dockerfile\"
+    out=\$(bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=true \
+        --scan-delete-output=false \
+        --check-missing=true --show-added-entries=false --show-different-entries=false 2>&1)
+    # forward_check_ignore must suppress the \"missing from .env\" report for RELOAD_PHP
+    echo \"\$out\" | grep -q 'GLOBAL_STACK_RELOAD_PHP.*missing\|missing.*GLOBAL_STACK_RELOAD_PHP\|GLOBAL_STACK_RELOAD_PHP.*not.*in\|not.*in.*GLOBAL_STACK_RELOAD_PHP' \
+        && { echo 'GLOBAL_STACK_RELOAD_PHP incorrectly reported as missing'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t29e: Bug 3 — GLOBAL_STACK_RELOAD_RBENV (external key, renamed from RELOAD_RUBY)
+# must appear in scan output when referenced in a compose file as ${GLOBAL_STACK_RELOAD_RBENV}.
+t "t29e: GLOBAL_STACK_RELOAD_RBENV extracted from compose RHS reference" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t29e; mkdir -p \"\$D/docker/images/02rbenv\"
+    printf 'GLOBAL_STACK_RELOAD_RBENV=false\n' > \"\$D/.env\"
+    printf 'GLOBAL_STACK_RELOAD_RBENV=false\n' > \"\$D/.env.local\"
+    # Simulates the 02rbenv compose passthrough after Bug 3 rename
+    printf '%s\n' '- GLOBAL_STACK_RELOAD_RBENV=\${GLOBAL_STACK_RELOAD_RBENV}' \
+        > \"\$D/docker/images/02rbenv/docker-compose.yaml\"
+    bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=true \
+        --scan-delete-output=false \
+        --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
+    grep -q 'GLOBAL_STACK_RELOAD_RBENV' \"\$D/.env.all.local\" \
+        || { echo 'GLOBAL_STACK_RELOAD_RBENV absent from scan output'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t29f: Bug 3 — GLOBAL_STACK_RELOAD_RUBY (container-internal alias in 03ruby* compose files,
+# references ${GLOBAL_STACK_RELOAD_RUBY3}) must still be suppressed (it IS in scan_var_ignore
+# via the RUBY$ anchor). No forward check false positive for this pattern.
+t "t29f: GLOBAL_STACK_RELOAD_RUBY (container-internal alias) still suppressed by scan_var_ignore" bash -c "
+    D=\${TMP_DIR:-${TMP_DIR}}/t29f; mkdir -p \"\$D/docker/images/03ruby3\"
+    printf 'GLOBAL_STACK_RELOAD_RUBY3=false\n' > \"\$D/.env\"
+    printf 'GLOBAL_STACK_RELOAD_RUBY3=false\n' > \"\$D/.env.local\"
+    # Container-internal alias pattern: LHS RELOAD_RUBY, RHS RELOAD_RUBY3 (version-specific key)
+    printf '%s\n' '- GLOBAL_STACK_RELOAD_RUBY=\${GLOBAL_STACK_RELOAD_RUBY3}' \
+        > \"\$D/docker/images/03ruby3/docker-compose.yaml\"
+    bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=true \
+        --scan-delete-output=false \
+        --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
+    # RELOAD_RUBY (exact, anchored RUBY$) must NOT appear in scan output
+    grep -q '^GLOBAL_STACK_RELOAD_RUBY$' \"\$D/.env.all.local\" 2>/dev/null \
+        && { echo 'GLOBAL_STACK_RELOAD_RUBY incorrectly appeared in scan output'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section
