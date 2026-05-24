@@ -3909,7 +3909,7 @@ t "t46d: display — (override) at same version shows '(up to date — override)
     out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null)
     echo \"\$out\" | grep -qF 'up to date' || { echo \"expected 'up to date' in SKIP output: \$out\"; echo FAIL; exit 0; }
     echo \"\$out\" | grep -qF 'override'   || { echo \"expected 'override' hint in SKIP output: \$out\"; echo FAIL; exit 0; }
-    echo \"\$out\" | grep -qvF '[MANUAL]'  || { echo \"should show [SKIP] not [MANUAL]: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qvF '[MANUAL ]'  || { echo \"should show [SKIP] not [MANUAL ]: \$out\"; echo FAIL; exit 0; }
     echo PASS
 "
 
@@ -4202,7 +4202,7 @@ t "t50e: v20260311 → v20260512 via classify_decision → AUTO (not HOLD)" bash
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Section 51 — SHA decision path (classify_sha_decision, parse annotation_sha_date,
-#               apply SHA-only updates, display [SHA   ] label)
+#               apply SHA-only updates, display [SHA    ] label)
 # ═══════════════════════════════════════════════════════════════════════════
 section "51 — SHA decision path"
 
@@ -4849,7 +4849,7 @@ t "t56f: --force-auto: (manual) annotation treated as AUTO-eligible" bash -c "
     # With --force-auto it should NOT be MANUAL (becomes AUTO or SKIP)
     printf '# @todo env-update (manual) dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T56F=18.3-alpine3.23\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --force-auto --env-file=\"\$f\" 2>/dev/null)
-    echo \"\$out\" | grep -qF '[MANUAL]' && { echo \"(manual) still classified MANUAL with --force-auto: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '[MANUAL ]' && { echo \"(manual) still classified MANUAL with --force-auto: \$out\"; echo FAIL; exit 0; }
     echo PASS
 "
 
@@ -4860,7 +4860,7 @@ t "t56g: without --force-auto, (manual) annotation produces MANUAL classificatio
     # postgres fixture returns 18.4-alpine3.23 (newer than current 18.3-alpine3.23) → MANUAL
     printf '# @todo env-update (manual) dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T56G=18.3-alpine3.23\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null)
-    echo \"\$out\" | grep -qF '[MANUAL]' || { echo \"expected MANUAL without --force-auto: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '[MANUAL ]' || { echo \"expected MANUAL without --force-auto: \$out\"; echo FAIL; exit 0; }
     echo PASS
 "
 
@@ -4872,7 +4872,7 @@ t "t56h: --force-auto: (override) annotation treated as AUTO-eligible" bash -c "
     # (override) flag normally forces MANUAL; --force-auto must bypass it
     printf '# @todo env-update (override) dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T56H=18.3-alpine3.23\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --force-auto --env-file=\"\$f\" 2>/dev/null)
-    echo \"\$out\" | grep -qF '[MANUAL]' && { echo \"(override) still classified MANUAL with --force-auto: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '[MANUAL ]' && { echo \"(override) still classified MANUAL with --force-auto: \$out\"; echo FAIL; exit 0; }
     echo PASS
 "
 
@@ -6285,8 +6285,8 @@ t "t63b1: --force-auto does not override (lock:) — stays LOCK" bash -c "
     # but (lock:) must override to LOCK even with --force-auto
     printf '# @todo env-update (lock:pinned for stability) dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T63B1=18.3-alpine3.23\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --force-auto --env-file=\"\$f\" 2>/dev/null)
-    echo \"\$out\" | grep -qF '[LOCK  ]' || { echo \"expected [LOCK  ] with --force-auto, got: \$out\"; echo FAIL; exit 0; }
-    echo \"\$out\" | grep -qF '[AUTO  ]' && { echo \"[AUTO  ] must not appear with (lock:) + --force-auto\"; echo FAIL; exit 0; } || true
+    echo \"\$out\" | grep -qF '[LOCK   ]' || { echo \"expected [LOCK   ] with --force-auto, got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '[AUTO   ]' && { echo \"[AUTO   ] must not appear with (lock:) + --force-auto\"; echo FAIL; exit 0; } || true
     echo PASS
 "
 
@@ -6297,7 +6297,7 @@ t "t63b2: without (lock:), --force-auto produces AUTO (control test)" bash -c "
     f=\${TMP_DIR}/t63b2.env
     printf '# @todo env-update dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T63B2=18.3-alpine3.23\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --force-auto --env-file=\"\$f\" 2>/dev/null)
-    echo \"\$out\" | grep -qF '[AUTO  ]' || { echo \"expected AUTO without lock, got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '[AUTO   ]' || { echo \"expected AUTO without lock, got: \$out\"; echo FAIL; exit 0; }
     echo PASS
 "
 
@@ -6311,8 +6311,8 @@ t "t63c1: (lock:) does not override skip gate — [FROZEN] wins over [LOCK]" bas
     # Both (skip:) and (lock:) present — skip fires first, lock gate must not override it
     printf '# @todo env-update (skip:skip reason) (lock:lock reason) dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T63C1=18.3-alpine3.23\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null)
-    echo \"\$out\" | grep -qF '[FROZEN]' || { echo \"expected FROZEN (skip-gate wins), got: \$out\"; echo FAIL; exit 0; }
-    echo \"\$out\" | grep -qF '[LOCK  ]' && { echo \"LOCK must not override skip gate\"; echo FAIL; exit 0; } || true
+    echo \"\$out\" | grep -qF '[FROZEN ]' || { echo \"expected FROZEN (skip-gate wins), got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '[LOCK   ]' && { echo \"LOCK must not override skip gate\"; echo FAIL; exit 0; } || true
     echo PASS
 "
 
@@ -6324,8 +6324,8 @@ t "t63c2: (lock:) does not override ERROR — fetch failures surface" bash -c "
     # Use a non-existent fixture repo so fetcher returns ERROR
     printf '# @todo env-update (lock:pinned) dockerhub:_/nonexistent-repo-xyz 1.0.0\nGLOBAL_STACK_T63C2=1.0.0\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null || true)
-    echo \"\$out\" | grep -qF '[ERROR ]' || { echo \"expected ERROR, got: \$out\"; echo FAIL; exit 0; }
-    echo \"\$out\" | grep -qF '[LOCK  ]' && { echo \"LOCK must not override ERROR\"; echo FAIL; exit 0; } || true
+    echo \"\$out\" | grep -qF '[ERROR  ]' || { echo \"expected ERROR, got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '[LOCK   ]' && { echo \"LOCK must not override ERROR\"; echo FAIL; exit 0; } || true
     echo PASS
 "
 
@@ -6336,8 +6336,8 @@ t "t63c3: (manual) + (lock:) coexist — LOCK wins, (manual) ignored" bash -c "
     f=\${TMP_DIR}/t63c3.env
     printf '# @todo env-update (manual) (lock:lock wins) dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T63C3=18.3-alpine3.23\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null)
-    echo \"\$out\" | grep -qF '[LOCK  ]' || { echo \"expected LOCK when (manual)+(lock:) coexist: \$out\"; echo FAIL; exit 0; }
-    echo \"\$out\" | grep -qF '[MANUAL]' && { echo \"MANUAL must not appear when (lock:) present\"; echo FAIL; exit 0; } || true
+    echo \"\$out\" | grep -qF '[LOCK   ]' || { echo \"expected LOCK when (manual)+(lock:) coexist: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '[MANUAL ]' && { echo \"MANUAL must not appear when (lock:) present\"; echo FAIL; exit 0; } || true
     echo PASS
 "
 
@@ -6350,20 +6350,31 @@ t "t63c4: (lock:) when current == proposed — decision is LOCK, not SKIP" bash 
     # postgres fixture returns 18.4-alpine3.23 — use that as current
     printf '# @todo env-update (lock:pinned) dockerhub:_/postgres:18 18.4-alpine3.23\nGLOBAL_STACK_T63C4=18.4-alpine3.23\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null)
-    echo \"\$out\" | grep -qF '[LOCK  ]' || { echo \"expected LOCK even when current==proposed: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '[LOCK   ]' || { echo \"expected LOCK even when current==proposed: \$out\"; echo FAIL; exit 0; }
     echo PASS
 "
 
 # ── D: Output / display ───────────────────────────────────────────────────
 
-# t63d1: [LOCK  ] tag is 8 chars wide — matches other decision tags
-t "t63d1: [LOCK  ] tag is exactly 8 chars wide" bash -c "
+# t63d1: [LOCK   ] tag is 9 chars wide — matches other decision tags
+t "t63d1: [LOCK   ] tag is exactly 9 chars wide" bash -c "
     export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t63d1_cache
     f=\${TMP_DIR}/t63d1.env
     printf '# @todo env-update (lock:pinned) dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T63D1=18.3-alpine3.23\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null)
-    echo \"\$out\" | grep -qF '[LOCK  ]' || { echo \"expected '[LOCK  ]' (LOCK+2 spaces), got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '[LOCK   ]' || { echo \"expected '[LOCK   ]' (LOCK+3 spaces), got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t63d1b: [LOCK   ] tag is 9 chars wide — new alignment standard
+t "t63d1b: [LOCK   ] tag is exactly 9 chars wide" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t63d1b_cache
+    f=\${TMP_DIR}/t63d1b.env
+    printf '# @todo env-update (lock:pinned) dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T63D1B=18.3-alpine3.23\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null)
+    echo \"\$out\" | grep -qF '[LOCK   ]' || { echo \"expected '[LOCK   ]' (LOCK+3 spaces, 9-char tag), got: \$out\"; echo FAIL; exit 0; }
     echo PASS
 "
 
@@ -6507,7 +6518,7 @@ t "t63f3: full pipeline with lock-flag.env fixture — LOCK in output" bash -c "
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t63f3_cache
     out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run \
         --env-file='${FIXTURES}/lock-flag.env' 2>/dev/null)
-    echo \"\$out\" | grep -qF '[LOCK  ]' || { echo \"expected [LOCK  ] in full pipeline output: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '[LOCK   ]' || { echo \"expected [LOCK   ] in full pipeline output: \$out\"; echo FAIL; exit 0; }
     echo PASS
 "
 
@@ -7119,8 +7130,8 @@ t "t71a: (skip:REASON) annotation shows [FROZEN] tag" bash -c "
     f=\${TMP_DIR}/t71a.env
     printf '# @todo env-update (skip:frozen for now) dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T71A=18.3-alpine3.23\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
-    echo \"\$out\" | grep -qF '[FROZEN]' || { echo \"expected [FROZEN] tag in output; got: \$out\"; echo FAIL; exit 0; }
-    echo \"\$out\" | grep -qF '[SKIP  ]' && { echo \"[SKIP] should not appear for skip-gate record; got: \$out\"; echo FAIL; exit 0; } || true
+    echo \"\$out\" | grep -qF '[FROZEN ]' || { echo \"expected [FROZEN ] tag in output; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '[SKIP   ]' && { echo \"[SKIP] should not appear for skip-gate record; got: \$out\"; echo FAIL; exit 0; } || true
     echo PASS
 "
 

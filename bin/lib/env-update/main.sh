@@ -555,22 +555,22 @@ _gs_eu2_run_check() {
     _err="$(_gs_eu2_record_get "${_i}" error_message)"
 
     case "${_decision}" in
-      AUTO)   _tag="[AUTO  ]"; (( ++_n_auto ))   || true ;;
-      HOLD)   _tag="[HOLD  ]"; (( ++_n_hold ))   || true ;;
+      AUTO)   _tag="[AUTO   ]"; (( ++_n_auto ))   || true ;;
+      HOLD)   _tag="[HOLD   ]"; (( ++_n_hold ))   || true ;;
       SKIP)
         # skip-gate SKIP (skip:REASON annotation): display as [FROZEN], separate counter
         if [[ -n "${_skip_reason}" ]]; then
-          _tag="[FROZEN]"; (( ++_n_frozen )) || true
+          _tag="[FROZEN ]"; (( ++_n_frozen )) || true
         else
-          _tag="[SKIP  ]"; (( ++_n_skip ))  || true
+          _tag="[SKIP   ]"; (( ++_n_skip ))  || true
         fi
         ;;
-      ERROR)  _tag="[ERROR ]"; (( ++_n_error ))  || true ;;
-      MANUAL) _tag="[MANUAL]"; (( ++_n_manual )) || true ;;
-      SHA)    _tag="[SHA   ]"; (( ++_n_sha ))    || true ;;
-      LOCK)     _tag="[LOCK  ]"; (( ++_n_lock ))     || true ;;
+      ERROR)  _tag="[ERROR  ]"; (( ++_n_error ))  || true ;;
+      MANUAL) _tag="[MANUAL ]"; (( ++_n_manual )) || true ;;
+      SHA)    _tag="[SHA    ]"; (( ++_n_sha ))    || true ;;
+      LOCK)     _tag="[LOCK   ]"; (( ++_n_lock ))     || true ;;
       RESOLVED) _tag="[RESOLVE]"; (( ++_n_resolved )) || true ;;
-      *)        _tag="[SKIP  ]"; (( ++_n_skip ))     || true ;;
+      *)        _tag="[SKIP   ]"; (( ++_n_skip ))     || true ;;
     esac
 
     # Compute reason label for non-AUTO decisions
