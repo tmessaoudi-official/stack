@@ -511,7 +511,7 @@ than showing a placeholder.
 | `[LOCK  ]` | The annotation has `(lock:REASON)`. The fetcher ran and `proposed_version` is populated, but the variable is locked — `--apply` updates only the annotation version token; the `VAR=` line is never touched. Immune to `--force-auto`. Does not fire when the fetcher returned ERROR or a skip-gate `(skip:)` was active. |
 | `[SKIP  ]` | The variable is already at the latest version (`current == proposed`), or the fetcher returned no viable candidates, or the current version is a floating reference (`latest`, `nightly`, etc.), or the proposed would downgrade the current version, or the proposed is a prerelease while the current is stable. Also used when a fetcher sets `error_message` but no `decision`. |
 | `[ERROR ]` | Network failure, HTTP error (4xx/5xx), rate limiting after 3 retries, or a parse failure in the API response. The fetch was attempted and definitively failed. |
-| `RESOLVED` | Float-to-concrete resolution. Current is a floating ref (`latest`, `stable`, `lts`, …) and the fetcher returned a concrete version. Informational only — never auto-applied; requires `--apply --apply-resolve` to pin. |
+| `[RESOLVE]` | Float-to-concrete resolution. Current is a floating ref (`latest`, `stable`, `lts`, …) and the fetcher returned a concrete version. Informational only — never auto-applied; requires `--apply --apply-resolve` to pin. |
 
 ### alt_version line
 
@@ -637,7 +637,11 @@ but if `decision` is `AUTO` or empty, `decide.sh` makes the final call.
 ② force-auto: (manual)/(override) cleared if --force-auto set
 ③ classify_decision (decide.sh):
    proposed_version empty?        → SKIP
-   current is unversioned?        → SKIP  (floating ref: nightly/latest/edge/master/next/head/main)
+   current is unversioned?
+     proposed is concrete (non-float)?
+       override=true OR manual=true? → MANUAL
+       (none)                        → RESOLVE  (informational; pin with --apply --apply-resolve)
+     proposed empty or also unversioned → SKIP  (floating ref: nightly/latest/edge/master/next/head/main)
    current == proposed?           → SKIP  (up to date — fires before manual/override)
    proposed is prerelease AND
      current is stable?           → SKIP  (prerelease guard — "proposed is prerelease")
