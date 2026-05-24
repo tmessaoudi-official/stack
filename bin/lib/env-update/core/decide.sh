@@ -22,9 +22,21 @@ _gs_eu2_classify_decision() {
   # No proposed version → skip
   [[ -z "${_prop}" ]] && { echo "SKIP"; return 0; }
 
-  # Unversioned current (nightly/latest/edge/…): version comparison is meaningless.
-  # The proposed value is informational only; a pin change requires deliberate action.
-  if _gs_eu2_is_unversioned "${_cur}"; then echo "SKIP"; return 0; fi
+  # Unversioned current (nightly/latest/edge/stable/lts/…): semver comparison is
+  # meaningless. When the fetcher has resolved a concrete proposed version, emit
+  # RESOLVED (informational — never auto-applied; requires --apply-resolve --apply).
+  # When _prop is empty or also unversioned, fall through to SKIP below.
+  # (manual)/(override) flags are hoisted here so they apply to the float case too.
+  if _gs_eu2_is_unversioned "${_cur}"; then
+    if [[ -n "${_prop}" ]] && ! _gs_eu2_is_unversioned "${_prop}"; then
+      # Concrete version resolved from a floating ref.
+      if [[ "${_override}" == "true" || "${_manual}" == "true" ]]; then
+        echo "MANUAL"; return 0   # (manual)/(override) flag on a float → MANUAL
+      fi
+      echo "RESOLVED"; return 0
+    fi
+    echo "SKIP"; return 0
+  fi
 
   # Same version → nothing to do; SKIP even for manual/override vars.
   # manual/override means "don't auto-apply changes", not "always surface as MANUAL".

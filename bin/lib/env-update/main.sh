@@ -111,6 +111,7 @@ _GS_EU2_TALLY_N_HIDDEN=0
 _GS_EU2_TALLY_N_SHA_ANNO=0
 _GS_EU2_TALLY_N_REPLACE_DRIFT=0
 _GS_EU2_TALLY_N_REPLACE_CASCADE=0
+_GS_EU2_TALLY_N_RESOLVED=0
 
 _gs_eu2_tally_init() {
   _GS_EU2_TALLY_ACTIVE=0
@@ -233,7 +234,7 @@ _gs_eu2_run_check() {
   _GS_EU2_CACHE_TTL="${_GS_EU2_CFG[cache_ttl]:-3600}"
 
   local _n_auto=0 _n_hold=0 _n_skip=0 _n_error=0 _n_manual=0 _n_sha=0 _n_lock=0 _n_frozen=0
-  local _n_fallback=0 _n_watch=0 _n_drift=0 _n_drift_fixable=0 _n_downgrade=0 _n_downgrade_force=0 _n_hidden=0 _n_sha_anno=0 _n_replace_drift=0 _n_replace_cascade=0
+  local _n_fallback=0 _n_watch=0 _n_drift=0 _n_drift_fixable=0 _n_downgrade=0 _n_downgrade_force=0 _n_hidden=0 _n_sha_anno=0 _n_replace_drift=0 _n_replace_cascade=0 _n_resolved=0
 
   # Initialize and arm live tally (TTY-only, gate checked inside)
   _gs_eu2_tally_init
@@ -277,6 +278,7 @@ _gs_eu2_run_check() {
       _GS_EU2_TALLY_N_SHA_ANNO="${_n_sha_anno}"
       _GS_EU2_TALLY_N_REPLACE_DRIFT="${_n_replace_drift}"
       _GS_EU2_TALLY_N_REPLACE_CASCADE="${_n_replace_cascade}"
+      _GS_EU2_TALLY_N_RESOLVED="${_n_resolved}"
       _gs_eu2_tally_draw
     else
       printf '\r  [%d/%d] fetching %-55s' \
@@ -500,8 +502,9 @@ _gs_eu2_run_check() {
       ERROR)  _tag="[ERROR ]"; (( ++_n_error ))  || true ;;
       MANUAL) _tag="[MANUAL]"; (( ++_n_manual )) || true ;;
       SHA)    _tag="[SHA   ]"; (( ++_n_sha ))    || true ;;
-      LOCK)   _tag="[LOCK  ]"; (( ++_n_lock ))   || true ;;
-      *)      _tag="[SKIP  ]"; (( ++_n_skip ))   || true ;;
+      LOCK)     _tag="[LOCK  ]"; (( ++_n_lock ))     || true ;;
+      RESOLVED) _tag="[RESOLVE]"; (( ++_n_resolved )) || true ;;
+      *)        _tag="[SKIP  ]"; (( ++_n_skip ))     || true ;;
     esac
 
     # Compute reason label for non-AUTO decisions
@@ -816,7 +819,9 @@ _gs_eu2_run_check() {
     # Empty VAR + other decisions: enable-warning — --apply will write the fetched version.
     # NOT suppressed by --no-notes. ONLY suppressed by --no-drift.
     local _drift_fired=false _drift_dir_downgrade=false
-    if [[ "${_GS_EU2_CFG[no_drift]:-false}" != "true" ]]; then
+    # RESOLVED: annotation holds a floating alias (latest/stable/lts/…), not a semver baseline.
+    # Drift comparison is meaningless — skip the whole block to avoid false [DRIFT] sub-lines.
+    if [[ "${_GS_EU2_CFG[no_drift]:-false}" != "true" && "${_decision}" != "RESOLVED" ]]; then
       local _drift_actual _drift_ann_ver _drift_ann_sha _drift_use_sha
       _drift_actual="$(_gs_eu2_record_get "${_i}" actual_var_value)"
       _drift_ann_ver="$(_gs_eu2_record_get "${_i}" current_version)"
@@ -1074,8 +1079,11 @@ _gs_eu2_run_check() {
   printf '%-80s\n' "──────────────────────────────────────────────────────────────────────────────"
   local _checked_suffix="${_total} checked"
   (( _n_hidden > 0 )) && _checked_suffix="${_total} checked, ${_n_hidden} hidden"
-  printf '  Summary: %d AUTO, %d SHA, %d HOLD, %d MANUAL, %d LOCK, %d SKIP, %d FROZEN, %d FALLBACK, %d ERROR  (%s)\n' \
-    "${_n_auto}" "${_n_sha}" "${_n_hold}" "${_n_manual}" "${_n_lock}" "${_n_skip}" "${_n_frozen}" "${_n_fallback}" "${_n_error}" "${_checked_suffix}"
+  # RESOLVE column: shown only when at least one RESOLVED record exists (consistent with FALLBACK behaviour)
+  local _resolve_col=""
+  (( _n_resolved > 0 )) && _resolve_col=" ${_n_resolved} RESOLVE,"
+  printf '  Summary: %d AUTO,%s %d SHA, %d HOLD, %d MANUAL, %d LOCK, %d SKIP, %d FROZEN, %d FALLBACK, %d ERROR  (%s)\n' \
+    "${_n_auto}" "${_resolve_col}" "${_n_sha}" "${_n_hold}" "${_n_manual}" "${_n_lock}" "${_n_skip}" "${_n_frozen}" "${_n_fallback}" "${_n_error}" "${_checked_suffix}"
 
   # Secondary signals sub-line: WATCH, DRIFT (with fixable count), DOWNGRADE, REPLACE-DRIFT, +sha, +replace.
   # DRIFT, DOWNGRADE, REPLACE-DRIFT, and +replace suppressed when --no-drift is active.
@@ -1083,6 +1091,7 @@ _gs_eu2_run_check() {
   # Entire line omitted when all relevant signals are zero.
   local _sec_watch="${_n_watch}"
   local _sec_drift=0 _sec_fixable=0 _sec_down=0 _sec_down_force=0 _sec_sha_anno="${_n_sha_anno}" _sec_replace_drift=0 _sec_replace_cascade=0
+  local _sec_resolved="${_n_resolved}"
   if [[ "${_GS_EU2_CFG[no_drift]:-false}" != "true" ]]; then
     _sec_drift="${_n_drift}"
     _sec_fixable="${_n_drift_fixable}"
@@ -1091,9 +1100,11 @@ _gs_eu2_run_check() {
     _sec_replace_drift="${_n_replace_drift}"
     _sec_replace_cascade="${_n_replace_cascade}"
   fi
-  if (( _sec_watch > 0 || _sec_drift > 0 || _sec_down > 0 || _sec_down_force > 0 || _sec_sha_anno > 0 || _sec_replace_drift > 0 || _sec_replace_cascade > 0 )); then
-    printf '    ↳ %d WATCH · %d DRIFT (%d fixable) · %d DOWNGRADE · %d FORCE-DOWNGRADE · %d REPLACE-DRIFT · %d +sha · %d +replace\n' \
+  if (( _sec_watch > 0 || _sec_drift > 0 || _sec_down > 0 || _sec_down_force > 0 || _sec_sha_anno > 0 || _sec_replace_drift > 0 || _sec_replace_cascade > 0 || _sec_resolved > 0 )); then
+    printf '    ↳ %d WATCH · %d DRIFT (%d fixable) · %d DOWNGRADE · %d FORCE-DOWNGRADE · %d REPLACE-DRIFT · %d +sha · %d +replace' \
       "${_sec_watch}" "${_sec_drift}" "${_sec_fixable}" "${_sec_down}" "${_sec_down_force}" "${_sec_replace_drift}" "${_sec_sha_anno}" "${_sec_replace_cascade}"
+    (( _sec_resolved > 0 )) && printf ' · +resolve %d' "${_sec_resolved}"
+    printf '\n'
   fi
 
   # Exit non-zero when any ERROR decisions were recorded — callers can detect fetch failures.

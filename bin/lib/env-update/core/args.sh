@@ -33,6 +33,7 @@ _gs_eu2_parse_args() {
       --with-tags)    _GS_EU2_CFG[with_tags]="true" ;;
       --no-notes)       _GS_EU2_CFG[no_notes]="true" ;;
       --no-drift)       _GS_EU2_CFG[no_drift]="true" ;;
+      --apply-resolve)  _GS_EU2_CFG[apply_resolve]="true" ;;
       --force-auto)     _GS_EU2_CFG[force_auto]="true" ;;
       --changes-only)   _GS_EU2_CFG[changes_only]="true" ;;
       --no-fail)        _GS_EU2_CFG[no_fail]="true" ;;
@@ -121,6 +122,7 @@ _gs_eu2_parse_args() {
   [[ -z "${_GS_EU2_CFG[backup_purge]+set}" ]]  && _GS_EU2_CFG[backup_purge]="false"
   [[ -z "${_GS_EU2_CFG[backup_suffix]+set}" ]] && _GS_EU2_CFG[backup_suffix]=".bak"
   [[ -z "${_GS_EU2_CFG[backup_keep]+set}" ]]   && _GS_EU2_CFG[backup_keep]="10"
+  [[ -z "${_GS_EU2_CFG[apply_resolve]+set}" ]] && _GS_EU2_CFG[apply_resolve]="false"
   [[ -z "${_GS_EU2_CFG[annotations]+set}" ]]   && _GS_EU2_CFG[annotations]="false"
   [[ -z "${_GS_EU2_CFG[tally]+set}" ]]        && _GS_EU2_CFG[tally]="auto"
 
@@ -146,6 +148,12 @@ _gs_eu2_parse_args() {
         exit 1
       fi
     }
+  fi
+
+  if [[ "${_GS_EU2_CFG[apply_resolve]:-false}" == "true" && \
+        "${_GS_EU2_CFG[apply]:-false}" != "true" ]]; then
+    printf 'env-update: --apply-resolve requires --apply\n' >&2
+    exit 1
   fi
 
   if [[ "${_GS_EU2_CFG[dry_run]}" == "true" && "${_GS_EU2_CFG[apply]}" == "true" ]]; then

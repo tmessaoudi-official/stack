@@ -13,10 +13,12 @@ _gs_eu2_is_prerelease() {
   [[ "${_v}" =~ (${_GS_EU2_PRERELEASE_REGEX}) ]]
 }
 
-# Returns 0 if version is unversioned (nightly/latest/edge/next/master)
+# Returns 0 if version is unversioned (floating refs: nightly/latest/edge/next/master/stable/lts/current/release)
+# These values are floating aliases — semver comparison is meaningless.
+# New values (stable, lts, current, release) added for RESOLVED decision support.
 _gs_eu2_is_unversioned() {
   local _v="${1,,}"
-  [[ "${_v}" =~ ^(nightly|latest|edge|master|next|head|main)$ ]]
+  [[ "${_v}" =~ ^(nightly|latest|edge|master|next|head|main|stable|lts|current|release)$ ]]
 }
 
 # Compare two version strings. Echoes: older | newer | equal

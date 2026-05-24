@@ -1567,10 +1567,12 @@ t "t20d: classify — same-codename ubuntu update → AUTO (not HOLD)" bash -c "
     echo PASS
 "
 
-t "t20e: classify — unversioned current (nightly) → SKIP" bash -c "
+t "t20e: classify — unversioned current (nightly) + concrete proposed → RESOLVED (Batch1)" bash -c "
     ${_DC_LIBS20}
+    # Post-Batch1: nightly + concrete proposed emits RESOLVED, not SKIP.
+    # RESOLVED is informational (requires --apply-resolve --apply to pin).
     result=\$(_gs_eu2_classify_decision 'nightly' '2024.10.22-7ca5933' '' '' '')
-    [[ \"\$result\" == 'SKIP' ]] || { echo \"got: \$result\"; echo FAIL; exit 0; }
+    [[ \"\$result\" == 'RESOLVED' ]] || { echo \"got: \$result (expected RESOLVED)\"; echo FAIL; exit 0; }
     echo PASS
 "
 
@@ -9631,6 +9633,141 @@ FIXTURE
     # Without pagination fix: proposed would be best from page 1 only (25.1.0)
     # With pagination fix: proposed is best from all pages (26.0.0)
     [[ \"\$proposed\" == '26.0.0' ]] || { echo \"expected proposed=26.0.0 (from page 2); got: '\$proposed'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+_flush_section
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 98 — RESOLVED decision type + --apply-resolve flag
+# ═══════════════════════════════════════════════════════════════════════════
+section "98 — RESOLVED decision: float-to-concrete, --apply-resolve"
+
+_DC_LIBS98="
+source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update/core/semver.sh'
+source '/stack/bin/lib/env-update/core/decide.sh'
+"
+
+# --- 1. Core classify_decision unit tests (unversioned set extension + RESOLVED) ---
+
+t "t98a: _cur=latest, _prop=18.3-alpine3.23 → RESOLVED" bash -c "
+    ${_DC_LIBS98}
+    result=\$(_gs_eu2_classify_decision 'latest' '18.3-alpine3.23' '' '' '')
+    [[ \"\$result\" == 'RESOLVED' ]] || { echo \"got: \$result\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t98b: _cur=stable, _prop=3.2.1 → RESOLVED (extended float set)" bash -c "
+    ${_DC_LIBS98}
+    result=\$(_gs_eu2_classify_decision 'stable' '3.2.1' '' '' '')
+    [[ \"\$result\" == 'RESOLVED' ]] || { echo \"got: \$result\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t98c: _cur=lts, _prop=20.18.0 → RESOLVED (extended float set)" bash -c "
+    ${_DC_LIBS98}
+    result=\$(_gs_eu2_classify_decision 'lts' '20.18.0' '' '' '')
+    [[ \"\$result\" == 'RESOLVED' ]] || { echo \"got: \$result\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t98d: _cur=current, _prop=22.14.0 → RESOLVED (extended float set)" bash -c "
+    ${_DC_LIBS98}
+    result=\$(_gs_eu2_classify_decision 'current' '22.14.0' '' '' '')
+    [[ \"\$result\" == 'RESOLVED' ]] || { echo \"got: \$result\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t98e: _cur=latest, _prop=latest → SKIP (proposed also unversioned)" bash -c "
+    ${_DC_LIBS98}
+    result=\$(_gs_eu2_classify_decision 'latest' 'latest' '' '' '')
+    [[ \"\$result\" == 'SKIP' ]] || { echo \"got: \$result\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t98f: _cur=latest, _prop='' → SKIP (no proposed)" bash -c "
+    ${_DC_LIBS98}
+    result=\$(_gs_eu2_classify_decision 'latest' '' '' '' '')
+    [[ \"\$result\" == 'SKIP' ]] || { echo \"got: \$result\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t98g: _cur=latest, _prop=18.3-alpine3.23, manual=true → MANUAL" bash -c "
+    ${_DC_LIBS98}
+    result=\$(_gs_eu2_classify_decision 'latest' '18.3-alpine3.23' '' 'true' '')
+    [[ \"\$result\" == 'MANUAL' ]] || { echo \"got: \$result\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t98h: _cur=latest, _prop=18.3-alpine3.23, override=true → MANUAL" bash -c "
+    ${_DC_LIBS98}
+    result=\$(_gs_eu2_classify_decision 'latest' '18.3-alpine3.23' 'true' '' '')
+    [[ \"\$result\" == 'MANUAL' ]] || { echo \"got: \$result\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# --- 2. Integration tests (end-to-end via env-update.sh CLI) ---
+
+t "t98i: --check output contains [RESOLVE] tag and 'latest → <concrete>'" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t98i_cache
+    f=\${TMP_DIR}/t98i.env
+    printf '# @todo env-update dockerhub:_/postgres latest\nGLOBAL_STACK_T98I_VERSION=latest\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[RESOLVE]' || { echo \"no [RESOLVE] tag in output: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'latest →' || { echo \"no 'latest →' in output: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t98j: --apply alone does NOT write file for RESOLVED record" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t98j_cache
+    f=\${TMP_DIR}/t98j.env
+    printf '# @todo env-update dockerhub:_/postgres latest\nGLOBAL_STACK_T98J_VERSION=latest\n' > \"\$f\"
+    # Create dry-run marker so apply proceeds past safety guard
+    mkdir -p \"\${TMP_DIR}/t98j_cache\"
+    touch \"\${TMP_DIR}/t98j_cache/last-dry-run-ts\"
+    bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$f\" 2>&1 || true
+    # VAR= must still be 'latest' — RESOLVED must not be auto-applied
+    grep -q 'GLOBAL_STACK_T98J_VERSION=latest' \"\$f\" || { echo 'RESOLVED was written without --apply-resolve'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t98k: --apply --force-auto does NOT write RESOLVED (force-auto does not promote RESOLVED)" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t98k_cache
+    f=\${TMP_DIR}/t98k.env
+    printf '# @todo env-update dockerhub:_/postgres latest\nGLOBAL_STACK_T98K_VERSION=latest\n' > \"\$f\"
+    mkdir -p \"\${TMP_DIR}/t98k_cache\"
+    touch \"\${TMP_DIR}/t98k_cache/last-dry-run-ts\"
+    bash '${ENV_UPDATE_V2}' --apply --force-auto --confirm='Confirm override' --env-file=\"\$f\" 2>&1 || true
+    grep -q 'GLOBAL_STACK_T98K_VERSION=latest' \"\$f\" || { echo 'RESOLVED was written by force-auto'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t98l: --apply --apply-resolve DOES write concrete version and emits [PINNED ]" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t98l_cache
+    f=\${TMP_DIR}/t98l.env
+    printf '# @todo env-update dockerhub:_/postgres latest\nGLOBAL_STACK_T98L_VERSION=latest\n' > \"\$f\"
+    mkdir -p \"\${TMP_DIR}/t98l_cache\"
+    touch \"\${TMP_DIR}/t98l_cache/last-dry-run-ts\"
+    out=\$(bash '${ENV_UPDATE_V2}' --apply --apply-resolve --env-file=\"\$f\" 2>&1)
+    # File must have been updated (no longer 'latest')
+    grep -q 'GLOBAL_STACK_T98L_VERSION=latest' \"\$f\" && { echo 'file not updated by --apply-resolve'; echo FAIL; exit 0; } || true
+    # Output must contain [PINNED ]
+    echo \"\$out\" | grep -qF '[PINNED ]' || { echo \"no [PINNED ] in output: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t98m: B1 summary contains RESOLVE count when RESOLVED records present" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t98m_cache
+    f=\${TMP_DIR}/t98m.env
+    printf '# @todo env-update dockerhub:_/postgres latest\nGLOBAL_STACK_T98M_VERSION=latest\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qE 'Summary.*RESOLVE' || { echo \"no RESOLVE in summary: \$out\"; echo FAIL; exit 0; }
     echo PASS
 "
 

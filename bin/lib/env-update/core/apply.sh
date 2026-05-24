@@ -142,6 +142,7 @@ _gs_eu2_apply_updates() {
   local _n_auto_sha_applied=0  _n_auto_sha_would=0
   local _n_sha_applied=0       _n_sha_would=0
   local _n_lock_applied=0      _n_lock_would=0
+  local _n_resolve_applied=0
 
   local _i _var _cur _prop _decision _raw_ann
   local _ann_sha _ann_sha_date _new_sha _new_sha_date _use_sha
@@ -196,6 +197,29 @@ _gs_eu2_apply_updates() {
                               "" "" "false" "true" ""
         printf '  [LOCK]     %-55s  annotation: %s → %s\n' "${_var}" "${_cur}" "${_prop}"
         (( ++_n_lock_applied )) || true
+      fi
+      continue
+    fi
+
+    # ── RESOLVED path: float-to-concrete pin (requires --apply-resolve) ────
+    # RESOLVED entries are informational only. --force-auto does NOT promote them.
+    # Only --apply-resolve --apply triggers the write path.
+    if [[ "${_decision}" == "RESOLVED" ]]; then
+      if [[ "${_GS_EU2_CFG[apply_resolve]:-false}" == "true" ]]; then
+        _var="$(_gs_eu2_record_get "${_i}" env_var)"
+        _cur="$(_gs_eu2_record_get "${_i}" current_version)"
+        _prop="$(_gs_eu2_record_get "${_i}" proposed_version)"
+        _raw_ann="$(_gs_eu2_record_get "${_i}" raw_annotation)"
+        [[ -z "${_prop}" || "${_prop}" == "${_cur}" ]] && continue
+        if [[ "${_dry_run}" == "true" ]]; then
+          printf '  [DRY-RUN]  %-55s  %s → %s (float pinned)\n' "${_var}" "${_cur}" "${_prop}"
+        else
+          # Write concrete version to VAR= and update annotation CURRENT_VERSION from float to concrete.
+          _gs_eu2_apply_single "${_env_file}" "${_var}" "${_prop}" "${_raw_ann}" "${_cur}" \
+                               "" "" "false" "false" ""
+          printf '  [PINNED ]  %-55s  %s → %s\n' "${_var}" "${_cur}" "${_prop}"
+          (( ++_n_resolve_applied )) || true
+        fi
       fi
       continue
     fi
@@ -377,5 +401,7 @@ _gs_eu2_apply_updates() {
     local _total_applied=$(( _n_auto_only_applied + _n_auto_sha_applied + _n_sha_applied + _n_lock_applied + _n_replace_only_applied ))
     printf '  %d update(s) applied to %s (%d version-only, %d version+sha, %d sha, %d lock, %d replace-only)\n' \
       "${_total_applied}" "${_env_file}" "${_n_auto_only_applied}" "${_n_auto_sha_applied}" "${_n_sha_applied}" "${_n_lock_applied}" "${_n_replace_only_applied}"
+    # Floating ref pins are a separate operation (--apply-resolve), counted independently.
+    (( _n_resolve_applied > 0 )) && printf '  %d floating ref(s) pinned\n' "${_n_resolve_applied}"
   fi
 }
