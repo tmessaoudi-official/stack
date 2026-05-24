@@ -300,7 +300,7 @@ _gs_eu2_run_check() {
   _GS_EU2_CACHE_TTL="${_GS_EU2_CFG[cache_ttl]:-3600}"
 
   local _n_auto=0 _n_hold=0 _n_skip=0 _n_error=0 _n_manual=0 _n_sha=0 _n_lock=0 _n_frozen=0
-  local _n_fallback=0 _n_watch=0 _n_drift=0 _n_drift_fixable=0 _n_downgrade=0 _n_downgrade_force=0 _n_hidden=0 _n_sha_anno=0 _n_replace_drift=0 _n_replace_cascade=0 _n_resolved=0
+  local _n_fallback=0 _n_watch=0 _n_drift=0 _n_drift_fixable=0 _n_downgrade=0 _n_downgrade_force=0 _n_hidden=0 _n_sha_anno=0 _n_replace_drift=0 _n_replace_cascade=0 _n_resolved=0 _n_warn_depends_on=0
 
   # Initialize and arm live tally (TTY-only, gate checked inside)
   _gs_eu2_tally_init
@@ -870,6 +870,19 @@ _gs_eu2_run_check() {
       fi
     fi
 
+    # (depends-on) safety warning: when a record carries a depends_on annotation, emit a
+    # [WARN] sub-line reminding the user that dependency ordering is not enforced at runtime.
+    # NOT suppressed by --no-notes (this is a safety signal, not cosmetic output).
+    local _depends_on
+    _depends_on="$(_gs_eu2_record_get "${_i}" depends_on)"
+    if [[ -n "${_depends_on}" ]]; then
+      printf '%10s↳ [WARN] (depends-on:%s) not enforced — dependency ordering\n' \
+        "" "${_depends_on}"
+      printf '%10s         unimplemented; verify %s manually before --apply\n' \
+        "" "${_depends_on%%:*}"
+      (( ++_n_warn_depends_on )) || true
+    fi
+
     # [DRIFT] sub-line: emitted when the actual VAR= value in the env file differs from
     # what the annotation records as the current version (or SHA for use-sha records).
     # Decision-aware: the message adapts to the current decision so the user knows exactly
@@ -1166,10 +1179,11 @@ _gs_eu2_run_check() {
     _sec_replace_drift="${_n_replace_drift}"
     _sec_replace_cascade="${_n_replace_cascade}"
   fi
-  if (( _sec_watch > 0 || _sec_drift > 0 || _sec_down > 0 || _sec_down_force > 0 || _sec_sha_anno > 0 || _sec_replace_drift > 0 || _sec_replace_cascade > 0 || _sec_resolved > 0 )); then
+  if (( _sec_watch > 0 || _sec_drift > 0 || _sec_down > 0 || _sec_down_force > 0 || _sec_sha_anno > 0 || _sec_replace_drift > 0 || _sec_replace_cascade > 0 || _sec_resolved > 0 || _n_warn_depends_on > 0 )); then
     printf '    ↳ %d WATCH · %d DRIFT (%d fixable) · %d DOWNGRADE · %d FORCE-DOWNGRADE · %d REPLACE-DRIFT · %d +sha · %d +replace' \
       "${_sec_watch}" "${_sec_drift}" "${_sec_fixable}" "${_sec_down}" "${_sec_down_force}" "${_sec_replace_drift}" "${_sec_sha_anno}" "${_sec_replace_cascade}"
     (( _sec_resolved > 0 )) && printf ' · +resolve %d' "${_sec_resolved}"
+    (( _n_warn_depends_on > 0 )) && printf ' · %d depends-on-warn' "${_n_warn_depends_on}"
     printf '\n'
   fi
 

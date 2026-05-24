@@ -9907,6 +9907,67 @@ t "t99c: --help output contains --tally flag" bash -c "
 _flush_section
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Section 100 — stub annotation parse/storage coverage (depends-on, propagate)
+# ═══════════════════════════════════════════════════════════════════════════
+section "100 — stub annotation parse/storage coverage"
+
+# t100a: (depends-on:SOME_VAR:major) parses without error; --check exits 0
+t "t100a: (depends-on) parses without error, --check exits 0" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t100a_cache
+    f=\${TMP_DIR}/t100a.env
+    printf '# @todo env-update (depends-on:GLOBAL_STACK_OTHER:major) dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T100A_VERSION=18.3-alpine3.23\n' > \"\$f\"
+    bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" >/dev/null 2>&1 && echo PASS || { echo 'non-zero exit on (depends-on) check'; echo FAIL; exit 0; }
+"
+
+# t100b: --dump output for a (depends-on) record shows 'depends_on: SOME_VAR:major'
+t "t100b: --dump shows depends_on field" bash -c "
+    out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file='${FIXTURES}/depends-on.env' 2>&1)
+    echo \"\$out\" | grep -qF 'depends_on: GLOBAL_STACK_SONARQUBE_VERSION:major' || { echo \"depends_on field not in dump; got: \$(echo \"\$out\" | grep depends)\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t100c: --check output for a (depends-on) record shows [WARN] sub-line
+t "t100c: --check emits [WARN] sub-line for (depends-on) record" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t100c_cache
+    f=\${TMP_DIR}/t100c.env
+    printf '# @todo env-update (depends-on:GLOBAL_STACK_OTHER:major) dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T100C_VERSION=18.3-alpine3.23\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[WARN]' || { echo \"no [WARN] sub-line for depends-on record; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t100d: (depends-on) record is NOT blocked — fetch still runs, a decision comes back
+t "t100d: (depends-on) record fetches and produces a decision" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t100d_cache
+    f=\${TMP_DIR}/t100d.env
+    printf '# @todo env-update (depends-on:GLOBAL_STACK_OTHER:major) dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T100D_VERSION=18.3-alpine3.23\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qE '\[(AUTO|SKIP|HOLD|MANUAL|ERROR|LOCK)\s*\]' || { echo \"no decision tag in output; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t100e: (propagate) annotation parses without error; --check exits 0
+t "t100e: (propagate) parses without error, --check exits 0" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t100e_cache
+    f=\${TMP_DIR}/t100e.env
+    printf '# @todo env-update (propagate) dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T100E_VERSION=18.3-alpine3.23\n' > \"\$f\"
+    bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" >/dev/null 2>&1 && echo PASS || { echo 'non-zero exit on (propagate) check'; echo FAIL; exit 0; }
+"
+
+# t100f: --dump output for a (propagate) record shows 'propagate: true'
+t "t100f: --dump shows propagate: true" bash -c "
+    out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file='${FIXTURES}/flags-all.env' 2>&1)
+    echo \"\$out\" | grep -qF 'propagate: true' || { echo \"propagate not true in dump; got: \$(echo \"\$out\" | grep propagate)\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+_flush_section
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section
