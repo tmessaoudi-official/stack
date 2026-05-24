@@ -6367,14 +6367,16 @@ t "t63d1: [LOCK   ] tag is exactly 9 chars wide" bash -c "
     echo PASS
 "
 
-# t63d1b: [LOCK   ] tag is 9 chars wide — new alignment standard
-t "t63d1b: [LOCK   ] tag is exactly 9 chars wide" bash -c "
+# t63d1b: [SHA    ] tag is 9 chars wide — widest padding, most off-by-one prone
+# Uses pecl:imagick + git:Imagick/imagick fixture: version current (SKIP) but annotation
+# SHA is stale → pipeline upgrades to SHA decision, emitting [SHA    ] (SHA+4 spaces).
+t "t63d1b: [SHA    ] tag is exactly 9 chars wide (widest-padding anchor)" bash -c "
     export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t63d1b_cache
     f=\${TMP_DIR}/t63d1b.env
-    printf '# @todo env-update (lock:pinned) dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T63D1B=18.3-alpine3.23\n' > \"\$f\"
+    printf '# @todo env-update (use-sha) pecl:imagick (git:Imagick/imagick) 3.8.0 sha:oldshaoldsha0000000000000000000000000000\nGLOBAL_STACK_T63D1B=3.8.0\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null)
-    echo \"\$out\" | grep -qF '[LOCK   ]' || { echo \"expected '[LOCK   ]' (LOCK+3 spaces, 9-char tag), got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '[SHA    ]' || { echo \"expected '[SHA    ]' (SHA+4 spaces, 9-char tag), got: \$out\"; echo FAIL; exit 0; }
     echo PASS
 "
 
