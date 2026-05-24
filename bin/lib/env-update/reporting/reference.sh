@@ -418,7 +418,7 @@ DECISIONS EMITTED BY --check
             and the fetcher resolved it to a concrete semver.
             Informational only — NOT written by --apply alone.
             --apply --apply-resolve writes: both VAR= and annotation CURRENT_VERSION.
-            Output tag in apply: [PINNED ] (8 chars with trailing space).
+            Output tag in apply: [PINNED ] (9 chars, including trailing space).
             --force-auto does NOT promote RESOLVED to AUTO.
             Float+DRIFT: RESOLVED entries skip the drift detection path (annotation
             holds the float alias, not a semver baseline — no mismatch possible).
@@ -681,9 +681,11 @@ _gs_eu2_show_reference_matrix() {
       "${_extra:+ (${_extra})}"
   }
 
-  # ── SECTION A — LIVE CLASSIFIER FIXTURES ─────────────────────────────────────────────────
-  # Calls _gs_eu2_classify_decision and _gs_eu2_classify_sha_decision with synthetic data.
-  # No network calls. Output is what the actual engine produces for these inputs.
+  printf 'SECTION A — Live classifier fixtures (no network calls)\n'
+  printf 'Calls _gs_eu2_classify_decision and _gs_eu2_classify_sha_decision with synthetic data.\n'
+  printf 'Output is what the actual engine produces for these inputs.\n'
+  printf '%s\n' '─────────────────────────────────────────────────────────────────────────────────────────────'
+  printf '\n'
 
   # ── Fixture 1: Standard semver — stable vs prerelease ──────────────────
   printf 'Fixture 1: Standard semver (default / --unstable / --unstable=full)\n'
@@ -720,9 +722,10 @@ _gs_eu2_show_reference_matrix() {
 
   printf '\n'
 
-  # Note: range hints (e.g. 18-19) are handled by main.sh orchestration BEFORE calling
-  # the classifier. Passing a range string directly to _gs_eu2_classify_decision produces
-  # incorrect results. Range/FALLBACK behavior is shown in Section B (orchestration).
+  printf 'Note: range hints (e.g. 18-19) are handled by main.sh orchestration BEFORE calling\n'
+  printf 'the classifier. Passing a range string directly to _gs_eu2_classify_decision produces\n'
+  printf 'incorrect results. Range/FALLBACK behavior is shown in Section B (orchestration).\n'
+  printf '\n'
 
   # ── Fixture 2: Major hint — boundary enforcement ──────────────────────
   printf 'Fixture 2: Major hint boundary\n'
