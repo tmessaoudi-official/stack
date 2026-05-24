@@ -174,6 +174,17 @@ GLOBAL CLI FLAGS (env-update)
     --stable=full vs --unstable=full
     --apply-resolve requires --apply (standalone exits non-zero)
 
+  Environment variables:
+    _GS_EU2_TALLY_FORCE=1
+      Environment variable (not a CLI flag). Bypasses the stderr TTY gate so the
+      live running tally displays even when stderr is not a terminal.
+      Use cases: CI pipelines (GitHub Actions, GitLab CI where stderr has no TTY),
+      terminal multiplexers (tmux, screen) that don't expose TTY on stderr,
+      any non-interactive shell wanting live progress during a long --check run.
+      Default: unset (TTY gate active).
+      Note: the column-width gate (--tally=auto requires >= 130 cols) still applies
+      unless combined with --tally=full.
+
 FLAGS_EOF
   fi
 
@@ -670,6 +681,10 @@ _gs_eu2_show_reference_matrix() {
       "${_extra:+ (${_extra})}"
   }
 
+  # ── SECTION A — LIVE CLASSIFIER FIXTURES ─────────────────────────────────────────────────
+  # Calls _gs_eu2_classify_decision and _gs_eu2_classify_sha_decision with synthetic data.
+  # No network calls. Output is what the actual engine produces for these inputs.
+
   # ── Fixture 1: Standard semver — stable vs prerelease ──────────────────
   printf 'Fixture 1: Standard semver (default / --unstable / --unstable=full)\n'
   printf '  Mock versions: 4.0.0-rc1 3.2.0-rc2 3.1.0 2.5.0\n'
@@ -684,7 +699,7 @@ _gs_eu2_show_reference_matrix() {
   _matrix_row 'minor bump (AUTO)' '3.1.0' '3.2.0' "${_r}"
 
   _r="$(_gs_eu2_classify_decision '3.1.0' '4.0.0' '' '' '')"
-  _matrix_row 'major bump no hint (AUTO)' '3.1.0' '4.0.0' "${_r}"
+  _matrix_row 'major bump no hint (HOLD)' '3.1.0' '4.0.0' "${_r}"
 
   _r="$(_gs_eu2_classify_decision '3.1.0' '4.0.0' '' '' '3')"
   _matrix_row 'major bump + hint=3 (HOLD)' '3.1.0' '4.0.0' "${_r}"
@@ -692,7 +707,22 @@ _gs_eu2_show_reference_matrix() {
   _r="$(_gs_eu2_classify_decision '3.2.0-rc2' '3.2.0' '' '' '')"
   _matrix_row 'rc→stable same base (AUTO)' '3.2.0-rc2' '3.2.0' "${_r}"
 
+  _r="$(_gs_eu2_classify_decision '3.1.0' '' '' '' '')"
+  _matrix_row 'no proposed version (SKIP)' '3.1.0' '' "${_r}"
+
+  _r="$(_gs_eu2_classify_decision '3.1.0' '3.2.0-rc1' '' '' '')"
+  _matrix_row 'prerelease proposed, stable current, default (SKIP)' '3.1.0' '3.2.0-rc1' "${_r}"
+
+  # Major prerelease + unstable_mode=full → still HOLD: major jump check runs after
+  # prerelease guard bypass. Only minor/patch prerelease bypasses produce AUTO.
+  _r="$(_gs_eu2_classify_decision '3.1.0' '3.2.0-rc1' '' '' '' 'full')"
+  _matrix_row 'prerelease proposed, unstable_mode=full, minor (AUTO)' '3.1.0' '3.2.0-rc1' "${_r}" 'unstable_mode=full'
+
   printf '\n'
+
+  # Note: range hints (e.g. 18-19) are handled by main.sh orchestration BEFORE calling
+  # the classifier. Passing a range string directly to _gs_eu2_classify_decision produces
+  # incorrect results. Range/FALLBACK behavior is shown in Section B (orchestration).
 
   # ── Fixture 2: Major hint — boundary enforcement ──────────────────────
   printf 'Fixture 2: Major hint boundary\n'
@@ -762,5 +792,136 @@ _gs_eu2_show_reference_matrix() {
   _r="$(_gs_eu2_classify_decision '3.2.0' '3.2.0' '' '' '')"
   _matrix_row 'proposed = current (SKIP)' '3.2.0' '3.2.0' "${_r}"
 
+  printf '\n'
+
+  # ── Fixture 6: SHA annotation classifier (_gs_eu2_classify_sha_decision) ─────────────────
+  printf 'Fixture 6: SHA annotation classifier (_gs_eu2_classify_sha_decision)\n'
+  printf 'Purpose: classifies whether the annotation sha: field needs updating (git: flag records).\n'
+  printf 'Called AFTER the primary classifier. Can upgrade a SKIP decision to SHA.\n\n'
+
+  printf '%-55s  %-12s  %-12s  %s\n' 'Scenario' 'ann_sha' 'prop_sha' 'Result'
+  printf '%s\n' '─────────────────────────────────────────────────────────────────────────────────────────────'
+
+  # Case 1 — new SHA available (annotation sha ≠ proposed sha)
+  _r="$(_gs_eu2_classify_sha_decision 'abc1234567' 'def9876543')"
+  _matrix_row 'new SHA available (SHA)' 'abc1234567' 'def9876543' "${_r}"
+
+  # Case 2 — first time tracking (annotation sha empty)
+  _r="$(_gs_eu2_classify_sha_decision '' 'def9876543')"
+  _matrix_row 'first tracking, ann sha empty (SHA)' '' 'def9876543' "${_r}"
+
+  # Case 3 — SHA current (annotation sha == proposed sha)
+  _r="$(_gs_eu2_classify_sha_decision 'abc1234567' 'abc1234567')"
+  _matrix_row 'SHA current, no update needed (SKIP)' 'abc1234567' 'abc1234567' "${_r}"
+
+  # Case 4 — no proposed sha (no git: flag or fetch failed)
+  _r="$(_gs_eu2_classify_sha_decision 'abc1234567' '')"
+  _matrix_row 'no proposed sha (SKIP)' 'abc1234567' '' "${_r}"
+
+  printf '\n'
+
+  # ── SECTION B — ORCHESTRATION-LAYER SIGNALS (static narrative) ───────────────────────────
+  # These states are set by main.sh AFTER the classifier runs. They cannot be demonstrated
+  # by calling the classifier in isolation — they require the full pipeline context.
+  # Shown with the annotation syntax that triggers each state.
+
+  printf 'SECTION B — Orchestration-layer signals (set by main.sh, not the classifier)\n'
+  printf '%s\n' '─────────────────────────────────────────────────────────────────────────────────────────────'
+  printf '\n'
+
+  printf '1. FROZEN — (skip:REASON) flag\n'
+  printf '   Annotation:  # @todo env-update (skip:Not used) npm:express 4.19.2\n'
+  printf '   Trigger:     skip_reason field non-empty → main.sh overrides classifier → FROZEN\n'
+  printf '   Immune to:   --force-auto (cannot bypass skip gate)\n'
+  printf '   --apply:     never writes this record\n'
+  printf '   Summary:     N FROZEN\n'
+  printf '\n'
+
+  printf '2. LOCK — (lock:REASON) flag\n'
+  printf '   Annotation:  # @todo env-update (lock:LTS policy) sdkman:java 17.0.11-tem\n'
+  printf '   Trigger:     lock_reason field non-empty → main.sh overrides → LOCK\n'
+  printf '   Immune to:   --force-auto (cannot bypass lock gate)\n'
+  printf '   --apply:     MAY update annotation CURRENT_VERSION; NEVER changes VAR=\n'
+  printf '   Summary:     N LOCK\n'
+  printf '\n'
+
+  printf '3. ERROR — fetch failure\n'
+  printf '   Trigger:     fetcher returns non-zero, HTTP >= 400, timeout, or parse failure\n'
+  printf '   --apply:     never writes this record\n'
+  printf '   --no-fail:   suppresses non-zero process exit; ERROR still shown in output\n'
+  printf '   Summary:     N ERROR\n'
+  printf '\n'
+
+  printf '4. FALLBACK — range major_hint, currently on LOW, HIGH not yet available\n'
+  printf '   Annotation:  # @todo env-update dockerhub:_/node:18-19 18.20.0\n'
+  printf '   Trigger:     main.sh parses range; fetcher finds no version in HIGH range → using_fallback_major=true\n'
+  printf '   Effect:      primary decision unaffected; FALLBACK is additive\n'
+  printf '   --apply:     AUTO within LOW range still applies\n'
+  printf '   Summary:     N FALLBACK\n'
+  printf '\n'
+
+  printf '5. DRIFT — VAR= value differs from annotation CURRENT_VERSION\n'
+  printf '   Example:     annotation says 18.3-alpine3.23 but VAR=18.5-alpine3.21\n'
+  printf '   Trigger:     actual_var_value != current_version field\n'
+  printf '   Effect:      [DRIFT] sub-line; "fixable" when decision is AUTO\n'
+  printf '   --apply:     AUTO apply fixes drift\n'
+  printf '   Summary B2:  N DRIFT (N fixable)\n'
+  printf '\n'
+
+  printf '6. DOWNGRADE — VAR= is ahead of fetcher'"'"'s proposed version\n'
+  printf '   Trigger:     actual_var_value sorts AFTER proposed (env file is manually ahead)\n'
+  printf '   Effect:      [DOWNGRADE] sub-line; NOT an error\n'
+  printf '   Summary B2:  N DOWNGRADE\n'
+  printf '\n'
+
+  printf '7. FORCE-DOWNGRADE — DOWNGRADE record where --apply would write a lower version\n'
+  printf '   Trigger:     DOWNGRADE + decision is AUTO\n'
+  printf '   Effect:      --apply would overwrite VAR= with a version lower than currently set\n'
+  printf '   Note:        distinguishable from DOWNGRADE+SKIP (no write occurs for SKIP)\n'
+  printf '   Summary B2:  N FORCE-DOWNGRADE\n'
+  printf '\n'
+
+  printf '8. WATCH — (watch-major[:N]) + major boundary crossing detected\n'
+  printf '   Annotation:  # @todo env-update (watch-major) github:nodejs/node 20.18.0\n'
+  printf '   Trigger:     proposed major > current major (or N-th boundary for watch-major:N)\n'
+  printf '   Effect:      [WATCH] sub-line alongside primary decision; does NOT change decision\n'
+  printf '   Summary B2:  N WATCH\n'
+  printf '\n'
+
+  printf '9. REPLACE-DRIFT — (replace:TARGET=template) target has wrong current value\n'
+  printf '   Annotation:  # @todo env-update (replace:ALIAS={version}) npm:typescript 5.4.5\n'
+  printf '   Trigger:     current value of TARGET var != what {version} would expand to\n'
+  printf '   Effect:      [REPLACE-DRIFT] sub-line; independent of primary decision\n'
+  printf '   --apply:     rewrites TARGET= to correct expanded value\n'
+  printf '   Summary B2:  N REPLACE-DRIFT\n'
+  printf '\n'
+
+  printf '10. +sha sub-signal — AUTO or MANUAL record with stale annotation SHA\n'
+  printf '    Trigger:     decision in {AUTO, MANUAL} AND _gs_eu2_classify_sha_decision returns SHA\n'
+  printf '    Effect:      appended to primary decision line; annotation sha: updated on --apply\n'
+  printf '    Summary B2:  N +sha\n'
+  printf '\n'
+
+  printf '11. +replace sub-signal — AUTO or SHA record with (replace:) cascade targets\n'
+  printf '    Trigger:     decision in {AUTO, SHA} AND record has replace_targets field set\n'
+  printf '    Effect:      arrow (replace) sub-lines; TARGET= vars rewritten on --apply\n'
+  printf '    Summary B2:  N +replace\n'
+  printf '\n'
+
+  printf '12. PINNED — RESOLVED record applied via --apply --apply-resolve\n'
+  printf '    Trigger:     decision=RESOLVED AND --apply AND --apply-resolve both present\n'
+  printf '    Tag:         [PINNED ] (9 chars) in apply output\n'
+  printf '    --apply:     VAR= rewritten to concrete version; annotation CURRENT_VERSION updated\n'
+  printf '    Safety:      --force-auto CANNOT produce PINNED; RESOLVED gate is explicit\n'
+  printf '\n'
+
+  printf '13. DEPENDS-ON WARNING — (depends-on:VAR:constraint) annotation present\n'
+  printf '    Annotation:  # @todo env-update (depends-on:GLOBAL_STACK_SONARQUBE_VERSION:major) ...\n'
+  printf '    Trigger:     depends_on field non-empty\n'
+  printf '    Effect:      [WARN] sub-line: "(depends-on:VAR:constraint) not enforced — dependency\n'
+  printf '                 ordering unimplemented; verify manually before --apply"\n'
+  printf '    NOT suppressed by --no-notes (safety warning)\n'
+  printf '    Summary:     N [WARN] depends-on (if > 0)\n'
+  printf '    Status:      ANNOTATION IS PARSED AND STORED. Dependency check IS NOT ENFORCED.\n'
   printf '\n'
 }

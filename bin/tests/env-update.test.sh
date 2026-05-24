@@ -7996,6 +7996,56 @@ t "t81i: --annotations — rejected as unknown option (no backward compat alias)
     echo PASS
 "
 
+# t81j: --reference=matrix does NOT contain the wrong label 'major bump no hint (AUTO)'
+#        (D1 label bug: that scenario actually returns HOLD, not AUTO)
+t "t81j: --reference=matrix — major-bump-no-hint label must NOT say AUTO (it is HOLD)" bash -c "
+    out=\$(bash '${ENV_UPDATE_V2}' --reference=matrix 2>&1 || true)
+    echo \"\$out\" | grep -qF 'major bump no hint (AUTO)' && { echo \"label bug still present: found (AUTO) on major-bump-no-hint row\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t81k: --reference=matrix contains 'no proposed version' scenario (D2 addition)
+t "t81k: --reference=matrix — no proposed version scenario present" bash -c "
+    out=\$(bash '${ENV_UPDATE_V2}' --reference=matrix 2>&1 || true)
+    echo \"\$out\" | grep -qF 'no proposed version' || { echo \"missing 'no proposed version' scenario; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t81l: --reference=matrix contains 'prerelease proposed' scenario (D2 addition)
+t "t81l: --reference=matrix — prerelease proposed scenario present" bash -c "
+    out=\$(bash '${ENV_UPDATE_V2}' --reference=matrix 2>&1 || true)
+    echo \"\$out\" | grep -qF 'prerelease proposed' || { echo \"missing 'prerelease proposed' scenario; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t81m: --reference=matrix contains SHA fixture section header (D4 addition)
+t "t81m: --reference=matrix — Fixture 6 SHA classifier header present" bash -c "
+    out=\$(bash '${ENV_UPDATE_V2}' --reference=matrix 2>&1 || true)
+    echo \"\$out\" | grep -qF 'Fixture 6:' || { echo \"missing Fixture 6 SHA classifier section; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t81n: --reference=matrix contains FROZEN in orchestration narrative (D6 addition)
+t "t81n: --reference=matrix — FROZEN orchestration entry present" bash -c "
+    out=\$(bash '${ENV_UPDATE_V2}' --reference=matrix 2>&1 || true)
+    echo \"\$out\" | grep -qF 'FROZEN' || { echo \"missing FROZEN in matrix output; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t81o: --reference=matrix contains depends-on warning entry (D6 addition)
+t "t81o: --reference=matrix — depends-on warning entry present" bash -c "
+    out=\$(bash '${ENV_UPDATE_V2}' --reference=matrix 2>&1 || true)
+    echo \"\$out\" | grep -qF 'depends-on' || { echo \"missing depends-on entry in matrix output; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t81p: --reference=flags contains _GS_EU2_TALLY_FORCE (D7 addition)
+t "t81p: --reference=flags — _GS_EU2_TALLY_FORCE documented in flags section" bash -c "
+    out=\$(bash '${ENV_UPDATE_V2}' --reference=flags 2>&1 || true)
+    echo \"\$out\" | grep -qF '_GS_EU2_TALLY_FORCE' || { echo \"missing _GS_EU2_TALLY_FORCE in flags reference; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
 # ═══════════════════════════════════════════════════════════════════════════
 # 82 — decide.sh: v-prefix + major_hint regression
 # ═══════════════════════════════════════════════════════════════════════════
