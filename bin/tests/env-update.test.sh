@@ -7907,37 +7907,79 @@ t "t80f: --backup-keep=abc — rejected; stderr contains 'non-negative integer'"
     echo PASS
 "
 
-section "81 — --annotations flag"
+section "81 — --reference flag (replaces --annotations)"
 
-# t81a: --annotations exits 0
-t "t81a: --annotations — exits 0" bash -c "
-    bash '${ENV_UPDATE_V2}' --annotations >/dev/null 2>&1
+# t81a: --reference exits 0
+t "t81a: --reference — exits 0" bash -c "
+    bash '${ENV_UPDATE_V2}' --reference >/dev/null 2>&1
     rc=\$?
     [[ \$rc -eq 0 ]] || { echo \"expected exit 0, got: \$rc\"; echo FAIL; exit 0; }
     echo PASS
 "
 
-# t81b: --annotations output contains 'FETCHER TYPES'
-t "t81b: --annotations — output contains FETCHER TYPES section" bash -c "
-    out=\$(bash '${ENV_UPDATE_V2}' --annotations 2>&1 || true)
+# t81b: --reference output contains FETCHER TYPES section
+t "t81b: --reference — output contains FETCHER TYPES section" bash -c "
+    out=\$(bash '${ENV_UPDATE_V2}' --reference 2>&1 || true)
     echo \"\$out\" | grep -qF 'FETCHER TYPES' || { echo \"missing FETCHER TYPES; got: \$out\"; echo FAIL; exit 0; }
     echo PASS
 "
 
-# t81c: --annotations output contains 'ANNOTATION FLAGS'
-t "t81c: --annotations — output contains ANNOTATION FLAGS section" bash -c "
-    out=\$(bash '${ENV_UPDATE_V2}' --annotations 2>&1 || true)
+# t81c: --reference output contains ANNOTATION FLAGS section
+t "t81c: --reference — output contains ANNOTATION FLAGS section" bash -c "
+    out=\$(bash '${ENV_UPDATE_V2}' --reference 2>&1 || true)
     echo \"\$out\" | grep -qF 'ANNOTATION FLAGS' || { echo \"missing ANNOTATION FLAGS; got: \$out\"; echo FAIL; exit 0; }
     echo PASS
 "
 
-# t81d: --annotations exits before requiring an env file (works without --env-file pointing to a real file)
-t "t81d: --annotations — exits without requiring an env file" bash -c "
-    bash '${ENV_UPDATE_V2}' --annotations --env-file=/nonexistent/path.env >/dev/null 2>&1
+# t81d: --reference exits without requiring an env file
+t "t81d: --reference — exits without requiring an env file" bash -c "
+    bash '${ENV_UPDATE_V2}' --reference --env-file=/nonexistent/path.env >/dev/null 2>&1
     rc=\$?
     [[ \$rc -eq 0 ]] || { echo \"expected exit 0, got \$rc (should exit before env file check)\"; echo FAIL; exit 0; }
-    out=\$(bash '${ENV_UPDATE_V2}' --annotations --env-file=/nonexistent/path.env 2>&1 || true)
-    echo \"\$out\" | grep -qF 'ANNOTATION FLAGS' || { echo \"missing reference output\"; echo FAIL; exit 0; }
+    out=\$(bash '${ENV_UPDATE_V2}' --reference --env-file=/nonexistent/path.env 2>&1 || true)
+    echo \"\$out\" | grep -qF 'ANNOTATION FLAGS' || { echo \"missing reference output; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t81e: --reference=syntax shows annotation format, not fetcher deep-dive
+t "t81e: --reference=syntax — shows syntax section" bash -c "
+    out=\$(bash '${ENV_UPDATE_V2}' --reference=syntax 2>&1 || true)
+    echo \"\$out\" | grep -qF 'ANNOTATION FORMAT' || { echo \"missing ANNOTATION FORMAT; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t81f: --reference=annotations includes previously undocumented flags
+t "t81f: --reference=annotations — includes tag-extract and fetch-json flags" bash -c "
+    out=\$(bash '${ENV_UPDATE_V2}' --reference=annotations 2>&1 || true)
+    echo \"\$out\" | grep -qF 'tag-extract' || { echo \"missing tag-extract; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'fetch-json' || { echo \"missing fetch-json; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t81g: --reference=annotations does NOT document (hold) as a valid flag
+t "t81g: --reference=annotations — no (hold) as a valid annotation flag" bash -c "
+    out=\$(bash '${ENV_UPDATE_V2}' --reference=annotations 2>&1 || true)
+    # (hold) should NOT appear as a parenthesised flag entry (it is not a real flag)
+    # It may appear in explanatory prose about the HOLD decision itself, so we
+    # check for the specific pattern of it being listed as a valid flag.
+    echo \"\$out\" | grep -qP '^\s+\(hold\)' && { echo \"(hold) should NOT be listed as a valid flag\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t81h: --reference=matrix shows RESOLVED and AUTO in matrix output
+t "t81h: --reference=matrix — live matrix shows RESOLVED and AUTO" bash -c "
+    out=\$(bash '${ENV_UPDATE_V2}' --reference=matrix 2>&1 || true)
+    echo \"\$out\" | grep -qF 'RESOLVED' || { echo \"missing RESOLVED in matrix; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'AUTO' || { echo \"missing AUTO in matrix; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t81i: --annotations (old flag) exits non-zero with unknown option error
+t "t81i: --annotations — rejected as unknown option (no backward compat alias)" bash -c "
+    rc=\$(bash '${ENV_UPDATE_V2}' --annotations 2>/dev/null; echo \$?)
+    [[ \$rc -ne 0 ]] || { echo \"expected non-zero exit for --annotations, got 0\"; echo FAIL; exit 0; }
+    err=\$(bash '${ENV_UPDATE_V2}' --annotations 2>&1 || true)
+    echo \"\$err\" | grep -qiE 'unknown|unrecognized|invalid' || { echo \"expected unknown-option error; got: \$err\"; echo FAIL; exit 0; }
     echo PASS
 "
 

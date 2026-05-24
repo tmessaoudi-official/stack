@@ -57,7 +57,8 @@ _gs_eu2_parse_args() {
         fi
         _GS_EU2_CFG[backup_keep]="${_bkval}"
         ;;
-      --annotations)  _GS_EU2_CFG[annotations]="true" ;;
+      --reference)    _GS_EU2_CFG[reference]="true" ;;
+      --reference=*)  _GS_EU2_CFG[reference_section]="${1#*=}"; _GS_EU2_CFG[reference]="true" ;;
       --tally)        _GS_EU2_CFG[tally]="auto" ;;
       --tally=*)
         local _tval="${1#*=}"
@@ -122,9 +123,10 @@ _gs_eu2_parse_args() {
   [[ -z "${_GS_EU2_CFG[backup_purge]+set}" ]]  && _GS_EU2_CFG[backup_purge]="false"
   [[ -z "${_GS_EU2_CFG[backup_suffix]+set}" ]] && _GS_EU2_CFG[backup_suffix]=".bak"
   [[ -z "${_GS_EU2_CFG[backup_keep]+set}" ]]   && _GS_EU2_CFG[backup_keep]="10"
-  [[ -z "${_GS_EU2_CFG[apply_resolve]+set}" ]] && _GS_EU2_CFG[apply_resolve]="false"
-  [[ -z "${_GS_EU2_CFG[annotations]+set}" ]]   && _GS_EU2_CFG[annotations]="false"
-  [[ -z "${_GS_EU2_CFG[tally]+set}" ]]        && _GS_EU2_CFG[tally]="auto"
+  [[ -z "${_GS_EU2_CFG[apply_resolve]+set}" ]]      && _GS_EU2_CFG[apply_resolve]="false"
+  [[ -z "${_GS_EU2_CFG[reference]+set}" ]]          && _GS_EU2_CFG[reference]="false"
+  [[ -z "${_GS_EU2_CFG[reference_section]+set}" ]]  && _GS_EU2_CFG[reference_section]="all"
+  [[ -z "${_GS_EU2_CFG[tally]+set}" ]]              && _GS_EU2_CFG[tally]="auto"
 
   # Validate --filter regex early: invalid ERE causes per-record bash errors and silent
   # empty output. type: prefixes are not regex — skip validation for those.

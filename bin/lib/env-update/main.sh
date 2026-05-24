@@ -41,8 +41,8 @@ source "$(dirname "${BASH_SOURCE[0]}")/fetchers/pecl.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/fetchers/url.sh"
 # shellcheck source=./reporting/help.sh
 source "$(dirname "${BASH_SOURCE[0]}")/reporting/help.sh"
-# shellcheck source=./reporting/annotations-ref.sh
-source "$(dirname "${BASH_SOURCE[0]}")/reporting/annotations-ref.sh"
+# shellcheck source=./reporting/reference.sh
+source "$(dirname "${BASH_SOURCE[0]}")/reporting/reference.sh"
 # shellcheck source=./reporting/dump.sh
 source "$(dirname "${BASH_SOURCE[0]}")/reporting/dump.sh"
 # shellcheck source=./reporting/summary.sh
@@ -1117,9 +1117,9 @@ _gs_eu2_main() {
   _gs_eu2_parse_args "${@}"
   _gs_eu2_profile_end "Parse args"
 
-  # --annotations: print annotation reference and exit (before any env file access)
-  if [[ "${_GS_EU2_CFG[annotations]:-false}" == "true" ]]; then
-    _gs_eu2_show_annotations_ref
+  # --reference: print comprehensive reference and exit (before any env file access)
+  if [[ "${_GS_EU2_CFG[reference]:-false}" == "true" ]]; then
+    _gs_eu2_show_reference "${_GS_EU2_CFG[reference_section]:-all}"
     exit 0
   fi
 
