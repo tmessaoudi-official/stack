@@ -1,5 +1,31 @@
 #!/bin/bash
-# extract.sh — gs_es_search_and_extract + gs_es_detect_multiple_defaults
+# extract.sh — variable extraction from Docker sources and multi-default conflict detection
+#
+# Exports:   gs_es_search_and_extract  gs_es_detect_multiple_defaults  _gs_es_run_extraction
+# Sources:   config/defaults.sh
+# Deps:      bash 4.3+, grep, awk, sed, find, sort, envsubst
+# Env:       _GS_ES_CFG (scan_ignore_pattern, scan_var_ignore_pattern, debug,
+#                        debug_show_extracted_files, include_docker_args, scan_var_prefix,
+#                        scan_output_file, scan_delete_output, cleanup_tmp,
+#                        source_merged_file, exclude_implicit_empty, exclude_explicit_empty,
+#                        conflict_ignore_pattern, scan_path)
+#            _GS_ES_SESSION_TMP (set by gs_es_main; temp dir for per-run extract.N files)
+#
+# gs_es_search_and_extract — extract all GLOBAL_STACK_* variable usages from one file.
+#   12 source forms are matched: ARG, ENV, shell export, docker-compose list, YAML map,
+#   shell reference (${VAR}), Caddyfile ({env.VAR}), PHP getenv(), PHP $_ENV[],
+#   JS/TS process.env, Python os.environ.get(), Python os.environ[].
+#   Output is normalised to KEY=value form; |implicit_empty| / |explicit_empty|
+#   sentinels represent absent or shell-default values.
+#
+# gs_es_detect_multiple_defaults — report variables with conflicting values across sources.
+#   Cross-checks scan output against source files via awk; prints a warning for each
+#   variable that appears with two or more distinct non-empty, non-sentinel values.
+#
+# _gs_es_run_extraction — parallel extraction driver.
+#   Forks gs_es_search_and_extract as background jobs per file; waits for all to
+#   complete; consolidates per-file extract.N temp files into scan_output_file;
+#   deduplicates with sort -u.
 
 # Include guard
 [[ -n "${_GS_ES_EXTRACT_SH_LOADED:-}" ]] && return 0
@@ -8,10 +34,17 @@ readonly _GS_ES_EXTRACT_SH_LOADED=1
 # shellcheck source=./../config/defaults.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../config/defaults.sh"
 
-# ── gs_es_detect_multiple_defaults ───────────────────────────────────────────────
-# Args: input_file  current_file
-# Reads from _GS_ES_CFG: source_merged_file, exclude_implicit_empty,
-#                        exclude_explicit_empty
+# gs_es_detect_multiple_defaults — report variables with conflicting default values.
+#
+# Args:    $1 input_file   — per-file scan output (extract.N from gs_es_search_and_extract)
+# Args:    $2 current_file — source path being checked (used in diagnostic output only)
+# Reads:   _GS_ES_CFG[source_merged_file]  _GS_ES_CFG[exclude_implicit_empty]
+#          _GS_ES_CFG[exclude_explicit_empty]  _GS_ES_CFG[conflict_ignore_pattern]
+# Prints:  "(gs_es_detect_multiple_defaults): Entries defined multiple times..." to stdout
+# Returns: 0 always (informational — does not abort the run)
+# Side fx: creates and deletes input_file.src.all.merged and *.expanded temp files;
+#          vars with ${...} in their .env value are skipped (matches propagate.sh guard);
+#          self-referencing values (VAR=${VAR}, VAR=${VAR:-x}) are excluded from comparison
 gs_es_detect_multiple_defaults() {
 	local input_file="${1}"
 	local current_file="${2}"
@@ -99,15 +132,20 @@ gs_es_detect_multiple_defaults() {
 		"${input_file_merge}.expanded"
 }
 
-# ── gs_es_search_and_extract ─────────────────────────────────────────────────────
-# Args: current_file  count
-# Reads from _GS_ES_CFG: scan_ignore_pattern (file paths), scan_var_ignore_pattern (variable names),
-#                        debug, debug_show_extracted_files, include_docker_args,
-#                        scan_var_prefix, scan_output_file,
-#                        scan_delete_output, cleanup_tmp,
-#                        source_merged_file, exclude_implicit_empty,
-#                        exclude_explicit_empty
-# Session temp dir: _GS_ES_SESSION_TMP (set by gs_es_main)
+# gs_es_search_and_extract — extract all matching variable usages from one file.
+#
+# Args:    $1 current_file — file to scan (any file type; polyglot extraction)
+#          $2 count        — unique index for this invocation (temp file name: extract.<count>)
+# Reads:   _GS_ES_CFG[scan_ignore_pattern]  _GS_ES_CFG[scan_var_ignore_pattern]
+#          _GS_ES_CFG[debug]  _GS_ES_CFG[debug_show_extracted_files]
+#          _GS_ES_CFG[include_docker_args]  _GS_ES_CFG[scan_var_prefix]
+#          _GS_ES_CFG[scan_delete_output]  _GS_ES_CFG[cleanup_tmp]
+#          _GS_ES_SESSION_TMP (global)
+# Prints:  debug output to stdout when debug=true and debug_show_extracted_files=true
+# Returns: 0 always (grep failures are suppressed with || true)
+# Side fx: writes extract.<count> to _GS_ES_SESSION_TMP;
+#          calls gs_es_detect_multiple_defaults on the per-file output;
+#          early-returns (no write) when current_file matches scan_ignore_pattern
 gs_es_search_and_extract() {
 	local current_file="${1}"
 	local count="${2}"
@@ -255,8 +293,19 @@ gs_es_search_and_extract() {
 	# _gs_es_run_extraction after all background jobs complete (race fix).
 }
 
-# ── _gs_es_run_extraction ────────────────────────────────────────────────────────
-# Parallel find-and-extract loop, then consolidate results.
+# _gs_es_run_extraction — parallel extraction driver and result consolidator.
+#
+# Args:    none (reads _GS_ES_CFG[scan_path] for the root path)
+# Reads:   _GS_ES_CFG[scan_path]  _GS_ES_CFG[scan_output_file]
+#          _GS_ES_CFG[scan_delete_output]  _GS_ES_CFG[cleanup_tmp]
+#          _GS_ES_SESSION_TMP (global)
+# Prints:  error to stderr if any background job fails
+# Returns: 0 on success; 1 if scan_path is neither a file nor a directory, or
+#          if any background extraction job exits non-zero
+# Side fx: forks one gs_es_search_and_extract background job per file under scan_path;
+#          waits for all jobs and aggregates exit codes;
+#          sequentially consolidates extract.N temp files into scan_output_file;
+#          deduplicates with sort -u -o in place (I1 race-condition fix)
 _gs_es_run_extraction() {
 	true > "${_GS_ES_CFG[scan_output_file]}"
 

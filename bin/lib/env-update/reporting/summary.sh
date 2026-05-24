@@ -1,5 +1,10 @@
 #!/bin/bash
-# summary.sh — default output when no action flags are given
+# summary.sh — default output when no action flags are given.
+#
+# Exports:   _gs_eu2_print_summary
+# Sources:   config/defaults.sh  core/records.sh
+# Deps:      bash 4.3+
+# Env:       _GS_EU2_VERSION
 
 [[ -n "${_GS_EU2_SUMMARY_SH_LOADED:-}" ]] && return 0
 readonly _GS_EU2_SUMMARY_SH_LOADED=1
@@ -9,6 +14,11 @@ source "$(dirname "${BASH_SOURCE[0]}")/../config/defaults.sh"
 # shellcheck source=./../core/records.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../core/records.sh"
 
+# _gs_eu2_print_summary — print per-type count summary when no action flags given.
+#
+# Args:    $1 env_file — path to the parsed env file (shown in header line)
+# Prints:  version header + count of annotated variables + per-type breakdown
+# Returns: 0 always
 _gs_eu2_print_summary() {
   local _env_file="${1}"
   local _count

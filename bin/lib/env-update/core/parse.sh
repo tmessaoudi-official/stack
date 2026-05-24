@@ -1,5 +1,21 @@
 #!/bin/bash
-# parse.sh — annotation parser (two-pass: hoist flags, then parse TYPE:ID/version)
+# parse.sh — .env annotation parser (two-pass: hoist flags, then parse TYPE:ID/version).
+#
+# Exports:   _gs_eu2_is_recognized_flag  _gs_eu2_hoist_all_flags
+#            _gs_eu2_dispatch_flag  _gs_eu2_parse_env_file
+# Sources:   core/records.sh
+# Deps:      bash 4.3+ (nameref used in _gs_eu2_hoist_all_flags)
+# Env:       none
+#
+# Two-pass annotation parsing:
+#   Pass 1 (_gs_eu2_hoist_all_flags): scan the entire annotation string for balanced
+#          (flag) groups whose key is in the recognised-flag set; extract them
+#          position-agnostically into a $'\x1f'-delimited list.
+#   Pass 2: parse TYPE:IDENTIFIER[:MAJOR_HINT] from the cleaned (flags-removed) string,
+#          then extract sha:/urls: keywords and a trailing (hint) parenthetical.
+#
+# This two-pass design means flags can appear anywhere in the annotation line
+# (before or after the TYPE:ID field) without breaking the parser.
 
 [[ -n "${_GS_EU2_PARSE_SH_LOADED:-}" ]] && return 0
 readonly _GS_EU2_PARSE_SH_LOADED=1
@@ -7,7 +23,14 @@ readonly _GS_EU2_PARSE_SH_LOADED=1
 # shellcheck source=./records.sh
 source "$(dirname "${BASH_SOURCE[0]}")/records.sh"
 
-# ── Returns 0 if flag content is a recognised flag key ────────────────────
+# _gs_eu2_is_recognized_flag — test whether a flag name is in the known-flag set.
+#
+# Args:    $1 flag_content — content inside parens (e.g. "channel:rc", "manual")
+# Prints:  nothing
+# Returns: 0 if the flag name (before any ":") is recognised; 1 if not
+#
+# Used by _gs_eu2_hoist_all_flags to decide whether a balanced (…) group is a
+# flag to extract or a hint/compat note to leave in the annotation string.
 _gs_eu2_is_recognized_flag() {
   local _f="${1}" _name
   [[ "${_f}" == *:* ]] && _name="${_f%%:*}" || _name="${_f}"
@@ -27,17 +50,21 @@ _gs_eu2_is_recognized_flag() {
   esac
 }
 
-# ── Hoist all recognised flag parens from anywhere in the string ───────────
-# Pass 1 of the two-pass parser.  Scans the entire input string; any balanced
-# (…) group whose key name is in the recognised-flag set is extracted into
-# _flags_var (joined by U+001F).  Non-flag parens (hints, compat notes) are
-# left in _cleaned_var.  One trailing space after each extracted flag is also
-# consumed to avoid double-space artifacts.
+# _gs_eu2_hoist_all_flags — extract all recognised flag groups from an annotation string.
 #
-# Sets (by nameref):
-#   $1 = flags_var   → extracted flags joined by $'\x1f'
-#   $2 = cleaned_var → input with recognised flags removed, leading/trailing ws trimmed
-# $3 = input string
+# Args:    $1 flags_var   — nameref: output variable for extracted flags (joined by $'\x1f')
+#          $2 cleaned_var — nameref: output variable for annotation with flags removed
+#          $3 input       — raw annotation string after "@todo env-update "
+# Reads:   nothing
+# Sets:    $1 (by nameref): $'\x1f'-delimited list of flag contents (e.g. "manual\x1fchannel:rc")
+#          $2 (by nameref): annotation with recognised flags and their trailing spaces removed
+# Prints:  nothing
+# Returns: 0 always
+#
+# Pass 1 of the two-pass parser.  Handles nested parens (depth tracking) and
+# consumes one trailing space after each extracted flag to avoid double-space
+# artifacts in the cleaned string.  Unrecognised (…) groups and unbalanced
+# parens are passed through unchanged.
 _gs_eu2_hoist_all_flags() {
   local -n _haf_flags="${1}"
   local -n _haf_cleaned="${2}"
@@ -101,8 +128,18 @@ _gs_eu2_hoist_all_flags() {
   _haf_cleaned="${_haf_cleaned%"${_haf_cleaned##*[! ]}"}"
 }
 
-# ── Validate and dispatch one flag token → record field ───────────────────
-# $1 = flag content (inside parens), $2 = env_file, $3 = line_num, $4 = idx
+# _gs_eu2_dispatch_flag — validate a flag token and write its value to the record.
+#
+# Args:    $1 flag_content — content inside parens (e.g. "channel:rc", "manual")
+#          $2 env_file     — path to the .env file (for error messages only)
+#          $3 line_num     — annotation line number (for error messages)
+#          $4 record_idx   — 0-based record index to write field into
+# Reads:   nothing (validation is done inline)
+# Sets:    record fields via _gs_eu2_record_set (specific field depends on flag name)
+# Prints:  error message to stderr on unknown/invalid flag
+# Returns: 0 on success; exits 1 on unknown or malformed flag
+#
+# See the checklist at the bottom of this file when adding a new flag.
 _gs_eu2_dispatch_flag() {
   local _f="${1}" _env_file="${2}" _lnum="${3}" _idx="${4}"
   local _name _val
@@ -257,7 +294,23 @@ _gs_eu2_dispatch_flag() {
 #    - flag is parsed and stored (record field matches expected value)
 #    - flag is effective (fetcher or decide.sh behaves differently with it)
 
-# ── Main parser: reads .env file, populates records ────────────────────────
+# _gs_eu2_parse_env_file — read a .env file and populate the record array.
+#
+# Args:    $1 env_file — path to the .env file to parse
+#          $2 filter   — optional regex or "type:TYPE" prefix to include only
+#                        matching variables (empty = include all)
+#          $3 exclude  — optional regex: skip variables whose name matches
+# Reads:   env_file line by line
+# Sets:    all record fields for each matched annotation+variable pair
+#          (via _gs_eu2_record_new + _gs_eu2_record_set)
+# Prints:  error messages to stderr on malformed annotations
+# Returns: 0 on success; exits 1 on parse errors (duplicate annotation, missing
+#          assignment, unknown flag, bad range syntax)
+# Side fx: increments _GS_EU2_REC_COUNT and writes _GS_EU2_REC_* flat variables
+#
+# State machine: IDLE → AWAITING_VARIABLE → IDLE.
+# Blank lines and comment lines between the annotation and the VAR= line are
+# tolerated (C2 rule); any other non-assignment line is an error and resets state.
 _gs_eu2_parse_env_file() {
   local _env_file="${1}"
   local _filter="${2:-}"

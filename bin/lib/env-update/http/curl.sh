@@ -1,15 +1,32 @@
 #!/bin/bash
-# curl.sh — thin HTTP GET wrapper with fixture injection for testing
+# curl.sh — thin HTTP GET wrapper with fixture injection and session-level memo.
 #
-# If _GS_EU2_HTTP_FIXTURE_DIR is set, all requests are served from files in
-# that directory. File name is derived from the URL by sanitizing non-alnum
-# chars to underscores (same scheme as cache key sanitization).
-# This is the single seam that makes all fetchers deterministically testable.
+# Exports:   _gs_eu2_fixture_path  _gs_eu2_http_get_core
+#            _gs_eu2_http_get  _gs_eu2_http_get_auth
+# Sources:   none
+# Deps:      curl, bash 4.3+ (associative array)
+# Env:       _GS_EU2_HTTP_FIXTURE_DIR (test seam — if set, all GETs read local files)
 #
-# Pagination disambiguation: when the URL contains a "page=N" query param,
-# the fixture filename includes "_page_N" as a suffix so that page=1 and page=2
-# map to distinct fixture files.  Without this, stripping the query string
-# collapses both URLs to the same path.
+# FIXTURE INJECTION (test seam)
+#   If _GS_EU2_HTTP_FIXTURE_DIR is set, all requests are served from files in
+#   that directory. File name is derived from the URL by sanitizing non-alnum
+#   chars to underscores (same scheme as cache key sanitization).
+#   This is the single seam that makes all fetchers deterministically testable.
+#   Pagination disambiguation: when the URL contains a "page=N" query param,
+#   the fixture filename includes "_page_N" as a suffix so that page=1 and page=2
+#   map to distinct fixture files.
+#
+# SESSION-LEVEL MEMO (_GS_EU2_HTTP_MEMO)
+#   Avoids redundant HTTP round-trips for the same URL within one run.
+#   Example: npm:@types/node with major_hint=22 and major_hint=24 both fetch
+#   the same registry URL — the second call returns the body instantly.
+#   Scope: process lifetime only; NOT persisted to the TTL cache.
+#   Key format: "${url}:${auth_flag}" where auth_flag=1 (token present) or 0.
+#
+# RETRY STRATEGY (_gs_eu2_http_get_core)
+#   Two-level: inner curl --retry 3 handles TCP/DNS failures; outer 3-attempt
+#   loop with exponential back-off handles HTTP 429 rate-limiting (5s, 10s).
+#   Together: up to 9 curl attempts per URL, outer back-off on 429 only.
 
 [[ -n "${_GS_EU2_CURL_SH_LOADED:-}" ]] && return 0
 readonly _GS_EU2_CURL_SH_LOADED=1
@@ -26,9 +43,16 @@ readonly _GS_EU2_CURL_SH_LOADED=1
 # to an authenticated caller that would receive a richer (or rate-limit-exempt) response.
 declare -gA _GS_EU2_HTTP_MEMO=()
 
-# _gs_eu2_fixture_path URL
-# Derive the fixture filename from a URL.  Shared by _gs_eu2_http_get and
-# _gs_eu2_http_get_auth so the logic stays in exactly one place.
+# _gs_eu2_fixture_path — derive the fixture filename from a URL.
+#
+# Args:    $1 url — fully qualified URL
+# Prints:  fixture filename (e.g. "api.github.com_repos_owner_repo_tags")
+# Returns: 0 always
+#
+# Shared by _gs_eu2_http_get and _gs_eu2_http_get_auth so the derivation logic
+# lives in exactly one place. Sanitizes: strips query string, replaces non-alnum
+# chars with underscores, strips leading "https___" protocol prefix, then appends
+# "_page_N" when "page=N" appears in the original query string.
 _gs_eu2_fixture_path() {
   local _url="${1}"
   local _noquery="${_url%%\?*}"                       # strip query string
@@ -43,19 +67,17 @@ _gs_eu2_fixture_path() {
   printf '%s' "${_safe}"
 }
 
-# _gs_eu2_http_get_core URL [TOKEN]
-# Shared network layer: two-level retry loop + memo store.
-# Called by _gs_eu2_http_get (no token) and _gs_eu2_http_get_auth (with token).
-# Callers must have already handled the fixture-seam and memo fast-paths.
+# _gs_eu2_http_get_core — shared network layer with two-level retry + memo store.
 #
-# Two-level retry strategy (D4):
-# - Inner: curl --retry 3 --retry-delay 2 handles transient network failures
-#   (connection reset, DNS timeout, brief server hiccups) at the TCP/HTTP level.
-# - Outer: the for-loop (3 attempts) specifically handles HTTP 429 rate-limiting
-#   with exponential back-off (5s, 10s). This is layered on top of curl's retry
-#   because curl does not retry 429 by default (it only retries on connection
-#   errors and transient HTTP 5xx per --retry-all-errors).
-# Together: up to 3*3 = 9 curl attempts, with outer back-off on 429 only.
+# Args:    $1 url   — fully qualified URL to fetch
+#          $2 token — optional Bearer auth token (empty = unauthenticated)
+# Prints:  response body on success
+# Returns: 0 on success; 1 on failure (network error, HTTP 4xx/5xx, repeated 429)
+# Side fx: stores body in _GS_EU2_HTTP_MEMO keyed on "${url}:${auth_flag}"
+#
+# Callers must handle fixture-seam and memo fast-paths before calling this.
+# Retry strategy: inner curl --retry 3 for TCP errors; outer 3-attempt loop
+# with 5s/10s back-off for HTTP 429. Total: up to 9 curl attempts per URL.
 _gs_eu2_http_get_core() {
   local _url="${1}" _token="${2:-}"
   local _body_tmp _curl_stderr_file
@@ -113,8 +135,12 @@ _gs_eu2_http_get_core() {
   printf '%s' "${_core_body}"
 }
 
-# Fetch URL contents. Returns 0 on success, 1 on failure.
-# Stdout: response body. Stderr: error message on failure.
+# _gs_eu2_http_get — unauthenticated HTTP GET with fixture injection and memo.
+#
+# Args:    $1 url — URL to fetch
+# Prints:  response body
+# Returns: 0 on success; 1 on failure
+# Side fx: reads _GS_EU2_HTTP_MEMO; may write to it via _gs_eu2_http_get_core
 _gs_eu2_http_get() {
   local _url="${1}"
 
@@ -139,10 +165,16 @@ _gs_eu2_http_get() {
   _gs_eu2_http_get_core "${_url}"
 }
 
-# Authenticated HTTP GET — injects Authorization: Bearer <token>.
-# If token is empty, delegates entirely to _gs_eu2_http_get (no copy-paste).
-# Fixture injection is identical: path derived from URL only, token ignored.
-# Args: $1 url, $2 token
+# _gs_eu2_http_get_auth — authenticated HTTP GET (Bearer token).
+#
+# Args:    $1 url   — URL to fetch
+#          $2 token — Bearer token (empty → delegates to _gs_eu2_http_get, no duplication)
+# Prints:  response body
+# Returns: 0 on success; 1 on failure
+# Side fx: reads _GS_EU2_HTTP_MEMO[url:1]; may write to it via _gs_eu2_http_get_core
+#
+# Fixture injection: path derived from URL only — token is NOT part of the fixture path.
+# This means authenticated and unauthenticated test fixtures share the same file.
 _gs_eu2_http_get_auth() {
   local _url="${1}" _token="${2:-}"
 

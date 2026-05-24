@@ -1,5 +1,17 @@
 #!/bin/bash
-# channel.sh — stable/rc/beta/unstable tag selection (ported from v1)
+# channel.sh — stable/rc/beta/unstable channel selection and tag filtering.
+#
+# Exports:   _gs_eu2_version_matches_channel  _gs_eu2_filter_versions_by_channel
+#            _gs_eu2_channel_select_best
+# Sources:   core/semver.sh
+# Deps:      bash 4.3+ (associative array-free; portable)
+# Env:       none
+#
+# Channel values (from @todo annotation (channel:VALUE)):
+#   ""/"stable"  — return highest stable (non-prerelease) version
+#   "unstable"   — return highest prerelease (or stable if stable surpassed it)
+#   "nightly"    — return highest tag containing "nightly" literally
+#   "rc","beta",… — return highest tag matching the qualifier; fall back to stable
 
 [[ -n "${_GS_EU2_CHANNEL_SH_LOADED:-}" ]] && return 0
 readonly _GS_EU2_CHANNEL_SH_LOADED=1
@@ -7,7 +19,16 @@ readonly _GS_EU2_CHANNEL_SH_LOADED=1
 # shellcheck source=./semver.sh
 source "$(dirname "${BASH_SOURCE[0]}")/semver.sh"
 
-# Returns 0 if version matches channel qualifier (case-insensitive word-boundary match)
+# _gs_eu2_version_matches_channel — test whether a version tag matches a channel qualifier.
+#
+# Args:    $1 version — version string to test
+#          $2 channel — channel qualifier ("unstable" delegates to _gs_eu2_is_prerelease;
+#                       other values are matched case-insensitively with word-boundary regex)
+# Prints:  nothing
+# Returns: 0 if the version matches; 1 if not
+#
+# Pattern: D3 — trailing anchor ([0-9]|$) prevents "rcx" matching "rc" while
+# allowing rc1, rc2, rc.1, rc-1 forms.
 _gs_eu2_version_matches_channel() {
   local _ver="${1,,}" _chan="${2}"
   [[ "${_chan}" == "unstable" ]] && { _gs_eu2_is_prerelease "${1}"; return; }
@@ -25,7 +46,12 @@ _gs_eu2_version_matches_channel() {
   return 1
 }
 
-# Filter a newline-separated version list by channel
+# _gs_eu2_filter_versions_by_channel — keep only versions matching a channel qualifier.
+#
+# Args:    $1 versions — newline-separated list of version strings
+#          $2 channel  — channel qualifier; empty → return all (pass-through)
+# Prints:  filtered newline-separated list
+# Returns: 0 always
 _gs_eu2_filter_versions_by_channel() {
   local _vers="${1}" _chan="${2:-}"
   [[ -z "${_chan}" ]] && { printf '%s\n' "${_vers}"; return 0; }
@@ -36,9 +62,22 @@ _gs_eu2_filter_versions_by_channel() {
   done <<< "${_vers}"
 }
 
-# Select the best version from a newline-separated list given a channel.
-# Echoes the selected version; returns 0 always.
-# $1 = newline-separated version list, $2 = channel (empty → stable)
+# _gs_eu2_channel_select_best — pick the best version from a list given a channel.
+#
+# Args:    $1 versions — newline-separated list of version strings
+#          $2 channel  — channel qualifier (empty/"stable" → best stable only)
+# Reads:   nothing
+# Prints:  selected version string; nothing if list is empty or no match for channel
+# Returns: 0 always
+#
+# Sort strategy: tags are sorted with awk (strip v-prefix) + sort -V to avoid
+# mixed v-prefix/no-prefix ordering bugs (v0.3.0 sorts after 1.0.0 in plain sort -V).
+#
+# Stable channel: never falls back to prerelease.
+# Unstable: returns highest prerelease, but promotes to stable if stable has surpassed it.
+# Nightly: only tags containing "nightly" literally.
+# Other channels (rc, beta, …): highest tag matching qualifier; falls back to stable
+#   if no match, but always promotes to stable if stable surpassed the channel match.
 _gs_eu2_channel_select_best() {
   local _all="${1}" _chan="${2:-}"
   [[ -z "${_all}" ]] && return 0

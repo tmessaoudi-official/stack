@@ -1,5 +1,23 @@
 #!/bin/bash
 # defaults.sh — _GS_ES_CFG defaults and pattern constants for env-scan
+#
+# Exports:   _GS_ES_VERSION  _GS_ES_CFG (global associative array, populated by args.sh)
+#            _GS_ES_PATTERN_DIFF_IGNORE  _GS_ES_PATTERN_SCAN_VAR_IGNORE
+#            _GS_ES_PATTERN_REVERSE_CHECK_IGNORE  _GS_ES_PATTERN_CONFLICT_IGNORE
+#            _GS_ES_PATTERN_ORPHAN_IGNORE  _GS_ES_PATTERN_FORWARD_CHECK_IGNORE
+# Sources:   none
+# Deps:      bash 4.3+
+# Env:       none
+#
+# Pattern constants are named <SCOPE>_IGNORE and map 1:1 to _GS_ES_CFG keys and
+# CLI flags in args.sh.  They are readonly ERE strings consumed by grep -E or
+# bash [[ =~ ]] in the pipeline phases:
+#   _GS_ES_PATTERN_DIFF_IGNORE          Phase 5 — suppress "different value" warnings
+#   _GS_ES_PATTERN_SCAN_VAR_IGNORE      Phase 3 — suppress variable names from scan output
+#   _GS_ES_PATTERN_REVERSE_CHECK_IGNORE Phase 5 Check 3 — dest→scan orphan detection
+#   _GS_ES_PATTERN_CONFLICT_IGNORE      Phase 4 — suppress conflicting-defaults detection
+#   _GS_ES_PATTERN_ORPHAN_IGNORE        merge phase — suppress local-only var warnings
+#   _GS_ES_PATTERN_FORWARD_CHECK_IGNORE Phase 5 Checks 1+2 — scan→env new-usage detection
 
 # Include guard
 [[ -n "${_GS_ES_DEFAULTS_SH_LOADED:-}" ]] && return 0

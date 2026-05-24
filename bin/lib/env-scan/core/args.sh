@@ -1,5 +1,15 @@
 #!/bin/bash
 # args.sh — CLI argument parser; populates _GS_ES_CFG from "$@"
+#
+# Exports:   gs_es_parse_args
+# Sources:   config/defaults.sh  reporting/help.sh
+# Deps:      bash 4.3+, realpath
+# Env:       _GS_ES_CFG (associative array, declared in defaults.sh)
+#
+# Parses every --flag=value pair onto _GS_ES_CFG, validates boolean values,
+# then applies defaults for any key that was not set on the command line.
+# Non-boolean defaults that depend on --dir are computed after --dir is
+# resolved (dependent defaults section).
 
 # Include guard
 [[ -n "${_GS_ES_ARGS_SH_LOADED:-}" ]] && return 0
@@ -10,6 +20,15 @@ source "$(dirname "${BASH_SOURCE[0]}")/../config/defaults.sh"
 # shellcheck source=./../reporting/help.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../reporting/help.sh"
 
+# gs_es_parse_args — parse CLI flags and populate _GS_ES_CFG.
+#
+# Args:    "$@" — all CLI arguments
+# Sets:    _GS_ES_CFG[*] — every supported flag key; unset keys receive defaults
+# Prints:  error messages to stderr on invalid values
+# Returns: 0 on success; exit 1 on invalid --backup-keep or unknown flag
+# Side fx: calls gs_es_show_help and exits 0 for --help;
+#          prints version and exits 0 for --version;
+#          sets reference=true for --reference[=SECTION]
 gs_es_parse_args() {
 	while [[ $# -gt 0 ]]; do
 		case "${1}" in

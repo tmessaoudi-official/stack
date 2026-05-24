@@ -1,5 +1,11 @@
 #!/bin/bash
-# prerelease_markers.sh — pre-release detection regex (ported from v1 verbatim)
+# prerelease_markers.sh — pre-release detection regex for version classifier.
+#
+# Exports:   _GS_EU2_PRERELEASE_MARKERS (readonly array)
+#            _GS_EU2_PRERELEASE_REGEX   (readonly joined ERE string)
+# Sources:   none
+# Deps:      bash 4.3+
+# Env:       none (all output is readonly globals)
 #
 # PURPOSE
 # -------

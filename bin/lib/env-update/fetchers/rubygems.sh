@@ -1,13 +1,22 @@
 #!/bin/bash
-# rubygems.sh — RubyGems registry fetcher using the record-index contract
+# rubygems.sh — RubyGems registry fetcher using the record-index contract.
 #
-# Input:  record index — reads type/identifier/channel/tag_*/major_hint etc.
-# Output: writes proposed_version + decision + error_message back into record
+# Exports:   _gs_eu2_fetch_rubygems
+# Sources:   core/records.sh  core/semver.sh  core/channel.sh
+#            core/tag_flags.sh  core/cache.sh  http/curl.sh
+# Deps:      curl, jq  (gem CLI optional — CLI fast path when available)
+# Env:       _GS_EU2_CFG[no_cache]  _GS_EU2_HTTP_FIXTURE_DIR
+#
+# Input:  record index — reads identifier/channel/tag_*/major_hint/major_hint_min/
+#                        watch_major_depth/current_version/version_prefix
+# Output: writes proposed_version + decision + error_message + latest_unconstrained
+#         + using_fallback_major back into record
 #
 # API (two calls):
 #   https://rubygems.org/api/v1/gems/{name}.json      → .version (stable fast path)
 #   https://rubygems.org/api/v1/versions/{name}.json  → .[].number, filter yanked=false
-# Resilience: if versions endpoint fails, fall back to single stable from gems endpoint.
+# Resilience: versions endpoint failure falls back to stable from gems endpoint.
+# Channel selection fallback: if channel selection yields nothing, uses gems .version.
 
 [[ -n "${_GS_EU2_RUBYGEMS_SH_LOADED:-}" ]] && return 0
 readonly _GS_EU2_RUBYGEMS_SH_LOADED=1
@@ -25,7 +34,17 @@ source "$(dirname "${BASH_SOURCE[0]}")/../core/cache.sh"
 # shellcheck source=./../http/curl.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../http/curl.sh"
 
-# Main fetcher entry point — takes one argument: record index.
+# _gs_eu2_fetch_rubygems — main entry point for the rubygems: fetcher type.
+#
+# Args:    $1 record_index — 0-based record index
+# Reads:   record fields: identifier, channel, major_hint, major_hint_min,
+#          watch_major_depth, current_version, version_prefix, tag_filter,
+#          tag_exclude, tag_strip_prefix, tag_strip_suffix, tag_extract,
+#          tag_replace_from, tag_replace_to
+# Sets:    record fields: proposed_version, decision (ERROR/SKIP only),
+#          error_message, latest_unconstrained, using_fallback_major
+# Prints:  nothing
+# Returns: 0 always
 _gs_eu2_fetch_rubygems() {
   local _idx="${1}"
 

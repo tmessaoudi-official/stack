@@ -1,8 +1,15 @@
 #!/bin/bash
-# dockerhub.sh — Docker Hub tag fetcher using the record-index contract
+# dockerhub.sh — Docker Hub tag fetcher using the record-index contract.
 #
-# Input:  record index — reads type/identifier/channel/tag_*/major_hint etc.
-# Output: writes proposed_version + decision + error_message back into record
+# Exports:   _gs_eu2_fetch_dockerhub  _gs_eu2_dh_namespace  _gs_eu2_dh_fetch_tags
+# Sources:   core/records.sh  core/semver.sh  core/channel.sh
+#            core/tag_flags.sh  core/cache.sh  http/curl.sh
+# Deps:      curl, jq
+# Env:       _GS_EU2_CFG[no_cache]
+#
+# Input:  record index — reads identifier/channel/tag_*/major_hint/prefer_specific etc.
+# Output: writes proposed_version + decision + error_message + latest_unconstrained
+#         + using_fallback_major back into record
 
 [[ -n "${_GS_EU2_DOCKERHUB_SH_LOADED:-}" ]] && return 0
 readonly _GS_EU2_DOCKERHUB_SH_LOADED=1
@@ -20,7 +27,13 @@ source "$(dirname "${BASH_SOURCE[0]}")/../core/cache.sh"
 # shellcheck source=./../http/curl.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../http/curl.sh"
 
-# Normalise _/imagename → library/imagename; user/image stays as-is
+# _gs_eu2_dh_namespace — normalise Docker Hub image identifier.
+#
+# Args:    $1 identifier — raw identifier (e.g. "_/nginx", "user/image")
+# Prints:  normalised identifier ("library/nginx", "user/image")
+# Returns: 0 always
+#
+# Docker Hub special convention: "_/name" means "library/name" (official images).
 _gs_eu2_dh_namespace() {
   local _id="${1}"
   if [[ "${_id}" == _/* ]]; then
@@ -30,9 +43,14 @@ _gs_eu2_dh_namespace() {
   fi
 }
 
-# Fetch all tags for a namespace/image from Docker Hub.
-# C1: Follows the "next" pagination link until null, accumulating all tag names.
-# Returns newline-separated list of tag names on stdout, non-zero on failure.
+# _gs_eu2_dh_fetch_tags — fetch all tags for a Docker Hub namespace/image.
+#
+# Args:    $1 ns — "namespace/image" string (already normalised by _gs_eu2_dh_namespace)
+# Prints:  newline-separated tag names
+# Returns: 0 on success; non-zero on HTTP failure
+# Side fx: may read/write cache (via _gs_eu2_http_get)
+#
+# C1: follows the "next" pagination link until null, accumulating all tag pages.
 _gs_eu2_dh_fetch_tags() {
   local _ns="${1}"
   local _url="https://registry.hub.docker.com/v2/repositories/${_ns}/tags?page_size=100&ordering=last_updated"
@@ -53,9 +71,17 @@ _gs_eu2_dh_fetch_tags() {
   printf '%s' "${_all_tags}"
 }
 
-# Main fetcher entry point — takes one argument: record index.
-# Reads record fields, fetches, applies tag flags + channel selection,
-# writes proposed_version + decision + error_message back.
+# _gs_eu2_fetch_dockerhub — main entry point for the dockerhub: fetcher type.
+#
+# Args:    $1 record_index — 0-based record index
+# Reads:   record fields: identifier, channel, major_hint, major_hint_min,
+#          prefer_specific, tag_filter, tag_exclude, tag_strip_prefix,
+#          tag_strip_suffix, tag_extract, tag_replace_from, tag_replace_to,
+#          version_prefix, tag_channel_prefix, watch_major_depth, current_version
+# Sets:    record fields: proposed_version, decision (ERROR only), error_message,
+#          latest_unconstrained, using_fallback_major
+# Prints:  nothing
+# Returns: 0 always
 _gs_eu2_fetch_dockerhub() {
   local _idx="${1}"
 

@@ -1,7 +1,13 @@
 #!/bin/bash
-# codeberg.sh — Codeberg (Gitea) releases/tags fetcher using the record-index contract
+# codeberg.sh — Codeberg (Gitea) releases/tags fetcher using the record-index contract.
 #
-# Input:  record index — reads type/identifier/channel/tag_*/major_hint etc.
+# Exports:   _gs_eu2_fetch_codeberg  _gs_eu2_cb_fetch_tags
+# Sources:   core/records.sh  core/semver.sh  core/channel.sh
+#            core/tag_flags.sh  core/cache.sh  http/curl.sh
+# Deps:      curl, jq
+# Env:       _GS_EU2_CFG[no_cache]
+#
+# Input:  record index — reads identifier/channel/tag_*/major_hint/major_hint_min
 # Output: writes proposed_version + decision + error_message back into record
 #
 # API: https://codeberg.org/api/v1/repos/{owner}/{repo}/releases?limit=50&page=1
@@ -23,8 +29,12 @@ source "$(dirname "${BASH_SOURCE[0]}")/../core/cache.sh"
 # shellcheck source=./../http/curl.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../http/curl.sh"
 
-# Fetch tag list from Codeberg tags endpoint (fallback / explicit).
-# Returns newline-separated tag names. Non-zero on HTTP failure.
+# _gs_eu2_cb_fetch_tags — fetch tag list from Codeberg tags endpoint.
+#
+# Args:    $1 identifier — "owner/repo" string
+# Prints:  newline-separated tag names
+# Returns: 0 on success; non-zero on HTTP failure
+# Side fx: may read/write cache (via _gs_eu2_http_get)
 _gs_eu2_cb_fetch_tags() {
   local _identifier="${1}"
   local _url="https://codeberg.org/api/v1/repos/${_identifier}/tags?limit=50"
@@ -37,7 +47,16 @@ _gs_eu2_cb_fetch_tags() {
   printf '%s\n' "${_resp}" | jq -r '.[].name' 2>/dev/null || true
 }
 
-# Main fetcher entry point — takes one argument: record index.
+# _gs_eu2_fetch_codeberg — main entry point for the codeberg: fetcher type.
+#
+# Args:    $1 record_index — 0-based record index
+# Reads:   record fields: identifier, channel, major_hint, major_hint_min,
+#          tag_filter, tag_exclude, tag_strip_prefix, tag_strip_suffix,
+#          tag_extract, tag_replace_from, tag_replace_to
+# Sets:    record fields: proposed_version, decision (ERROR only), error_message,
+#          latest_unconstrained, using_fallback_major
+# Prints:  nothing
+# Returns: 0 always (errors stored in record, not propagated as exit codes)
 _gs_eu2_fetch_codeberg() {
   local _idx="${1}"
 

@@ -1,20 +1,25 @@
 #!/bin/bash
-# pecl.sh — PECL REST API helper functions and entry point for pecl: fetcher type
+# pecl.sh — PECL REST API fetcher for pecl: annotations.
 #
-# Provides:
-#   _gs_eu2_pecl_get_latest_stable EXT_NAME
-#     → echoes latest stable PECL version string, or empty on no stable/error
+# Exports:   _gs_eu2_pecl_fetch_allreleases  _gs_eu2_pecl_parse_stable
+#            _gs_eu2_pecl_get_latest_stable  _gs_eu2_pecl_get_release_date
+#            _gs_eu2_pecl_check_promotion    _gs_eu2_fetch_pecl
+# Sources:   http/curl.sh  core/cache.sh  fetchers/github.sh
+# Deps:      curl, grep, sed, sort
+# Env:       _GS_EU2_CFG[no_cache]
 #
-#   _gs_eu2_pecl_check_promotion EXT_NAME COMMIT_DATE
-#     → echoes stable version when PECL release date > COMMIT_DATE (YYYY-MM-DD)
-#       otherwise echoes nothing
+# Input:  record index — reads identifier/channel/git_repo
+# Output: writes proposed_version + proposed_sha + proposed_sha_date into record;
+#         sets decision=ERROR when no stable release found
 #
 # PECL REST API:
 #   allreleases: https://pecl.php.net/rest/r/{ext}/allreleases.xml
 #   per-version: https://pecl.php.net/rest/r/{ext}/{version}.xml
-#
-# XML is parsed with grep/sed — no xmllint required (following v1 pattern).
+# XML is parsed with grep/sed — no xmllint required (mirrors v1 pattern).
 # XML format: <v>VERSION</v><s>stable|beta|alpha|devel</s>
+#
+# When (git:owner/repo) flag is set, also fetches HEAD SHA from GitHub so
+# decide.sh can compare the current SHA against HEAD for pecl-git type vars.
 
 [[ -n "${_GS_EU2_PECL_SH_LOADED:-}" ]] && return 0
 readonly _GS_EU2_PECL_SH_LOADED=1
@@ -26,16 +31,23 @@ source "$(dirname "${BASH_SOURCE[0]}")/../core/cache.sh"
 # shellcheck source=./github.sh
 source "$(dirname "${BASH_SOURCE[0]}")/github.sh"
 
-# _gs_eu2_pecl_fetch_allreleases EXT_NAME
-# Returns raw allreleases XML on stdout; non-zero on HTTP failure.
+# _gs_eu2_pecl_fetch_allreleases — fetch the allreleases.xml for a PECL extension.
+#
+# Args:    $1 ext — PECL extension name (e.g. "apcu", "redis")
+# Prints:  raw XML from https://pecl.php.net/rest/r/{ext}/allreleases.xml
+# Returns: 0 on success; non-zero on HTTP failure
 _gs_eu2_pecl_fetch_allreleases() {
   local _ext="${1}"
   local _url="https://pecl.php.net/rest/r/${_ext}/allreleases.xml"
   _gs_eu2_http_get "${_url}"
 }
 
-# _gs_eu2_pecl_parse_stable XML [CHANNEL]
-# Parses allreleases XML and returns the highest acceptable version, or empty.
+# _gs_eu2_pecl_parse_stable — parse allreleases XML and select highest acceptable version.
+#
+# Args:    $1 xml     — raw allreleases XML string
+#          $2 channel — "stable" (default) or "unstable"
+# Prints:  highest version string matching channel, or empty if none
+# Returns: 0 always
 #
 # PECL CHANNEL MODEL — BINARY, NOT GRADUATED:
 #   The PECL channel model is binary. Either:
@@ -70,10 +82,13 @@ _gs_eu2_pecl_parse_stable() {
     | sort -V | tail -1
 }
 
-# _gs_eu2_pecl_get_latest_stable EXT_NAME [CHANNEL]
-# Returns the latest acceptable PECL version for EXT_NAME on stdout.
-# CHANNEL defaults to "stable"; "unstable" also accepts beta/alpha/devel.
-# Returns empty (not an error exit) when no matching release found or HTTP fails.
+# _gs_eu2_pecl_get_latest_stable — return latest PECL version for an extension.
+#
+# Args:    $1 ext     — PECL extension name
+#          $2 channel — "stable" (default) or "unstable"
+# Prints:  latest version string, or empty when no matching release or HTTP fails
+# Returns: 0 always (errors are silent — empty output signals failure)
+# Side fx: reads/writes cache keyed on "pecl2:{channel}:{ext}"
 _gs_eu2_pecl_get_latest_stable() {
   local _ext="${1}"
   local _channel="${2:-stable}"
@@ -101,9 +116,15 @@ _gs_eu2_pecl_get_latest_stable() {
   printf '%s' "${_ver}"
 }
 
-# _gs_eu2_pecl_get_release_date EXT_NAME VERSION
-# Returns the release date (YYYY-MM-DD) for EXT_NAME VERSION from PECL.
-# Returns empty on failure.
+# _gs_eu2_pecl_get_release_date — return release date for a specific PECL version.
+#
+# Args:    $1 ext     — PECL extension name
+#          $2 version — version string (e.g. "5.3.7")
+# Prints:  release date as YYYY-MM-DD, or empty on failure
+# Returns: 0 always
+# Side fx: reads/writes cache keyed on "pecl2:date:{ext}:{version}"
+#
+# Fetches https://pecl.php.net/rest/r/{ext}/{version}.xml and extracts <da>...</da>.
 _gs_eu2_pecl_get_release_date() {
   local _ext="${1}" _ver="${2}"
   local _cache_key="pecl2:date:${_ext}:${_ver}"
@@ -135,10 +156,15 @@ _gs_eu2_pecl_get_release_date() {
   printf '%s' "${_date}"
 }
 
-# _gs_eu2_pecl_check_promotion EXT_NAME COMMIT_DATE
-# Returns the latest stable PECL version if its release date is strictly
-# newer than COMMIT_DATE (lexicographic YYYY-MM-DD comparison).
-# Returns empty when no promotion is warranted.
+# _gs_eu2_pecl_check_promotion — check if PECL has released a newer stable version.
+#
+# Args:    $1 ext         — PECL extension name
+#          $2 commit_date — YYYY-MM-DD date of the current git commit (pecl-git baseline)
+# Prints:  latest stable PECL version string if release date > commit_date; else empty
+# Returns: 0 always
+#
+# Used by the pecl-git fetcher flow: if PECL released after the current pinned
+# git commit, there is likely a newer stable release worth pinning to instead.
 _gs_eu2_pecl_check_promotion() {
   local _ext="${1}" _commit_date="${2}"
 
@@ -161,12 +187,19 @@ _gs_eu2_pecl_check_promotion() {
   return 0
 }
 
-# _gs_eu2_fetch_pecl IDX
-# Entry point for type:pecl annotations.
-# Identifier field = bare extension name (e.g. apcu, redis, imagick).
-# Writes proposed_version on success, or sets decision=ERROR on failure.
-# Caching is handled entirely by _gs_eu2_pecl_get_latest_stable.
-# When the record has channel=unstable, beta/alpha/devel releases are accepted.
+# _gs_eu2_fetch_pecl — main entry point for the pecl: fetcher type.
+#
+# Args:    $1 record_index — 0-based record index
+# Reads:   record fields: identifier, channel, git_repo
+# Sets:    record fields: proposed_version, proposed_sha, proposed_sha_date,
+#          decision (ERROR only), error_message
+# Prints:  nothing
+# Returns: 0 always
+#
+# Identifier = bare PECL extension name (e.g. "apcu", "redis", "imagick").
+# Caching is handled by _gs_eu2_pecl_get_latest_stable — not at this level.
+# When channel=unstable, beta/alpha/devel releases are accepted alongside stable.
+# When git_repo is set, also fetches the HEAD SHA from GitHub for SHA tracking.
 _gs_eu2_fetch_pecl() {
   local _idx="${1}"
 

@@ -1,14 +1,33 @@
 #!/bin/bash
 # backup.sh — backup helpers for env-scan (Phase 4.5 and Phase 6 extension)
+#
+# Exports:   _gs_es_backup_unconditional  _gs_es_backup_if_gitignored
+#            _gs_es_backup_prune  _gs_es_backup_purge_all
+# Sources:   none
+# Deps:      bash 4.3+, cp, find, rm, git
+# Env:       none (all inputs are arguments)
+#
+# Provides four composable backup operations used by gs_es_main (Phase 4.5,
+# Phase 6, Phase 6.5):
+#   _gs_es_backup_unconditional   — always back up a file (used for env files)
+#   _gs_es_backup_if_gitignored   — conditionally back up a Dockerfile (Phase 6)
+#   _gs_es_backup_prune           — enforce --backup-keep retention limit (Phase 6.5)
+#   _gs_es_backup_purge_all       — delete all backups before a run (--backup-purge)
 
 # Include guard
 [[ -n "${_GS_ES_BACKUP_SH_LOADED:-}" ]] && return 0
 readonly _GS_ES_BACKUP_SH_LOADED=1
 
-# ── _gs_es_backup_unconditional ──────────────────────────────────────────────
-# Args: file  backup_ts  suffix  dry_run  quiet
-# Copies file → file<suffix>.<backup_ts>. Logs "[backup] ..." unless quiet=true.
-# Skips silently if file does not exist.
+# _gs_es_backup_unconditional — copy file → file<suffix>.<ts> unconditionally.
+#
+# Args:    $1 file       — path to back up
+#          $2 backup_ts  — timestamp suffix (e.g. 20260524-120000-12345)
+#          $3 suffix     — suffix anchor (e.g. .bak)
+#          $4 dry_run    — "true" → print what would happen, skip cp (default: false)
+#          $5 quiet      — "true" → suppress informational output (default: false)
+# Prints:  "[backup] file → dest" to stderr (unless quiet=true or dry_run=true)
+# Returns: 0 on success or skipped (file not found); 1 if cp fails (disk full, etc.)
+# Side fx: creates file<suffix>.<backup_ts> on disk when dry_run != true
 _gs_es_backup_unconditional() {
   local _file="${1}"
   local _ts="${2}"
@@ -33,10 +52,17 @@ _gs_es_backup_unconditional() {
   [[ "${_quiet}" == "true" ]] || echo " [backup] ${_file} → ${_dest}" >&2
 }
 
-# ── _gs_es_backup_if_gitignored ──────────────────────────────────────────────
-# Args: file  dir  backup_ts  suffix  dry_run  quiet
-# Backs up file only if git check-ignore reports it as gitignored.
-# If not in a git repo, skips silently with one warning (only first time).
+# _gs_es_backup_if_gitignored — back up file only when gitignored.
+#
+# Args:    $1 file       — file to conditionally back up (typically a Dockerfile)
+#          $2 dir        — git repo root for git -C context
+#          $3 backup_ts  — timestamp suffix
+#          $4 suffix     — suffix anchor
+#          $5 dry_run    — "true" → dry-run mode (default: false)
+#          $6 quiet      — "true" → suppress informational output (default: false)
+# Prints:  warning to stderr if dir is not a git repo (first occurrence only)
+# Returns: 0 always (skip and warn rather than abort)
+# Side fx: delegates to _gs_es_backup_unconditional when file is gitignored
 _gs_es_backup_if_gitignored() {
   local _file="${1}"
   local _dir="${2}"
@@ -55,10 +81,16 @@ _gs_es_backup_if_gitignored() {
   fi
 }
 
-# ── _gs_es_backup_prune ───────────────────────────────────────────────────────
-# Args: file  suffix  keep  quiet
-# Lists file<suffix>.* sorted by name (lexicographic = chronological for YYYYMMDD-HHMMSS),
-# deletes all but the newest `keep`. No-op when keep=0 (unlimited).
+# _gs_es_backup_prune — enforce retention limit for a file's backups.
+#
+# Args:    $1 file    — original file whose backups to prune
+#          $2 suffix  — suffix anchor (e.g. .bak)
+#          $3 keep    — number of newest backups to retain; 0 = unlimited (no-op)
+#          $4 quiet   — "true" → suppress pruning notices (default: false)
+# Prints:  "[backup] pruning old backup: <path>" to stderr per deleted file
+# Returns: 0 always
+# Side fx: deletes oldest backups (file<suffix>.*) down to keep count
+#          lexicographic sort == chronological order for YYYYMMDD-HHMMSS timestamps
 _gs_es_backup_prune() {
   local _file="${1}"
   local _suffix="${2}"
@@ -86,10 +118,17 @@ _gs_es_backup_prune() {
   done
 }
 
-# ── _gs_es_backup_purge_all ───────────────────────────────────────────────────
-# Args: files_list  suffix  scan_path  dir  quiet
-# Deletes all <file><suffix>.* for each file in files_list (space-separated).
-# Also purges gitignored Dockerfile backups under scan_path.
+# _gs_es_backup_purge_all — delete ALL backups for destination files and Dockerfiles.
+#
+# Args:    $1 files_list  — space-separated list of destination files
+#          $2 suffix      — suffix anchor
+#          $3 scan_path   — root dir for Dockerfile search
+#          $4 dir         — git repo root for gitignore check
+#          $5 quiet       — "true" → suppress purge notices (default: false)
+# Prints:  "[backup] purging: <path>" to stderr per deleted backup
+# Returns: 0 always
+# Side fx: rm -f all <file><suffix>.* for each file in files_list;
+#          also purges gitignored Dockerfile backups under scan_path
 _gs_es_backup_purge_all() {
   local _files_list="${1}"
   local _suffix="${2}"

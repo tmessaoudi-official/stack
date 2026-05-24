@@ -1,7 +1,18 @@
 #!/bin/bash
-# github.sh — GitHub fetcher using the record-index contract
+# github.sh — GitHub fetcher using the record-index contract.
 #
-# Input:  record index — reads type/identifier/channel/tag_*/major_hint etc.
+# Exports:   _gs_eu2_fetch_github
+#            _gs_eu2_github_get_commit_sha  (used by pecl.sh for git:owner/repo)
+#            _gs_eu2_github_get_commit_date (used by pecl.sh for git:owner/repo)
+#            _gs_eu2_github_api_get  _gs_eu2_github_ls_remote
+#            _gs_eu2_github_fetch_releases  _gs_eu2_github_fetch_tags_paginated
+# Sources:   core/records.sh  core/semver.sh  core/channel.sh
+#            core/tag_flags.sh  core/cache.sh  http/curl.sh
+# Deps:      curl, jq, git (for ls-remote fallback)
+# Env:       GITHUB_TOKEN or GLOBAL_STACK_GITHUB_TOKEN (Bearer auth; unauthenticated
+#            fallback but rate-limited); _GS_EU2_GIT_LS_REMOTE_FIXTURE (test seam)
+#
+# Input:  record index — reads identifier/channel/tag_*/major_hint/git_repo etc.
 # Output: writes proposed_version + decision + error_message + alt_version back into record
 #
 # Strategy (tried in order until a non-empty candidate list is found):
@@ -36,8 +47,13 @@ source "$(dirname "${BASH_SOURCE[0]}")/../core/cache.sh"
 # shellcheck source=../http/curl.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../http/curl.sh"
 
-# _gs_eu2_github_api_get URL [token]
-# Authenticated GET helper (falls through to unauthenticated when token is empty).
+# _gs_eu2_github_api_get — authenticated GET to GitHub API.
+#
+# Args:    $1 url   — GitHub API URL
+#          $2 token — Bearer token (default: GITHUB_TOKEN or GLOBAL_STACK_GITHUB_TOKEN)
+# Prints:  response body
+# Returns: 0 on success; non-zero on HTTP failure
+# Side fx: may read/write cache (via http/curl.sh)
 _gs_eu2_github_api_get() {
   local _url="${1}" _tok="${2:-${GITHUB_TOKEN:-${GLOBAL_STACK_GITHUB_TOKEN:-}}}"
   if [[ -n "${_tok}" ]]; then
@@ -47,10 +63,14 @@ _gs_eu2_github_api_get() {
   fi
 }
 
-# _gs_eu2_github_ls_remote REPO_ID
-# Runs git ls-remote to list all refs for a GitHub repo.
-# When _GS_EU2_GIT_LS_REMOTE_FIXTURE is set, cats that file instead (test seam).
-# Outputs newline-separated "SHA\tREF" lines.
+# _gs_eu2_github_ls_remote — list all tag refs for a GitHub repo via git ls-remote.
+#
+# Args:    $1 repo_id — "owner/repo" string
+# Reads:   GITHUB_TOKEN or GLOBAL_STACK_GITHUB_TOKEN; _GS_EU2_GIT_LS_REMOTE_FIXTURE
+# Prints:  newline-separated "SHA\tref" lines (same format as git ls-remote)
+# Returns: 0 always (git ls-remote failure → empty output, not non-zero)
+# Side fx: creates and deletes a temporary ASKPASS script when token is set
+#          (token is passed via GIT_ASKPASS to avoid it appearing in process list)
 _gs_eu2_github_ls_remote() {
   local _repo="${1}"
   if [[ -n "${_GS_EU2_GIT_LS_REMOTE_FIXTURE:-}" ]]; then
@@ -79,9 +99,13 @@ _gs_eu2_github_ls_remote() {
   fi
 }
 
-# _gs_eu2_github_get_commit_sha REPO_ID REF
-# Returns the commit SHA (full or short) for REF (branch name, tag, or SHA).
-# Exported for use by the pecl fetcher (git:owner/repo flag).
+# _gs_eu2_github_get_commit_sha — resolve a ref to its commit SHA.
+#
+# Args:    $1 repo_id — "owner/repo" string
+#          $2 ref     — branch name, tag, or SHA (default: main)
+# Prints:  full commit SHA (40 hex chars)
+# Returns: 0 on success; non-zero on HTTP failure
+# Side fx: calls GitHub commits API (cacheable via http/curl.sh)
 _gs_eu2_github_get_commit_sha() {
   local _repo="${1}" _ref="${2:-main}"
   local _url="https://api.github.com/repos/${_repo}/commits?sha=${_ref}&per_page=1"
@@ -90,9 +114,13 @@ _gs_eu2_github_get_commit_sha() {
   printf '%s' "${_resp}" | jq -r '.[0].sha // empty' 2>/dev/null || true
 }
 
-# _gs_eu2_github_get_commit_date REPO_ID SHA
-# Returns the commit date (YYYY-MM-DD) for a given SHA.
-# Exported for use by the pecl fetcher (git:owner/repo flag).
+# _gs_eu2_github_get_commit_date — return the author date for a commit SHA.
+#
+# Args:    $1 repo_id — "owner/repo" string
+#          $2 sha     — full commit SHA
+# Prints:  YYYY-MM-DD date string
+# Returns: 0 on success; non-zero on HTTP failure
+# Side fx: calls GitHub single-commit API (cacheable via http/curl.sh)
 _gs_eu2_github_get_commit_date() {
   local _repo="${1}" _sha="${2}"
   local _url="https://api.github.com/repos/${_repo}/commits/${_sha}"
@@ -104,8 +132,12 @@ _gs_eu2_github_get_commit_date() {
   printf '%s' "${_raw:0:10}"
 }
 
-# _gs_eu2_github_fetch_releases REPO_ID TOKEN
-# Fetches all non-draft releases; outputs raw tag_names (one per line).
+# _gs_eu2_github_fetch_releases — fetch all non-draft release tag names.
+#
+# Args:    $1 repo_id — "owner/repo" string
+#          $2 token   — Bearer token (empty = unauthenticated)
+# Prints:  newline-separated tag_name values for non-draft releases
+# Returns: 0 on success; non-zero on HTTP failure
 _gs_eu2_github_fetch_releases() {
   local _repo="${1}" _tok="${2:-}"
   local _url="https://api.github.com/repos/${_repo}/releases?per_page=100"
@@ -114,10 +146,14 @@ _gs_eu2_github_fetch_releases() {
   printf '%s' "${_resp}" | jq -r '.[] | select(.draft == false) | .tag_name' 2>/dev/null || true
 }
 
-# _gs_eu2_github_fetch_tags_paginated REPO_ID TOKEN MAX_PAGES
-# Fetches tags via pagination (up to MAX_PAGES pages).
-# Stops early when a page returns fewer than 100 items.
-# Outputs raw tag names (one per line).
+# _gs_eu2_github_fetch_tags_paginated — fetch all tags via paginated Tags API.
+#
+# Args:    $1 repo_id  — "owner/repo" string
+#          $2 token    — Bearer token (empty = unauthenticated)
+#          $3 max_pages — max pages to fetch (default: 10)
+# Prints:  newline-separated tag names from all pages
+# Returns: 0 always (partial results on failure)
+# Side fx: stops early when a page returns fewer than 100 items (end of tags)
 _gs_eu2_github_fetch_tags_paginated() {
   local _repo="${1}" _tok="${2:-}" _max="${3:-10}"
   local _page=1 _tags="" _page_tags _count
@@ -137,7 +173,18 @@ _gs_eu2_github_fetch_tags_paginated() {
   printf '%s' "${_tags}"
 }
 
-# Main fetcher entry point — takes one argument: record index.
+# _gs_eu2_fetch_github — main entry point for the github: fetcher type.
+#
+# Args:    $1 record_index — 0-based record index
+# Reads:   record fields: identifier, channel, major_hint, major_hint_min,
+#          tag_filter, tag_exclude, tag_strip_prefix, tag_strip_suffix,
+#          tag_extract, tag_replace_from, tag_replace_to, check_tags,
+#          git_repo, annotation_sha, prefer_specific, watch_major_depth,
+#          current_version, tag_suffix
+# Sets:    record fields: proposed_version, decision (ERROR only), error_message,
+#          proposed_sha, proposed_sha_date, latest_unconstrained, using_fallback_major
+# Prints:  nothing
+# Returns: 0 always
 _gs_eu2_fetch_github() {
   local _idx="${1}"
 

@@ -1,26 +1,29 @@
 #!/bin/bash
-# sdkmanager.sh — Android SDK Manager version fetcher using the record-index contract
+# sdkmanager.sh — Android SDK Manager version fetcher using the record-index contract.
 #
-# Input:  record index — reads type/identifier/channel etc.
+# Exports:   _gs_eu2_sdkmanager_get_list  _gs_eu2_sdkmanager_parse_versions
+#            _gs_eu2_fetch_sdkmanager
+# Sources:   core/records.sh  core/semver.sh  core/channel.sh  core/cache.sh
+# Deps:      sdkmanager (Android cmdline-tools)
+# Env:       _GS_EU2_CFG[no_cache]  _GS_EU2_SDKMANAGER_CMD_FIXTURE (test seam)
+#            ANDROID_HOME  GLOBAL_STACK_ANDROID_HOME  GLOBAL_STACK_DOCKER_TOOLS_PATH
+#
+# Input:  record index — reads identifier/channel
 # Output: writes proposed_version + error_message back into record
+#         (decision is NOT written — owned by decide.sh)
 #
 # Strategy:
 #   1. If _GS_EU2_SDKMANAGER_CMD_FIXTURE is set, cat that file (test seam).
-#   2. Otherwise find sdkmanager binary:
+#   2. Otherwise find sdkmanager binary in this order:
 #        a. PATH (profile.sh may have added cmdline-tools/bin)
-#        b. ${ANDROID_HOME:-...}/cmdline-tools/latest/bin/sdkmanager
-#        c. ${ANDROID_HOME:-...}/cmdline-tools/bin/sdkmanager
-#        d. ${ANDROID_HOME:-...}/tools/bin/sdkmanager
-#   3. Run: sdkmanager --list (or cat fixture) and parse.
-#
-# Classification: this fetcher does NOT set manual=true. Classification is owned by
-# decide.sh, which checks the (manual) annotation flag set by parse.sh. If a variable
-# should always produce MANUAL, annotate it with (manual) in .env.
-# The fetcher NEVER writes the decision field — that is owned by decide.sh.
+#        b. ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager
+#        c. ${ANDROID_HOME}/cmdline-tools/bin/sdkmanager
+#        d. ${ANDROID_HOME}/tools/bin/sdkmanager
+#   3. Run: sdkmanager --list (or cat fixture) and parse for the component.
 #
 # When sdkmanager is not found, error_message is set and proposed_version stays empty.
-# This results in a SKIP (not ERROR) because the tool may simply not be installed on
-# this machine.
+# decide.sh classifies an empty proposed as SKIP (not ERROR) — tool may simply not
+# be installed on this machine.
 
 [[ -n "${_GS_EU2_SDKMANAGER_SH_LOADED:-}" ]] && return 0
 readonly _GS_EU2_SDKMANAGER_SH_LOADED=1
@@ -34,9 +37,12 @@ source "$(dirname "${BASH_SOURCE[0]}")/../core/channel.sh"
 # shellcheck source=../core/cache.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../core/cache.sh"
 
-# _gs_eu2_sdkmanager_get_list
-# Returns the sdkmanager --list output (or fixture contents) on stdout.
-# Returns non-zero exit if sdkmanager is not available and no fixture is set.
+# _gs_eu2_sdkmanager_get_list — return sdkmanager --list output (or fixture).
+#
+# Args:    none
+# Prints:  raw sdkmanager --list output
+# Returns: 0 on success; non-zero if sdkmanager is not available (no fixture set)
+# Side fx: runs sdkmanager --sdk_root=... --list when binary is found
 _gs_eu2_sdkmanager_get_list() {
   # Test seam: fixture override
   if [[ -n "${_GS_EU2_SDKMANAGER_CMD_FIXTURE:-}" ]]; then
@@ -72,14 +78,16 @@ _gs_eu2_sdkmanager_get_list() {
   "${_sdkmanager_bin}" "--sdk_root=${_sdk_root}" --list 2>/dev/null
 }
 
-# _gs_eu2_sdkmanager_parse_versions LIST_OUTPUT COMPONENT
-# Extract all version strings for COMPONENT from sdkmanager --list output.
-# Returns newline-separated sorted version list on stdout.
+# _gs_eu2_sdkmanager_parse_versions — extract version strings for a component.
 #
-# sdkmanager --list output formats handled:
-#   "  platform-tools                         | 37.0.0            | ..."  (bare name)
-#   "  build-tools;37.0.0                     | 37.0.0            | ..."  (component;version)
-#   "  ndk;27.2.12479018                       | 27.2.12479018     | ..."
+# Args:    $1 output    — raw sdkmanager --list output
+#          $2 component — component name (e.g. "platform-tools", "build-tools", "ndk")
+# Prints:  newline-separated sorted version list (sort -uV)
+# Returns: 0 always (prints nothing if no match)
+#
+# Handles two output line formats:
+#   "  platform-tools  | 37.0.0  | ..."   (bare component name)
+#   "  build-tools;37.0.0  | 37.0.0  | ..." (component;version form — multiple rows)
 _gs_eu2_sdkmanager_parse_versions() {
   local _output="${1}" _component="${2}"
   local _versions=()
@@ -109,7 +117,14 @@ _gs_eu2_sdkmanager_parse_versions() {
   fi
 }
 
-# Main fetcher entry point — takes one argument: record index.
+# _gs_eu2_fetch_sdkmanager — main entry point for the sdkmanager: fetcher type.
+#
+# Args:    $1 record_index — 0-based record index
+# Reads:   record fields: identifier, channel
+# Sets:    record fields: proposed_version, error_message
+#          (decision is NOT written — owned by decide.sh)
+# Prints:  nothing
+# Returns: 0 always
 _gs_eu2_fetch_sdkmanager() {
   local _idx="${1}"
 

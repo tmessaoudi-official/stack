@@ -1,5 +1,18 @@
 #!/bin/bash
-# profile.sh — execution profiling for env-update phases
+# profile.sh — execution profiling for env-update phases (--profile flag).
+#
+# Exports:   _gs_eu2_profile_init  _gs_eu2_profile_start  _gs_eu2_profile_end
+#            _gs_eu2_profile_report  _gs_eu2_now_ms  _gs_eu2_rss_kb
+#            _gs_eu2_fmt_duration  _gs_eu2_fmt_mem
+# Sources:   none
+# Deps:      bash 4.3+; EPOCHREALTIME (bash 5.0+) or date +%s%3N as fallback
+# Env:       none
+#
+# Usage pattern:
+#   _gs_eu2_profile_init          # once at start
+#   _gs_eu2_profile_start         # before each phase
+#   _gs_eu2_profile_end "Name"    # after each phase
+#   _gs_eu2_profile_report        # at end (prints to stderr)
 
 # Include guard
 [[ -n "${_GS_EU2_PROFILE_SH_LOADED:-}" ]] && return 0
@@ -14,9 +27,13 @@ _GS_EU2_PROFILE_PHASE_START_KB=0
 _GS_EU2_PROFILE_TOTAL_START_MS=0
 _GS_EU2_PROFILE_PEAK_KB=0
 
-# ── Helper: millisecond timestamp (no subprocess when bash >= 5.0) ────────────
-# Note: EPOCHREALTIME uses a locale-dependent decimal separator (. or ,)
-# We strip non-digit characters after the integer seconds part to be portable.
+# _gs_eu2_now_ms — return current time in milliseconds.
+#
+# Prints:  integer millisecond timestamp
+# Returns: 0 always
+# Note:    uses EPOCHREALTIME (bash 5.0+, no subprocess); falls back to
+#          `date +%s%3N` on older bash. EPOCHREALTIME decimal separator is
+#          locale-dependent (. or ,) — digit stripping makes it portable.
 _gs_eu2_now_ms() {
   if [[ -n "${EPOCHREALTIME:-}" ]]; then
     local _raw="${EPOCHREALTIME}"
@@ -33,24 +50,37 @@ _gs_eu2_now_ms() {
   fi
 }
 
-# ── Helper: current RSS in KB (reads /proc/self/status; returns 0 if unavailable) ──
+# _gs_eu2_rss_kb — return current process RSS in KB.
+#
+# Prints:  integer KB (0 if /proc/self/status is unavailable)
+# Returns: 0 always
 _gs_eu2_rss_kb() {
   awk '/^VmRSS:/{print $2; exit}' /proc/self/status 2>/dev/null || echo 0
 }
 
-# ── _gs_eu2_profile_init: called once at the start of _gs_eu2_main ────────────────
+# _gs_eu2_profile_init — initialize profiling state at the start of a run.
+#
+# Args:    none
+# Side fx: sets _GS_EU2_PROFILE_TOTAL_START_MS and _GS_EU2_PROFILE_PEAK_KB
 _gs_eu2_profile_init() {
   _GS_EU2_PROFILE_TOTAL_START_MS=$(_gs_eu2_now_ms)
   _GS_EU2_PROFILE_PEAK_KB=$(_gs_eu2_rss_kb)
 }
 
-# ── _gs_eu2_profile_start: called before a phase begins ──────────────────────
+# _gs_eu2_profile_start — record start time and memory for the next phase.
+#
+# Args:    none
+# Side fx: sets _GS_EU2_PROFILE_PHASE_START_MS and _GS_EU2_PROFILE_PHASE_START_KB
 _gs_eu2_profile_start() {
   _GS_EU2_PROFILE_PHASE_START_MS=$(_gs_eu2_now_ms)
   _GS_EU2_PROFILE_PHASE_START_KB=$(_gs_eu2_rss_kb)
 }
 
-# ── _gs_eu2_profile_end "Phase Name": called after a phase completes ──────────
+# _gs_eu2_profile_end — record elapsed time and memory delta for a completed phase.
+#
+# Args:    $1 name — human-readable phase name (e.g. "Parse env file")
+# Side fx: appends to _GS_EU2_PROFILE_PHASES / _DURATIONS_MS / _MEM_DELTAS_KB arrays;
+#          updates _GS_EU2_PROFILE_PEAK_KB if current RSS exceeds previous peak
 _gs_eu2_profile_end() {
   local _name="$1"
   local _end_ms _end_kb
@@ -66,7 +96,10 @@ _gs_eu2_profile_end() {
 
 # ── Format helpers ────────────────────────────────────────────────────────────
 
-# Right-align duration in 9 chars: "  123 ms" or "  1.23  s"
+# _gs_eu2_fmt_duration — format millisecond duration as a fixed-width string.
+#
+# Args:    $1 ms — integer millisecond count
+# Prints:  "  NNN ms" (< 1000ms) or "  N.NN  s" (>= 1000ms), 9 chars wide
 _gs_eu2_fmt_duration() {
   local ms="$1"
   if (( ms < 1000 )); then
@@ -78,8 +111,10 @@ _gs_eu2_fmt_duration() {
   fi
 }
 
-# Format memory delta in KB as e.g. "+1.2 MB" or "−1.2 MB"
-# Near-zero (abs < 100 KB) always shows as "+0.0 MB"
+# _gs_eu2_fmt_mem — format KB memory delta as a human-readable string.
+#
+# Args:    $1 kb — integer KB delta (positive = growth, negative = freed)
+# Prints:  e.g. "+1.2 MB", "−0.5 MB", "+0.0 MB" (near-zero: abs < 100 KB → zero)
 _gs_eu2_fmt_mem() {
   local kb="$1"
   local sign="+" minus_sign="−"
@@ -95,7 +130,12 @@ _gs_eu2_fmt_mem() {
   printf "%s%d.%d MB" "${sign}" "${mb_int}" "${mb_frac}"
 }
 
-# ── _gs_eu2_profile_report: print the pretty summary table ────────────────────
+# _gs_eu2_profile_report — print the phase timing table to stderr.
+#
+# Args:    none
+# Prints:  box-drawn table with per-phase duration + memory delta + total (to stderr)
+# Returns: 0 always
+# Side fx: uses ANSI color codes when stderr is a terminal
 _gs_eu2_profile_report() {
   # ANSI codes — only when stderr is a tty (profile output goes to stderr)
   local R="" DIM="" BOLD="" GREEN="" YELLOW="" RED="" CYAN="" DIMCYAN=""

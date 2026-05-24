@@ -1,5 +1,21 @@
 #!/bin/bash
-# decide.sh — classify a proposed version update into AUTO/HOLD/MANUAL/SKIP/ERROR
+# decide.sh — classify a proposed version into AUTO/HOLD/MANUAL/SKIP/RESOLVED.
+#
+# Exports:   _gs_eu2_classify_decision  _gs_eu2_classify_sha_decision
+# Sources:   core/semver.sh
+# Deps:      sort (GNU coreutils — for sort -V in downgrade detection)
+# Env:       none
+#
+# Decision ladder (applied in this order — first match wins):
+#   1. No proposed → SKIP
+#   2. Floating current (nightly/latest/…) + concrete proposed → RESOLVED
+#   3. Current == proposed → SKIP
+#   4. Proposed is prerelease but current is stable (and unstable_mode != full) → SKIP
+#   5. Proposed sorts before current (downgrade) → SKIP
+#   6. (override) or (manual) flag → MANUAL
+#   7. Major jump without major_hint pin → HOLD
+#   8. Major jump escapes major_hint pin → HOLD
+#   9. Otherwise → AUTO
 
 [[ -n "${_GS_EU2_DECIDE_SH_LOADED:-}" ]] && return 0
 readonly _GS_EU2_DECIDE_SH_LOADED=1
@@ -7,14 +23,20 @@ readonly _GS_EU2_DECIDE_SH_LOADED=1
 # shellcheck source=./semver.sh
 source "$(dirname "${BASH_SOURCE[0]}")/semver.sh"
 
-# Classify a version update.
-# Args:
-#   $1 current      — current version string
-#   $2 proposed     — proposed version string
-#   $3 override     — "true" → always MANUAL
-#   $4 manual       — "true" → always MANUAL
-#   $5 major_hint   — if set, proposed must stay within this major
-# Echoes: AUTO | HOLD | MANUAL | SKIP
+# _gs_eu2_classify_decision — apply the decision ladder to one version update.
+#
+# Args:    $1 current      — current version string (from annotation or VAR=)
+#          $2 proposed     — proposed version string (from fetcher)
+#          $3 override     — "true" → MANUAL (even when proposed > current)
+#          $4 manual       — "true" → MANUAL (same as override; different annotation flag)
+#          $5 major_hint   — pin constraint: proposed must start with this major prefix
+#          $6 unstable_mode— "full" → bypass prerelease guard (allow stable→prerelease AUTO)
+# Prints:  one of: AUTO | HOLD | MANUAL | SKIP | RESOLVED
+# Returns: 0 always
+#
+# Note: caller in main.sh strips tag_channel_prefix before calling here so that
+# decide.sh only sees plain semver strings (no leading "dev-" or "nightly-").
+# Note: force-auto in main.sh upgrades HOLD→AUTO after this function returns.
 _gs_eu2_classify_decision() {
   local _cur="${1}" _prop="${2}" _override="${3:-}" _manual="${4:-}" _major_hint="${5:-}" \
         _unstable_mode="${6:-}"
@@ -106,11 +128,16 @@ _gs_eu2_classify_decision() {
   echo "AUTO"
 }
 
-# Classify a SHA-only update.
-# Args:
-#   $1 annotation_sha  — SHA currently stored in the annotation (may be empty)
-#   $2 proposed_sha    — SHA fetched from HEAD (may be empty)
-# Echoes: SHA | SKIP
+# _gs_eu2_classify_sha_decision — classify whether the annotation SHA needs updating.
+#
+# Args:    $1 annotation_sha — SHA currently stored in the @todo annotation (may be empty)
+#          $2 proposed_sha   — SHA fetched from the repo's HEAD (may be empty)
+# Prints:  "SHA" when annotation needs updating; "SKIP" otherwise
+# Returns: 0 always
+#
+# This is a secondary classification applied in main.sh after _gs_eu2_classify_decision.
+# It can upgrade a SKIP decision to SHA when the version is current but the annotation
+# sha: is stale (repo tracking HEAD with git: flag).
 _gs_eu2_classify_sha_decision() {
   local _ann_sha="${1:-}" _prop_sha="${2:-}"
   # No proposed SHA → nothing to do

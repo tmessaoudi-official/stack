@@ -1,8 +1,13 @@
 #!/bin/bash
-# propagate.sh — gs_es_propagate_to_dockerfiles
+# propagate.sh — Dockerfile ARG propagation (Phase 6 of env-scan pipeline).
 #
-# Propagates canonical VAR=value pairs from the source .env file into
-# matching "ARG VAR=<value>" lines in Dockerfiles found under docker_search_root.
+# Exports:   gs_es_propagate_to_dockerfiles
+# Sources:   core/backup.sh  core/git.sh
+# Deps:      bash 4.3+, find, sed, git
+# Env:       _GS_ES_CFG (backup, backup_suffix, _backup_ts, dir, quiet, dry_run)
+#
+# Propagates canonical VAR=value pairs from the source .env file into matching
+# "ARG VAR=<value>" lines in Dockerfiles found under docker_search_root.
 #
 # Source of truth is always the .env file.  Vars whose .env value contains
 # "${" are skipped — they depend on shell expansion and cannot be embedded
@@ -11,6 +16,7 @@
 # Vars matching exclude_pattern are also skipped (protects structural
 # divergences such as GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS, which uses
 # a shell-expanded form in .env but a literal hostname in Dockerfiles).
+# Rule 8: git-tracked Dockerfiles with uncommitted changes are skipped (safe guard).
 
 # Include guard
 [[ -n "${_GS_ES_PROPAGATE_SH_LOADED:-}" ]] && return 0

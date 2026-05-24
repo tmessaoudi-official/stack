@@ -1,5 +1,15 @@
 #!/bin/bash
-# main.sh — orchestration
+# main.sh — top-level orchestrator for env-update: wires all library modules,
+#           defines the tally display subsystem, the check loop, and _gs_eu2_main.
+#
+# Exports:   _gs_eu2_main  _gs_eu2_dispatch_fetcher
+#            _gs_eu2_tally_init  _gs_eu2_tally_draw  _gs_eu2_tally_erase
+#            _gs_eu2_tally_cleanup  _gs_eu2_run_check
+# Sources:   all sub-libraries under config/, core/, fetchers/, http/, reporting/
+# Deps:      bash 4.3+, tput (for terminal width detection)
+# Env:       _GS_EU2_CFG (associative array), _GS_EU2_TALLY_* (module-level state),
+#            _GS_EU2_TALLY_FORCE=1 (test hook: bypass TTY gate for tally)
+#            _GS_EU2_ENV_SCAN_PATH (test hook: override env-scan.sh path for --scan)
 set -eEuo pipefail
 
 [[ -n "${_GS_EU2_MAIN_SH_LOADED:-}" ]] && return 0
@@ -52,11 +62,18 @@ source "$(dirname "${BASH_SOURCE[0]}")/reporting/profile.sh"
 # shellcheck source=./core/apply.sh
 source "$(dirname "${BASH_SOURCE[0]}")/core/apply.sh"
 
-# ── _gs_eu2_dispatch_fetcher ─────────────────────────────────────────────────
-# I2: DRY helper — replaces three identical 11-fetcher case blocks.
-# Args: record_index
-# Calls the appropriate fetcher based on the record's type field.
-# Unknown types are classified as SKIP with an error message.
+# _gs_eu2_dispatch_fetcher — route a record to its type-specific fetcher function.
+#
+# Args:    $1 record_index — 0-based index into the parallel record arrays
+# Reads:   record field "type" (set by parse.sh from @todo annotation)
+# Sets:    record fields "decision", "proposed_version", "error_message" (via fetcher)
+# Prints:  nothing
+# Returns: 0 always (unknown types set decision=SKIP rather than returning non-zero)
+# Side fx: may write to cache directory (TTL-based HTTP response caching)
+#
+# Note: this DRY helper (I2) replaces three identical 11-fetcher case blocks
+# that previously appeared separately in run_check, unstable-info second-pass,
+# and stable-info second-pass.
 _gs_eu2_dispatch_fetcher() {
   local _df_i="${1}"
   local _df_type
@@ -113,6 +130,15 @@ _GS_EU2_TALLY_N_REPLACE_DRIFT=0
 _GS_EU2_TALLY_N_REPLACE_CASCADE=0
 _GS_EU2_TALLY_N_RESOLVED=0
 
+# _gs_eu2_tally_init — evaluate all display gates and set _GS_EU2_TALLY_ACTIVE.
+#
+# Args:    none
+# Reads:   _GS_EU2_CFG[tally], NO_COLOR, TERM, COLUMNS, _GS_EU2_TALLY_FORCE
+# Sets:    _GS_EU2_TALLY_ACTIVE (1 = tally enabled for this run, 0 = disabled)
+#          _GS_EU2_TALLY_PREV_LINES (reset to 0)
+# Prints:  nothing
+# Returns: 0 always
+# Side fx: none
 _gs_eu2_tally_init() {
   _GS_EU2_TALLY_ACTIVE=0
   _GS_EU2_TALLY_PREV_LINES=0
@@ -138,9 +164,19 @@ _gs_eu2_tally_init() {
   _GS_EU2_TALLY_ACTIVE=1
 }
 
-# _gs_eu2_tally_draw: emit the live tally block.
-# Reads all state from _GS_EU2_TALLY_* module-level vars (set by the check loop).
-# No positional arguments — caller must update state vars before each call.
+# _gs_eu2_tally_draw — erase the previous tally block and redraw with current state.
+#
+# Args:    none (all state is read from _GS_EU2_TALLY_* module-level vars)
+# Reads:   _GS_EU2_TALLY_ACTIVE, _GS_EU2_TALLY_PREV_LINES, _GS_EU2_TALLY_IDX,
+#          _GS_EU2_TALLY_COUNT, _GS_EU2_TALLY_VARNAME, all _GS_EU2_TALLY_N_* counters
+# Sets:    _GS_EU2_TALLY_PREV_LINES (number of lines just drawn)
+# Prints:  multi-line tally block to stderr using ANSI cursor-movement escapes
+# Returns: 0 always (early exit when TALLY_ACTIVE != 1)
+# Side fx: moves terminal cursor up and erases lines via ANSI escape sequences
+#
+# Caller protocol: update all _GS_EU2_TALLY_* state vars before each call;
+# the erase-and-redraw cycle uses _GS_EU2_TALLY_PREV_LINES to know how many
+# lines to move the cursor up before overwriting.
 _gs_eu2_tally_draw() {
   [[ "${_GS_EU2_TALLY_ACTIVE}" != "1" ]] && return 0
 
@@ -198,7 +234,16 @@ _gs_eu2_tally_draw() {
   _GS_EU2_TALLY_PREV_LINES="${_lines}"
 }
 
-# _gs_eu2_tally_erase: wipe the tally block entirely (before printing final summary)
+# _gs_eu2_tally_erase — wipe the tally block entirely from the terminal.
+#
+# Args:    none
+# Reads:   _GS_EU2_TALLY_ACTIVE, _GS_EU2_TALLY_PREV_LINES
+# Sets:    _GS_EU2_TALLY_PREV_LINES (reset to 0)
+# Prints:  ANSI erase sequences to stderr; leaves cursor at column 0 on the
+#          first line of where the tally was
+# Returns: 0 always
+# Side fx: modifies terminal cursor position; must be called before any output
+#          that should not appear below the tally (e.g. final summary)
 _gs_eu2_tally_erase() {
   [[ "${_GS_EU2_TALLY_ACTIVE}" != "1" ]] && return 0
   [[ "${_GS_EU2_TALLY_PREV_LINES}" -eq 0 ]] && return 0
@@ -220,12 +265,33 @@ _gs_eu2_tally_erase() {
   _GS_EU2_TALLY_PREV_LINES=0
 }
 
-# _gs_eu2_tally_cleanup: called from INT/ERR trap — erase tally then reset trap
+# _gs_eu2_tally_cleanup — INT/ERR trap handler: erase tally then reset trap.
+#
+# Args:    none
+# Reads:   _GS_EU2_TALLY_ACTIVE, _GS_EU2_TALLY_PREV_LINES (via _gs_eu2_tally_erase)
+# Sets:    trap state (resets INT and ERR to default)
+# Prints:  ANSI erase sequences to stderr (via _gs_eu2_tally_erase)
+# Returns: 0 always
+# Side fx: clears the INT and ERR traps so the outer ERR trap in bin/env-update.sh
+#          can fire normally on subsequent errors after the check loop exits
 _gs_eu2_tally_cleanup() {
   _gs_eu2_tally_erase
   trap - INT ERR
 }
 
+# _gs_eu2_run_check — main check loop: fetch, classify, and stream results for all records.
+#
+# Args:    none
+# Reads:   _GS_EU2_CFG (env_file, filter, unstable, stable, changes_only, no_drift,
+#          no_notes, no_fail, format, tally, force_auto), all record arrays
+# Sets:    record fields (decision, proposed_version, error_message, unstable_proposed,
+#          stable_proposed) for each record; _GS_EU2_CACHE_TTL
+# Prints:  per-record status lines ([AUTO], [HOLD], etc.) + sub-lines to stdout;
+#          progress indicator / live tally to stderr
+# Returns: 0 when no ERROR decisions; 1 when at least one ERROR decision exists
+#          (caller in _gs_eu2_main captures with || _check_rc=$?)
+# Side fx: fetches from external registries (unless cache hits); may write cache files;
+#          arms/disarms INT+ERR traps around the loop for tally cleanup
 _gs_eu2_run_check() {
   local _count _i
   _count="$(_gs_eu2_record_count)"
@@ -1111,6 +1177,16 @@ _gs_eu2_run_check() {
   (( _n_error > 0 )) && return 1 || return 0
 }
 
+# _gs_eu2_main — top-level entry point: parse args, validate, orchestrate check/dump/apply.
+#
+# Args:    "$@" — all CLI arguments forwarded from bin/env-update.sh
+# Reads:   _GS_EU2_CFG (all fields, populated by _gs_eu2_parse_args)
+# Sets:    _GS_EU2_CFG[check]="true" when --apply is set (apply implies check)
+# Prints:  mode banners + check/dump/apply output to stdout; warnings to stderr
+# Returns: 0 on success; 1 on usage error or when ERROR decisions present
+#          (propagated via the || exit $? pattern in bin/env-update.sh)
+# Side fx: may write .env backup files; may invoke env-scan.sh (--scan);
+#          writes last-dry-run-ts marker after a successful dry-run check
 _gs_eu2_main() {
   _gs_eu2_profile_init   # records total start time before we know --profile value
   _gs_eu2_profile_start

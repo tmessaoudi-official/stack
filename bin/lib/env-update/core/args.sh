@@ -1,5 +1,21 @@
 #!/bin/bash
-# args.sh — CLI argument parser; populates _GS_EU2_CFG
+# args.sh — CLI argument parser and validator; populates _GS_EU2_CFG associative array.
+#
+# Exports:   _gs_eu2_parse_args
+# Sources:   config/defaults.sh  reporting/help.sh
+# Deps:      bash 4.3+ (associative arrays), grep (ERE validation)
+# Env:       _GS_EU2_CFG (associative array, declared in config/defaults.sh)
+#
+# _gs_eu2_parse_args:
+#   1. Parse all CLI flags (while/case) into _GS_EU2_CFG
+#   2. Fill missing keys with defaults
+#   3. Validate regex args (--filter, --exclude) — exit 1 on invalid ERE
+#   4. Validate mutual exclusivity (--dry-run/--apply, --stable=full/--unstable=full)
+#   5. Validate confirmation gate for --force-auto --apply
+#
+# Note: --dry-run and --apply are now mutually exclusive. Previously --apply implied
+# --dry-run when combined (v1 behaviour). The current model is: use --check --dry-run
+# for preview, then --apply separately (the 30-min gate in main.sh enforces this).
 
 [[ -n "${_GS_EU2_ARGS_SH_LOADED:-}" ]] && return 0
 readonly _GS_EU2_ARGS_SH_LOADED=1
@@ -9,6 +25,13 @@ source "$(dirname "${BASH_SOURCE[0]}")/../config/defaults.sh"
 # shellcheck source=./../reporting/help.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../reporting/help.sh"
 
+# _gs_eu2_parse_args — parse CLI arguments and populate _GS_EU2_CFG.
+#
+# Args:    "$@" — all CLI arguments from bin/env-update.sh
+# Reads:   nothing
+# Sets:    _GS_EU2_CFG keys (all flags listed in the module header above)
+# Prints:  error messages to stderr on invalid/missing arguments
+# Returns: 0 on success; exits 1 on unknown flag or validation failure
 _gs_eu2_parse_args() {
   while [[ $# -gt 0 ]]; do
     case "${1}" in

@@ -1,5 +1,10 @@
 #!/bin/bash
-# help.sh — usage text
+# help.sh — --help flag output for env-update.sh.
+#
+# Exports:   _gs_eu2_show_help
+# Sources:   config/defaults.sh
+# Deps:      bash 4.3+
+# Env:       _GS_EU2_VERSION (read from defaults.sh)
 
 [[ -n "${_GS_EU2_HELP_SH_LOADED:-}" ]] && return 0
 readonly _GS_EU2_HELP_SH_LOADED=1
@@ -7,6 +12,11 @@ readonly _GS_EU2_HELP_SH_LOADED=1
 # shellcheck source=./../config/defaults.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../config/defaults.sh"
 
+# _gs_eu2_show_help — print full CLI flag reference to stdout.
+#
+# Args:    none
+# Prints:  formatted help text including all flags, backup options, examples
+# Returns: 0 always
 _gs_eu2_show_help() {
   cat << EOF
 bin/env-update.sh v${_GS_EU2_VERSION} — annotation parser + version checker (11 fetcher types)
@@ -29,6 +39,12 @@ Options:
   --apply                 Apply all AUTO decisions to the env file; implies --check.
                           Creates a timestamped .env backup before writing.
                           Use with --dry-run to preview without writing.
+  --apply-resolve         Also apply RESOLVED decisions when used with --apply.
+                          RESOLVED records are variables with floating (unversioned)
+                          current values (nightly/latest/edge) where the fetcher has
+                          resolved a concrete proposed version. These are informational
+                          by default and never applied unless --apply-resolve is set.
+                          Requires --apply to take effect.
   --scan                  After --apply, run bin/env-scan.sh to propagate changes to
                           .env.local and Dockerfiles. Off by default.
                           Note: env-scan runs on the full env file regardless of --filter;
@@ -171,6 +187,7 @@ Examples:
   bin/env-update.sh --apply --backup-keep=3                           # keep only 3 newest backups
   bin/env-update.sh --apply --backup-purge=true                       # purge old backups then create new
   bin/env-update.sh --apply --backup-suffix=.snap                     # custom backup suffix
+  bin/env-update.sh --apply --apply-resolve                           # apply AUTO + concrete-resolve RESOLVED decisions
 
   bin/env-update.sh --annotations                                     # print annotation syntax reference
 

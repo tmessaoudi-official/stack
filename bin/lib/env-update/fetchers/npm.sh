@@ -1,12 +1,20 @@
 #!/bin/bash
-# npm.sh — npm registry fetcher using the record-index contract
+# npm.sh — npm registry fetcher using the record-index contract.
 #
-# Input:  record index — reads type/identifier/channel/tag_*/major_hint etc.
-# Output: writes proposed_version + decision + error_message back into record
+# Exports:   _gs_eu2_npm_encode_pkg  _gs_eu2_fetch_npm
+# Sources:   core/records.sh  core/semver.sh  core/channel.sh
+#            core/tag_flags.sh  core/cache.sh  http/curl.sh
+# Deps:      curl, jq  (npm CLI optional — CLI fast path when available)
+# Env:       _GS_EU2_CFG[no_cache]  _GS_EU2_HTTP_FIXTURE_DIR
+#
+# Input:  record index — reads identifier/channel/tag_*/major_hint/major_hint_min/
+#                        watch_major_depth/current_version/version_prefix
+# Output: writes proposed_version + decision + error_message + latest_unconstrained
+#         + using_fallback_major back into record
 #
 # API: https://registry.npmjs.org/{package}
 # Scoped packages (@scope/name) are URL-encoded: @ → %40, / → %2F
-# Stable fast path: dist-tags.latest
+# Stable fast path: dist-tags.latest (skipped for watch-major or major-pinned vars)
 # Full channel path: .versions keys[], excluding deprecated entries
 
 [[ -n "${_GS_EU2_NPM_SH_LOADED:-}" ]] && return 0
@@ -25,8 +33,14 @@ source "$(dirname "${BASH_SOURCE[0]}")/../core/cache.sh"
 # shellcheck source=./../http/curl.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../http/curl.sh"
 
-# URL-encode a package name for the npm registry:
-#   @scope/name → %40scope%2Fname
+# _gs_eu2_npm_encode_pkg — URL-encode a package name for the npm registry.
+#
+# Args:    $1 pkg — raw package name (e.g. "@scope/name", "webpack")
+# Prints:  URL-safe encoded name (@ → %40, / → %2F)
+# Returns: 0 always
+#
+# Only @ and / need encoding in npm package names — other characters in package
+# names are already URL-safe per the npm registry spec.
 _gs_eu2_npm_encode_pkg() {
   local _pkg="${1}"
   # Replace @ with %40 and / with %2F (only chars needing encoding in pkg names)
@@ -35,7 +49,24 @@ _gs_eu2_npm_encode_pkg() {
   printf '%s' "${_pkg}"
 }
 
-# Main fetcher entry point — takes one argument: record index.
+# _gs_eu2_fetch_npm — main entry point for the npm: fetcher type.
+#
+# Args:    $1 record_index — 0-based record index
+# Reads:   record fields: identifier, channel, major_hint, major_hint_min,
+#          watch_major_depth, current_version, version_prefix, tag_filter,
+#          tag_exclude, tag_strip_prefix, tag_strip_suffix, tag_extract,
+#          tag_replace_from, tag_replace_to
+# Sets:    record fields: proposed_version, decision (ERROR/SKIP only),
+#          error_message, latest_unconstrained, using_fallback_major
+# Prints:  nothing
+# Returns: 0 always
+#
+# Three fast paths (tried in order, most to least optimised):
+#   1. Cache hit — returns immediately without network
+#   2. CLI (npm view dist-tags.latest) — only when npm available, no watch-major,
+#      no major_hint (major-pin requires full version list for filtering)
+#   3. API dist-tags.latest — only for stable channel, no watch-major, no major_hint
+# Full path: fetches complete .versions object, excludes deprecated entries.
 _gs_eu2_fetch_npm() {
   local _idx="${1}"
 

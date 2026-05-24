@@ -1,6 +1,11 @@
 #!/bin/bash
 # git.sh — git-state safety check for env-scan write operations
 #
+# Exports:   _gs_es_check_tracked_file_state
+# Sources:   none
+# Deps:      bash 4.3+, git
+# Env:       none (all inputs are arguments)
+#
 # Rule 8: before overwriting a Dockerfile in-place, check whether it is tracked
 # by git and has uncommitted changes. If so, skip that file (emit a warning) to
 # avoid overwriting in-flight edits.
@@ -14,12 +19,13 @@
 [[ -n "${_GS_ES_GIT_SH_LOADED:-}" ]] && return 0
 readonly _GS_ES_GIT_SH_LOADED=1
 
-# _gs_es_check_tracked_file_state FILE
+# _gs_es_check_tracked_file_state — check if a file is safe to overwrite in-place.
 #
-# Returns 0 if safe to write, 1 if the file is git-tracked and has uncommitted
-# changes. The caller is responsible for deciding whether to skip the file.
-#
-# Stderr: warning line on return 1.
+# Args:    $1 file — absolute or relative path to the file being checked
+# Prints:  [WARN] line to stderr when returning 1
+# Returns: 0 if safe to write (not tracked, not dirty, or not in a git repo)
+#          1 if file is tracked AND has uncommitted changes
+# Side fx: none
 _gs_es_check_tracked_file_state() {
   local _file="${1}"
   local _file_dir

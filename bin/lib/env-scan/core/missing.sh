@@ -1,5 +1,23 @@
 #!/bin/bash
-# missing.sh — gs_es_check_missing_variables
+# missing.sh — gs_es_check_missing_variables: forward and reverse variable-presence checks
+#
+# Exports:   gs_es_check_missing_variables
+# Sources:   config/defaults.sh
+# Deps:      bash 4.3+, cut, sort, comm, grep
+# Env:       _GS_ES_CFG (scan_output_file, scan_path, debug, cleanup_tmp, quiet)
+#            _GS_ES_SESSION_TMP (set by gs_es_main; temp dir for per-run scratch files)
+#
+# Implements three directed checks (called from merge.sh):
+#   Forward Check 1 (reverse_checking=false, target=.env):
+#     Vars in scan output absent from source — new Docker usages not yet in .env.
+#   Forward Check 2 (reverse_checking=false, target=.env.local):
+#     Vars in scan output absent from destination — entries added to .env not yet
+#     propagated to .env.local.
+#   Reverse Check 3 (reverse_checking=true, target=.env.local):
+#     Vars in destination absent from scan output — stale/orphaned entries in
+#     .env.local with no corresponding Docker usage.
+#
+# The check direction is selected by the reverse_checking argument.
 
 # Include guard
 [[ -n "${_GS_ES_MISSING_SH_LOADED:-}" ]] && return 0
@@ -8,11 +26,20 @@ readonly _GS_ES_MISSING_SH_LOADED=1
 # shellcheck source=./../config/defaults.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../config/defaults.sh"
 
-# ── gs_es_check_missing_variables ────────────────────────────────────────────────
-# Args: target_file  txt_file_name  exclude_pattern  reverse_checking
-# Reads from _GS_ES_CFG: scan_output_file, scan_path, debug,
-#                        cleanup_tmp, quiet
-# Session temp dir: _GS_ES_SESSION_TMP (set by gs_es_main)
+# gs_es_check_missing_variables — report variables present in one set but absent from another.
+#
+# Args:    $1 target_file       — env file to check against (one side of the diff)
+#          $2 txt_file_name     — name stem used for per-invocation temp files in _GS_ES_SESSION_TMP
+#          $3 exclude_pattern   — ERE; matching variable names are suppressed from output
+#          $4 reverse_checking  — "true"  → dest→scan direction (Check 3, stale-entry)
+#                               — "false" → scan→env direction (Checks 1+2, new-usage)
+# Reads:   _GS_ES_CFG[scan_output_file]  _GS_ES_CFG[scan_path]
+#          _GS_ES_CFG[debug]  _GS_ES_CFG[cleanup_tmp]  _GS_ES_CFG[quiet]
+#          _GS_ES_SESSION_TMP (global)
+# Prints:  missing variable names to stdout; debug message when all present
+# Returns: 0 always (informational — does not abort the run)
+# Side fx: writes/reads two temp files in _GS_ES_SESSION_TMP; deletes them if
+#          cleanup_tmp=true
 gs_es_check_missing_variables() {
 	local target_file="${1}"
 	local txt_file_name="${2}"

@@ -1,5 +1,26 @@
 #!/bin/bash
-# merge.sh — gs_es_process_file (src→dst merge + cleanup)
+# merge.sh — gs_es_process_file: Phase 5 src→dest merge and post-merge checks
+#
+# Exports:   gs_es_process_file
+# Sources:   config/defaults.sh  reporting/report.sh  core/missing.sh
+# Deps:      bash 4.3+, sed, awk, mv, realpath
+# Env:       _GS_ES_CFG (strip_comments, remove_empty_lines, remove_trailing_spaces,
+#                        show_added_entries, check_missing, exclude_local_pattern,
+#                        reverse_check_ignore_pattern, forward_check_ignore_pattern,
+#                        cleanup_tmp, debug, show_different_entries, sync_values,
+#                        scan_output_file, dir, scan_path, orphan_ignore_pattern,
+#                        orphan_quiet, prune_removed, destination_file_merged_suffix)
+#
+# Merge strategy (when dry_run != true):
+#   1. Walk source top-to-bottom; for each KEY=value line:
+#      - If KEY exists in dest → emit dest's line (preserves local value)
+#      - If KEY absent from dest → emit source's line (new entry)
+#      - Blank/comment lines are passed through verbatim (preserves @todo annotations)
+#   2. Append dest-only ("local-only") keys under a footer comment.
+#      With --prune-removed=true, local-only keys are dropped instead.
+#   3. Apply optional sed passes: strip_comments, remove_empty_lines, trailing spaces.
+#   4. Atomically replace dest with merged output (mv).
+#   Then: run show_inconsistency + show_differences + check_missing passes.
 
 # Include guard
 [[ -n "${_GS_ES_MERGE_SH_LOADED:-}" ]] && return 0
@@ -12,17 +33,20 @@ source "$(dirname "${BASH_SOURCE[0]}")/../reporting/report.sh"
 # shellcheck source=./missing.sh
 source "$(dirname "${BASH_SOURCE[0]}")/missing.sh"
 
-# ── gs_es_process_file ───────────────────────────────────────────────────────────
-# Args: src_file  dest_file  count  dry_run
-# Reads from _GS_ES_CFG: destination_file_tmp_suffix, destination_file_merged_suffix,
-#                        strip_comments, remove_empty_lines, remove_trailing_spaces,
-#                        show_added_entries, check_missing, exclude_local_pattern,
-#                        reverse_check_ignore_pattern, forward_check_ignore_pattern,
-#                        cleanup_tmp, debug, show_different_entries,
-#                        sync_values, scan_output_file,
-#                        dir, scan_path
-# When dry_run="true": all filesystem writes are suppressed; the function still
-# computes and reports what would change (added entries, differences, missing).
+# gs_es_process_file — merge source env file into destination and run post-merge checks.
+#
+# Args:    $1 src_file  — canonical source file (e.g. .env)
+#          $2 dest_file — destination to update (e.g. .env.local)
+#          $3 count     — run index (used to name per-invocation temp files to avoid collisions)
+#          $4 dry_run   — "true" → report only, suppress all filesystem writes (default: false)
+# Reads:   _GS_ES_CFG (see module header for full key list)
+# Prints:  informational output to stdout; errors to stderr
+# Returns: 0 on success; 1 if source file is missing/empty or src==dest
+# Side fx: writes merged_file at <dest><destination_file_merged_suffix>.<count>;
+#          atomically replaces dest with merged result when dry_run != true;
+#          calls gs_es_show_inconsistency, gs_es_show_differences,
+#          gs_es_check_missing_variables for the three check passes;
+#          GAP-3: aborts if src and dest resolve to the same path (realpath check)
 gs_es_process_file() {
 	local src_file="${1}"
 	local dest_file="${2}"

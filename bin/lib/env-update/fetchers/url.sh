@@ -1,13 +1,20 @@
 #!/bin/bash
 # url.sh — URL fetcher — tiered strategy for arbitrary URL-based version sources.
 #
-# Input:  record index — reads type/identifier/fetch_extract/fetch_json/channel/
-#                        urls/url_probe/url_probe_depth/version_prefix etc.
-# Output: writes proposed_version + error_message + alt_version back into record.
+# Exports:   _gs_eu2_fetch_url  _gs_eu2_url_probe_check  _gs_eu2_url_probe_http_check
+# Sources:   core/records.sh  core/semver.sh  core/channel.sh  core/tag_flags.sh
+#            core/cache.sh  core/ubuntu.sh  http/curl.sh  fetchers/github.sh
+# Deps:      curl, jq, perl, grep, sort
+# Env:       _GS_EU2_CFG[no_cache]  _GS_EU2_HTTP_FIXTURE_DIR
+#            GITHUB_TOKEN  GLOBAL_STACK_GITHUB_TOKEN
+#
+# Input:  record index — reads identifier/fetch_extract/fetch_json/channel/
+#                        urls/url_probe/url_probe_depth/version_prefix/tag_*
+# Output: writes proposed_version + error_message back into record.
 #         NEVER writes decision (except ERROR on hard fetch failure) — that is
 #         owned exclusively by core/decide.sh.
 #
-# 5-tier strategy (tried in order, stop at first successful extraction):
+# 5-tier strategy (tried in order, first successful extraction wins):
 #   Tier 1: fetch-extract — fetch URL body, run perl regex capture-group-1
 #   Tier 2: fetch-json    — fetch URL as JSON, run jq path extraction
 #   Tier 3: GitHub redirect — use urls: field to call GitHub releases/tags API
@@ -38,8 +45,20 @@ source "$(dirname "${BASH_SOURCE[0]}")/../http/curl.sh"
 # shellcheck source=./github.sh
 source "$(dirname "${BASH_SOURCE[0]}")/github.sh"
 
-# _gs_eu2_fetch_url INDEX
-# Main fetcher entry point — takes one argument: record index.
+# _gs_eu2_fetch_url — main entry point for the url: fetcher type.
+#
+# Args:    $1 record_index — 0-based record index
+# Reads:   record fields: identifier, channel, fetch_extract, fetch_json, urls,
+#          url_probe, url_probe_depth, version_prefix, tag_filter, tag_exclude,
+#          tag_strip_prefix, tag_strip_suffix, tag_extract, tag_replace_from,
+#          tag_replace_to
+# Sets:    record fields: proposed_version, error_message
+#          (decision is NOT written except on hard ERROR — owned by decide.sh)
+# Prints:  nothing
+# Returns: 0 always
+#
+# The identifier field holds the primary URL for all tiers except Tier 3 (which
+# reads additional URLs from the urls: field).
 _gs_eu2_fetch_url() {
   local _idx="${1}"
 
@@ -318,22 +337,22 @@ _gs_eu2_fetch_url() {
   return 0
 }
 
-# _gs_eu2_url_probe_check BASE_URL PROBE_PATHS DEPTH CACHE_KEY
+# _gs_eu2_url_probe_check — probe Ubuntu-codename-qualified paths for availability.
 #
-# Probes path templates for each Ubuntu codename going from current → older,
-# testing each path in the order listed in PROBE_PATHS.  Returns the first
-# path (raw form, e.g. "stable/xUbuntu_24.04") that responds with 2xx/3xx.
+# Args:    $1 base_url      — base URL prefix (e.g. "https://download.opensuse.org/...")
+#          $2 probe_paths   — comma-separated path templates (e.g. "stable/xUbuntu_{codename-version}")
+#          $3 depth         — max number of codenames to probe (default 6)
+#          $4 cache_key     — cache key to write the result under
+# Prints:  first matching resolved path (e.g. "stable/xUbuntu_24.04"), or empty
+# Returns: 0 always
+# Side fx: writes to cache on first successful probe
 #
-# Template variables in PROBE_PATHS:
+# Template variables in PROBE_PATHS entries:
 #   {codename}         → Ubuntu codename (e.g. "noble")
 #   {codename-version} → Ubuntu version number (e.g. "24.04")
 #
-# The starting codename is derived from the current_version field in the
-# record (e.g. "unstable/xUbuntu_24.04" → version "24.04" → codename "noble").
-# If derivation fails, starts from the newest known codename.
-#
-# Probes newest first (current codename, then older ones) so we always
-# propose the most recent available path.
+# Probes newest codename first, going back up to DEPTH codenames.
+# Accepts 2xx or 3xx HTTP responses (resource exists, possibly redirected).
 _gs_eu2_url_probe_check() {
   local _base_url="${1}"
   local _probe_paths_str="${2}"
@@ -406,10 +425,16 @@ _gs_eu2_url_probe_check() {
   return 0
 }
 
-# _gs_eu2_url_probe_http_check URL
-# Returns the HTTP status code for a HEAD/GET to URL.
-# Uses fixture injection when _GS_EU2_HTTP_FIXTURE_DIR is set —
-# presence of the fixture file = 200; absence = 404.
+# _gs_eu2_url_probe_http_check — return HTTP status code for a URL.
+#
+# Args:    $1 url — the URL to probe
+# Prints:  HTTP status code string (e.g. "200", "404", "0" on curl failure)
+# Returns: 0 always
+# Side fx: performs a real HTTP HEAD request (with GET fallback for 405 responses)
+#          or reads a fixture file when _GS_EU2_HTTP_FIXTURE_DIR is set
+#
+# Fixture mode: file presence = 200; absence = 404 (test seam).
+# Real mode: HEAD first (faster), GET fallback when HEAD returns 405 (Method Not Allowed).
 _gs_eu2_url_probe_http_check() {
   local _url="${1}"
 

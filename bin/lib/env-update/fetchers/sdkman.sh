@@ -1,8 +1,17 @@
 #!/bin/bash
-# sdkman.sh — SDKMAN! version fetcher using the record-index contract
+# sdkman.sh — SDKMAN! version fetcher using the record-index contract.
 #
-# Input:  record index — reads type/identifier/channel/major_hint/current_version etc.
-# Output: writes proposed_version + error_message back into record
+# Exports:   _gs_eu2_sdkman_extract_versions  _gs_eu2_sdkman_extract_java_versions
+#            _gs_eu2_sdkman_select_java  _gs_eu2_fetch_sdkman
+# Sources:   core/records.sh  core/semver.sh  core/channel.sh
+#            core/cache.sh  http/curl.sh
+# Deps:      curl, grep, sort, awk
+# Env:       _GS_EU2_CFG[no_cache]  SDKMAN_DIR  GLOBAL_STACK_SDKMAN_DIR
+#
+# Input:  record index — reads identifier/channel/major_hint/current_version/
+#                        watch_major_depth
+# Output: writes proposed_version + error_message + latest_unconstrained
+#         back into record (decision is NOT written — that is owned by decide.sh)
 #
 # Strategy (tried in order):
 #   1. SDKMAN REST API  — GET /2/candidates/{c}/linux/versions/list?current=...
@@ -36,10 +45,15 @@ source "$(dirname "${BASH_SOURCE[0]}")/../http/curl.sh"
 
 readonly _GS_EU2_SDKMAN_API_BASE="https://api.sdkman.io/2"
 
-# _gs_eu2_sdkman_extract_versions RAW_TEXT MAJOR_HINT
-# Extract all version-like tokens from SDKMAN text list response.
-# When MAJOR_HINT is set, only include versions that start with that major.
-# Returns newline-separated sorted version list on stdout.
+# _gs_eu2_sdkman_extract_versions — extract version tokens from SDKMAN text response.
+#
+# Args:    $1 raw  — raw text from the SDKMAN API (formatted table or CSV)
+#          $2 major — optional major version to filter (e.g. "21"); empty = no filter
+# Prints:  newline-separated sorted version list (sort -V)
+# Returns: 0 always
+#
+# Used for non-Java candidates (gradle, groovy, etc.) where versions have no
+# distribution suffix. Tokens matching N.N[.N]* patterns are extracted and deduped.
 _gs_eu2_sdkman_extract_versions() {
   local _raw="${1}" _major="${2:-}"
   # Extract tokens that look like versions (1+ digit groups, optional pre-release suffix)
@@ -57,9 +71,17 @@ _gs_eu2_sdkman_extract_versions() {
   printf '%s' "${_versions}"
 }
 
-# _gs_eu2_sdkman_extract_java_versions CSV_OR_TEXT MAJOR_HINT PREFERRED_DIST
-# Extract Java versions from a comma-or-newline-separated list.
-# Returns newline-separated list of matching versioned strings.
+# _gs_eu2_sdkman_extract_java_versions — extract Java versions from SDKMAN /all response.
+#
+# Args:    $1 raw       — comma-or-newline-separated list from SDKMAN /versions/all
+#          $2 major     — optional major version filter (e.g. "21"); empty = no filter
+#          $3 preferred — distribution suffix to prefer (e.g. "zulu", "tem"); empty OK
+# Prints:  newline-separated list of N.N.N-dist versioned strings (sort -t- -k1,1V)
+# Returns: 0 always
+#
+# Java versions have the form N.N.N-distN (e.g. "21.0.7-zulu", "11.0.31-tem").
+# The distribution suffix is part of the SDKMAN identifier and is preserved here;
+# _gs_eu2_sdkman_select_java uses it for distribution-preference selection.
 _gs_eu2_sdkman_extract_java_versions() {
   local _raw="${1}" _major="${2:-}" _preferred="${3:-}"
   # Normalise: replace commas with newlines so we get one entry per line
@@ -77,10 +99,16 @@ _gs_eu2_sdkman_extract_java_versions() {
   printf '%s' "${_lines}"
 }
 
-# _gs_eu2_sdkman_select_java VERSIONS PREFERRED_DIST
-# Select best Java version from newline-separated list, with distribution preference.
-# Preference: preferred_dist > -tem (Temurin) > others.
-# Returns single best version string on stdout.
+# _gs_eu2_sdkman_select_java — select best Java version with distribution preference.
+#
+# Args:    $1 versions  — newline-separated Java version list (N.N.N-dist form)
+#          $2 preferred — distribution suffix to prefer (e.g. "zulu"); may be empty
+# Prints:  single best version string (e.g. "21.0.7-zulu")
+# Returns: 0 always (prints nothing if no stable version found)
+#
+# Selection priority: preferred_dist > -tem (Temurin) > other distributions.
+# Within each tier, highest version wins (sort -t- -k1,1V | tail -1).
+# Pre-release Java versions (rc/beta/alpha/ea in base or dist) are filtered out.
 _gs_eu2_sdkman_select_java() {
   local _versions="${1}" _preferred="${2:-}"
   local _preferred_list="" _tem_list="" _other_list=""
@@ -122,7 +150,19 @@ _gs_eu2_sdkman_select_java() {
   fi
 }
 
-# Main fetcher entry point — takes one argument: record index.
+# _gs_eu2_fetch_sdkman — main entry point for the sdkman: fetcher type.
+#
+# Args:    $1 record_index — 0-based record index
+# Reads:   record fields: identifier, channel, major_hint, current_version,
+#          watch_major_depth
+# Sets:    record fields: proposed_version, error_message, latest_unconstrained
+#          (decision is NOT written — owned by decide.sh)
+# Prints:  nothing
+# Returns: 0 always
+#
+# Note: channel flag is read but effectively ignored for all SDKMAN candidates.
+# The SDKMAN API returns all versions (stable + pre-release) via the same endpoint;
+# pre-releases are filtered by this fetcher when channel != unstable.
 _gs_eu2_fetch_sdkman() {
   local _idx="${1}"
 

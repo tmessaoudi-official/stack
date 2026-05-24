@@ -1,5 +1,16 @@
 #!/bin/bash
-# semver.sh — version comparison + pre-release detection helpers
+# semver.sh — version comparison, pre-release detection, and prefix extraction.
+#
+# Exports:   _gs_eu2_is_prerelease  _gs_eu2_is_unversioned
+#            _gs_eu2_semver_compare  _gs_eu2_semver_delta
+#            _gs_eu2_version_prefix  _gs_eu2_version_tag_suffix
+# Sources:   config/prerelease_markers.sh
+# Deps:      sort (GNU coreutils — for sort -V), sed, grep
+# Env:       _GS_EU2_PRERELEASE_REGEX (from prerelease_markers.sh)
+#
+# All functions are pure (no side effects, no globals written).
+# sort -V is used for ordering — callers strip v-prefixes before sorting to
+# avoid the mixed v-prefix/no-prefix ordering bug (v0.3.0 after 1.0.0 in ASCII).
 
 [[ -n "${_GS_EU2_SEMVER_SH_LOADED:-}" ]] && return 0
 readonly _GS_EU2_SEMVER_SH_LOADED=1
@@ -7,24 +18,43 @@ readonly _GS_EU2_SEMVER_SH_LOADED=1
 # shellcheck source=./../config/prerelease_markers.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../config/prerelease_markers.sh"
 
-# Returns 0 if version looks like a pre-release
+# _gs_eu2_is_prerelease — test whether a version string looks like a pre-release.
+#
+# Args:    $1 version — version string to test (case-insensitively matched)
+# Prints:  nothing
+# Returns: 0 if the version contains a prerelease marker; 1 otherwise
+# Note:    matching is against _GS_EU2_PRERELEASE_REGEX from prerelease_markers.sh
 _gs_eu2_is_prerelease() {
   local _v="${1,,}"
   [[ "${_v}" =~ (${_GS_EU2_PRERELEASE_REGEX}) ]]
 }
 
-# Returns 0 if version is unversioned (floating refs: nightly/latest/edge/next/master/stable/lts/current/release)
-# These values are floating aliases — semver comparison is meaningless.
-# New values (stable, lts, current, release) added for RESOLVED decision support.
+# _gs_eu2_is_unversioned — test whether a version string is a floating alias.
+#
+# Args:    $1 version — version string to test (case-insensitive)
+# Prints:  nothing
+# Returns: 0 for floating aliases (nightly, latest, edge, master, next, head,
+#          main, stable, lts, current, release); 1 for concrete versions
+#
+# These floating aliases make semver comparison meaningless — decide.sh emits
+# RESOLVED when the current is unversioned and a concrete proposed is available.
 _gs_eu2_is_unversioned() {
   local _v="${1,,}"
   [[ "${_v}" =~ ^(nightly|latest|edge|master|next|head|main|stable|lts|current|release)$ ]]
 }
 
-# Compare two version strings. Echoes: older | newer | equal
-# Handles v-prefix and SemVer pre-release ordering (1.0.0-rc1 < 1.0.0)
-# Optional $3: channel prefix to strip before comparison (e.g. "dev-").
-# Backward-compatible: callers omitting $3 behave identically to before.
+# _gs_eu2_semver_compare — compare two version strings.
+#
+# Args:    $1 ver_a   — first version string
+#          $2 ver_b   — second version string
+#          $3 tcp     — optional channel prefix to strip before comparison (e.g. "dev-")
+# Prints:  "older"  if ver_a < ver_b
+#          "newer"  if ver_a > ver_b
+#          "equal"  if ver_a == ver_b (after stripping v-prefix and channel prefix)
+# Returns: 0 always
+#
+# Pre-release handling: 1.0.0-rc1 < 1.0.0 (pre-release sorts before stable).
+# v-prefix is stripped before comparison; $3 is backward-compatible (omit → no-op).
 _gs_eu2_semver_compare() {
   local _tcp="${3:-}"
   local _a="${1#v}" _b="${2#v}"
@@ -55,13 +85,16 @@ _gs_eu2_semver_compare() {
   if [[ "${_first}" == "${_a}" ]]; then echo "older"; else echo "newer"; fi
 }
 
-# Extract first N dot-separated numeric segments from a version string.
-# Strips build metadata (+...) and non-numeric suffixes (-LTS, -alpine, etc.)
-# so "25.0.1+9-LTS" at depth 1 returns "25", and "8.5.2" at depth 2 returns "8.5".
-# Returns empty string if the version cannot be parsed.
-# Extract the variant tag suffix from a version string for (watch-major) unconstrained fetch.
-# Returns the trailing "-SUFFIX" when the version has a non-numeric dash suffix (e.g. -zulu,
-# -alpine3.21, -fpm).  Returns empty when no dash suffix or when only build metadata (+...).
+# _gs_eu2_version_tag_suffix — extract the variant tag suffix from a version string.
+#
+# Args:    $1 version — version string (e.g. "25.0.1-zulu", "8.5.2-alpine3.21")
+# Prints:  the trailing "-SUFFIX" when the version has a non-numeric dash suffix;
+#          empty string when no suffix or when only build metadata (+...)
+# Returns: 0 always
+#
+# Used by (watch-major) unconstrained fetch to preserve variant suffixes when
+# searching for newer major versions (e.g. always fetch -zulu, not plain).
+#
 # Examples:
 #   "25.0.1-zulu"         → "-zulu"
 #   "8.5.2-alpine3.21"   → "-alpine3.21"
@@ -85,6 +118,17 @@ _gs_eu2_version_tag_suffix() {
   fi
 }
 
+# _gs_eu2_version_prefix — extract the first N dot-separated numeric segments.
+#
+# Args:    $1 version — version string (e.g. "25.0.1+9-LTS", "8.5.2-alpine3.21")
+#          $2 depth   — number of segments to extract (default: 1)
+# Prints:  N-segment prefix (e.g. depth=1 → "25"; depth=2 → "8.5"); empty if
+#          the version has fewer numeric segments than requested
+# Returns: 0 always
+#
+# Build metadata (+…) is stripped first.  Non-numeric dash suffixes (-LTS, -alpine)
+# are stripped so "25.0.1+9-LTS" at depth 1 returns "25".  Date suffixes with
+# leading digits (-20260108) are kept as they ARE numeric.
 _gs_eu2_version_prefix() {
   local _version="${1}" _depth="${2:-1}"
   # Strip build metadata (everything after +)
@@ -115,7 +159,19 @@ _gs_eu2_version_prefix() {
   fi
 }
 
-# Returns delta type between two versions: major | minor | patch | unknown
+# _gs_eu2_semver_delta — classify the semantic distance between two versions.
+#
+# Args:    $1 ver_a — first (current) version string
+#          $2 ver_b — second (proposed) version string
+# Prints:  "major" | "minor" | "patch" | "unknown"
+# Returns: 0 always
+#
+# Special cases handled:
+#   - path-like prefixes (e.g. "tags/2.4.66" → "2.4.66")
+#   - codename-date style (e.g. ubuntu "resolute-20260108" → patch/major by codename prefix)
+#   - date-SHA style (YYYYMMDD-sha8 or full 40-char SHA → always "patch")
+#   - date versions (6+ digit pure numeric major → always "patch" for forward increments)
+#   - Ruby underscore separators (3_4_9 → 3.4.9)
 _gs_eu2_semver_delta() {
   local _a="${1#v}" _b="${2#v}"
   [[ -z "${_a}" || -z "${_b}" ]] && { echo "unknown"; return; }

@@ -1,5 +1,11 @@
 #!/bin/bash
-# report.sh — gs_es_show_inconsistency + gs_es_show_differences
+# report.sh — added-entry and diverged-value reporters for env-scan Phase 5
+#
+# Exports:   gs_es_show_inconsistency  gs_es_show_differences
+# Sources:   config/defaults.sh
+# Deps:      bash 4.3+, awk, mv
+# Env:       _GS_ES_CFG (debug, quiet, diff_ignore_pattern, show_different_entries,
+#                        sync_values, dry_run)
 
 # Include guard
 [[ -n "${_GS_ES_REPORT_SH_LOADED:-}" ]] && return 0
@@ -8,9 +14,17 @@ readonly _GS_ES_REPORT_SH_LOADED=1
 # shellcheck source=./../config/defaults.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../config/defaults.sh"
 
-# ── gs_es_show_inconsistency ─────────────────────────────────────────────────────
-# Args: src_file  dest_file  exclude_pattern  operation
-# Reads from _GS_ES_CFG: debug, quiet
+# gs_es_show_inconsistency — report variables present in src but absent from dest (or vice versa).
+#
+# Args:    $1 src_file        — file whose keys are treated as the reference set
+#          $2 dest_file       — file to check for key presence
+#          $3 exclude_pattern — ERE; matching keys are suppressed from output (empty = include all)
+#          $4 operation       — "add" → "New entries added to dest from src";
+#                               ""    → "Entries missing in dest from src"
+# Reads:   _GS_ES_CFG[debug]  _GS_ES_CFG[quiet]
+# Prints:  list of added/missing entries to stdout (suppressed when quiet=true)
+# Returns: 0 always
+# Side fx: none
 gs_es_show_inconsistency() {
 	local src_file="${1}"
 	local dest_file="${2}"
@@ -34,10 +48,19 @@ gs_es_show_inconsistency() {
 	fi
 }
 
-# ── gs_es_show_differences ───────────────────────────────────────────────────────
-# Args: src_file  dest_file  count
-# Reads from _GS_ES_CFG: diff_ignore_pattern, show_different_entries,
-#                        debug, sync_values, quiet
+# gs_es_show_differences — report and optionally sync variables whose values diverge.
+#
+# Args:    $1 src_file  — canonical source file
+#          $2 dest_file — destination file to compare against
+#          $3 count     — run index (used to name the per-invocation temp rewrite file)
+# Reads:   _GS_ES_CFG[diff_ignore_pattern]  _GS_ES_CFG[show_different_entries]
+#          _GS_ES_CFG[debug]  _GS_ES_CFG[sync_values]  _GS_ES_CFG[dry_run]
+#          _GS_ES_CFG[quiet]
+# Prints:  diverged KEY=value pairs + "(--------- is : ...)" annotation to stdout
+# Returns: 0 always
+# Side fx: when sync_values=true and dry_run != true, rewrites dest in place via an
+#          atomic awk → tmp → mv pipeline so diverged keys take the source value;
+#          keys matching diff_ignore_pattern are never overwritten
 gs_es_show_differences() {
 	local src_file="${1}"
 	local dest_file="${2}"

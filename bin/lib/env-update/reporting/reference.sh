@@ -1,6 +1,14 @@
 #!/bin/bash
-# reference.sh — comprehensive reference for env-update (and env-scan) annotation syntax,
-#                CLI flags, decisions, fetchers, and live decision matrix.
+# reference.sh — comprehensive reference for env-update (and env-scan).
+#
+# Exports:   _gs_eu2_show_reference  _gs_eu2_show_reference_matrix
+# Sources:   config/defaults.sh  core/records.sh  core/decide.sh  (via main.sh)
+# Deps:      bash 4.3+
+# Env:       none
+#
+# Covers: annotation syntax, fetcher types, CLI flags, all annotation flags,
+#         per-fetcher deep-dive, decision types, live decision matrix, worked
+#         scenarios, and env-scan pipeline reference.
 #
 # Replaces: annotations-ref.sh (renamed 2026-05-24)
 # Called by: main.sh when --reference[=SECTION] is passed

@@ -1,10 +1,19 @@
 #!/bin/bash
-# quay.sh — Quay.io tag fetcher using the record-index contract
+# quay.sh — Quay.io tag fetcher using the record-index contract.
 #
-# Input:  record index — reads type/identifier/channel/tag_*/major_hint etc.
-# Output: writes proposed_version + decision + error_message back into record
+# Exports:   _gs_eu2_qy_fetch_tags  _gs_eu2_fetch_quay
+# Sources:   core/records.sh  core/semver.sh  core/channel.sh
+#            core/tag_flags.sh  core/cache.sh  http/curl.sh
+# Deps:      curl, jq
+# Env:       _GS_EU2_CFG[no_cache]
 #
-# API: https://quay.io/api/v1/repository/{org}/{image}/tag/?limit=50&onlyActiveTags=true
+# Input:  record index — reads identifier/channel/tag_*/major_hint/major_hint_min/
+#                        watch_major_depth/current_version/version_prefix
+# Output: writes proposed_version + decision + error_message + latest_unconstrained
+#         + using_fallback_major back into record
+#
+# API: https://quay.io/api/v1/repository/{org}/{image}/tag/?limit=100&onlyActiveTags=true
+# Pagination: follows has_additional=true across pages until exhausted.
 
 [[ -n "${_GS_EU2_QUAY_SH_LOADED:-}" ]] && return 0
 readonly _GS_EU2_QUAY_SH_LOADED=1
@@ -22,9 +31,15 @@ source "$(dirname "${BASH_SOURCE[0]}")/../core/cache.sh"
 # shellcheck source=./../http/curl.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../http/curl.sh"
 
-# Fetch all tags for an org/image from Quay.io.
+# _gs_eu2_qy_fetch_tags — fetch all active tags for an org/image from Quay.io.
+#
+# Args:    $1 identifier — "org/image" string
+# Prints:  newline-separated tag names
+# Returns: 0 on success; non-zero on HTTP failure
+# Side fx: may read/write cache (via _gs_eu2_http_get)
+#
 # Follows has_additional pagination (page=1, page=2, ...) until exhausted.
-# Returns newline-separated list of tag names on stdout, non-zero on HTTP failure.
+# Only active tags are fetched (onlyActiveTags=true); limit=100 per page.
 _gs_eu2_qy_fetch_tags() {
   local _identifier="${1}"
   local _base="https://quay.io/api/v1/repository/${_identifier}/tag/?limit=100&onlyActiveTags=true"
@@ -49,7 +64,17 @@ _gs_eu2_qy_fetch_tags() {
   printf '%s' "${_all_tags}"
 }
 
-# Main fetcher entry point — takes one argument: record index.
+# _gs_eu2_fetch_quay — main entry point for the quay: fetcher type.
+#
+# Args:    $1 record_index — 0-based record index
+# Reads:   record fields: identifier, channel, major_hint, major_hint_min,
+#          watch_major_depth, current_version, version_prefix, tag_filter,
+#          tag_exclude, tag_strip_prefix, tag_strip_suffix, tag_extract,
+#          tag_replace_from, tag_replace_to
+# Sets:    record fields: proposed_version, decision (ERROR/SKIP only),
+#          error_message, latest_unconstrained, using_fallback_major
+# Prints:  nothing
+# Returns: 0 always
 _gs_eu2_fetch_quay() {
   local _idx="${1}"
 

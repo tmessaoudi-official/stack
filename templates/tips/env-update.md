@@ -267,6 +267,7 @@ bin/env-update.sh [OPTIONS]
 | `--format=text\|json` | `text` | Output format for `--dump`. `text` emits one field per line with `field: value` pairs, grouped by record index. `json` emits a JSON array of objects, one per record, with all fields as string values. |
 | `--check` | off | Fetch latest versions for all parsed records and stream the `[AUTO\|HOLD\|SKIP\|ERROR\|MANUAL]` report. Requires network. |
 | `--apply` | off | Apply all `AUTO` decisions back to the `.env` file. Implies `--check`. Creates a timestamped backup of `.env` before any writes. Requires a recent `--dry-run` within the past 30 minutes (safety gate). Mutually exclusive with `--dry-run`. |
+| `--apply-resolve` | off | Also apply `RESOLVED` decisions when used with `--apply`. `RESOLVED` records have a floating (unversioned) current value (`nightly`, `latest`, `edge`, etc.) where the fetcher resolved a concrete proposed version. These are informational by default and never auto-applied; `--apply-resolve` opts into writing the concrete version. Requires `--apply` to take effect. |
 | `--scan` | off | After `--apply` completes, automatically run `bin/env-scan.sh` to propagate changes to `.env.local` and Dockerfiles. Pass-through: if `env-scan.sh` fails, a warning is printed but the exit code is non-fatal. |
 | `--dry-run` | off | No writes of any kind: cache writes are suppressed, `.env` is never modified, Dockerfile propagation is skipped. Prints a `[DRY-RUN MODE]` banner to stderr at startup, and a `[DRY-RUN]` prefix line for each update that would be applied. Mutually exclusive with `--apply`. After a successful `--dry-run --check`, writes a timestamp marker (`last-dry-run-ts`) so a subsequent `--apply` can confirm the preview was recent. |
 | `--no-cache` | off | Bypass the flat-file cache entirely. Every fetch goes to the network. Cache reads return miss; cache writes are skipped. Prints a `[NO-CACHE MODE] cache bypassed — all fetches hit network` header line. |
@@ -288,6 +289,7 @@ bin/env-update.sh [OPTIONS]
 - `--dump` and `--check` are mutually exclusive — exit 1 if both are given.
 - `--dump` and `--apply` are mutually exclusive — exit 1 if both are given.
 - `--apply` implies `--check` — no need to specify both; `--apply` alone triggers a check first.
+- `--apply-resolve` is a no-op unless `--apply` is also specified.
 - `--scan` is a no-op unless `--apply` is also specified and not `--dry-run`.
 - `--scan` + `--profile`: when both are active, `--profile=true` is forwarded to env-scan so its internal phase timing also appears in the output.
 - `--stable=full` and `--unstable=full` are mutually exclusive — exit 1 if both are given (contradictory: cannot force stable and force unstable simultaneously).

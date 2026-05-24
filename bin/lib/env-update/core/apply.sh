@@ -1,5 +1,17 @@
 #!/bin/bash
-# apply.sh — rewrite .env AUTO decisions back to the env file
+# apply.sh — rewrite .env AUTO/SHA/LOCK/RESOLVED decisions back to the env file.
+#
+# Exports:   _gs_eu2_apply_single  _gs_eu2_apply_replace_target
+#            _gs_eu2_expand_replace_template  _gs_eu2_apply_updates
+# Sources:   core/records.sh  core/git.sh
+# Deps:      awk, mktemp, mv, cp
+# Env:       _GS_EU2_CFG (env_file, dry_run, no_fail, backup, backup_keep,
+#                         backup_purge, backup_suffix, apply_resolve)
+#
+# All writes go through awk-based rewrite with atomic tmp+mv to avoid partial
+# file state.  A snapshot of the env file is taken before the loop; on error
+# the snapshot is restored so cascaded (replace:) failures don't leave the file
+# in a partially-written state.
 
 [[ -n "${_GS_EU2_APPLY_SH_LOADED:-}" ]] && return 0
 readonly _GS_EU2_APPLY_SH_LOADED=1
@@ -9,16 +21,28 @@ source "$(dirname "${BASH_SOURCE[0]}")/records.sh"
 # shellcheck source=./git.sh
 source "$(dirname "${BASH_SOURCE[0]}")/git.sh"
 
-# Rewrite a VAR=value line and its @todo annotation comment in one awk pass (atomic via tmp+mv).
-# $4 = raw_annotation (exact comment line to match); $5 = current version token to replace.
-# $6 = current annotation SHA (for sha: keyword replacement in annotation).
-# $7 = new SHA to write into sha: keyword (may include date suffix, e.g. "HASH (YYYY-MM-DD)").
-# $8 = use_sha flag ("true" → write new SHA to VAR= instead of new version).
-# $9 = annotation_only flag ("true" → skip VAR= rewrite, update annotation only).
-# $10 = bare_sha: the raw 40-char SHA without date — used for the VAR= line only.
-#        Keeping the date out of VAR= (Bug E fix): new_sha carries "HASH (DATE)" for the
-#        annotation sha: keyword; bare_sha carries just "HASH" for the VAR= value.
-# Finds " curval" as a literal word boundary — immune to trailing urls: extras.
+# _gs_eu2_apply_single — rewrite a VAR=value line and its annotation in one awk pass.
+#
+# Args:    $1  file           — path to the env file
+#          $2  var_name       — env variable name (matched as prefix of lines)
+#          $3  new_value      — new version value for VAR= line
+#          $4  raw_annotation — exact annotation comment line to match and rewrite
+#          $5  cur_version    — current version token in the annotation (replaced with $3)
+#          $6  cur_sha        — current sha: hash in the annotation (empty = no sha rewrite)
+#          $7  new_sha        — new sha: hash for the annotation (may include "(YYYY-MM-DD)")
+#          $8  use_sha        — "true" → write new SHA to VAR= instead of new version
+#          $9  annotation_only— "true" → skip VAR= rewrite (LOCK path: annotation updated only)
+#          $10 bare_sha       — raw 40-char SHA without date (used for the VAR= value only;
+#                               prevents date leaking into the variable value — Bug E fix)
+# Reads:   file on disk
+# Sets:    nothing (writes to file via awk + tmp+mv)
+# Prints:  error message to stderr on mktemp/awk/mv failure
+# Returns: 0 on success; 1 on failure (caller should abort or roll back)
+# Side fx: rewrites file atomically (tmp+mv); does NOT create a backup (caller handles that)
+#
+# Design note: uses the LAST occurrence of " curval" in the annotation to avoid
+# collisions with major-hint tokens (e.g. "... repo 2 2.4.0" — first " 2" is the
+# hint; the version token is the last " 2.4.0").
 _gs_eu2_apply_single() {
   local _file="${1}" _var="${2}" _new="${3}" _raw_ann="${4:-}" _cur="${5:-}" \
         _cur_sha="${6:-}" _new_sha="${7:-}" _use_sha="${8:-false}" \
@@ -72,8 +96,16 @@ _gs_eu2_apply_single() {
   mv "${_tmp}" "${_file}" || { rm -f "${_tmp}"; return 1; }
 }
 
-# Rewrite a single VAR=value line in _file (VAR= only — no annotation comment rewrite).
-# $1 = file, $2 = var_name, $3 = new_value
+# _gs_eu2_apply_replace_target — rewrite a single VAR=value line (no annotation rewrite).
+#
+# Args:    $1 file      — path to the env file
+#          $2 var_name  — env variable name to match
+#          $3 new_value — new value for the VAR= line
+# Reads:   file on disk
+# Sets:    nothing
+# Prints:  error to stderr on failure
+# Returns: 0 on success; 1 on failure
+# Side fx: rewrites file atomically (tmp+mv); used by (replace:) cascade writes
 _gs_eu2_apply_replace_target() {
   local _file="${1}" _var="${2}" _new="${3}"
   local _tmp
@@ -85,8 +117,15 @@ _gs_eu2_apply_replace_target() {
   mv "${_tmp}" "${_file}" || { rm -f "${_tmp}"; return 1; }
 }
 
-# Expand {major}, {minor}, {patch} tokens in a template string.
-# $1 = template, $2 = proposed version (used to extract components).
+# _gs_eu2_expand_replace_template — expand {version}/{major}/{minor}/{patch} tokens.
+#
+# Args:    $1 template — template string containing {version}, {major}, {minor}, {patch}
+#          $2 proposed — proposed version (used to extract major/minor/patch components)
+# Reads:   nothing
+# Sets:    nothing
+# Prints:  expanded template string (v-prefix stripped from components)
+# Returns: 0 always
+# Side fx: none
 _gs_eu2_expand_replace_template() {
   local _tmpl="${1}" _prop="${2}"
   local _ver="${_prop#v}"
@@ -102,8 +141,18 @@ _gs_eu2_expand_replace_template() {
   printf '%s' "${_tmpl}"
 }
 
-# Apply all AUTO decisions from records to the env file.
-# Args: $1 = env_file, $2 = dry_run ("true" → no writes)
+# _gs_eu2_apply_updates — apply all AUTO/SHA/LOCK/RESOLVED decisions to the env file.
+#
+# Args:    $1 env_file — path to the .env file to rewrite
+#          $2 dry_run  — "true" → print what would be applied without writing
+# Reads:   all record arrays (decision, env_var, current_version, proposed_version,
+#          raw_annotation, annotation_sha, proposed_sha, use_sha, replace_targets,
+#          replace_templates), _GS_EU2_CFG
+# Sets:    nothing (reads record state set by run_check)
+# Prints:  [APPLIED]/[DRY-RUN]/[SHA]/[LOCK]/[REPLACE] lines to stdout; errors to stderr
+# Returns: 0 on success; 1 on write error (unless --no-fail suppresses it)
+# Side fx: rewrites env_file in-place for non-dry-run runs; creates a tmpdir snapshot
+#          for rollback on (replace:) cascade failure; the snapshot is cleaned up on RETURN
 _gs_eu2_apply_updates() {
   local _env_file="${1}" _dry_run="${2:-false}"
 

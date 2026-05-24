@@ -1,5 +1,17 @@
 #!/bin/bash
-# cache.sh — TTL-based flat-file cache for fetched versions
+# cache.sh — TTL-based flat-file cache for fetched versions.
+#
+# Exports:   _gs_eu2_cache_read  _gs_eu2_cache_write
+#            _gs_eu2_cache_invalidate  _gs_eu2_cache_clear_all
+#            _gs_eu2_cache_key_to_file
+# Sources:   config/defaults.sh
+# Deps:      date, stat (GNU or BSD), mktemp, mv
+# Env:       _GS_EU2_CACHE_DIR (default: /tmp/global-stack-env-update-cache)
+#            _GS_EU2_CACHE_TTL (default: 3600 seconds; set by main.sh from _GS_EU2_CFG)
+#
+# Cache key → filename: special chars (:, /, @, space) replaced with _ to produce
+# a safe flat-file name.  Atomic writes (tmp+mv) prevent partial reads from
+# concurrent fetches hitting the same key.  Dry-run mode skips cache writes (C4).
 
 [[ -n "${_GS_EU2_CACHE_SH_LOADED:-}" ]] && return 0
 readonly _GS_EU2_CACHE_SH_LOADED=1
@@ -10,12 +22,24 @@ source "$(dirname "${BASH_SOURCE[0]}")/../config/defaults.sh"
 _GS_EU2_CACHE_DIR="${_GS_EU2_CACHE_DIR:-/tmp/global-stack-env-update-cache}"
 _GS_EU2_CACHE_TTL="${_GS_EU2_CACHE_TTL:-3600}"
 
+# _gs_eu2_cache_key_to_file — map a cache key to its on-disk filename.
+#
+# Args:    $1 key — cache key (e.g. "github:owner/repo:stable")
+# Prints:  absolute path to the cache file (file may or may not exist)
+# Returns: 0 always
 _gs_eu2_cache_key_to_file() {
   local _key="${1}"
   local _safe="${_key//[:\/@ ]/_}"
   printf '%s/%s.cache' "${_GS_EU2_CACHE_DIR}" "${_safe}"
 }
 
+# _gs_eu2_cache_read — return cached value if fresh, else signal miss.
+#
+# Args:    $1 key — cache key
+# Reads:   _GS_EU2_CACHE_TTL, cache file mtime
+# Prints:  cached value string (may be empty if cached as empty)
+# Returns: 0 on cache hit (value is fresh); 1 on miss or error (file absent,
+#          expired, or disappeared between stat and read)
 _gs_eu2_cache_read() {
   local _key="${1}"
   local _f
@@ -34,6 +58,14 @@ _gs_eu2_cache_read() {
   return 0
 }
 
+# _gs_eu2_cache_write — atomically write a value to the cache.
+#
+# Args:    $1 key   — cache key
+#          $2 value — value to store (may be empty string)
+# Reads:   _GS_EU2_CFG[dry_run]
+# Prints:  nothing
+# Returns: 0 on success; 1 on failure (mktemp or write error)
+# Side fx: creates _GS_EU2_CACHE_DIR if needed; writes tmp file then renames atomically
 _gs_eu2_cache_write() {
   # C4: Skip cache writes in dry-run mode — dry runs must not pollute the cache
   if [[ "${_GS_EU2_CFG[dry_run]:-false}" == "true" ]]; then
@@ -53,11 +85,20 @@ _gs_eu2_cache_write() {
   return 1
 }
 
+# _gs_eu2_cache_invalidate — delete the cache file for a single key.
+#
+# Args:    $1 key — cache key to invalidate
+# Returns: 0 always
 _gs_eu2_cache_invalidate() {
   local _key="${1}"
   rm -f "$(_gs_eu2_cache_key_to_file "${_key}")"
 }
 
+# _gs_eu2_cache_clear_all — delete the entire cache directory.
+#
+# Args:    none
+# Returns: 0 always
+# Side fx: removes _GS_EU2_CACHE_DIR and all its contents
 _gs_eu2_cache_clear_all() {
   rm -rf "${_GS_EU2_CACHE_DIR}"
 }

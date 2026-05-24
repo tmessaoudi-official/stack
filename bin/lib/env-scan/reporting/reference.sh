@@ -2,7 +2,13 @@
 # reference.sh — comprehensive reference for env-scan: pipeline phases, flags,
 #                propagation rules, conflict detection, and worked scenarios.
 #
+# Exports:   _gs_es_show_reference
+# Sources:   none
+# Deps:      bash 4.3+
+# Env:       none
+#
 # Called by: main.sh when --reference[=SECTION] is passed (exits before env file access)
+# Sections:  all (default) | pipeline | flags | propagation | conflicts | scenarios
 
 [[ -n "${_GS_ES_REFERENCE_SH_LOADED:-}" ]] && return 0
 readonly _GS_ES_REFERENCE_SH_LOADED=1

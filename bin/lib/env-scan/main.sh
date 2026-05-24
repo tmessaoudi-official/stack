@@ -1,5 +1,23 @@
 #!/bin/bash
-# main.sh — gs_es_main orchestration
+# main.sh — gs_es_main orchestration for env-scan 8-phase pipeline.
+#
+# Exports:   gs_es_main
+# Sources:   config/defaults.sh  core/args.sh  core/backup.sh  core/extract.sh
+#            core/merge.sh  reporting/profile.sh  reporting/reference.sh
+#            propagate.sh
+# Deps:      bash 4.3+, mktemp, realpath, envsubst, sed, awk, find
+# Env:       _GS_ES_CFG (associative array — populated by args.sh)
+#
+# 8-phase pipeline (see templates/tips/env-scan.md for full reference):
+#   Phase 1: Parse args
+#   Phase 2: Build source index
+#   Phase 3: Scan docker sources (ARG lines in Dockerfiles)
+#   Phase 4: Detect conflicting values across sources
+#   Phase 4.5: Backup pre-flight (purge + snapshot)
+#   Phase 5: Sync env files (.env → .env.local)
+#   Phase 6: Propagate to Dockerfiles
+#   Phase 6.5: Backup retention prune
+#   Phase 7: Cleanup
 set -eEuo pipefail
 
 # Include guard — B4: fix name to follow _GS_ES_MODULENAME_SH_LOADED convention
@@ -26,6 +44,11 @@ source "$(dirname "${BASH_SOURCE[0]}")/propagate.sh"
 # Session-scoped temp directory — set here, used by extract.sh and missing.sh
 _GS_ES_SESSION_TMP=""
 
+# gs_es_main — top-level entry point; runs the full 8-phase pipeline.
+#
+# Args:    "$@" — all CLI arguments (passed through to gs_es_parse_args)
+# Prints:  phase output to stdout; banners + backup messages to stderr
+# Returns: 0 on success; non-zero on Phase 6 propagation error (unless --no-fail)
 gs_es_main() {
   # Phase 1: Parse args
   _gs_es_profile_init # records total start time before we know --profile value
