@@ -18,6 +18,8 @@ source "$(dirname "${BASH_SOURCE[0]}")/core/extract.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/core/merge.sh"
 # shellcheck source=./reporting/profile.sh
 source "$(dirname "${BASH_SOURCE[0]}")/reporting/profile.sh"
+# shellcheck source=./reporting/reference.sh
+source "$(dirname "${BASH_SOURCE[0]}")/reporting/reference.sh"
 # shellcheck source=./propagate.sh
 source "$(dirname "${BASH_SOURCE[0]}")/propagate.sh"
 
@@ -30,6 +32,12 @@ gs_es_main() {
   _gs_es_profile_start
   gs_es_parse_args "${@}"
   _gs_es_profile_end "Parse args"
+
+  # --reference: print comprehensive reference and exit (before any env file access)
+  if [[ "${_GS_ES_CFG[reference]:-false}" == "true" ]]; then
+    _gs_es_show_reference "${_GS_ES_CFG[reference_section]:-all}"
+    exit 0
+  fi
 
   # Mode banners — always printed to stderr regardless of --quiet
   [[ "${_GS_ES_CFG[dry_run]:-false}" == "true" ]] && printf '[DRY-RUN MODE] no files will be written\n' >&2

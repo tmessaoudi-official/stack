@@ -2248,6 +2248,48 @@ t "t22c: --no-fail + Phase 6 propagation error → [NO-FAIL] per-suppression not
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
+section "28 — --reference flag (env-scan)"
+# ═══════════════════════════════════════════════════════════════════════════
+
+# t28a: --reference exits 0 and produces non-empty output
+t "t28a: env-scan --reference exits 0 with non-empty output" bash -c "
+    out=\$(bash '${ENV_SCAN}' --reference 2>&1)
+    rc=\$?
+    [[ \$rc -eq 0 ]] || { echo \"expected exit 0, got \$rc\"; echo FAIL; exit 0; }
+    [[ -n \"\$out\" ]] || { echo 'output was empty'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t28b: --reference shows 8-phase pipeline overview with specific phase content
+t "t28b: env-scan --reference shows phase overview" bash -c "
+    out=\$(bash '${ENV_SCAN}' --reference 2>&1)
+    rc=\$?
+    [[ \$rc -eq 0 ]] \
+        || { echo \"expected exit 0, got \$rc\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qi 'phase.*[12345678]\|[12345678].*phase\|8-phase\|eight phase' \
+        || { echo 'expected numbered phase overview in --reference output'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t28c: --reference requires no env file (exits before file access)
+t "t28c: env-scan --reference needs no env file" bash -c "
+    D=\$(mktemp -d)
+    out=\$(bash '${ENV_SCAN}' --dir=\"\$D\" --reference 2>&1)
+    rc=\$?
+    rm -rf \"\$D\"
+    [[ \$rc -eq 0 ]] || { echo \"expected exit 0 without env file, got \$rc; out=\$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t28c2: --reference shows flag documentation
+t "t28c2: env-scan --reference shows flag documentation" bash -c "
+    out=\$(bash '${ENV_SCAN}' --reference 2>&1)
+    echo \"\$out\" | grep -qi -- '--dry-run\|--no-fail\|--backup' \
+        || { echo 'expected flag docs in --reference output'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section

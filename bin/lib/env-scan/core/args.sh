@@ -61,6 +61,13 @@ gs_es_parse_args() {
 		--prune-removed=*)                _GS_ES_CFG[prune_removed]="${1#*=}";               _GS_ES_CFG[prune_removed]="${_GS_ES_CFG[prune_removed],,}" ;;
 		--orphan-ignore-pattern=*)         _GS_ES_CFG[orphan_ignore_pattern]="${1#*=}" ;;
 		--orphan-quiet=*)                 _GS_ES_CFG[orphan_quiet]="${1#*=}";                _GS_ES_CFG[orphan_quiet]="${_GS_ES_CFG[orphan_quiet],,}" ;;
+		--reference)
+			_GS_ES_CFG[reference]="true"
+			;;
+		--reference=*)
+			_GS_ES_CFG[reference_section]="${1#*=}"
+			_GS_ES_CFG[reference]="true"
+			;;
 		--version)
 			printf '%s\n' "${_GS_ES_VERSION}"
 			exit 0
@@ -154,6 +161,8 @@ gs_es_parse_args() {
 	[[ -z "${_GS_ES_CFG[backup_keep]+set}" ]]               && _GS_ES_CFG[backup_keep]="10"
 	[[ -z "${_GS_ES_CFG[backup_suffix]+set}" ]]             && _GS_ES_CFG[backup_suffix]=".bak"
 	[[ -z "${_GS_ES_CFG[orphan_ignore_pattern]+set}" ]]    && _GS_ES_CFG[orphan_ignore_pattern]="${_GS_ES_PATTERN_ORPHAN_IGNORE}"
+	[[ -z "${_GS_ES_CFG[reference]+set}" ]]              && _GS_ES_CFG[reference]="false"
+	[[ -z "${_GS_ES_CFG[reference_section]+set}" ]]      && _GS_ES_CFG[reference_section]="all"
 	# Explicit return 0 — guards against bash set -e treating a false [[ ]] && pattern
 	# on the last line of a function as a non-zero function exit (surfaced by Sprint H tests).
 	return 0
