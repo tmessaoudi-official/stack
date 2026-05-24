@@ -247,7 +247,7 @@ After the pipeline, channel selection picks the best remaining version.
 
 | Flag | Record field | Description |
 |------|-------------|---|
-| `(depends-on:VAR:constraint)` | `depends_on` | Declare a dependency relationship. Both VAR and constraint are required; the format `VAR:constraint` is mandatory. Stored as metadata only — the core fetcher does not enforce it. Intended for tools that post-process records to check dependency ordering. |
+| `(depends-on:VAR:constraint)` | `depends_on` | Declare a dependency relationship. Both VAR and constraint are required; the format `VAR:constraint` is mandatory. Stored as metadata only — the core fetcher does not enforce it. Intended for tools that post-process records to check dependency ordering. **NOT enforced at runtime.** When present, `--check` emits a `↳ [WARN]` sub-line for the record: `(depends-on:VAR:constraint) not enforced — dependency ordering unimplemented; verify VAR manually before --apply`. This warning is NOT suppressed by `--no-notes`. |
 
 ---
 
@@ -282,6 +282,8 @@ bin/env-update.sh [OPTIONS]
 | `--no-notes` | off | **Suppress note sub-lines.** When set, `↳ (note: TEXT)` annotation sub-lines are omitted from `--check` output. Prints a `[NO-NOTES MODE] note sub-lines suppressed for N record(s)` header line, where N is the number of records that carry a `(note:TEXT)` annotation. Useful for minimal/scripted output. Does NOT suppress SHA sub-lines, `[UNSTABLE]` sub-lines, `[STABLE]` sub-lines, `[PIN-MISS]` sub-lines, or `[WATCH]` generation-change sub-lines. |
 | `--force-auto` | off | **Override annotation gates.** Treats `(manual)` and `(override)` annotation flags as if they were absent, and upgrades `HOLD` decisions to `AUTO`. Prints a `[FORCE-AUTO MODE] (manual) and (override) gates bypassed` header line. Use when you need to auto-apply updates that are normally gated (e.g. in CI scripts or one-shot mass updates). NOTE: `(lock:REASON)` and `(skip:REASON)` annotation flags are immune to `--force-auto` — they cannot be overridden by it. The `(manual)` flag CAN be overridden; the annotation text is not rewritten. `(lock:REASON)` cannot be overridden at all; annotation-only updates via `--apply` still work for locked records without `--force-auto`. When combined with `--apply`, requires `--confirm="Confirm override"` (exact string) — exit 1 without it. When combined with `--check` only, no confirmation is needed. |
 | `--confirm=TEXT` | (none) | **Confirmation gate for `--force-auto --apply`.** Must be exactly `Confirm override` (case-sensitive, including the space). Prevents accidental invocation of `--force-auto --apply` in interactive sessions. Has no effect unless `--force-auto` and `--apply` are both specified. |
+| `--reference[=SECTION]` | — | Print the annotation/fetcher/decision reference and exit 0. Optional SECTION: `syntax \| flags \| annotations \| fetchers \| decisions \| matrix \| scenarios \| env-scan`. Without SECTION, all sections are printed. |
+| `--tally[=VALUE]` | `auto` | Control the live running tally on stderr during `--check`. `auto` (default): show when stderr is a TTY and terminal ≥ 130 cols. `full`: show when TTY (no column-width requirement). `off`: never show. Plain `--tally` = `--tally=auto`. |
 
 ### Flag combinations and mutual exclusivity
 
@@ -297,6 +299,12 @@ bin/env-update.sh [OPTIONS]
   - `--stable=full + --unstable=info` ✓ (force stable decisions, show prerelease sub-line)
   - `--stable=info + --unstable=full` ✓ (force prerelease decisions, show stable sub-line)
   - `--stable=info + --unstable=info` ✓ (both sub-lines shown; unstable first, stable second)
+
+### Environment variables
+
+| Variable | Description |
+|----------|-------------|
+| `_GS_EU2_TALLY_FORCE=1` | Bypasses the stderr TTY gate so the live running tally displays even when stderr is not a terminal. Use cases: CI pipelines (GitHub Actions, GitLab CI), terminal multiplexers (tmux, screen) that don't expose TTY on stderr, any non-interactive shell wanting live progress during a long `--check` run. Default: unset (TTY gate active). Note: the column-width gate (`--tally=auto` requires ≥ 130 cols) still applies unless combined with `--tally=full`. |
 
 ### Typical usage patterns
 
@@ -503,6 +511,7 @@ than showing a placeholder.
 | `[LOCK  ]` | The annotation has `(lock:REASON)`. The fetcher ran and `proposed_version` is populated, but the variable is locked — `--apply` updates only the annotation version token; the `VAR=` line is never touched. Immune to `--force-auto`. Does not fire when the fetcher returned ERROR or a skip-gate `(skip:)` was active. |
 | `[SKIP  ]` | The variable is already at the latest version (`current == proposed`), or the fetcher returned no viable candidates, or the current version is a floating reference (`latest`, `nightly`, etc.), or the proposed would downgrade the current version, or the proposed is a prerelease while the current is stable. Also used when a fetcher sets `error_message` but no `decision`. |
 | `[ERROR ]` | Network failure, HTTP error (4xx/5xx), rate limiting after 3 retries, or a parse failure in the API response. The fetch was attempted and definitively failed. |
+| `RESOLVED` | Float-to-concrete resolution. Current is a floating ref (`latest`, `stable`, `lts`, …) and the fetcher returned a concrete version. Informational only — never auto-applied; requires `--apply --apply-resolve` to pin. |
 
 ### alt_version line
 
