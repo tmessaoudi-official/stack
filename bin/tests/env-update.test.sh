@@ -9829,6 +9829,34 @@ t "t98m: B1 summary contains RESOLVE count when RESOLVED records present" bash -
 _flush_section
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Section 99 — Batch B: --reference in help, --tally documented
+# ═══════════════════════════════════════════════════════════════════════════
+section "99 — Batch B: --reference in help, --tally documented"
+
+# t99a: --help output must contain --reference (B1 rename)
+t "t99a: --help output contains --reference flag" bash -c "
+    out=\$(bash '${ENV_UPDATE_V2}' --help 2>&1)
+    echo \"\$out\" | grep -qF -- '--reference' || { echo \"help missing --reference flag; got fragment: \$(echo \"\$out\" | grep -i 'annot\|ref')\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t99b: --help output must NOT contain --annotations (dead flag removed)
+t "t99b: --help output does NOT contain dead --annotations flag" bash -c "
+    out=\$(bash '${ENV_UPDATE_V2}' --help 2>&1)
+    echo \"\$out\" | grep -qF -- '--annotations' && { echo \"help still references dead --annotations flag\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t99c: --help output must contain --tally (B2 new entry)
+t "t99c: --help output contains --tally flag" bash -c "
+    out=\$(bash '${ENV_UPDATE_V2}' --help 2>&1)
+    echo \"\$out\" | grep -qF -- '--tally' || { echo \"help missing --tally flag\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+_flush_section
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section

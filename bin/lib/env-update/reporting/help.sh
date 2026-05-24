@@ -26,8 +26,10 @@ Usage: env-update.sh [OPTIONS]
 Options:
   --version               Print version and exit
   --help                  Show this help and exit
-  --annotations           Print a structured reference of all supported annotation
-                          flags, fetcher types, and inline syntax, then exit.
+  --reference[=SECTION]   Print the annotation/fetcher/decision reference. Optional
+                          SECTION: syntax | flags | fetchers | decisions | matrix |
+                          scenarios | env-scan. Without SECTION, all sections are
+                          printed.
   --env-file=<path>       Source .env file (default: /stack/.env)
   --filter=<regex>        Only parse records whose env_var matches regex
   --exclude=<regex>       Skip records whose env_var matches regex. Composable
@@ -77,6 +79,11 @@ Options:
   --no-notes                      Suppress annotation (note: TEXT) sub-lines — for minimal
                                   output. Does NOT suppress SHA, [UNSTABLE], [STABLE],
                                   [DRIFT], or [PIN-MISS] sub-lines.
+  --tally[=VALUE]                 Control the live running tally on stderr during --check.
+                                  auto (default): show when stderr is a TTY and terminal
+                                  >= 130 cols. full: show when TTY (no column-width
+                                  requirement). off: never show.
+                                  Plain --tally = --tally=auto.
   --no-drift                      Suppress [DRIFT] sub-lines — emitted when the VAR= value
                                   in the env file differs from what the annotation claims as
                                   current. Does NOT affect (note:TEXT) or other sub-lines.
@@ -189,8 +196,8 @@ Examples:
   bin/env-update.sh --apply --backup-suffix=.snap                     # custom backup suffix
   bin/env-update.sh --apply --apply-resolve                           # apply AUTO + concrete-resolve RESOLVED decisions
 
-  bin/env-update.sh --annotations                                     # print annotation syntax reference
+  bin/env-update.sh --reference                                        # print annotation/fetcher/decision reference
 
-Tip: run --annotations to see all supported annotation flags, fetcher types, and inline syntax.
+Tip: run --reference to see all supported annotation flags, fetcher types, and inline syntax.
 EOF
 }
