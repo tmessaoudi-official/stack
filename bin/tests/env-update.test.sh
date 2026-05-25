@@ -9968,6 +9968,172 @@ t "t100f: --dump shows propagate: true" bash -c "
 _flush_section
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Section 101 — decide.sh nightly SHA sort-V normalization (NODEEDGE fix)
+#
+# Regression guards for the sort-V false-downgrade bug: nightly versions with
+# a long numeric+hex SHA suffix (e.g. nightly20260524837910d298) caused sort-V
+# to produce a key longer than the date-only key (nightly202605252e3daf6e4d),
+# making May-24 sort AFTER May-25 → legitimate upgrade seen as downgrade → SKIP.
+# Fix: perl normalization strips hex chars after YYYYMMDD before sort-V.
+# ═══════════════════════════════════════════════════════════════════════════
+section "101 — decide.sh nightly SHA sort-V normalization"
+
+_NODEEDGE_DECIDE_LIBS="
+source '/stack/bin/lib/env-update/config/defaults.sh'
+source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update/core/semver.sh'
+source '/stack/bin/lib/env-update/core/decide.sh'
+"
+
+# t101a: May-24 long-SHA nightly current → May-25 short-SHA nightly proposed → AUTO (not SKIP)
+# This is the exact NODEEDGE regression: raw sort-V incorrectly ranks May-24 > May-25.
+t "t101a: newer nightly (May-25 short SHA) is NOT a downgrade over May-24 long SHA" bash -c "
+    ${_NODEEDGE_DECIDE_LIBS}
+    cv='v27.0.0-nightly20260524837910d298'
+    pv='v27.0.0-nightly202605252e3daf6e4d'
+    result=\$(_gs_eu2_classify_decision \"\${cv#v}\" \"\${pv#v}\" '' '' '' 'full')
+    [[ \"\$result\" != 'SKIP' ]] || { echo \"got SKIP — false downgrade still fires; May-25 nightly should be accepted as upgrade\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t101b: same-date different-SHA nightly — normalization strips both SHAs to same date key,
+# so _oldest == _pv_norm == _cv_norm and the downgrade guard does NOT fire → falls through to AUTO.
+# This is the correct behavior: same-date builds cannot be ordered; AUTO is safer than false SKIP.
+t "t101b: same-date different-SHA nightly does not falsely SKIP (downgrade guard bypassed)" bash -c "
+    ${_NODEEDGE_DECIDE_LIBS}
+    cv='27.0.0-nightly20260524837910d298'
+    pv='27.0.0-nightly20260524abc1234def'
+    result=\$(_gs_eu2_classify_decision \"\$cv\" \"\$pv\" '' '' '' 'full')
+    [[ \"\$result\" != 'SKIP' ]] || { echo \"got SKIP — same-date nightly falsely seen as downgrade; expected AUTO or MANUAL\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t101c: older nightly (May-24) proposed against May-25 current → SKIP (real downgrade still caught)
+t "t101c: older nightly (May-24 proposed vs May-25 current) still produces SKIP (downgrade)" bash -c "
+    ${_NODEEDGE_DECIDE_LIBS}
+    cv='27.0.0-nightly202605252e3daf6e4d'
+    pv='27.0.0-nightly20260524837910d298'
+    result=\$(_gs_eu2_classify_decision \"\$cv\" \"\$pv\" '' '' '' 'full')
+    [[ \"\$result\" == 'SKIP' ]] || { echo \"expected SKIP for real downgrade, got: '\$result'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t101d: non-nightly versions are unaffected — plain semver still works
+t "t101d: plain semver versions pass through decide.sh unchanged after normalization" bash -c "
+    ${_NODEEDGE_DECIDE_LIBS}
+    result=\$(_gs_eu2_classify_decision '27.0.0' '27.1.0' '' '' '')
+    [[ \"\$result\" == 'AUTO' ]] || { echo \"expected AUTO for plain minor bump, got: '\$result'\"; echo FAIL; exit 0; }
+    result2=\$(_gs_eu2_classify_decision '27.1.0' '27.0.0' '' '' '')
+    [[ \"\$result2\" == 'SKIP' ]] || { echo \"expected SKIP for plain downgrade, got: '\$result2'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+_flush_section
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 102 — apply.sh LOCK path skips annotation rewrite for floating current (PHPEDGE fix)
+#
+# Bug: (lock:) + floating current ("next") caused the annotation to be rewritten
+# from "next" to the concrete proposed version (e.g. "php-8.5.6") on --apply.
+# The VAR= line was left unchanged, but the annotation's current_version token was
+# corrupted, breaking round-trip semantics and future runs.
+# Fix: apply.sh LOCK path guards with _gs_eu2_is_unversioned before any rewrite.
+# ═══════════════════════════════════════════════════════════════════════════
+section "102 — apply.sh LOCK floating-current guard (PHPEDGE fix)"
+
+# t102a: LOCK + floating current ("next") — --apply must NOT rewrite annotation
+t "t102a: (lock:) with floating current 'next' — --apply leaves annotation byte-identical" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t102a_cache
+    mkdir -p \"\${TMP_DIR}/t102a_cache\"
+    touch \"\${TMP_DIR}/t102a_cache/last-dry-run-ts\"
+    f=\${TMP_DIR}/t102a.env
+    ann='# @todo env-update (lock:keep as floating alias) github:php/php-src next'
+    printf '%s\nGLOBAL_STACK_PHPEDGE_VERSION=next\n' \"\$ann\" > \"\$f\"
+    original=\$(cat \"\$f\")
+    bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$f\" 2>/dev/null || true
+    after=\$(cat \"\$f\")
+    [[ \"\$original\" == \"\$after\" ]] || {
+        echo 'file was modified — annotation rewritten for floating (next) current'
+        echo \"before: \$original\"
+        echo \"after:  \$after\"
+        echo FAIL; exit 0
+    }
+    echo PASS
+"
+
+# t102b: LOCK + floating current — --check shows LOCK; --apply leaves file unchanged
+# Uses dockerhub:_/postgres:18 which has a fixture returning 18.4-alpine3.23,
+# so the LOCK decision fires reliably.
+t "t102b: (lock:) with floating current — --check shows LOCK; file unchanged after --apply" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t102b_cache
+    mkdir -p \"\${TMP_DIR}/t102b_cache\"
+    touch \"\${TMP_DIR}/t102b_cache/last-dry-run-ts\"
+    f=\${TMP_DIR}/t102b.env
+    ann='# @todo env-update (lock:keep as floating alias) dockerhub:_/postgres:18 next'
+    printf '%s\nGLOBAL_STACK_T102B=next\n' \"\$ann\" > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1 || true)
+    echo \"\$out\" | grep -qF '[LOCK' || {
+        echo \"expected LOCK in check output; got: \$out\"
+        echo FAIL; exit 0
+    }
+    original=\$(cat \"\$f\")
+    bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$f\" 2>/dev/null || true
+    after=\$(cat \"\$f\")
+    [[ \"\$original\" == \"\$after\" ]] || {
+        echo 'file changed after --apply on floating-current LOCK'
+        echo FAIL; exit 0
+    }
+    echo PASS
+"
+
+# t102c: LOCK + concrete current still rewrites annotation (existing LOCK behaviour intact)
+t "t102c: (lock:) with concrete current still rewrites annotation when proposed differs" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t102c_cache
+    mkdir -p \"\${TMP_DIR}/t102c_cache\"
+    touch \"\${TMP_DIR}/t102c_cache/last-dry-run-ts\"
+    f=\${TMP_DIR}/t102c.env
+    ann='# @todo env-update (lock:pinned) dockerhub:_/postgres:18 18.3-alpine3.23'
+    printf '%s\nGLOBAL_STACK_T102C=18.3-alpine3.23\n' \"\$ann\" > \"\$f\"
+    bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$f\" 2>/dev/null || true
+    after=\$(cat \"\$f\")
+    echo \"\$after\" | grep -q '18.4-alpine3.23' || {
+        echo \"annotation not updated for concrete locked var; file: \$after\"
+        echo FAIL; exit 0
+    }
+    echo \"\$after\" | grep -q 'GLOBAL_STACK_T102C=18.3-alpine3.23' || {
+        echo \"VAR= was changed — LOCK must not touch VAR=\"
+        echo FAIL; exit 0
+    }
+    echo PASS
+"
+
+# t102d: LOCK + other floating aliases (edge, nightly, latest) also skip annotation rewrite
+t "t102d: (lock:) with other floating aliases (edge, nightly, latest) — annotation left unchanged" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t102d_cache
+    mkdir -p \"\${TMP_DIR}/t102d_cache\"
+    touch \"\${TMP_DIR}/t102d_cache/last-dry-run-ts\"
+    for alias in edge latest lts; do
+        f=\${TMP_DIR}/t102d_\${alias}.env
+        ann=\"# @todo env-update (lock:keep floating) dockerhub:_/postgres:18 \${alias}\"
+        printf '%s\nGLOBAL_STACK_T102D=\${alias}\n' \"\$ann\" > \"\$f\"
+        original=\$(cat \"\$f\")
+        bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$f\" 2>/dev/null || true
+        after=\$(cat \"\$f\")
+        [[ \"\$original\" == \"\$after\" ]] || {
+            echo \"alias '\${alias}': file was modified\"
+            echo FAIL; exit 0
+        }
+    done
+    echo PASS
+"
+
+_flush_section
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section

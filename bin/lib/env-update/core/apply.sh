@@ -20,6 +20,8 @@ readonly _GS_EU2_APPLY_SH_LOADED=1
 source "$(dirname "${BASH_SOURCE[0]}")/records.sh"
 # shellcheck source=./git.sh
 source "$(dirname "${BASH_SOURCE[0]}")/git.sh"
+# shellcheck source=./semver.sh
+source "$(dirname "${BASH_SOURCE[0]}")/semver.sh"
 
 # _gs_eu2_apply_single — rewrite a VAR=value line and its annotation in one awk pass.
 #
@@ -234,6 +236,9 @@ _gs_eu2_apply_updates() {
       _cur="$(_gs_eu2_record_get "${_i}" current_version)"
       _prop="$(_gs_eu2_record_get "${_i}" proposed_version)"
       _raw_ann="$(_gs_eu2_record_get "${_i}" raw_annotation)"
+      # Floating current (next, edge, latest, …) means the annotation intentionally
+      # carries an alias — rewriting it to a concrete version breaks the lock semantics.
+      _gs_eu2_is_unversioned "${_cur}" && continue
       # Only rewrite annotation when proposed differs from annotation version (idempotency).
       [[ -z "${_prop}" || "${_prop}" == "${_cur}" ]] && continue
       if [[ "${_dry_run}" == "true" ]]; then

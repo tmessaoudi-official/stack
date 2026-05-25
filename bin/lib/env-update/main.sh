@@ -608,10 +608,14 @@ _gs_eu2_run_check() {
           local _cur_cmp="${_cur#v}" _prop_cmp="${_prop#v}"
           [[ -n "${_tcp_disp}" ]] && _cur_cmp="${_cur_cmp#"${_tcp_disp}"}"
           [[ -n "${_tcp_disp}" ]] && _prop_cmp="${_prop_cmp#"${_tcp_disp}"}"
-          local _oldest
-          _oldest="$(printf '%s\n%s\n' "${_cur_cmp}" "${_prop_cmp}" | sort -V | head -1)"
-          if [[ "${_oldest}" == "${_prop_cmp}" && "${_oldest}" != "${_cur_cmp}" ]]; then
-            _err="would downgrade: current ${_cur_cmp} → stable ${_prop_cmp}"
+          local _cv_norm _pv_norm _oldest
+          _cv_norm="$(perl -pe 's/(\d{8})[0-9a-fA-F]+$/$1/' <<< "${_cur_cmp}")"
+          _pv_norm="$(perl -pe 's/(\d{8})[0-9a-fA-F]+$/$1/' <<< "${_prop_cmp}")"
+          _oldest="$(printf '%s\n%s\n' "${_cv_norm}" "${_pv_norm}" | sort -V | head -1)"
+          if [[ "${_oldest}" == "${_pv_norm}" && "${_oldest}" != "${_cv_norm}" ]]; then
+            local _channel
+            _channel="$(_gs_eu2_record_get "${_i}" channel)"
+            _err="would downgrade: current ${_cur_cmp} → ${_channel:-proposed} ${_prop_cmp}"
           fi
         fi
         ;;
