@@ -171,7 +171,7 @@ make start-local-registry            # Start local TLS registry (port 5000)
 **Slash commands** (type `/command` in any session):
 - `/lint` — shellcheck all scripts + hadolint all Dockerfiles
 - `/fmt` — format shell scripts (`shfmt`) and YAML files (`yamlfmt`); supports `--check`, `--sh`, `--yaml`
-- `/check-versions` — v2 `--check` across all fetcher types (dockerhub, github, npm, pecl, pecl-git, pypi, quay, rubygems, sdkman, sdkmanager, url, codeberg); no v1 fallback
+- `/check-versions` — v2 `--check` across all fetcher types (dockerhub, github, npm, pecl, pypi, quay, rubygems, sdkman, sdkmanager, url, codeberg); no v1 fallback
 - `/validate` — compose config + env consistency + COMPOSE_FILE + tier deps
 - `/stack-health` — health markers, container status, version markers
 - `/env-diff` — show divergences between `.env` and `.env.local`
@@ -183,8 +183,8 @@ make start-local-registry            # Start local TLS registry (port 5000)
 - `/repair` — detect and repair config drift: scans CLAUDE.md + .claude/ vs project reality (files, tools, commands, structure), presents a plan, waits for confirmation; supports `--check` (report only) and `--apply` (auto-fix without prompting)
 - `/sleuth` — *(global command)* behavioral bug hunter: 10 parallel agents hunt silent failures, logic traps, contract violations, cross-component inconsistencies; confidence-scored report, never auto-fixes
 - `/gaps` — *(global command)* incompleteness detector: finds TODO markers, stubs, partial features, promised-but-missing code, template placeholders; prioritized roadmap, never auto-applies
-- `/mega-analysis` — *(global command)* full pipeline in one command: repair → audit → command-audit → inspect × 2 → sleuth × 2 → gaps × 2 → inspect --vision × 2 → retrospective → memory-promote → handoff; versioned delta report at `~/.claude/projects/meta-reports/YYYY-MM-DD/full-analysis[-runN].md`; `--quick` ~30 min, default ~2 hr
-- `/command-audit` — *(global command)* per-command 15-dimension deep report: 4 parallel agents analyze every command file (name clarity, coverage scope, flag completeness, cold-start readiness…); never auto-applies
+- `/mega-analysis` — *(global command)* full pipeline in one command: repair → audit → skill-audit → inspect × 2 → sleuth × 2 → gaps × 2 → inspect --vision × 2 → retrospective → memory-promote → handoff; versioned delta report at `~/.claude/projects/meta-reports/YYYY-MM-DD/full-analysis[-runN].md`; `--quick` ~30 min, default ~2 hr
+- `/skill-audit` — *(global command)* per-skill 15-dimension deep report: 4 parallel agents analyze every skill file (frontmatter completeness, trigger specificity, ask-human gate compliance, convergence gate compliance, cold-start readiness…); never auto-applies
 - `/memory-promote` — *(global command)* analyze project memory files and propose promotions to CLAUDE.md (global) or agent def (project-specific); never auto-applies
 - `/new-service <name> [--parent <image>] [--runtime <name>] [--port <n>]` — scaffold a new service (Dockerfile, compose, startup script, printed `.env` + Makefile lines); args-first with interactive fallback
 
@@ -272,9 +272,9 @@ Claude Code's configuration for this project lives in:
   yamllint-on-write.sh                   # Validate YAML on write
   shfmt-on-write.sh                      # Check shell formatting on write
   subagent-stop-reminder.sh              # SubagentStop: remind parent to verify Phase 7/8
-.claude/commands/                        # Slash command definitions
-  lint.md  fmt.md  check-versions.md  validate.md
-  stack-health.md  env-diff.md  service-info.md  new-service.md
+.claude/skills/                          # Slash skill definitions
+  lint/SKILL.md  fmt/SKILL.md  check-versions/SKILL.md  validate/SKILL.md
+  stack-health/SKILL.md  env-diff/SKILL.md  service-info/SKILL.md  new-service/SKILL.md
 ```
 
 ## File Layout Quick Reference

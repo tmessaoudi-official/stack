@@ -1,3 +1,9 @@
+---
+name: new-service
+description: Use when scaffolding a new Docker service for the /stack project — creates Dockerfile, docker-compose.yaml, and startup script boilerplate from inputs or interactive prompts.
+user-invocable: true
+---
+
 # /new-service — Scaffold a New Docker Service
 
 Creates the full boilerplate for a new /stack service. Arguments-first; falls back to interactive Q&A for anything missing.

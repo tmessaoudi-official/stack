@@ -1,3 +1,9 @@
+---
+name: stack-health
+description: Use when checking which stack services are healthy, failed, or pending. Use after `make up` or when troubleshooting container startup issues.
+user-invocable: true
+---
+
 Check the health status of the running stack by inspecting health markers and container state.
 
 ## Steps:

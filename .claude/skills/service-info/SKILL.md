@@ -1,3 +1,9 @@
+---
+name: service-info
+description: Use when needing comprehensive details about a specific stack service — compose config, Dockerfile, startup script, health status, version vars, and port bindings.
+user-invocable: true
+---
+
 Show comprehensive information about a specific stack service.
 
 The service name is: $ARGUMENTS

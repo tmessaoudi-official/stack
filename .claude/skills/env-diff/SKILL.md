@@ -1,3 +1,9 @@
+---
+name: env-diff
+description: Use when comparing .env (master reference) with .env.local (active config) to find divergences, missing vars, or port mismatches.
+user-invocable: true
+---
+
 Show differences between `.env` (master reference) and `.env.local` (active config).
 
 ## Steps:

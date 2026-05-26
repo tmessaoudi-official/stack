@@ -1,3 +1,9 @@
+---
+name: check-versions
+description: Use when checking for outdated dependencies, Docker images, or language runtime versions tracked in .env with @todo env-update annotations.
+user-invocable: true
+---
+
 Run the automated version checker in preview mode to find outdated dependencies.
 
 `env-update.sh` covers all fetcher types (dockerhub, github, npm, pecl,

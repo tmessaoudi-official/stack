@@ -1,3 +1,9 @@
+---
+name: fmt
+description: Use when shell scripts or YAML files need formatting, or to preview formatting changes before committing. Supports --check, --sh, --yaml flags.
+user-invocable: true
+---
+
 Format shell scripts and YAML files using shfmt and yamlfmt.
 
 ## Default behavior (no arguments):

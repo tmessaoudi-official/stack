@@ -1,3 +1,9 @@
+---
+name: validate
+description: Use when verifying Docker Compose configuration, checking environment file sync, or before starting the stack after changes to .env, .env.local, or compose files.
+user-invocable: true
+---
+
 Validate the Docker Compose configuration and environment consistency.
 
 ## Steps:

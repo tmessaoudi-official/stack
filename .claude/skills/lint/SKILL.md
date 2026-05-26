@@ -1,3 +1,9 @@
+---
+name: lint
+description: Use when shell scripts, Dockerfiles, or YAML files need quality validation. Use after editing any .sh, Dockerfile*, or .yaml/.yml file.
+user-invocable: true
+---
+
 Find and validate all shell scripts and Dockerfiles in this project for quality issues.
 
 ## Shell Scripts
