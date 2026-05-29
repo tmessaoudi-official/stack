@@ -9,7 +9,7 @@
 #
 # NOT included (service-specific): build, image, depends_on, environment vars
 #   for RBENV_MODE, RUBY_VERSION/VERSION_AS, GLOBAL_STACK_RBENV_VERSION,
-#   GLOBAL_STACK_RELOAD_RUBY, GLOBAL_STACK_ERROR_TOKEN,
+#   GLOBAL_STACK_RELOAD_RBENV, GLOBAL_STACK_RELOAD_RUBY (mapped from GLOBAL_STACK_RELOAD_RUBY3 or _RUBY4), GLOBAL_STACK_ERROR_TOKEN,
 #   healthcheck, labels.stack.service/tier.
 services:
   ruby-packages:
