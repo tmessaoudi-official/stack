@@ -201,7 +201,7 @@ _p+='|GLOBAL_STACK_BASE_GROUP'
 _p+='|PHP_INSTALL_CLI_VARIANTS'
 _p+='|PHP_INSTALL_CLI_OPTIONS'
 _p+='|GLOBAL_STACK_SERVERLESS_FRAMEWORK_SERVERLESS_ACCESS_KEY' # feeds BASE_SERVERLESS_ACCESS_KEY alias; injected via base-env.compose.yaml
-_p+='|GLOBAL_STACK_NODE_UPGRADE$'                             # synthetic compose-level alias (per-tier: NODE22_UPGRADE etc.); not a top-level .env key
+_p+='|GLOBAL_STACK_NODE_UPGRADE$'                             # synthetic compose-level alias (per-tier: NODE24_UPGRADE etc.); not a top-level .env key
 _p+=')'
 readonly _GS_ES_PATTERN_FORWARD_CHECK_IGNORE="${_p}"
 unset _p

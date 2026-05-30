@@ -30,9 +30,6 @@ services:
       02fvm:
         condition: service_healthy
         required: true
-      03java25-zulu:
-        condition: service_healthy
-        required: true
       03java26-zulu:
         condition: service_healthy
         required: true
@@ -47,8 +44,8 @@ services:
         required: true
     environment:
       - SDKMAN_DIR=${GLOBAL_STACK_SDKMAN_DIR}
-      - JAVA_VERSION_AS=${GLOBAL_STACK_JAVA25_VERSION_AS}
-      - JAVA_VERSION=${GLOBAL_STACK_JAVA25_VERSION}
+      - JAVA_VERSION_AS=${GLOBAL_STACK_JAVA26_VERSION_AS}
+      - JAVA_VERSION=${GLOBAL_STACK_JAVA26_VERSION}
       - SDKMAN_CONFIG_PACKAGE_DUMMY_NAME=dummy
       - SDKMAN_INSTALL_PACKAGE_DUMMY_VERSION=0
       - SDKMAN_CONFIG_PACKAGE_01_ANT_NAME=${GLOBAL_STACK_JAVA_CONFIG_PACKAGE_ANT_NAME}

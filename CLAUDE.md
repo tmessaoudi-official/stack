@@ -24,7 +24,7 @@ Services live in `docker/images/<tier><name>/` and are numbered by build depende
 | `00*` | Base Ubuntu image + core tooling (Go, Zig, Docker-in-Docker, mkcert, hadolint, shellcheck) | `00base` |
 | `01*` | Infrastructure: databases, cache, web servers, mail, cloud simulators | MySQL9, Postgres18, Redis, Nginx, Caddy, Mailpit, LocalStack |
 | `02*` | Language/version managers — install tools into shared `tools/` volume | NVM, PHPBrew, PyEnv, RbEnv, SDKMAN, Rust, FVM |
-| `03*` | Pre-configured language runtimes (depend on tier 02 being healthy) | Node 22/24, PHP 8.2–8.5, Python 3, Ruby 3/4, Java 11/17/25, Flutter 3 |
+| `03*` | Pre-configured language runtimes (depend on tier 02 being healthy) | Node 24/26/edge, PHP 8.4/8.5/edge, Python 3, Ruby 3/4, Java 17/21/26, Flutter 3 |
 | `04*` | Specialized application tools | PhpMyAdmin, Android SDK, Serverless Framework |
 | `05*` | Combined all-in-one images (`05stable` / `05edge`) | All tier 03 runtimes in one container |
 | `local.*` | Machine-specific custom images (git-ignored) | Project-specific variants |
@@ -158,7 +158,7 @@ make start-local-registry            # Start local TLS registry (port 5000)
 ## Testing & Verification
 
 - **env-scan tests**: `bash bin/tests/env-scan.test.sh` — custom harness with `assert_equals`, `assert_contains`, `assert_not_contains`, `assert_file_exists`
-- **env-update tests**: `bash bin/tests/env-update.test.sh` — 667 tests across 102 sections (fetchers, cache, semver, apply, args, RESOLVED, --reference…); use `--dry-run --filter=<VAR>` and `--offline` for manual cache-only testing
+- **env-update tests**: `bash bin/tests/env-update.test.sh` — 692+ tests across 106 sections (fetchers, cache, semver, apply, args, RESOLVED, --reference…); use `--dry-run --filter=<VAR>` for quick preview; `--offline` is not implemented (use `_GS_EU2_HTTP_FIXTURE_DIR` seam for deterministic offline testing)
 - **Shell scripts**: `shellcheck <file>` and `shfmt -d -i 2 -ci -bn <file>` (diff mode)
 - **YAML files**: `yamllint -d relaxed <file>` and `yamlfmt -dry <file>` (dry-run mode)
 - **Formatting**: `/fmt --check` to preview all formatting changes, `/fmt` to apply them
@@ -204,7 +204,7 @@ make start-local-registry            # Start local TLS registry (port 5000)
 - **Trailing `;` in `COMPOSE_FILE`** breaks Docker Compose silently — always check this after editing
 - **Port vars must end with `:`** when set (e.g. `42708:`) — compose uses `${VAR:-}PORT` so the value becomes the host half of `HOST:CONTAINER`; omitting the colon silently concatenates the port numbers (e.g. `427083306`)
 - **`00base` must always be in `COMPOSE_FILE`** — nearly everything depends on it being healthy
-- **Tier 02 required for tier 03**: if `03node22` is active, `02nvm` must be in `COMPOSE_FILE`; same for `02phpbrew`/`03php*`, `02sdkman`/`03java*`, etc.
+- **Tier 02 required for tier 03**: if `03node24` is active, `02nvm` must be in `COMPOSE_FILE`; same for `02phpbrew`/`03php*`, `02sdkman`/`03java*`, etc.
 - **`${VAR}` expansion in `.env`**: variables must be defined before being referenced; Docker Compose and Make both expand them, but simple dotenv parsers do not
 - **`GLOBAL_STACK_RELOAD_*=true`** forces full reinstall (can take 30+ minutes) — reset to `false` after use
 - **`tools/` is shared state**: `make down` clears success/error markers; if a container fails mid-install, manually check `tools/errors/` before restarting

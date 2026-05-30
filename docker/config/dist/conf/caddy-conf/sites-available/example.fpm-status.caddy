@@ -2,13 +2,13 @@ php fpm config www.conf
 pm.status_path = /fpm-status
 ping.path = /fpm-ping
 domain:port {
-    reverse_proxy /fpm-status 03php8-2:9000 {
+    reverse_proxy /fpm-status 03php8-4:9000 {
         transport fastcgi {
             env SCRIPT_NAME /fpm-status
         }
     }
     
-    reverse_proxy /fpm-ping 03php8-2:9000 {
+    reverse_proxy /fpm-ping 03php8-4:9000 {
         transport fastcgi {
             env SCRIPT_NAME /fpm-ping
         }
