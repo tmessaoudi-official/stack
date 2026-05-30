@@ -5574,6 +5574,32 @@ t "t60g: --dump --format=json stdout is clean JSON even with --no-cache and --fi
     echo PASS
 "
 
+# t60h: --dump --format=json serializes tag_channel_prefix field (non-vacuous:
+# field must appear with the value set). tag_channel_prefix is dispatched by
+# parse.sh via (tag-channel-prefix:STR) but was missing from _gs_eu2_record_fields(),
+# causing dump.sh to silently drop it. This test catches that regression.
+t "t60h: --dump --format=json serializes tag_channel_prefix field (record_fields coverage)" bash -c "
+    source '/stack/bin/lib/env-update/config/defaults.sh'
+    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+    source '/stack/bin/lib/env-update/core/records.sh'
+    source '/stack/bin/lib/env-update/core/semver.sh'
+    source '/stack/bin/lib/env-update/core/channel.sh'
+    source '/stack/bin/lib/env-update/core/tag_flags.sh'
+    source '/stack/bin/lib/env-update/core/cache.sh'
+    source '/stack/bin/lib/env-update/reporting/dump.sh'
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx env_var          'GLOBAL_STACK_T60H_VERSION'
+    _gs_eu2_record_set \$idx type             'github'
+    _gs_eu2_record_set \$idx identifier       'testowner/rtk-repo'
+    _gs_eu2_record_set \$idx current_version  'v0.40.0'
+    _gs_eu2_record_set \$idx tag_channel_prefix 'dev-'
+    out=\$(_gs_eu2_dump_json)
+    echo \"\$out\" | jq empty 2>/dev/null || { echo \"invalid JSON: \$out\"; echo FAIL; exit 0; }
+    val=\$(echo \"\$out\" | jq -r '.[0].tag_channel_prefix' 2>/dev/null)
+    [[ \"\$val\" == 'dev-' ]] || { echo \"tag_channel_prefix wrong in JSON dump — expected 'dev-' got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Section 58b — pypi + rubygems (watch-major)
 # ═══════════════════════════════════════════════════════════════════════════

@@ -41,6 +41,7 @@ _gs_eu2_record_fields() {
     version_prefix \
     prefer_specific check_tags \
     tag_filter tag_exclude tag_strip_prefix tag_strip_suffix \
+    tag_channel_prefix \
     tag_extract tag_replace_from tag_replace_to tag_suffix \
     fetch_extract fetch_json \
     url_probe url_probe_depth \
