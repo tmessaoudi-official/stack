@@ -178,7 +178,7 @@ flags. Flags are **position-agnostic** — they can appear anywhere in the annot
 
 | Flag | Record field | Description |
 |------|-------------|-------------|
-| `(replace:TARGET=template)` | `replace_targets` / `replace_templates` | When this var receives an AUTO update, also rewrite `TARGET=<expanded>` in the same env file (VAR= line only — annotation comment untouched). Template tokens: `{major}`, `{minor}`, `{patch}` are expanded from the proposed version. Multiple `(replace:)` flags may be stacked on one annotation line. If TARGET is not found in the env file, an ERROR is printed; with `--no-fail`, the error is non-fatal and the remaining targets are still processed. In `--dry-run` mode, sub-lines are shown but no files are written. The `[REPLACE]` sub-line appears under `[AUTO]` in `--check` output. Example: `# @todo env-update (replace:GLOBAL_STACK_NODE22_ALIAS={major}) github:nodejs/node:22 22.12.0` |
+| `(replace:TARGET=template)` | `replace_targets` / `replace_templates` | When this var receives an AUTO update, also rewrite `TARGET=<expanded>` in the same env file (VAR= line only — annotation comment untouched). Template tokens: `{major}`, `{minor}`, `{patch}` are expanded from the proposed version. Multiple `(replace:)` flags may be stacked on one annotation line. If TARGET is not found in the env file, an ERROR is printed; with `--no-fail`, the error is non-fatal and the remaining targets are still processed. In `--dry-run` mode, sub-lines are shown but no files are written. The `[REPLACE]` sub-line appears under `[AUTO]` in `--apply` output (and in `--dry-run` mode when combined with `--apply`). It is not shown during plain `--check`. Example: `# @todo env-update (replace:GLOBAL_STACK_NODE24_ALIAS={major}) github:nodejs/node:22 22.12.0` |
 
 ### Generation-watch flag
 
@@ -263,6 +263,7 @@ bin/env-update.sh [OPTIONS]
 | `--help` | — | Show usage text and exit 0. |
 | `--env-file=PATH` | `/stack/.env` | Path to the `.env` file to parse. |
 | `--filter=REGEX` | (none) | Only process records whose `env_var` matches this bash ERE regex. Also supports `type:TYPENAME` prefix (e.g. `--filter=type:dockerhub`) to filter by fetcher type rather than variable name. Prints a `[FILTER MODE: REGEX]` header line. |
+| `--exclude=REGEX` | (none) | Skip records whose `env_var` matches this bash ERE regex. Composable with `--filter`: `--filter=NODE --exclude=NODEEDGE` processes all NODE vars except NODEEDGE. Validated same as `--filter` — exit 1 on invalid ERE. |
 | `--dump` | off | After parsing, emit all records to stdout in text or JSON format. No network calls. Mutually exclusive with `--check` and `--apply`. |
 | `--format=text\|json` | `text` | Output format for `--dump`. `text` emits one field per line with `field: value` pairs, grouped by record index. `json` emits a JSON array of objects, one per record, with all fields as string values. |
 | `--check` | off | Fetch latest versions for all parsed records and stream the `[AUTO\|HOLD\|SKIP\|ERROR\|MANUAL]` report. Requires network. |
@@ -277,13 +278,19 @@ bin/env-update.sh [OPTIONS]
 | `--unstable=info` | off | **Informational unstable mode.** Does NOT change `AUTO`/`HOLD`/`SKIP` decision logic and does NOT bypass the prerelease guard. After each fetch, performs a second pass (cache hit — no extra HTTP) with `channel=unstable` to discover what the latest prerelease would be. When a prerelease version is found that differs from the stable proposed version, it is shown as a `↳ [UNSTABLE] unstable: <version>` sub-line under the main decision line. Use when you want a heads-up about available prereleases without committing to tracking them. Compatible with all `--stable` forms. |
 | `--stable` / `--stable=full` | off | **Force stable channel.** Forces `channel=stable` on every record whose annotation has an explicit non-stable channel (`rc`, `beta`, `alpha`, `nightly`, `unstable`, or any other non-empty, non-stable value). Records already on the default stable channel (empty or `stable`) are untouched. Prints a `[STABLE MODE] channel forced stable for N record(s)` header line (always shown when `--stable=full` is active; N may be 0 when no records have an explicit non-stable channel). Use when you want to see what the stable versions would be for a set of vars that are normally tracked at prerelease. Mutually exclusive with `--unstable=full` only. |
 | `--stable=info` | off | **Informational stable mode.** Does NOT change `AUTO`/`HOLD`/`SKIP` decision logic and does NOT inject channel overrides. After each fetch, performs a second pass (cache hit — no extra HTTP) with `channel=stable` to discover what the latest stable version would be. Only runs for records whose annotation channel is neither empty nor `stable` (those already use the stable fetch path). When a stable version is found that differs from the main proposed version (and is not a prerelease itself), it is shown as a `↳ [STABLE] stable: <version>` sub-line under the main decision line. Use when you want a baseline stable reference while tracking prerelease vars. Compatible with `--unstable=full` and `--unstable=info`; when both are active, the unstable sub-line appears first, stable second. |
-| `--no-fail` | off | **Always exit 0.** When set, a non-zero exit code caused by `ERROR` fetch decisions is suppressed to `0` and a notice is printed to stderr: `(--no-fail: fetch errors present — exit code forced to 0)`. The `[ERROR]` decision lines still appear in output — only the exit code is changed. Scope: only ERROR fetch decisions. Usage errors (bad flags), backup failures during `--apply`, and env-file-not-found remain fatal (they exit before the override point). With `--apply --no-fail`, `AUTO` decisions are still applied even when some records have `ERROR`. Use in pipeline scripts where you want the output but cannot let fetch failures abort the pipeline. |
+| `--no-fail` | off | **Always exit 0.** When set, a non-zero exit code caused by `ERROR` fetch decisions is suppressed to `0`. The startup banner `[NO-FAIL MODE] ERROR decisions will not abort — exit code forced to 0` is printed to stderr at launch. No runtime message is emitted at the suppression point — only the exit code is silently changed to 0. The `[ERROR]` decision lines still appear in output. Scope: only ERROR fetch decisions. Usage errors (bad flags), backup failures during `--apply`, and env-file-not-found remain fatal (they exit before the override point). With `--apply --no-fail`, `AUTO` decisions are still applied even when some records have `ERROR`. Use in pipeline scripts where you want the output but cannot let fetch failures abort the pipeline. |
 | `--changes-only` | off | **Hide up-to-date records.** Suppresses purely up-to-date `SKIP` records from `--check` output. A record is hidden only when: `decision=SKIP` (genuine up-to-date, not FROZEN/skip-gate), no `[DRIFT]`, no `[WATCH]`, no `[FALLBACK]`, no `[UNSTABLE]`/`[STABLE]` info sub-lines. `(note:TEXT)` does not prevent hiding — it is metadata, not a signal. `(skip:REASON)` and `(lock:REASON)` records are always visible. The summary still counts all checked records; a `(N hidden)` parenthetical is added when any records are suppressed. Useful for large env files where most vars are up-to-date. |
 | `--no-notes` | off | **Suppress note sub-lines.** When set, `↳ (note: TEXT)` annotation sub-lines are omitted from `--check` output. Prints a `[NO-NOTES MODE] note sub-lines suppressed for N record(s)` header line, where N is the number of records that carry a `(note:TEXT)` annotation. Useful for minimal/scripted output. Does NOT suppress SHA sub-lines, `[UNSTABLE]` sub-lines, `[STABLE]` sub-lines, `[PIN-MISS]` sub-lines, or `[WATCH]` generation-change sub-lines. |
+| `--no-drift` | off | **Suppress drift sub-lines.** Suppresses `[DRIFT]`, `[REPLACE-DRIFT]`, `[DOWNGRADE]`, and `[FORCE-DOWNGRADE]` sub-lines from `--check` output. Does not suppress `[WATCH]`, `+sha`, or `+replace` signals. Useful for scripted output where drift noise is irrelevant. |
 | `--force-auto` | off | **Override annotation gates.** Treats `(manual)` and `(override)` annotation flags as if they were absent, and upgrades `HOLD` decisions to `AUTO`. Prints a `[FORCE-AUTO MODE] (manual) and (override) gates bypassed` header line. Use when you need to auto-apply updates that are normally gated (e.g. in CI scripts or one-shot mass updates). NOTE: `(lock:REASON)` and `(skip:REASON)` annotation flags are immune to `--force-auto` — they cannot be overridden by it. The `(manual)` flag CAN be overridden; the annotation text is not rewritten. `(lock:REASON)` cannot be overridden at all; annotation-only updates via `--apply` still work for locked records without `--force-auto`. When combined with `--apply`, requires `--confirm="Confirm override"` (exact string) — exit 1 without it. When combined with `--check` only, no confirmation is needed. |
 | `--confirm=TEXT` | (none) | **Confirmation gate for `--force-auto --apply`.** Must be exactly `Confirm override` (case-sensitive, including the space). Prevents accidental invocation of `--force-auto --apply` in interactive sessions. Has no effect unless `--force-auto` and `--apply` are both specified. |
 | `--reference[=SECTION]` | — | Print the annotation/fetcher/decision reference and exit 0. Optional SECTION: `syntax \| flags \| annotations \| fetchers \| decisions \| matrix \| scenarios \| env-scan`. Without SECTION, all sections are printed. |
 | `--tally[=VALUE]` | `auto` | Control the live running tally on stderr during `--check`. `auto` (default): show when stderr is a TTY and terminal ≥ 130 cols. `full`: show when TTY (no column-width requirement). `off`: never show. Plain `--tally` = `--tally=auto`. |
+| `--profile` / `--profile=true\|false` | off | Show a per-phase timing and memory usage table after the run. When combined with `--apply --scan`, `--profile=true` is forwarded to `env-scan.sh` so its phase timing also appears. |
+| `--backup=true\|false` | `true` | Create a timestamped backup of `.env` before `--apply` writes. Pass `--backup=false` to skip. Backup failure aborts `--apply`. |
+| `--backup-keep=N` | `10` | Keep the N newest backup files per run; delete older ones. `0` = unlimited. |
+| `--backup-purge=true\|false` | `false` | Delete ALL existing `<file>.bak.*` backups before this run (before creating the new backup). |
+| `--backup-suffix=STR` | `.bak` | Suffix anchor for backup filenames; full name: `<file><suffix>.<YYYYMMDD-HHMMSS>`. |
 
 ### Flag combinations and mutual exclusivity
 
@@ -403,8 +410,10 @@ When signals are non-zero the secondary line appears:
 
 ```
   Summary: 2 AUTO, 0 SHA, 1 HOLD, 0 MANUAL, 0 LOCK, 1 SKIP, 0 FROZEN, 1 FALLBACK, 0 ERROR  (4 checked)
-    ↳ 1 WATCH · 2 DRIFT (1 fixable) · 1 DOWNGRADE · 0 FORCE-DOWNGRADE · 1 REPLACE-DRIFT · 3 +sha · 2 +replace
+    ↳ 1 WATCH · 2 DRIFT (1 fixable) · 1 DOWNGRADE · 0 FORCE-DOWNGRADE · 1 REPLACE-DRIFT · 3 +sha · 2 +replace [· +resolve N] [· N depends-on-warn]
 ```
+
+The `+resolve N` and `N depends-on-warn` signals are omitted from the line when their count is 0.
 
 #### Summary line signals
 
@@ -433,6 +442,8 @@ When signals are non-zero the secondary line appears:
 | `REPLACE-DRIFT` | Records with `(replace:TARGET=template)` where the TARGET variable's current value differs from `expand_template(current_primary)`. The target is stale relative to the current primary version — run `--apply` (or `--force-auto --apply` for HOLD/MANUAL) to fix. |
 | `+sha` | AUTO or MANUAL decisions that also carry a sha annotation update (a `↳ sha:` sub-line was emitted). Pure SHA decisions (decision=SHA) are excluded — they are already counted in the primary `SHA` counter. |
 | `+replace` | AUTO or SHA decisions that will also write a `(replace:TARGET=template)` cascade update when `--apply` runs (i.e. the template expansion changes between current and proposed, or the target is already stale). Counted once per record (not per target). Does not include SKIP/HOLD/MANUAL replace records — only records where `--apply` will actually write. |
+| `+resolve N` | RESOLVED decisions: variables with a floating current value (`nightly`, `latest`, `edge`) where the fetcher resolved a concrete proposed version. Shown only when `> 0`. |
+| `N depends-on-warn` | Records with `(depends-on:VAR:constraint)` that emitted a `[WARN]` sub-line (dependency ordering is not enforced at runtime). Shown only when `> 0`. |
 
 ### --check exit code
 
@@ -602,7 +613,7 @@ When `--apply` is active:
 ```
 Backup: /stack/.env.bak.1716123456
 [APPLIED]  GLOBAL_STACK_POSTGRES18_VERSION              18.3-alpine3.23 → 18.4-alpine3.23
-[APPLIED]  GLOBAL_STACK_NODE22_VERSION                  22.13.0 → 22.14.0
+[APPLIED]  GLOBAL_STACK_NODE24_VERSION                  24.15.0 → 24.16.0
 [LOCK]     GLOBAL_STACK_MODSEC_MOD_VERSION              annotation: v0.0.9-beta1 → v0.0.12-beta1
   3 update(s) applied to /stack/.env (2 version, 1 SHA)
 ```
@@ -1049,9 +1060,9 @@ GLOBAL_STACK_ANSIBLE_VERSION=10.7.0
 
 **Identifier format:** `org/image` (e.g. `keycloak/keycloak`).
 
-**API:** `https://quay.io/api/v1/repository/{org}/{image}/tag/?limit=50&onlyActiveTags=true`
+**API:** `https://quay.io/api/v1/repository/{org}/{image}/tag/?limit=100&onlyActiveTags=true`
 
-**No pagination** — fetches at most 50 tags per call. If a project has more than 50 active tags, only the most recently updated 50 are considered.
+**Pagination** — follows `has_additional=true` across pages (page=1, 2, …) until exhausted. Fetches all active tags, not just the first page.
 
 **What field is used:** `.tags[].name`
 
@@ -1064,7 +1075,6 @@ GLOBAL_STACK_ANSIBLE_VERSION=10.7.0
 **Version prefix:** Applied after channel selection.
 
 **Pitfalls:**
-- The 50-tag limit may miss older major versions if the project has many active tags. Use `major_hint` to ensure the right version range is targeted.
 
 **Cache key:** `quay:org/image:major_hint:channel`
 
@@ -1359,7 +1369,7 @@ is derived from the URL using the same sanitization as the cache key:
 3. Replace all non-alphanumeric characters (except `.`, `-`, `_`) with `_`
 4. If the original URL had `page=N` in the query string, append `_page_N` to the filename
 
-This is the single test seam that makes all 12 fetchers deterministically testable.
+This is the single test seam that makes all 11 fetchers deterministically testable.
 
 ### Dry-run timestamp marker
 
@@ -1534,17 +1544,17 @@ variable references the default via shell expansion in `.env`:
 GLOBAL_STACK_NODE_DEFAULT_TYPES_NODE_VERSION=22.15.17
 
 # Per-tier overrides — annotated independently to track each tier's active major
-# @todo env-update (major:22) npm:@types/node 22.15.17
-GLOBAL_STACK_NODE22_TYPES_NODE_VERSION=${GLOBAL_STACK_NODE_DEFAULT_TYPES_NODE_VERSION}
+# @todo env-update npm:@types/node:24 24.12.3
+GLOBAL_STACK_NODE24_TYPES_NODE_VERSION=${GLOBAL_STACK_NODE_DEFAULT_TYPES_NODE_VERSION}
 
-# @todo env-update (major:24) npm:@types/node 24.0.3
+# @todo env-update npm:@types/node:24 24.0.3
 GLOBAL_STACK_NODE24_TYPES_NODE_VERSION=${GLOBAL_STACK_NODE_DEFAULT_TYPES_NODE_VERSION}
 ```
 
 **Rules for this pattern:**
 - The `DEFAULT` annotation tracks the latest stable (no major pin). When a new major ships,
   the `DEFAULT` variable moves to it automatically via AUTO.
-- Per-tier annotations use `(major:N)` to stay locked to a specific major. They will HOLD
+- Per-tier annotations use the `:N` major-hint colon syntax (e.g. `npm:@types/node:24`) to stay locked to a specific major. They will HOLD
   when a new major ships, letting the operator decide whether to bump the per-tier pin.
 - The per-tier `VAR=` value is a shell expansion `${DEFAULT_VAR}` — the annotation
   `CURRENT_VERSION` field in the annotation is the pinned version string for comparison
@@ -1554,7 +1564,7 @@ GLOBAL_STACK_NODE24_TYPES_NODE_VERSION=${GLOBAL_STACK_NODE_DEFAULT_TYPES_NODE_VE
   operator is reminded to sync per-tier pins when the default advances to a new major.
 
 **Drift detection**: if `DEFAULT` has moved to major 24 but `NODE22_TYPES_NODE_VERSION`
-annotation still says `(major:22)`, env-update will HOLD with `← major pin (24.x available)`
+annotation still says `:22` (npm:@types/node:22), env-update will HOLD with `← major pin (24.x available)`
 on the DEFAULT but AUTO on `NODE22` (because 22.x is the correct pin for that tier). This
 is intentional — the drift is surfaced by the HOLD on DEFAULT, not on the per-tier var.
 
@@ -1632,8 +1642,8 @@ These do not abort the tool — they set `decision=ERROR` and move to the next r
 bash bin/tests/env-update.test.sh
 ```
 
-The test suite runs 216+ tests across 38 sections covering: lexer, parsing, flag dispatch,
-HTTP seam, all 12 fetchers, cache, channel selection, tag flags, semver, decision classifier,
+The test suite runs 692+ tests across 106 sections covering: lexer, parsing, flag dispatch,
+HTTP seam, all 11 fetchers, cache, channel selection, tag flags, semver, decision classifier,
 apply logic, and error paths.
 
 Output format: sections with pass/fail counts per section, and a final summary. Color output
@@ -1705,7 +1715,7 @@ prevent cache pollution between tests.
 
 ### Adding a new fetcher
 
-All 12 fetcher types are implemented. To add a hypothetical 13th:
+All 11 fetcher types are implemented. To add a hypothetical 12th:
 
 1. Create `bin/lib/env-update/fetchers/{type}.sh` with an include guard and a main function
    `_gs_eu2_fetch_{type}() { local _idx="${1}"; ... }`.

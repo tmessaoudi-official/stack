@@ -98,7 +98,7 @@ GLOBAL FLAGS
                             SECTION: all (default) | pipeline | flags |
                                      propagation | conflicts | scenarios
   --dry-run                 Report only — skip Phase 6 (sync) and Phase 7 (propagate).
-  --no-fail                 Always exit 0; suppress Phase 6 propagation errors.
+  --no-fail                 Always exit 0; suppress Phase 7 propagation errors.
                             Infrastructure and backup failures remain fatal.
   --quiet=true|false        Suppress informational output. Default: false.
   --profile=true|false      Show per-phase timing at end of run. Default: false.
@@ -237,7 +237,7 @@ CONFLICT DETECTION (Phase 4)
   NOTE
   Conflicts do not abort the run by default. They are reported and then
   env-scan continues with the first-seen value as canonical.
-  Use --no-fail to suppress exit codes from Phase 6 propagation errors, but
+  Use --no-fail to suppress exit codes from Phase 7 propagation errors, but
   conflict detection itself is always informational.
 
 CONFLICT_EOF

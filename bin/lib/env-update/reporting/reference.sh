@@ -130,10 +130,16 @@ GLOBAL CLI FLAGS (env-update)
                          --confirm="Confirm override" with --apply. Does NOT
                          override FROZEN (skip:) or LOCK records. Does NOT promote
                          RESOLVED to AUTO — use --apply-resolve for that.
+    --confirm=TEXT       Confirmation gate for --force-auto --apply. Must be exactly
+                         "Confirm override" (case-sensitive). Required when both
+                         --force-auto and --apply are specified; ignored otherwise.
 
   Input / scope flags:
     --env-file=PATH      Override env file path (default: .env).
     --filter=REGEX       Process only vars whose name matches REGEX (case-insensitive).
+    --exclude=REGEX      Skip records whose env_var matches REGEX. Composable with
+                         --filter: --filter=NODE --exclude=NODEEDGE processes all
+                         NODE vars except NODEEDGE.
     --no-cache           Bypass HTTP cache (forces fresh fetch for every record).
     --cache-ttl=N        Cache TTL in seconds (default: 3600).
     --scan               After --apply, run bin/env-scan.sh to propagate updates
@@ -144,11 +150,31 @@ GLOBAL CLI FLAGS (env-update)
     --changes-only       Suppress up-to-date SKIP records from check output.
     --no-notes           Suppress (note:TEXT) sub-lines.
     --no-drift           Suppress [DRIFT]/[REPLACE-DRIFT] sub-lines.
+    --tally[=auto|full|off]
+                         Control the live running tally on stderr during --check.
+                         auto (default): show when stderr is a TTY and terminal >= 130 cols.
+                         full: show when TTY (no column-width requirement).
+                         off: never show. Plain --tally = --tally=auto.
     --no-fail            Exit 0 even when ERROR decisions exist. Only suppresses
                          fetch-ERROR exits — backup and infrastructure errors remain fatal.
-    --with-tags          Show the full tag list for each record (debug mode).
+    --with-tags          For every github: record in the run, always fetch both the
+                         Releases API and the Tags API and merge the candidate pools.
+                         Same as adding (check-tags) to every annotation for this run.
     --dump               Dump all parsed records as JSON; mutually exclusive with
                          --check and --apply.
+
+  Backup flags (--apply only):
+    --backup=true|false  Create timestamped .env backup before --apply writes.
+                         (default: true). Backup failure aborts --apply.
+    --backup-keep=N      Keep N newest backup files (0 = unlimited; default: 10).
+    --backup-purge=true  Delete all existing <file>.bak.* before this run.
+    --backup-suffix=STR  Suffix anchor for backup filenames; full name:
+                         <file><suffix>.<YYYYMMDD-HHMMSS> (default: .bak).
+
+  Diagnostics:
+    --profile[=true|false]
+                         Show per-phase timing and memory usage table after run.
+                         (default: false)
 
   Channel flags:
     --unstable[=full|info]

@@ -75,6 +75,14 @@ All options use `--key=value` form. Boolean options accept `true` or `false`.
 | `--exclude-implicit-empty=true\|false` | `true` | Ignore `KEY=` (implicit empty) when detecting conflicting defaults |
 | `--exclude-explicit-empty=true\|false` | `true` | Ignore `KEY=${KEY:-}` (explicit empty passthrough) when detecting conflicts |
 
+### Orphan / prune
+
+| Option | Default | Description |
+|---|---|---|
+| `--prune-removed=true\|false` | `false` | Remove variables from destination that are absent from all sources (orphaned local-only vars). When `false`, orphaned vars are kept and warned about. |
+| `--orphan-ignore-pattern=REGEX` | (none) | ERE regex: suppress orphaned-variable warnings for var names matching this pattern. Orphaned vars are still kept in `.env.local`. |
+| `--orphan-quiet=true\|false` | `false` | Suppress ALL orphaned-variable warnings. Vars are still kept unless `--prune-removed=true`. |
+
 ### Temp file control
 
 | Option | Default | Description |
@@ -100,7 +108,7 @@ All options use `--key=value` form. Boolean options accept `true` or `false`.
 | `--debug=true\|false` | `false` | Enable verbose diagnostic messages |
 | `--profile=true\|false` | `false` | Print per-phase execution time and memory usage after run |
 | `--dry-run` | `false` | Report what would change but suppress all filesystem writes (env file sync, Dockerfile propagation, and backups) |
-| `--no-fail` | `false` | Always exit 0, even when a Phase 6 propagation error occurs (source env file not found). Infrastructure errors (mktemp failure), backup failures, and usage errors remain fatal. Prints `(--no-fail: scan error present — exit code forced to 0)` to stderr when suppressing. |
+| `--no-fail` | `false` | Always exit 0, even when a Phase 6 propagation error occurs (source env file not found). Infrastructure errors (mktemp failure), backup failures, and usage errors remain fatal. Prints `[NO-FAIL] Phase 6 propagation error suppressed (exit code N) — continuing` to stderr when suppressing. |
 | `--version` | — | Print version string (`1.0.0`) and exit 0 |
 | `--help` | — | Show usage and exit 0 |
 
