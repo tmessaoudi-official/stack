@@ -96,6 +96,12 @@ FETCHER TYPES
   codeberg:OWNER/REPO
     Codeberg.org releases (Gitea-based forge).
 
+  ghcr:OWNER/IMAGE
+    GitHub Container Registry (ghcr.io) image tags (OCI distribution API).
+    Public images: no credentials needed (anonymous token fetched automatically).
+    Private images: set GITHUB_TOKEN or GLOBAL_STACK_GITHUB_TOKEN.
+    Requests up to n=1000 tags per call; Link-header pagination not supported.
+
   Note: codeberg and github support (check-tags) for tag-only releases.
 
 
@@ -431,6 +437,19 @@ PER-FETCHER DEEP-DIVE
     Auth:      None required for public repos (Gitea-based).
     Tags:      (check-tags) merges tags + releases, same as github.
     Channel:   Prerelease detection via is_prerelease field.
+
+  ghcr:OWNER/IMAGE
+    API:       https://ghcr.io/v2/OWNER/IMAGE/tags/list?n=1000 (OCI distribution API)
+               Token: https://ghcr.io/token?service=ghcr.io&scope=repository:OWNER/IMAGE:pull
+    Auth:      Anonymous token fetched automatically for public images. Set GITHUB_TOKEN
+               or GLOBAL_STACK_GITHUB_TOKEN to authenticate private images (token used
+               directly as Bearer, bypassing anonymous token acquisition).
+    Tags:      Full tag pipeline applies: filter → exclude → extract → strip-prefix
+               → strip-suffix → replace. (prefer-specific) applies.
+               Non-semver tags (latest, edge, nightly, …) are filtered by channel selection.
+    Pagination: Single request with n=1000 cap. OCI Link-header pagination not supported.
+    Channel:   (channel:rc/beta/alpha/unstable) and --unstable/--stable flags apply.
+    Cache key: ghcr:OWNER/IMAGE:MAJOR_HINT:CHANNEL
 
 FETCH_EOF
   fi

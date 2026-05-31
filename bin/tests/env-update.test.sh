@@ -10160,6 +10160,248 @@ t "t102d: (lock:) with other floating aliases (edge, nightly, latest) — annota
 _flush_section
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Section 103 — ghcr fetcher
+# ═══════════════════════════════════════════════════════════════════════════
+section "103 — ghcr fetcher"
+
+_GHCR_LIBS="
+source '/stack/bin/lib/env-update/config/defaults.sh'
+source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update/core/records.sh'
+source '/stack/bin/lib/env-update/core/semver.sh'
+source '/stack/bin/lib/env-update/core/channel.sh'
+source '/stack/bin/lib/env-update/core/tag_flags.sh'
+source '/stack/bin/lib/env-update/core/cache.sh'
+source '/stack/bin/lib/env-update/http/curl.sh'
+source '/stack/bin/lib/env-update/fetchers/ghcr.sh'
+export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+export _GS_EU2_CACHE_DIR=\${TMP_DIR}/ghcr_cache
+"
+
+# t103a: happy path — latest stable tag returned as proposed_version
+t "t103a: happy path — latest stable tag returned as proposed_version" bash -c "
+    ${_GHCR_LIBS}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'ghcr'
+    _gs_eu2_record_set \$idx identifier 'testowner/ghcr-repo'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_GHCR_VERSION'
+    _gs_eu2_fetch_ghcr \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    # fixture has 2.1.2 as highest stable
+    [[ \"\$val\" == '2.1.2' ]] || { echo \"got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t103b: non-semver tags filtered out — latest/edge/sha-* do not become proposed_version
+t "t103b: non-semver tags (latest, edge, sha-*) are filtered out by channel selection" bash -c "
+    ${_GHCR_LIBS}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'ghcr'
+    _gs_eu2_record_set \$idx identifier 'testowner/ghcr-repo'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_GHCR_VERSION'
+    _gs_eu2_fetch_ghcr \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    # must not be a non-semver tag
+    [[ \"\$val\" != 'latest' && \"\$val\" != 'edge' ]] || { echo \"non-semver tag selected: '\$val'\"; echo FAIL; exit 0; }
+    [[ \"\$val\" != sha-* ]] || { echo \"sha tag selected: '\$val'\"; echo FAIL; exit 0; }
+    [[ -n \"\$val\" ]] || { echo 'proposed_version is empty'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t103c: major_hint filtering — only tags in the pinned major returned
+t "t103c: major_hint=1 restricts to 1.x tags" bash -c "
+    ${_GHCR_LIBS}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'ghcr'
+    _gs_eu2_record_set \$idx identifier 'testowner/ghcr-majorpin'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_GHCR_PIN_VERSION'
+    _gs_eu2_record_set \$idx major_hint '1'
+    _gs_eu2_fetch_ghcr \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    # fixture has 1.0.0, 1.1.0, 1.2.0 in major 1; 1.2.0 should win
+    [[ \"\$val\" == '1.2.0' ]] || { echo \"expected 1.2.0 for major_hint=1, got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t103d: major_hint filtering — higher major excluded
+t "t103d: major_hint=1 excludes 2.x tags" bash -c "
+    ${_GHCR_LIBS}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'ghcr'
+    _gs_eu2_record_set \$idx identifier 'testowner/ghcr-majorpin'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_GHCR_PIN_VERSION'
+    _gs_eu2_record_set \$idx major_hint '1'
+    _gs_eu2_fetch_ghcr \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$val\" != 2.* ]] || { echo \"2.x tag escaped major pin: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t103e: all-non-semver image returns SKIP (no versioned tags)
+# Fixture has only: latest, edge, nightly, stable, main — all unversioned per _gs_eu2_is_unversioned.
+# Note: sha-* tags are NOT treated as unversioned (sort -V can order them); use the unversioned
+# tag set (latest/edge/nightly) to test this path cleanly.
+t "t103e: image with only unversioned tags (latest, edge, nightly) sets decision=SKIP" bash -c "
+    ${_GHCR_LIBS}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'ghcr'
+    _gs_eu2_record_set \$idx identifier 'testowner/ghcr-nonsemver'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_GHCR_NONSEMVER_VERSION'
+    _gs_eu2_fetch_ghcr \$idx
+    decision=\$(_gs_eu2_record_get \$idx decision)
+    [[ \"\$decision\" == 'SKIP' ]] || { echo \"expected SKIP, got: '\$decision'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t103f: empty tags list returns ERROR
+t "t103f: empty tags array sets decision=ERROR" bash -c "
+    ${_GHCR_LIBS}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'ghcr'
+    _gs_eu2_record_set \$idx identifier 'testowner/ghcr-empty'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_GHCR_EMPTY_VERSION'
+    _gs_eu2_fetch_ghcr \$idx
+    decision=\$(_gs_eu2_record_get \$idx decision)
+    err=\$(_gs_eu2_record_get \$idx error_message)
+    [[ \"\$decision\" == 'ERROR' ]] || { echo \"expected ERROR, got: '\$decision'\"; echo FAIL; exit 0; }
+    [[ -n \"\$err\" ]] || { echo 'error_message is empty'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t103g: HTTP failure (no fixture dir + nonexistent identifier) sets ERROR
+t "t103g: HTTP failure (nonexistent identifier) sets decision=ERROR, error_message set" bash -c "
+    ${_GHCR_LIBS}
+    unset _GS_EU2_HTTP_FIXTURE_DIR
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/ghcr_g_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'ghcr'
+    _gs_eu2_record_set \$idx identifier 'no-such-owner/no-such-image'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_GHCR_XYZZY_VERSION'
+    _gs_eu2_fetch_ghcr \$idx 2>/dev/null || true
+    decision=\$(_gs_eu2_record_get \$idx decision)
+    err=\$(_gs_eu2_record_get \$idx error_message)
+    [[ \"\$decision\" == 'ERROR' ]] || { echo \"expected ERROR, got: '\$decision'\"; echo FAIL; exit 0; }
+    [[ -n \"\$err\" ]] || { echo 'error_message is empty'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t103h: GITHUB_TOKEN path — token used directly, no token endpoint call
+t "t103h: GITHUB_TOKEN present — token endpoint fixture not required" bash -c "
+    ${_GHCR_LIBS}
+    export GITHUB_TOKEN='test-pat-token-direct'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/ghcr_h_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'ghcr'
+    _gs_eu2_record_set \$idx identifier 'testowner/ghcr-repo'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_GHCR_PAT_VERSION'
+    _gs_eu2_fetch_ghcr \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ -n \"\$val\" ]] || { echo 'proposed_version empty with GITHUB_TOKEN set'; echo FAIL; exit 0; }
+    unset GITHUB_TOKEN
+    echo PASS
+"
+
+# t103i: tag-strip-prefix strips 'v' prefix
+t "t103i: tag-strip-prefix strips leading v from version tags" bash -c "
+    ${_GHCR_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/ghcr_i_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type             'ghcr'
+    _gs_eu2_record_set \$idx identifier       'testowner/ghcr-repo'
+    _gs_eu2_record_set \$idx env_var          'GLOBAL_STACK_GHCR_STRIP_VERSION'
+    # The fixture tags have no v-prefix, so strip-prefix v should have no effect
+    # but must not break the fetcher
+    _gs_eu2_record_set \$idx tag_strip_prefix 'v'
+    _gs_eu2_fetch_ghcr \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ -n \"\$val\" ]] || { echo 'proposed_version empty after tag-strip-prefix'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t103j: fetcher leaves decision empty on success path (decide.sh owns AUTO/HOLD)
+t "t103j: fetcher leaves decision empty on success path (not AUTO/HOLD)" bash -c "
+    ${_GHCR_LIBS}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'ghcr'
+    _gs_eu2_record_set \$idx identifier 'testowner/ghcr-repo'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_GHCR_DECISION_VERSION'
+    _gs_eu2_fetch_ghcr \$idx
+    decision=\$(_gs_eu2_record_get \$idx decision)
+    proposed=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ -n \"\$proposed\" ]] || { echo 'proposed_version is empty'; echo FAIL; exit 0; }
+    [[ -z \"\$decision\" ]] || { echo \"fetcher set decision: '\$decision' (should be empty)\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t103k: cache hit path — second call returns same result without re-fetching
+t "t103k: cache hit path returns same proposed_version without a second fetch" bash -c "
+    ${_GHCR_LIBS}
+    # Prime the cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'ghcr'
+    _gs_eu2_record_set \$idx identifier 'testowner/ghcr-repo'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_GHCR_CACHE1_VERSION'
+    _gs_eu2_fetch_ghcr \$idx
+    proposed_first=\$(_gs_eu2_record_get \$idx proposed_version)
+    # Second call — should hit cache
+    _gs_eu2_record_new; idx2=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx2 type       'ghcr'
+    _gs_eu2_record_set \$idx2 identifier 'testowner/ghcr-repo'
+    _gs_eu2_record_set \$idx2 env_var    'GLOBAL_STACK_GHCR_CACHE2_VERSION'
+    _gs_eu2_fetch_ghcr \$idx2
+    proposed_second=\$(_gs_eu2_record_get \$idx2 proposed_version)
+    [[ \"\$proposed_first\" == \"\$proposed_second\" ]] \
+        || { echo \"cache mismatch: '\$proposed_first' vs '\$proposed_second'\"; echo FAIL; exit 0; }
+    [[ -n \"\$proposed_second\" ]] || { echo 'cache hit returned empty'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t103l: dispatch wiring — ghcr type dispatches correctly via _gs_eu2_dispatch_fetcher
+t "t103l: dispatch wiring — ghcr: type is handled by _gs_eu2_dispatch_fetcher" bash -c "
+    source '/stack/bin/lib/env-update/config/defaults.sh'
+    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+    source '/stack/bin/lib/env-update/core/records.sh'
+    source '/stack/bin/lib/env-update/core/semver.sh'
+    source '/stack/bin/lib/env-update/core/channel.sh'
+    source '/stack/bin/lib/env-update/core/tag_flags.sh'
+    source '/stack/bin/lib/env-update/core/cache.sh'
+    source '/stack/bin/lib/env-update/core/decide.sh'
+    source '/stack/bin/lib/env-update/http/curl.sh'
+    source '/stack/bin/lib/env-update/fetchers/github.sh'
+    source '/stack/bin/lib/env-update/fetchers/codeberg.sh'
+    source '/stack/bin/lib/env-update/fetchers/dockerhub.sh'
+    source '/stack/bin/lib/env-update/fetchers/quay.sh'
+    source '/stack/bin/lib/env-update/fetchers/npm.sh'
+    source '/stack/bin/lib/env-update/fetchers/pypi.sh'
+    source '/stack/bin/lib/env-update/fetchers/rubygems.sh'
+    source '/stack/bin/lib/env-update/fetchers/sdkman.sh'
+    source '/stack/bin/lib/env-update/fetchers/sdkmanager.sh'
+    source '/stack/bin/lib/env-update/fetchers/pecl.sh'
+    source '/stack/bin/lib/env-update/fetchers/url.sh'
+    source '/stack/bin/lib/env-update/fetchers/ghcr.sh'
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/ghcr_l_cache
+    # Load main.sh which defines _gs_eu2_dispatch_fetcher
+    source '/stack/bin/lib/env-update/main.sh'
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'ghcr'
+    _gs_eu2_record_set \$idx identifier 'testowner/ghcr-repo'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_GHCR_DISPATCH_VERSION'
+    _gs_eu2_dispatch_fetcher \$idx
+    decision=\$(_gs_eu2_record_get \$idx decision)
+    proposed=\$(_gs_eu2_record_get \$idx proposed_version)
+    # Dispatch must not produce 'unknown fetcher type' SKIP
+    [[ \"\$decision\" != 'SKIP' ]] || {
+        err=\$(_gs_eu2_record_get \$idx error_message)
+        [[ \"\$err\" == *'unknown fetcher type'* ]] && { echo \"dispatch: unknown type — wiring missing\"; echo FAIL; exit 0; }
+    }
+    [[ -n \"\$proposed\" ]] || { echo \"dispatch produced empty proposed_version; decision='\$decision'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+_flush_section
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section

@@ -19,7 +19,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/../config/defaults.sh"
 # Returns: 0 always
 _gs_eu2_show_help() {
   cat << EOF
-bin/env-update.sh v${_GS_EU2_VERSION} — annotation parser + version checker (11 fetcher types)
+bin/env-update.sh v${_GS_EU2_VERSION} — annotation parser + version checker (12 fetcher types)
 
 Usage: env-update.sh [OPTIONS]
 
@@ -157,7 +157,7 @@ Summary line format (shown after --check):
   --no-drift suppresses DRIFT, DOWNGRADE, FORCE-DOWNGRADE, and REPLACE-DRIFT; WATCH, +sha, +replace
   are unaffected.
 
-Fetcher types: dockerhub, github, npm, pecl, pypi, quay, rubygems,
+Fetcher types: dockerhub, github, ghcr, npm, pecl, pypi, quay, rubygems,
 sdkman, sdkmanager, url, codeberg.
 pecl supports an optional (git:owner/repo) flag for HEAD SHA tracking.
 pecl and sdkmanager do not support major_hint filtering; range syntax is

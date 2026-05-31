@@ -49,6 +49,8 @@ source "$(dirname "${BASH_SOURCE[0]}")/fetchers/sdkmanager.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/fetchers/pecl.sh"
 # shellcheck source=./fetchers/url.sh
 source "$(dirname "${BASH_SOURCE[0]}")/fetchers/url.sh"
+# shellcheck source=./fetchers/ghcr.sh
+source "$(dirname "${BASH_SOURCE[0]}")/fetchers/ghcr.sh"
 # shellcheck source=./reporting/help.sh
 source "$(dirname "${BASH_SOURCE[0]}")/reporting/help.sh"
 # shellcheck source=./reporting/reference.sh
@@ -71,7 +73,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/core/apply.sh"
 # Returns: 0 always (unknown types set decision=SKIP rather than returning non-zero)
 # Side fx: may write to cache directory (TTL-based HTTP response caching)
 #
-# Note: this DRY helper (I2) replaces three identical 11-fetcher case blocks
+# Note: this DRY helper (I2) replaces three identical 12-fetcher case blocks
 # that previously appeared separately in run_check, unstable-info second-pass,
 # and stable-info second-pass.
 _gs_eu2_dispatch_fetcher() {
@@ -90,6 +92,7 @@ _gs_eu2_dispatch_fetcher() {
     sdkmanager) _gs_eu2_fetch_sdkmanager "${_df_i}" ;;
     pecl)       _gs_eu2_fetch_pecl       "${_df_i}" ;;
     url)        _gs_eu2_fetch_url        "${_df_i}" ;;
+    ghcr)       _gs_eu2_fetch_ghcr       "${_df_i}" ;;
     *)
       _gs_eu2_record_set "${_df_i}" decision      "SKIP"
       _gs_eu2_record_set "${_df_i}" error_message "unknown fetcher type '${_df_type}' — check annotation syntax"
@@ -363,7 +366,7 @@ _gs_eu2_run_check() {
     # Skip gate fires: bypass all fetcher dispatch and second-pass blocks.
     # The record already has decision=SKIP and error_message set; display code below handles output.
     if [[ -z "${_skip_reason}" ]]; then
-      # I2: dispatch via helper — all 11 fetcher types handled in _gs_eu2_dispatch_fetcher
+      # I2: dispatch via helper — all 12 fetcher types handled in _gs_eu2_dispatch_fetcher
       _gs_eu2_dispatch_fetcher "${_i}"
 
     # --unstable=info second-pass: temporarily swap channel→unstable, re-run the

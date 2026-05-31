@@ -1,7 +1,7 @@
 # env-update v2.0.0 — Complete Reference
 
 `bin/env-update.sh` is the automated version checker for Global Stack. It parses
-`@todo env-update` annotations in `.env`, fetches the latest versions from 11 upstream
+`@todo env-update` annotations in `.env`, fetches the latest versions from 12 upstream
 fetcher types, classifies each update decision, and can apply AUTO decisions back to `.env`.
 
 ---
@@ -26,6 +26,7 @@ fetcher types, classifies each update decision, and can apply AUTO decisions bac
    - [sdkmanager](#79-sdkmanager)
    - [url](#710-url)
    - [codeberg](#711-codeberg)
+   - [ghcr](#712-ghcr)
 8. [Caching System](#8-caching-system)
 9. [The Apply Cycle](#9-the-apply-cycle)
 10. [Multi-Variable Patterns](#10-multi-variable-patterns)
@@ -49,6 +50,7 @@ fetcher types, classifies each update decision, and can apply AUTO decisions bac
 | `sdkmanager` | `component-name` | No | No | No | Always MANUAL; requires `sdkmanager` binary |
 | `url` | URL string | No | Yes (some tiers) | Varies | 5-tier strategy; most flexible fetcher |
 | `codeberg` | `owner/repo` | Yes | Yes | No | Gitea API; releases → tags fallback |
+| `ghcr` | `owner/image` | Yes | Yes | No for public (anonymous token); GITHUB_TOKEN for private | OCI distribution API; single request (n=1000 cap) |
 
 ---
 
@@ -71,7 +73,7 @@ VAR_NAME=current_value
 
 **`TYPE:IDENTIFIER[:MAJOR_HINT]`** — required; must appear exactly once.
 
-- `TYPE` — lowercase fetcher name: `dockerhub`, `github`, `npm`, `pecl`, `pypi`,
+- `TYPE` — lowercase fetcher name: `dockerhub`, `github`, `ghcr`, `npm`, `pecl`, `pypi`,
   `quay`, `rubygems`, `sdkman`, `sdkmanager`, `url`, `codeberg`.
 - `IDENTIFIER` — the resource to fetch. Format varies by fetcher type (see Section 7).
 - `:MAJOR_HINT` — optional numeric suffix. Accepts dotted values like `8.2` (the D1 fix).
@@ -1290,6 +1292,43 @@ GLOBAL_STACK_GOTOSOCIAL_VERSION=0.17.3
 
 ---
 
+### 7.12 ghcr
+
+**Identifier format:** `owner/image` (GitHub Container Registry image).
+
+**API endpoints:**
+1. Token acquisition (anonymous): `https://ghcr.io/token?service=ghcr.io&scope=repository:{owner}/{image}:pull`
+2. Tags list: `https://ghcr.io/v2/{owner}/{image}/tags/list?n=1000` (OCI distribution API)
+
+**Strategy:** Obtains a Bearer token first, then fetches up to 1000 tags in a single OCI API call. If `GITHUB_TOKEN` or `GLOBAL_STACK_GITHUB_TOKEN` is set, it is used directly as the Bearer token (bypasses anonymous token acquisition and works for private images). For public images, an anonymous token is fetched from the GHCR token service. OCI Link-header pagination is not supported; `n=1000` covers the vast majority of real-world repositories.
+
+**Major hint:** Yes.
+
+**Tag flags:** Full pipeline applies.
+
+**Auth:** No auth required for public images (anonymous token fetched automatically). Set `GITHUB_TOKEN` or `GLOBAL_STACK_GITHUB_TOKEN` for private images.
+
+**Version prefix:** Applied after channel selection.
+
+**Cache key:** `ghcr:owner/image:major_hint:channel`
+
+**Example annotations:**
+```bash
+# Latest release of any version
+# @todo env-update ghcr:sooperset/mcp-atlassian 0.21.1
+MCP_ATLASSIAN_VERSION=0.21.1
+
+# Pinned to major version 1
+# @todo env-update ghcr:myorg/myservice:1 1.5.3
+MYSERVICE_VERSION=1.5.3
+
+# With tag-strip-prefix v
+# @todo env-update (tag-strip-prefix:v) (version-prefix:v) ghcr:myorg/myapp v2.3.1
+MYAPP_VERSION=v2.3.1
+```
+
+---
+
 ---
 
 ## 8. Caching System
@@ -1326,6 +1365,7 @@ Characters replaced: `:`, `/`, `@`, and space → `_`. The result is a flat file
 | rubygems | `rubygems:gem:major_hint:channel` |
 | quay | `quay:org/image:major_hint:channel` |
 | codeberg | `codeberg:owner/repo:major_hint:channel` |
+| ghcr | `ghcr:owner/image:major_hint:channel` |
 | sdkman | `sdkman:candidate:major_hint:channel` |
 | sdkmanager | `sdkmanager:component:channel` |
 | url | `url:URL:fe_flag:fj_flag:up_flag:channel` |
@@ -1369,7 +1409,7 @@ is derived from the URL using the same sanitization as the cache key:
 3. Replace all non-alphanumeric characters (except `.`, `-`, `_`) with `_`
 4. If the original URL had `page=N` in the query string, append `_page_N` to the filename
 
-This is the single test seam that makes all 11 fetchers deterministically testable.
+This is the single test seam that makes all 12 fetchers deterministically testable.
 
 ### Dry-run timestamp marker
 
@@ -1643,7 +1683,7 @@ bash bin/tests/env-update.test.sh
 ```
 
 The test suite runs 692+ tests across 106 sections covering: lexer, parsing, flag dispatch,
-HTTP seam, all 11 fetchers, cache, channel selection, tag flags, semver, decision classifier,
+HTTP seam, all 12 fetchers, cache, channel selection, tag flags, semver, decision classifier,
 apply logic, and error paths.
 
 Output format: sections with pass/fail counts per section, and a final summary. Color output
@@ -1715,7 +1755,7 @@ prevent cache pollution between tests.
 
 ### Adding a new fetcher
 
-All 11 fetcher types are implemented. To add a hypothetical 12th:
+All 12 fetcher types are implemented. To add a hypothetical 13th:
 
 1. Create `bin/lib/env-update/fetchers/{type}.sh` with an include guard and a main function
    `_gs_eu2_fetch_{type}() { local _idx="${1}"; ... }`.

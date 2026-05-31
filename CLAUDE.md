@@ -76,7 +76,7 @@ See `templates/tips/env-update.md` for the full fetcher-type and flag reference.
 
 ### bin/env-update.sh
 
-**v2.0.0 (all fetcher types)** — parses `.env` annotations, fetches latest versions across all 11 fetcher types (dockerhub, github, npm, pecl, pypi, quay, rubygems, sdkman, sdkmanager, url, codeberg), streams a `[AUTO|HOLD|SKIP|ERROR]` report, and can apply AUTO decisions back to `.env`.
+**v2.0.0 (all fetcher types)** — parses `.env` annotations, fetches latest versions across all 12 fetcher types (dockerhub, github, ghcr, npm, pecl, pypi, quay, rubygems, sdkman, sdkmanager, url, codeberg), streams a `[AUTO|HOLD|SKIP|ERROR]` report, and can apply AUTO decisions back to `.env`.
 
 **Key flags**: `--check` (fetch + report), `--apply` (apply AUTO decisions; implies `--check`), `--apply-resolve` (also apply RESOLVED decisions — floating→concrete rewrites; requires `--apply`), `--dry-run` (no writes), `--filter=<regex>`, `--no-cache`, `--format=text|json`, `--dump`, `--env-file=<path>`, `--cache-ttl=<N>`, `--with-tags`, `--unstable[=full|info]` (prerelease channel mode), `--stable[=full|info]` (stable channel mode; only `--stable=full + --unstable=full` is banned), `--no-notes` (suppress note sub-lines), `--changes-only` (hide up-to-date SKIP records), `--no-drift` (suppress [DRIFT]/[REPLACE-DRIFT] sub-lines), `--no-fail` (always exit 0; only ERROR fetch decisions suppressed — usage/backup errors remain fatal), `--scan` (run `bin/env-scan.sh` after `--apply` to propagate updated values to `.env.local` and Dockerfiles), `--force-auto` (bypass `(manual)`/`(override)`/`HOLD` gates; requires `--confirm="Confirm override"` with `--apply`; emits advisory when used without `--apply`), `--confirm=TEXT` (confirmation gate for `--force-auto --apply`)
 
@@ -158,7 +158,7 @@ make start-local-registry            # Start local TLS registry (port 5000)
 ## Testing & Verification
 
 - **env-scan tests**: `bash bin/tests/env-scan.test.sh` — custom harness with `assert_equals`, `assert_contains`, `assert_not_contains`, `assert_file_exists`
-- **env-update tests**: `bash bin/tests/env-update.test.sh` — 692+ tests across 106 sections (fetchers, cache, semver, apply, args, RESOLVED, --reference…); use `--dry-run --filter=<VAR>` for quick preview; `--offline` is not implemented (use `_GS_EU2_HTTP_FIXTURE_DIR` seam for deterministic offline testing)
+- **env-update tests**: `bash bin/tests/env-update.test.sh` — 700+ tests across 107 sections (fetchers, cache, semver, apply, args, RESOLVED, --reference…); use `--dry-run --filter=<VAR>` for quick preview; `--offline` is not implemented (use `_GS_EU2_HTTP_FIXTURE_DIR` seam for deterministic offline testing)
 - **Shell scripts**: `shellcheck <file>` and `shfmt -d -i 2 -ci -bn <file>` (diff mode)
 - **YAML files**: `yamllint -d relaxed <file>` and `yamlfmt -dry <file>` (dry-run mode)
 - **Formatting**: `/fmt --check` to preview all formatting changes, `/fmt` to apply them
@@ -171,7 +171,7 @@ make start-local-registry            # Start local TLS registry (port 5000)
 **Slash commands** (type `/command` in any session):
 - `/lint` — shellcheck all scripts + hadolint all Dockerfiles
 - `/fmt` — format shell scripts (`shfmt`) and YAML files (`yamlfmt`); supports `--check`, `--sh`, `--yaml`
-- `/check-versions` — v2 `--check` across all fetcher types (dockerhub, github, npm, pecl, pypi, quay, rubygems, sdkman, sdkmanager, url, codeberg); no v1 fallback
+- `/check-versions` — v2 `--check` across all fetcher types (dockerhub, github, ghcr, npm, pecl, pypi, quay, rubygems, sdkman, sdkmanager, url, codeberg); no v1 fallback
 - `/validate` — compose config + env consistency + COMPOSE_FILE + tier deps
 - `/stack-health` — health markers, container status, version markers
 - `/env-diff` — show divergences between `.env` and `.env.local`
