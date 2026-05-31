@@ -10285,11 +10285,17 @@ t "t103g: HTTP failure (nonexistent identifier) sets decision=ERROR, error_messa
     echo PASS
 "
 
-# t103h: GITHUB_TOKEN path — token used directly, no token endpoint call
-t "t103h: GITHUB_TOKEN present — token endpoint fixture not required" bash -c "
+# t103h: GITHUB_TOKEN path — PAT exchanged via token endpoint, returns PAT-scoped token
+# Fixture ghcr.io_token_pat is present → PAT branch reads it; proposed_version is populated.
+t "t103h: GITHUB_TOKEN present — PAT exchanged via token endpoint (ghcr.io_token_pat fixture)" bash -c "
     ${_GHCR_LIBS}
-    export GITHUB_TOKEN='test-pat-token-direct'
+    export GITHUB_TOKEN='test-pat-token-for-exchange'
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/ghcr_h_cache
+    # Verify _gs_eu2_ghcr_get_token returns the PAT-scoped token (not the anon token)
+    tok=\$(_gs_eu2_ghcr_get_token 'testowner/ghcr-repo')
+    [[ \"\$tok\" == 'test-pat-scoped-token-ghcr-fixture' ]] \
+        || { echo \"expected PAT-scoped token, got: '\$tok'\"; echo FAIL; exit 0; }
+    # Also verify full fetch path still produces a proposed_version
     _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
     _gs_eu2_record_set \$idx type       'ghcr'
     _gs_eu2_record_set \$idx identifier 'testowner/ghcr-repo'
@@ -10298,6 +10304,46 @@ t "t103h: GITHUB_TOKEN present — token endpoint fixture not required" bash -c 
     val=\$(_gs_eu2_record_get \$idx proposed_version)
     [[ -n \"\$val\" ]] || { echo 'proposed_version empty with GITHUB_TOKEN set'; echo FAIL; exit 0; }
     unset GITHUB_TOKEN
+    echo PASS
+"
+
+# t103h_b: GITHUB_TOKEN present but token endpoint fails → falls back to anonymous token
+# Simulate PAT failure by pointing fixture dir at a temp dir with NO ghcr.io_token_pat file
+# (anonymous ghcr.io_token is present so the fallback can succeed).
+t "t103h_b: GITHUB_TOKEN present + PAT token endpoint fails → falls back to anonymous token" bash -c "
+    ${_GHCR_LIBS}
+    export GITHUB_TOKEN='test-pat-will-fail'
+    # Temp fixture dir: has anonymous token fixture but NOT ghcr.io_token_pat
+    _fallback_dir=\$(mktemp -d)
+    cp '${FIXTURES}/http/ghcr.io_token' \"\${_fallback_dir}/\"
+    cp '${FIXTURES}/http/ghcr.io_v2_testowner_ghcr-repo_tags_list' \"\${_fallback_dir}/\"
+    export _GS_EU2_HTTP_FIXTURE_DIR=\"\${_fallback_dir}\"
+    export _GS_EU2_CACHE_DIR=\$(mktemp -d)
+    # _gs_eu2_ghcr_get_token: PAT fixture absent → falls through to anonymous path
+    tok=\$(_gs_eu2_ghcr_get_token 'testowner/ghcr-repo')
+    [[ \"\$tok\" == 'test-anon-token-ghcr-fixture' ]] \
+        || { echo \"expected anon fallback token, got: '\$tok'\"; echo FAIL; exit 0; }
+    # Full fetch must still succeed (uses anonymous token)
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'ghcr'
+    _gs_eu2_record_set \$idx identifier 'testowner/ghcr-repo'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_GHCR_PAT_FALLBACK_VERSION'
+    _gs_eu2_fetch_ghcr \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ -n \"\$val\" ]] || { echo 'proposed_version empty after anon fallback'; echo FAIL; exit 0; }
+    unset GITHUB_TOKEN
+    rm -rf \"\${_fallback_dir}\"
+    echo PASS
+"
+
+# t103h_c: no PAT → anonymous token path via _gs_eu2_ghcr_get_token directly
+t "t103h_c: no PAT (GITHUB_TOKEN unset) → anonymous token returned by get_token" bash -c "
+    ${_GHCR_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/ghcr_hc_cache
+    unset GITHUB_TOKEN GLOBAL_STACK_GITHUB_TOKEN
+    tok=\$(_gs_eu2_ghcr_get_token 'testowner/ghcr-repo')
+    [[ \"\$tok\" == 'test-anon-token-ghcr-fixture' ]] \
+        || { echo \"expected anon token, got: '\$tok'\"; echo FAIL; exit 0; }
     echo PASS
 "
 

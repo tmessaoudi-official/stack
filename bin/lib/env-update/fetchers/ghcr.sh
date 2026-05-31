@@ -5,8 +5,8 @@
 # Sources:   core/records.sh  core/semver.sh  core/channel.sh
 #            core/tag_flags.sh  core/cache.sh  http/curl.sh
 # Deps:      curl, jq
-# Env:       GITHUB_TOKEN or GLOBAL_STACK_GITHUB_TOKEN (optional; used as Bearer when set,
-#            bypassing anonymous token acquisition); _GS_EU2_CFG[no_cache]
+# Env:       GITHUB_TOKEN or GLOBAL_STACK_GITHUB_TOKEN (optional; used as oauth2 Basic auth
+#            to the token endpoint; see authentication strategy below); _GS_EU2_CFG[no_cache]
 #
 # Input:  record index — reads identifier/channel/tag_*/major_hint/major_hint_min/
 #                        watch_major_depth/current_version/version_prefix
@@ -14,10 +14,19 @@
 #         + using_fallback_major back into record
 #
 # Authentication strategy:
-#   1. If GITHUB_TOKEN or GLOBAL_STACK_GITHUB_TOKEN is set → use it directly as Bearer.
-#      This also works for private images accessible by the token.
-#   2. Otherwise → fetch an anonymous Bearer token from the GHCR token endpoint.
-#      Public images support anonymous pull via scope=repository:<owner>/<image>:pull.
+#   GHCR does NOT accept a GitHub PAT directly as a Bearer token unless it carries
+#   read:packages scope.  Project tokens typically carry only "repo" scope.
+#   The correct pattern is to exchange the PAT via the GHCR token endpoint, which
+#   returns a short-lived pull-scoped registry token regardless of the PAT's package
+#   scope — as long as the image is public or the account has pull access.
+#
+#   1. If GITHUB_TOKEN or GLOBAL_STACK_GITHUB_TOKEN is set:
+#      → Exchange via GHCR token endpoint using oauth2 Basic auth (-u "oauth2:<PAT>").
+#        Works for public images and private images the account can pull.
+#        Falls back to anonymous on failure (e.g. invalid PAT or network error).
+#   2. Otherwise (or after PAT-auth failure):
+#      → Fetch an anonymous Bearer token from the GHCR token endpoint.
+#        Public images support anonymous pull via scope=repository:<owner>/<image>:pull.
 #      Token endpoint: https://ghcr.io/token?service=ghcr.io&scope=repository:<id>:pull
 #
 # Pagination: requests up to n=1000 tags in one call. The OCI distribution API paginates
@@ -44,33 +53,56 @@ source "$(dirname "${BASH_SOURCE[0]}")/../core/cache.sh"
 # shellcheck source=./../http/curl.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../http/curl.sh"
 
-# _gs_eu2_ghcr_get_token — obtain a Bearer token for a GHCR image pull.
+# _gs_eu2_ghcr_get_token — obtain a pull-scoped Bearer token for a GHCR image.
 #
 # Args:    $1 identifier — "owner/image" string (e.g. "sooperset/mcp-atlassian")
-# Reads:   GITHUB_TOKEN or GLOBAL_STACK_GITHUB_TOKEN
+# Reads:   GITHUB_TOKEN or GLOBAL_STACK_GITHUB_TOKEN (optional)
+#          _GS_EU2_HTTP_FIXTURE_DIR (optional; test seam)
 # Prints:  Bearer token string (non-empty on success)
 # Returns: 0 on success; 1 on failure (token endpoint unreachable or response invalid)
 #
-# If GITHUB_TOKEN or GLOBAL_STACK_GITHUB_TOKEN is set, returns it directly without
-# contacting the token endpoint — GitHub tokens are valid GHCR Bearer tokens.
-# Otherwise fetches an anonymous token scoped to the specific repository pull permission.
+# A GitHub PAT used directly as a GHCR Bearer requires read:packages scope.  Project
+# tokens typically carry only "repo" scope → 403.  Instead, always exchange credentials
+# via the GHCR token endpoint:
+#   PAT present  → -u "oauth2:<PAT>" to token endpoint (works for public + accessible private).
+#                  Falls back to anonymous when the PAT-authenticated request fails.
+#   No PAT       → anonymous token endpoint request (works for all public images).
+# Fixture seam: PAT branch reads ghcr.io_token_pat; anonymous branch reads ghcr.io_token.
 _gs_eu2_ghcr_get_token() {
   local _id="${1}"
   local _pat="${GITHUB_TOKEN:-${GLOBAL_STACK_GITHUB_TOKEN:-}}"
+  local _token_url="https://ghcr.io/token?service=ghcr.io&scope=repository:${_id}:pull"
+  local _resp=''
 
-  # Fast path: use the existing GitHub PAT directly.
+  # PAT path: exchange via token endpoint using oauth2 Basic auth.
+  # A GitHub PAT used as a direct GHCR Bearer token requires read:packages scope — most
+  # project tokens carry only "repo" scope and get a 403.  The token endpoint accepts
+  # any valid PAT with oauth2 Basic auth and returns a short-lived pull-scoped token.
   if [[ -n "${_pat}" ]]; then
-    printf '%s' "${_pat}"
-    return 0
+    if [[ -n "${_GS_EU2_HTTP_FIXTURE_DIR:-}" ]]; then
+      # Fixture seam for PAT branch: reads ghcr.io_token_pat (distinct from anonymous ghcr.io_token).
+      local _pat_fixture="${_GS_EU2_HTTP_FIXTURE_DIR}/ghcr.io_token_pat"
+      if [[ -f "${_pat_fixture}" ]]; then
+        _resp="$(cat "${_pat_fixture}")"
+      fi
+      # No PAT fixture → fall through to anonymous path (simulates PAT-auth failure).
+    else
+      # Live path: curl with oauth2 Basic auth (empty username, PAT as password is
+      # rejected; "oauth2" as username is the correct GHCR convention).
+      local _raw_resp
+      if _raw_resp="$(curl -sf -u "oauth2:${_pat}" "${_token_url}" 2>/dev/null)"; then
+        _resp="${_raw_resp}"
+      fi
+      # curl failure (4xx/5xx/network) → fall through to anonymous path.
+    fi
   fi
 
-  # Anonymous path: fetch a short-lived registry token from the GHCR token service.
-  # The token is scoped to a single repository pull and is safe to use in tests via
-  # the fixture seam (fixture file: ghcr.io_token — query string is stripped by fixture_path).
-  local _token_url="https://ghcr.io/token?service=ghcr.io&scope=repository:${_id}:pull"
-  local _resp
-  if ! _resp="$(_gs_eu2_http_get "${_token_url}" 2>/dev/null)"; then
-    return 1
+  # Anonymous path: works for all public images.
+  # Also serves as fallback when PAT-authenticated request failed.
+  if [[ -z "${_resp}" ]]; then
+    if ! _resp="$(_gs_eu2_http_get "${_token_url}" 2>/dev/null)"; then
+      return 1
+    fi
   fi
 
   local _tok
