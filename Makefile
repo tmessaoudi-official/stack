@@ -8,7 +8,7 @@ GLOBAL_STACK_DOCKER_CLI ?=
 GLOBAL_STACK_DOCKER_CLI_DOT_ENV ?= .env.local
 GLOBAL_STACK_DOCKER_CLI_FLAGS ?=
 
-include ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}
+-include ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}
 export $(shell sed 's/=.*//' ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV})
 
 GLOBAL_STACK_DOCKER_CLI_NO_COMPOSE_BAKE ?= ${COMPOSE_BAKE}
@@ -353,7 +353,7 @@ mkdir-p:
 touch:
 	touch ${GLOBAL_STACK_TARGET_FILE}
 create-paths::
-	$(MAKE) GLOBAL_STACK_TARGET_DIR="tools ${GLOBAL_STACK_AXLLENT_MAILPIT_MP_DATABASE} docker/data/dumps/dpage-pgadmin4 ./docker/registry/certs/ ./docker/registry/data/ ./docker/registry/registry/" mkdir-p --silent --ignore-errors --keep-going --warn-undefined-variables
+	$(MAKE) GLOBAL_STACK_TARGET_DIR="tools var/images ${GLOBAL_STACK_AXLLENT_MAILPIT_MP_DATABASE} docker/data/dumps/dpage-pgadmin4 ./docker/registry/certs/ ./docker/registry/data/ ./docker/registry/registry/" mkdir-p --silent --ignore-errors --keep-going --warn-undefined-variables
 	$(MAKE) GLOBAL_STACK_TARGET_FILE="${GLOBAL_STACK_SHELL_HISTORY} tools/.gitkeep ./docker/registry/certs/.gitkeep ./docker/registry/data/.gitkeep ./docker/registry/registry/.gitkeep" touch --silent --ignore-errors --keep-going --warn-undefined-variables
 generate-buildx:
 	rm -rf ${BUILDX_BAKE_FILE} ${COMPOSE_FULL_FILE}
@@ -375,9 +375,7 @@ create-buildx-builder:
 	docker buildx create --debug --name docker-buildx-builder --driver docker-container --driver-opt image=custom-moby/buildkit --driver-opt network=host --driver-opt env.BUILDKIT_REGISTRY_CONFIG=${GLOBAL_STACK_DOCKER_ROOT_PATH}/docker/registry/config.local.json --driver-opt env.BUILDKIT_EXTRA_MOUNTS=[/stack/docker/registry/certs/local-global-stack-registry.local.crt:/etc/ssl/certs/local-global-stack-registry.local.crt:ro] --use
 	docker buildx inspect --debug --bootstrap
 start-local-registry:
-	docker stop ${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_NAME} &>/dev/null
-	sleep 10
-	docker rm ${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_NAME} &>/dev/null
+	docker rm -f ${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_NAME} >/dev/null 2>&1 || true
 	openssl req -x509 -newkey rsa:4096 -sha256 -days 365 -nodes -keyout ./docker/registry/certs/${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}.key -out ./docker/registry/certs/${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}.crt -subj "/CN=${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}" -addext "subjectAltName=DNS:${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}"
 	sudo cp ./docker/registry/certs/${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}.crt /usr/local/share/ca-certificates/${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}.crt
 	sudo update-ca-certificates
@@ -388,7 +386,38 @@ start-local-registry:
 build: create-paths generate-buildx
 	# change the order of this in local.Makefile
 	#  --no-cache --progress=plain
-	@jq -r '.group.default.targets[]' ${BUILDX_BAKE_FILE} | while read target; do echo "Processing $$target..."; $(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="bake" GLOBAL_STACK_DOCKER_CLI_EXEC_FLAGS="--push --load" GLOBAL_STACK_DOCKER_CLI="docker buildx" GLOBAL_STACK_DOCKER_CLI_SERVICE="$$target" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables ;done
+	@echo "=== Building all targets (tagged: push+load, untagged: load only) ==="; \
+	_failed_file=$$(mktemp) || { echo "Error: mktemp failed"; exit 1; }; \
+	trap "rm -f $$_failed_file" EXIT; \
+	jq -r '.group.default.targets[]' ${BUILDX_BAKE_FILE} | while IFS= read -r _target; do \
+	  _has_tags=$$(jq -r --arg t "$$_target" '.target[$$t].tags // empty | length > 0' ${BUILDX_BAKE_FILE} 2>/dev/null); \
+	  if [ "$$_has_tags" = "true" ]; then \
+	    echo "Building + pushing $$_target (tagged)..."; \
+	    $(MAKE) \
+	      GLOBAL_STACK_DOCKER_CLI="docker buildx" \
+	      GLOBAL_STACK_DOCKER_CLI_EXEC="bake" \
+	      GLOBAL_STACK_DOCKER_CLI_EXEC_FLAGS="--push --load" \
+	      GLOBAL_STACK_DOCKER_CLI_SERVICE="$$_target" \
+	      docker-cli --silent --keep-going --warn-undefined-variables \
+	      || printf '%s\n' "$$_target" >> "$$_failed_file"; \
+	  else \
+	    echo "Building $$_target (untagged, load only)..."; \
+	    $(MAKE) \
+	      GLOBAL_STACK_DOCKER_CLI="docker buildx" \
+	      GLOBAL_STACK_DOCKER_CLI_EXEC="bake" \
+	      GLOBAL_STACK_DOCKER_CLI_EXEC_FLAGS="--load" \
+	      GLOBAL_STACK_DOCKER_CLI_SERVICE="$$_target" \
+	      docker-cli --silent --keep-going --warn-undefined-variables \
+	      || printf '%s\n' "$$_target" >> "$$_failed_file"; \
+	  fi; \
+	done; \
+	if [ -s "$$_failed_file" ]; then \
+	  echo ""; \
+	  echo "=== BUILD FAILURES ==="; \
+	  cat "$$_failed_file"; \
+	  exit 1; \
+	fi; \
+	echo "=== Build complete ==="
 up: create-paths generate-buildx
 	rm -rf ${BUILDX_BAKE_FILE} ${COMPOSE_FULL_FILE}
 	GLOBAL_STACK_DOCKER_CLI_NO_COMPOSE_BAKE="false" $(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="up" GLOBAL_STACK_DOCKER_CLI_EXEC_FLAGS="--remove-orphans --detach" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
@@ -420,8 +449,9 @@ restart:
 save:
 	source ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV} && docker save $$(docker images --format '{{.Repository}}:{{.Tag}}') -o var/images/stack-${GLOBAL_STACK_VERSION}.tar
 commit:
-	@test -n "$(CONTAINER_NAME)" || (echo "Error: CONTAINER_NAME is required. Usage: CONTAINER_NAME=my_container make commit"; exit 1)
-	source ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV} && docker commit ${CONTAINER_NAME} repository:tag
+	@test -n "$(CONTAINER_NAME)" || (echo "Error: CONTAINER_NAME is required. Usage: make commit CONTAINER_NAME=<name> REPOSITORY_TAG=<repo:tag>"; exit 1)
+	@test -n "$(REPOSITORY_TAG)" || (echo "Error: REPOSITORY_TAG is required. Usage: make commit CONTAINER_NAME=<name> REPOSITORY_TAG=<repo:tag>"; exit 1)
+	source ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV} && docker commit ${CONTAINER_NAME} ${REPOSITORY_TAG}
 restore:
 	source ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV} && docker load -i var/images/stack-${GLOBAL_STACK_VERSION}.tar
 log-follow:
