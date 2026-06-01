@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -xeE
+set -xeE -o pipefail
 shopt -s extdebug
 IFS=$'\n\t'
 trap 'stackCatch ${?} ${LINENO} "${BASH_COMMAND}"' EXIT ERR PIPE SIGPIPE SIGHUP

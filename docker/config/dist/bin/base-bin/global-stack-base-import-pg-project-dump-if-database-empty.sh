@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -euo pipefail
+
 if ! PGPASSWORD=${DATABASE_PASSWORD} psql -h ${DATABASE_HOST} -U ${DATABASE_USER} -d ${DATABASE_NAME} -c "SELECT tablename FROM pg_tables WHERE schemaname NOT IN ('pg_catalog', 'information_schema');" | grep -q "(0 rows)"; then
     echo "Database already populated"
 else

@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -xeE -o pipefail
+
 if [[ -n "${GLOBAL_STACK_MERGIRAF_VERSION}" && "" = "$(command -v mergiraf)" ]]; then
     sudo mkdir /tmp/mergiraf
     sudo chmod -R a+rwx /tmp/mergiraf

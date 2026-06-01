@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -xeE -o pipefail
+
 SECONDS=0
 
 sleep 1
