@@ -129,7 +129,7 @@ services:
       03python3:
         condition: service_healthy
         required: true
-      03phpedge:
+      03php8-5:
         condition: service_healthy
         required: true
     healthcheck:
