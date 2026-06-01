@@ -22,6 +22,7 @@
 /.env.src.all.merged
 /.env*.src.all.merged
 /.env.backup*
+/.env.bak.*
 /.env.copy*
 
 docker-compose*.local.yaml
