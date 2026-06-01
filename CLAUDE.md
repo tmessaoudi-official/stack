@@ -78,7 +78,7 @@ See `templates/tips/env-update.md` for the full fetcher-type and flag reference.
 
 **v2.0.0 (all fetcher types)** — parses `.env` annotations, fetches latest versions across all 12 fetcher types (dockerhub, github, ghcr, npm, pecl, pypi, quay, rubygems, sdkman, sdkmanager, url, codeberg), streams a `[AUTO|HOLD|SKIP|ERROR]` report, and can apply AUTO decisions back to `.env`.
 
-**Key flags**: `--check` (fetch + report), `--apply` (apply AUTO decisions; implies `--check`), `--apply-resolve` (also apply RESOLVED decisions — floating→concrete rewrites; requires `--apply`), `--dry-run` (no writes), `--filter=<regex>`, `--no-cache`, `--format=text|json`, `--dump`, `--env-file=<path>`, `--cache-ttl=<N>`, `--with-tags`, `--unstable[=full|info]` (prerelease channel mode), `--stable[=full|info]` (stable channel mode; only `--stable=full + --unstable=full` is banned), `--no-notes` (suppress note sub-lines), `--changes-only` (hide up-to-date SKIP records), `--no-drift` (suppress [DRIFT]/[REPLACE-DRIFT] sub-lines), `--no-fail` (always exit 0; only ERROR fetch decisions suppressed — usage/backup errors remain fatal), `--scan` (run `bin/env-scan.sh` after `--apply` to propagate updated values to `.env.local` and Dockerfiles), `--force-auto` (bypass `(manual)`/`(override)`/`HOLD` gates; requires `--confirm="Confirm override"` with `--apply`; emits advisory when used without `--apply`), `--confirm=TEXT` (confirmation gate for `--force-auto --apply`)
+**Key flags**: `--check` (fetch + report), `--apply` (apply AUTO decisions; implies `--check`), `--apply-resolve` (also apply RESOLVED decisions — floating→concrete rewrites; requires `--apply`), `--dry-run` (no writes), `--filter=<regex>`, `--no-cache`, `--format=text|json`, `--dump`, `--env-file=<path>`, `--cache-ttl=<N>`, `--with-tags`, `--unstable[=full|info]` (prerelease channel mode), `--stable[=full|info]` (stable channel mode; only `--stable=full + --unstable=full` is banned), `--no-notes` (suppress note sub-lines), `--changes-only` (hide up-to-date SKIP records), `--no-drift` (suppress [DRIFT]/[REPLACE-DRIFT] sub-lines), `--no-fail` (always exit 0; only ERROR fetch decisions suppressed — usage/backup errors remain fatal), `--scan` (run `bin/env-scan.sh` after `--apply` to propagate updated values to `.env.local` and Dockerfiles), `--force-auto` (bypass `(manual)`/`(override)`/`HOLD` gates; requires `--confirm="Confirm override"` with `--apply`; emits advisory when used without `--apply`), `--confirm=TEXT` (confirmation gate for `--force-auto --apply`), `--reference[=SECTION]` (print annotation/fetcher/decision reference and exit)
 
 **⚠️ Safety rule**: Always run `--dry-run` before `--apply` in the same session. Never run `--apply` cold — ask-tier operation. (Incident 2026-04-23: ran `--apply` without prior dry-run.)
 
@@ -139,7 +139,7 @@ make restart-03node24                # Restart one service
 # Version updates (safe preview first)
 bin/env-update.sh --check                         # preview all types
 bin/env-update.sh --filter=NODE --check           # only Node-related
-bin/env-update.sh --apply                         # apply AUTO decisions (run --check first!)
+bin/env-update.sh --apply                         # apply AUTO decisions (run --dry-run first!)
 
 # After updating versions in .env
 bin/env-scan.sh   # Propagate to .env.local + rewrite ARG lines in Dockerfiles (--sync-values=true by default)
@@ -158,7 +158,7 @@ make start-local-registry            # Start local TLS registry (port 5000)
 ## Testing & Verification
 
 - **env-scan tests**: `bash bin/tests/env-scan.test.sh` — custom harness with `assert_equals`, `assert_contains`, `assert_not_contains`, `assert_file_exists`
-- **env-update tests**: `bash bin/tests/env-update.test.sh` — 700+ tests across 107 sections (fetchers, cache, semver, apply, args, RESOLVED, --reference…); use `--dry-run --filter=<VAR>` for quick preview; `--offline` is not implemented (use `_GS_EU2_HTTP_FIXTURE_DIR` seam for deterministic offline testing)
+- **env-update tests**: `bash bin/tests/env-update.test.sh` — 700+ tests across 108 sections (fetchers, cache, semver, apply, args, RESOLVED, --reference…); use `--dry-run --filter=<VAR>` for quick preview; `--offline` is not implemented (use `_GS_EU2_HTTP_FIXTURE_DIR` seam for deterministic offline testing)
 - **Shell scripts**: `shellcheck <file>` and `shfmt -d -i 2 -ci -bn <file>` (diff mode)
 - **YAML files**: `yamllint -d relaxed <file>` and `yamlfmt -dry <file>` (dry-run mode)
 - **Formatting**: `/fmt --check` to preview all formatting changes, `/fmt` to apply them
