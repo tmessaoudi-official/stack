@@ -16,4 +16,4 @@ global-stack-base-init-mkcert.sh
 # mkdir -p /home/seluser/.pki/nssdb
 # certutil -d sql:/home/seluser/.pki/nssdb -A -t "PcTCuwg,PcTCuwg,PcTCuwg" -n 'mkcert development CA' -i "${CAROOT}"/rootCA.pem
 
-/opt/bin/entry_point.sh
+exec /opt/bin/entry_point.sh

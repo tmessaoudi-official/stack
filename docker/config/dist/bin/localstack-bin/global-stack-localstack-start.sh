@@ -38,4 +38,4 @@ sudo rsync -raz --ignore-times \
 # cp ${CAROOT}/rootCA.pem /var/lib/localstack/cache/server.test.pem.crt
 # cp ${CAROOT}/rootCA-key.pem /var/lib/localstack/cache/server.test.pem.key
 
-/usr/local/bin/docker-entrypoint.sh
+exec /usr/local/bin/docker-entrypoint.sh

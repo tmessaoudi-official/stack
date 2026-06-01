@@ -9,4 +9,4 @@ global-stack-base-wait-for.sh \
 
 global-stack-base-init-mkcert.sh
 
-/opt/sonarqube/docker/entrypoint.sh
+exec /opt/sonarqube/docker/entrypoint.sh
