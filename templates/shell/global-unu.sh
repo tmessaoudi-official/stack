@@ -243,22 +243,10 @@ fi
 if eval "${env_file_exists}"; then
 	if [ "" != "${OPERATING_SYSTEM}" ]; then
 		if [[ "" != "${DOCKER_COMPOSE_ARCH}" ]]; then
-			if  [ -n "${GLOBAL_STACK_DOCKER_COMPOSE_V1_VERSION}" ] && [ "" != "${GLOBAL_STACK_DOCKER_COMPOSE_V1_VERSION}" ]; then
-				if [ -f ~/.local/bin/docker-compose ]; then GLOBAL_UNU_DOCKER_COMPOSEV1_VERSION="$(docker-compose -v | sed 's/docker-compose version //' | sed 's/\, build .*//')"; else GLOBAL_UNU_DOCKER_COMPOSEV1_VERSION=0; fi
-				GLOBAL_UNU_DOCKER_COMPOSEV1_LATEST=${GLOBAL_STACK_DOCKER_COMPOSE_V1_VERSION}
-				if [ "${GLOBAL_UNU_DOCKER_COMPOSEV1_VERSION}" != "${GLOBAL_UNU_DOCKER_COMPOSEV1_LATEST}" ]; then
-					echo "Updating/Installing docker-compose v1 - system : ${OPERATING_SYSTEM}, arch : ${DOCKER_COMPOSE_ARCH} https://github.com/docker/compose/releases/download/${GLOBAL_UNU_DOCKER_COMPOSEV1_LATEST}/docker-compose-${OPERATING_SYSTEM}-${DOCKER_COMPOSE_ARCH}"
-					curl -L https://github.com/docker/compose/releases/download/${GLOBAL_UNU_DOCKER_COMPOSEV1_LATEST}/docker-compose-${OPERATING_SYSTEM}-${DOCKER_COMPOSE_ARCH} -o ~/.local/bin/docker-compose
-					chmod a+rwx ~/.local/bin/docker-compose
-				else
-					echo "Docker compose v1 is latest '${GLOBAL_UNU_DOCKER_COMPOSEV1_VERSION}'"
-				fi
-			fi
-
-			if  [ -n "${GLOBAL_STACK_DOCKER_COMPOSE_V2_VERSION}" ] && [ "" != "${GLOBAL_STACK_DOCKER_COMPOSE_V2_VERSION}" ]; then
+			if  [ -n "${GLOBAL_STACK_DOCKER_COMPOSE_VERSION}" ] && [ "" != "${GLOBAL_STACK_DOCKER_COMPOSE_VERSION}" ]; then
 				if [ -f ~/.docker/cli-plugins/docker-compose ]; then GLOBAL_UNU_DOCKER_COMPOSEV2_VERSION="$(docker compose version | sed 's/Docker Compose version //')"; else GLOBAL_UNU_DOCKER_COMPOSEV2_VERSION=0; fi
 				# GLOBAL_UNU_DOCKER_COMPOSEV2_LATEST="$(curl --silent https://api.github.com/repos/docker/compose/releases/latest | jq .name -r)"
-				GLOBAL_UNU_DOCKER_COMPOSEV2_LATEST=${GLOBAL_STACK_DOCKER_COMPOSE_V2_VERSION}
+				GLOBAL_UNU_DOCKER_COMPOSEV2_LATEST=${GLOBAL_STACK_DOCKER_COMPOSE_VERSION}
 				if [ "${GLOBAL_UNU_DOCKER_COMPOSEV2_VERSION}" != "${GLOBAL_UNU_DOCKER_COMPOSEV2_LATEST}" ]; then
 					echo "Updating/Installing docker-compose v2 - system : ${OPERATING_SYSTEM}, arch : ${DOCKER_COMPOSE_ARCH} https://github.com/docker/compose/releases/download/${GLOBAL_UNU_DOCKER_COMPOSEV2_LATEST}/docker-compose-${OPERATING_SYSTEM}-${DOCKER_COMPOSE_ARCH}"
 					curl -L https://github.com/docker/compose/releases/download/${GLOBAL_UNU_DOCKER_COMPOSEV2_LATEST}/docker-compose-${OPERATING_SYSTEM}-${DOCKER_COMPOSE_ARCH} -o ~/.docker/cli-plugins/docker-compose

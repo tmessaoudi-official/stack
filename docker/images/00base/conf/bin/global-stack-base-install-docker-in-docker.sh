@@ -96,13 +96,8 @@ fi
 
 if [[ "" != "${OPERATING_SYSTEM}" ]]; then
 	if [[ "" != "${DOCKER_COMPOSE_ARCH}" ]]; then
-		GLOBAL_UNU_DOCKER_COMPOSEV1_LATEST=${GLOBAL_STACK_DOCKER_COMPOSE_V1_VERSION}
-		echo "Installing docker-compose v1 - system : ${OPERATING_SYSTEM}, arch : ${DOCKER_COMPOSE_ARCH}"
-		sudo curl -L "https://github.com/docker/compose/releases/download/${GLOBAL_UNU_DOCKER_COMPOSEV1_LATEST}/docker-compose-${OPERATING_SYSTEM}-${DOCKER_COMPOSE_ARCH}" -o /usr/local/bin/docker-compose
-		sudo chmod a+rwx /usr/local/bin/docker-compose
-
 		# GLOBAL_UNU_DOCKER_COMPOSEV2_LATEST=$(curl --silent https://api.github.com/repos/docker/compose/releases/latest | jq .name -r)
-		GLOBAL_UNU_DOCKER_COMPOSEV2_LATEST=${GLOBAL_STACK_DOCKER_COMPOSE_V2_VERSION}
+		GLOBAL_UNU_DOCKER_COMPOSEV2_LATEST=${GLOBAL_STACK_DOCKER_COMPOSE_VERSION}
 		echo "Installing docker-compose v2 - system : ${OPERATING_SYSTEM}, arch : ${DOCKER_COMPOSE_ARCH}"
 		curl -L "https://github.com/docker/compose/releases/download/${GLOBAL_UNU_DOCKER_COMPOSEV2_LATEST}/docker-compose-${OPERATING_SYSTEM}-${DOCKER_COMPOSE_ARCH}" -o /home/"${GLOBAL_STACK_DOCKER_USER_ID}"/.docker/cli-plugins/docker-compose
 		chmod a+rwx /home/"${GLOBAL_STACK_DOCKER_USER_ID}"/.docker/cli-plugins/docker-compose
