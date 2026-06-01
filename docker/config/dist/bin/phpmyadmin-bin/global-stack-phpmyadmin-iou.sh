@@ -32,23 +32,23 @@ if [ "${GLOBAL_STACK_PHPMYADMIN_VERSION}" != "${PHPMYADMIN_CURRENT_RELEASE}" ]; 
   cd "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin"
 
   if [[ "${GLOBAL_STACK_PHPMYADMIN_TYPE_VERSION}" == "release" ]]; then
-    curl -fsSL -o "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin/phpmyadmin${GLOBAL_STACK_PHPMYADMIN_VERSION}.zip" "https://files.phpmyadmin.net/phpMyAdmin/${GLOBAL_STACK_PHPMYADMIN_VERSION}/phpMyAdmin-${GLOBAL_STACK_PHPMYADMIN_VERSION}-all-languages.zip"
+    curl --connect-timeout 30 --max-time 300 -fsSL -o "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin/phpmyadmin${GLOBAL_STACK_PHPMYADMIN_VERSION}.zip" "https://files.phpmyadmin.net/phpMyAdmin/${GLOBAL_STACK_PHPMYADMIN_VERSION}/phpMyAdmin-${GLOBAL_STACK_PHPMYADMIN_VERSION}-all-languages.zip"
     unzip "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin/phpmyadmin${GLOBAL_STACK_PHPMYADMIN_VERSION}.zip"
     rsync -rav "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin/phpMyAdmin-${GLOBAL_STACK_PHPMYADMIN_VERSION}-all-languages/" "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin/"
   elif [[ "${GLOBAL_STACK_PHPMYADMIN_TYPE_VERSION}" == "branch" ]]; then
     PHPMYADMIN_REF_VALUE="archive/refs/heads/${GLOBAL_STACK_PHPMYADMIN_VERSION}"
-    curl -LsS "https://github.com/phpmyadmin/phpmyadmin/${PHPMYADMIN_REF_VALUE}.tar.gz" -o "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin/phpmyadmin${GLOBAL_STACK_PHPMYADMIN_VERSION}.tar.gz"
+    curl --connect-timeout 30 --max-time 300 -LsS "https://github.com/phpmyadmin/phpmyadmin/${PHPMYADMIN_REF_VALUE}.tar.gz" -o "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin/phpmyadmin${GLOBAL_STACK_PHPMYADMIN_VERSION}.tar.gz"
     # --directory="${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin/phpMyAdmin-${GLOBAL_STACK_PHPMYADMIN_VERSION}-all-languages/" --strip-components=1
     tar -xzf "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin/phpmyadmin${GLOBAL_STACK_PHPMYADMIN_VERSION}.tar.gz"
     rsync -rav "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin/phpmyadmin-${GLOBAL_STACK_PHPMYADMIN_VERSION}/" "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin/"
   elif [[ "${GLOBAL_STACK_PHPMYADMIN_TYPE_VERSION}" == "tag" ]]; then
     PHPMYADMIN_REF_VALUE="archive/refs/tags/${GLOBAL_STACK_PHPMYADMIN_VERSION}"
-    curl -LsS "https://github.com/phpmyadmin/phpmyadmin/${PHPMYADMIN_REF_VALUE}.tar.gz" -o "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin/phpmyadmin${GLOBAL_STACK_PHPMYADMIN_VERSION}.tar.gz"
+    curl --connect-timeout 30 --max-time 300 -LsS "https://github.com/phpmyadmin/phpmyadmin/${PHPMYADMIN_REF_VALUE}.tar.gz" -o "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin/phpmyadmin${GLOBAL_STACK_PHPMYADMIN_VERSION}.tar.gz"
     tar -xzf "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin/phpmyadmin${GLOBAL_STACK_PHPMYADMIN_VERSION}.tar.gz"
     rsync -rav "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin/phpmyadmin-${GLOBAL_STACK_PHPMYADMIN_VERSION}/" "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin/"
   elif [[ "${GLOBAL_STACK_PHPMYADMIN_TYPE_VERSION}" == "commit" ]]; then
     PHPMYADMIN_REF_VALUE="archive/${GLOBAL_STACK_PHPMYADMIN_VERSION}"
-    curl -LsS "https://github.com/phpmyadmin/phpmyadmin/${PHPMYADMIN_REF_VALUE}.tar.gz" -o "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin/phpmyadmin${GLOBAL_STACK_PHPMYADMIN_VERSION}.tar.gz"
+    curl --connect-timeout 30 --max-time 300 -LsS "https://github.com/phpmyadmin/phpmyadmin/${PHPMYADMIN_REF_VALUE}.tar.gz" -o "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin/phpmyadmin${GLOBAL_STACK_PHPMYADMIN_VERSION}.tar.gz"
     tar -xzf "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin/phpmyadmin${GLOBAL_STACK_PHPMYADMIN_VERSION}.tar.gz"
     rsync -rav "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin/phpmyadmin-${GLOBAL_STACK_PHPMYADMIN_VERSION}/" "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin/"
   fi

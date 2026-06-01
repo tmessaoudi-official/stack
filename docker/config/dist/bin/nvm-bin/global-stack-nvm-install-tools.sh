@@ -20,7 +20,7 @@ if [ -f "${DENO_JS}" ]; then
     echo "**** ${DENO_JS} already installed."
 else
     echo "**** Installing ${DENO_JS}"
-    curl -fsSL -o deno-insall.sh "https://deno.land/x/install/install.sh"
+    curl --connect-timeout 30 --max-time 300 -fsSL -o deno-insall.sh "https://deno.land/x/install/install.sh"
     chmod a+x ./deno-insall.sh
     ./deno-insall.sh ${GLOBAL_STACK_DENO_VERSION}
     rm -rf ./deno-insall.sh
@@ -40,5 +40,5 @@ if [ -f "${BUN_JS}" ]; then
     echo "**** ${BUN_JS} already installed."
 else
     echo "**** Installing ${BUN_JS}"
-    curl -fsSL https://bun.sh/install | bash -s ${GLOBAL_STACK_BUN_VERSION}
+    curl --connect-timeout 30 --max-time 300 -fsSL https://bun.sh/install | bash -s ${GLOBAL_STACK_BUN_VERSION}
 fi

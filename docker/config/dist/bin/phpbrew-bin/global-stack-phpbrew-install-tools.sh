@@ -50,7 +50,7 @@ if [[ -f "${ZEPHIR_LANG_PHAR_FILE}" && "${ZEPHIR_LANG_LATEST}" = "$(cat "${GLOBA
 else
     echo -e "\nInstalling ${ZEPHIR_LANG_PHAR_FILE}."
     echo -e "${ZEPHIR_LANG_LATEST}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew.zephir"
-    curl -fsSLO "https://github.com/zephir-lang/zephir/releases/download/${ZEPHIR_LANG_LATEST}/zephir.phar"
+    curl --connect-timeout 30 --max-time 300 -fsSLO "https://github.com/zephir-lang/zephir/releases/download/${ZEPHIR_LANG_LATEST}/zephir.phar"
     mv zephir.phar "${ZEPHIR_LANG_PHAR_FILE}"
     chmod a+x "${ZEPHIR_LANG_PHAR_FILE}"
 fi
@@ -64,7 +64,7 @@ if [[ -f "${PHALCON_DEVTOOLS_PHAR_FILE}" && "${PHALCON_DEVTOOLS_LATEST}" = "$(ca
 else
     echo -e "\nInstalling ${PHALCON_DEVTOOLS_PHAR_FILE}."
     echo -e "${PHALCON_DEVTOOLS_LATEST}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew.phalcon"
-    curl -fsSLO "https://github.com/phalcon/phalcon-devtools/releases/download/${PHALCON_DEVTOOLS_LATEST}/phalcon.phar"
+    curl --connect-timeout 30 --max-time 300 -fsSLO "https://github.com/phalcon/phalcon-devtools/releases/download/${PHALCON_DEVTOOLS_LATEST}/phalcon.phar"
     mv phalcon.phar "${PHALCON_DEVTOOLS_PHAR_FILE}"
     chmod a+x "${PHALCON_DEVTOOLS_PHAR_FILE}"
 fi
@@ -78,7 +78,7 @@ if [ -f "${DEPLOYER_PHAR_FILE}" ]; then
 else
     echo -e "\nInstalling ${DEPLOYER_PHAR_FILE}."
     echo -e "${GLOBAL_STACK_DEPLOYER_VERSION}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew.deployer"
-    curl -LO https://github.com/deployphp/deployer/releases/download/${GLOBAL_STACK_DEPLOYER_VERSION}/deployer.phar
+    curl --connect-timeout 30 --max-time 300 -LO https://github.com/deployphp/deployer/releases/download/${GLOBAL_STACK_DEPLOYER_VERSION}/deployer.phar
     mv deployer.phar "${DEPLOYER_PHAR_FILE}" 2> /dev/null
     chmod a+x "${DEPLOYER_PHAR_FILE}" 2> /dev/null
 fi
@@ -102,7 +102,7 @@ if [ -f "${SYMFONY_CLI_PHAR_FILE}" ]; then
 else
     echo -e "\nInstalling ${SYMFONY_CLI_PHAR_FILE}."
     echo -e "${GLOBAL_STACK_SYMFONY_CLI_VERSION}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew.symfony-cli"
-    curl -LO https://github.com/symfony-cli/symfony-cli/releases/download/${GLOBAL_STACK_SYMFONY_CLI_VERSION}/symfony-cli_linux_amd64.tar.gz
+    curl --connect-timeout 30 --max-time 300 -LO https://github.com/symfony-cli/symfony-cli/releases/download/${GLOBAL_STACK_SYMFONY_CLI_VERSION}/symfony-cli_linux_amd64.tar.gz
     tar --extract --file=symfony-cli_linux_amd64.tar.gz symfony
     chmod a+x ./symfony 2> /dev/null
     mv ./symfony "${SYMFONY_HOME}/bin/symfony"
@@ -118,7 +118,7 @@ if [[ -f "${PICKLE_PHAR_FILE}" && "${PICKLE_LATEST}" = "$(cat "${GLOBAL_STACK_DO
 else
     echo -e "\nInstalling ${PICKLE_PHAR_FILE}."
     echo -e "${PICKLE_LATEST}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew.pickle"
-    curl -fsSLO "https://github.com/FriendsOfPHP/pickle/releases/download/${PICKLE_LATEST}/pickle.phar"
+    curl --connect-timeout 30 --max-time 300 -fsSLO "https://github.com/FriendsOfPHP/pickle/releases/download/${PICKLE_LATEST}/pickle.phar"
     mv pickle.phar "${PICKLE_PHAR_FILE}"
     chmod a+x "${PICKLE_PHAR_FILE}"
 fi
@@ -131,7 +131,7 @@ if [[ -f "${PIE_PHAR_FILE}" && "${PIE_LATEST}" = "$(cat "${GLOBAL_STACK_DOCKER_T
 else
     echo -e "\nInstalling ${PIE_PHAR_FILE}."
     echo -e "${PIE_LATEST}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew.pie"
-    curl -fsSLO "https://github.com/php/pie/releases/download/${PIE_LATEST}/pie.phar"
+    curl --connect-timeout 30 --max-time 300 -fsSLO "https://github.com/php/pie/releases/download/${PIE_LATEST}/pie.phar"
     mv pie.phar "${PIE_PHAR_FILE}"
     chmod a+x "${PIE_PHAR_FILE}"
 fi
@@ -144,7 +144,7 @@ if [[ -f "${MAGO_PHAR_FILE}" && "${MAGO_LATEST}" = "$(cat "${GLOBAL_STACK_DOCKER
 else
     echo -e "\nInstalling ${MAGO_PHAR_FILE}."
     echo -e "${MAGO_LATEST}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew.mago"
-    curl --proto '=https' --tlsv1.2 -sSf https://carthage.software/mago.sh | bash -s -- --install-dir=${PHPBREW_BIN} --version=${MAGO_LATEST}
+    curl --connect-timeout 30 --max-time 300 --proto '=https' --tlsv1.2 -sSf https://carthage.software/mago.sh | bash -s -- --install-dir=${PHPBREW_BIN} --version=${MAGO_LATEST}
     chmod a+x "${MAGO_PHAR_FILE}"
 fi
 
@@ -155,7 +155,7 @@ if [[ -f "${CASTOR_PHAR_FILE}" && "${CASTOR_LATEST}" = "$(cat "${GLOBAL_STACK_DO
 else
     echo -e "\nInstalling ${CASTOR_PHAR_FILE}."
     echo -e "${CASTOR_LATEST}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew.castor"
-    curl "https://castor.jolicode.com/install" | bash -s -- --install-dir=${PHPBREW_BIN} --version=${CASTOR_LATEST}
+    curl --connect-timeout 30 --max-time 300 "https://castor.jolicode.com/install" | bash -s -- --install-dir=${PHPBREW_BIN} --version=${CASTOR_LATEST}
     chmod a+x "${CASTOR_PHAR_FILE}"
 fi
 
@@ -167,7 +167,7 @@ if [[ -f "${FABPOT_LOCAL_PHP_SECURITY_CHECKER}" && "${FABPOT_LOCAL_PHP_SECURITY_
 else
     echo -e "\nInstalling ${FABPOT_LOCAL_PHP_SECURITY_CHECKER}."
     echo -e "${FABPOT_LOCAL_PHP_SECURITY_CHECKER_LATEST}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew.fabpot-local-php-security-checker"
-    curl -LsS "https://github.com/fabpot/local-php-security-checker/releases/download/${FABPOT_LOCAL_PHP_SECURITY_CHECKER_LATEST}/local-php-security-checker_linux_amd64" -o "${FABPOT_LOCAL_PHP_SECURITY_CHECKER}"
+    curl --connect-timeout 30 --max-time 300 -LsS "https://github.com/fabpot/local-php-security-checker/releases/download/${FABPOT_LOCAL_PHP_SECURITY_CHECKER_LATEST}/local-php-security-checker_linux_amd64" -o "${FABPOT_LOCAL_PHP_SECURITY_CHECKER}"
     chmod a+x "${FABPOT_LOCAL_PHP_SECURITY_CHECKER}"
 fi
 

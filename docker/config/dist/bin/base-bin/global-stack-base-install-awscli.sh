@@ -11,7 +11,7 @@ if [[ ! -d "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/awscli" ]]; then
 
     cd "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/awscli"
 
-    curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+    curl --connect-timeout 30 --max-time 300 "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
 
     unzip awscliv2.zip
 

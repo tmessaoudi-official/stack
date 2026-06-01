@@ -68,7 +68,7 @@ mkdir -p "${PUB_CACHE}" "${FVM_CACHE_PATH}" "${FVM_GIT_CACHE_PATH}"
 
 if [[ "${FVM_MODE}" = "install" ]]; then
   if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/fvm" ]] || [[ "${GLOBAL_STACK_RELOAD_FVM}" = "true" ]]; then
-    curl -fsSL -o "fvm-${FVM_VERSION}-linux-x64.tar.gz" "https://github.com/leoafarias/fvm/releases/download/${FVM_VERSION}/fvm-${FVM_VERSION}-linux-x64.tar.gz"
+    curl --connect-timeout 30 --max-time 300 -fsSL -o "fvm-${FVM_VERSION}-linux-x64.tar.gz" "https://github.com/leoafarias/fvm/releases/download/${FVM_VERSION}/fvm-${FVM_VERSION}-linux-x64.tar.gz"
     tar -xvf fvm-${FVM_VERSION}-linux-x64.tar.gz
     sudo mv fvm/fvm ${GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN}/fvm
     sudo chmod +x ${GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN}/fvm

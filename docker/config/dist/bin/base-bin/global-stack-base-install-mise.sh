@@ -21,7 +21,7 @@ if [[ -n "${GLOBAL_STACK_MISE_VERSION}" && "${GLOBAL_STACK_BASE_INSTALL_TOOLS}" 
     done
 
     # Install mise
-    curl -sSL https://mise.run | sh
+    curl --connect-timeout 30 --max-time 300 -sSL https://mise.run | sh
 
     mise use -g usage
 else

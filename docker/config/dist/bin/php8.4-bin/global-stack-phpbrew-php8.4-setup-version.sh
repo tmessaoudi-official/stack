@@ -16,7 +16,7 @@ stackCatch() {
 
 if [[ ! -f ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/frankenphp/frankenphp-${GLOBAL_STACK_FRANKENPHP_VERSION}.tar.gz ]]; then
     FRANKENPHP_REFS_VALUE=$( { [[ "${GLOBAL_STACK_FRANKENPHP_VERSION}" =~ ^[0-9a-f]{7,40}$ ]] && echo "archive/${GLOBAL_STACK_FRANKENPHP_VERSION}"; } || { [[ "${GLOBAL_STACK_FRANKENPHP_VERSION}" =~ ^v?[0-9]+(\.[0-9]+)*(-.+)?$ ]] && echo "archive/refs/tags/${GLOBAL_STACK_FRANKENPHP_VERSION}"; } || echo "archive/refs/heads/${GLOBAL_STACK_FRANKENPHP_VERSION}" )
-    curl -LsS "https://github.com/dunglas/frankenphp/${FRANKENPHP_REFS_VALUE}.tar.gz" -o ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/frankenphp/frankenphp-${GLOBAL_STACK_FRANKENPHP_VERSION}.tar.gz
+    curl --connect-timeout 30 --max-time 300 -LsS "https://github.com/dunglas/frankenphp/${FRANKENPHP_REFS_VALUE}.tar.gz" -o ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/frankenphp/frankenphp-${GLOBAL_STACK_FRANKENPHP_VERSION}.tar.gz
 fi
 
 cd ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/frankenphp
