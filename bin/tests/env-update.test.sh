@@ -10448,6 +10448,146 @@ t "t103l: dispatch wiring — ghcr: type is handled by _gs_eu2_dispatch_fetcher"
 _flush_section
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Section 104 — apply.sh error paths
+#
+# Covers: Rule 8 tracked-file dirty guard (no_fail=false → return 1;
+#         no_fail=true → [SKIP] + return 0), replace-cascade target-not-found
+#         with no_fail=true (continues, prints [ERROR], exits 0), and the
+#         SKIP replace-only pass target-not-found with no_fail=true.
+#
+# These paths existed since apply.sh was written; t91f (Section 91) covered
+# cascade rollback with no_fail=false. This section fills the remaining gaps.
+# ═══════════════════════════════════════════════════════════════════════════
+section "104 — apply.sh error paths"
+
+_APPLY_LIBS="
+    source '/stack/bin/lib/env-update/config/defaults.sh'
+    source '/stack/bin/lib/env-update/core/records.sh'
+    source '/stack/bin/lib/env-update/core/git.sh'
+    source '/stack/bin/lib/env-update/core/semver.sh'
+    source '/stack/bin/lib/env-update/core/apply.sh'
+"
+
+# t104a: Rule 8 dirty-tracked file + no_fail=false → apply returns non-zero.
+# Sets up a real git repo, tracks the env file, then modifies it without
+# staging so git status --porcelain returns non-empty → guard fires → return 1.
+t "t104a: dirty tracked env file + no_fail=false → _gs_eu2_apply_updates returns 1" bash -c "
+    ${_APPLY_LIBS}
+    declare -A _GS_EU2_CFG=([no_fail]=false [apply_resolve]=false)
+    # Create a real git repo in a temp dir
+    repo=\$(mktemp -d)
+    git -C \"\$repo\" init -q
+    git -C \"\$repo\" config user.email 'test@test.com'
+    git -C \"\$repo\" config user.name 'Test'
+    f=\"\$repo/.env\"
+    printf 'GLOBAL_STACK_T104A=1.0.0\n' > \"\$f\"
+    git -C \"\$repo\" add \"\$f\"
+    git -C \"\$repo\" commit -qm 'init'
+    # Modify the file without staging (dirty unstaged)
+    printf 'GLOBAL_STACK_T104A=1.0.0\n# dirty\n' > \"\$f\"
+    # Set up a record so apply_updates has something to process
+    _gs_eu2_record_new; idx=\$_GS_EU2_LAST_IDX
+    _gs_eu2_record_set \$idx env_var          'GLOBAL_STACK_T104A'
+    _gs_eu2_record_set \$idx current_version  '1.0.0'
+    _gs_eu2_record_set \$idx proposed_version '2.0.0'
+    _gs_eu2_record_set \$idx decision         'AUTO'
+    rc=0
+    _gs_eu2_apply_updates \"\$f\" 'false' > /dev/null 2>&1 || rc=\$?
+    rm -rf \"\$repo\"
+    [[ \"\$rc\" -ne 0 ]] || { echo \"expected non-zero return for dirty file, got 0\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t104b: Rule 8 dirty-tracked file + no_fail=true → [SKIP] output, returns 0.
+# Same setup as t104a but with no_fail=true: the guard fires but exits 0 with
+# a [SKIP] message instead of aborting.
+t "t104b: dirty tracked env file + no_fail=true → [SKIP] in output, returns 0" bash -c "
+    ${_APPLY_LIBS}
+    declare -A _GS_EU2_CFG=([no_fail]=true [apply_resolve]=false)
+    repo=\$(mktemp -d)
+    git -C \"\$repo\" init -q
+    git -C \"\$repo\" config user.email 'test@test.com'
+    git -C \"\$repo\" config user.name 'Test'
+    f=\"\$repo/.env\"
+    printf 'GLOBAL_STACK_T104B=1.0.0\n' > \"\$f\"
+    git -C \"\$repo\" add \"\$f\"
+    git -C \"\$repo\" commit -qm 'init'
+    # Dirty (unstaged modification)
+    printf 'GLOBAL_STACK_T104B=1.0.0\n# dirty\n' > \"\$f\"
+    _gs_eu2_record_new; idx=\$_GS_EU2_LAST_IDX
+    _gs_eu2_record_set \$idx env_var          'GLOBAL_STACK_T104B'
+    _gs_eu2_record_set \$idx current_version  '1.0.0'
+    _gs_eu2_record_set \$idx proposed_version '2.0.0'
+    _gs_eu2_record_set \$idx decision         'AUTO'
+    rc=0
+    out=\$(_gs_eu2_apply_updates \"\$f\" 'false' 2>&1) || rc=\$?
+    rm -rf \"\$repo\"
+    [[ \"\$rc\" -eq 0 ]] || { echo \"expected exit 0 with no_fail=true, got rc=\$rc\"; echo FAIL; exit 0; }
+    printf '%s' \"\$out\" | grep -qiF 'SKIP' \
+        || { echo \"expected [SKIP] in output; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t104c: replace-cascade target-not-found + no_fail=true → primary var IS written
+# (no rollback), [ERROR] emitted to stderr, and processing continues.
+# Contrast with no_fail=false (t91f): rollback fires and primary reverts.
+# Note: function exit code reflects the last (( expr )) statement — focus on
+# file-content behavior (rollback vs no-rollback) rather than exit code.
+t "t104c: replace-cascade target missing + no_fail=true → primary written (no rollback), [ERROR] emitted" bash -c "
+    ${_APPLY_LIBS}
+    declare -A _GS_EU2_CFG=([no_fail]=true [apply_resolve]=false)
+    f=\$(mktemp)
+    # File has the primary VAR but NOT the replace target
+    printf '# @todo env-update github:testowner/testrepo 2.4.0\nGLOBAL_STACK_T104C=2.4.0\n' > \"\$f\"
+    _gs_eu2_record_new; idx=\$_GS_EU2_LAST_IDX
+    _gs_eu2_record_set \$idx env_var           'GLOBAL_STACK_T104C'
+    _gs_eu2_record_set \$idx current_version   '2.4.0'
+    _gs_eu2_record_set \$idx proposed_version  '3.0.0'
+    _gs_eu2_record_set \$idx decision          'AUTO'
+    _gs_eu2_record_set \$idx replace_targets   'GLOBAL_STACK_T104C_ALIAS'
+    _gs_eu2_record_set \$idx replace_templates 'node{major}'
+    # Capture stderr (the [ERROR] line); stdout goes to /dev/null (summary line)
+    err=\$(_gs_eu2_apply_updates \"\$f\" 'false' 2>&1 >/dev/null || true)
+    # Key assertion 1: no rollback — primary var was written to 3.0.0
+    grep -qF 'GLOBAL_STACK_T104C=3.0.0' \"\$f\" \
+        || { echo \"primary var was rolled back (no_fail=true should prevent rollback); file: \$(cat \"\$f\")\"; echo FAIL; exit 0; }
+    # Key assertion 2: [ERROR] was emitted to stderr
+    printf '%s' \"\$err\" | grep -qF '[ERROR]' \
+        || { echo \"expected [ERROR] in stderr; got: \$err\"; echo FAIL; exit 0; }
+    rm -f \"\$f\"
+    echo PASS
+"
+
+# t104d: SKIP replace-only pass target missing + no_fail=true → [ERROR] emitted,
+# file unchanged (primary VAR still at original value — SKIP means cur==prop).
+# Exercises the second loop in _gs_eu2_apply_updates (lines ~396-448).
+t "t104d: SKIP replace-only target missing + no_fail=true → [ERROR] emitted, primary unchanged" bash -c "
+    ${_APPLY_LIBS}
+    declare -A _GS_EU2_CFG=([no_fail]=true [apply_resolve]=false)
+    f=\$(mktemp)
+    # cur==prop → SKIP decision; target GLOBAL_STACK_T104D_ALIAS missing from file
+    printf 'GLOBAL_STACK_T104D=3.0.0\n' > \"\$f\"
+    _gs_eu2_record_new; idx=\$_GS_EU2_LAST_IDX
+    _gs_eu2_record_set \$idx env_var           'GLOBAL_STACK_T104D'
+    _gs_eu2_record_set \$idx current_version   '3.0.0'
+    _gs_eu2_record_set \$idx proposed_version  '3.0.0'
+    _gs_eu2_record_set \$idx decision          'SKIP'
+    _gs_eu2_record_set \$idx replace_targets   'GLOBAL_STACK_T104D_ALIAS'
+    _gs_eu2_record_set \$idx replace_templates 'node{major}'
+    err=\$(_gs_eu2_apply_updates \"\$f\" 'false' 2>&1 >/dev/null || true)
+    # Primary var must be unchanged (SKIP → no write to primary)
+    grep -qF 'GLOBAL_STACK_T104D=3.0.0' \"\$f\" \
+        || { echo \"primary var changed for SKIP decision; file: \$(cat \"\$f\")\"; echo FAIL; exit 0; }
+    # [ERROR] must be emitted for the missing replace target
+    printf '%s' \"\$err\" | grep -qF '[ERROR]' \
+        || { echo \"expected [ERROR] in stderr for missing SKIP target; got: \$err\"; echo FAIL; exit 0; }
+    rm -f \"\$f\"
+    echo PASS
+"
+
+_flush_section
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section
