@@ -25,5 +25,4 @@ if [ "${NVM_LATEST_VERSION}" != "${NVM_CURRENT_VERSION}" ]; then
   rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN}/nvm.installer.sh"
   curl -fsSL -o "${GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN}/nvm.installer.sh" "https://raw.githubusercontent.com/nvm-sh/nvm/${NVM_LATEST_VERSION}/install.sh"
   chmod a+x "${GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN}/nvm.installer.sh"
-  echo "${NVM_LATEST_VERSION}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/nvm"
 fi
