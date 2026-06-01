@@ -117,7 +117,7 @@ gs_es_main() {
   _backup_ts="$(date +%Y%m%d-%H%M%S)-$$"
   _GS_ES_CFG[_backup_ts]="${_backup_ts}"
 
-  if [[ "true" == "${_GS_ES_CFG[backup_purge]}" ]]; then
+  if [[ "true" == "${_GS_ES_CFG[backup_purge]}" && "true" != "${_GS_ES_CFG[dry_run]}" ]]; then
     _gs_es_backup_purge_all \
       "${_GS_ES_CFG[destination_files]}" \
       "${_GS_ES_CFG[backup_suffix]}" \
