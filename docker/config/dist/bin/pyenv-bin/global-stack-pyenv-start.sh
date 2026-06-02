@@ -8,7 +8,7 @@ stackCatch() {
   if [[ "${1}" != "0" ]]; then
     # error handling goes here
     echo "Error detected !!"
-    printf "$(date '+%d-%m-%Y %H:%M:%S'): Error - ** line: %s ** ** message: %s ** pyenv (%s) %s global-stack-pyenv-start.sh\n" "${2}" "${3}" "$([[ -n "${PYTHON_VERSION_AS:-}" && "" != "${PYTHON_VERSION_AS:-}" ]] && echo "${PYTHON_VERSION_AS:-}" || echo "${PYTHON_VERSION:-}")" "${PYENV_MODE:-}" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/elapsed"
+    printf "$(date '+%d-%m-%Y %H:%M:%S'): Error - ** line: %s ** ** message: %s ** pyenv (%s) %s global-stack-pyenv-start.sh\n" "${2}" "${3}" "${PYTHON_VERSION_AS:-${PYTHON_VERSION:-}}" "${PYENV_MODE:-}" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/elapsed"
     [[ -n "${GLOBAL_STACK_ERROR_TOKEN:-}" ]] && touch "${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}/${GLOBAL_STACK_ERROR_TOKEN}"
     exit 1
   fi
@@ -43,7 +43,7 @@ if [[ "${PYENV_MODE}" = "install" ]]; then
 fi
 
 if [[ "${PYENV_MODE}" = "setup" ]]; then
-  rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/python.$([[ -n "${PYTHON_VERSION_AS:-}" && "" != "${PYTHON_VERSION_AS:-}" ]] && echo "${PYTHON_VERSION_AS:-}" || echo "${PYTHON_VERSION:-}")"
+  rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/python.${PYTHON_VERSION_AS:-${PYTHON_VERSION:-}}"
   rm -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}/${GLOBAL_STACK_ERROR_TOKEN:-}"
   sleep 1
 
@@ -52,8 +52,8 @@ if [[ "${PYENV_MODE}" = "setup" ]]; then
     "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/rust"
 
   if [[ "${GLOBAL_STACK_RELOAD_PYTHON:-false}" = "true" ]]; then
-    printf '\nReloading python %s ...\n' "$([[ -n "${PYTHON_VERSION_AS:-}" && "" != "${PYTHON_VERSION_AS:-}" ]] && echo "${PYTHON_VERSION_AS:-}" || echo "${PYTHON_VERSION:-}")"
-    rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/python.$([[ -n "${PYTHON_VERSION_AS:-}" && "" != "${PYTHON_VERSION_AS:-}" ]] && echo "${PYTHON_VERSION_AS:-}" || echo "${PYTHON_VERSION:-}")" "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/python.$([[ -n "${PYTHON_VERSION_AS:-}" && "" != "${PYTHON_VERSION_AS:-}" ]] && echo "${PYTHON_VERSION_AS:-}" || echo "${PYTHON_VERSION:-}")"
+    printf '\nReloading python %s ...\n' "${PYTHON_VERSION_AS:-${PYTHON_VERSION:-}}"
+    rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/python.${PYTHON_VERSION_AS:-${PYTHON_VERSION:-}}" "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/python.${PYTHON_VERSION_AS:-${PYTHON_VERSION:-}}"
   fi
 
   if [[ "true" = "${GLOBAL_STACK_USE_LOCKS}" ]]; then
@@ -110,7 +110,7 @@ fi
 
 if [[ "${PYENV_MODE}" = "setup" ]]; then
   export PYENV_VERSION=""
-  if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/python.$([[ -n "${PYTHON_VERSION_AS:-}" && "" != "${PYTHON_VERSION_AS:-}" ]] && echo "${PYTHON_VERSION_AS:-}" || echo "${PYTHON_VERSION:-}")" || "true" = "${GLOBAL_STACK_RELOAD_PYENV}" ]]; then
+  if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/python.${PYTHON_VERSION_AS:-${PYTHON_VERSION:-}}" || "true" = "${GLOBAL_STACK_RELOAD_PYENV}" ]]; then
     export PYENV_VERSION=$(global-stack-pyenv-find-latest.sh "${PYTHON_VERSION}")
     source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/pyenv.shellrc" && global-stack-pyenv-python${PYTHON_VERSION_AS}-install-version.sh
 
@@ -128,18 +128,18 @@ if [[ "${PYENV_MODE}" = "setup" ]]; then
   fi
   if [[ "" != "${PYENV_VERSION}" ]]; then
     printf '\nWriting version\n'
-    echo "${PYENV_VERSION}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/python.$([[ -n "${PYTHON_VERSION_AS:-}" && "" != "${PYTHON_VERSION_AS:-}" ]] && echo "${PYTHON_VERSION_AS:-}" || echo "${PYTHON_VERSION:-}")"
+    echo "${PYENV_VERSION}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/python.${PYTHON_VERSION_AS:-${PYTHON_VERSION:-}}"
   fi
   if [[ "" = "${PYENV_VERSION}" ]]; then
-    export PYENV_VERSION=$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/python.$([[ -n "${PYTHON_VERSION_AS:-}" && "" != "${PYTHON_VERSION_AS:-}" ]] && echo "${PYTHON_VERSION_AS:-}" || echo "${PYTHON_VERSION:-}")")
+    export PYENV_VERSION=$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/python.${PYTHON_VERSION_AS:-${PYTHON_VERSION:-}}")
   fi
 
-  if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/python.$([[ -n "${PYTHON_VERSION_AS:-}" && "" != "${PYTHON_VERSION_AS:-}" ]] && echo "${PYTHON_VERSION_AS:-}" || echo "${PYTHON_VERSION:-}")" || "true" = "${GLOBAL_STACK_RELOAD_PYENV}" ]]; then
+  if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/python.${PYTHON_VERSION_AS:-${PYTHON_VERSION:-}}" || "true" = "${GLOBAL_STACK_RELOAD_PYENV}" ]]; then
     source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/pyenv.shellrc" && eval "$(pyenv init -)" && pyenv shell && pyenv local "${PYENV_VERSION}" && global-stack-pyenv-python${PYTHON_VERSION_AS}-setup-version.sh
   fi
 
   printf '\nWriting success\n'
-  : > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/python.$([[ -n "${PYTHON_VERSION_AS:-}" && "" != "${PYTHON_VERSION_AS:-}" ]] && echo "${PYTHON_VERSION_AS:-}" || echo "${PYTHON_VERSION:-}")"
+  : > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/python.${PYTHON_VERSION_AS:-${PYTHON_VERSION:-}}"
   if [[ "true" = "${GLOBAL_STACK_USE_LOCKS}" ]]; then
     printf '\nReleasing pyenv lock\n'
     flock -u 200

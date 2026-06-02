@@ -47,7 +47,7 @@ if [[ "${SDKMAN_MODE}" = "install" ]]; then
 fi
 
 if [[ "${SDKMAN_MODE}" = "setup" ]]; then
-  sudo rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/java.$([[ -n "${JAVA_VERSION_AS:-}" && "" != "${JAVA_VERSION_AS:-}" ]] && echo "${JAVA_VERSION_AS}" || echo "${JAVA_VERSION}")"
+  sudo rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/java.${JAVA_VERSION_AS:-${JAVA_VERSION:-}}"
   rm -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}/${GLOBAL_STACK_ERROR_TOKEN:-}"
   sleep 1
 
@@ -62,8 +62,8 @@ if [[ "${SDKMAN_MODE}" = "setup" ]]; then
   # fi
 
   if [[ "${GLOBAL_STACK_RELOAD_JAVA:-false}" = "true" ]]; then
-    printf '\nReloading java %s ...\n' "$([[ -n "${JAVA_VERSION_AS:-}" && "" != "${JAVA_VERSION_AS:-}" ]] && echo "${JAVA_VERSION_AS}" || echo "${JAVA_VERSION}")"
-    rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/java.$([[ -n "${JAVA_VERSION_AS:-}" && "" != "${JAVA_VERSION_AS:-}" ]] && echo "${JAVA_VERSION_AS}" || echo "${JAVA_VERSION}")" "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/java.$([[ -n "${JAVA_VERSION_AS:-}" && "" != "${JAVA_VERSION_AS:-}" ]] && echo "${JAVA_VERSION_AS}" || echo "${JAVA_VERSION}")"
+    printf '\nReloading java %s ...\n' "${JAVA_VERSION_AS:-${JAVA_VERSION:-}}"
+    rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/java.${JAVA_VERSION_AS:-${JAVA_VERSION:-}}" "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/java.${JAVA_VERSION_AS:-${JAVA_VERSION:-}}"
   fi
 fi
 
@@ -105,7 +105,7 @@ source "${SDKMAN_DIR}"/bin/sdkman-init.sh
 # @todo refactor
 if [[ "${SDKMAN_MODE}" = "setup" ]]; then
   printf '\n \033[0;31m Setting up java %s\n' "${JAVA_VERSION}"
-  if [[ -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/java.$([[ -n "${JAVA_VERSION_AS:-}" && "" != "${JAVA_VERSION_AS:-}" ]] && echo "${JAVA_VERSION_AS}" || echo "${JAVA_VERSION}")" ]]; then
+  if [[ -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/java.${JAVA_VERSION_AS:-${JAVA_VERSION:-}}" ]]; then
     mkdir -p "${HOME}/.sdkman/etc/"
     touch "${HOME}/.sdkman/etc/config"
     echo "sdkman_healthcheck_enable=false" > "${HOME}/.sdkman/etc/config"
@@ -120,7 +120,7 @@ if [[ "${SDKMAN_MODE}" = "setup" ]]; then
   source /usr/local/bin/global-stack-base-setup-packages.sh
   source /home/"${GLOBAL_STACK_DOCKER_USER_ID}"/${GLOBAL_STACK_SHELL_RC_TARGET}
 
-  if [[ -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/java.$([[ -n "${JAVA_VERSION_AS:-}" && "" != "${JAVA_VERSION_AS:-}" ]] && echo "${JAVA_VERSION_AS}" || echo "${JAVA_VERSION}")" ]]; then
+  if [[ -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/java.${JAVA_VERSION_AS:-${JAVA_VERSION:-}}" ]]; then
     global_stack_base_setup_packages \
       --prefix='SDKMAN' \
       --command='echo -e "**** Using ${PACKAGE_NAME} ${PACKAGE_VERSION} ${PACKAGE_COMMAND_SUFFIX}"' \
@@ -157,9 +157,9 @@ fi
 
 if [[ "${SDKMAN_MODE}" = "setup" ]]; then
   printf '\nWriting version\n'
-  echo "${JAVA_VERSION}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/java.$([[ -n "${JAVA_VERSION_AS:-}" && "" != "${JAVA_VERSION_AS:-}" ]] && echo "${JAVA_VERSION_AS}" || echo "${JAVA_VERSION}")"
+  echo "${JAVA_VERSION}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/java.${JAVA_VERSION_AS:-${JAVA_VERSION:-}}"
   printf '\nWriting success\n'
-  : > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/java.$([[ -n "${JAVA_VERSION_AS:-}" && "" != "${JAVA_VERSION_AS:-}" ]] && echo "${JAVA_VERSION_AS}" || echo "${JAVA_VERSION}")"
+  : > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/java.${JAVA_VERSION_AS:-${JAVA_VERSION:-}}"
   # if [[ "true" = "${GLOBAL_STACK_USE_LOCKS}" ]]; then
   printf '\nReleasing sdkman lock\n'
   flock -u 200

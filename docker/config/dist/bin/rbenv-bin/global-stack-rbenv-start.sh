@@ -7,7 +7,7 @@ stackCatch() {
   if [[ "${1}" != "0" ]]; then
     # error handling goes here
     echo "Error detected !!"
-    printf "$(date '+%d-%m-%Y %H:%M:%S'): Error - ** line: %s ** ** message: %s ** rbenv (%s) %s global-stack-rbenv-start.sh\n" "${2}" "${3}" "$([[ -n "${RUBY_VERSION_AS:-}" && "" != "${RUBY_VERSION_AS:-}" ]] && echo "${RUBY_VERSION_AS:-}" || echo "${RUBY_VERSION:-}")" "${RBENV_MODE:-}" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/elapsed"
+    printf "$(date '+%d-%m-%Y %H:%M:%S'): Error - ** line: %s ** ** message: %s ** rbenv (%s) %s global-stack-rbenv-start.sh\n" "${2}" "${3}" "${RUBY_VERSION_AS:-${RUBY_VERSION:-}}" "${RBENV_MODE:-}" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/elapsed"
     [[ -n "${GLOBAL_STACK_ERROR_TOKEN:-}" ]] && touch "${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}/${GLOBAL_STACK_ERROR_TOKEN}"
     exit 1
   fi
@@ -44,7 +44,7 @@ if [[ "${RBENV_MODE}" = "install" ]]; then
 fi
 
 if [[ "${RBENV_MODE}" = "setup" ]]; then
-  rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/ruby.$([[ -n "${RUBY_VERSION_AS:-}" && "" != "${RUBY_VERSION_AS:-}" ]] && echo "${RUBY_VERSION_AS:-}" || echo "${RUBY_VERSION:-}")"
+  rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/ruby.${RUBY_VERSION_AS:-${RUBY_VERSION:-}}"
   rm -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}/${GLOBAL_STACK_ERROR_TOKEN:-}"
   sleep 1
 
@@ -52,8 +52,8 @@ if [[ "${RBENV_MODE}" = "setup" ]]; then
     "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/rbenv"
 
   if [[ "${GLOBAL_STACK_RELOAD_RUBY:-false}" = "true" ]]; then
-    printf '\nReloading ruby %s ...\n' "$([[ -n "${RUBY_VERSION_AS:-}" && "" != "${RUBY_VERSION_AS:-}" ]] && echo "${RUBY_VERSION_AS:-}" || echo "${RUBY_VERSION:-}")"
-    rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/ruby.$([[ -n "${RUBY_VERSION_AS:-}" && "" != "${RUBY_VERSION_AS:-}" ]] && echo "${RUBY_VERSION_AS:-}" || echo "${RUBY_VERSION:-}")" "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/ruby.$([[ -n "${RUBY_VERSION_AS:-}" && "" != "${RUBY_VERSION_AS:-}" ]] && echo "${RUBY_VERSION_AS:-}" || echo "${RUBY_VERSION:-}")"
+    printf '\nReloading ruby %s ...\n' "${RUBY_VERSION_AS:-${RUBY_VERSION:-}}"
+    rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/ruby.${RUBY_VERSION_AS:-${RUBY_VERSION:-}}" "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/ruby.${RUBY_VERSION_AS:-${RUBY_VERSION:-}}"
   fi
 
   if [[ "true" = "${GLOBAL_STACK_USE_LOCKS}" ]]; then
@@ -105,7 +105,7 @@ fi
 if [[ "${RBENV_MODE}" = "setup" ]]; then
   export RBENV_VERSION=$(global-stack-rbenv-find-latest.sh "${RUBY_VERSION}")
 
-  if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/ruby.$([[ -n "${RUBY_VERSION_AS:-}" && "" != "${RUBY_VERSION_AS:-}" ]] && echo "${RUBY_VERSION_AS:-}" || echo "${RUBY_VERSION:-}")" || "true" = "${GLOBAL_STACK_RELOAD_RUBY}" ]]; then
+  if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/ruby.${RUBY_VERSION_AS:-${RUBY_VERSION:-}}" || "true" = "${GLOBAL_STACK_RELOAD_RUBY}" ]]; then
     source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/rbenv.shellrc" && rbenv install --verbose --skip-existing --keep "${RBENV_VERSION}"
     source /usr/local/bin/global-stack-base-setup-packages.sh
     source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/rbenv.shellrc"
@@ -118,21 +118,21 @@ if [[ "${RBENV_MODE}" = "setup" ]]; then
     source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/rbenv.shellrc" && eval "$(rbenv init - --no-rehash ${GLOBAL_STACK_SHELL})" && global-stack-rbenv-ruby${RUBY_VERSION_AS}-setup-version.sh
   fi
 
-  if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/ruby.$([[ -n "${RUBY_VERSION_AS:-}" && "" != "${RUBY_VERSION_AS:-}" ]] && echo "${RUBY_VERSION_AS:-}" || echo "${RUBY_VERSION:-}")" || "true" = "${GLOBAL_STACK_RELOAD_RUBY}" ]]; then
+  if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/ruby.${RUBY_VERSION_AS:-${RUBY_VERSION:-}}" || "true" = "${GLOBAL_STACK_RELOAD_RUBY}" ]]; then
     source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/rbenv.shellrc" && eval "$(rbenv init - --no-rehash ${GLOBAL_STACK_SHELL})" && rbenv shell && rbenv local "${RBENV_VERSION}" && global-stack-rbenv-ruby${RUBY_VERSION_AS}-setup-version.sh
   fi
 
   if [[ "" != "${RBENV_VERSION}" ]]; then
     printf '\nWriting version\n'
-    echo "${RBENV_VERSION}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/ruby.$([[ -n "${RUBY_VERSION_AS:-}" && "" != "${RUBY_VERSION_AS:-}" ]] && echo "${RUBY_VERSION_AS:-}" || echo "${RUBY_VERSION:-}")"
-    export RBENV_VERSION=$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/ruby.$([[ -n "${RUBY_VERSION_AS:-}" && "" != "${RUBY_VERSION_AS:-}" ]] && echo "${RUBY_VERSION_AS:-}" || echo "${RUBY_VERSION:-}")")
+    echo "${RBENV_VERSION}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/ruby.${RUBY_VERSION_AS:-${RUBY_VERSION:-}}"
+    export RBENV_VERSION=$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/ruby.${RUBY_VERSION_AS:-${RUBY_VERSION:-}}")
   fi
 
   echo "export RBENV_VERSION=${RBENV_VERSION}" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
   printf '%s\n' "rbenv local ${RBENV_VERSION}" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 
   printf '\nWriting success\n'
-  : > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/ruby.$([[ -n "${RUBY_VERSION_AS:-}" && "" != "${RUBY_VERSION_AS:-}" ]] && echo "${RUBY_VERSION_AS:-}" || echo "${RUBY_VERSION:-}")"
+  : > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/ruby.${RUBY_VERSION_AS:-${RUBY_VERSION:-}}"
   if [[ "true" = "${GLOBAL_STACK_USE_LOCKS}" ]]; then
     printf '\nReleasing rbenv lock\n'
     flock -u 200

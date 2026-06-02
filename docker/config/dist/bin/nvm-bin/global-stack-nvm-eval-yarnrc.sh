@@ -8,7 +8,7 @@ stackCatch() {
   if [ "${1}" != "0" ]; then
     # error handling goes here
     echo "Error detected !!"
-    echo -e "$(date '+%d-%m-%Y %H:%M:%S'): Error - ** line: ${2} ** ** message: ${3} ** nvm ($([[ -n "${NODE_VERSION_AS:-}" && "" != "${NODE_VERSION_AS:-}" ]] && echo "${NODE_VERSION_AS:-}" || echo "${NODE_VERSION:-}")) ${NVM_MODE:-} global-stack-nvm-eval-yarnrc.sh" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/elapsed"
+    echo -e "$(date '+%d-%m-%Y %H:%M:%S'): Error - ** line: ${2} ** ** message: ${3} ** nvm (${NODE_VERSION_AS:-${NODE_VERSION:-}}) ${NVM_MODE:-} global-stack-nvm-eval-yarnrc.sh" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/elapsed"
     [[ -n "${GLOBAL_STACK_ERROR_TOKEN:-}" ]] && touch "${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}/${GLOBAL_STACK_ERROR_TOKEN}"
     exit 1
   fi

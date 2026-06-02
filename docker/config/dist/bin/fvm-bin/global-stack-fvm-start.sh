@@ -7,7 +7,7 @@ stackCatch() {
   if [[ "${1}" != "0" ]]; then
     # error handling goes here
     echo "Error detected !!"
-    printf "$(date '+%d-%m-%Y %H:%M:%S'): Error - ** line: %s ** ** message: %s ** fvm (%s) %s global-stack-fvm-start.sh\n" "${2}" "${3}" "$([[ -n "${FLUTTER_VERSION_AS:-}" && "" != "${FLUTTER_VERSION_AS:-}" ]] && echo "${FLUTTER_VERSION_AS:-}" || echo "${FLUTTER_VERSION:-}")" "${FVM_MODE:-}" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/elapsed"
+    printf "$(date '+%d-%m-%Y %H:%M:%S'): Error - ** line: %s ** ** message: %s ** fvm (%s) %s global-stack-fvm-start.sh\n" "${2}" "${3}" "${FLUTTER_VERSION_AS:-${FLUTTER_VERSION:-}}" "${FVM_MODE:-}" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/elapsed"
     [[ -n "${GLOBAL_STACK_ERROR_TOKEN:-}" ]] && touch "${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}/${GLOBAL_STACK_ERROR_TOKEN}"
     exit 1
   fi
@@ -42,7 +42,7 @@ if [[ "${FVM_MODE}" = "install" ]]; then
 fi
 
 if [[ "${FVM_MODE}" = "setup" ]]; then
-  sudo rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/flutter.$([[ -n "${FLUTTER_VERSION_AS:-}" && "" != "${FLUTTER_VERSION_AS:-}" ]] && echo "${FLUTTER_VERSION_AS:-}" || echo "${FLUTTER_VERSION:-}")"
+  sudo rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/flutter.${FLUTTER_VERSION_AS:-${FLUTTER_VERSION:-}}"
   rm -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}/${GLOBAL_STACK_ERROR_TOKEN:-}"
   sleep 1
 
@@ -51,7 +51,7 @@ if [[ "${FVM_MODE}" = "setup" ]]; then
 
   if [[ "${GLOBAL_STACK_RELOAD_FLUTTER:-false}" = "true" ]]; then
     printf '\nReloading flutter %s ...\n' "${FLUTTER_VERSION:-}"
-    rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/flutter.$([[ -n "${FLUTTER_VERSION_AS:-}" && "" != "${FLUTTER_VERSION_AS:-}" ]] && echo "${FLUTTER_VERSION_AS:-}" || echo "${FLUTTER_VERSION:-}")" "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/flutter.$([[ -n "${FLUTTER_VERSION_AS:-}" && "" != "${FLUTTER_VERSION_AS:-}" ]] && echo "${FLUTTER_VERSION_AS:-}" || echo "${FLUTTER_VERSION:-}")"
+    rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/flutter.${FLUTTER_VERSION_AS:-${FLUTTER_VERSION:-}}" "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/flutter.${FLUTTER_VERSION_AS:-${FLUTTER_VERSION:-}}"
   fi
 
   if [[ "true" = "${GLOBAL_STACK_USE_LOCKS}" ]]; then
@@ -62,7 +62,7 @@ if [[ "${FVM_MODE}" = "setup" ]]; then
   fi
 fi
 
-printf '\n******** Starting fvm %s %s ********\n' "${FVM_MODE}" "$([[ -n "${FLUTTER_VERSION_AS:-}" && "" != "${FLUTTER_VERSION_AS:-}" ]] && echo "${FLUTTER_VERSION_AS:-}" || echo "${FLUTTER_VERSION:-}")"
+printf '\n******** Starting fvm %s %s ********\n' "${FVM_MODE}" "${FLUTTER_VERSION_AS:-${FLUTTER_VERSION:-}}"
 
 mkdir -p "${PUB_CACHE}" "${FVM_CACHE_PATH}" "${FVM_GIT_CACHE_PATH}"
 
@@ -78,8 +78,8 @@ if [[ "${FVM_MODE}" = "install" ]]; then
 fi
 
 if [[ "${FVM_MODE}" = "setup" ]]; then
-  if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/flutter.$([[ -n "${FLUTTER_VERSION_AS:-}" && "" != "${FLUTTER_VERSION_AS:-}" ]] && echo "${FLUTTER_VERSION_AS:-}" || echo "${FLUTTER_VERSION:-}")" ]]; then
-    printf '\nInstalling flutter version %s\n' "$([[ -n "${FLUTTER_VERSION_AS:-}" && "" != "${FLUTTER_VERSION_AS:-}" ]] && echo "${FLUTTER_VERSION_AS:-}" || echo "${FLUTTER_VERSION:-}")"
+  if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/flutter.${FLUTTER_VERSION_AS:-${FLUTTER_VERSION:-}}" ]]; then
+    printf '\nInstalling flutter version %s\n' "${FLUTTER_VERSION_AS:-${FLUTTER_VERSION:-}}"
     fvm install "${FLUTTER_VERSION:-}"
   fi
 
@@ -114,9 +114,9 @@ if [[ "${FVM_MODE}" = "setup" ]]; then
   flutter precache
   flutter doctor -v
   printf '\nWriting version\n'
-  echo "${FLUTTER_VERSION:-}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/flutter.$([[ -n "${FLUTTER_VERSION_AS:-}" && "" != "${FLUTTER_VERSION_AS:-}" ]] && echo "${FLUTTER_VERSION_AS:-}" || echo "${FLUTTER_VERSION:-}")"
+  echo "${FLUTTER_VERSION:-}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/flutter.${FLUTTER_VERSION_AS:-${FLUTTER_VERSION:-}}"
   printf '\nWriting success\n'
-  : > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/flutter.$([[ -n "${FLUTTER_VERSION_AS:-}" && "" != "${FLUTTER_VERSION_AS:-}" ]] && echo "${FLUTTER_VERSION_AS:-}" || echo "${FLUTTER_VERSION:-}")"
+  : > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/flutter.${FLUTTER_VERSION_AS:-${FLUTTER_VERSION:-}}"
   if [[ "true" = "${GLOBAL_STACK_USE_LOCKS}" ]]; then
     printf '\nReleasing fvm lock\n'
     flock -u 200
