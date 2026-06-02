@@ -106,6 +106,13 @@ _gs_eu2_parse_args() {
           exit 1
         fi
         _GS_EU2_CFG[unstable]="${_uval}" ;;
+      --jobs=*)
+        local _jval="${1#*=}"
+        if [[ ! "${_jval}" =~ ^[1-9][0-9]*$ ]]; then
+          printf 'env-update: --jobs requires a positive integer, got: %q\n' "${_jval}" >&2
+          exit 1
+        fi
+        _GS_EU2_CFG[jobs]="${_jval}" ;;
       --cache-ttl=*)
         local _ttl="${1#*=}"
         if [[ ! "${_ttl}" =~ ^[0-9]+$ ]]; then
@@ -150,6 +157,7 @@ _gs_eu2_parse_args() {
   [[ -z "${_GS_EU2_CFG[reference]+set}" ]]          && _GS_EU2_CFG[reference]="false"
   [[ -z "${_GS_EU2_CFG[reference_section]+set}" ]]  && _GS_EU2_CFG[reference_section]="all"
   [[ -z "${_GS_EU2_CFG[tally]+set}" ]]              && _GS_EU2_CFG[tally]="auto"
+  [[ -z "${_GS_EU2_CFG[jobs]+set}" ]]               && _GS_EU2_CFG[jobs]="${_GS_EU2_JOBS_DEFAULT:-8}"
 
   # Validate --filter regex early: invalid ERE causes per-record bash errors and silent
   # empty output. type: prefixes are not regex — skip validation for those.

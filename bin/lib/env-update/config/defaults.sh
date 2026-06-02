@@ -23,3 +23,7 @@ readonly _GS_EU2_VERSION="2.0.0"
 declare -Ag _GS_EU2_CFG
 
 # Test hooks — documented in module header above.
+
+# _GS_EU2_JOBS_DEFAULT — parallel worker count for --check fan-out.
+# Override via --jobs=N or GLOBAL_STACK_ENV_UPDATE_JOBS env var.
+_GS_EU2_JOBS_DEFAULT="${GLOBAL_STACK_ENV_UPDATE_JOBS:-8}"

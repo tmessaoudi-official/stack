@@ -63,6 +63,8 @@ source "$(dirname "${BASH_SOURCE[0]}")/reporting/summary.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/reporting/profile.sh"
 # shellcheck source=./core/apply.sh
 source "$(dirname "${BASH_SOURCE[0]}")/core/apply.sh"
+# shellcheck source=./core/parallel.sh
+source "$(dirname "${BASH_SOURCE[0]}")/core/parallel.sh"
 
 # _gs_eu2_dispatch_fetcher — route a record to its type-specific fetcher function.
 #
@@ -320,11 +322,55 @@ _gs_eu2_run_check() {
     (( _vl > _max_var_len )) && _max_var_len="${_vl}"
   done
 
+  # ── Parallel fan-out ─────────────────────────────────────────────────────
+  # When --jobs > 1 and profile is off: spawn _count background workers (capped
+  # at --jobs concurrent), each running _gs_eu2_fetch_one_worker into a per-index
+  # result file.  The collect loop below then sources these files instead of
+  # dispatching fetchers directly.
+  # --profile forces serial mode: per-record timing arrays cannot propagate from
+  # subshells back to the parent.
+  local _par_mode="false"
+  local _par_tmpdir=""
+  local _par_jobs
+  _par_jobs="${_GS_EU2_CFG[jobs]:-8}"
+  declare -A _par_pids=()
+
+  if (( _par_jobs > 1 )) && [[ "${_GS_EU2_CFG[profile]:-false}" != "true" ]]; then
+    _par_mode="true"
+    _par_tmpdir="$(mktemp -d)"
+    # Extend INT trap: kill all background workers and clean up tmpdir.
+    # shellcheck disable=SC2064
+    trap "kill \$(printf '%s ' \"\${_par_pids[@]:-}\") 2>/dev/null || true; rm -rf '${_par_tmpdir}' 2>/dev/null || true; _gs_eu2_tally_cleanup" INT
+
+    printf '\r  fetching %d records (%d parallel workers)...' "${_count}" "${_par_jobs}" >&2
+
+    local _par_active=0
+    for (( _i = 0; _i < _count; _i++ )); do
+      if (( _par_active >= _par_jobs )); then
+        wait -n 2>/dev/null || true
+        (( _par_active-- )) || true
+      fi
+      ( _gs_eu2_fetch_one_worker "${_i}" "${_par_tmpdir}" ) &
+      _par_pids[${_i}]=$!
+      (( _par_active++ )) || true
+    done
+    # Wait for all remaining workers; || true prevents set -e propagation on
+    # non-zero worker exit codes (worker failures are handled via missing result file).
+    for (( _i = 0; _i < _count; _i++ )); do
+      wait "${_par_pids[${_i}]:-}" 2>/dev/null || true
+    done
+
+    # Clear the fan-out progress line so collect output begins cleanly.
+    printf '\r%*s\r' "$(( _max_var_len + 40 ))" "" >&2
+  fi
+
   for (( _i = 0; _i < _count; _i++ )); do
     local _env_var
     _env_var="$(_gs_eu2_record_get "${_i}" env_var)"
 
-    # Progress indicator: live tally when tally is active; fallback single-line \r when not
+    # Progress indicator: live tally when tally is active; fallback single-line \r when not.
+    # In parallel collect mode (fetching already done) the tally still draws correctly —
+    # the "fetching VARNAME..." hint is cosmetically stale but harmless; counters are accurate.
     if [[ "${_GS_EU2_TALLY_ACTIVE}" == "1" ]]; then
       _GS_EU2_TALLY_IDX="${_i}"
       _GS_EU2_TALLY_COUNT="${_count}"
@@ -354,6 +400,19 @@ _gs_eu2_run_check() {
         "$(( _i + 1 ))" "${_count}" "${_env_var:0:55}" >&2
     fi
 
+    # ── Fetch or load: skip gate + dispatch + second passes ─────────────────
+    # Parallel mode: results are already in the tmpdir from the fan-out phase;
+    # source the per-index file to load them into the parent's record variables.
+    # Serial mode: run skip gate + dispatch + second passes inline as before.
+    if [[ "${_par_mode}" == "true" ]]; then
+      if [[ -f "${_par_tmpdir}/${_i}.env" ]]; then
+        # shellcheck disable=SC1090
+        source "${_par_tmpdir}/${_i}.env"
+      else
+        _gs_eu2_record_set "${_i}" decision      "ERROR"
+        _gs_eu2_record_set "${_i}" error_message "worker process died unexpectedly"
+      fi
+    else
     # Skip gate: (skip:REASON) annotation forces SKIP before any fetch.
     # Sets decision + error_message on the record; display code below handles output.
     local _skip_reason
@@ -454,6 +513,12 @@ _gs_eu2_run_check() {
       fi
     fi
     fi  # end: if [[ -z "${_skip_reason}" ]] (skip gate — bypass all fetcher dispatch)
+    fi  # end: serial mode fetch
+
+    # Always read skip_reason after fetch/load so display code below can use it in both modes.
+    # In serial mode it was set inside the else block; in parallel mode it wasn't — read it now.
+    local _skip_reason
+    _skip_reason="$(_gs_eu2_record_get "${_i}" skip_reason)"
 
     # Apply decision classifier (refines any AUTO decision the fetcher set)
     local _cur _prop _override _manual _major _major_min _note _fetcher_decision
@@ -1156,6 +1221,9 @@ _gs_eu2_run_check() {
       fi
     fi
   done
+
+  # Clean up parallel tmpdir (no-op in serial mode where _par_tmpdir is empty)
+  [[ -n "${_par_tmpdir:-}" ]] && rm -rf "${_par_tmpdir}" 2>/dev/null || true
 
   # Disarm tally traps and erase live tally block before printing static summary
   trap - INT ERR

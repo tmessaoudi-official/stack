@@ -10588,6 +10588,66 @@ t "t104d: SKIP replace-only target missing + no_fail=true → [ERROR] emitted, p
 _flush_section
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Section 105 — parallel fetch (--jobs): correctness + flag validation
+# ═══════════════════════════════════════════════════════════════════════════
+section "105 — parallel fetch (--jobs)"
+
+# t105a: --jobs=1 and --jobs=4 produce byte-identical stdout.
+# Uses four fixture-backed records (dockerhub, github, npm, pypi) so the test
+# is fully deterministic and exercises the fan-out/collect round-trip.
+t "t105a: --jobs=1 and --jobs=4 produce identical stdout (fixture-backed)" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t105a_cache
+    f=\${TMP_DIR}/t105a.env
+    cat > \"\$f\" <<'ENVEOF'
+# @todo env-update dockerhub:_/postgres:18 18.3-alpine3.23
+GLOBAL_STACK_T105A_POSTGRES=18.3-alpine3.23
+# @todo env-update dockerhub:_/mysql 9.5.0
+GLOBAL_STACK_T105A_MYSQL=9.5.0
+# @todo env-update npm:typescript 5.7.0
+GLOBAL_STACK_T105A_TS=5.7.0
+# @todo env-update pypi:flask 3.1.0
+GLOBAL_STACK_T105A_FLASK=3.1.0
+ENVEOF
+    serial=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --jobs=1 --env-file=\"\$f\" 2>/dev/null)
+    parallel=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --jobs=4 --env-file=\"\$f\" 2>/dev/null)
+    if [[ \"\$serial\" != \"\$parallel\" ]]; then
+        echo 'jobs=1 and jobs=4 output differ:'
+        diff <(printf '%s\n' \"\$serial\") <(printf '%s\n' \"\$parallel\") || true
+        echo FAIL; exit 0
+    fi
+    echo \"\$serial\" | grep -qE 'AUTO|SKIP|HOLD' || { echo \"no decision output; got: \$serial\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t105b: --jobs=4 with a (skip:REASON) record still shows FROZEN in output.
+t "t105b: skip-gated record shows FROZEN in parallel mode" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t105b_cache
+    f=\${TMP_DIR}/t105b.env
+    printf '# @todo env-update (skip:frozen-for-testing) dockerhub:_/postgres 18.3-alpine3.23\nGLOBAL_STACK_T105B=18.3-alpine3.23\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --jobs=4 --env-file=\"\$f\" 2>/dev/null)
+    echo \"\$out\" | grep -qF '[FROZEN' || { echo \"expected [FROZEN] in output; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t105c: --jobs=0 is rejected (must be a positive integer).
+t "t105c: --jobs=0 rejected with error" bash -c "
+    err=\$(bash '${ENV_UPDATE_V2}' --jobs=0 --check --env-file='${FIXTURES}/basic-dockerhub.env' 2>&1 || true)
+    echo \"\$err\" | grep -qi 'jobs' || { echo \"expected error mentioning --jobs; got: \$err\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t105d: --jobs=N documented in --help output.
+t "t105d: --jobs documented in --help" bash -c "
+    out=\$(bash '${ENV_UPDATE_V2}' --help 2>&1 || true)
+    echo \"\$out\" | grep -q '\-\-jobs' || { echo '--jobs not in --help; got: \$out'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+_flush_section
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section

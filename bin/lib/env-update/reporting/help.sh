@@ -79,6 +79,13 @@ Options:
   --no-notes                      Suppress annotation (note: TEXT) sub-lines — for minimal
                                   output. Does NOT suppress SHA, [UNSTABLE], [STABLE],
                                   [DRIFT], or [PIN-MISS] sub-lines.
+  --jobs=N                        Number of parallel fetch workers for --check (default 8).
+                                  Each worker fetches one record concurrently; results are
+                                  collected in original order before display. --jobs=1
+                                  disables parallelism and reproduces the exact serial path.
+                                  Env var override: GLOBAL_STACK_ENV_UPDATE_JOBS. Auto-
+                                  disabled when --profile is active (per-record timing arrays
+                                  cannot propagate from subshells).
   --tally[=VALUE]                 Control the live running tally on stderr during --check.
                                   auto (default): show when stderr is a TTY and terminal
                                   >= 130 cols. full: show when TTY (no column-width
