@@ -15,7 +15,7 @@
 #   bin/env-update.sh --filter=POSTGRES --dump       # filter by variable name regex
 #   bin/env-update.sh --dump --format=json | jq .    # machine-readable JSON
 #   bin/env-update.sh --check                        # fetch latest versions, preview
-#   bin/env-update.sh --dry-run --apply              # preview apply changes
+#   bin/env-update.sh --check && bin/env-update.sh --apply   # two-step: preview then apply
 #   bin/env-update.sh --apply                        # apply AUTO decisions (after dry-run)
 #
 set -eEuo pipefail
