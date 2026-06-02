@@ -69,6 +69,8 @@ source "$(dirname "${BASH_SOURCE[0]}")/reporting/profile.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/core/apply.sh"
 # shellcheck source=./core/parallel.sh
 source "$(dirname "${BASH_SOURCE[0]}")/core/parallel.sh"
+# shellcheck source=./core/passes.sh
+source "$(dirname "${BASH_SOURCE[0]}")/core/passes.sh"
 
 # _gs_eu2_dispatch_fetcher — route a record to its type-specific fetcher function.
 #
@@ -872,90 +874,9 @@ _gs_eu2_run_check() {
       # I2: dispatch via helper — all 12 fetcher types handled in _gs_eu2_dispatch_fetcher
       _gs_eu2_dispatch_fetcher "${_i}"
 
-    # --unstable=info second-pass: temporarily swap channel→unstable, re-run the
-    # same fetcher (cache hit — no extra HTTP), capture proposed as unstable_proposed,
-    # then restore proposed_version and decision to pre-pass values.
-    # Only runs when: unstable=info, record channel is not already unstable,
-    # and the fetcher type supports channel selection (github/dockerhub/quay/npm/…).
-    # Suppressed when --stable=full is active (args.sh already enforces mutual exclusivity,
-    # but this belt-and-suspenders guard protects against direct library calls).
-    # stable=info is compatible — both second-pass blocks can run independently.
-    if [[ "${_GS_EU2_CFG[unstable]:-}" == "info" && "${_GS_EU2_CFG[stable]:-}" != "full" ]]; then
-      local _info_chan
-      _info_chan="$(_gs_eu2_record_get "${_i}" channel)"
-      if [[ "${_info_chan}" != "unstable" ]]; then
-        # Save state (all fields that fetchers may overwrite during the second pass)
-        local _saved_prop _saved_decision _saved_chan _saved_err
-        _saved_prop="$(_gs_eu2_record_get "${_i}" proposed_version)"
-        _saved_decision="$(_gs_eu2_record_get "${_i}" decision)"
-        _saved_err="$(_gs_eu2_record_get "${_i}" error_message)"
-        _saved_chan="${_info_chan}"
-        # Temporarily set channel=unstable and re-run fetcher
-        _gs_eu2_record_set "${_i}" channel "unstable"
-        _gs_eu2_record_set "${_i}" proposed_version ""
-        _gs_eu2_record_set "${_i}" decision ""
-        _gs_eu2_record_set "${_i}" error_message ""
-        # I2: dispatch via helper
-        _gs_eu2_dispatch_fetcher "${_i}"
-        local _unstable_ver
-        _unstable_ver="$(_gs_eu2_record_get "${_i}" proposed_version)"
-        # Restore original state (including error_message to avoid info-pass errors bleeding through)
-        _gs_eu2_record_set "${_i}" channel "${_saved_chan}"
-        _gs_eu2_record_set "${_i}" proposed_version "${_saved_prop}"
-        _gs_eu2_record_set "${_i}" decision "${_saved_decision}"
-        _gs_eu2_record_set "${_i}" error_message "${_saved_err}"
-        # Store unstable_proposed only if it's a prerelease, different from stable proposed,
-        # AND genuinely newer than the stable proposed (not a backward step like stable=3.1.1
-        # returning hp=3.0.0-rc.4 — that would be a downgrade, not an advance).
-        if [[ -n "${_unstable_ver}" && "${_unstable_ver}" != "${_saved_prop}" ]] && \
-           _gs_eu2_is_prerelease "${_unstable_ver}"; then
-          local _ui_store="true"
-          if [[ -n "${_saved_prop}" ]]; then
-            local _ui_cmp
-            _ui_cmp="$(_gs_eu2_semver_compare "${_saved_prop}" "${_unstable_ver}")"
-            # "older" means stable is older than unstable — i.e. unstable is genuinely newer
-            [[ "${_ui_cmp}" != "older" ]] && _ui_store="false"
-          fi
-          [[ "${_ui_store}" == "true" ]] && \
-            _gs_eu2_record_set "${_i}" unstable_proposed "${_unstable_ver}"
-        fi
-      fi
-    fi
-
-    # --stable=info second-pass: temporarily swap channel→stable, re-run the
-    # same fetcher (cache hit — no extra HTTP), capture proposed as stable_proposed,
-    # then restore proposed_version and decision to pre-pass values.
-    # Only runs when: stable=info, record channel is not already stable/empty
-    # (a stable channel would make the second pass identical to the main fetch).
-    if [[ "${_GS_EU2_CFG[stable]:-}" == "info" ]]; then
-      local _si_chan
-      _si_chan="$(_gs_eu2_record_get "${_i}" channel)"
-      if [[ -n "${_si_chan}" && "${_si_chan}" != "stable" ]]; then
-        local _si_saved_prop _si_saved_decision _si_saved_chan _si_saved_err
-        _si_saved_prop="$(_gs_eu2_record_get "${_i}" proposed_version)"
-        _si_saved_decision="$(_gs_eu2_record_get "${_i}" decision)"
-        _si_saved_err="$(_gs_eu2_record_get "${_i}" error_message)"
-        _si_saved_chan="${_si_chan}"
-        _gs_eu2_record_set "${_i}" channel "stable"
-        _gs_eu2_record_set "${_i}" proposed_version ""
-        _gs_eu2_record_set "${_i}" decision ""
-        _gs_eu2_record_set "${_i}" error_message ""
-        # I2: dispatch via helper
-        _gs_eu2_dispatch_fetcher "${_i}"
-        local _stable_ver
-        _stable_ver="$(_gs_eu2_record_get "${_i}" proposed_version)"
-        _gs_eu2_record_set "${_i}" channel "${_si_saved_chan}"
-        _gs_eu2_record_set "${_i}" proposed_version "${_si_saved_prop}"
-        _gs_eu2_record_set "${_i}" decision "${_si_saved_decision}"
-        _gs_eu2_record_set "${_i}" error_message "${_si_saved_err}"
-        # Store stable_proposed only if it's non-empty, not a prerelease,
-        # and different from the main proposed (suppress when identical).
-        if [[ -n "${_stable_ver}" && "${_stable_ver}" != "${_si_saved_prop}" ]] && \
-           ! _gs_eu2_is_prerelease "${_stable_ver}"; then
-          _gs_eu2_record_set "${_i}" stable_proposed "${_stable_ver}"
-        fi
-      fi
-    fi
+    # Second passes: unstable=info and stable=info.
+    # Delegated to shared helper in core/passes.sh.
+    _gs_eu2_run_second_passes "${_i}"
     fi  # end: if [[ -z "${_skip_reason}" ]] (skip gate — bypass all fetcher dispatch)
     fi  # end: serial mode fetch
 

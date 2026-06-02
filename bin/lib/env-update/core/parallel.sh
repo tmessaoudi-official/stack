@@ -71,68 +71,9 @@ _gs_eu2_fetch_one_worker() {
   # Main dispatch — calls the type-specific fetcher (github, dockerhub, etc.).
   _gs_eu2_dispatch_fetcher "${_wi}"
 
-  # --unstable=info second pass: mirror of the same block in _gs_eu2_run_check.
-  # Runs in the worker so cache is warm for the second pass regardless of --dry-run.
-  if [[ "${_GS_EU2_CFG[unstable]:-}" == "info" && "${_GS_EU2_CFG[stable]:-}" != "full" ]]; then
-    local _info_chan
-    _info_chan="$(_gs_eu2_record_get "${_wi}" channel)"
-    if [[ "${_info_chan}" != "unstable" ]]; then
-      local _saved_prop _saved_decision _saved_chan _saved_err
-      _saved_prop="$(_gs_eu2_record_get "${_wi}" proposed_version)"
-      _saved_decision="$(_gs_eu2_record_get "${_wi}" decision)"
-      _saved_err="$(_gs_eu2_record_get "${_wi}" error_message)"
-      _saved_chan="${_info_chan}"
-      _gs_eu2_record_set "${_wi}" channel         "unstable"
-      _gs_eu2_record_set "${_wi}" proposed_version ""
-      _gs_eu2_record_set "${_wi}" decision         ""
-      _gs_eu2_record_set "${_wi}" error_message    ""
-      _gs_eu2_dispatch_fetcher "${_wi}"
-      local _unstable_ver
-      _unstable_ver="$(_gs_eu2_record_get "${_wi}" proposed_version)"
-      _gs_eu2_record_set "${_wi}" channel          "${_saved_chan}"
-      _gs_eu2_record_set "${_wi}" proposed_version "${_saved_prop}"
-      _gs_eu2_record_set "${_wi}" decision         "${_saved_decision}"
-      _gs_eu2_record_set "${_wi}" error_message    "${_saved_err}"
-      if [[ -n "${_unstable_ver}" && "${_unstable_ver}" != "${_saved_prop}" ]] && \
-         _gs_eu2_is_prerelease "${_unstable_ver}"; then
-        local _ui_store="true"
-        if [[ -n "${_saved_prop}" ]]; then
-          local _ui_cmp
-          _ui_cmp="$(_gs_eu2_semver_compare "${_saved_prop}" "${_unstable_ver}")"
-          [[ "${_ui_cmp}" != "older" ]] && _ui_store="false"
-        fi
-        [[ "${_ui_store}" == "true" ]] && \
-          _gs_eu2_record_set "${_wi}" unstable_proposed "${_unstable_ver}"
-      fi
-    fi
-  fi
-
-  # --stable=info second pass: mirror of the same block in _gs_eu2_run_check.
-  if [[ "${_GS_EU2_CFG[stable]:-}" == "info" ]]; then
-    local _si_chan
-    _si_chan="$(_gs_eu2_record_get "${_wi}" channel)"
-    if [[ -n "${_si_chan}" && "${_si_chan}" != "stable" ]]; then
-      local _si_saved_prop _si_saved_decision _si_saved_err
-      _si_saved_prop="$(_gs_eu2_record_get "${_wi}" proposed_version)"
-      _si_saved_decision="$(_gs_eu2_record_get "${_wi}" decision)"
-      _si_saved_err="$(_gs_eu2_record_get "${_wi}" error_message)"
-      _gs_eu2_record_set "${_wi}" channel          "stable"
-      _gs_eu2_record_set "${_wi}" proposed_version ""
-      _gs_eu2_record_set "${_wi}" decision         ""
-      _gs_eu2_record_set "${_wi}" error_message    ""
-      _gs_eu2_dispatch_fetcher "${_wi}"
-      local _stable_ver
-      _stable_ver="$(_gs_eu2_record_get "${_wi}" proposed_version)"
-      _gs_eu2_record_set "${_wi}" channel          "${_si_chan}"
-      _gs_eu2_record_set "${_wi}" proposed_version "${_si_saved_prop}"
-      _gs_eu2_record_set "${_wi}" decision         "${_si_saved_decision}"
-      _gs_eu2_record_set "${_wi}" error_message    "${_si_saved_err}"
-      if [[ -n "${_stable_ver}" && "${_stable_ver}" != "${_si_saved_prop}" ]] && \
-         ! _gs_eu2_is_prerelease "${_stable_ver}"; then
-        _gs_eu2_record_set "${_wi}" stable_proposed "${_stable_ver}"
-      fi
-    fi
-  fi
+  # Second passes: unstable=info and stable=info.
+  # Delegated to shared helper in core/passes.sh (sourced by main.sh, inherited via fork).
+  _gs_eu2_run_second_passes "${_wi}"
 
   # Serialize all output fields to the result file using printf %q so multi-line
   # values, special chars, and empty strings all survive source() safely.
