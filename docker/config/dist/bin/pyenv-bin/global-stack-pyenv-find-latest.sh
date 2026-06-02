@@ -14,7 +14,7 @@ if [ -n "${1}" ]; then
   fi
 fi
 
-if [[ "" = "${CURRENT_PYTHON_VERSION}" ]]; then
+if [[ "" = "${PYENV_CURRENT_PYTHON_VERSION}" ]]; then
   PYENV_CURRENT_PYTHON_VERSION="${PYTHON_VERSION}"
 fi
 
