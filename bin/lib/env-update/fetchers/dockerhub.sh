@@ -65,6 +65,11 @@ _gs_eu2_dh_fetch_tags() {
     fi
     _all_tags="${_all_tags}${_page_tags}"$'\n'
     _next_url="$(printf '%s\n' "${_resp}" | jq -r '.next // empty' 2>/dev/null)"
+    if [[ -n "${_next_url}" ]] \
+      && [[ "${_next_url}" != https://registry.hub.docker.com/* ]] \
+      && [[ "${_next_url}" != https://hub.docker.com/* ]]; then
+      _next_url=""
+    fi
     _url="${_next_url}"
   done
 
