@@ -135,6 +135,11 @@ Options:
                                   records (version bump without --force-auto).
                                   When used with --apply, requires --confirm="Confirm override"
                                   to proceed (safety gate — prevents accidental use).
+  --yes                           Skip the interactive confirmation prompt for --apply.
+                                  Required in non-interactive (no TTY) mode — --apply
+                                  exits 1 without this flag when stdin is not a terminal.
+                                  Use this flag in scripts, CI, and Claude agent workflows.
+                                  Has no effect with --dry-run (prompt is never shown).
   --confirm=TEXT                  Confirmation string required by --force-auto --apply.
                                   Must be exactly: Confirm override
   --profile                       Show phase timing and memory usage table after run
@@ -185,9 +190,10 @@ Examples:
   bin/env-update.sh --check --filter=NODE --exclude=NODEEDGE  # Node vars except NODEEDGE
   bin/env-update.sh --check --no-cache             # bypass cache
   bin/env-update.sh --dump --format=json | jq .    # structured record dump
-  bin/env-update.sh --check --apply                # fetch + apply all AUTO updates
+  bin/env-update.sh --check --apply                # fetch + show report; prompt for confirmation on TTY
+  bin/env-update.sh --check --apply --yes          # apply without interactive prompt (non-TTY / scripting)
   bin/env-update.sh --check --apply --scan         # apply + propagate to .env.local + Dockerfiles
-  bin/env-update.sh --check --apply --dry-run      # preview what would be applied
+  bin/env-update.sh --check --apply --dry-run      # preview what would be applied (no prompt, no writes)
   bin/env-update.sh --check --with-tags            # audit all github repos including tag-only releases
   bin/env-update.sh --unstable --check             # force unstable: propose prereleases globally as AUTO
   bin/env-update.sh --unstable=info --check        # info mode: show unstable sub-line without changing decisions

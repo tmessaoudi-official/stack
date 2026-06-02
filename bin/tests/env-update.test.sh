@@ -4804,10 +4804,9 @@ t "t56a: --force-auto --apply without --confirm exits 1 with FATAL message" bash
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t56a_cache
     f=\${TMP_DIR}/t56a.env
     printf '# @todo env-update dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T56A=18.3-alpine3.23\n' > \"\$f\"
-    # Create dry-run marker so apply guard is satisfied
     mkdir -p \"\${TMP_DIR}/t56a_cache\"
     touch \"\${TMP_DIR}/t56a_cache/last-dry-run-ts\"
-    err=\$(bash '${ENV_UPDATE_V2}' --apply --force-auto --env-file=\"\$f\" 2>&1 || true)
+    err=\$(bash '${ENV_UPDATE_V2}' --apply --yes --force-auto --env-file=\"\$f\" 2>&1 || true)
     echo \"\$err\" | grep -qiF 'FATAL' || { echo \"expected FATAL message, got: '\$err'\"; echo FAIL; exit 0; }
     echo PASS
 "
@@ -4818,7 +4817,7 @@ t "t56b: --force-auto --apply --confirm='Wrong string' exits 1" bash -c "
     printf '# @todo env-update dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T56B=18.3-alpine3.23\n' > \"\$f\"
     mkdir -p \"\${TMP_DIR}/t56b_cache\"
     touch \"\${TMP_DIR}/t56b_cache/last-dry-run-ts\"
-    err=\$(bash '${ENV_UPDATE_V2}' --apply --force-auto --confirm='wrong string' --env-file=\"\$f\" 2>&1 || true)
+    err=\$(bash '${ENV_UPDATE_V2}' --apply --yes --force-auto --confirm='wrong string' --env-file=\"\$f\" 2>&1 || true)
     echo \"\$err\" | grep -qiF 'FATAL' || { echo \"expected FATAL for wrong confirm, got: '\$err'\"; echo FAIL; exit 0; }
     echo PASS
 "
@@ -5744,7 +5743,7 @@ t "t19-apply-e2e-a: --apply with AUTO var updates the env file on disk" bash -c 
     # Run dry-run first to satisfy the dry-run gate
     bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null || true
     # Now apply — postgres fixture has 18.4-alpine3.23, so decision is AUTO
-    bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$f\" 2>/dev/null || true
+    bash '${ENV_UPDATE_V2}' --apply --yes --env-file=\"\$f\" 2>/dev/null || true
     [[ -f \"\$f\" ]] || { echo 'env file deleted by --apply'; echo FAIL; exit 0; }
     # The value should now be updated to 18.4-alpine3.23
     grep -qF 'GLOBAL_STACK_PG18_T19=18.4-alpine3.23' \"\$f\" || {
@@ -6442,7 +6441,7 @@ t "t63e1: --apply: annotation version updated, VAR= value unchanged" bash -c "
     # current=18.3-alpine3.23 in annotation; fixture returns 18.4-alpine3.23 (proposed)
     ann='# @todo env-update (lock:pinned) dockerhub:_/postgres:18 18.3-alpine3.23'
     printf '%s\nGLOBAL_STACK_T63E1=18.3-alpine3.23\n' \"\$ann\" > \"\$f\"
-    bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$f\" 2>/dev/null || true
+    bash '${ENV_UPDATE_V2}' --apply --yes --env-file=\"\$f\" 2>/dev/null || true
     # VAR= line must still hold the original value
     grep -q 'GLOBAL_STACK_T63E1=18.3-alpine3.23' \"\$f\" \
         || { echo 'VAR= value was changed — must stay 18.3-alpine3.23'; echo FAIL; exit 0; }
@@ -6477,9 +6476,9 @@ t "t63e3: --apply is idempotent for (lock:) annotation updates" bash -c "
     f=\${TMP_DIR}/t63e3.env
     ann='# @todo env-update (lock:pinned) dockerhub:_/postgres:18 18.3-alpine3.23'
     printf '%s\nGLOBAL_STACK_T63E3=18.3-alpine3.23\n' \"\$ann\" > \"\$f\"
-    bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$f\" 2>/dev/null || true
+    bash '${ENV_UPDATE_V2}' --apply --yes --env-file=\"\$f\" 2>/dev/null || true
     after_first=\$(cat \"\$f\")
-    bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$f\" 2>/dev/null || true
+    bash '${ENV_UPDATE_V2}' --apply --yes --env-file=\"\$f\" 2>/dev/null || true
     after_second=\$(cat \"\$f\")
     [[ \"\$after_first\" == \"\$after_second\" ]] || { echo 'second apply changed the file — not idempotent'; echo FAIL; exit 0; }
     echo PASS
@@ -6495,7 +6494,7 @@ t "t63e4: --apply: LOCK records not counted in version update total" bash -c "
     # Two entries: one AUTO (should count as version update), one LOCK (annotation only)
     printf '# @todo env-update dockerhub:_/postgres:18 17.5-alpine3.23\nGLOBAL_STACK_T63E4A=17.5-alpine3.23\n' > \"\$f\"
     printf '# @todo env-update (lock:pinned) dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T63E4B=18.3-alpine3.23\n' >> \"\$f\"
-    out=\$(bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$f\" 2>/dev/null || true)
+    out=\$(bash '${ENV_UPDATE_V2}' --apply --yes --env-file=\"\$f\" 2>/dev/null || true)
     # Verify the LOCK record's VAR= line was not touched
     grep -q 'GLOBAL_STACK_T63E4B=18.3-alpine3.23' \"\$f\" \
         || { echo 'LOCK VAR= must remain 18.3-alpine3.23'; echo FAIL; exit 0; }
@@ -6515,7 +6514,7 @@ t "t63f1: (lock:) when annotation version already matches proposed — no rewrit
     ann='# @todo env-update (lock:pinned) dockerhub:_/postgres:18 18.4-alpine3.23'
     printf '%s\nGLOBAL_STACK_T63F1=18.4-alpine3.23\n' \"\$ann\" > \"\$f\"
     original=\$(cat \"\$f\")
-    bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$f\" 2>/dev/null || true
+    bash '${ENV_UPDATE_V2}' --apply --yes --env-file=\"\$f\" 2>/dev/null || true
     after=\$(cat \"\$f\")
     [[ \"\$original\" == \"\$after\" ]] || { echo 'file changed when annotation was already up to date'; echo FAIL; exit 0; }
     echo PASS
@@ -7862,7 +7861,7 @@ t "t80a: --apply --backup=false — no backup file created" bash -c "
     touch \"\${TMP_DIR}/t80a_cache/last-dry-run-ts\"
     f=\${TMP_DIR}/t80a.env
     printf '# @todo env-update dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_PG18_T80A=18.3-alpine3.23\n' > \"\$f\"
-    bash '${ENV_UPDATE_V2}' --apply --backup=false --env-file=\"\$f\" 2>/dev/null || true
+    bash '${ENV_UPDATE_V2}' --apply --yes --backup=false --env-file=\"\$f\" 2>/dev/null || true
     count=\$(find \"\${TMP_DIR}\" -maxdepth 1 -name 't80a.env.bak*' -type f 2>/dev/null | wc -l)
     [[ \$count -eq 0 ]] || { echo \"expected 0 backup files, found \$count\"; echo FAIL; exit 0; }
     echo PASS
@@ -7876,7 +7875,7 @@ t "t80b: --apply (default) — exactly one .bak. file created" bash -c "
     touch \"\${TMP_DIR}/t80b_cache/last-dry-run-ts\"
     f=\${TMP_DIR}/t80b.env
     printf '# @todo env-update dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_PG18_T80B=18.3-alpine3.23\n' > \"\$f\"
-    bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$f\" 2>/dev/null || true
+    bash '${ENV_UPDATE_V2}' --apply --yes --env-file=\"\$f\" 2>/dev/null || true
     count=\$(find \"\${TMP_DIR}\" -maxdepth 1 -name 't80b.env.bak*' -type f 2>/dev/null | wc -l)
     [[ \$count -ge 1 ]] || { echo \"expected >=1 backup file, found \$count\"; echo FAIL; exit 0; }
     echo PASS
@@ -7890,7 +7889,7 @@ t "t80c: --apply --backup-suffix=.mybak — backup uses custom suffix" bash -c "
     touch \"\${TMP_DIR}/t80c_cache/last-dry-run-ts\"
     f=\${TMP_DIR}/t80c.env
     printf '# @todo env-update dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_PG18_T80C=18.3-alpine3.23\n' > \"\$f\"
-    bash '${ENV_UPDATE_V2}' --apply --backup-suffix=.mybak --env-file=\"\$f\" 2>/dev/null || true
+    bash '${ENV_UPDATE_V2}' --apply --yes --backup-suffix=.mybak --env-file=\"\$f\" 2>/dev/null || true
     count_mybak=\$(find \"\${TMP_DIR}\" -maxdepth 1 -name 't80c.env.mybak.*' -type f 2>/dev/null | wc -l)
     count_bak=\$(find \"\${TMP_DIR}\" -maxdepth 1 -name 't80c.env.bak.*' -type f 2>/dev/null | wc -l)
     [[ \$count_mybak -ge 1 ]] || { echo \"expected >=1 .mybak.* file, found \$count_mybak\"; echo FAIL; exit 0; }
@@ -7910,7 +7909,7 @@ t "t80d: --apply --backup-keep=2 — prunes oldest; exactly 2 backups remain" ba
     touch \"\${TMP_DIR}/t80d.env.bak.20200101-000001-99\"
     touch \"\${TMP_DIR}/t80d.env.bak.20200101-000002-99\"
     touch \"\${TMP_DIR}/t80d.env.bak.20200101-000003-99\"
-    bash '${ENV_UPDATE_V2}' --apply --backup-keep=2 --env-file=\"\$f\" 2>/dev/null || true
+    bash '${ENV_UPDATE_V2}' --apply --yes --backup-keep=2 --env-file=\"\$f\" 2>/dev/null || true
     count=\$(find \"\${TMP_DIR}\" -maxdepth 1 -name 't80d.env.bak*' -type f 2>/dev/null | wc -l)
     [[ \$count -eq 2 ]] || { echo \"expected 2 backups after pruning, found \$count\"; echo FAIL; exit 0; }
     echo PASS
@@ -7928,7 +7927,7 @@ t "t80e: --apply --backup-purge=true — purges old backups; 1 new backup remain
     touch \"\${TMP_DIR}/t80e.env.bak.20200101-000001-99\"
     touch \"\${TMP_DIR}/t80e.env.bak.20200101-000002-99\"
     touch \"\${TMP_DIR}/t80e.env.bak.20200101-000003-99\"
-    bash '${ENV_UPDATE_V2}' --apply --backup-purge=true --env-file=\"\$f\" 2>/dev/null || true
+    bash '${ENV_UPDATE_V2}' --apply --yes --backup-purge=true --env-file=\"\$f\" 2>/dev/null || true
     count=\$(find \"\${TMP_DIR}\" -maxdepth 1 -name 't80e.env.bak*' -type f 2>/dev/null | wc -l)
     [[ \$count -eq 1 ]] || { echo \"expected exactly 1 backup after purge+create, found \$count\"; echo FAIL; exit 0; }
     echo PASS
@@ -7939,8 +7938,8 @@ t "t80f: --backup-keep=abc — rejected; stderr contains 'non-negative integer'"
     export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
     f=\${TMP_DIR}/t80f.env
     printf '# @todo env-update dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_PG18_T80F=18.3-alpine3.23\n' > \"\$f\"
-    err=\$(bash '${ENV_UPDATE_V2}' --apply --backup-keep=abc --env-file=\"\$f\" 2>&1 || true)
-    rc=\$(bash '${ENV_UPDATE_V2}' --apply --backup-keep=abc --env-file=\"\$f\" 2>/dev/null; echo \$?)
+    err=\$(bash '${ENV_UPDATE_V2}' --apply --yes --backup-keep=abc --env-file=\"\$f\" 2>&1 || true)
+    rc=\$(bash '${ENV_UPDATE_V2}' --apply --yes --backup-keep=abc --env-file=\"\$f\" 2>/dev/null; echo \$?)
     [[ \$rc -ne 0 ]] || { echo \"expected non-zero exit, got 0\"; echo FAIL; exit 0; }
     echo \"\$err\" | grep -q 'non-negative integer' || { echo \"stderr missing 'non-negative integer'; got: \$err\"; echo FAIL; exit 0; }
     echo PASS
@@ -8130,7 +8129,7 @@ t "t83a: --apply --scan — mock env-scan.sh is invoked" bash -c "
     printf '#!/bin/bash\ntouch \"%s\"\nexit 0\n' \"\$sentinel\" > \"\$mock\"
     chmod +x \"\$mock\"
     export _GS_EU2_ENV_SCAN_PATH=\"\$mock\"
-    bash '${ENV_UPDATE_V2}' --apply --scan --env-file=\"\$f\" >/dev/null 2>&1 || true
+    bash '${ENV_UPDATE_V2}' --apply --yes --scan --env-file=\"\$f\" >/dev/null 2>&1 || true
     [[ -f \"\$sentinel\" ]] || { echo \"mock env-scan was not invoked (sentinel absent)\"; echo FAIL; exit 0; }
     echo PASS
 "
@@ -8148,7 +8147,7 @@ t "t83b: --apply --scan --no-fail — env-scan receives --no-fail flag" bash -c 
     printf '#!/bin/bash\nprintf \"%%s\n\" \"\$@\" > \"%s\"\nexit 0\n' \"\$args_file\" > \"\$mock\"
     chmod +x \"\$mock\"
     export _GS_EU2_ENV_SCAN_PATH=\"\$mock\"
-    bash '${ENV_UPDATE_V2}' --apply --scan --no-fail --env-file=\"\$f\" >/dev/null 2>&1 || true
+    bash '${ENV_UPDATE_V2}' --apply --yes --scan --no-fail --env-file=\"\$f\" >/dev/null 2>&1 || true
     [[ -f \"\$args_file\" ]] || { echo \"mock env-scan was not invoked\"; echo FAIL; exit 0; }
     grep -qF -- '--no-fail' \"\$args_file\" || { echo \"--no-fail not in env-scan args: \$(cat \"\$args_file\")\"; echo FAIL; exit 0; }
     echo PASS
@@ -8167,7 +8166,7 @@ t "t83c: --apply --scan --backup=false — env-scan receives --backup=false flag
     printf '#!/bin/bash\nprintf \"%%s\n\" \"\$@\" > \"%s\"\nexit 0\n' \"\$args_file\" > \"\$mock\"
     chmod +x \"\$mock\"
     export _GS_EU2_ENV_SCAN_PATH=\"\$mock\"
-    bash '${ENV_UPDATE_V2}' --apply --scan --backup=false --env-file=\"\$f\" >/dev/null 2>&1 || true
+    bash '${ENV_UPDATE_V2}' --apply --yes --scan --backup=false --env-file=\"\$f\" >/dev/null 2>&1 || true
     [[ -f \"\$args_file\" ]] || { echo \"mock env-scan was not invoked\"; echo FAIL; exit 0; }
     grep -qF -- '--backup=false' \"\$args_file\" || { echo \"--backup=false not in env-scan args: \$(cat \"\$args_file\")\"; echo FAIL; exit 0; }
     echo PASS
@@ -8204,7 +8203,7 @@ t "t83e: --apply --scan with missing env-scan → WARNING in stderr, exit still 
     printf '%s\n' '${_T83_ENV}' > \"\$f\"
     export _GS_EU2_ENV_SCAN_PATH=\"/nonexistent/env-scan.sh\"
     rc_file=\${TMP_DIR}/t83e_rc
-    err=\$(bash '${ENV_UPDATE_V2}' --apply --scan --env-file=\"\$f\" 2>&1 >/dev/null; echo \$? > \"\$rc_file\")
+    err=\$(bash '${ENV_UPDATE_V2}' --apply --yes --scan --env-file=\"\$f\" 2>&1 >/dev/null; echo \$? > \"\$rc_file\")
     rc=\$(cat \"\$rc_file\" 2>/dev/null || echo 99)
     [[ \$rc -eq 0 ]] || { echo \"expected exit 0 after apply success (scan warning non-fatal), got \$rc\"; echo FAIL; exit 0; }
     echo \"\$err\" | grep -qF 'WARNING: --scan requested but env-scan.sh not found' || { echo \"expected WARNING in stderr; got: \$err\"; echo FAIL; exit 0; }
@@ -8224,7 +8223,7 @@ t "t83f: --apply --scan --profile — env-scan receives --profile=true flag" bas
     printf '#!/bin/bash\nprintf \"%%s\n\" \"\$@\" > \"%s\"\nexit 0\n' \"\$args_file\" > \"\$mock\"
     chmod +x \"\$mock\"
     export _GS_EU2_ENV_SCAN_PATH=\"\$mock\"
-    bash '${ENV_UPDATE_V2}' --apply --scan --profile --env-file=\"\$f\" >/dev/null 2>&1 || true
+    bash '${ENV_UPDATE_V2}' --apply --yes --scan --profile --env-file=\"\$f\" >/dev/null 2>&1 || true
     [[ -f \"\$args_file\" ]] || { echo \"mock env-scan was not invoked\"; echo FAIL; exit 0; }
     grep -qF -- '--profile=true' \"\$args_file\" || { echo \"--profile=true not in env-scan args: \$(cat \"\$args_file\")\"; echo FAIL; exit 0; }
     echo PASS
@@ -8249,7 +8248,7 @@ t "t80g: --apply --backup-keep=0 — unlimited mode, 5 pre-seeded + 1 new = 6 to
     touch \"\${TMP_DIR}/t80g.env.bak.20200101-000003-99\"
     touch \"\${TMP_DIR}/t80g.env.bak.20200101-000004-99\"
     touch \"\${TMP_DIR}/t80g.env.bak.20200101-000005-99\"
-    bash '${ENV_UPDATE_V2}' --apply --backup-keep=0 --env-file=\"\$f\" 2>/dev/null || true
+    bash '${ENV_UPDATE_V2}' --apply --yes --backup-keep=0 --env-file=\"\$f\" 2>/dev/null || true
     count=\$(find \"\${TMP_DIR}\" -maxdepth 1 -name 't80g.env.bak*' -type f 2>/dev/null | wc -l)
     # keep=0 = unlimited: no pruning; 5 pre-seeded + 1 new = 6
     [[ \$count -eq 6 ]] || { echo \"expected 6 backups (unlimited keep=0), found \$count\"; echo FAIL; exit 0; }
@@ -8272,7 +8271,7 @@ t "t80h: --apply --backup-keep=2 with 5 pre-seeds — exactly 2 remain, oldest p
     touch \"\${TMP_DIR}/t80h.env.bak.20200101-000003-99\"
     touch \"\${TMP_DIR}/t80h.env.bak.20200101-000004-99\"
     touch \"\${TMP_DIR}/t80h.env.bak.20200101-000005-99\"
-    bash '${ENV_UPDATE_V2}' --apply --backup-keep=2 --env-file=\"\$f\" 2>/dev/null || true
+    bash '${ENV_UPDATE_V2}' --apply --yes --backup-keep=2 --env-file=\"\$f\" 2>/dev/null || true
     count=\$(find \"\${TMP_DIR}\" -maxdepth 1 -name 't80h.env.bak*' -type f 2>/dev/null | wc -l)
     [[ \$count -eq 2 ]] || { echo \"expected exactly 2 backups after pruning 4, found \$count\"; echo FAIL; exit 0; }
     # Oldest (000001) and early ones should be gone
@@ -8299,7 +8298,7 @@ t "t80i: --apply --backup-purge=true --backup-keep=2 — purge clears all, 1 new
     touch \"\${TMP_DIR}/t80i.env.bak.20200101-000003-99\"
     touch \"\${TMP_DIR}/t80i.env.bak.20200101-000004-99\"
     touch \"\${TMP_DIR}/t80i.env.bak.20200101-000005-99\"
-    bash '${ENV_UPDATE_V2}' --apply --backup-purge=true --backup-keep=2 --env-file=\"\$f\" 2>/dev/null || true
+    bash '${ENV_UPDATE_V2}' --apply --yes --backup-purge=true --backup-keep=2 --env-file=\"\$f\" 2>/dev/null || true
     count=\$(find \"\${TMP_DIR}\" -maxdepth 1 -name 't80i.env.bak*' -type f 2>/dev/null | wc -l)
     # purge removed all 5 old; 1 new created; keep=2 does not prune (only 1 ≤ 2)
     [[ \$count -eq 1 ]] || { echo \"expected exactly 1 backup after purge+create (keep=2 does not prune 1 file), found \$count\"; echo FAIL; exit 0; }
@@ -8310,46 +8309,36 @@ t "t80i: --apply --backup-purge=true --backup-keep=2 — purge clears all, 1 new
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Section 84 — dry-run guard: missing and stale marker cases
+# Section 84 — --apply --yes gate: non-interactive behavior
 # ═══════════════════════════════════════════════════════════════════════════
-section "84 — dry-run guard: missing and stale marker"
+section "84 — --apply --yes gate: non-interactive behavior"
 
 _T84_ENV='# @todo env-update dockerhub:_/postgres:18 18.3-alpine3.23
 GLOBAL_STACK_PG18_T84=18.3-alpine3.23'
 
-# t84a: --apply with NO marker file → exit non-zero; stderr contains guard warning
-t "t84a: --apply with no last-dry-run-ts marker → exit 1, guard warning in stderr" bash -c "
+# t84a: --apply without --yes in non-TTY → exit 1, requires --yes message in stderr
+t "t84a: --apply without --yes in non-TTY → exit 1, requires --yes message" bash -c "
     export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t84a_cache
     mkdir -p \"\${TMP_DIR}/t84a_cache\"
-    # Deliberately do NOT create last-dry-run-ts
     f=\${TMP_DIR}/t84a.env
     printf '%s\n' '${_T84_ENV}' > \"\$f\"
     err=\$(bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$f\" 2>&1 >/dev/null || true)
-    rc=\$(bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$f\" 2>/dev/null; echo \$?)
-    [[ \$rc -ne 0 ]] || { echo \"expected non-zero exit (no dry-run marker), got 0\"; echo FAIL; exit 0; }
-    echo \"\$err\" | grep -qF '[WARN] --apply requires a recent --dry-run' || { echo \"expected guard warning in stderr; got: \$err\"; echo FAIL; exit 0; }
+    bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$f\" >/dev/null 2>/dev/null; rc=\$?
+    [[ \$rc -ne 0 ]] || { echo \"expected non-zero exit (no --yes), got 0\"; echo FAIL; exit 0; }
+    echo \"\$err\" | grep -qF 'requires --yes in non-interactive mode' || { echo \"expected requires --yes message in stderr; got: \$err\"; echo FAIL; exit 0; }
     echo PASS
 "
 
-# t84b: --apply with stale marker (>1800 s old) → same guard fires
-t "t84b: --apply with stale marker (>30 min) → exit 1, guard warning in stderr" bash -c "
+# t84b: --apply --yes in non-TTY → exit 0, gate bypassed
+t "t84b: --apply --yes in non-TTY → exit 0, gate bypassed" bash -c "
     export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t84b_cache
     mkdir -p \"\${TMP_DIR}/t84b_cache\"
-    # Create a marker backdated to 40 minutes ago
-    marker=\${TMP_DIR}/t84b_cache/last-dry-run-ts
-    touch \"\$marker\"
-    # Set mtime to 40 min (2400 s) ago using touch -d
-    touch -d '-2400 seconds' \"\$marker\" 2>/dev/null || \
-        touch -t \"\$(date -d '-2400 seconds' +%Y%m%d%H%M.%S 2>/dev/null || date -v-2400S +%Y%m%d%H%M.%S)\" \"\$marker\" 2>/dev/null || \
-        printf '0\n' > \"\$marker\"  # fallback: write epoch 0 (always stale)
     f=\${TMP_DIR}/t84b.env
     printf '%s\n' '${_T84_ENV}' > \"\$f\"
-    err=\$(bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$f\" 2>&1 >/dev/null || true)
-    rc=\$(bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$f\" 2>/dev/null; echo \$?)
-    [[ \$rc -ne 0 ]] || { echo \"expected non-zero exit (stale marker), got 0\"; echo FAIL; exit 0; }
-    echo \"\$err\" | grep -qF '[WARN] --apply requires a recent --dry-run' || { echo \"expected guard warning in stderr; got: \$err\"; echo FAIL; exit 0; }
+    bash '${ENV_UPDATE_V2}' --apply --yes --env-file=\"\$f\" >/dev/null 2>/dev/null; rc=\$?
+    [[ \$rc -eq 0 ]] || { echo \"expected exit 0 with --yes, got \$rc\"; echo FAIL; exit 0; }
     echo PASS
 "
 
@@ -8427,7 +8416,7 @@ t "t87a: tracked+dirty .env — apply aborts with warning" bash -c "
     export _GS_EU2_HTTP_FIXTURE_DIR=\"\${TMP_DIR}/no_fixtures_t87a\"
     mkdir -p \"\$_GS_EU2_HTTP_FIXTURE_DIR\"
     # --apply should warn and NOT overwrite the file
-    out=\$(bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$D/.env\" 2>&1 || true)
+    out=\$(bash '${ENV_UPDATE_V2}' --apply --yes --env-file=\"\$D/.env\" 2>&1 || true)
     after_content=\$(cat \"\$D/.env\")
     # File content must be unchanged
     [[ \"\${original_content}\" == \"\${after_content}\" ]] \
@@ -8449,7 +8438,7 @@ t "t87b: .env in non-git directory — apply proceeds without git error" bash -c
     printf '{\"results\":[{\"name\":\"3.19\"}]}' \
         > \"\$FDIR/registry.hub.docker.com_v2_repositories___alpine_tags_page_size=100\"
     export _GS_EU2_HTTP_FIXTURE_DIR=\"\$FDIR\"
-    out=\$(bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$D/.env\" 2>&1)
+    out=\$(bash '${ENV_UPDATE_V2}' --apply --yes --env-file=\"\$D/.env\" 2>&1)
     rc=\$?
     # Should not contain any git-related error
     echo \"\$out\" | grep -qiE '(not a git repo|git error|fatal:.*git)' \
@@ -8471,7 +8460,7 @@ t "t87c: tracked+clean .env — apply is not blocked" bash -c "
     printf '{\"results\":[{\"name\":\"3.19\"}]}' \
         > \"\$FDIR/registry.hub.docker.com_v2_repositories___alpine_tags_page_size=100\"
     export _GS_EU2_HTTP_FIXTURE_DIR=\"\$FDIR\"
-    out=\$(bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$D/.env\" 2>&1)
+    out=\$(bash '${ENV_UPDATE_V2}' --apply --yes --env-file=\"\$D/.env\" 2>&1)
     # Must NOT contain the dirty-file warning
     echo \"\$out\" | grep -qiE '(uncommitted|stash)' \
         && { echo \"false-positive block on clean file: \$out\"; echo FAIL; exit 0; }
@@ -8580,7 +8569,7 @@ t "t89d: --apply --scan does not emit the scan warning" bash -c "
     printf '#!/bin/bash\nexit 0\n' > \"\$mock\"
     chmod +x \"\$mock\"
     export _GS_EU2_ENV_SCAN_PATH=\"\$mock\"
-    out=\$(bash '${ENV_UPDATE_V2}' --apply --scan --env-file=\"\$f\" 2>&1 || true)
+    out=\$(bash '${ENV_UPDATE_V2}' --apply --yes --scan --env-file=\"\$f\" 2>&1 || true)
     echo \"\$out\" | grep -qF '--scan has no effect' \
         && { echo \"unexpected --scan warning when --apply is active: \$out\"; echo FAIL; exit 0; }
     echo PASS
@@ -9113,7 +9102,7 @@ t "t91b: replace apply — primary and target VAR= both updated" bash -c "
     f=\${TMP_DIR}/t91b.env
     printf '# @todo env-update (replace:GLOBAL_STACK_T91B_ALIAS=node{major}) github:testowner/testrepo 2.4.0\nGLOBAL_STACK_T91B=2.4.0\nGLOBAL_STACK_T91B_ALIAS=node2\n' > \"\$f\"
     bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" > /dev/null 2>&1
-    out=\$(bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$f\" 2>&1)
+    out=\$(bash '${ENV_UPDATE_V2}' --apply --yes --env-file=\"\$f\" 2>&1)
     grep -qE '^GLOBAL_STACK_T91B=v?2\.5\.0$' \"\$f\" || { echo \"primary var not updated; file: \$(cat \"\$f\")\"; echo FAIL; exit 0; }
     grep -q '^GLOBAL_STACK_T91B_ALIAS=node2$' \"\$f\" || { echo \"target var not updated to node2; file: \$(cat \"\$f\")\"; echo FAIL; exit 0; }
     echo \"\$out\" | grep -qF '[REPLACE]' || { echo \"expected [REPLACE] sub-line; got: \$out\"; echo FAIL; exit 0; }
@@ -9127,7 +9116,7 @@ t "t91c: token expansion {major}/{minor}/{patch} from proposed 2.5.0" bash -c "
     f=\${TMP_DIR}/t91c.env
     printf '# @todo env-update (replace:GLOBAL_STACK_T91C_LABEL={major}.{minor}.{patch}-lts) github:testowner/testrepo 2.4.0\nGLOBAL_STACK_T91C=2.4.0\nGLOBAL_STACK_T91C_LABEL=old\n' > \"\$f\"
     bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" > /dev/null 2>&1
-    bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$f\" 2>&1
+    bash '${ENV_UPDATE_V2}' --apply --yes --env-file=\"\$f\" 2>&1
     grep -q '^GLOBAL_STACK_T91C_LABEL=2\.5\.0-lts$' \"\$f\" || { echo \"expected 2.5.0-lts; file: \$(cat \"\$f\")\"; echo FAIL; exit 0; }
     echo PASS
 "
@@ -9139,7 +9128,7 @@ t "t91d: multiple (replace:) flags — all targets updated" bash -c "
     f=\${TMP_DIR}/t91d.env
     printf '# @todo env-update (replace:GLOBAL_STACK_T91D_A=v{major}) (replace:GLOBAL_STACK_T91D_B={major}.{minor}) github:testowner/testrepo 2.4.0\nGLOBAL_STACK_T91D=2.4.0\nGLOBAL_STACK_T91D_A=v2\nGLOBAL_STACK_T91D_B=2.4\n' > \"\$f\"
     bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" > /dev/null 2>&1
-    bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$f\" 2>&1
+    bash '${ENV_UPDATE_V2}' --apply --yes --env-file=\"\$f\" 2>&1
     grep -q '^GLOBAL_STACK_T91D_A=v2$' \"\$f\" || { echo \"target A not updated; file: \$(cat \"\$f\")\"; echo FAIL; exit 0; }
     grep -q '^GLOBAL_STACK_T91D_B=2.5$' \"\$f\" || { echo \"target B not updated; file: \$(cat \"\$f\")\"; echo FAIL; exit 0; }
     echo PASS
@@ -9152,7 +9141,7 @@ t "t91e: missing target → ERROR output; --no-fail lets primary apply succeed" 
     f=\${TMP_DIR}/t91e.env
     printf '# @todo env-update (replace:GLOBAL_STACK_T91E_MISSING=val) github:testowner/testrepo 2.4.0\nGLOBAL_STACK_T91E=2.4.0\n' > \"\$f\"
     bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" > /dev/null 2>&1
-    out=\$(bash '${ENV_UPDATE_V2}' --apply --no-fail --env-file=\"\$f\" 2>&1)
+    out=\$(bash '${ENV_UPDATE_V2}' --apply --yes --no-fail --env-file=\"\$f\" 2>&1)
     echo \"\$out\" | grep -qiE 'error|not found' || { echo \"expected error about missing target; got: \$out\"; echo FAIL; exit 0; }
     grep -qE '^GLOBAL_STACK_T91E=v?2\.5\.0$' \"\$f\" || { echo \"primary var must still be applied with --no-fail; file: \$(cat \"\$f\")\"; echo FAIL; exit 0; }
     echo PASS
@@ -9171,7 +9160,7 @@ t "t91f: cascade failure rolls back primary var to original value (no half-updat
     # Capture original primary value
     orig_val=\$(grep '^GLOBAL_STACK_T91F=' \"\$f\" | cut -d= -f2-)
     bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" > /dev/null 2>&1
-    bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$f\" 2>/dev/null || true
+    bash '${ENV_UPDATE_V2}' --apply --yes --env-file=\"\$f\" 2>/dev/null || true
     # After cascade failure, primary var must still hold the original value (rollback)
     cur_val=\$(grep '^GLOBAL_STACK_T91F=' \"\$f\" | cut -d= -f2-)
     [[ \"\$cur_val\" == \"\$orig_val\" ]] || { echo \"primary var not rolled back: orig='\$orig_val' cur='\$cur_val'; file: \$(cat \"\$f\")\"; echo FAIL; exit 0; }
@@ -9214,7 +9203,7 @@ t "t92b: SKIP + stale target → --apply rewrites target to correct value" bash 
     # cur=v2.5.0 (matches what fixture returns) → SKIP; target should be node2 but is node1 (stale)
     printf '# @todo env-update (replace:GLOBAL_STACK_T92B_ALIAS=node{major}) github:testowner/testrepo v2.5.0\nGLOBAL_STACK_T92B=v2.5.0\nGLOBAL_STACK_T92B_ALIAS=node1\n' > \"\$f\"
     bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" > /dev/null 2>&1
-    out=\$(bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$f\" 2>&1)
+    out=\$(bash '${ENV_UPDATE_V2}' --apply --yes --env-file=\"\$f\" 2>&1)
     grep -qE '^GLOBAL_STACK_T92B=v?2\.5\.0$' \"\$f\" || { echo \"primary must remain unchanged; file: \$(cat \"\$f\")\"; echo FAIL; exit 0; }
     grep -q '^GLOBAL_STACK_T92B_ALIAS=node2$' \"\$f\" || { echo \"target should now be node2; file: \$(cat \"\$f\")\"; echo FAIL; exit 0; }
     echo \"\$out\" | grep -qF '[REPLACE]' || { echo \"expected [REPLACE] in apply output; got: \$out\"; echo FAIL; exit 0; }
@@ -9283,7 +9272,7 @@ t "t92g: SKIP + stale target → --apply summary includes replace-only count" ba
     # cur=v2.5.0 (matches fixture) → SKIP; target node1 is stale (should be node2)
     printf '# @todo env-update (replace:GLOBAL_STACK_T92G_ALIAS=node{major}) github:testowner/testrepo v2.5.0\nGLOBAL_STACK_T92G=v2.5.0\nGLOBAL_STACK_T92G_ALIAS=node1\n' > \"\$f\"
     bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" > /dev/null 2>&1
-    out=\$(bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$f\" 2>&1)
+    out=\$(bash '${ENV_UPDATE_V2}' --apply --yes --env-file=\"\$f\" 2>&1)
     echo \"\$out\" | grep -qF 'replace-only' || { echo \"expected replace-only in apply summary line; got: \$out\"; echo FAIL; exit 0; }
     echo \"\$out\" | grep -qE '[1-9][0-9]* replace-only' || { echo \"expected non-zero replace-only count in summary; got: \$out\"; echo FAIL; exit 0; }
     echo PASS
@@ -9551,7 +9540,7 @@ t "t95c: apply.sh [REPLACE] line uses '↳ (replace)' format (not bare '↳')" b
     f=\${TMP_DIR}/t95c.env
     printf '# @todo env-update (replace:GLOBAL_STACK_T95C_ALIAS=node{major}) github:testowner/testrepo 2.4.0\nGLOBAL_STACK_T95C=2.4.0\nGLOBAL_STACK_T95C_ALIAS=node2\n' > \"\$f\"
     bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" > /dev/null 2>&1
-    out=\$(bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$f\" 2>&1)
+    out=\$(bash '${ENV_UPDATE_V2}' --apply --yes --env-file=\"\$f\" 2>&1)
     # The [REPLACE] line from apply.sh must use '↳ (replace)' not bare '↳ VAR'
     echo \"\$out\" | grep -qF '[REPLACE]' || { echo \"expected [REPLACE] line in apply output; got: \$out\"; echo FAIL; exit 0; }
     echo \"\$out\" | grep -qF '[REPLACE]' | grep -qF '↳ (replace)' && echo PASS && exit 0
@@ -9859,7 +9848,7 @@ t "t98j: --apply alone does NOT write file for RESOLVED record" bash -c "
     # Create dry-run marker so apply proceeds past safety guard
     mkdir -p \"\${TMP_DIR}/t98j_cache\"
     touch \"\${TMP_DIR}/t98j_cache/last-dry-run-ts\"
-    bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$f\" 2>&1 || true
+    bash '${ENV_UPDATE_V2}' --apply --yes --env-file=\"\$f\" 2>&1 || true
     # VAR= must still be 'latest' — RESOLVED must not be auto-applied
     grep -q 'GLOBAL_STACK_T98J_VERSION=latest' \"\$f\" || { echo 'RESOLVED was written without --apply-resolve'; echo FAIL; exit 0; }
     echo PASS
@@ -9872,7 +9861,7 @@ t "t98k: --apply --force-auto does NOT write RESOLVED (force-auto does not promo
     printf '# @todo env-update dockerhub:_/postgres latest\nGLOBAL_STACK_T98K_VERSION=latest\n' > \"\$f\"
     mkdir -p \"\${TMP_DIR}/t98k_cache\"
     touch \"\${TMP_DIR}/t98k_cache/last-dry-run-ts\"
-    bash '${ENV_UPDATE_V2}' --apply --force-auto --confirm='Confirm override' --env-file=\"\$f\" 2>&1 || true
+    bash '${ENV_UPDATE_V2}' --apply --yes --force-auto --confirm='Confirm override' --env-file=\"\$f\" 2>&1 || true
     grep -q 'GLOBAL_STACK_T98K_VERSION=latest' \"\$f\" || { echo 'RESOLVED was written by force-auto'; echo FAIL; exit 0; }
     echo PASS
 "
@@ -9884,7 +9873,7 @@ t "t98l: --apply --apply-resolve DOES write concrete version and emits [PINNED ]
     printf '# @todo env-update dockerhub:_/postgres latest\nGLOBAL_STACK_T98L_VERSION=latest\n' > \"\$f\"
     mkdir -p \"\${TMP_DIR}/t98l_cache\"
     touch \"\${TMP_DIR}/t98l_cache/last-dry-run-ts\"
-    out=\$(bash '${ENV_UPDATE_V2}' --apply --apply-resolve --env-file=\"\$f\" 2>&1)
+    out=\$(bash '${ENV_UPDATE_V2}' --apply --yes --apply-resolve --env-file=\"\$f\" 2>&1)
     # File must have been updated (no longer 'latest')
     grep -q 'GLOBAL_STACK_T98L_VERSION=latest' \"\$f\" && { echo 'file not updated by --apply-resolve'; echo FAIL; exit 0; } || true
     # Output must contain [PINNED ]
@@ -10077,7 +10066,7 @@ t "t102a: (lock:) with floating current 'next' — --apply leaves annotation byt
     ann='# @todo env-update (lock:keep as floating alias) github:php/php-src next'
     printf '%s\nGLOBAL_STACK_PHPEDGE_VERSION=next\n' \"\$ann\" > \"\$f\"
     original=\$(cat \"\$f\")
-    bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$f\" 2>/dev/null || true
+    bash '${ENV_UPDATE_V2}' --apply --yes --env-file=\"\$f\" 2>/dev/null || true
     after=\$(cat \"\$f\")
     [[ \"\$original\" == \"\$after\" ]] || {
         echo 'file was modified — annotation rewritten for floating (next) current'
@@ -10105,7 +10094,7 @@ t "t102b: (lock:) with floating current — --check shows LOCK; file unchanged a
         echo FAIL; exit 0
     }
     original=\$(cat \"\$f\")
-    bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$f\" 2>/dev/null || true
+    bash '${ENV_UPDATE_V2}' --apply --yes --env-file=\"\$f\" 2>/dev/null || true
     after=\$(cat \"\$f\")
     [[ \"\$original\" == \"\$after\" ]] || {
         echo 'file changed after --apply on floating-current LOCK'
@@ -10123,7 +10112,7 @@ t "t102c: (lock:) with concrete current still rewrites annotation when proposed 
     f=\${TMP_DIR}/t102c.env
     ann='# @todo env-update (lock:pinned) dockerhub:_/postgres:18 18.3-alpine3.23'
     printf '%s\nGLOBAL_STACK_T102C=18.3-alpine3.23\n' \"\$ann\" > \"\$f\"
-    bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$f\" 2>/dev/null || true
+    bash '${ENV_UPDATE_V2}' --apply --yes --env-file=\"\$f\" 2>/dev/null || true
     after=\$(cat \"\$f\")
     echo \"\$after\" | grep -q '18.4-alpine3.23' || {
         echo \"annotation not updated for concrete locked var; file: \$after\"
@@ -10147,7 +10136,7 @@ t "t102d: (lock:) with other floating aliases (edge, nightly, latest) — annota
         ann=\"# @todo env-update (lock:keep floating) dockerhub:_/postgres:18 \${alias}\"
         printf '%s\nGLOBAL_STACK_T102D=\${alias}\n' \"\$ann\" > \"\$f\"
         original=\$(cat \"\$f\")
-        bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$f\" 2>/dev/null || true
+        bash '${ENV_UPDATE_V2}' --apply --yes --env-file=\"\$f\" 2>/dev/null || true
         after=\$(cat \"\$f\")
         [[ \"\$original\" == \"\$after\" ]] || {
             echo \"alias '\${alias}': file was modified\"

@@ -44,6 +44,36 @@ source "$(dirname "${BASH_SOURCE[0]}")/propagate.sh"
 # Session-scoped temp directory — set here, used by extract.sh and missing.sh
 _GS_ES_SESSION_TMP=""
 
+# _gs_es_confirm_write — interactive confirmation gate before env-scan writes files.
+#
+# Args:    none
+# Reads:   _GS_ES_CFG[yes]     — when "true", skip prompt and proceed immediately
+#          _GS_ES_CFG[dry_run] — when "true", no gate needed (no writes will occur)
+# Prints:  prompt to stderr (TTY path); nothing on non-TTY (proceed silently)
+# Returns: 0 (proceed) | exits 1 (user declined on TTY)
+# Side fx: reads one line from stdin when on a TTY
+#
+# Gate logic (gentler than env-update — env-scan is designed for automated use):
+#   dry_run=true    → return 0 immediately (no writes, no gate needed)
+#   --yes=true      → return 0 (explicit bypass for scripting and --scan cascade)
+#   stdin not TTY   → return 0 (non-interactive: Makefile, CI, scripts — proceed silently)
+#   TTY, user y/Y   → return 0
+#   TTY, other      → exit 1
+_gs_es_confirm_write() {
+  [[ "${_GS_ES_CFG[dry_run]:-false}" == "true" ]] && return 0
+  [[ "${_GS_ES_CFG[yes]:-false}" == "true" ]] && return 0
+  [[ ! -t 0 ]] && return 0  # non-interactive: proceed without prompt
+  # TTY path: ask the user
+  local _reply
+  printf '\nProceed with env-scan (sync .env.local + propagate to Dockerfiles)? [y/N]: ' >&2
+  read -r _reply || _reply=""
+  if [[ "${_reply}" =~ ^[Yy]$ ]]; then
+    return 0
+  fi
+  printf 'Aborted.\n' >&2
+  exit 1
+}
+
 # gs_es_main — top-level entry point; runs the full 8-phase pipeline.
 #
 # Args:    "$@" — all CLI arguments (passed through to gs_es_parse_args)
@@ -69,6 +99,11 @@ gs_es_main() {
   [[ "${_GS_ES_CFG[backup]:-true}" == "false" ]] && printf '[NO-BACKUP MODE] backup step skipped\n' >&2
   [[ "${_GS_ES_CFG[backup_purge]:-false}" == "true" ]] && printf '[BACKUP-PURGE MODE] all existing backups will be deleted before run\n' >&2
   [[ "${_GS_ES_CFG[prune_removed]:-false}" == "true" ]] && printf '[PRUNE-REMOVED MODE] vars absent from source will be removed from dest\n' >&2
+
+  # ── Write confirmation gate ───────────────────────────────────────────────
+  # On TTY: prompt before any files are written. Non-TTY: proceed silently.
+  # --yes bypasses the TTY prompt (used by env-update --scan cascade).
+  _gs_es_confirm_write
 
   # ── Session temp directory (infrastructure — not a profiled phase) ─────────
   _GS_ES_SESSION_TMP="$(mktemp -d)" || {

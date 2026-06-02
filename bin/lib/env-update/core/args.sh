@@ -62,6 +62,7 @@ _gs_eu2_parse_args() {
       --no-fail)        _GS_EU2_CFG[no_fail]="true" ;;
       --profile|--profile=true)  _GS_EU2_CFG[profile]="true" ;;
       --profile=false)           _GS_EU2_CFG[profile]="false" ;;
+      --yes)          _GS_EU2_CFG[yes]="true" ;;
       --confirm=*)    _GS_EU2_CFG[confirm]="${1#*=}" ;;
       --backup=*)
         local _bval="${1#*=}"
@@ -147,6 +148,7 @@ _gs_eu2_parse_args() {
   [[ -z "${_GS_EU2_CFG[force_auto]+set}" ]]   && _GS_EU2_CFG[force_auto]="false"
   [[ -z "${_GS_EU2_CFG[changes_only]+set}" ]] && _GS_EU2_CFG[changes_only]="false"
   [[ -z "${_GS_EU2_CFG[no_fail]+set}" ]]    && _GS_EU2_CFG[no_fail]="false"
+  [[ -z "${_GS_EU2_CFG[yes]+set}" ]]           && _GS_EU2_CFG[yes]="false"
   [[ -z "${_GS_EU2_CFG[confirm]+set}" ]]       && _GS_EU2_CFG[confirm]=""
   [[ -z "${_GS_EU2_CFG[profile]+set}" ]]       && _GS_EU2_CFG[profile]="false"
   [[ -z "${_GS_EU2_CFG[backup]+set}" ]]        && _GS_EU2_CFG[backup]="true"

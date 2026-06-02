@@ -80,7 +80,7 @@ See `templates/tips/env-update.md` for the full fetcher-type and flag reference.
 
 **Key flags**: `--check` (fetch + report), `--apply` (apply AUTO decisions; implies `--check`), `--apply-resolve` (also apply RESOLVED decisions — floating→concrete rewrites; requires `--apply`), `--dry-run` (no writes), `--filter=<regex>`, `--no-cache`, `--format=text|json`, `--dump`, `--env-file=<path>`, `--cache-ttl=<N>`, `--with-tags`, `--unstable[=full|info]` (prerelease channel mode), `--stable[=full|info]` (stable channel mode; only `--stable=full + --unstable=full` is banned), `--no-notes` (suppress note sub-lines), `--changes-only` (hide up-to-date SKIP records), `--no-drift` (suppress [DRIFT]/[REPLACE-DRIFT] sub-lines), `--no-fail` (always exit 0; only ERROR fetch decisions suppressed — usage/backup errors remain fatal), `--scan` (run `bin/env-scan.sh` after `--apply` to propagate updated values to `.env.local` and Dockerfiles), `--force-auto` (bypass `(manual)`/`(override)`/`HOLD` gates; requires `--confirm="Confirm override"` with `--apply`; emits advisory when used without `--apply`), `--confirm=TEXT` (confirmation gate for `--force-auto --apply`), `--reference[=SECTION]` (print annotation/fetcher/decision reference and exit)
 
-**⚠️ Safety rule**: Always run `--dry-run` before `--apply` in the same session. Never run `--apply` cold — ask-tier operation. (Incident 2026-04-23: ran `--apply` without prior dry-run.)
+**Apply gate**: `--apply` is self-guarding — TTY prompts before writing; non-TTY requires `--yes`. Use `--apply --dry-run` to preview without writing. Add `--yes` to `--apply` for scripted/CI use.
 
 **Full reference**: `templates/tips/env-update.md`
 

@@ -1366,6 +1366,90 @@ _gs_eu2_run_check() {
   (( _n_error > 0 )) && return 1 || return 0
 }
 
+# _gs_eu2_count_apply_candidates — count records that would be written by --apply.
+#
+# Args:    none (reads record state set by _gs_eu2_run_check)
+# Reads:   all record decision, current_version, proposed_version, annotation_sha,
+#          proposed_sha, skip_reason, use_sha fields; _GS_EU2_CFG[apply_resolve]
+# Prints:  integer N to stdout
+# Returns: 0 always
+# Side fx: none
+#
+# Uses the same predicates as _gs_eu2_apply_updates (apply.sh) so the count
+# displayed in the confirmation prompt equals the number of writes that follow.
+# AUTO: writes when prop != cur (and prop is non-empty).
+# SHA:  writes annotation sha (and optionally VAR=) when sha tokens differ.
+# LOCK: writes annotation when prop != cur and current is not unversioned.
+# RESOLVED: writes when --apply-resolve active and prop != cur.
+_gs_eu2_count_apply_candidates() {
+  local _n=0
+  local _cac_count _cac_i _cac_decision _cac_cur _cac_prop _cac_ann_sha _cac_new_sha
+  _cac_count="$(_gs_eu2_record_count)"
+  for (( _cac_i = 0; _cac_i < _cac_count; _cac_i++ )); do
+    _cac_decision="$(_gs_eu2_record_get "${_cac_i}" decision)"
+    case "${_cac_decision}" in
+      AUTO)
+        _cac_cur="$(_gs_eu2_record_get "${_cac_i}" current_version)"
+        _cac_prop="$(_gs_eu2_record_get "${_cac_i}" proposed_version)"
+        [[ -n "${_cac_prop}" && "${_cac_prop}" != "${_cac_cur}" ]] && (( _n++ )) || true
+        ;;
+      SHA)
+        (( _n++ )) || true
+        ;;
+      LOCK)
+        _cac_cur="$(_gs_eu2_record_get "${_cac_i}" current_version)"
+        _cac_prop="$(_gs_eu2_record_get "${_cac_i}" proposed_version)"
+        if [[ -n "${_cac_prop}" && "${_cac_prop}" != "${_cac_cur}" ]] && \
+           ! _gs_eu2_is_unversioned "${_cac_cur}"; then
+          (( _n++ )) || true
+        fi
+        ;;
+      RESOLVED)
+        if [[ "${_GS_EU2_CFG[apply_resolve]:-false}" == "true" ]]; then
+          _cac_cur="$(_gs_eu2_record_get "${_cac_i}" current_version)"
+          _cac_prop="$(_gs_eu2_record_get "${_cac_i}" proposed_version)"
+          [[ -n "${_cac_prop}" && "${_cac_prop}" != "${_cac_cur}" ]] && (( _n++ )) || true
+        fi
+        ;;
+    esac
+  done
+  printf '%d' "${_n}"
+}
+
+# _gs_eu2_confirm_apply — interactive confirmation gate for --apply writes.
+#
+# Args:    $1 n_candidates — number of changes that will be written (for display)
+# Reads:   _GS_EU2_CFG[yes] — when "true", skip prompt and proceed immediately
+# Prints:  prompt to stderr (TTY path); error message to stderr (non-TTY / rejected)
+# Returns: 0 (proceed) | exits 1 (user declined or non-TTY without --yes)
+# Side fx: reads one line from stdin when on a TTY
+#
+# Gate logic:
+#   --yes=true         → proceed immediately (scripting / Claude use)
+#   stdin not a TTY    → exit 1 with clear error (require --yes for non-interactive use)
+#   TTY, user enters y/Y → proceed (return 0)
+#   TTY, any other input → exit 1
+_gs_eu2_confirm_apply() {
+  local _n_cand="${1:-0}"
+  if [[ "${_GS_EU2_CFG[yes]:-false}" == "true" ]]; then
+    return 0
+  fi
+  if [[ ! -t 0 ]]; then
+    printf 'env-update: --apply requires --yes in non-interactive mode (no TTY detected).\n' >&2
+    printf '  Run with --yes to bypass this gate, or use --dry-run to preview without writing.\n' >&2
+    exit 1
+  fi
+  # TTY path: ask the user
+  local _reply
+  printf '\nApply %d change(s)? [y/N]: ' "${_n_cand}" >&2
+  read -r _reply || _reply=""
+  if [[ "${_reply}" =~ ^[Yy]$ ]]; then
+    return 0
+  fi
+  printf 'Aborted.\n' >&2
+  exit 1
+}
+
 # _gs_eu2_main — top-level entry point: parse args, validate, orchestrate check/dump/apply.
 #
 # Args:    "$@" — all CLI arguments forwarded from bin/env-update.sh
@@ -1374,8 +1458,7 @@ _gs_eu2_run_check() {
 # Prints:  mode banners + check/dump/apply output to stdout; warnings to stderr
 # Returns: 0 on success; 1 on usage error or when ERROR decisions present
 #          (propagated via the || exit $? pattern in bin/env-update.sh)
-# Side fx: may write .env backup files; may invoke env-scan.sh (--scan);
-#          writes last-dry-run-ts marker after a successful dry-run check
+# Side fx: may write .env backup files; may invoke env-scan.sh (--scan)
 _gs_eu2_main() {
   _gs_eu2_profile_init   # records total start time before we know --profile value
   _gs_eu2_profile_start
@@ -1396,27 +1479,6 @@ _gs_eu2_main() {
 
   # --apply implies --check
   [[ "${_GS_EU2_CFG[apply]}" == "true" ]] && _GS_EU2_CFG[check]="true"
-
-  # Safety guard: --apply (without --dry-run) requires a recent --dry-run in the same session.
-  # This prevents the 2026-04-23 incident class (running --apply cold without previewing changes).
-  # Marker file: ${_GS_EU2_CACHE_DIR}/last-dry-run-ts (written after every successful --dry-run check)
-  if [[ "${_GS_EU2_CFG[apply]}" == "true" && "${_GS_EU2_CFG[dry_run]}" != "true" ]]; then
-    local _dry_run_marker="${_GS_EU2_CACHE_DIR:-/tmp/global-stack-env-update-cache}/last-dry-run-ts"
-    local _guard_ok=false
-    if [[ -f "${_dry_run_marker}" ]]; then
-      local _now _mtime _age
-      _now="$(date +%s)"
-      _mtime="$(stat -c %Y "${_dry_run_marker}" 2>/dev/null \
-        || stat -f %m "${_dry_run_marker}" 2>/dev/null \
-        || printf '0')"
-      _age=$(( _now - _mtime ))
-      (( _age < 1800 )) && _guard_ok=true
-    fi
-    if [[ "${_guard_ok}" != "true" ]]; then
-      printf '[WARN] --apply requires a recent --dry-run (within 30 min). Run with --dry-run first.\n' >&2
-      exit 1
-    fi
-  fi
 
   local _env_file="${_GS_EU2_CFG[env_file]}"
   if [[ ! -f "${_env_file}" ]]; then
@@ -1532,14 +1594,6 @@ _gs_eu2_main() {
     _gs_eu2_run_check || _check_rc=$?
     _gs_eu2_profile_end "Fetch + classify"
 
-    # After a successful dry-run check, write the timestamp marker so a subsequent
-    # --apply knows a recent preview was done (incident prevention: 2026-04-23).
-    if [[ "${_GS_EU2_CFG[dry_run]}" == "true" ]]; then
-      local _dry_run_marker="${_GS_EU2_CACHE_DIR:-/tmp/global-stack-env-update-cache}/last-dry-run-ts"
-      mkdir -p "$(dirname "${_dry_run_marker}")"
-      date +%s > "${_dry_run_marker}"
-    fi
-
     if [[ "${_GS_EU2_CFG[apply]}" == "true" ]]; then
       printf '\n'
       if [[ "${_GS_EU2_CFG[dry_run]}" == "true" ]]; then
@@ -1548,6 +1602,12 @@ _gs_eu2_main() {
         _gs_eu2_apply_updates "${_env_file}" "true"
         _gs_eu2_profile_end "Apply"
       else
+        # ── Confirmation gate ────────────────────────────────────────────────
+        # Interactive: prompt on TTY; require --yes in non-interactive (no TTY) mode.
+        local _n_cand
+        _n_cand="$(_gs_eu2_count_apply_candidates)"
+        _gs_eu2_confirm_apply "${_n_cand}"
+
         # ── Configurable backup (A2) ────────────────────────────────────────
         local _bk_suffix="${_GS_EU2_CFG[backup_suffix]:-.bak}"
         local _bk_keep="${_GS_EU2_CFG[backup_keep]:-10}"
@@ -1603,6 +1663,9 @@ _gs_eu2_main() {
           if [[ -x "${_env_scan}" ]]; then
             printf 'Running env-scan.sh to propagate changes...\n' >&2
             local _scan_flags=()
+            # Always pass --yes: user already confirmed at env-update's gate above,
+            # so env-scan's TTY prompt would be a double-prompt. Pre-authorize it.
+            _scan_flags+=("--yes")
             [[ "${_GS_EU2_CFG[no_fail]:-false}" == "true" ]]        && _scan_flags+=("--no-fail")
             [[ "${_GS_EU2_CFG[backup]:-true}" == "false" ]]         && _scan_flags+=("--backup=false")
             [[ "${_GS_EU2_CFG[backup_purge]:-false}" == "true" ]]   && _scan_flags+=("--backup-purge=true")

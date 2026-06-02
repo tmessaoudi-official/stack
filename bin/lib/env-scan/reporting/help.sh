@@ -40,6 +40,10 @@ Options:
   --destination-file-merged-suffix=<value>   Merged file suffix for destination files (default: .merged)
   --sync-values=<value>                      Sync destination values to match source when they differ (default: true)
   --dry-run                                  Report what would change but suppress all filesystem writes (env file sync and Dockerfile propagation) (default: false)
+  --yes                                      Skip the interactive write-confirmation prompt on TTY. Not required in non-interactive
+                                             mode (no TTY — Makefile, CI, scripts proceed silently by default). Use --yes when
+                                             running from a TTY context where you want no prompt (e.g. inside another script that
+                                             already prompted the user, or when invoked via env-update --scan).
   --no-fail                                  Always exit 0, even when a propagation error occurs (source env file not found).
                                              Scope: only suppresses return 1 from Phase 6 propagation. Infrastructure errors
                                              (mktemp failure), backup failures, and usage errors remain fatal.

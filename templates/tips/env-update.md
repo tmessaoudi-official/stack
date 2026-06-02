@@ -1423,25 +1423,24 @@ class of incident where `--apply` is run "cold" without a prior preview.
 
 ## 9. The Apply Cycle
 
-### Safety rule: always dry-run before apply
+### Apply cycle
+
+`--apply` is self-guarding:
+
+- **On a TTY** (interactive shell): runs the check, prints the report, then prompts
+  `Apply N changes? [y/N]:` — only writes on `y`/`Y`.
+- **Non-interactive** (CI, scripts, `make`, piped): requires `--yes`; exits 1 without it.
 
 ```bash
-# Step 1: Preview
-bin/env-update.sh --check --dry-run
-
-# Step 2: Apply (within 30 minutes of the dry-run)
+# Interactive — prompts before writing
 bin/env-update.sh --apply
-```
 
-The `--apply` flag checks for a `last-dry-run-ts` marker in the cache directory. If the
-marker is absent or older than 30 minutes, `--apply` exits with:
+# Non-interactive / scripted — bypass the prompt
+bin/env-update.sh --apply --yes
 
+# Preview only — no prompt, no writes
+bin/env-update.sh --apply --dry-run
 ```
-[WARN] --apply requires a recent --dry-run (within 30 min). Run with --dry-run first.
-```
-
-This is a hard guard — there is no flag to bypass it. If you need to force an apply (e.g.
-after CI cleared the cache dir), run `--dry-run` first.
 
 ### What --apply writes
 
@@ -1671,7 +1670,7 @@ These do not abort the tool — they set `decision=ERROR` and move to the next r
 | `env-update: unknown option: --OPTION` | Unrecognized CLI flag. |
 | `env-update: env file not found: PATH` | The `--env-file` path does not exist. |
 | `env-update: unknown --format value: VALUE (valid: text, json)` | Invalid value for `--format`. |
-| `[WARN] --apply requires a recent --dry-run (within 30 min). Run with --dry-run first.` | `--apply` attempted without a recent `--dry-run`. |
+| `env-update: --apply requires --yes in non-interactive mode (no TTY detected).` | `--apply` used in a non-TTY context without `--yes`. Add `--yes` to bypass the interactive gate. |
 
 ---
 

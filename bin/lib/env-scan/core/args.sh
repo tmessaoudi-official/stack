@@ -117,6 +117,7 @@ gs_es_parse_args() {
         _GS_ES_CFG[profile]="${_GS_ES_CFG[profile],,}"
         ;;
       --dry-run) _GS_ES_CFG[dry_run]="true" ;;
+      --yes)     _GS_ES_CFG[yes]="true" ;;
       --no-fail) _GS_ES_CFG[no_fail]="true" ;;
       --backup=*)
         _GS_ES_CFG[backup]="${1#*=}"
@@ -192,6 +193,7 @@ gs_es_parse_args() {
     [prune_removed]=false
     [orphan_quiet]=false
     [no_fail]=false
+    [yes]=false
   )
   local _key
   for _key in "${!_bool_defaults[@]}"; do
