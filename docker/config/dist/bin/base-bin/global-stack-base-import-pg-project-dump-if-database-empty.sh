@@ -2,7 +2,15 @@
 
 set -euo pipefail
 
-if ! PGPASSWORD="${DATABASE_PASSWORD}" psql -h "${DATABASE_HOST}" -U "${DATABASE_USER}" -d "${DATABASE_NAME}" -c "SELECT tablename FROM pg_tables WHERE schemaname NOT IN ('pg_catalog', 'information_schema');" | grep -q "(0 rows)"; then
+# Capture output separately so a connection failure is distinguishable from a populated DB.
+# Piping psql directly into grep masks psql's exit code: both "DB has tables" and
+# "connection failed" produce no "(0 rows)" match, causing a silent skip on failure.
+_psql_out=$(PGPASSWORD="${DATABASE_PASSWORD}" psql -h "${DATABASE_HOST}" -p "${DATABASE_PORT:-5432}" \
+    -U "${DATABASE_USER}" -d "${DATABASE_NAME}" \
+    -c "SELECT tablename FROM pg_tables WHERE schemaname NOT IN ('pg_catalog', 'information_schema');" \
+    2>&1) || { echo "ERROR: cannot connect to PostgreSQL at ${DATABASE_HOST}:${DATABASE_PORT:-5432} — ${_psql_out}" >&2; exit 1; }
+
+if ! printf '%s\n' "${_psql_out}" | grep -q "(0 rows)"; then
     echo "Database already populated"
 else
     echo "Importing database dump ${1} to database: ${DATABASE_NAME}, server: ${DATABASE_HOST}"
