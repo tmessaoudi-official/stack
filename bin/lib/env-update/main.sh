@@ -5,11 +5,15 @@
 # Exports:   _gs_eu2_main  _gs_eu2_dispatch_fetcher
 #            _gs_eu2_tally_init  _gs_eu2_tally_draw  _gs_eu2_tally_erase
 #            _gs_eu2_tally_cleanup  _gs_eu2_run_check
+#            _gs_eu2_check_prescan_width  _gs_eu2_classify_record
+#            _gs_eu2_compute_reason_label  _gs_eu2_compute_change_string
+#            _gs_eu2_should_hide_record  _gs_eu2_print_check_summary
 # Sources:   all sub-libraries under config/, core/, fetchers/, http/, reporting/
 # Deps:      bash 4.3+, tput (for terminal width detection)
 # Env:       _GS_EU2_CFG (associative array), _GS_EU2_TALLY_* (module-level state),
 #            _GS_EU2_TALLY_FORCE=1 (test hook: bypass TTY gate for tally)
 #            _GS_EU2_ENV_SCAN_PATH (test hook: override env-scan.sh path for --scan)
+#            _GS_EU2_MAX_VAR_LEN (set by _gs_eu2_check_prescan_width, read by run_check)
 set -eEuo pipefail
 
 [[ -n "${_GS_EU2_MAIN_SH_LOADED:-}" ]] && return 0
@@ -284,6 +288,452 @@ _gs_eu2_tally_cleanup() {
   trap - INT ERR
 }
 
+# _gs_eu2_check_prescan_width — pre-scan all env_var names to compute the widest name.
+#
+# Args:    $1 count — total number of records
+# Reads:   _GS_EU2_REC_<N>_env_var flat vars for N in [0, count)
+# Sets:    _GS_EU2_MAX_VAR_LEN (module-level) to the widest env_var length (min 40)
+# Prints:  nothing
+# Returns: 0 always
+# Side fx: none
+#
+# Used by: _gs_eu2_run_check to align the → arrow in output columns.
+_GS_EU2_MAX_VAR_LEN=40
+
+_gs_eu2_check_prescan_width() {
+  local _pw_count="${1}"
+  local _pw_max=40
+  local _pw_vl _pw_j _pw_vname _pw_tmpval
+  for (( _pw_j = 0; _pw_j < _pw_count; _pw_j++ )); do
+    _pw_vname="_GS_EU2_REC_${_pw_j}_env_var"
+    _pw_tmpval="${!_pw_vname:-}"
+    _pw_vl="${#_pw_tmpval}"
+    (( _pw_vl > _pw_max )) && _pw_max="${_pw_vl}"
+  done
+  _GS_EU2_MAX_VAR_LEN="${_pw_max}"
+}
+
+# _gs_eu2_classify_record — apply decision classifier and all annotation-based overrides.
+#
+# Args:    $1 record_index — 0-based index into the parallel record arrays
+# Reads:   _GS_EU2_CFG[force_auto], _GS_EU2_CFG[unstable]; record fields: decision,
+#          proposed_version, current_version, override, manual, major_hint,
+#          major_hint_min, tag_channel_prefix, using_fallback_major,
+#          skip_reason, lock_reason, annotation_sha, proposed_sha
+# Sets:    record field "decision" (final classified value)
+#          record field "error_message" (skip/lock annotations)
+# Prints:  nothing
+# Returns: 0 always
+# Side fx: none
+#
+# Phases:
+#   1. classify_decision: refines AUTO → HOLD/MANUAL/SKIP/AUTO based on version delta
+#   2. force_auto upgrade: HOLD → AUTO when --force-auto active
+#   3. lock gate: (lock:REASON) overrides any non-ERROR decision (except skip-gate SKIP)
+#   4. SHA classification: SKIP → SHA when annotation sha lags proposed sha
+#   5. Floating/prerelease skip annotations: adds error_message to explain up-to-date SKIP
+_gs_eu2_classify_record() {
+  local _cr_i="${1}"
+  local _cr_cur _cr_prop _cr_override _cr_manual _cr_major _cr_major_min _cr_fetcher_decision
+  _cr_cur="$(_gs_eu2_record_get "${_cr_i}" current_version)"
+  _cr_prop="$(_gs_eu2_record_get "${_cr_i}" proposed_version)"
+  _cr_override="$(_gs_eu2_record_get "${_cr_i}" override)"
+  _cr_manual="$(_gs_eu2_record_get "${_cr_i}" manual)"
+  _cr_major="$(_gs_eu2_record_get "${_cr_i}" major_hint)"
+  _cr_major_min="$(_gs_eu2_record_get "${_cr_i}" major_hint_min)"
+  _cr_fetcher_decision="$(_gs_eu2_record_get "${_cr_i}" decision)"
+
+  # Phase 1: classify_decision — refines AUTO decisions
+  if [[ "${_cr_fetcher_decision}" == "AUTO" || -z "${_cr_fetcher_decision}" ]]; then
+    local _cr_classified
+    # --force-auto: bypass (manual) and (override) annotation flags by passing "" so
+    # classify_decision never sees them.  The HOLD gate is handled after classification.
+    local _cr_eff_override="${_cr_override}" _cr_eff_manual="${_cr_manual}"
+    if [[ "${_GS_EU2_CFG[force_auto]:-false}" == "true" ]]; then
+      _cr_eff_override="" _cr_eff_manual=""
+    fi
+    # (tag-channel-prefix): pre-strip the channel prefix from _cur and _prop so that
+    # decide.sh's internal sort -V downgrade check compares pure semver strings.
+    # The round-trip prefix is display/storage-only; classify_decision must not see it.
+    local _cr_cur_cls="${_cr_cur}" _cr_prop_cls="${_cr_prop}"
+    local _cr_tcp_cls
+    _cr_tcp_cls="$(_gs_eu2_record_get "${_cr_i}" tag_channel_prefix)"
+    if [[ -n "${_cr_tcp_cls}" ]]; then
+      _cr_cur_cls="${_cr_cur_cls#v}"; _cr_cur_cls="${_cr_cur_cls#"${_cr_tcp_cls}"}"
+      _cr_prop_cls="${_cr_prop_cls#v}"; _cr_prop_cls="${_cr_prop_cls#"${_cr_tcp_cls}"}"
+    fi
+    # Range annotation: when the fetcher fell back to the LOW major, pass major_hint_min
+    # to classify_decision so the HOLD guard accepts the fallback version.
+    local _cr_using_fallback _cr_major_cls="${_cr_major}"
+    _cr_using_fallback="$(_gs_eu2_record_get "${_cr_i}" using_fallback_major)"
+    if [[ "${_cr_using_fallback}" == "true" && -n "${_cr_major_min}" ]]; then
+      _cr_major_cls="${_cr_major_min}"
+    fi
+    _cr_classified="$(_gs_eu2_classify_decision "${_cr_cur_cls}" "${_cr_prop_cls}" "${_cr_eff_override}" "${_cr_eff_manual}" "${_cr_major_cls}" "${_GS_EU2_CFG[unstable]:-}")"
+    # Phase 2: --force-auto upgrade: HOLD → AUTO (bypasses major-bump guard)
+    if [[ "${_GS_EU2_CFG[force_auto]:-false}" == "true" && "${_cr_classified}" == "HOLD" ]]; then
+      _cr_classified="AUTO"
+    fi
+    _gs_eu2_record_set "${_cr_i}" decision "${_cr_classified}"
+  fi
+
+  # Phase 3: lock gate — (lock:REASON) overrides AUTO/HOLD/MANUAL/SKIP(classifier) to LOCK.
+  # Fires AFTER force-auto upgrade. Does NOT override ERROR or skip-gate SKIP.
+  local _cr_skip_reason _cr_lock_reason
+  _cr_skip_reason="$(_gs_eu2_record_get "${_cr_i}" skip_reason)"
+  _cr_lock_reason="$(_gs_eu2_record_get "${_cr_i}" lock_reason)"
+  if [[ -n "${_cr_lock_reason}" && \
+        "$(_gs_eu2_record_get "${_cr_i}" decision)" != "ERROR" && \
+        -z "${_cr_skip_reason}" ]]; then
+    _gs_eu2_record_set "${_cr_i}" decision "LOCK"
+    _gs_eu2_record_set "${_cr_i}" error_message "${_cr_lock_reason}"
+  fi
+
+  # Phase 4: SHA classification — SKIP → SHA when annotation sha lags proposed sha.
+  local _cr_ann_sha _cr_prop_sha _cr_sha_classified
+  _cr_ann_sha="$(_gs_eu2_record_get "${_cr_i}" annotation_sha)"
+  _cr_prop_sha="$(_gs_eu2_record_get "${_cr_i}" proposed_sha)"
+  _cr_sha_classified="$(_gs_eu2_classify_sha_decision "${_cr_ann_sha}" "${_cr_prop_sha}")"
+  if [[ "${_cr_sha_classified}" == "SHA" && \
+        "$(_gs_eu2_record_get "${_cr_i}" decision)" == "SKIP" ]]; then
+    _gs_eu2_record_set "${_cr_i}" decision "SHA"
+  fi
+
+  # Phase 5: floating/prerelease skip annotations — add error_message to explain up-to-date SKIP.
+  # Guard: skip-gated records already have error_message set; do not overwrite.
+  if [[ -z "${_cr_skip_reason}" && \
+        "$(_gs_eu2_record_get "${_cr_i}" decision)" == "SKIP" && \
+        "${_cr_prop}" != "${_cr_cur}" ]] && \
+     _gs_eu2_is_unversioned "${_cr_cur}"; then
+    _gs_eu2_record_set "${_cr_i}" error_message \
+      "floating reference (${_cr_cur}) — pin manually to adopt proposed version"
+  fi
+
+  # Annotate SKIP when proposed is prerelease but current is stable.
+  if [[ -z "${_cr_skip_reason}" && \
+        "$(_gs_eu2_record_get "${_cr_i}" decision)" == "SKIP" && \
+        -z "$(_gs_eu2_record_get "${_cr_i}" error_message)" && \
+        -n "${_cr_prop}" && "${_cr_prop}" != "${_cr_cur}" ]] && \
+     _gs_eu2_is_prerelease "${_cr_prop}" && ! _gs_eu2_is_prerelease "${_cr_cur}"; then
+    _gs_eu2_record_set "${_cr_i}" error_message \
+      "proposed is prerelease — pin manually when stable ships"
+  fi
+}
+
+# _gs_eu2_compute_reason_label — compute the reason suffix for non-AUTO decisions.
+#
+# Args:    $1 record_index — 0-based index into the parallel record arrays
+#          $2 decision     — current decision string (HOLD/MANUAL/LOCK/SKIP/etc.)
+#          $3 current_ver  — current_version field value
+#          $4 proposed_ver — proposed_version field value
+#          $5 major_hint   — major_hint field value (may be empty)
+#          $6 lock_reason  — lock_reason field value (may be empty)
+# Reads:   nothing beyond args
+# Prints:  reason string (e.g. "  ← major pin (26.x available)") or "" (empty)
+# Returns: 0 always
+# Side fx: none
+_gs_eu2_compute_reason_label() {
+  local _rl_i="${1}"
+  local _rl_decision="${2}"
+  local _rl_cur="${3}"
+  local _rl_prop="${4}"
+  local _rl_major="${5}"
+  local _rl_lock_reason="${6}"
+  local _rl_reason=""
+
+  case "${_rl_decision}" in
+    HOLD)
+      if [[ -n "${_rl_prop}" ]]; then
+        local _rl_delta _rl_cur_maj _rl_prop_maj
+        _rl_delta="$(_gs_eu2_semver_delta "${_rl_cur}" "${_rl_prop}")"
+        _rl_cur_maj="${_rl_cur#v}"; _rl_cur_maj="${_rl_cur_maj%%.*}"
+        _rl_prop_maj="${_rl_prop#v}"; _rl_prop_maj="${_rl_prop_maj%%.*}"
+        # Strip path-like prefix from major labels (e.g. "tags/2" → "2")
+        _rl_cur_maj="${_rl_cur_maj##*[^0-9]}"
+        _rl_prop_maj="${_rl_prop_maj##*[^0-9]}"
+        if [[ -n "${_rl_major}" ]]; then
+          _rl_reason="  ← major pin (${_rl_prop_maj}.x available)"
+        elif [[ "${_rl_delta}" == "major" ]]; then
+          _rl_reason="  ← major bump (${_rl_cur_maj}→${_rl_prop_maj})"
+        fi
+      fi
+      ;;
+    MANUAL)
+      _rl_reason="  ← manual flag"
+      ;;
+    LOCK)
+      _rl_reason="  ← locked: ${_rl_lock_reason}"
+      ;;
+  esac
+
+  printf '%s' "${_rl_reason}"
+}
+
+# _gs_eu2_compute_change_string — compute the inline change/status string for the main output line.
+#
+# Args:    $1 record_index — 0-based index into the parallel record arrays
+#          $2 decision     — current decision string
+#          $3 current_ver  — current_version field value
+#          $4 proposed_ver — proposed_version field value
+#          $5 err_msg      — error_message field value (may be empty)
+#          $6 manual       — manual flag value ("true" or "")
+#          $7 override     — override flag value ("true" or "")
+#          $8 reason_label — pre-computed reason label from _gs_eu2_compute_reason_label
+# Reads:   record field "skip_reason" (for downgrade SKIP check), "tag_channel_prefix",
+#          "annotation_sha", "proposed_sha"
+# Prints:  change string (e.g. "  1.2.0 → 1.3.0  ← major bump") or status text
+# Returns: 0 always
+# Side fx: none
+_gs_eu2_compute_change_string() {
+  local _cs_i="${1}"
+  local _cs_decision="${2}"
+  local _cs_cur="${3}"
+  local _cs_prop="${4}"
+  local _cs_err="${5}"
+  local _cs_manual="${6}"
+  local _cs_override="${7}"
+  local _cs_reason="${8}"
+  local _cs_change=""
+
+  if [[ "${_cs_decision}" == "SHA" ]]; then
+    local _cs_sha_new _cs_sha_ann
+    _cs_sha_new="$(_gs_eu2_record_get "${_cs_i}" proposed_sha)"
+    _cs_sha_ann="$(_gs_eu2_record_get "${_cs_i}" annotation_sha)"
+    _cs_change="  sha:${_cs_sha_ann:0:8} → sha:${_cs_sha_new:0:8}"
+  elif [[ "${_cs_decision}" == "SKIP" && -n "${_cs_err}" ]]; then
+    _cs_change="  (${_cs_err})"
+  elif [[ "${_cs_decision}" == "SKIP" && -z "${_cs_err}" && -n "${_cs_prop}" && "${_cs_prop}" != "${_cs_cur}" ]]; then
+    # Detect downgrade: proposed non-empty, differs from current, no error yet.
+    # If a downgrade is detected, set _cs_err and display it as "(would downgrade: ...)".
+    # If no downgrade, display the version arrow ("cur → prop") via the prop!=cur branch.
+    local _cs_tcp_disp
+    _cs_tcp_disp="$(_gs_eu2_record_get "${_cs_i}" tag_channel_prefix)"
+    local _cs_cur_cmp="${_cs_cur#v}" _cs_prop_cmp="${_cs_prop#v}"
+    [[ -n "${_cs_tcp_disp}" ]] && _cs_cur_cmp="${_cs_cur_cmp#"${_cs_tcp_disp}"}"
+    [[ -n "${_cs_tcp_disp}" ]] && _cs_prop_cmp="${_cs_prop_cmp#"${_cs_tcp_disp}"}"
+    local _cs_cv_norm _cs_pv_norm _cs_oldest
+    _cs_cv_norm="$(perl -pe 's/(\d{8})[0-9a-fA-F]+$/$1/' <<< "${_cs_cur_cmp}")"
+    _cs_pv_norm="$(perl -pe 's/(\d{8})[0-9a-fA-F]+$/$1/' <<< "${_cs_prop_cmp}")"
+    _cs_oldest="$(printf '%s\n%s\n' "${_cs_cv_norm}" "${_cs_pv_norm}" | sort -V | head -1)"
+    if [[ "${_cs_oldest}" == "${_cs_pv_norm}" && "${_cs_oldest}" != "${_cs_cv_norm}" ]]; then
+      local _cs_channel
+      _cs_channel="$(_gs_eu2_record_get "${_cs_i}" channel)"
+      _cs_err="would downgrade: current ${_cs_cur_cmp} → ${_cs_channel:-proposed} ${_cs_prop_cmp}"
+      _cs_change="  (${_cs_err})"
+    else
+      # No downgrade — show version arrow (mirrors the generic prop!=cur branch below)
+      _cs_change="  ${_cs_cur} → ${_cs_prop}${_cs_reason}"
+    fi
+  elif [[ -n "${_cs_prop}" && "${_cs_prop}" != "${_cs_cur}" ]]; then
+    _cs_change="  ${_cs_cur} → ${_cs_prop}${_cs_reason}"
+  elif [[ -n "${_cs_err}" ]]; then
+    _cs_change="  (${_cs_err})"
+  elif [[ "${_cs_decision}" == "SKIP" ]]; then
+    if [[ "${_cs_manual}" == "true" ]]; then
+      _cs_change="  (up to date — manual)"
+    elif [[ "${_cs_override}" == "true" ]]; then
+      _cs_change="  (up to date — override)"
+    else
+      _cs_change="  (up to date)"
+    fi
+  elif [[ -n "${_cs_reason}" ]]; then
+    _cs_change="${_cs_reason}"
+  fi
+
+  printf '%s' "${_cs_change}"
+}
+
+# _gs_eu2_should_hide_record — evaluate whether a record should be suppressed under --changes-only.
+#
+# Args:    $1 record_index — 0-based index into the parallel record arrays
+#          $2 decision     — current decision string
+#          $3 err_msg      — error_message field value (may be empty)
+#          $4 skip_reason  — skip_reason field value (may be empty — distinguishes FROZEN vs SKIP)
+#          $5 major_hint   — major_hint field value (for FALLBACK signal)
+#          $6 cur          — current_version value
+# Reads:   _GS_EU2_CFG[changes_only], _GS_EU2_CFG[unstable], _GS_EU2_CFG[stable],
+#          _GS_EU2_CFG[env_file]; record fields for signal detection
+# Prints:  nothing
+# Returns: 0 (hide the record) | 1 (show the record)
+# Side fx: reads env file for replace-drift detection
+#
+# A record is hidden only when: decision=SKIP, error_message empty, no skip_reason,
+# AND none of: FALLBACK signal, WATCH signal, UNSTABLE/STABLE info sub-lines, DRIFT, REPLACE-DRIFT.
+_gs_eu2_should_hide_record() {
+  local _sh_i="${1}"
+  local _sh_decision="${2}"
+  local _sh_err="${3}"
+  local _sh_skip_reason="${4}"
+  local _sh_major="${5}"
+  local _sh_cur="${6}"
+
+  # Gate: only evaluate when --changes-only is active and the record is a plain up-to-date SKIP
+  if [[ "${_GS_EU2_CFG[changes_only]:-false}" != "true" \
+        || "${_sh_decision}" != "SKIP" \
+        || -n "${_sh_err}" \
+        || -n "${_sh_skip_reason}" ]]; then
+    return 1  # show
+  fi
+
+  # Tentatively hide; check each signal that would prevent hiding
+  # [FALLBACK] signal: range annotation fell back to LOW major
+  local _sh_fallback
+  _sh_fallback="$(_gs_eu2_record_get "${_sh_i}" using_fallback_major)"
+  if [[ "${_sh_fallback}" == "true" && -n "${_sh_major}" ]]; then
+    return 1  # show
+  fi
+
+  # [WATCH] signal: new runtime generation detected
+  local _sh_wm_depth
+  _sh_wm_depth="$(_gs_eu2_record_get "${_sh_i}" watch_major_depth)"
+  if [[ -n "${_sh_wm_depth}" ]]; then
+    local _sh_wm_lat
+    _sh_wm_lat="$(_gs_eu2_record_get "${_sh_i}" latest_unconstrained)"
+    [[ -z "${_sh_wm_lat}" ]] && _sh_wm_lat="$(_gs_eu2_record_get "${_sh_i}" proposed_version)"
+    if [[ -n "${_sh_wm_lat}" && -n "${_sh_cur}" ]]; then
+      local _sh_wm_cpfx _sh_wm_lpfx
+      _sh_wm_cpfx="$(_gs_eu2_version_prefix "${_sh_cur}" "${_sh_wm_depth}")"
+      _sh_wm_lpfx="$(_gs_eu2_version_prefix "${_sh_wm_lat}" "${_sh_wm_depth}")"
+      if [[ -n "${_sh_wm_cpfx}" && -n "${_sh_wm_lpfx}" \
+            && "${_sh_wm_cpfx}" != "${_sh_wm_lpfx}" ]]; then
+        local _sh_wm_hi
+        _sh_wm_hi="$(printf '%s\n%s\n' "${_sh_wm_cpfx}" "${_sh_wm_lpfx}" | sort -V | tail -1)"
+        [[ "${_sh_wm_hi}" == "${_sh_wm_lpfx}" ]] && return 1  # show
+      fi
+    fi
+  fi
+
+  # [UNSTABLE] info sub-line signal
+  if [[ "${_GS_EU2_CFG[unstable]:-}" == "info" && "${_GS_EU2_CFG[stable]:-}" != "full" ]]; then
+    local _sh_unstable
+    _sh_unstable="$(_gs_eu2_record_get "${_sh_i}" unstable_proposed)"
+    [[ -n "${_sh_unstable}" && "${_sh_unstable}" != "${_sh_cur}" ]] && return 1  # show
+  fi
+
+  # [STABLE] info sub-line signal
+  if [[ "${_GS_EU2_CFG[stable]:-}" == "info" ]]; then
+    local _sh_stable
+    _sh_stable="$(_gs_eu2_record_get "${_sh_i}" stable_proposed)"
+    [[ -n "${_sh_stable}" && "${_sh_stable}" != "${_sh_cur}" ]] && return 1  # show
+  fi
+
+  # [DRIFT] signal: VAR= differs from annotation version or SHA
+  local _sh_actual _sh_ann_ver _sh_use_sha _sh_ann_sha
+  _sh_actual="$(_gs_eu2_record_get "${_sh_i}" actual_var_value)"
+  _sh_ann_ver="$(_gs_eu2_record_get "${_sh_i}" current_version)"
+  _sh_use_sha="$(_gs_eu2_record_get "${_sh_i}" use_sha)"
+  _sh_ann_sha="$(_gs_eu2_record_get "${_sh_i}" annotation_sha)"
+  if [[ "${_sh_use_sha}" == "true" ]]; then
+    [[ -n "${_sh_actual}" && -n "${_sh_ann_sha}" \
+       && "${_sh_actual}" != "${_sh_ann_sha}" ]] && return 1  # show
+  else
+    if [[ -z "${_sh_actual}" && -n "${_sh_ann_ver}" ]]; then
+      return 1  # show
+    elif [[ -n "${_sh_actual}" && -n "${_sh_ann_ver}" \
+            && "${_sh_actual}" != "${_sh_ann_ver}" ]]; then
+      return 1  # show
+    fi
+  fi
+
+  # [REPLACE-DRIFT] signal: any replace target whose actual value differs from expand_template(cur)
+  local _sh_rep_tgts _sh_rep_tmpls
+  _sh_rep_tgts="$(_gs_eu2_record_get "${_sh_i}" replace_targets)"
+  _sh_rep_tmpls="$(_gs_eu2_record_get "${_sh_i}" replace_templates)"
+  if [[ -n "${_sh_rep_tgts}" ]]; then
+    local _sh_old_ifs="${IFS}"
+    IFS=$'\x1f'
+    local _sh_rt_arr _sh_rm_arr
+    read -ra _sh_rt_arr <<< "${_sh_rep_tgts}"
+    read -ra _sh_rm_arr <<< "${_sh_rep_tmpls}"
+    IFS="${_sh_old_ifs}"
+    local _sh_ri
+    for (( _sh_ri = 0; _sh_ri < ${#_sh_rt_arr[@]}; _sh_ri++ )); do
+      local _sh_rt="${_sh_rt_arr[${_sh_ri}]}"
+      local _sh_rm="${_sh_rm_arr[${_sh_ri}]:-}"
+      local _sh_tgt_actual _sh_exp_cur
+      _sh_tgt_actual="$(grep -m1 "^${_sh_rt}=" "${_GS_EU2_CFG[env_file]}" 2>/dev/null \
+        | cut -d= -f2-)"
+      _sh_exp_cur="$(_gs_eu2_expand_replace_template "${_sh_rm}" "${_sh_ann_ver:-}")"
+      if [[ "${_sh_tgt_actual}" != "${_sh_exp_cur}" ]]; then
+        return 1  # show
+      fi
+    done
+  fi
+
+  return 0  # hide
+}
+
+# _gs_eu2_print_check_summary — print the post-loop separator + summary line + secondary signals.
+#
+# Args:    $1  n_auto            $2  n_hold         $3  n_skip
+#          $4  n_error           $5  n_manual        $6  n_sha
+#          $7  n_lock            $8  n_frozen        $9  n_fallback
+#          $10 n_watch           $11 n_drift         $12 n_drift_fixable
+#          $13 n_downgrade       $14 n_downgrade_force $15 n_hidden
+#          $16 n_sha_anno        $17 n_replace_drift  $18 n_replace_cascade
+#          $19 n_resolved        $20 n_warn_depends_on
+# Reads:   _GS_EU2_CFG[no_drift]
+# Prints:  separator line + summary line + optional secondary signals sub-line to stdout
+# Returns: 0 always
+# Side fx: none
+_gs_eu2_print_check_summary() {
+  local _ps_n_auto="${1}"
+  local _ps_n_hold="${2}"
+  local _ps_n_skip="${3}"
+  local _ps_n_error="${4}"
+  local _ps_n_manual="${5}"
+  local _ps_n_sha="${6}"
+  local _ps_n_lock="${7}"
+  local _ps_n_frozen="${8}"
+  local _ps_n_fallback="${9}"
+  local _ps_n_watch="${10}"
+  local _ps_n_drift="${11}"
+  local _ps_n_drift_fixable="${12}"
+  local _ps_n_downgrade="${13}"
+  local _ps_n_downgrade_force="${14}"
+  local _ps_n_hidden="${15}"
+  local _ps_n_sha_anno="${16}"
+  local _ps_n_replace_drift="${17}"
+  local _ps_n_replace_cascade="${18}"
+  local _ps_n_resolved="${19}"
+  local _ps_n_warn_depends_on="${20}"
+
+  local _ps_total=$(( _ps_n_auto + _ps_n_hold + _ps_n_skip + _ps_n_error + _ps_n_manual + _ps_n_sha + _ps_n_lock + _ps_n_frozen ))
+  printf '%-80s\n' "──────────────────────────────────────────────────────────────────────────────"
+  local _ps_checked_suffix="${_ps_total} checked"
+  (( _ps_n_hidden > 0 )) && _ps_checked_suffix="${_ps_total} checked, ${_ps_n_hidden} hidden"
+  # RESOLVE column: shown only when at least one RESOLVED record exists
+  local _ps_resolve_col=""
+  (( _ps_n_resolved > 0 )) && _ps_resolve_col=" ${_ps_n_resolved} RESOLVE,"
+  printf '  Summary: %d AUTO,%s %d SHA, %d HOLD, %d MANUAL, %d LOCK, %d SKIP, %d FROZEN, %d FALLBACK, %d ERROR  (%s)\n' \
+    "${_ps_n_auto}" "${_ps_resolve_col}" "${_ps_n_sha}" "${_ps_n_hold}" "${_ps_n_manual}" "${_ps_n_lock}" "${_ps_n_skip}" "${_ps_n_frozen}" "${_ps_n_fallback}" "${_ps_n_error}" "${_ps_checked_suffix}"
+
+  # Secondary signals sub-line: WATCH, DRIFT (with fixable count), DOWNGRADE, REPLACE-DRIFT, +sha, +replace.
+  # DRIFT, DOWNGRADE, REPLACE-DRIFT, and +replace suppressed when --no-drift is active.
+  # +sha follows WATCH (unconditional — not suppressed by --no-drift).
+  # Entire line omitted when all relevant signals are zero.
+  local _ps_sec_watch="${_ps_n_watch}"
+  local _ps_sec_drift=0 _ps_sec_fixable=0 _ps_sec_down=0 _ps_sec_down_force=0
+  local _ps_sec_sha_anno="${_ps_n_sha_anno}"
+  local _ps_sec_replace_drift=0 _ps_sec_replace_cascade=0
+  local _ps_sec_resolved="${_ps_n_resolved}"
+  if [[ "${_GS_EU2_CFG[no_drift]:-false}" != "true" ]]; then
+    _ps_sec_drift="${_ps_n_drift}"
+    _ps_sec_fixable="${_ps_n_drift_fixable}"
+    _ps_sec_down="${_ps_n_downgrade}"
+    _ps_sec_down_force="${_ps_n_downgrade_force}"
+    _ps_sec_replace_drift="${_ps_n_replace_drift}"
+    _ps_sec_replace_cascade="${_ps_n_replace_cascade}"
+  fi
+  if (( _ps_sec_watch > 0 || _ps_sec_drift > 0 || _ps_sec_down > 0 || _ps_sec_down_force > 0 || _ps_sec_sha_anno > 0 || _ps_sec_replace_drift > 0 || _ps_sec_replace_cascade > 0 || _ps_sec_resolved > 0 || _ps_n_warn_depends_on > 0 )); then
+    printf '    ↳ %d WATCH · %d DRIFT (%d fixable) · %d DOWNGRADE · %d FORCE-DOWNGRADE · %d REPLACE-DRIFT · %d +sha · %d +replace' \
+      "${_ps_sec_watch}" "${_ps_sec_drift}" "${_ps_sec_fixable}" "${_ps_sec_down}" "${_ps_sec_down_force}" "${_ps_sec_replace_drift}" "${_ps_sec_sha_anno}" "${_ps_sec_replace_cascade}"
+    (( _ps_sec_resolved > 0 )) && printf ' · +resolve %d' "${_ps_sec_resolved}"
+    (( _ps_n_warn_depends_on > 0 )) && printf ' · %d depends-on-warn' "${_ps_n_warn_depends_on}"
+    printf '\n'
+  fi
+}
+
 # _gs_eu2_run_check — main check loop: fetch, classify, and stream results for all records.
 #
 # Args:    none
@@ -313,14 +763,8 @@ _gs_eu2_run_check() {
 
   # Dynamic column width: pre-scan all env_var names so the → arrow aligns
   # across every record in this run, regardless of variable name length.
-  local _max_var_len=40
-  local _vl _j _vname _tmpval
-  for (( _j = 0; _j < _count; _j++ )); do
-    _vname="_GS_EU2_REC_${_j}_env_var"
-    _tmpval="${!_vname:-}"
-    _vl="${#_tmpval}"
-    (( _vl > _max_var_len )) && _max_var_len="${_vl}"
-  done
+  _gs_eu2_check_prescan_width "${_count}"
+  local _max_var_len="${_GS_EU2_MAX_VAR_LEN}"
 
   # ── Parallel fan-out ─────────────────────────────────────────────────────
   # When --jobs > 1 and profile is off: spawn _count background workers (capped
@@ -520,8 +964,14 @@ _gs_eu2_run_check() {
     local _skip_reason
     _skip_reason="$(_gs_eu2_record_get "${_i}" skip_reason)"
 
-    # Apply decision classifier (refines any AUTO decision the fetcher set)
-    local _cur _prop _override _manual _major _major_min _note _fetcher_decision
+    # ── Classify: decision classifier + lock gate + SHA + skip annotations ──
+    # _gs_eu2_classify_record refines the fetcher's AUTO decision and applies all
+    # annotation-based overrides (force_auto, lock gate, SHA upgrade, skip annotations).
+    # After this call the record's "decision" field is final.
+    _gs_eu2_classify_record "${_i}"
+
+    # Read fields needed for display — classification is complete at this point.
+    local _cur _prop _override _manual _major _major_min _note _lock_reason
     _cur="$(_gs_eu2_record_get "${_i}" current_version)"
     _prop="$(_gs_eu2_record_get "${_i}" proposed_version)"
     _override="$(_gs_eu2_record_get "${_i}" override)"
@@ -529,93 +979,7 @@ _gs_eu2_run_check() {
     _major="$(_gs_eu2_record_get "${_i}" major_hint)"
     _major_min="$(_gs_eu2_record_get "${_i}" major_hint_min)"
     _note="$(_gs_eu2_record_get "${_i}" note)"
-    _fetcher_decision="$(_gs_eu2_record_get "${_i}" decision)"
-
-    if [[ "${_fetcher_decision}" == "AUTO" || -z "${_fetcher_decision}" ]]; then
-      local _classified
-      # --force-auto: bypass (manual) and (override) annotation flags by passing "" so
-      # classify_decision never sees them.  The HOLD gate is handled after classification.
-      local _eff_override="${_override}" _eff_manual="${_manual}"
-      if [[ "${_GS_EU2_CFG[force_auto]:-false}" == "true" ]]; then
-        _eff_override="" _eff_manual=""
-      fi
-      # (tag-channel-prefix): pre-strip the channel prefix from _cur and _prop so that
-      # decide.sh's internal sort -V downgrade check compares pure semver strings.
-      # The round-trip prefix is display/storage-only; classify_decision must not see it.
-      local _cur_cls="${_cur}" _prop_cls="${_prop}"
-      local _tcp_cls
-      _tcp_cls="$(_gs_eu2_record_get "${_i}" tag_channel_prefix)"
-      if [[ -n "${_tcp_cls}" ]]; then
-        _cur_cls="${_cur_cls#v}"; _cur_cls="${_cur_cls#"${_tcp_cls}"}"
-        _prop_cls="${_prop_cls#v}"; _prop_cls="${_prop_cls#"${_tcp_cls}"}"
-      fi
-      # Range annotation: when the fetcher fell back to the LOW major, pass major_hint_min
-      # to classify_decision so the HOLD guard accepts the fallback version (e.g., 25.x
-      # is valid against pin=25, not pin=26 which would HOLD).
-      local _using_fallback _major_cls="${_major}"
-      _using_fallback="$(_gs_eu2_record_get "${_i}" using_fallback_major)"
-      if [[ "${_using_fallback}" == "true" && -n "${_major_min}" ]]; then
-        _major_cls="${_major_min}"
-      fi
-      _classified="$(_gs_eu2_classify_decision "${_cur_cls}" "${_prop_cls}" "${_eff_override}" "${_eff_manual}" "${_major_cls}" "${_GS_EU2_CFG[unstable]:-}")"
-      # --force-auto: upgrade HOLD to AUTO (bypasses major-bump guard / major_hint pin guard)
-      if [[ "${_GS_EU2_CFG[force_auto]:-false}" == "true" && "${_classified}" == "HOLD" ]]; then
-        _classified="AUTO"
-      fi
-      _gs_eu2_record_set "${_i}" decision "${_classified}"
-    fi
-
-    # Lock gate: (lock:REASON) overrides AUTO/HOLD/MANUAL/SKIP(classifier) to LOCK.
-    # Fires AFTER force-auto (HOLD→AUTO upgrade) — lock is immune to --force-auto.
-    # Does NOT override ERROR (fetch failures must surface).
-    # Does NOT override SKIP from the skip gate (when _skip_reason is set) —
-    # only overrides SKIP from the classifier (current==proposed with no skip flag).
-    local _lock_reason
     _lock_reason="$(_gs_eu2_record_get "${_i}" lock_reason)"
-    if [[ -n "${_lock_reason}" && \
-          "$(_gs_eu2_record_get "${_i}" decision)" != "ERROR" && \
-          -z "${_skip_reason}" ]]; then
-      _gs_eu2_record_set "${_i}" decision "LOCK"
-      _gs_eu2_record_set "${_i}" error_message "${_lock_reason}"
-    fi
-
-    # SHA classification: independent of version decision.
-    # When a repo is tracking HEAD (git:owner/repo flag), the annotation SHA may
-    # lag behind even when the version is current.  Upgrade the decision to SHA
-    # so the apply step can rewrite the annotation without touching VAR=.
-    local _ann_sha _prop_sha _sha_classified
-    _ann_sha="$(_gs_eu2_record_get "${_i}" annotation_sha)"
-    _prop_sha="$(_gs_eu2_record_get "${_i}" proposed_sha)"
-    _sha_classified="$(_gs_eu2_classify_sha_decision "${_ann_sha}" "${_prop_sha}")"
-    if [[ "${_sha_classified}" == "SHA" && \
-          "$(_gs_eu2_record_get "${_i}" decision)" == "SKIP" ]]; then
-      _gs_eu2_record_set "${_i}" decision "SHA"
-    fi
-
-    # Annotate SKIP on a floating-reference current with a human-readable reason.
-    # Guard: skip-gated records already have error_message set by the skip gate above;
-    # do not overwrite it (for skip-gated records _prop is empty, so _prop != _cur is
-    # vacuously true and would fire incorrectly without this guard).
-    if [[ -z "${_skip_reason}" && \
-          "$(_gs_eu2_record_get "${_i}" decision)" == "SKIP" && \
-          "${_prop}" != "${_cur}" ]] && \
-       _gs_eu2_is_unversioned "${_cur}"; then
-      _gs_eu2_record_set "${_i}" error_message \
-        "floating reference (${_cur}) — pin manually to adopt proposed version"
-    fi
-
-    # Annotate SKIP when proposed is prerelease but current is stable.
-    # Guard: skip-gated records already have error_message set; -z check below would
-    # prevent overwrite anyway, but the explicit _skip_reason guard is consistent and
-    # avoids calling _gs_eu2_is_prerelease with an empty _prop (which fetcher never set).
-    if [[ -z "${_skip_reason}" && \
-          "$(_gs_eu2_record_get "${_i}" decision)" == "SKIP" && \
-          -z "$(_gs_eu2_record_get "${_i}" error_message)" && \
-          -n "${_prop}" && "${_prop}" != "${_cur}" ]] && \
-       _gs_eu2_is_prerelease "${_prop}" && ! _gs_eu2_is_prerelease "${_cur}"; then
-      _gs_eu2_record_set "${_i}" error_message \
-        "proposed is prerelease — pin manually when stable ships"
-    fi
 
     # Stream this record immediately — don't buffer until all fetches complete
     local _decision _err _tag _change _reason
@@ -641,180 +1005,19 @@ _gs_eu2_run_check() {
       *)        _tag="[SKIP   ]"; (( ++_n_skip ))     || true ;;
     esac
 
-    # Compute reason label for non-AUTO decisions
-    _reason=""
-    case "${_decision}" in
-      HOLD)
-        if [[ -n "${_prop}" ]]; then
-          local _delta _cur_maj _prop_maj
-          _delta="$(_gs_eu2_semver_delta "${_cur}" "${_prop}")"
-          _cur_maj="${_cur#v}"; _cur_maj="${_cur_maj%%.*}"
-          _prop_maj="${_prop#v}"; _prop_maj="${_prop_maj%%.*}"
-          # Strip path-like prefix from major labels (e.g. "tags/2" → "2")
-          _cur_maj="${_cur_maj##*[^0-9]}"
-          _prop_maj="${_prop_maj##*[^0-9]}"
-          if [[ -n "${_major}" ]]; then
-            # Proposed escapes major_hint pin
-            _reason="  ← major pin (${_prop_maj}.x available)"
-          elif [[ "${_delta}" == "major" ]]; then
-            # Unpinned major bump
-            _reason="  ← major bump (${_cur_maj}→${_prop_maj})"
-          fi
-        fi
-        ;;
-      MANUAL)
-        _reason="  ← manual flag"
-        ;;
-      LOCK)
-        _reason="  ← locked: ${_lock_reason}"
-        ;;
-      SKIP)
-        # Detect downgrade: proposed non-empty, differs from current, no error yet
-        if [[ -z "${_err}" && -n "${_prop}" && "${_prop}" != "${_cur}" ]]; then
-          local _tcp_disp
-          _tcp_disp="$(_gs_eu2_record_get "${_i}" tag_channel_prefix)"
-          local _cur_cmp="${_cur#v}" _prop_cmp="${_prop#v}"
-          [[ -n "${_tcp_disp}" ]] && _cur_cmp="${_cur_cmp#"${_tcp_disp}"}"
-          [[ -n "${_tcp_disp}" ]] && _prop_cmp="${_prop_cmp#"${_tcp_disp}"}"
-          local _cv_norm _pv_norm _oldest
-          _cv_norm="$(perl -pe 's/(\d{8})[0-9a-fA-F]+$/$1/' <<< "${_cur_cmp}")"
-          _pv_norm="$(perl -pe 's/(\d{8})[0-9a-fA-F]+$/$1/' <<< "${_prop_cmp}")"
-          _oldest="$(printf '%s\n%s\n' "${_cv_norm}" "${_pv_norm}" | sort -V | head -1)"
-          if [[ "${_oldest}" == "${_pv_norm}" && "${_oldest}" != "${_cv_norm}" ]]; then
-            local _channel
-            _channel="$(_gs_eu2_record_get "${_i}" channel)"
-            _err="would downgrade: current ${_cur_cmp} → ${_channel:-proposed} ${_prop_cmp}"
-          fi
-        fi
-        ;;
-    esac
+    # ── Reason label + change string ─────────────────────────────────────────
+    # _gs_eu2_compute_reason_label: HOLD/MANUAL/LOCK reason suffix (e.g. "← major pin")
+    # _gs_eu2_compute_change_string: full inline change text (e.g. "1.2.0 → 1.3.0 ← major pin")
+    local _reason _change
+    _reason="$(_gs_eu2_compute_reason_label "${_i}" "${_decision}" "${_cur}" "${_prop}" "${_major}" "${_lock_reason}")"
+    _change="$(_gs_eu2_compute_change_string "${_i}" "${_decision}" "${_cur}" "${_prop}" "${_err}" "${_manual}" "${_override}" "${_reason}")"
 
-    _change=""
-    if [[ "${_decision}" == "SHA" ]]; then
-      local _sha_disp_new _sha_disp_ann
-      _sha_disp_new="$(_gs_eu2_record_get "${_i}" proposed_sha)"
-      _sha_disp_ann="$(_gs_eu2_record_get "${_i}" annotation_sha)"
-      _change="  sha:${_sha_disp_ann:0:8} → sha:${_sha_disp_new:0:8}"
-    elif [[ "${_decision}" == "SKIP" && -n "${_err}" ]]; then
-      _change="  (${_err})"
-    elif [[ -n "${_prop}" && "${_prop}" != "${_cur}" ]]; then
-      _change="  ${_cur} → ${_prop}${_reason}"
-    elif [[ -n "${_err}" ]]; then
-      _change="  (${_err})"
-    elif [[ "${_decision}" == "SKIP" ]]; then
-      if [[ "${_manual}" == "true" ]]; then
-        _change="  (up to date — manual)"
-      elif [[ "${_override}" == "true" ]]; then
-        _change="  (up to date — override)"
-      else
-        _change="  (up to date)"
-      fi
-    elif [[ -n "${_reason}" ]]; then
-      _change="${_reason}"
-    fi
-
-    # --changes-only hide gate: suppress purely up-to-date records from output.
-    # A record is hidden only when ALL of the following hold:
-    #   • decision=SKIP, error_message empty (genuine up-to-date — not FROZEN/skip-gate)
-    #   • no [DRIFT] condition (checked from record fields, independent of --no-drift display)
-    #   • no [WATCH] signal
-    #   • no [FALLBACK] signal
-    #   • no [UNSTABLE]/[STABLE] info sub-lines
-    # (note:TEXT) is the only sub-line that does NOT prevent hiding — it is metadata.
-    # Signals are pre-computed from record fields so the gate is atomic: either the
-    # full record (main line + all sub-lines) prints or nothing does.
-    local _should_hide=false
-    if [[ "${_GS_EU2_CFG[changes_only]:-false}" == "true" \
-          && "${_decision}" == "SKIP" && -z "${_err}" && -z "${_skip_reason}" ]]; then
-      _should_hide=true
-      # [FALLBACK] signal: range annotation fell back to LOW major
-      local _co_fallback
-      _co_fallback="$(_gs_eu2_record_get "${_i}" using_fallback_major)"
-      [[ "${_co_fallback}" == "true" && -n "${_major_min}" ]] && _should_hide=false
-      # [WATCH] signal: new runtime generation detected
-      if [[ "${_should_hide}" == "true" ]]; then
-        local _co_wm_depth
-        _co_wm_depth="$(_gs_eu2_record_get "${_i}" watch_major_depth)"
-        if [[ -n "${_co_wm_depth}" ]]; then
-          local _co_wm_lat
-          _co_wm_lat="$(_gs_eu2_record_get "${_i}" latest_unconstrained)"
-          [[ -z "${_co_wm_lat}" ]] && _co_wm_lat="${_prop}"
-          if [[ -n "${_co_wm_lat}" && -n "${_cur}" ]]; then
-            local _co_wm_cpfx _co_wm_lpfx
-            _co_wm_cpfx="$(_gs_eu2_version_prefix "${_cur}" "${_co_wm_depth}")"
-            _co_wm_lpfx="$(_gs_eu2_version_prefix "${_co_wm_lat}" "${_co_wm_depth}")"
-            if [[ -n "${_co_wm_cpfx}" && -n "${_co_wm_lpfx}" \
-                  && "${_co_wm_cpfx}" != "${_co_wm_lpfx}" ]]; then
-              local _co_wm_hi
-              _co_wm_hi="$(printf '%s\n%s\n' "${_co_wm_cpfx}" "${_co_wm_lpfx}" | sort -V | tail -1)"
-              [[ "${_co_wm_hi}" == "${_co_wm_lpfx}" ]] && _should_hide=false
-            fi
-          fi
-        fi
-      fi
-      # [UNSTABLE] info sub-line signal: mirror the exact display condition (including stable!=full guard)
-      if [[ "${_should_hide}" == "true" && "${_GS_EU2_CFG[unstable]:-}" == "info" \
-            && "${_GS_EU2_CFG[stable]:-}" != "full" ]]; then
-        local _co_unstable
-        _co_unstable="$(_gs_eu2_record_get "${_i}" unstable_proposed)"
-        [[ -n "${_co_unstable}" && "${_co_unstable}" != "${_cur}" ]] && _should_hide=false
-      fi
-      # [STABLE] info sub-line signal
-      if [[ "${_should_hide}" == "true" && "${_GS_EU2_CFG[stable]:-}" == "info" ]]; then
-        local _co_stable
-        _co_stable="$(_gs_eu2_record_get "${_i}" stable_proposed)"
-        [[ -n "${_co_stable}" && "${_co_stable}" != "${_cur}" ]] && _should_hide=false
-      fi
-      # [DRIFT] signal: checked independently of --no-drift (drift exists even when display suppressed)
-      if [[ "${_should_hide}" == "true" ]]; then
-        local _co_actual _co_ann_ver _co_use_sha _co_ann_sha
-        _co_actual="$(_gs_eu2_record_get "${_i}" actual_var_value)"
-        _co_ann_ver="$(_gs_eu2_record_get "${_i}" current_version)"
-        _co_use_sha="$(_gs_eu2_record_get "${_i}" use_sha)"
-        _co_ann_sha="$(_gs_eu2_record_get "${_i}" annotation_sha)"
-        if [[ "${_co_use_sha}" == "true" ]]; then
-          [[ -n "${_co_actual}" && -n "${_co_ann_sha}" \
-             && "${_co_actual}" != "${_co_ann_sha}" ]] && _should_hide=false
-        else
-          if [[ -z "${_co_actual}" && -n "${_co_ann_ver}" ]]; then
-            _should_hide=false
-          elif [[ -n "${_co_actual}" && -n "${_co_ann_ver}" \
-                  && "${_co_actual}" != "${_co_ann_ver}" ]]; then
-            _should_hide=false
-          fi
-        fi
-      fi
-      # [REPLACE-DRIFT] signal: any replace target whose actual value differs from
-      # expand_template(cur) is a drift condition — reveal SKIP records that would otherwise hide.
-      # Checked independently of --no-drift (same pattern as [DRIFT] gate above).
-      if [[ "${_should_hide}" == "true" ]]; then
-        local _co_rep_tgts _co_rep_tmpls
-        _co_rep_tgts="$(_gs_eu2_record_get "${_i}" replace_targets)"
-        _co_rep_tmpls="$(_gs_eu2_record_get "${_i}" replace_templates)"
-        if [[ -n "${_co_rep_tgts}" ]]; then
-          local _co_old_ifs="${IFS}"
-          IFS=$'\x1f'
-          local _co_rt_arr _co_rm_arr
-          read -ra _co_rt_arr <<< "${_co_rep_tgts}"
-          read -ra _co_rm_arr <<< "${_co_rep_tmpls}"
-          IFS="${_co_old_ifs}"
-          local _co_ri
-          for (( _co_ri = 0; _co_ri < ${#_co_rt_arr[@]}; _co_ri++ )); do
-            local _co_rt="${_co_rt_arr[${_co_ri}]}"
-            local _co_rm="${_co_rm_arr[${_co_ri}]:-}"
-            local _co_tgt_actual _co_exp_cur
-            _co_tgt_actual="$(grep -m1 "^${_co_rt}=" "${_GS_EU2_CFG[env_file]}" 2>/dev/null \
-              | cut -d= -f2-)"
-            _co_exp_cur="$(_gs_eu2_expand_replace_template "${_co_rm}" "${_cur:-}")"
-            if [[ "${_co_tgt_actual}" != "${_co_exp_cur}" ]]; then
-              _should_hide=false
-              break
-            fi
-          done
-        fi
-      fi
-    fi
-    if [[ "${_should_hide}" == "true" ]]; then
+    # ── Changes-only hide gate ────────────────────────────────────────────────
+    # _gs_eu2_should_hide_record returns 0 (hide) when --changes-only is active and the
+    # record is a purely up-to-date SKIP with no signals (WATCH/FALLBACK/DRIFT/etc.).
+    # The _n_hidden counter and the `continue` statement remain here — the predicate
+    # function cannot `continue` in the caller's loop.
+    if _gs_eu2_should_hide_record "${_i}" "${_decision}" "${_err}" "${_skip_reason}" "${_major}" "${_cur}"; then
       (( ++_n_hidden )) || true
       if [[ "${_GS_EU2_TALLY_ACTIVE}" != "1" ]]; then
         printf '\r%*s\r' "$(( _max_var_len + 20 ))" "" >&2
@@ -1229,38 +1432,14 @@ _gs_eu2_run_check() {
   trap - INT ERR
   _gs_eu2_tally_erase
 
-  local _total=$(( _n_auto + _n_hold + _n_skip + _n_error + _n_manual + _n_sha + _n_lock + _n_frozen ))
-  printf '%-80s\n' "──────────────────────────────────────────────────────────────────────────────"
-  local _checked_suffix="${_total} checked"
-  (( _n_hidden > 0 )) && _checked_suffix="${_total} checked, ${_n_hidden} hidden"
-  # RESOLVE column: shown only when at least one RESOLVED record exists (consistent with FALLBACK behaviour)
-  local _resolve_col=""
-  (( _n_resolved > 0 )) && _resolve_col=" ${_n_resolved} RESOLVE,"
-  printf '  Summary: %d AUTO,%s %d SHA, %d HOLD, %d MANUAL, %d LOCK, %d SKIP, %d FROZEN, %d FALLBACK, %d ERROR  (%s)\n' \
-    "${_n_auto}" "${_resolve_col}" "${_n_sha}" "${_n_hold}" "${_n_manual}" "${_n_lock}" "${_n_skip}" "${_n_frozen}" "${_n_fallback}" "${_n_error}" "${_checked_suffix}"
-
-  # Secondary signals sub-line: WATCH, DRIFT (with fixable count), DOWNGRADE, REPLACE-DRIFT, +sha, +replace.
-  # DRIFT, DOWNGRADE, REPLACE-DRIFT, and +replace suppressed when --no-drift is active.
-  # +sha follows WATCH (unconditional — not suppressed by --no-drift).
-  # Entire line omitted when all relevant signals are zero.
-  local _sec_watch="${_n_watch}"
-  local _sec_drift=0 _sec_fixable=0 _sec_down=0 _sec_down_force=0 _sec_sha_anno="${_n_sha_anno}" _sec_replace_drift=0 _sec_replace_cascade=0
-  local _sec_resolved="${_n_resolved}"
-  if [[ "${_GS_EU2_CFG[no_drift]:-false}" != "true" ]]; then
-    _sec_drift="${_n_drift}"
-    _sec_fixable="${_n_drift_fixable}"
-    _sec_down="${_n_downgrade}"
-    _sec_down_force="${_n_downgrade_force}"
-    _sec_replace_drift="${_n_replace_drift}"
-    _sec_replace_cascade="${_n_replace_cascade}"
-  fi
-  if (( _sec_watch > 0 || _sec_drift > 0 || _sec_down > 0 || _sec_down_force > 0 || _sec_sha_anno > 0 || _sec_replace_drift > 0 || _sec_replace_cascade > 0 || _sec_resolved > 0 || _n_warn_depends_on > 0 )); then
-    printf '    ↳ %d WATCH · %d DRIFT (%d fixable) · %d DOWNGRADE · %d FORCE-DOWNGRADE · %d REPLACE-DRIFT · %d +sha · %d +replace' \
-      "${_sec_watch}" "${_sec_drift}" "${_sec_fixable}" "${_sec_down}" "${_sec_down_force}" "${_sec_replace_drift}" "${_sec_sha_anno}" "${_sec_replace_cascade}"
-    (( _sec_resolved > 0 )) && printf ' · +resolve %d' "${_sec_resolved}"
-    (( _n_warn_depends_on > 0 )) && printf ' · %d depends-on-warn' "${_n_warn_depends_on}"
-    printf '\n'
-  fi
+  # ── Summary ───────────────────────────────────────────────────────────────
+  _gs_eu2_print_check_summary \
+    "${_n_auto}" "${_n_hold}" "${_n_skip}" "${_n_error}" \
+    "${_n_manual}" "${_n_sha}" "${_n_lock}" "${_n_frozen}" \
+    "${_n_fallback}" "${_n_watch}" "${_n_drift}" "${_n_drift_fixable}" \
+    "${_n_downgrade}" "${_n_downgrade_force}" "${_n_hidden}" \
+    "${_n_sha_anno}" "${_n_replace_drift}" "${_n_replace_cascade}" \
+    "${_n_resolved}" "${_n_warn_depends_on}"
 
   # Exit non-zero when any ERROR decisions were recorded — callers can detect fetch failures.
   (( _n_error > 0 )) && return 1 || return 0
