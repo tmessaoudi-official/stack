@@ -1,4 +1,10 @@
 #!/bin/bash
+# NOTE: set -euo pipefail is intentionally NOT added to this file.
+# This is a function library sourced by caller scripts (e.g. serverless-framework-start.sh).
+# Adding set flags here would bleed them into any sourcing script's execution context,
+# potentially altering the caller's error-handling behaviour in hard-to-debug ways.
+# Additionally, the compgen|grep|sort|while pipeline at line 36 exits 1 with pipefail
+# when no matching variables are found — a valid no-op case that must not abort.
 
 global_stack_base_setup_packages() {
     local PREFIX

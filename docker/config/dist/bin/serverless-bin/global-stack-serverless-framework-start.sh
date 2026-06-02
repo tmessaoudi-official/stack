@@ -1,24 +1,5 @@
 #!/bin/bash
-
-# # Enable strict error handling and debugging
-# set -xeEuo pipefail
-# shopt -s extdebug
-# IFS=$'\n\t'
-
-# # Function to handle errors and trap cleanup
-# stackCatch() {
-#   local exit_code=${1}
-#   local line_num=${2}
-#   local command=${3}
-#   if [[ ${exit_code} -ne 0 ]]; then
-#     echo "Error detected!"
-#     echo -e "$(date '+%d-%m-%Y %H:%M:%S'): Error - exit_code: ${exit_code}, line: ${line_num}, command: ${command}, serverless-framework global-stack-serverless-framework-start.sh" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/elapsed"
-#     sleep infinity
-#   fi
-# }
-
-# # Trap errors for cleanup or error reporting
-# trap 'stackCatch ${?} ${LINENO} "${BASH_COMMAND}"' ERR EXIT
+set -xeE -o pipefail
 
 SECONDS=0
 
@@ -43,18 +24,26 @@ echo "# global-stack-setup-started" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${G
 echo "PATH=${RUSTUP_HOME}/bin:${RUSTUP_HOME}/toolchains/stable-x86_64-unknown-linux-gnu/bin:${CARGO_HOME}/bin:${COMPOSER_HOME}/vendor/bin:${COMPOSER_SOURCE}/bin:${SYMFONY_HOME}/bin:${PHPBREW_SRC}/bin:${PYENV_ROOT}/bin:${GLOBAL_STACK_DOCKER_TOOLS_PATH}/yarn/bin:${DENO_DIR}/bin:${BUN_INSTALL}/bin:${PNPM_HOME}:${RBENV_ROOT}/bin:${PATH}" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 echo "export PATH" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 
-[ -f ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/run/elasticmq.pid ] && sudo kill -9 $(cat ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/run/elasticmq.pid)
-[ -f ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/run/serverless-framework.pid ] && sudo kill -9 $(cat ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/run/serverless-framework.pid)
+# Kill any previously running processes.
+# || true: stale PID is expected on restart — the process is gone but the pidfile persists
+# until the rm -rf block below clears var/run/. kill returns 1 for a missing process,
+# which would abort the script under set -e without the || true guard.
+if [ -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/run/elasticmq.pid" ]; then
+  sudo kill -9 "$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/run/elasticmq.pid")" || true
+fi
+if [ -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/run/serverless-framework.pid" ]; then
+  sudo kill -9 "$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/run/serverless-framework.pid")" || true
+fi
 
 source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/nvm.shellrc"
-source ${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/rbenv.shellrc
-source ${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/pyenv.shellrc
-source ${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/phpbrew.shellrc
-source ${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/sdkman.shellrc
+source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/rbenv.shellrc"
+source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/pyenv.shellrc"
+source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/phpbrew.shellrc"
+source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/sdkman.shellrc"
 "${GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN}"/sdkman.installer.sh
 source "${SDKMAN_DIR}"/bin/sdkman-init.sh
 
-PYENV_VERSION=$(cat ${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/python.${PYTHON_VERSION_AS})
+PYENV_VERSION=$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/python.${PYTHON_VERSION_AS}")
 export PYENV_VERSION
 PHPBREW_PHP=$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/php.${PHP_VERSION_AS}")
 export PHPBREW_PHP
@@ -67,7 +56,7 @@ echo "source ${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/nvm.shellrc" >> "/home/${
 echo "source ${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/rbenv.shellrc" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 echo "source ${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/pyenv.shellrc" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 echo "source ${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/phpbrew.shellrc" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
-echo "PYENV_VERSION=$(cat ${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/python.${PYTHON_VERSION_AS})" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
+echo "PYENV_VERSION=$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/python.${PYTHON_VERSION_AS}")" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 echo "export PYENV_VERSION" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 echo "PHPBREW_PHP=$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/php.${PHP_VERSION_AS}")" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 echo "export PHPBREW_PHP" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
@@ -104,88 +93,90 @@ global-stack-nvm-eval-yarnrc.sh
 # @todo put versions in .env
 # @todo refactor all serverless files
 
-sudo chmod -R a+rwx ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework
-sudo chown -R "${GLOBAL_STACK_DOCKER_USER_ID}:${GLOBAL_STACK_DOCKER_GROUP_ID}" ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework
+sudo chmod -R a+rwx "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework"
+sudo chown -R "${GLOBAL_STACK_DOCKER_USER_ID}:${GLOBAL_STACK_DOCKER_GROUP_ID}" "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework"
 
 rm -rf \
-  ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/build \
-  ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/dist \
-  ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/serverless.js* \
-  ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/.serverless \
-  ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/conf \
-  ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/src \
-  ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/tmp \
-  ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/run \
-  ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/overrides/ready
+  "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/build" \
+  "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/dist" \
+  "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/serverless.js"* \
+  "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/.serverless" \
+  "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/conf" \
+  "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/src" \
+  "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/tmp" \
+  "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/run" \
+  "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/overrides/ready"
 
-[ -d ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/overrides ] && find ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/overrides -mindepth 1 -maxdepth 1 ! -name "overriden" -exec rm -rf {} +
-
-mkdir -p \
-  ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework \
-  ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/storage/s3-buckets \
-  ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/storage/sqs-queues \
-  ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/storage/sqs-messages \
-  ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/log \
-  ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/run \
-  ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/overrides/ready
-
-rsync -raz --ignore-times \
-  ${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/conf/serverless/ \
-  ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework
-
-
-if [[ ! -d ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/bin ]]; then
-  mkdir -p ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/bin
+if [ -d "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/overrides" ]; then
+  find "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/overrides" -mindepth 1 -maxdepth 1 ! -name "overriden" -exec rm -rf {} +
 fi
 
-if [[ ! -f ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/bin/elasticmq-server-all.jar ]]; then
+mkdir -p \
+  "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework" \
+  "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/storage/s3-buckets" \
+  "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/storage/sqs-queues" \
+  "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/storage/sqs-messages" \
+  "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/log" \
+  "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/run" \
+  "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/overrides/ready"
+
+rsync -raz --ignore-times \
+  "${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/conf/serverless/" \
+  "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework"
+
+
+if [[ ! -d "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/bin" ]]; then
+  mkdir -p "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/bin"
+fi
+
+if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/bin/elasticmq-server-all.jar" ]]; then
   curl --connect-timeout 30 --max-time 300 -fsSL -o "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/bin/elasticmq-server-all.jar" "https://github.com/softwaremill/elasticmq/releases/download/${GLOBAL_STACK_SERVERLESS_FRAMEWORK_ELASTICMQ_VERSION}/elasticmq-server-all-$(echo "${GLOBAL_STACK_SERVERLESS_FRAMEWORK_ELASTICMQ_VERSION}" | sed 's/v//').jar"
 fi
 
-chmod a+x ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/bin/elasticmq-server-all.jar
+chmod a+x "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/bin/elasticmq-server-all.jar"
 
-cd ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework
+cd "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework"
 
-if [[ -f ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/serverless.local.ts ]]; then
+if [[ -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/serverless.local.ts" ]]; then
   mv \
-    ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/serverless.local.ts \
-    ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/serverless.ts
+    "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/serverless.local.ts" \
+    "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/serverless.ts"
 fi
 
-rm -rf ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/tmp/finder-result.txt ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/tmp/finder.sh
+rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/tmp/finder-result.txt" "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/tmp/finder.sh"
 
 npm install
 
 for overriden_package in "s3rver"; do
-  if [[ ! -d ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/overrides/original/${overriden_package}/ ]]; then
-    mkdir -p ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/overrides/original/${overriden_package}/
-    cp -R ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/node_modules/${overriden_package}/* ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/overrides/original/${overriden_package}/
+  if [[ ! -d "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/overrides/original/${overriden_package}/" ]]; then
+    mkdir -p "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/overrides/original/${overriden_package}/"
+    cp -R "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/node_modules/${overriden_package}/"* "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/overrides/original/${overriden_package}/"
   fi
 
-  original_dist_package="$(cat ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/overrides/original/${overriden_package}/package.json | grep '"version": ' | sed 's/.*"version": "//; s/",//')"
-  node_modules_package="$(cat ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/node_modules/${overriden_package}/package.json | grep '"version": ' | sed 's/.*"version": "//; s/",//')"
+  original_dist_package="$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/overrides/original/${overriden_package}/package.json" | grep '"version": ' | sed 's/.*"version": "//; s/",//')"
+  node_modules_package="$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/node_modules/${overriden_package}/package.json" | grep '"version": ' | sed 's/.*"version": "//; s/",//')"
 
-  overriden_dist_package=$(cat ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/overrides/overriden/${overriden_package}/.version)
+  overriden_dist_package=$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/overrides/overriden/${overriden_package}/.version")
 
   if [[ "${original_dist_package}" != "${node_modules_package}" || "${overriden_dist_package}" != "${original_dist_package}" ]]; then
     echo -e "You need to upgrade ${overriden_package} from ${overriden_dist_package} to ${node_modules_package}"
     exit 1
   fi
 
-  rm -rf ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/node_modules/${overriden_package}/ ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/overrides/ready/${overriden_package}/
-  mkdir -p ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/node_modules/${overriden_package}/ ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/overrides/ready/${overriden_package}/
+  rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/node_modules/${overriden_package}/" "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/overrides/ready/${overriden_package}/"
+  mkdir -p "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/node_modules/${overriden_package}/" "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/overrides/ready/${overriden_package}/"
 
-  cp -R ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/overrides/original/${overriden_package}/* ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/overrides/ready/${overriden_package}/
-  cp -R ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/overrides/overriden/${overriden_package}/* ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/overrides/ready/${overriden_package}/
+  cp -R "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/overrides/original/${overriden_package}/"* "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/overrides/ready/${overriden_package}/"
+  cp -R "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/overrides/overriden/${overriden_package}/"* "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/overrides/ready/${overriden_package}/"
 done
 
 base_dir="${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework"
 
-mkdir -p ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/tmp
-echo -e "#!/bin/bash\n\nfind \"${base_dir}\" \\( -path \"${base_dir}/node_modules\" -o -path \"${base_dir}/build\" -o -path \"${base_dir}/dist\" -o -path \"${base_dir}/bin\" -o -path \"${base_dir}/overrides/original\" -o -path \"${base_dir}/overrides/overriden\" -o -path \"${base_dir}/overrides/packages\" -o -path \"${base_dir}/.serverless\" -o -path \"${base_dir}/.serverless-offline\" -o -path \"${base_dir}/var\" \\) -prune -o -type f -print" > ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/tmp/finder.sh
-chmod a+x ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/tmp/finder.sh
+mkdir -p "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/tmp"
+echo -e "#!/bin/bash\n\nfind \"${base_dir}\" \\( -path \"${base_dir}/node_modules\" -o -path \"${base_dir}/build\" -o -path \"${base_dir}/dist\" -o -path \"${base_dir}/bin\" -o -path \"${base_dir}/overrides/original\" -o -path \"${base_dir}/overrides/overriden\" -o -path \"${base_dir}/overrides/packages\" -o -path \"${base_dir}/.serverless\" -o -path \"${base_dir}/.serverless-offline\" -o -path \"${base_dir}/var\" \\) -prune -o -type f -print" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/tmp/finder.sh"
+chmod a+x "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/tmp/finder.sh"
 
-${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/tmp/finder.sh > ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/tmp/finder-result.txt
+"${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/tmp/finder.sh" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/tmp/finder-result.txt"
 while IFS= read -r file || [[ -n "$file" ]]; do
   temp_file="${file}.tmp"
   > "${temp_file}"
@@ -209,25 +200,25 @@ ${line}" >> "${temp_file}"
   echo "" >> "${temp_file}"
 
   mv "${temp_file}" "${file}"
-done < ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/tmp/finder-result.txt
+done < "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/tmp/finder-result.txt"
 
 for overriden_package in "s3rver"; do
-  cp -R ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/overrides/ready/${overriden_package}/* ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/node_modules/${overriden_package}/
+  cp -R "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/overrides/ready/${overriden_package}/"* "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/node_modules/${overriden_package}/"
 done
 
 npm run build
 
-touch ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/log/elasticmq-$(date '+%d-%m-%Y').log ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/log/serverless-framework-$(date '+%d-%m-%Y').log
+touch "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/log/elasticmq-$(date '+%d-%m-%Y').log" "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/log/serverless-framework-$(date '+%d-%m-%Y').log"
 
 [ "${GLOBAL_STACK_DOCKER_IN_DOCKER}" = "true" ] && global-stack-base-start-docker.sh || echo -e "\n Docker In Docker will not be started"
 
-java -Dconfig.file=${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/conf/elasticmq/custom.conf -Dlogback.configurationFile=${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/conf/elasticmq/logback.xml -jar ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/bin/elasticmq-server-all.jar >> ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/log/elasticmq-$(date '+%d-%m-%Y').log 2>&1 &
+java -Dconfig.file="${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/conf/elasticmq/custom.conf" -Dlogback.configurationFile="${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/conf/elasticmq/logback.xml" -jar "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/bin/elasticmq-server-all.jar" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/log/elasticmq-$(date '+%d-%m-%Y').log" 2>&1 &
 elasticmq_pid=$!
-serverless offline start >> ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/log/serverless-framework-$(date '+%d-%m-%Y').log 2>&1 &
+serverless offline start >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/log/serverless-framework-$(date '+%d-%m-%Y').log" 2>&1 &
 serverless_framework_pid=$!
 
-echo ${elasticmq_pid} > ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/run/elasticmq.pid
-echo ${serverless_framework_pid} > ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/run/serverless-framework.pid
+echo "${elasticmq_pid}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/run/elasticmq.pid"
+echo "${serverless_framework_pid}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/var/run/serverless-framework.pid"
 
 global-stack-base-prepare-shell.sh
 echo "# global-stack-setup-finished" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
