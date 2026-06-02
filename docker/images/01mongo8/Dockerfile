@@ -13,12 +13,8 @@ USER root
 
 SHELL ["/bin/bash", "-xeEu", "-o", "pipefail", "-c"]
 
-ARG GLOBAL_STACK_SHELL_HISTORY
-COPY "${GLOBAL_STACK_SHELL_HISTORY}" /data/db/.bash_history
 COPY docker/images/01mongo8/conf/initdb/ /docker-entrypoint-initdb.d/
 
 RUN chown -R root:root /root/ \
     && find /root/ -type f -exec chmod 600 {} \; \
-    && find /root/ -type d -exec chmod 700 {} \; \
-    && chown -R root:root /data/db/.bash_history \
-    && chmod 600 /data/db/.bash_history
+    && find /root/ -type d -exec chmod 700 {} \;

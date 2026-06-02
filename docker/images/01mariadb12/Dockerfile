@@ -16,8 +16,6 @@ SHELL ["/bin/bash", "-xeEu", "-o", "pipefail", "-c"]
 COPY docker/images/01mariadb12/conf/etc/ /etc/mysql/mariadb.conf.d/
 COPY docker/images/01mariadb12/conf/initdb/ /docker-entrypoint-initdb.d/
 
-ARG GLOBAL_STACK_SHELL_HISTORY
-COPY "${GLOBAL_STACK_SHELL_HISTORY}" /root/.bash_history
 
 RUN chown -R root:root /root/ \
     && find /root/ -type f -exec chmod 600 {} \; \

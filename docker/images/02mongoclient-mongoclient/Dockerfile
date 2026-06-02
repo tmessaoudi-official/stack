@@ -9,9 +9,6 @@ LABEL maintainer="Takieddine Messaoudi <takieddine.messaoudi.official@gmail.com>
 
 USER root
 
-ARG GLOBAL_STACK_SHELL_HISTORY
-
-COPY "${GLOBAL_STACK_SHELL_HISTORY}" /home/node/.bash_history
 
 RUN chown -R node:node /home/node/ \
     && find /home/node/ -type f -exec chmod 600 {} \; \

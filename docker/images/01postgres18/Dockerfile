@@ -13,9 +13,6 @@ USER root
 
 SHELL ["/bin/bash", "-xeEu", "-o", "pipefail", "-c"]
 
-ARG GLOBAL_STACK_SHELL_HISTORY
-
-COPY "${GLOBAL_STACK_SHELL_HISTORY}" /root/.bash_history
 COPY docker/images/01postgres18/conf/initdb/ /docker-entrypoint-initdb.d/
 
 RUN chown -R root:root /root/ \

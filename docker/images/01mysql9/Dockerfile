@@ -26,9 +26,6 @@ RUN sed -i "s|\${GLOBAL_STACK_DATABASE_CHARSET}|${GLOBAL_STACK_DATABASE_CHARSET}
     && sed -i "s|\${GLOBAL_STACK_DATABASE_COLLATE}|${GLOBAL_STACK_DATABASE_COLLATE}|g" \
     /etc/mysql/conf.d/my.cnf
 
-ARG GLOBAL_STACK_SHELL_HISTORY
-
-COPY "${GLOBAL_STACK_SHELL_HISTORY}" /root/.bash_history
 
 RUN chown -R root:root /root/ \
     && find /root/ -type f -exec chmod 600 {} \; \

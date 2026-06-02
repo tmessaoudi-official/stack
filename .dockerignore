@@ -20,3 +20,7 @@ CHANGES.md
 .gitignore
 env
 env.local
+
+# Never bake shell history into image layers — history files may contain secrets
+docker/config/root/.bash_history
+docker/config/root/.zsh_history

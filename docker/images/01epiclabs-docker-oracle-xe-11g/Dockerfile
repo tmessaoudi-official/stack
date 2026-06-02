@@ -13,9 +13,6 @@ USER root
 
 SHELL ["/bin/bash", "-xeEu", "-o", "pipefail", "-c"]
 
-ARG GLOBAL_STACK_SHELL_HISTORY
-
-COPY "${GLOBAL_STACK_SHELL_HISTORY}" /root/.bash_history
 
 RUN chown -R root:root /root/ \
     && find /root/ -type f -exec chmod 600 {} \; \

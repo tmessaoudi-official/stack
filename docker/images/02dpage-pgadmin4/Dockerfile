@@ -14,8 +14,6 @@ USER root
 COPY docker/images/02dpage-pgadmin4/dist/conf/ /pgadmin4/
 COPY docker/images/02dpage-pgadmin4/dist/entrypoint.sh /entrypoint.sh
 
-ARG GLOBAL_STACK_SHELL_HISTORY
-COPY "${GLOBAL_STACK_SHELL_HISTORY}" /root/.bash_history
 
 RUN chown -R root:root /root/ \
     && find /root/ -type f -exec chmod 600 {} \; \
