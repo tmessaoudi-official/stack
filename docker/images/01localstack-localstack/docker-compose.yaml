@@ -61,6 +61,8 @@ services:
       - ./docker/config/dist/conf:${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/conf:rw
       - /var/run/docker.sock:/var/run/docker.sock
       - 01localstack_localstack_lib_localstack:/var/lib/localstack:rw,delegated
+      - ./${GLOBAL_STACK_SHELL_HISTORY}:/root/${GLOBAL_STACK_SHELL_HISTORY_TARGET}:rw
+      - ./${GLOBAL_STACK_SHELL_ZSH_HISTORY}:/root/${GLOBAL_STACK_SHELL_ZSH_HISTORY_TARGET}:rw
       - 01localstack_localstack_tmp_localstack_s3_storage:/tmp/localstack-s3-storage/:rw,delegated
       - 01localstack_localstack_lib_docker:/var/lib/docker:rw,delegated
     networks:

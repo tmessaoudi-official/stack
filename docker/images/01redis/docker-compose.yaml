@@ -7,6 +7,8 @@ services:
       - ${GLOBAL_STACK_REDIS_PORT_6379:-}6379
     volumes:
       - 01redis_data:/data
+      - ./${GLOBAL_STACK_SHELL_HISTORY}:/root/${GLOBAL_STACK_SHELL_HISTORY_TARGET}:rw
+      - ./${GLOBAL_STACK_SHELL_ZSH_HISTORY}:/root/${GLOBAL_STACK_SHELL_ZSH_HISTORY_TARGET}:rw
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s

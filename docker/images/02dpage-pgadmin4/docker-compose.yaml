@@ -5,7 +5,6 @@ services:
     build:
       args:
         BUILDKIT_INLINE_CACHE: 1
-        GLOBAL_STACK_SHELL_HISTORY: ${GLOBAL_STACK_SHELL_HISTORY}
         GLOBAL_STACK_IMAGE_DPAGE_PGADMIN4_VERSION: ${GLOBAL_STACK_IMAGE_DPAGE_PGADMIN4_VERSION}
       context: ./
       dockerfile: ./docker/images/02dpage-pgadmin4/Dockerfile
@@ -32,6 +31,8 @@ services:
     volumes:
       - ./docker/data/dumps/dpage-pgadmin4:/var/lib/pgadmin/storage/${GLOBAL_STACK_DOCKER_USER_ID}_local.io:rw
       - pgadmin_lib:/var/lib/pgadmin:rw,delegated
+      - ./${GLOBAL_STACK_SHELL_HISTORY}:/root/${GLOBAL_STACK_SHELL_HISTORY_TARGET}:rw
+      - ./${GLOBAL_STACK_SHELL_ZSH_HISTORY}:/root/${GLOBAL_STACK_SHELL_ZSH_HISTORY_TARGET}:rw
 volumes:
   pgadmin_lib:
     name: ${COMPOSE_PROJECT_NAME}_${GLOBAL_STACK_VERSION}_pgadmin_lib

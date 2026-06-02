@@ -1,0 +1,11 @@
+make up
+make down
+make down-n-up
+make log-follow-
+make login-
+bin/env-update.sh --check
+bin/env-scan.sh
+docker compose --env-file .env.local ps
+docker compose --env-file .env.local logs --tail=50
+ls tools/successes/
+ls tools/errors/

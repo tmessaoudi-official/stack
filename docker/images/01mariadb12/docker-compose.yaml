@@ -5,7 +5,6 @@ services:
     build:
       args:
         BUILDKIT_INLINE_CACHE: 1
-        GLOBAL_STACK_SHELL_HISTORY: ${GLOBAL_STACK_SHELL_HISTORY}
         GLOBAL_STACK_IMAGE_MARIADB12_VERSION: ${GLOBAL_STACK_IMAGE_MARIADB12_VERSION}
         GLOBAL_STACK_IMAGE_UBUNTU_VERSION: ${GLOBAL_STACK_IMAGE_UBUNTU_VERSION}
       context: ./
@@ -42,6 +41,8 @@ services:
     volumes:
       - ./docker/data/dumps/mariadb/12:/opt/dumps:rw
       - 01mariadb12_data:/var/lib/mysql:rw,delegated
+      - ./${GLOBAL_STACK_SHELL_HISTORY}:/root/${GLOBAL_STACK_SHELL_HISTORY_TARGET}:rw
+      - ./${GLOBAL_STACK_SHELL_ZSH_HISTORY}:/root/${GLOBAL_STACK_SHELL_ZSH_HISTORY_TARGET}:rw
         # - ./var/database-history/.mariadb_history:/root/.mariadb_history:rw,delegated
         # - source: ./docker/logs/mariadb/12
         #   target: /var/log/mysql

@@ -125,6 +125,7 @@ services:
       - ./projects:${GLOBAL_STACK_DOCKER_WORKDIR}:rw
       - ./tools:${GLOBAL_STACK_DOCKER_TOOLS_PATH}:rw
       - ./${GLOBAL_STACK_SHELL_HISTORY}:/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_HISTORY_TARGET}:rw
+      - ./${GLOBAL_STACK_SHELL_ZSH_HISTORY}:/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_ZSH_HISTORY_TARGET}:rw
       - ./docker/config/root:${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/home/user:rw
       - ./docker/config/dist/bin:${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/bin:rw
       - 00base_lib_docker:/var/lib/docker:rw,delegated

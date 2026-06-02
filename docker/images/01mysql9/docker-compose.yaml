@@ -5,7 +5,6 @@ services:
     build:
       args:
         BUILDKIT_INLINE_CACHE: 1
-        GLOBAL_STACK_SHELL_HISTORY: ${GLOBAL_STACK_SHELL_HISTORY}
         GLOBAL_STACK_IMAGE_MYSQL9_VERSION: ${GLOBAL_STACK_IMAGE_MYSQL9_VERSION}
         GLOBAL_STACK_DATABASE_CHARSET: ${GLOBAL_STACK_DATABASE_CHARSET}
         GLOBAL_STACK_DATABASE_COLLATE: ${GLOBAL_STACK_DATABASE_COLLATE}
@@ -44,6 +43,8 @@ services:
     volumes:
       - ./docker/data/dumps/mysql/9:/opt/dumps:rw
       - 01mysql9_data:/var/lib/mysql:rw,delegated
+      - ./${GLOBAL_STACK_SHELL_HISTORY}:/root/${GLOBAL_STACK_SHELL_HISTORY_TARGET}:rw
+      - ./${GLOBAL_STACK_SHELL_ZSH_HISTORY}:/root/${GLOBAL_STACK_SHELL_ZSH_HISTORY_TARGET}:rw
         # - ./var/database-history/.mysql_history:/root/.mysql_history:rw,delegated
         # - source: ./docker/logs/mysql/9
         #   target: /var/log/mysql

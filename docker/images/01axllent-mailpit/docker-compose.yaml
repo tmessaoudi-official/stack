@@ -26,3 +26,5 @@ services:
     restart: "on-failure:5"
     volumes:
       - ${GLOBAL_STACK_AXLLENT_MAILPIT_MP_DATABASE}:/data:rw
+      - ./${GLOBAL_STACK_SHELL_HISTORY}:/root/${GLOBAL_STACK_SHELL_HISTORY_TARGET}:rw
+      - ./${GLOBAL_STACK_SHELL_ZSH_HISTORY}:/root/${GLOBAL_STACK_SHELL_ZSH_HISTORY_TARGET}:rw

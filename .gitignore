@@ -97,6 +97,11 @@ docker/config/root/.ssh/known_hosts
 docker/config/root/.ssh/known_hosts.old
 
 /docker/config/root/**/*
+# Exceptions to the above catch-all — tracked intentionally:
+!/docker/config/root/.gitconfig
+!/docker/config/root/.gitattributes
+!/docker/config/root/.bash_history.template
+!/docker/config/root/.zsh_history.template
 
 /docker/data/**/*
 

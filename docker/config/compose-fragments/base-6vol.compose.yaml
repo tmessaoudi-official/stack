@@ -1,5 +1,5 @@
 ---
-# 6-volume base fragment — services that mount dist/bin but NOT dist/conf.
+# 7-volume base fragment — services that mount dist/bin but NOT dist/conf.
 # Services: 02pyenv, 02rbenv, 02rust, 03python3, 03ruby3, 03ruby4
 #
 # Volumes use ${GLOBAL_STACK_DOCKER_ROOT_PATH} for absolute path resolution
@@ -26,6 +26,7 @@ services:
       - ${GLOBAL_STACK_DOCKER_ROOT_PATH}/projects:${GLOBAL_STACK_DOCKER_WORKDIR}:rw
       - ${GLOBAL_STACK_DOCKER_ROOT_PATH}/tools:${GLOBAL_STACK_DOCKER_TOOLS_PATH}:rw
       - ${GLOBAL_STACK_DOCKER_ROOT_PATH}/${GLOBAL_STACK_SHELL_HISTORY}:/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_HISTORY_TARGET}:rw
+      - ${GLOBAL_STACK_DOCKER_ROOT_PATH}/${GLOBAL_STACK_SHELL_ZSH_HISTORY}:/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_ZSH_HISTORY_TARGET}:rw
       - ${GLOBAL_STACK_DOCKER_ROOT_PATH}/docker/config/root:${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/home/user:rw
       - ${GLOBAL_STACK_DOCKER_ROOT_PATH}/docker/config/dist/bin:${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/bin:rw
     extra_hosts:

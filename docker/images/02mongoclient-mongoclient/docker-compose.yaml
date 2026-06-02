@@ -5,7 +5,6 @@ services:
     build:
       args:
         BUILDKIT_INLINE_CACHE: 1
-        GLOBAL_STACK_SHELL_HISTORY: ${GLOBAL_STACK_SHELL_HISTORY}
         GLOBAL_STACK_IMAGE_MONGOCLIENT_MONGOCLIENT_VERSION: ${GLOBAL_STACK_IMAGE_MONGOCLIENT_MONGOCLIENT_VERSION}
       context: ./
       dockerfile: ./docker/images/02mongoclient-mongoclient/Dockerfile
@@ -26,3 +25,6 @@ services:
       stack.tier: "tools"
       stack.version: "${GLOBAL_STACK_VERSION}"
     restart: "on-failure:5"
+    volumes:
+      - ./${GLOBAL_STACK_SHELL_HISTORY}:/home/node/${GLOBAL_STACK_SHELL_HISTORY_TARGET}:rw
+      - ./${GLOBAL_STACK_SHELL_ZSH_HISTORY}:/home/node/${GLOBAL_STACK_SHELL_ZSH_HISTORY_TARGET}:rw

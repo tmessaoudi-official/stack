@@ -5,7 +5,6 @@ services:
     build:
       args:
         BUILDKIT_INLINE_CACHE: 1
-        GLOBAL_STACK_SHELL_HISTORY: ${GLOBAL_STACK_SHELL_HISTORY}
         GLOBAL_STACK_IMAGE_POSTGRES18_VERSION: ${GLOBAL_STACK_IMAGE_POSTGRES18_VERSION}
       context: ./
       dockerfile: ./docker/images/01postgres18/Dockerfile
@@ -33,6 +32,8 @@ services:
     volumes:
       - ./docker/data/dumps/postgres/18:/opt/dumps:rw
       - 01postgres18_var_lib_postgresql:/var/lib/postgresql:rw,delegated
+      - ./${GLOBAL_STACK_SHELL_HISTORY}:/root/${GLOBAL_STACK_SHELL_HISTORY_TARGET}:rw
+      - ./${GLOBAL_STACK_SHELL_ZSH_HISTORY}:/root/${GLOBAL_STACK_SHELL_ZSH_HISTORY_TARGET}:rw
         # - ./var/database-history/.psql_history:/root/.psql_history:rw,delegated
         # - source: ./docker/logs/postgresql/18
         #   target: /var/log/postgresql

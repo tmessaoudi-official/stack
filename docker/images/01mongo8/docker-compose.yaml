@@ -5,7 +5,6 @@ services:
     build:
       args:
         BUILDKIT_INLINE_CACHE: 1
-        GLOBAL_STACK_SHELL_HISTORY: ${GLOBAL_STACK_SHELL_HISTORY}
         GLOBAL_STACK_IMAGE_MONGO8_VERSION: ${GLOBAL_STACK_IMAGE_MONGO8_VERSION}
       context: ./
       dockerfile: ./docker/images/01mongo8/Dockerfile
@@ -33,6 +32,8 @@ services:
       - ./docker/data/dumps/mongo/8:/opt/dumps:rw
       - 01mongo8_data:/data/db:rw,delegated
       - 01mongo8_configdb:/data/configdb:rw,delegated
+      - ./${GLOBAL_STACK_SHELL_HISTORY}:/root/${GLOBAL_STACK_SHELL_HISTORY_TARGET}:rw
+      - ./${GLOBAL_STACK_SHELL_ZSH_HISTORY}:/root/${GLOBAL_STACK_SHELL_ZSH_HISTORY_TARGET}:rw
         # - ./var/database-history/mongosh_repl_history:/data/db/.mongodb/mongosh/mongosh_repl_history:rw,delegated
         # - source: ./docker/logs/mongodb/8
         #   target: /var/log/mongodb

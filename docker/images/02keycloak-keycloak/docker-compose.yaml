@@ -5,7 +5,6 @@ services:
     build:
       args:
         BUILDKIT_INLINE_CACHE: 1
-        GLOBAL_STACK_SHELL_HISTORY: ${GLOBAL_STACK_SHELL_HISTORY}
         GLOBAL_STACK_IMAGE_KEYCLOAK_KEYCLOAK_VERSION: ${GLOBAL_STACK_IMAGE_KEYCLOAK_KEYCLOAK_VERSION}
       context: ./
       dockerfile: ./docker/images/02keycloak-keycloak/Dockerfile
@@ -56,6 +55,8 @@ services:
       - ./docker/logs/keycloak:/opt/keycloak/logs:rw
       - ./docker/images/02keycloak-keycloak/conf/conf:/opt/keycloak/conf:rw
       - keycloak_data:/opt/keycloak/data:rw,delegated
+      - ./${GLOBAL_STACK_SHELL_HISTORY}:/opt/keycloak/${GLOBAL_STACK_SHELL_HISTORY_TARGET}:rw
+      - ./${GLOBAL_STACK_SHELL_ZSH_HISTORY}:/opt/keycloak/${GLOBAL_STACK_SHELL_ZSH_HISTORY_TARGET}:rw
     networks:
       - public
     ports:
