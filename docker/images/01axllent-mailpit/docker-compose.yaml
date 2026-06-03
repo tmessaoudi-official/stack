@@ -14,7 +14,7 @@ services:
       - ${GLOBAL_STACK_AXLLENT_MAILPIT_PORT_1025:-}1025
       - ${GLOBAL_STACK_AXLLENT_MAILPIT_PORT_8025:-}8025
     healthcheck:
-      test: ["CMD-SHELL", "curl -fs http://localhost:8025/ -o /dev/null"]
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8025/"]
       interval: 30s
       timeout: 10s
       retries: 3

@@ -18,7 +18,7 @@ services:
       - ${GLOBAL_STACK_DPAGE_PGADMIN4_PORT_80:-}80
       - ${GLOBAL_STACK_DPAGE_PGADMIN4_PORT_443:-}443
     healthcheck:
-      test: ["CMD-SHELL", "curl -fs http://localhost:80/misc/ping -o /dev/null"]
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:80/misc/ping"]
       interval: 30s
       timeout: 10s
       retries: 3

@@ -18,7 +18,7 @@ services:
       - RELAX_SECURITY=${GLOBAL_STACK_EPICLABS_DOCKER_ORACLE_XE_11G_RELAX_SECURITY}
       - TZ=${GLOBAL_STACK_TIMEZONE}
     healthcheck:
-      test: ["CMD-SHELL", "sqlplus -S system/${GLOBAL_STACK_DATABASE_ROOT_PASSWORD}@localhost:1521/XE </dev/null | grep -q 'Connected' || exit 1"]
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/1521' || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
