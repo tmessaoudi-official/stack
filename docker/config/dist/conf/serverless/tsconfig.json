@@ -15,5 +15,5 @@
     "skipLibCheck": true,
     "typeRoots": ["node_modules/@types"]
   },
-  "include": ["serverless.ts", "src/handlers/typescript"],
+  "include": ["src/handlers/typescript"]
 }
