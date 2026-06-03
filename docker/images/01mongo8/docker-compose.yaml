@@ -9,6 +9,8 @@ services:
       context: ./
       dockerfile: ./docker/images/01mongo8/Dockerfile
     environment:
+      - GLIBC_TUNABLES=glibc.pthread.rseq=0:glibc.cpu.hwcaps=-SHSTK
+      - LD_PRELOAD=/usr/local/lib/fakeuname.so
       - MONGO_DBS=${GLOBAL_STACK_MONGO8_DBS}
       - MONGODB_PASSWORD=${GLOBAL_STACK_DATABASE_ROOT_PASSWORD}
       - MONGODB_USER=root
