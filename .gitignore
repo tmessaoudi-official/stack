@@ -1,8 +1,3 @@
-!/**/.gitkeep
-!/**/*.gitkeep
-!/docker/config/dist/conf/**/sites-available/example*
-!/docker/config/dist/conf/**/example*
-
 /**/*.git.ignore
 /**/*.git.ignore.*
 /**/*.git.ignore/*
@@ -62,13 +57,8 @@ Taskfile.yaml
 /docker/config/dist/conf/**/*.local.*
 
 .claude/worktrees
-!/var/.gitkeep
 /var
-!/projects/.claude/
-!/projects/CLAUDE.md
-!/projects/.gitkeep
 /projects
-!/tools/.gitkeep
 /tools
 
 /docker/logs/**/*.log
@@ -87,21 +77,13 @@ docker/config/dist/conf/http-common/ssl/*.pem
 /docker/config/root/.*_history
 /docker/config/etc/env*
 
-!/docker/config/root/.gitconfig
-!/docker/config/root/.gitattributes
-
 # SSH private keys — never commit, bind-mounted into containers
 docker/config/root/.ssh/id_*
-!docker/config/root/.ssh/id_*.pub
+# !docker/config/root/.ssh/id_*.pub
 docker/config/root/.ssh/known_hosts
 docker/config/root/.ssh/known_hosts.old
 
 /docker/config/root/**/*
-# Exceptions to the above catch-all — tracked intentionally:
-!/docker/config/root/.gitconfig
-!/docker/config/root/.gitattributes
-!/docker/config/root/.bash_history.template
-!/docker/config/root/.zsh_history.template
 
 /docker/data/**/*
 
@@ -109,7 +91,6 @@ docker/config/root/.ssh/known_hosts.old
 
 docker/registry/data
 docker/registry/certs
-!docker/registry/config.json
 docker/registry/config.local.json
 
 docker/config/dist/conf/localstack-init/init*/**/*.local.*
@@ -117,3 +98,26 @@ docker/config/dist/conf/localstack-init/init*/**/*.local.*
 docker/config/dist/conf/serverless/**/*.local.*
 docker/config/dist/conf/serverless/**/local.*/
 docker/config/dist/conf/serverless/**/*.local/
+
+!/docker/config/root/.gitconfig
+!/docker/config/root/.gitattributes
+
+!/var/.gitkeep
+!/projects/.claude/
+!/projects/CLAUDE.md
+!/projects/.gitkeep
+!/tools/.gitkeep
+
+!docker/registry/config.json
+
+!/**/.gitkeep
+!/**/*.gitkeep
+
+!/docker/config/dist/conf/**/sites-available/example*
+!/docker/config/dist/conf/**/example*
+
+# Exceptions to the above catch-all — tracked intentionally:
+!/docker/config/root/.gitconfig
+!/docker/config/root/.gitattributes
+!/docker/config/root/.bash_history.template
+!/docker/config/root/.zsh_history.template
