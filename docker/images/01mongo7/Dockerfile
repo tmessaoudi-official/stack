@@ -1,8 +1,8 @@
 # shellcheck disable=SC2148
-ARG GLOBAL_STACK_IMAGE_MONGO8_VERSION=8.3.2-noble
+ARG GLOBAL_STACK_IMAGE_MONGO7_VERSION=7.0.34-jammy
 
 # shellcheck disable=SC2148
-FROM mongo:${GLOBAL_STACK_IMAGE_MONGO8_VERSION}
+FROM mongo:${GLOBAL_STACK_IMAGE_MONGO7_VERSION}
 
 LABEL maintainer="Takieddine Messaoudi <takieddine.messaoudi.official@gmail.com>" \
       info="local_global_stack"
@@ -13,17 +13,8 @@ USER root
 
 SHELL ["/bin/bash", "-xeEu", "-o", "pipefail", "-c"]
 
-COPY docker/images/01mongo8/conf/initdb/ /docker-entrypoint-initdb.d/
+COPY docker/images/01mongo7/conf/initdb/ /docker-entrypoint-initdb.d/
 
 RUN chown -R root:root /root/ \
     && find /root/ -type f -exec chmod 600 {} \; \
     && find /root/ -type d -exec chmod 700 {} \;
-
-COPY docker/images/01mongo8/fakeuname.c /tmp/fakeuname.c
-
-# hadolint ignore=DL3008
-RUN apt-get update -qq \
-    && apt-get install -y --no-install-recommends gcc libc6-dev \
-    && gcc -shared -fPIC -o /usr/local/lib/fakeuname.so /tmp/fakeuname.c -ldl \
-    && rm /tmp/fakeuname.c \
-    && rm -rf /var/lib/apt/lists/*

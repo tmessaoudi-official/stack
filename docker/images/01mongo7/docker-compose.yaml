@@ -1,17 +1,15 @@
 ---
 services:
-  01mongo8:
+  01mongo7:
     init: ${DOCKER_INIT}
     build:
       args:
         BUILDKIT_INLINE_CACHE: 1
-        GLOBAL_STACK_IMAGE_MONGO8_VERSION: ${GLOBAL_STACK_IMAGE_MONGO8_VERSION}
+        GLOBAL_STACK_IMAGE_MONGO7_VERSION: ${GLOBAL_STACK_IMAGE_MONGO7_VERSION}
       context: ./
-      dockerfile: ./docker/images/01mongo8/Dockerfile
+      dockerfile: ./docker/images/01mongo7/Dockerfile
     environment:
-      - GLIBC_TUNABLES=glibc.pthread.rseq=0:glibc.cpu.hwcaps=-SHSTK
-      - LD_PRELOAD=/usr/local/lib/fakeuname.so
-      - MONGO_DBS=${GLOBAL_STACK_MONGO8_DBS}
+      - MONGO_DBS=${GLOBAL_STACK_MONGO7_DBS}
       - MONGODB_PASSWORD=${GLOBAL_STACK_DATABASE_ROOT_PASSWORD}
       - MONGODB_USER=root
       - TZ=${GLOBAL_STACK_TIMEZONE}
@@ -24,24 +22,24 @@ services:
     networks:
       - public
     ports:
-      - ${GLOBAL_STACK_MONGO8_PORT_27017:-}27017
+      - ${GLOBAL_STACK_MONGO7_PORT_27017:-}27017
     labels:
-      stack.service: "01mongo8"
+      stack.service: "01mongo7"
       stack.tier: "database"
       stack.version: "${GLOBAL_STACK_VERSION}"
     restart: "on-failure:5"
     volumes:
-      - ./docker/data/dumps/mongo/8:/opt/dumps:rw
-      - 01mongo8_data:/data/db:rw,delegated
-      - 01mongo8_configdb:/data/configdb:rw,delegated
+      - ./docker/data/dumps/mongo/7:/opt/dumps:rw
+      - 01mongo7_data:/data/db:rw,delegated
+      - 01mongo7_configdb:/data/configdb:rw,delegated
       - ./${GLOBAL_STACK_SHELL_HISTORY}:/root/${GLOBAL_STACK_SHELL_HISTORY_TARGET}:rw
       - ./${GLOBAL_STACK_SHELL_ZSH_HISTORY}:/root/${GLOBAL_STACK_SHELL_ZSH_HISTORY_TARGET}:rw
         # - ./var/database-history/mongosh_repl_history:/data/db/.mongodb/mongosh/mongosh_repl_history:rw,delegated
-        # - source: ./docker/logs/mongodb/8
+        # - source: ./docker/logs/mongodb/7
         #   target: /var/log/mongodb
         #   type: bind
 volumes:
-  01mongo8_data:
-    name: ${COMPOSE_PROJECT_NAME}_${GLOBAL_STACK_VERSION}_01mongo8_data
-  01mongo8_configdb:
-    name: ${COMPOSE_PROJECT_NAME}_${GLOBAL_STACK_VERSION}_01mongo8_configdb
+  01mongo7_data:
+    name: ${COMPOSE_PROJECT_NAME}_${GLOBAL_STACK_VERSION}_01mongo7_data
+  01mongo7_configdb:
+    name: ${COMPOSE_PROJECT_NAME}_${GLOBAL_STACK_VERSION}_01mongo7_configdb

@@ -21,7 +21,7 @@ default: help
 	down-n-up exec restart save commit restore log-follow hard-restart soft-restart \
 	login-00base login-00corentinth-it-tools \
 	login-01axllent-mailpit login-01caddy login-01epiclabs-docker-oracle-xe-11g \
-	login-01httpd login-01localstack-localstack login-01mariadb12 login-01mongo8 \
+	login-01httpd login-01localstack-localstack login-01mariadb12 login-01mongo7 \
 	login-01mysql9 login-01nginx login-01postgres18 login-01redis \
 	login-01selenium-standalone-chrome login-01selenium-standalone-firefox \
 	login-01valkey \
@@ -36,7 +36,7 @@ default: help
 	login-05edge login-05stable \
 	log-00base log-00corentinth-it-tools \
 	log-01axllent-mailpit log-01caddy log-01epiclabs-docker-oracle-xe-11g \
-	log-01httpd log-01localstack-localstack log-01mariadb12 log-01mongo8 \
+	log-01httpd log-01localstack-localstack log-01mariadb12 log-01mongo7 \
 	log-01mysql9 log-01nginx log-01postgres18 log-01redis \
 	log-01selenium-standalone-chrome log-01selenium-standalone-firefox \
 	log-01valkey \
@@ -51,7 +51,7 @@ default: help
 	log-05edge log-05stable \
 	log-follow-00base log-follow-00corentinth-it-tools \
 	log-follow-01axllent-mailpit log-follow-01caddy log-follow-01epiclabs-docker-oracle-xe-11g \
-	log-follow-01httpd log-follow-01localstack-localstack log-follow-01mariadb12 log-follow-01mongo8 \
+	log-follow-01httpd log-follow-01localstack-localstack log-follow-01mariadb12 log-follow-01mongo7 \
 	log-follow-01mysql9 log-follow-01nginx log-follow-01postgres18 log-follow-01redis \
 	log-follow-01selenium-standalone-chrome log-follow-01selenium-standalone-firefox \
 	log-follow-01valkey \
@@ -66,7 +66,7 @@ default: help
 	log-follow-05edge log-follow-05stable \
 	restart-00base restart-00corentinth-it-tools \
 	restart-01axllent-mailpit restart-01caddy restart-01epiclabs-docker-oracle-xe-11g \
-	restart-01httpd restart-01localstack-localstack restart-01mariadb12 restart-01mongo8 \
+	restart-01httpd restart-01localstack-localstack restart-01mariadb12 restart-01mongo7 \
 	restart-01mysql9 restart-01nginx restart-01postgres18 restart-01redis \
 	restart-01selenium-standalone-chrome restart-01selenium-standalone-firefox \
 	restart-01valkey \
@@ -119,7 +119,7 @@ $(eval $(call login-service-shell,01epiclabs-docker-oracle-xe-11g))
 $(eval $(call login-service-shell,01httpd))
 $(eval $(call login-service-shell,01localstack-localstack))
 $(eval $(call login-service-shell,01mariadb12))
-$(eval $(call login-service-shell,01mongo8))
+$(eval $(call login-service-shell,01mongo7))
 $(eval $(call login-service-shell,01mysql9))
 $(eval $(call login-service-shell,01nginx))
 $(eval $(call login-service-shell,01selenium-standalone-chrome))
@@ -168,7 +168,7 @@ $(eval $(call log-service,01epiclabs-docker-oracle-xe-11g))
 $(eval $(call log-service,01httpd))
 $(eval $(call log-service,01localstack-localstack))
 $(eval $(call log-service,01mariadb12))
-$(eval $(call log-service,01mongo8))
+$(eval $(call log-service,01mongo7))
 $(eval $(call log-service,01mysql9))
 $(eval $(call log-service,01nginx))
 $(eval $(call log-service,01postgres18))
@@ -215,7 +215,7 @@ $(eval $(call log-follow-service,01epiclabs-docker-oracle-xe-11g))
 $(eval $(call log-follow-service,01httpd))
 $(eval $(call log-follow-service,01localstack-localstack))
 $(eval $(call log-follow-service,01mariadb12))
-$(eval $(call log-follow-service,01mongo8))
+$(eval $(call log-follow-service,01mongo7))
 $(eval $(call log-follow-service,01mysql9))
 $(eval $(call log-follow-service,01nginx))
 $(eval $(call log-follow-service,01postgres18))
@@ -262,7 +262,7 @@ $(eval $(call restart-service,01epiclabs-docker-oracle-xe-11g))
 $(eval $(call restart-service,01httpd))
 $(eval $(call restart-service,01localstack-localstack))
 $(eval $(call restart-service,01mariadb12))
-$(eval $(call restart-service,01mongo8))
+$(eval $(call restart-service,01mongo7))
 $(eval $(call restart-service,01mysql9))
 $(eval $(call restart-service,01nginx))
 $(eval $(call restart-service,01postgres18))
