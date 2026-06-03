@@ -184,3 +184,6 @@ Full spec with exact diffs, marker inventory, and testing checklist already writ
 - [ ] **Gradle VX2 re-enable on Java 26** — `GLOBAL_STACK_JAVA26_SDKMAN_INSTALL_PACKAGE_GRADLE_VX2_VERSION` is empty (Gradle 8 crashes on Java 25+; same applies to Java 26). Monitor Gradle 8.x patch releases for Java 26 fix. When a compatible Gradle 8 version ships: restore the version value in `.env`. Check: `https://github.com/gradle/gradle/issues/29199`.
 
 - [ ] **Groovy VX2 re-enable on Java 26** — same situation: `GLOBAL_STACK_JAVA26_SDKMAN_INSTALL_PACKAGE_GROOVY_VX2_VERSION` is empty (not in Java 26 test matrix). Monitor Groovy 4.x for Java 26 compatibility.
+
+
+GLOBAL_STACK_WAIT_FOR_TIMEOUT should be read from .env !!
