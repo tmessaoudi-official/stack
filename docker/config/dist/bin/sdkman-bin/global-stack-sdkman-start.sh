@@ -113,7 +113,9 @@ if [[ "${SDKMAN_MODE}" = "setup" ]]; then
     source "${HOME}/.sdkman/etc/config"
   fi
 
+  set +e
   source /home/"${GLOBAL_STACK_DOCKER_USER_ID}"/${GLOBAL_STACK_SHELL_RC_TARGET} && sdk install java "${JAVA_VERSION}"
+  set -e
   [[ -d "${SDKMAN_DIR}/candidates/java/${JAVA_VERSION}" ]] || { printf 'Error: java %s directory missing after sdk install\n' "${JAVA_VERSION}"; exit 2; }
   echo "sdk use java '${JAVA_VERSION}'" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 
@@ -121,13 +123,16 @@ if [[ "${SDKMAN_MODE}" = "setup" ]]; then
   source /home/"${GLOBAL_STACK_DOCKER_USER_ID}"/${GLOBAL_STACK_SHELL_RC_TARGET}
 
   if [[ -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/java.${JAVA_VERSION_AS:-${JAVA_VERSION:-}}" ]]; then
+    set +e
     global_stack_base_setup_packages \
       --prefix='SDKMAN' \
       --command='echo -e "**** Using ${PACKAGE_NAME} ${PACKAGE_VERSION} ${PACKAGE_COMMAND_SUFFIX}"' \
       --command='sdk use ${PACKAGE_NAME} "${PACKAGE_VERSION}"' \
       --command='echo "sdk use ${PACKAGE_NAME} "${PACKAGE_VERSION}"" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"' \
       --command='chmod -R a+rwx "${SDKMAN_DIR}"/candidates/"${PACKAGE_NAME}"/"${PACKAGE_VERSION}"/bin'
+    set -e
   else
+    set +e
     global_stack_base_setup_packages \
       --prefix='SDKMAN' \
       --command='echo -e "**** Installing/Updating and using ${PACKAGE_NAME} ${PACKAGE_VERSION} ${PACKAGE_COMMAND_SUFFIX}"' \
@@ -135,6 +140,7 @@ if [[ "${SDKMAN_MODE}" = "setup" ]]; then
       --command='sdk use ${PACKAGE_NAME} "${PACKAGE_VERSION}"' \
       --command='echo "sdk use ${PACKAGE_NAME} "${PACKAGE_VERSION}"" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"' \
       --command='chmod -R a+rwx "${SDKMAN_DIR}"/candidates/"${PACKAGE_NAME}"/"${PACKAGE_VERSION}"/bin'
+    set -e
   fi
 fi
 

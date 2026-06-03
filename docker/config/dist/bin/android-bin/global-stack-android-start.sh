@@ -56,15 +56,19 @@ echo "sdkman_healthcheck_enable=false" > "${HOME}/.sdkman/etc/config"
 
 source "${HOME}/.sdkman/etc/config"
 
+set +e
 sdk use java "${JAVA_VERSION}"
+set -e
 echo "sdk use java '${JAVA_VERSION}'" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 
 source /usr/local/bin/global-stack-base-setup-packages.sh
+set +e
 global_stack_base_setup_packages \
   --prefix='SDKMAN' \
   --command='echo -e "**** Using ${PACKAGE_NAME} ${PACKAGE_VERSION}"' \
   --command='sdk use ${PACKAGE_NAME} "${PACKAGE_VERSION}"' \
   --command='echo "sdk use ${PACKAGE_NAME} \"${PACKAGE_VERSION}\"" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"'
+set -e
 
 if [ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/android.sdkmanager" ] || [ "${GLOBAL_STACK_RELOAD_ANDROID}" = "true" ]; then
   sudo rm -rf "${ANDROID_HOME}" "${ANDROID_SDK_HOME}" "${ANDROID_SDK_ROOT}" "${GRADLE_USER_HOME}" "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/android.sdkmanager"
