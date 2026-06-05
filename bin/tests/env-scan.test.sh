@@ -1031,9 +1031,9 @@ t "without --dry-run: .env.local IS written (Phase 5 regression)" bash -c "
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
-section "18. propagate: gs_es_propagate_to_dockerfiles unit tests"
+section "18. propagate: _gs_es_propagate_to_dockerfiles unit tests"
 # ═══════════════════════════════════════════════════════════════════════════
-# Tests call gs_es_propagate_to_dockerfiles directly (no env-scan.sh).
+# Tests call _gs_es_propagate_to_dockerfiles directly (no env-scan.sh).
 # Each test builds a self-contained temp dir and cleans up on exit.
 
 _PROP_LIB="/stack/bin/lib/env-scan/propagate.sh"
@@ -1044,7 +1044,7 @@ t "basic rewrite: ARG VAR=old → ARG VAR=new when .env has new value" bash -c "
     printf 'MY_VAR=new_value\n' > \"\$D/.env\"
     printf 'ARG MY_VAR=old_value\n' > \"\$D/docker/images/svc/Dockerfile\"
     source '${_PROP_LIB}'
-    gs_es_propagate_to_dockerfiles \"\$D/.env\" \"\$D/docker\" '' 'false' >/dev/null 2>&1
+    _gs_es_propagate_to_dockerfiles \"\$D/.env\" \"\$D/docker\" '' 'false' >/dev/null 2>&1
     content=\$(cat \"\$D/docker/images/svc/Dockerfile\")
     [[ \"\$content\" == 'ARG MY_VAR=new_value' ]] || { echo \"Expected 'ARG MY_VAR=new_value', got: \$content\"; echo FAIL; exit 0; }
     echo PASS
@@ -1056,7 +1056,7 @@ t "shell-expansion skip: var with \${...} value is not written to Dockerfile" ba
     printf 'EXPANDED_VAR=\${SOME_OTHER_VAR}/suffix\n' > \"\$D/.env\"
     printf 'ARG EXPANDED_VAR=literal_original\n' > \"\$D/docker/images/svc/Dockerfile\"
     source '${_PROP_LIB}'
-    gs_es_propagate_to_dockerfiles \"\$D/.env\" \"\$D/docker\" '' 'false' >/dev/null 2>&1
+    _gs_es_propagate_to_dockerfiles \"\$D/.env\" \"\$D/docker\" '' 'false' >/dev/null 2>&1
     content=\$(cat \"\$D/docker/images/svc/Dockerfile\")
     [[ \"\$content\" == 'ARG EXPANDED_VAR=literal_original' ]] || { echo \"Dockerfile should not have been modified; got: \$content\"; echo FAIL; exit 0; }
     echo PASS
@@ -1068,7 +1068,7 @@ t "exclude pattern respected: matching var is NOT rewritten even when stale" bas
     printf 'EXCLUDED_REGISTRY=env_value\n' > \"\$D/.env\"
     printf 'ARG EXCLUDED_REGISTRY=docker_value\n' > \"\$D/docker/images/svc/Dockerfile\"
     source '${_PROP_LIB}'
-    gs_es_propagate_to_dockerfiles \"\$D/.env\" \"\$D/docker\" 'EXCLUDED_REGISTRY' 'false' >/dev/null 2>&1
+    _gs_es_propagate_to_dockerfiles \"\$D/.env\" \"\$D/docker\" 'EXCLUDED_REGISTRY' 'false' >/dev/null 2>&1
     content=\$(cat \"\$D/docker/images/svc/Dockerfile\")
     [[ \"\$content\" == 'ARG EXCLUDED_REGISTRY=docker_value' ]] || { echo \"Excluded var should not be rewritten; got: \$content\"; echo FAIL; exit 0; }
     echo PASS
@@ -1081,7 +1081,7 @@ t "multiple Dockerfiles: both are rewritten in a single run" bash -c "
     printf 'ARG SHARED_VAR=stale\n' > \"\$D/docker/images/svc1/Dockerfile\"
     printf 'ARG SHARED_VAR=stale\n' > \"\$D/docker/images/svc2/Dockerfile\"
     source '${_PROP_LIB}'
-    gs_es_propagate_to_dockerfiles \"\$D/.env\" \"\$D/docker\" '' 'false' >/dev/null 2>&1
+    _gs_es_propagate_to_dockerfiles \"\$D/.env\" \"\$D/docker\" '' 'false' >/dev/null 2>&1
     c1=\$(cat \"\$D/docker/images/svc1/Dockerfile\")
     c2=\$(cat \"\$D/docker/images/svc2/Dockerfile\")
     [[ \"\$c1\" == 'ARG SHARED_VAR=canonical' ]] || { echo \"svc1 not updated; got: \$c1\"; echo FAIL; exit 0; }
@@ -1096,9 +1096,9 @@ t "idempotency: running propagation twice produces 0 changes on second run" bash
     printf 'ARG IDEM_VAR=stale\n' > \"\$D/docker/images/svc/Dockerfile\"
     source '${_PROP_LIB}'
     # First run — rewrites the file
-    gs_es_propagate_to_dockerfiles \"\$D/.env\" \"\$D/docker\" '' 'false' >/dev/null 2>&1
+    _gs_es_propagate_to_dockerfiles \"\$D/.env\" \"\$D/docker\" '' 'false' >/dev/null 2>&1
     # Second run — should report 0 values propagated
-    out2=\$(gs_es_propagate_to_dockerfiles \"\$D/.env\" \"\$D/docker\" '' 'false' 2>&1)
+    out2=\$(_gs_es_propagate_to_dockerfiles \"\$D/.env\" \"\$D/docker\" '' 'false' 2>&1)
     echo \"\$out2\" | grep -q 'propagated 0 value(s) across 0 file(s)' || { echo \"Expected 0 changes on second run; got: \$out2\"; echo FAIL; exit 0; }
     echo PASS
 "
@@ -1110,7 +1110,7 @@ t "already in sync: Dockerfile ARG matches .env → no rewrite, 0 changes" bash 
     printf 'ARG SYNC_VAR=same_value\n' > \"\$D/docker/images/svc/Dockerfile\"
     before=\$(cat \"\$D/docker/images/svc/Dockerfile\")
     source '${_PROP_LIB}'
-    out=\$(gs_es_propagate_to_dockerfiles \"\$D/.env\" \"\$D/docker\" '' 'false' 2>&1)
+    out=\$(_gs_es_propagate_to_dockerfiles \"\$D/.env\" \"\$D/docker\" '' 'false' 2>&1)
     after=\$(cat \"\$D/docker/images/svc/Dockerfile\")
     echo \"\$out\" | grep -q 'propagated 0 value(s) across 0 file(s)' || { echo \"Expected 0 changes; got: \$out\"; echo FAIL; exit 0; }
     [[ \"\$before\" == \"\$after\" ]] || { echo \"Dockerfile should not have changed\"; echo FAIL; exit 0; }
@@ -1123,7 +1123,7 @@ t "missing Dockerfile ARG: var in .env with no ARG line → no error, 0 changes"
     printf 'ABSENT_VAR=some_value\n' > \"\$D/.env\"
     printf 'ARG UNRELATED_VAR=unchanged\n' > \"\$D/docker/images/svc/Dockerfile\"
     source '${_PROP_LIB}'
-    out=\$(gs_es_propagate_to_dockerfiles \"\$D/.env\" \"\$D/docker\" '' 'false' 2>&1)
+    out=\$(_gs_es_propagate_to_dockerfiles \"\$D/.env\" \"\$D/docker\" '' 'false' 2>&1)
     rc=\$?
     [[ \$rc -eq 0 ]] || { echo \"Expected exit 0, got \$rc\"; echo FAIL; exit 0; }
     echo \"\$out\" | grep -q 'propagated 0 value(s) across 0 file(s)' || { echo \"Expected 0 changes; got: \$out\"; echo FAIL; exit 0; }
@@ -1577,7 +1577,7 @@ t "propagate.sh — _prop_env_map does not leak to caller" bash -c "
     source \"\$SDIR/propagate.sh\"
     # Create a minimal env file and a non-existent docker root (function returns 0)
     ETMP=\$(mktemp); printf 'GLOBAL_STACK_X=1\n' > \"\$ETMP\"
-    gs_es_propagate_to_dockerfiles \"\$ETMP\" '/nonexistent_docker_root_xyz' '' 'true' 2>/dev/null || true
+    _gs_es_propagate_to_dockerfiles \"\$ETMP\" '/nonexistent_docker_root_xyz' '' 'true' 2>/dev/null || true
     rm -f \"\$ETMP\"
     # _prop_env_map must not be visible in this scope
     if declare -p _prop_env_map 2>/dev/null | grep -q 'declare'; then
@@ -1621,7 +1621,7 @@ t "merge.sh — _gs_es_dest_vals does not leak to caller" bash -c "
     STMP=\$(mktemp); DTMP=\$(mktemp)
     printf 'GLOBAL_STACK_A=1\n' > \"\$STMP\"
     printf 'GLOBAL_STACK_A=1\n' > \"\$DTMP\"
-    gs_es_process_file \"\$STMP\" \"\$DTMP\" '99' 'false' 2>/dev/null || true
+    _gs_es_process_file \"\$STMP\" \"\$DTMP\" '99' 'false' 2>/dev/null || true
     rm -f \"\$STMP\" \"\$DTMP\"
     # Neither _gs_es_dest_vals nor _gs_es_dest_emitted should be visible here
     leaked=false
@@ -2165,7 +2165,7 @@ t "t21d: --destination-file-tmp-suffix accepted without error" bash -c "
 section "22 — es-F001/F002/F003: propagate per-file, dead tmp_file, no-fail notice"
 # ═══════════════════════════════════════════════════════════════════════════
 
-# es-F001: gs_es_propagate_to_dockerfiles called with full source_files string.
+# es-F001: _gs_es_propagate_to_dockerfiles called with full source_files string.
 # For multi-source invocations, the function receives "a.env b.env" as a single
 # string, the [[ ! -f ]] guard fires, and propagation fails silently.
 # Fix: loop over source_files in main.sh and call propagate per file.
@@ -2220,9 +2220,9 @@ t "t22b: removing dead tmp_file — merge output unchanged (no regression)" bash
 # After fix: when no_fail=true and propagation fails, a [NO-FAIL] notice must appear.
 t "t22c: --no-fail + Phase 6 propagation error → [NO-FAIL] per-suppression notice" bash -c "
     # Directly test main.sh Phase 6 suppression by sourcing the library files and
-    # overriding gs_es_propagate_to_dockerfiles to return 1.
+    # overriding _gs_es_propagate_to_dockerfiles to return 1.
     source '/stack/bin/lib/env-scan/config/defaults.sh'
-    gs_es_propagate_to_dockerfiles() { return 1; }
+    _gs_es_propagate_to_dockerfiles() { return 1; }
     declare -A _GS_ES_CFG
     _GS_ES_CFG[source_files]='/dev/null'
     _GS_ES_CFG[scan_path]='/tmp'
@@ -2232,7 +2232,7 @@ t "t22c: --no-fail + Phase 6 propagation error → [NO-FAIL] per-suppression not
     _propagate_rc=0
     _prop_src_file='/dev/null'
     _one_propagate_rc=0
-    gs_es_propagate_to_dockerfiles \
+    _gs_es_propagate_to_dockerfiles \
         \"\${_prop_src_file}\" '/tmp' '' 'false' || _one_propagate_rc=\$?
     [[ \"\${_one_propagate_rc}\" -ne 0 ]] && _propagate_rc=\${_one_propagate_rc}
     out=''
@@ -2604,6 +2604,108 @@ t "t37e: --source-merged-file=<path> flag accepted, run exits 0" bash -c "
         --source-merged-file=\"\$merged\" \
         --backup=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null || rc=\$?
     [[ \"\$rc\" -eq 0 ]] || { echo \"run failed with exit \$rc\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+_flush_section
+
+# ═══════════════════════════════════════════════════════════════════════════
+section "38 — P3 audit: smoke tests for 7 low-coverage flags"
+
+# t38a: --diff-ignore-pattern suppresses diff reports for matching vars
+t "t38a: --diff-ignore-pattern=PATTERN suppresses diff for matching var" bash -c "
+    D='\${TMP_DIR}/t38a'; mkdir -p \"\$D\"
+    printf 'GLOBAL_STACK_T38A_TOKEN=secret1\n' > \"\$D/.env\"
+    printf 'GLOBAL_STACK_T38A_TOKEN=secret2\n' > \"\$D/.env.local\"
+    out=\$(bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=false \
+        --diff-ignore-pattern='GLOBAL_STACK_T38A_TOKEN' \
+        --sync-values=false --backup=false 2>&1)
+    rc=\$?
+    [[ \"\$rc\" -eq 0 ]] || { echo \"run failed with exit \$rc; out=\$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t38b: --scan-var-ignore-pattern suppresses var extraction for matching names
+t "t38b: --scan-var-ignore-pattern=PATTERN accepted, run exits 0" bash -c "
+    D='\${TMP_DIR}/t38b'; mkdir -p \"\$D\"
+    printf 'GLOBAL_STACK_T38B=1.0\n' > \"\$D/.env\"
+    printf '' > \"\$D/.env.local\"
+    rc=0
+    bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=false \
+        --scan-var-ignore-pattern='GLOBAL_STACK_T38B' \
+        --backup=false --show-added-entries=false 2>&1 >/dev/null || rc=\$?
+    [[ \"\$rc\" -eq 0 ]] || { echo \"run failed with exit \$rc\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t38c: --reverse-check-ignore-pattern suppresses orphan reports for matching vars
+t "t38c: --reverse-check-ignore-pattern=PATTERN accepted, run exits 0" bash -c "
+    D='\${TMP_DIR}/t38c'; mkdir -p \"\$D\"
+    printf 'GLOBAL_STACK_T38C=1.0\n' > \"\$D/.env\"
+    printf 'GLOBAL_STACK_T38C=1.0\nGLOBAL_STACK_T38C_LOCAL=local\n' > \"\$D/.env.local\"
+    rc=0
+    bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=false \
+        --reverse-check-ignore-pattern='GLOBAL_STACK_T38C_LOCAL' \
+        --backup=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null || rc=\$?
+    [[ \"\$rc\" -eq 0 ]] || { echo \"run failed with exit \$rc\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t38d: --forward-check-ignore-pattern accepted without error
+t "t38d: --forward-check-ignore-pattern=PATTERN accepted, run exits 0" bash -c "
+    D='\${TMP_DIR}/t38d'; mkdir -p \"\$D\"
+    printf 'GLOBAL_STACK_T38D=1.0\n' > \"\$D/.env\"
+    printf '' > \"\$D/.env.local\"
+    rc=0
+    bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=false \
+        --forward-check-ignore-pattern='GLOBAL_STACK_T38D' \
+        --backup=false --show-added-entries=false 2>&1 >/dev/null || rc=\$?
+    [[ \"\$rc\" -eq 0 ]] || { echo \"run failed with exit \$rc\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t38e: --exclude-explicit-empty=true accepted and run exits 0
+# Note: this flag controls scan-conflict-detection suppression (Phase 4), not Phase 5 merge.
+# An empty VAR= in .env is still synced to .env.local; the flag suppresses conflict
+# reports for empty values found in scan (docker ARG) output.
+t "t38e: --exclude-explicit-empty=true flag accepted, run exits 0" bash -c "
+    D='\${TMP_DIR}/t38e'; mkdir -p \"\$D\"
+    printf 'GLOBAL_STACK_T38E_FILLED=1.0\nGLOBAL_STACK_T38E_EMPTY=\n' > \"\$D/.env\"
+    printf '' > \"\$D/.env.local\"
+    rc=0
+    bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=false \
+        --exclude-explicit-empty=true --backup=false \
+        --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null || rc=\$?
+    [[ \"\$rc\" -eq 0 ]] || { echo \"run failed with exit \$rc\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t38f: --conflict-ignore-pattern suppresses conflict detection for matching vars
+t "t38f: --conflict-ignore-pattern=PATTERN accepted, run exits 0" bash -c "
+    D='\${TMP_DIR}/t38f'; mkdir -p \"\$D\"
+    printf 'GLOBAL_STACK_T38F=1.0\n' > \"\$D/.env\"
+    printf '' > \"\$D/.env.local\"
+    rc=0
+    bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=false \
+        --conflict-ignore-pattern='GLOBAL_STACK_T38F' \
+        --backup=false --show-added-entries=false 2>&1 >/dev/null || rc=\$?
+    [[ \"\$rc\" -eq 0 ]] || { echo \"run failed with exit \$rc\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t38g: --backup-suffix=<str> uses the custom suffix for backup file names
+t "t38g: --backup-suffix=.mybak creates backup with custom suffix" bash -c "
+    D='\${TMP_DIR}/t38g'; mkdir -p \"\$D\"
+    printf 'GLOBAL_STACK_T38G=1.0\n' > \"\$D/.env\"
+    printf '' > \"\$D/.env.local\"
+    bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=false \
+        --backup=true --backup-suffix='.mybak' \
+        --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
+    rc=\$?
+    [[ \"\$rc\" -eq 0 ]] || { echo \"run failed with exit \$rc\"; echo FAIL; exit 0; }
+    # Backup file should exist with .mybak suffix (hidden file — requires ls -a)
+    found=\$(ls -a \"\$D/\" | grep '.env.local.mybak\.' 2>/dev/null | head -1)
+    [[ -n \"\$found\" ]] || { echo \"no .mybak backup found; files: \$(ls -a \$D/)\"; echo FAIL; exit 0; }
     echo PASS
 "
 

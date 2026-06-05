@@ -82,15 +82,21 @@ _gs_eu2_github_ls_remote() {
   if [[ -n "${_tok}" ]]; then
     # Use GIT_ASKPASS to supply the token out-of-band — avoids token in process
     # list (ps auxww), shell history, and CI logs.
-    local _askpass
+    local _askpass _old_umask
+    # umask 0077: ensure mktemp creates the file 0600 regardless of process umask.
+    # chmod 700 follows immediately after to add execute bit — ordering: chmod AFTER
+    # mktemp but BEFORE any write so the file is never world-readable with content.
+    _old_umask="$(umask)"
+    umask 0077
     _askpass="$(mktemp)"
+    umask "${_old_umask}"
+    chmod 700 "${_askpass}"
     # Guarantee cleanup on all exit paths (normal return, set -e abort, early return).
     # SIGKILL is the only case this cannot protect against.
     # shellcheck disable=SC2064
     trap "rm -f '${_askpass}'" RETURN
     printf '%s\n' '#!/bin/sh' > "${_askpass}"
     printf 'echo "%s"\n' "${_tok}" >> "${_askpass}"
-    chmod 700 "${_askpass}"
     GIT_ASKPASS="${_askpass}" git ls-remote \
       "https://x-access-token@github.com/${_repo}.git" 'refs/tags/*' 2>/dev/null || true
     rm -f "${_askpass}"

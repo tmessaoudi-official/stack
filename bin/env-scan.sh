@@ -14,4 +14,4 @@ source "${_GS_ES_LIB_DIR}/reporting/profile.sh"
 source "${_GS_ES_LIB_DIR}/core/missing.sh"
 source "${_GS_ES_LIB_DIR}/main.sh"
 
-gs_es_main "${@}"
+_gs_es_main "${@}"

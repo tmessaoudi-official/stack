@@ -7,7 +7,7 @@
 # Deps:      bash 4.3+, cp, find, rm, git
 # Env:       none (all inputs are arguments)
 #
-# Provides four composable backup operations used by gs_es_main (Phase 4.5,
+# Provides four composable backup operations used by _gs_es_main (Phase 4.5,
 # Phase 6, Phase 6.5):
 #   _gs_es_backup_unconditional   — always back up a file (used for env files)
 #   _gs_es_backup_if_gitignored   — conditionally back up a Dockerfile (Phase 6)

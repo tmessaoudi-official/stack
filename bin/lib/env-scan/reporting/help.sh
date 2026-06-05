@@ -1,7 +1,7 @@
 #!/bin/bash
-# help.sh — gs_es_show_help: print CLI usage to stdout
+# help.sh — _gs_es_show_help: print CLI usage to stdout
 #
-# Exports:   gs_es_show_help
+# Exports:   _gs_es_show_help
 # Sources:   none (reads _GS_ES_VERSION from defaults.sh at runtime via calling context)
 # Deps:      bash 4.3+
 # Env:       _GS_ES_VERSION (from config/defaults.sh; embedded in the usage header)
@@ -10,13 +10,13 @@
 [[ -n "${_GS_ES_HELP_SH_LOADED:-}" ]] && return 0
 readonly _GS_ES_HELP_SH_LOADED=1
 
-# gs_es_show_help — print the complete CLI flag reference to stdout.
+# _gs_es_show_help — print the complete CLI flag reference to stdout.
 #
 # Args:    none
 # Prints:  usage text with all supported flags, their types, defaults, and examples
 # Returns: 0 always
 # Side fx: none
-gs_es_show_help() {
+_gs_es_show_help() {
 	cat << EOF
 bin/env-scan.sh v${_GS_ES_VERSION} — env sync + Dockerfile propagation
 

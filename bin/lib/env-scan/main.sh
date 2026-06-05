@@ -1,7 +1,7 @@
 #!/bin/bash
-# main.sh — gs_es_main orchestration for env-scan 8-phase pipeline.
+# main.sh — _gs_es_main orchestration for env-scan 8-phase pipeline.
 #
-# Exports:   gs_es_main
+# Exports:   _gs_es_main
 # Sources:   config/defaults.sh  core/args.sh  core/backup.sh  core/extract.sh
 #            core/merge.sh  reporting/profile.sh  reporting/reference.sh
 #            propagate.sh
@@ -73,16 +73,16 @@ _gs_es_confirm_write() {
   exit 1
 }
 
-# gs_es_main — top-level entry point; runs the full 8-phase pipeline.
+# _gs_es_main — top-level entry point; runs the full 8-phase pipeline.
 #
-# Args:    "$@" — all CLI arguments (passed through to gs_es_parse_args)
+# Args:    "$@" — all CLI arguments (passed through to _gs_es_parse_args)
 # Prints:  phase output to stdout; banners + backup messages to stderr
 # Returns: 0 on success; non-zero on Phase 6 propagation error (unless --no-fail)
-gs_es_main() {
+_gs_es_main() {
   # Phase 1: Parse args
   _gs_es_profile_init # records total start time before we know --profile value
   _gs_es_profile_start
-  gs_es_parse_args "${@}"
+  _gs_es_parse_args "${@}"
   _gs_es_profile_end "Parse args"
 
   # --reference: print comprehensive reference and exit (before any env file access)
@@ -139,7 +139,7 @@ gs_es_main() {
   # Phase 4: Detect conflicting values
   _gs_es_profile_start
   # ── Consolidated multiple-defaults check (sequential, after all extractions) ─
-  gs_es_detect_multiple_defaults \
+  _gs_es_detect_multiple_defaults \
     "${_GS_ES_CFG[scan_output_file]}" \
     "${_GS_ES_CFG[scan_path]}"
   _gs_es_profile_end "Detect conflicting values"
@@ -189,7 +189,7 @@ gs_es_main() {
     ((++_count_src))
     for _dest_file in ${_GS_ES_CFG[destination_files]//[\"\'\`]/}; do
       ((++_count_dest))
-      gs_es_process_file \
+      _gs_es_process_file \
         "${_src_file}" \
         "${_dest_file}" \
         "${_count_src}_${_count_dest}" \
@@ -200,13 +200,13 @@ gs_es_main() {
 
   # Phase 6: Propagate canonical values to Dockerfiles.
   # es-F001: source_files may be space-separated when --source-files has multiple values.
-  # gs_es_propagate_to_dockerfiles expects a single file path — loop over each source file.
+  # _gs_es_propagate_to_dockerfiles expects a single file path — loop over each source file.
   _gs_es_profile_start
   local _propagate_rc=0
   local _prop_src_file
   for _prop_src_file in ${_GS_ES_CFG[source_files]//[\"\'\`]/}; do
     local _one_propagate_rc=0
-    gs_es_propagate_to_dockerfiles \
+    _gs_es_propagate_to_dockerfiles \
       "${_prop_src_file}" \
       "${_GS_ES_CFG[scan_path]}" \
       "${_GS_ES_CFG[conflict_ignore_pattern]:-}" \

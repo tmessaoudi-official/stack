@@ -110,8 +110,13 @@ _gs_eu2_apply_single() {
 # Side fx: rewrites file atomically (tmp+mv); used by (replace:) cascade writes
 _gs_eu2_apply_replace_target() {
   local _file="${1}" _var="${2}" _new="${3}"
-  local _tmp
-  _tmp="$(mktemp)" || { printf 'env-update/apply: mktemp failed\n' >&2; return 1; }
+  local _tmp _art_old_umask
+  # umask 0077: temp file holds env content — restrict to owner only.
+  _art_old_umask="$(umask)"
+  umask 0077
+  _tmp="$(mktemp)"
+  umask "${_art_old_umask}"
+  [[ -n "${_tmp}" ]] || { printf 'env-update/apply: mktemp failed\n' >&2; return 1; }
   awk -v var="${_var}" -v newval="${_new}" '
     index($0, var "=") == 1 { print var "=" newval; next }
     { print }
@@ -175,9 +180,14 @@ _gs_eu2_apply_updates() {
   # Snapshot the env file so we can roll back if a cascade write fails mid-way.
   # Covers both the AUTO cascade pass and the SKIP replace-only pass.
   # Dry-run: no snapshot needed (no writes occur).
-  local _snapshot=""
+  local _snapshot="" _snap_old_umask
   if [[ "${_dry_run}" != "true" ]]; then
-    _snapshot="$(mktemp)" || { printf 'env-update/apply: snapshot mktemp failed\n' >&2; return 1; }
+    # umask 0077: snapshot holds the entire env file — restrict to owner only.
+    _snap_old_umask="$(umask)"
+    umask 0077
+    _snapshot="$(mktemp)"
+    umask "${_snap_old_umask}"
+    [[ -n "${_snapshot}" ]] || { printf 'env-update/apply: snapshot mktemp failed\n' >&2; return 1; }
     cp "${_env_file}" "${_snapshot}" || { rm -f "${_snapshot}"; return 1; }
     # shellcheck disable=SC2064
     trap "rm -f '${_snapshot}'" RETURN

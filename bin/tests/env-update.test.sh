@@ -9659,7 +9659,7 @@ t "t96e: env-scan propagate dry-run per-var output contains [DRY-RUN] prefix" ba
     printf 'GLOBAL_STACK_T96E=newvalue\n' > \"\${env_file}\"
     # Dockerfile with mismatched value
     printf 'FROM scratch\nARG GLOBAL_STACK_T96E=oldvalue\n' > \"\${df_dir}/Dockerfile\"
-    out=\$(gs_es_propagate_to_dockerfiles \"\${env_file}\" \"\${df_dir}\" '' 'true' 2>&1)
+    out=\$(_gs_es_propagate_to_dockerfiles \"\${env_file}\" \"\${df_dir}\" '' 'true' 2>&1)
     # dry-run per-var line must contain '[DRY-RUN]'
     echo \"\$out\" | grep -qF '[DRY-RUN]' || { echo \"expected [DRY-RUN] in dry-run per-var output; got: \$out\"; echo FAIL; exit 0; }
     # File must NOT be modified in dry-run

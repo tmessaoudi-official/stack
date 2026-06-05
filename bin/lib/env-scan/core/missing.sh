@@ -1,11 +1,11 @@
 #!/bin/bash
-# missing.sh — gs_es_check_missing_variables: forward and reverse variable-presence checks
+# missing.sh — _gs_es_check_missing_variables: forward and reverse variable-presence checks
 #
-# Exports:   gs_es_check_missing_variables
+# Exports:   _gs_es_check_missing_variables
 # Sources:   config/defaults.sh
 # Deps:      bash 4.3+, cut, sort, comm, grep
 # Env:       _GS_ES_CFG (scan_output_file, scan_path, debug, cleanup_tmp, quiet)
-#            _GS_ES_SESSION_TMP (set by gs_es_main; temp dir for per-run scratch files)
+#            _GS_ES_SESSION_TMP (set by _gs_es_main; temp dir for per-run scratch files)
 #
 # Implements three directed checks (called from merge.sh):
 #   Forward Check 1 (reverse_checking=false, target=.env):
@@ -26,7 +26,7 @@ readonly _GS_ES_MISSING_SH_LOADED=1
 # shellcheck source=./../config/defaults.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../config/defaults.sh"
 
-# gs_es_check_missing_variables — report variables present in one set but absent from another.
+# _gs_es_check_missing_variables — report variables present in one set but absent from another.
 #
 # Args:    $1 target_file       — env file to check against (one side of the diff)
 #          $2 txt_file_name     — name stem used for per-invocation temp files in _GS_ES_SESSION_TMP
@@ -40,7 +40,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/../config/defaults.sh"
 # Returns: 0 always (informational — does not abort the run)
 # Side fx: writes/reads two temp files in _GS_ES_SESSION_TMP; deletes them if
 #          cleanup_tmp=true
-gs_es_check_missing_variables() {
+_gs_es_check_missing_variables() {
 	local target_file="${1}"
 	local txt_file_name="${2}"
 	local exclude_pattern="${3}"
@@ -67,16 +67,16 @@ gs_es_check_missing_variables() {
 
 	if [[ -n "${missing_variables}" ]]; then
 		if [[ "true" = "${reverse_checking}" ]]; then
-			printf '\n ---- (gs_es_check_missing_variables: reverse=%s): Missing variables from %s in %s:\n%s\n\n' "${reverse_checking}" "${target_file}" "${_GS_ES_CFG[scan_path]}" "${missing_variables}"
+			printf '\n ---- (_gs_es_check_missing_variables: reverse=%s): Missing variables from %s in %s:\n%s\n\n' "${reverse_checking}" "${target_file}" "${_GS_ES_CFG[scan_path]}" "${missing_variables}"
 		else
-			printf '\n ---- (gs_es_check_missing_variables: reverse=%s): Missing variables from %s in %s:\n%s\n\n' "${reverse_checking}" "${_GS_ES_CFG[scan_path]}" "${target_file}" "${missing_variables}"
+			printf '\n ---- (_gs_es_check_missing_variables: reverse=%s): Missing variables from %s in %s:\n%s\n\n' "${reverse_checking}" "${_GS_ES_CFG[scan_path]}" "${target_file}" "${missing_variables}"
 		fi
 	else
 		if [[ "true" = "${_GS_ES_CFG[debug]}" ]]; then
 			if [[ "true" = "${reverse_checking}" ]]; then
-				printf '\n ---- (gs_es_check_missing_variables: reverse=%s): All the environment variables present in %s are in %s\n\n' "${reverse_checking}" "${target_file}" "${_GS_ES_CFG[scan_path]}"
+				printf '\n ---- (_gs_es_check_missing_variables: reverse=%s): All the environment variables present in %s are in %s\n\n' "${reverse_checking}" "${target_file}" "${_GS_ES_CFG[scan_path]}"
 			else
-				printf '\n ---- (gs_es_check_missing_variables: reverse=%s): All the environment variables present in %s are in %s\n\n' "${reverse_checking}" "${_GS_ES_CFG[scan_path]}" "${target_file}"
+				printf '\n ---- (_gs_es_check_missing_variables: reverse=%s): All the environment variables present in %s are in %s\n\n' "${reverse_checking}" "${_GS_ES_CFG[scan_path]}" "${target_file}"
 			fi
 		fi
 	fi

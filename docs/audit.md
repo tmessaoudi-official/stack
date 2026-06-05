@@ -206,30 +206,29 @@
 
 ### [R4-P3-1] `github.sh:86-93` — chmod after write (defensive order wrong)
 
-- **Severity**: P3 · **Confidence**: 100% · **Status**: Open
+- **Severity**: P3 · **Confidence**: 100% · **Status**: **Fixed** (2026-06-05) — reordered to: umask 0077 → mktemp → chmod 700 → restore umask → trap → write; token file is never world-readable at any point
 - **Component**: `bin/lib/env-update/fetchers/github.sh:86-93`
-- **Evidence**: mktemp (0600 by default) → write token → chmod 700. chmod after write is ordering-wrong for defense-in-depth; mktemp default 0600 makes this a non-issue in practice
-- **Recommended fix**: move chmod to immediately after mktemp, before any write
 
 ### [R4-P3-2] `apply.sh:178` — mktemp without `umask 0077`
 
-- **Severity**: P3 · **Confidence**: 100% · **Status**: Open
+- **Severity**: P3 · **Confidence**: 100% · **Status**: **Fixed** (2026-06-05) — both mktemp calls in apply.sh (`_gs_eu2_apply_replace_target` and snapshot) now wrapped with umask 0077 / restore; temp files holding env content restricted to owner-only from creation
 - **Recommended fix**: wrap `mktemp` with `umask 0077` ... `umask <restore>` for defense-in-depth
 
 ### [R4-P3-3] env-scan public/private function naming inconsistency
 
-- **Severity**: P3 · **Confidence**: 100% · **Status**: Open — see Q15
+- **Severity**: P3 · **Confidence**: 100% · **Status**: **Fixed** (2026-06-05) — all 10 public `gs_es_*` functions renamed to `_gs_es_*`; entry point remains `bin/env-scan.sh` (unchanged); tests and one env-update test (t96e) updated
 - **Component**: `bin/lib/env-scan/*.sh`
 
 ### [R4-P3-4] `_p` temp variable in env-scan `defaults.sh:39,64`
 
-- **Severity**: P3 · **Confidence**: 100% · **Status**: Open
+- **Severity**: P3 · **Confidence**: 100% · **Status**: **Fixed** (2026-06-05) — renamed to `_gs_es_pattern_buf` across all 6 usage blocks in defaults.sh
 - **Recommended fix**: rename to `_gs_es_pattern_buf`
 
 ### [R2-P3-1 through R2-P3-7] Low-coverage env-scan flags (2 test refs each)
 
-- **Severity**: P3 · **Confidence**: 100% · **Status**: Open
+- **Severity**: P3 · **Confidence**: 100% · **Status**: **Fixed** (2026-06-05) — smoke tests added for all 7 flags in section 38 (t38a–t38g); also corrected test premise for `--exclude-explicit-empty` (flag affects scan-conflict-detection, not Phase 5 merge)
 - Flags: `--diff-ignore-pattern`, `--scan-var-ignore-pattern`, `--reverse-check-ignore-pattern`, `--forward-check-ignore-pattern`, `--exclude-explicit-empty`, `--conflict-ignore-pattern`, `--backup-suffix`
+- **Tests**: section 38 (t38a–t38g)
 
 ---
 
@@ -544,4 +543,9 @@ bash bin/tests/env-update.test.sh --section=108               # ALL PASSED ✓ 4
 bash bin/tests/env-scan.test.sh --section=37                  # ALL PASSED ✓ 5/5
 bash bin/tests/env-update.test.sh                             # ALL PASSED ✓ 728/728
 bash bin/tests/env-scan.test.sh                               # ALL PASSED ✓ 170/170
+
+# P3 batch (2026-06-05)
+bash bin/tests/env-scan.test.sh --section=38                  # ALL PASSED ✓ 7/7
+bash bin/tests/env-update.test.sh                             # ALL PASSED ✓ 728/728
+bash bin/tests/env-scan.test.sh                               # ALL PASSED ✓ 177/177
 ```

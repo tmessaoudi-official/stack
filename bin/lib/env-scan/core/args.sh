@@ -1,7 +1,7 @@
 #!/bin/bash
 # args.sh — CLI argument parser; populates _GS_ES_CFG from "$@"
 #
-# Exports:   gs_es_parse_args
+# Exports:   _gs_es_parse_args
 # Sources:   config/defaults.sh  reporting/help.sh
 # Deps:      bash 4.3+, realpath
 # Env:       _GS_ES_CFG (associative array, declared in defaults.sh)
@@ -20,16 +20,16 @@ source "$(dirname "${BASH_SOURCE[0]}")/../config/defaults.sh"
 # shellcheck source=./../reporting/help.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../reporting/help.sh"
 
-# gs_es_parse_args — parse CLI flags and populate _GS_ES_CFG.
+# _gs_es_parse_args — parse CLI flags and populate _GS_ES_CFG.
 #
 # Args:    "$@" — all CLI arguments
 # Sets:    _GS_ES_CFG[*] — every supported flag key; unset keys receive defaults
 # Prints:  error messages to stderr on invalid values
 # Returns: 0 on success; exit 1 on invalid --backup-keep or unknown flag
-# Side fx: calls gs_es_show_help and exits 0 for --help;
+# Side fx: calls _gs_es_show_help and exits 0 for --help;
 #          prints version and exits 0 for --version;
 #          sets reference=true for --reference[=SECTION]
-gs_es_parse_args() {
+_gs_es_parse_args() {
   while [[ $# -gt 0 ]]; do
     case "${1}" in
       --debug=*)
@@ -156,12 +156,12 @@ gs_es_parse_args() {
         exit 0
         ;;
       --help)
-        gs_es_show_help
+        _gs_es_show_help
         exit 0
         ;;
       *)
         printf '\n ---- Unknown option passed: '"'"'%s'"'"' \n\n' "${1}" >&2
-        gs_es_show_help
+        _gs_es_show_help
         exit 1
         ;;
     esac

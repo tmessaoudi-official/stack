@@ -1,7 +1,7 @@
 #!/bin/bash
-# merge.sh — gs_es_process_file: Phase 5 src→dest merge and post-merge checks
+# merge.sh — _gs_es_process_file: Phase 5 src→dest merge and post-merge checks
 #
-# Exports:   gs_es_process_file
+# Exports:   _gs_es_process_file
 # Sources:   config/defaults.sh  reporting/report.sh  core/missing.sh
 # Deps:      bash 4.3+, sed, awk, mv, realpath
 # Env:       _GS_ES_CFG (strip_comments, remove_empty_lines, remove_trailing_spaces,
@@ -33,7 +33,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/../reporting/report.sh"
 # shellcheck source=./missing.sh
 source "$(dirname "${BASH_SOURCE[0]}")/missing.sh"
 
-# gs_es_process_file — merge source env file into destination and run post-merge checks.
+# _gs_es_process_file — merge source env file into destination and run post-merge checks.
 #
 # Args:    $1 src_file  — canonical source file (e.g. .env)
 #          $2 dest_file — destination to update (e.g. .env.local)
@@ -44,10 +44,10 @@ source "$(dirname "${BASH_SOURCE[0]}")/missing.sh"
 # Returns: 0 on success; 1 if source file is missing/empty or src==dest
 # Side fx: writes merged_file at <dest><destination_file_merged_suffix>.<count>;
 #          atomically replaces dest with merged result when dry_run != true;
-#          calls gs_es_show_inconsistency, gs_es_show_differences,
-#          gs_es_check_missing_variables for the three check passes;
+#          calls _gs_es_show_inconsistency, _gs_es_show_differences,
+#          _gs_es_check_missing_variables for the three check passes;
 #          GAP-3: aborts if src and dest resolve to the same path (realpath check)
-gs_es_process_file() {
+_gs_es_process_file() {
 	local src_file="${1}"
 	local dest_file="${2}"
 	local count="${3}"
@@ -155,7 +155,7 @@ gs_es_process_file() {
 
 	# Show added entries if enabled
 	[[ "true" = "${_GS_ES_CFG[show_added_entries]}" ]] &&
-		gs_es_show_inconsistency \
+		_gs_es_show_inconsistency \
 			"${src_file}" \
 			"${dest_file}" \
 			"" \
@@ -167,7 +167,7 @@ gs_es_process_file() {
 	fi
 
 	# Show different/missing entries if enabled
-	gs_es_show_differences \
+	_gs_es_show_differences \
 		"${src_file}" \
 		"${dest_file}" \
 		"${count}"
@@ -175,7 +175,7 @@ gs_es_process_file() {
 	# FORWARD Check 1 (scan → .env): vars found in scan output absent from source.
 	# Suggests new GLOBAL_STACK_* usages in Docker files not yet declared in .env.
 	[[ "true" = "${_GS_ES_CFG[check_missing]}" ]] &&
-		gs_es_check_missing_variables \
+		_gs_es_check_missing_variables \
 			"${src_file}" \
 			"src.${count}" \
 			"${_GS_ES_CFG[forward_check_ignore_pattern]}|${_GS_ES_CFG[exclude_local_pattern]}" \
@@ -184,7 +184,7 @@ gs_es_process_file() {
 	# Suggests entries in .env not yet propagated to .env.local.
 	# exclude_local_pattern suppresses GLOBAL_STACK_LOCAL_* false positives (same as Check 1).
 	[[ "true" = "${_GS_ES_CFG[check_missing]}" ]] &&
-		gs_es_check_missing_variables \
+		_gs_es_check_missing_variables \
 			"${dest_file}" \
 			"dest.${count}" \
 			"${_GS_ES_CFG[forward_check_ignore_pattern]}|${_GS_ES_CFG[exclude_local_pattern]}" \
@@ -192,14 +192,14 @@ gs_es_process_file() {
 	# REVERSE Check 3 (.env.local → scan): vars in destination absent from scan output.
 	# Suggests stale/orphaned entries in .env.local with no corresponding Docker usage.
 	[[ "true" = "${_GS_ES_CFG[check_missing]}" ]] &&
-		gs_es_check_missing_variables \
+		_gs_es_check_missing_variables \
 			"${dest_file}" \
 			"dest.${count}" \
 			"${_GS_ES_CFG[reverse_check_ignore_pattern]}" \
 			"true"
 
 	[[ "true" = "${_GS_ES_CFG[show_added_entries]}" ]] &&
-		gs_es_show_inconsistency \
+		_gs_es_show_inconsistency \
 			"${dest_file}" \
 			"${src_file}" \
 			"${_GS_ES_CFG[exclude_local_pattern]}" \

@@ -1,7 +1,7 @@
 #!/bin/bash
 # propagate.sh — Dockerfile ARG propagation (Phase 6 of env-scan pipeline).
 #
-# Exports:   gs_es_propagate_to_dockerfiles
+# Exports:   _gs_es_propagate_to_dockerfiles
 # Sources:   core/backup.sh  core/git.sh
 # Deps:      bash 4.3+, find, sed, git
 # Env:       _GS_ES_CFG (backup, backup_suffix, _backup_ts, dir, quiet, dry_run)
@@ -27,7 +27,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/core/backup.sh"
 # shellcheck source=./core/git.sh
 source "$(dirname "${BASH_SOURCE[0]}")/core/git.sh"
 
-# ── gs_es_propagate_to_dockerfiles ───────────────────────────────────────────
+# ── _gs_es_propagate_to_dockerfiles ───────────────────────────────────────────
 # Args:
 #   env_file          — source of canonical values (typically .env)
 #   docker_search_root — directory tree to search for Dockerfiles
@@ -37,19 +37,19 @@ source "$(dirname "${BASH_SOURCE[0]}")/core/git.sh"
 # Output:
 #   Prints "[propagate] <dockerfile>: VAR: <old> → <new>" per change.
 #   Prints summary: "propagated N values across M files"
-gs_es_propagate_to_dockerfiles() {
+_gs_es_propagate_to_dockerfiles() {
   local env_file="${1}"
   local docker_search_root="${2}"
   local exclude_pattern="${3}"
   local dry_run="${4}"
 
   if [[ ! -f "${env_file}" ]]; then
-    printf ' ---- (gs_es_propagate_to_dockerfiles): env file not found: %s\n' "${env_file}" >&2
+    printf ' ---- (_gs_es_propagate_to_dockerfiles): env file not found: %s\n' "${env_file}" >&2
     return 1
   fi
 
   if [[ ! -d "${docker_search_root}" ]]; then
-    printf ' ---- (gs_es_propagate_to_dockerfiles): docker search root not found: %s (skipping)\n' "${docker_search_root}" >&2
+    printf ' ---- (_gs_es_propagate_to_dockerfiles): docker search root not found: %s (skipping)\n' "${docker_search_root}" >&2
     return 0
   fi
 
