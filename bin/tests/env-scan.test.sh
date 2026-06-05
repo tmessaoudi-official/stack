@@ -2459,6 +2459,31 @@ t "t34d: GLOBAL_STACK_SHOW_WAITING no longer suppressed by scan_var_ignore" bash
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Section 35 — P0 audit fixes: --reference=invalid
+# ═══════════════════════════════════════════════════════════════════════════
+section "35 — P0 audit fix: --reference=invalid exits 1"
+
+# t35a: --reference=blahblah exits 1 with 'unknown' in stderr
+t "t35a: --reference=blahblah exits 1 with unknown section error" bash -c "
+    stderr_out=\$(bash '${ENV_SCAN}' --reference=blahblah 2>&1 >/dev/null)
+    rc=\$?
+    [[ \"\$rc\" -eq 1 ]] || { echo \"expected exit 1, got \$rc\"; echo FAIL; exit 0; }
+    [[ \"\$stderr_out\" == *'unknown'* ]] || { echo \"expected 'unknown' in stderr; got: \$stderr_out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t35b: --reference=pipeline (valid) exits 0 with output
+t "t35b: --reference=pipeline (valid) exits 0 with output" bash -c "
+    out=\$(bash '${ENV_SCAN}' --reference=pipeline 2>/dev/null)
+    rc=\$?
+    [[ \"\$rc\" -eq 0 ]] || { echo \"expected exit 0, got \$rc\"; echo FAIL; exit 0; }
+    [[ -n \"\$out\" ]] || { echo \"expected output, got empty\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+_flush_section
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section

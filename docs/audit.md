@@ -33,10 +33,10 @@
 
 | Blocker | ID | Status |
 |---|---|---|
-| `--apply --dry-run` advertised by docs, rejected by code | R1-P0-1 | Open |
-| `--filter` documented case-insensitive, code is case-sensitive | R1-P0-2 | Open |
-| env-scan pipeline has 3 disagreeing phase-numbering schemes | R1-P0-3 | Open |
-| `--reference=<invalid>` exits 0 with no output | R1-P0-4 | Open |
+| `--apply --dry-run` advertised by docs, rejected by code | R1-P0-1 | Fixed |
+| `--filter` documented case-insensitive, code is case-sensitive | R1-P0-2 | Fixed |
+| env-scan pipeline has 3 disagreeing phase-numbering schemes | R1-P0-3 | Fixed |
+| `--reference=<invalid>` exits 0 with no output | R1-P0-4 | Fixed |
 | decide.sh sort-V false downgrade on nightly SHA versions | BUG-A | **Fixed** |
 | apply.sh LOCK path rewrites annotation for floating current | BUG-B | **Fixed** |
 
@@ -262,7 +262,7 @@ Three sources of truth in conflict: `args.sh:184-187` rejects it; `main.sh:1370-
 > (b) Keep the rejection: remove all references from help/reference/examples; delete the dead main.sh branch; rewrite test 5740 to assert the rejection itself.
 > (c) Something else.
 >
-> Owner answer: ___
+> Owner answer: (b) Keep rejection: remove dead branch, strip from help/reference, rewrite test 5740 as exit-1 assertion
 
 **Q2. `--filter` case sensitivity [R1-P0-2]**
 
@@ -272,7 +272,7 @@ Reference says case-insensitive; code is case-sensitive.
 > (b) Fix docs: remove "case-insensitive" claim; add note to use UPPER-CASE for GLOBAL_STACK_* convention.
 > (c) Add per-call opt-in (e.g., `--filter-case=insensitive`).
 >
-> Owner answer: ___
+> Owner answer: (a) Fix code: enable nocasematch inside match block
 
 **Q3. env-scan pipeline phase numbering [R1-P0-3]**
 
@@ -282,7 +282,7 @@ Three schemes co-exist: fractional (main.sh), 8-integer (reference), mixed (help
 > (b) Standardize on fractional — renumber reference and env-update's view.
 > (c) 9-phase integer (treat 4.5 and 6.5 as distinct phases).
 >
-> Owner answer: ___
+> Owner answer: (a) Standardize on 8-phase integer
 
 **Q4. `--reference=<invalid-section>` behavior [R1-P0-4]**
 
@@ -293,7 +293,7 @@ Currently exits 0 with zero output.
 > (c) Print closest-match suggestion.
 > (d) Silent no-op (keep current behavior, document it).
 >
-> Owner answer: ___
+> Owner answer: (a) Exit 1 with error listing valid sections
 
 ### P1 questions — shape next sprint
 
@@ -303,7 +303,7 @@ Currently exits 0 with zero output.
 > (b) Yes, intentionally hidden — leave.
 > (c) Add `--help-all` flag that includes them.
 >
-> Owner answer: ___
+> Owner answer: (a) Add --version and --reference to help
 
 **Q6. `--cache-ttl=0` semantics [R1-P1-3]**
 
@@ -314,7 +314,7 @@ Currently exits 0 with zero output.
 > (c) Keep current behavior; document explicitly.
 > (d) Reject `0`; require `--no-cache` instead.
 >
-> Owner answer: ___
+> Owner answer: (a) 0 = alias for --no-cache (bypass reads)
 
 **Q7. `--force-auto --apply --confirm` and the 30-min dry-run gate [R1-P1-4]**
 
@@ -324,7 +324,7 @@ Should explicit `--confirm` be an alternative to the marker?
 > (b) No — keep both gates; force-auto bypasses many guards, extra safety is warranted.
 > (c) Add `--no-dry-run-gate` for opt-out.
 >
-> Owner answer: ___
+> Owner answer: N/A — gate already removed from source
 
 **Q8. `--force-auto` alone (no `--check` or `--apply`) [R1-P1-5]**
 
@@ -334,7 +334,7 @@ Currently exits 0 with an advisory — no output generated.
 > (b) Keep advisory.
 > (c) Promote to ERROR when stdout is not a TTY.
 >
-> Owner answer: ___
+> Owner answer: (a) Exit 1, fix advisory message (remove --apply --dry-run suggestion)
 
 **Q9. Reference `--format` description [R1-P1-2]**
 
@@ -343,7 +343,7 @@ Currently exits 0 with an advisory — no output generated.
 > (a) Change to "Dump format."
 > (b) Extend `--format` to cover `--check` output (JSON streaming).
 >
-> Owner answer: ___
+> Owner answer: (a) Rename to "Dump format"
 
 ### P2 questions — design ambiguities
 
@@ -353,7 +353,7 @@ Currently exits 0 with an advisory — no output generated.
 > (b) No — env-update is intentionally chatty.
 > (c) Add `--quiet-scan` that only affects the forwarded call.
 >
-> Owner answer: ___
+> Owner answer: Closed — --filter forwarding makes no sense for env-scan; --quiet does not exist in env-update
 
 **Q11. Section C cross-product in `--reference=matrix` [R3-P2-1..11]**
 
@@ -363,7 +363,7 @@ Currently exits 0 with an advisory — no output generated.
 > (b) Add Section C only for the 11 specific flagged cells.
 > (c) No — trust users to infer from Sections A and B.
 >
-> Owner answer: ___
+> Owner answer: (a) Add full Section C with all 11 cells
 
 **Q12. Float current + `(watch-major)` undefined behavior [R3-P2-6]**
 
@@ -373,7 +373,7 @@ Currently exits 0 with an advisory — no output generated.
 > (b) Resolve the float first, then apply WATCH.
 > (c) Document as undefined; users should not combine them.
 >
-> Owner answer: ___
+> Owner answer: [ERROR] record at check time (not parse-time abort)
 
 **Q13. `(replace:T=tmpl)` + RESOLVED — replace cascade does not fire [R3-P2-7]**
 
@@ -383,7 +383,7 @@ Currently exits 0 with an advisory — no output generated.
 > (b) Current behavior is correct — RESOLVED and replace are separate concerns.
 > (c) Reject RESOLVED + (replace:) at parse time.
 >
-> Owner answer: ___
+> Owner answer: (a) Fire replace cascade for RESOLVED with --apply-resolve
 
 **Q14. `(hold)` anti-pattern error message [R3-P2-8]**
 
@@ -392,7 +392,7 @@ Currently exits 0 with an advisory — no output generated.
 > (a) Add special-case error with hint: "use (manual) or (override) instead."
 > (b) Generic error + reference docs are sufficient.
 >
-> Owner answer: ___
+> Owner answer: (a) Special-case error: "(hold) is not valid. Use (manual) or (override)."
 
 **Q15. env-scan public/private naming convention [R4-P3-3]**
 
@@ -402,7 +402,7 @@ Mixed `gs_es_*` (public) and `_gs_es_*` (private) across the codebase.
 > (b) Functions called from main.sh stay public; helpers private.
 > (c) Top-level functions in each module public; everything else private.
 >
-> Owner answer: ___
+> Owner answer: (a) All functions private (_gs_es_*), only entry point public
 
 **Q16. Roadmap for `(depends-on)` and `(propagate)` [R4 Maintainability]**
 
@@ -413,7 +413,7 @@ Both parsed but not enforced.
 > (c) Add a no-`--scan` propagation path for `(propagate)` inside env-update.
 > (d) Status quo — both remain documented partial implementations.
 >
-> Owner answer: ___
+> Owner answer: (propagate) = vestigial, remove it; (depends-on) = deferred
 
 **Q17. env-scan `args.sh` DRY refactor [R4-P2-2]**
 
@@ -423,7 +423,7 @@ Both parsed but not enforced.
 > (b) Defer — correct and stable; refactor risk > gain.
 > (c) Add `_gs_es_set_bool` / `_gs_es_set_string` helpers but keep case branches.
 >
-> Owner answer: ___
+> Owner answer: (b) Defer args.sh refactor
 
 **Q18. Dump JSON single-jq optimization [R4-P2-3]**
 
@@ -433,7 +433,7 @@ Both parsed but not enforced.
 > (b) Defer — JSON dump rarely used in tight loops.
 > (c) Benchmark first; decide based on numbers.
 >
-> Owner answer: ___
+> Owner answer: (c) Benchmark first
 
 **Q19. Global bandaid audit on `|| true` and `2>/dev/null` [R4 Error handling]**
 
@@ -443,7 +443,7 @@ Locations: `dockerhub.sh:149,191,201`, `github.sh:95,98`, `apply.sh:364,373`.
 > (b) Audit only the suspicious ones during code review.
 > (c) Defer.
 >
-> Owner answer: ___
+> Owner answer: Deferred
 
 **Q20. `templates/tips/*.md` synchronization with `--reference` [R4 Maintainability]**
 
@@ -453,7 +453,7 @@ No automated check that tips files stay in sync with `--reference` output.
 > (b) Replace tips with a thin wrapper script that runs `--reference`.
 > (c) Status quo — manual sync.
 >
-> Owner answer: ___
+> Owner answer: Closed — tips are standalone documents, not synced from --reference
 
 ### Genuine ambiguities (no specific round finding)
 

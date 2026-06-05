@@ -1596,12 +1596,7 @@ _gs_eu2_main() {
 
     if [[ "${_GS_EU2_CFG[apply]}" == "true" ]]; then
       printf '\n'
-      if [[ "${_GS_EU2_CFG[dry_run]}" == "true" ]]; then
-        printf 'Apply preview (--dry-run):\n'
-        _gs_eu2_profile_start
-        _gs_eu2_apply_updates "${_env_file}" "true"
-        _gs_eu2_profile_end "Apply"
-      else
+      {
         # ── Confirmation gate ────────────────────────────────────────────────
         # Interactive: prompt on TTY; require --yes in non-interactive (no TTY) mode.
         local _n_cand
@@ -1683,7 +1678,7 @@ _gs_eu2_main() {
         else
           printf 'Tip: run bin/env-scan.sh to propagate to .env.local and Dockerfiles (or pass --scan)\n' >&2
         fi
-      fi
+      }
     fi
     # --no-fail: suppress non-zero exit from ERROR fetch decisions.
     # Usage errors (args.sh exit 1), backup failures, and env-file errors are unaffected

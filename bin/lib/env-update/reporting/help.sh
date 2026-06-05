@@ -40,7 +40,7 @@ Options:
   --check                 Fetch latest versions and stream [AUTO|HOLD|SKIP|ERROR] report
   --apply                 Apply all AUTO decisions to the env file; implies --check.
                           Creates a timestamped .env backup before writing.
-                          Use with --dry-run to preview without writing.
+                          Mutually exclusive with --dry-run.
   --apply-resolve         Also apply RESOLVED decisions when used with --apply.
                           RESOLVED records are variables with floating (unversioned)
                           current values (nightly/latest/edge) where the fetcher has

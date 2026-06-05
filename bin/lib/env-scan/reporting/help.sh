@@ -91,7 +91,7 @@ Description:
   - Optionally updating destination files to match source files (--sync-values).
   - Propagating canonical .env values to Dockerfile ARG defaults (Phase 6).
   - Pass --dry-run to suppress all writes: env file sync (Phase 5) and Dockerfile propagation (Phase 6).
-  - Creating timestamped backups of destination files and gitignored Dockerfiles before overwriting (Phase 4.5 / 6).
+  - Creating timestamped backups of destination files and gitignored Dockerfiles before overwriting (Phase 5).
 
 Common backup workflows:
   Normal run, keep 10 backups:           bin/env-scan.sh

@@ -34,6 +34,16 @@ readonly _GS_EU2_REFERENCE_SH_LOADED=1
 _gs_eu2_show_reference() {
   local _section="${1:-all}"
 
+  # Validate section name — exit 1 with list of valid sections if unknown
+  case "${_section}" in
+    all|syntax|flags|annotations|fetchers|decisions|matrix|scenarios|env-scan) ;;
+    *)
+      printf 'env-update: unknown reference section: '\''%s'\''\n' "${_section}" >&2
+      printf 'Valid sections: all, syntax, flags, annotations, fetchers, decisions, matrix, scenarios, env-scan\n' >&2
+      exit 1
+      ;;
+  esac
+
   # ──────────────────────────────────────────────────────────────────────────
   # SECTION: syntax
   # ──────────────────────────────────────────────────────────────────────────
@@ -131,7 +141,8 @@ GLOBAL CLI FLAGS (env-update)
     --apply              Apply AUTO decisions; implies --check.
     --apply-resolve      When combined with --apply: also pin RESOLVED entries
                          (floating refs resolved to concrete versions). Requires --apply.
-    --dry-run            With --apply: simulate writes, print what would happen.
+    --dry-run            Suppress all writes (cache, .env, Dockerfile propagation).
+                         Mutually exclusive with --apply.
     --force-auto         Bypass (manual)/(override)/HOLD gates. Requires
                          --confirm="Confirm override" with --apply. Does NOT
                          override FROZEN (skip:) or LOCK records. Does NOT promote
@@ -152,7 +163,7 @@ GLOBAL CLI FLAGS (env-update)
                          to .env.local and Dockerfiles.
 
   Output flags:
-    --format=text|json   Output format (default: text).
+    --format=text|json   Dump format (default: text). Applies only to --dump output.
     --changes-only       Suppress up-to-date SKIP records from check output.
     --no-notes           Suppress (note:TEXT) sub-lines.
     --no-drift           Suppress [DRIFT]/[REPLACE-DRIFT] sub-lines.
@@ -203,6 +214,7 @@ GLOBAL CLI FLAGS (env-update)
 
   Mutual exclusions:
     --dump    vs --check, --apply
+    --dry-run vs --apply (mutually exclusive; --apply implies writes)
     --stable=full vs --unstable=full
     --apply-resolve requires --apply (standalone exits non-zero)
 

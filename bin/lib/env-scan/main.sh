@@ -13,11 +13,10 @@
 #   Phase 2: Build source index
 #   Phase 3: Scan docker sources (ARG lines in Dockerfiles)
 #   Phase 4: Detect conflicting values across sources
-#   Phase 4.5: Backup pre-flight (purge + snapshot)
-#   Phase 5: Sync env files (.env → .env.local)
-#   Phase 6: Propagate to Dockerfiles
-#   Phase 6.5: Backup retention prune
-#   Phase 7: Cleanup
+#   Phase 5: Backup pre-flight (purge + snapshot)
+#   Phase 6: Sync env files (.env → .env.local)
+#   Phase 7: Propagate to Dockerfiles
+#   Phase 8: Retention prune + cleanup
 set -eEuo pipefail
 
 # Include guard — B4: fix name to follow _GS_ES_MODULENAME_SH_LOADED convention

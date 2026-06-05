@@ -28,6 +28,16 @@ readonly _GS_ES_REFERENCE_SH_LOADED=1
 _gs_es_show_reference() {
   local _section="${1:-all}"
 
+  # Validate section name — exit 1 with list of valid sections if unknown
+  case "${_section}" in
+    all|pipeline|flags|propagation|conflicts|scenarios) ;;
+    *)
+      printf 'env-scan: unknown reference section: '\''%s'\''\n' "${_section}" >&2
+      printf 'Valid sections: all, pipeline, flags, propagation, conflicts, scenarios\n' >&2
+      exit 1
+      ;;
+  esac
+
   # ──────────────────────────────────────────────────────────────────────────
   # SECTION: pipeline
   # ──────────────────────────────────────────────────────────────────────────

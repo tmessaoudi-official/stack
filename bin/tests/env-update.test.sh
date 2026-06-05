@@ -5752,19 +5752,17 @@ t "t19-apply-e2e-a: --apply with AUTO var updates the env file on disk" bash -c 
     echo PASS
 "
 
-# t19-apply-e2e-b: --dry-run --apply does NOT modify the env file
-t "t19-apply-e2e-b: --dry-run --apply does NOT modify the env file" bash -c "
+# t19-apply-e2e-b: --apply --dry-run is rejected with exit 1 (mutually exclusive)
+t "t19-apply-e2e-b: --apply --dry-run exits 1 with mutually exclusive error" bash -c "
     export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t19eb_cache
     f=\${TMP_DIR}/t19eb.env
     cp '${FIXTURES}/basic-dockerhub.env' \"\$f\"
-    before=\$(cat \"\$f\")
-    # Run dry-run first
-    bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null || true
-    # Now apply with dry-run — file must NOT change
-    bash '${ENV_UPDATE_V2}' --apply --dry-run --env-file=\"\$f\" 2>/dev/null || true
-    after=\$(cat \"\$f\")
-    [[ \"\$before\" == \"\$after\" ]] || { echo \"env file was modified by --dry-run --apply\"; echo FAIL; exit 0; }
+    # Capture exit code and stderr
+    stderr_out=\$(bash '${ENV_UPDATE_V2}' --apply --dry-run --env-file=\"\$f\" 2>&1 >/dev/null)
+    rc=\$?
+    [[ \"\$rc\" -eq 1 ]] || { echo \"expected exit 1, got \$rc\"; echo FAIL; exit 0; }
+    [[ \"\$stderr_out\" == *'mutually exclusive'* ]] || { echo \"expected 'mutually exclusive' in stderr, got: \$stderr_out\"; echo FAIL; exit 0; }
     echo PASS
 "
 
@@ -10631,6 +10629,53 @@ t "t105c: --jobs=0 rejected with error" bash -c "
 t "t105d: --jobs documented in --help" bash -c "
     out=\$(bash '${ENV_UPDATE_V2}' --help 2>&1 || true)
     echo \"\$out\" | grep -q '\-\-jobs' || { echo '--jobs not in --help; got: \$out'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+_flush_section
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 106 — P0 audit fixes: --filter case-insensitive, --reference=invalid
+# ═══════════════════════════════════════════════════════════════════════════
+section "106 — P0 audit fixes: filter case-insensitive + reference validation"
+
+# t106a: --filter=lowercase matches UPPER_CASE var names (case-insensitive)
+t "t106a: --filter=postgres matches GLOBAL_STACK_POSTGRES18_VERSION" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t106a_cache
+    f=\${TMP_DIR}/t106a.env
+    printf '# @todo env-update dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_POSTGRES18_VERSION=18.3-alpine3.23\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --filter=postgres --env-file=\"\$f\" 2>/dev/null)
+    echo \"\$out\" | grep -q 'GLOBAL_STACK_POSTGRES18_VERSION' || { echo \"lowercase filter returned no match; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t106b: --filter=Postgres (mixed case) also matches
+t "t106b: --filter=Postgres (mixed case) matches" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t106b_cache
+    f=\${TMP_DIR}/t106b.env
+    printf '# @todo env-update dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_POSTGRES18_VERSION=18.3-alpine3.23\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --filter=Postgres --env-file=\"\$f\" 2>/dev/null)
+    echo \"\$out\" | grep -q 'GLOBAL_STACK_POSTGRES18_VERSION' || { echo \"mixed-case filter returned no match; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t106c: --reference=blahblah exits 1 and mentions 'unknown'
+t "t106c: --reference=blahblah exits 1 with unknown section error" bash -c "
+    stderr_out=\$(bash '${ENV_UPDATE_V2}' --reference=blahblah 2>&1 >/dev/null)
+    rc=\$?
+    [[ \"\$rc\" -eq 1 ]] || { echo \"expected exit 1, got \$rc\"; echo FAIL; exit 0; }
+    [[ \"\$stderr_out\" == *'unknown'* ]] || { echo \"expected 'unknown' in stderr; got: \$stderr_out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t106d: --reference=syntax (valid section) exits 0
+t "t106d: --reference=syntax (valid) exits 0 with output" bash -c "
+    out=\$(bash '${ENV_UPDATE_V2}' --reference=syntax 2>/dev/null)
+    rc=\$?
+    [[ \"\$rc\" -eq 0 ]] || { echo \"expected exit 0, got \$rc\"; echo FAIL; exit 0; }
+    [[ -n \"\$out\" ]] || { echo \"expected output, got empty\"; echo FAIL; exit 0; }
     echo PASS
 "
 

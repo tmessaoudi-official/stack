@@ -503,11 +503,18 @@ _gs_eu2_parse_env_file() {
               _pending_git_url="" _pending_git_sha=""
               continue
             fi
-          elif [[ ! "${_var_name}" =~ ${_filter} ]]; then
-            _state="IDLE"
-            _pending_sha="" _pending_sha_date=""
-            _pending_git_url="" _pending_git_sha=""
-            continue
+          else
+            # Case-insensitive match: capture result before resetting shopt
+            local _filter_matched=0
+            shopt -s nocasematch
+            [[ "${_var_name}" =~ ${_filter} ]] && _filter_matched=1
+            shopt -u nocasematch
+            if [[ "${_filter_matched}" -eq 0 ]]; then
+              _state="IDLE"
+              _pending_sha="" _pending_sha_date=""
+              _pending_git_url="" _pending_git_sha=""
+              continue
+            fi
           fi
         fi
 
