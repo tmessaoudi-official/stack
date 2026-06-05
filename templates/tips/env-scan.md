@@ -330,3 +330,49 @@ or `ARG FOO=value`) is detected and maintained after propagation.
   against `.env` source. When `--scan-sources=false` is passed, the scan output is empty
   and `check-missing` produces no output (even for keys that exist in `.env` but not in
   `.env.local`). This is a known limitation of the check-missing implementation.
+
+---
+
+## RELOAD Variables — Forcing Runtime Reinstall
+
+The following `GLOBAL_STACK_RELOAD_*` variables control whether a container reinstalls
+its entire runtime on next start. Set to `true` in `.env.local`, then restart the
+container. **Always reset to `false` after the reinstall completes** — leaving it `true`
+forces a full reinstall on every container start (can take 30+ minutes).
+
+| Variable | Effect |
+|---|---|
+| `GLOBAL_STACK_RELOAD_NODE` | Force NVM reinstall + Node.js version reinstall |
+| `GLOBAL_STACK_RELOAD_PHP` | Force phpbrew reinstall + PHP version reinstall |
+| `GLOBAL_STACK_RELOAD_PYTHON` | Force pyenv reinstall + Python version reinstall |
+| `GLOBAL_STACK_RELOAD_RUBY` | Force rbenv reinstall + Ruby version reinstall |
+| `GLOBAL_STACK_RELOAD_RBENV` | Alias for `GLOBAL_STACK_RELOAD_RUBY` (rbenv-specific) |
+| `GLOBAL_STACK_RELOAD_JAVA` | Force SDKMAN reinstall + Java version reinstall |
+| `GLOBAL_STACK_RELOAD_FLUTTER` | Force FVM reinstall + Flutter version reinstall |
+
+**RELOAD anchor pattern**: All `GLOBAL_STACK_RELOAD_*` vars are excluded from the
+scan-var-ignore pattern by default (they match `GLOBAL_STACK_RELOAD_(NODE|PHP|...)=`
+which is in `_GS_ES_PATTERN_SCAN_VAR_IGNORE`). This means they are extracted from
+Dockerfiles but never trigger "missing variable" warnings — they are deliberately
+not in source `.env` because they are machine-local flags set only in `.env.local`.
+
+---
+
+## Forward Check 2
+
+**Forward Check 2** is the second of the three missing-variable checks run after each
+merge. It checks: variables present in scan output (`.env.all.local`) that are absent
+from the **destination** file (`.env.local`).
+
+This catches a common drift scenario: a new `GLOBAL_STACK_*` variable was added to
+`.env` (source) and appears in Docker sources, but has not yet been propagated to
+`.env.local` (destination). The check fires even when `--sync-values=true` because
+the merge phase adds missing vars, but if the destination already existed with the
+key absent, it was never merged in.
+
+**When it fires**: after Phase 6 (sync env files), if a var appears in scan output
+but not in the destination file after sync.
+
+**Suppressed by**: `--forward-check-ignore-pattern=REGEX` and `--exclude-local-pattern=REGEX`.
+The default `_GS_ES_PATTERN_FORWARD_CHECK_IGNORE` suppresses known container-internal
+vars (NVM_MODE, PHPBREW_MODE, RELOAD_* etc.) that should never be in `.env.local`.

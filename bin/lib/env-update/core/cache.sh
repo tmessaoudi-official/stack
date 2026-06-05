@@ -42,6 +42,8 @@ _gs_eu2_cache_key_to_file() {
 #          expired, or disappeared between stat and read)
 _gs_eu2_cache_read() {
   local _key="${1}"
+  # TTL=0 is an alias for --no-cache: bypass reads entirely (write-through still active)
+  [[ "${_GS_EU2_CACHE_TTL}" -eq 0 ]] && return 1
   local _f
   _f="$(_gs_eu2_cache_key_to_file "${_key}")"
   local _now _mtime _age

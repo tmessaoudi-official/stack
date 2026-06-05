@@ -10635,6 +10635,69 @@ t "t105d: --jobs documented in --help" bash -c "
 _flush_section
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Section 107 — P1 audit: HTTP error injection seam + --force-auto alone exits 1
+# ═══════════════════════════════════════════════════════════════════════════
+section "107 — P1 audit: HTTP inject seam + --force-auto alone exits 1"
+
+# t107a: _GS_EU2_HTTP_INJECT_STATUS=429 → fetcher returns ERROR
+t "t107a: HTTP_INJECT_STATUS=429 produces ERROR output" bash -c "
+    export _GS_EU2_HTTP_INJECT_STATUS=429
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t107a_cache
+    f=\${TMP_DIR}/t107a.env
+    printf '# @todo env-update dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T107A=18.3-alpine3.23\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --no-fail --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qE 'ERROR|error|injected' || { echo \"expected ERROR in output; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t107b: _GS_EU2_HTTP_INJECT_STATUS=503 → fetcher returns ERROR
+t "t107b: HTTP_INJECT_STATUS=503 produces ERROR output" bash -c "
+    export _GS_EU2_HTTP_INJECT_STATUS=503
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t107b_cache
+    f=\${TMP_DIR}/t107b.env
+    printf '# @todo env-update dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T107B=18.3-alpine3.23\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --no-fail --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qE 'ERROR|error|injected' || { echo \"expected ERROR in output; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t107c: _GS_EU2_HTTP_INJECT_STATUS=malformed-json → fetcher returns parse error
+t "t107c: HTTP_INJECT_STATUS=malformed-json produces parse ERROR" bash -c "
+    export _GS_EU2_HTTP_INJECT_STATUS=malformed-json
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t107c_cache
+    f=\${TMP_DIR}/t107c.env
+    printf '# @todo env-update dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T107C=18.3-alpine3.23\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --no-fail --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qE 'ERROR|error|parse' || { echo \"expected ERROR/parse in output; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t107d: --force-auto alone (no --check, no --apply) exits 1
+t "t107d: --force-auto alone exits 1 with usage error" bash -c "
+    f=\${TMP_DIR}/t107d.env
+    cp '${FIXTURES}/basic-dockerhub.env' \"\$f\"
+    stderr_out=\$(bash '${ENV_UPDATE_V2}' --force-auto --env-file=\"\$f\" 2>&1 >/dev/null)
+    rc=\$?
+    [[ \"\$rc\" -eq 1 ]] || { echo \"expected exit 1, got \$rc\"; echo FAIL; exit 0; }
+    [[ \"\$stderr_out\" == *'--force-auto'* ]] || { echo \"expected --force-auto in error; got: \$stderr_out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t107e: --check --force-auto (valid) does NOT exit 1
+t "t107e: --check --force-auto (valid combination) exits 0" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t107e_cache
+    f=\${TMP_DIR}/t107e.env
+    printf '# @todo env-update dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T107E=18.3-alpine3.23\n' > \"\$f\"
+    rc=0
+    bash '${ENV_UPDATE_V2}' --check --force-auto --dry-run --env-file=\"\$f\" 2>/dev/null || rc=\$?
+    [[ \"\$rc\" -ne 1 ]] || { echo \"--check --force-auto exited 1 (should not)\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+_flush_section
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Section 106 — P0 audit fixes: --filter case-insensitive, --reference=invalid
 # ═══════════════════════════════════════════════════════════════════════════
 section "106 — P0 audit fixes: filter case-insensitive + reference validation"

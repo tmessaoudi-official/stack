@@ -144,6 +144,19 @@ _gs_eu2_http_get_core() {
 _gs_eu2_http_get() {
   local _url="${1}"
 
+  # HTTP_INJECT_STATUS test seam: simulate HTTP error codes or malformed responses.
+  # Values: 429, 503, or any 3-digit status code → return 1 with error message.
+  #         "malformed-json" → return 0 with incomplete JSON body (parse-failure testing).
+  if [[ -n "${_GS_EU2_HTTP_INJECT_STATUS:-}" ]]; then
+    if [[ "${_GS_EU2_HTTP_INJECT_STATUS}" == "malformed-json" ]]; then
+      printf '{"not": "valid json"'
+      return 0
+    else
+      printf 'env-update: injected HTTP error %s for URL: %s\n' "${_GS_EU2_HTTP_INJECT_STATUS}" "${_url}" >&2
+      return 1
+    fi
+  fi
+
   if [[ -n "${_GS_EU2_HTTP_FIXTURE_DIR:-}" ]]; then
     local _safe
     _safe="$(_gs_eu2_fixture_path "${_url}")"
@@ -178,10 +191,21 @@ _gs_eu2_http_get() {
 _gs_eu2_http_get_auth() {
   local _url="${1}" _token="${2:-}"
 
-  # Empty token: reuse plain GET (handles fixture path identically)
+  # Empty token: reuse plain GET (handles fixture path identically, including inject seam)
   if [[ -z "${_token}" ]]; then
     _gs_eu2_http_get "${_url}"
     return
+  fi
+
+  # HTTP_INJECT_STATUS also applies to authenticated calls
+  if [[ -n "${_GS_EU2_HTTP_INJECT_STATUS:-}" ]]; then
+    if [[ "${_GS_EU2_HTTP_INJECT_STATUS}" == "malformed-json" ]]; then
+      printf '{"not": "valid json"'
+      return 0
+    else
+      printf 'env-update: injected HTTP error %s for URL: %s\n' "${_GS_EU2_HTTP_INJECT_STATUS}" "${_url}" >&2
+      return 1
+    fi
   fi
 
   # Fixture seam: same path derivation as _gs_eu2_http_get (token not part of path)

@@ -23,6 +23,10 @@ bin/env-scan.sh v${_GS_ES_VERSION} — env sync + Dockerfile propagation
 Usage: env-scan.sh [OPTIONS]
 
 Options:
+  --version                                  Print version and exit.
+  --reference[=SECTION]                      Print comprehensive reference and exit. No env file needed.
+                                             SECTION: all (default) | pipeline | flags | propagation | conflicts | scenarios
+  --help                                     Print this help text and exit.
   --debug=<value>                            Enable debug mode (default: false)
   --debug-show-extracted-files=<value>       Show files from which environment variables were extracted (default: false)
   --strip-comments=<value>                   Remove commented lines from output (default: true)

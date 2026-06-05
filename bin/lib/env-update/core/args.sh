@@ -208,11 +208,14 @@ _gs_eu2_parse_args() {
     fi
   fi
 
-  # Advisory: --force-auto has no write effect without --apply.
-  # In --check mode it only affects how HOLD/MANUAL records are classified for display.
-  # This notice helps users who meant to use --apply --force-auto.
-  if [[ "${_GS_EU2_CFG[force_auto]}" == "true" && "${_GS_EU2_CFG[apply]}" != "true" ]]; then
-    printf '[WARN] --force-auto has no write effect without --apply; did you mean --apply --dry-run --force-auto?\n' >&2
+  # Error: --force-auto alone (no --check, no --apply) is a no-op and likely a mistake.
+  if [[ "${_GS_EU2_CFG[force_auto]}" == "true" && \
+        "${_GS_EU2_CFG[apply]}" != "true" && \
+        "${_GS_EU2_CFG[check]}" != "true" ]]; then
+    printf 'env-update: --force-auto requires --check or --apply to take effect;\n' >&2
+    printf '  did you mean --check --force-auto (to preview) or\n' >&2
+    printf '  --apply --force-auto --confirm="Confirm override" (to apply)?\n' >&2
+    exit 1
   fi
 
   return 0

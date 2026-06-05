@@ -159,6 +159,8 @@ GLOBAL CLI FLAGS (env-update)
                          NODE vars except NODEEDGE.
     --no-cache           Bypass HTTP cache (forces fresh fetch for every record).
     --cache-ttl=N        Cache TTL in seconds (default: 3600).
+                         0 = bypass cache reads entirely (alias for --no-cache behavior);
+                         cache writes are still performed (write-through).
     --scan               After --apply, run bin/env-scan.sh to propagate updates
                          to .env.local and Dockerfiles.
 

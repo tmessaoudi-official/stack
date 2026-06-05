@@ -147,6 +147,12 @@ Options:
                                   Fetch + classify, Apply (when --apply), env-scan
                                   (when --apply --scan).
 
+Environment variables:
+  _GS_EU2_TALLY_FORCE=1           Bypass the stderr TTY gate so the live tally appears
+                                  even when stderr is not a terminal (e.g. CI, tmux).
+                                  The column-width gate (--tally=auto requires >= 130 cols)
+                                  still applies unless combined with --tally=full.
+
 Default (no flags): print a parser summary with per-type breakdown and hints.
 
 Summary line format (shown after --check):
@@ -193,7 +199,7 @@ Examples:
   bin/env-update.sh --check --apply                # fetch + show report; prompt for confirmation on TTY
   bin/env-update.sh --check --apply --yes          # apply without interactive prompt (non-TTY / scripting)
   bin/env-update.sh --check --apply --scan         # apply + propagate to .env.local + Dockerfiles
-  bin/env-update.sh --check --apply --dry-run      # preview what would be applied (no prompt, no writes)
+  bin/env-update.sh --check --dry-run               # preview what would be fetched (no network writes)
   bin/env-update.sh --check --with-tags            # audit all github repos including tag-only releases
   bin/env-update.sh --unstable --check             # force unstable: propose prereleases globally as AUTO
   bin/env-update.sh --unstable=info --check        # info mode: show unstable sub-line without changing decisions

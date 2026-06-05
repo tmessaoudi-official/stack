@@ -2484,6 +2484,48 @@ t "t35b: --reference=pipeline (valid) exits 0 with output" bash -c "
 _flush_section
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Section 36 — P1 audit: --destination-file-merged-suffix + --exclude-local-pattern
+# ═══════════════════════════════════════════════════════════════════════════
+section "36 — P1 audit: --destination-file-merged-suffix and --exclude-local-pattern"
+
+# t36a: --destination-file-merged-suffix=.custom — flag accepted, run succeeds, dest updated
+t "t36a: --destination-file-merged-suffix=.custom accepted, run succeeds" bash -c "
+    D='${TMP_DIR}/t36a'; mkdir -p \"\$D\"
+    printf 'GLOBAL_STACK_T36A=1.0\nGLOBAL_STACK_T36A_NEW=2.0\n' > \"\$D/.env\"
+    printf 'GLOBAL_STACK_T36A=1.0\n' > \"\$D/.env.local\"
+    rc=0
+    bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=false \
+        --destination-file-merged-suffix=.custom \
+        --check-missing=false --show-added-entries=false --show-different-entries=false \
+        --backup=false 2>&1 >/dev/null || rc=\$?
+    [[ \"\$rc\" -eq 0 ]] || { echo \"run failed with exit \$rc\"; echo FAIL; exit 0; }
+    # Dest file should have been updated with the new var
+    grep -q 'GLOBAL_STACK_T36A_NEW=2.0' \"\$D/.env.local\" \
+        || { echo 'dest file not updated'; cat \"\$D/.env.local\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t36b: --exclude-local-pattern=GLOBAL_STACK_LOCAL_ — matching vars excluded from forward check warnings
+t "t36b: --exclude-local-pattern suppresses forward-check warnings for matching vars" bash -c "
+    D='${TMP_DIR}/t36b'; mkdir -p \"\$D\"
+    # .env has a LOCAL_ var; .env.local is missing it
+    printf 'GLOBAL_STACK_T36B=1.0\nGLOBAL_STACK_LOCAL_MACHINE=myhost\n' > \"\$D/.env\"
+    printf 'GLOBAL_STACK_T36B=1.0\n' > \"\$D/.env.local\"
+    # Without exclude-local-pattern: LOCAL_MACHINE absence from .env.local would warn
+    # With it: the warning is suppressed and run still exits 0
+    rc=0
+    out=\$(bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=true \
+        --scan-path=\"\$D\" \
+        --exclude-local-pattern='GLOBAL_STACK_LOCAL_' \
+        --check-missing=true --show-added-entries=false --show-different-entries=false \
+        --backup=false 2>&1) || rc=\$?
+    [[ \"\$rc\" -eq 0 ]] || { echo \"run failed with exit \$rc\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+_flush_section
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section

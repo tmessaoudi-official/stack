@@ -302,5 +302,50 @@ WORKED SCENARIOS
 SCENARIOS_EOF
   fi
 
+  # ──────────────────────────────────────────────────────────────────────────
+  # SECTION: reload (embedded in all; not a standalone section)
+  # ──────────────────────────────────────────────────────────────────────────
+  if [[ "${_section}" == "all" ]]; then
+    cat << 'RELOAD_EOF'
+env-scan reference — RELOAD VARIABLES + FORWARD CHECK 2
+────────────────────────────────────────────────────────────────────────────────
+
+RELOAD VARIABLES (machine-local only — set in .env.local, never in .env)
+
+  These variables force a full reinstall of their runtime on next container start.
+  Set to true in .env.local, restart the container, then reset to false.
+  Leaving set to true causes a full reinstall on every start (slow).
+
+  GLOBAL_STACK_RELOAD_NODE     Force NVM reinstall + Node.js version reinstall
+  GLOBAL_STACK_RELOAD_PHP      Force phpbrew reinstall + PHP version reinstall
+  GLOBAL_STACK_RELOAD_PYTHON   Force pyenv reinstall + Python version reinstall
+  GLOBAL_STACK_RELOAD_RUBY     Force rbenv reinstall + Ruby version reinstall
+  GLOBAL_STACK_RELOAD_RBENV    Alias: triggers rbenv-specific reinstall
+  GLOBAL_STACK_RELOAD_JAVA     Force SDKMAN reinstall + Java version reinstall
+  GLOBAL_STACK_RELOAD_FLUTTER  Force FVM reinstall + Flutter version reinstall
+
+  RELOAD ANCHOR PATTERN: All GLOBAL_STACK_RELOAD_* vars are in
+  _GS_ES_PATTERN_SCAN_VAR_IGNORE — they are extracted from Dockerfiles but
+  never trigger "missing variable" warnings, since they are machine-local
+  and intentionally absent from .env.
+
+FORWARD CHECK 2
+
+  Forward Check 2 runs after Phase 6 (sync env files).
+  Direction: scan output → destination file (.env.local)
+  Detects: variables present in .env.all.local (Docker scan) but absent from
+           .env.local — entries added to .env but not yet propagated.
+
+  Fires when a var appears in Dockerfiles (scan output) but is not yet in
+  .env.local after the sync phase. Common cause: a var was added to .env
+  recently but .env.local was not re-synced.
+
+  Suppressed by: --forward-check-ignore-pattern and --exclude-local-pattern.
+  The default _GS_ES_PATTERN_FORWARD_CHECK_IGNORE suppresses container-internal
+  vars (NVM_MODE, PHPBREW_MODE, RELOAD_* etc.) that are not expected in .env.local.
+
+RELOAD_EOF
+  fi
+
   return 0
 }
