@@ -526,6 +526,11 @@ _gs_eu2_compute_change_string() {
       # No downgrade — show version arrow (mirrors the generic prop!=cur branch below)
       _cs_change="  ${_cs_cur} → ${_cs_prop}${_cs_reason}"
     fi
+  elif [[ "${_cs_decision}" == "ERROR" && -n "${_cs_err}" ]]; then
+    # ERROR with an explicit message: show the error, not the version arrow.
+    # This covers float+(watch-major) and other annotation errors where the
+    # fetcher may have found a proposed version but the record is still invalid.
+    _cs_change="  (${_cs_err})"
   elif [[ -n "${_cs_prop}" && "${_cs_prop}" != "${_cs_cur}" ]]; then
     _cs_change="  ${_cs_cur} → ${_cs_prop}${_cs_reason}"
   elif [[ -n "${_cs_err}" ]]; then
@@ -907,6 +912,22 @@ _gs_eu2_run_check() {
     _decision="$(_gs_eu2_record_get "${_i}" decision)"
     _err="$(_gs_eu2_record_get "${_i}" error_message)"
 
+    # Float + (watch-major) guard: detect BEFORE display so the primary decision
+    # line shows [ERROR], not [RESOLVE] or [AUTO]. When current is a floating alias
+    # (latest/stable/lts/…), _gs_eu2_version_prefix returns empty and watch-major
+    # depth comparison is undefined. Override decision to ERROR at check time.
+    if [[ "${_decision}" != "ERROR" ]]; then
+      local _pre_wm_depth
+      _pre_wm_depth="$(_gs_eu2_record_get "${_i}" watch_major_depth)"
+      if [[ -n "${_pre_wm_depth}" ]] && _gs_eu2_is_unversioned "${_cur}"; then
+        local _wm_err_msg="(watch-major) with floating current version '${_cur}' is undefined — pin the current version first"
+        _gs_eu2_record_set "${_i}" error_message "${_wm_err_msg}"
+        _gs_eu2_record_set "${_i}" decision "ERROR"
+        _decision="ERROR"
+        _err="${_wm_err_msg}"
+      fi
+    fi
+
     case "${_decision}" in
       AUTO)   _tag="[AUTO   ]"; (( ++_n_auto ))   || true ;;
       HOLD)   _tag="[HOLD   ]"; (( ++_n_hold ))   || true ;;
@@ -987,8 +1008,12 @@ _gs_eu2_run_check() {
     # (watch-major) sub-line: emit when a new runtime generation is available.
     # Uses latest_unconstrained (set by fetchers from the pre-major-pin tag set),
     # falling back to proposed_version for fetcher types with no major-pin concept.
-    # Suppressed when: decision is ERROR/SKIP-unversioned, or no depth set.
+    # Suppressed when: decision is ERROR, or no depth set.
     # NOT suppressed by --no-notes — WATCH is a signal, not a note.
+    #
+    # Float + (watch-major) guard: handled BEFORE the display case block above.
+    # By the time we reach here, any float+watch-major record already has decision=ERROR
+    # and will be skipped by the [[ "${_decision}" != "ERROR" ]] guard below.
     if [[ "${_decision}" != "ERROR" ]]; then
       local _wm_depth_r
       _wm_depth_r="$(_gs_eu2_record_get "${_i}" watch_major_depth)"

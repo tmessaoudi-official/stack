@@ -35,7 +35,7 @@ _gs_eu2_is_recognized_flag() {
   local _f="${1}" _name
   [[ "${_f}" == *:* ]] && _name="${_f%%:*}" || _name="${_f}"
   case "${_name}" in
-    override | manual | propagate | use-sha | prefer-specific | check-tags | \
+    override | manual | hold | use-sha | prefer-specific | check-tags | \
       note | \
       channel | skip | lock | \
       tag-filter | tag-exclude | tag-strip-prefix | tag-strip-suffix | \
@@ -161,10 +161,6 @@ _gs_eu2_dispatch_flag() {
       _gs_eu2_record_set "${_idx}" manual "true"
       return 0
       ;;
-    propagate)
-      _gs_eu2_record_set "${_idx}" propagate "true"
-      return 0
-      ;;
     use-sha)
       _gs_eu2_record_set "${_idx}" use_sha "true"
       return 0
@@ -230,6 +226,14 @@ _gs_eu2_dispatch_flag() {
           "${_env_file}" "${_lnum}" >&2
         exit 1
       fi
+      ;;
+    hold)
+      printf 'env-update: %s:%s: (hold) is not a valid annotation flag.\n' \
+        "${_env_file}" "${_lnum}" >&2
+      printf '  Use (manual) or (override) to require a human gate before --apply.\n' >&2
+      printf '  HOLD decisions are generated automatically when a version would cross\n' >&2
+      printf '  a major_hint boundary — they do not need an annotation.\n' >&2
+      exit 1
       ;;
     *)
       printf 'env-update: %s:%s: unknown flag %q in annotation\n' \

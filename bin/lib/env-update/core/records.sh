@@ -36,7 +36,7 @@ _GS_EU2_LAST_IDX=0
 _gs_eu2_record_fields() {
   printf '%s\n' \
     env_var current_version type identifier major_hint \
-    override manual propagate \
+    override manual \
     channel skip_reason lock_reason \
     version_prefix \
     prefer_specific check_tags \

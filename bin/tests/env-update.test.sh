@@ -335,11 +335,10 @@ t "t03n: version-prefix flag" bash -c "
     echo PASS
 "
 
-t "t03o: boolean markers (override, manual, propagate)" bash -c "
+t "t03o: boolean markers (override, manual)" bash -c "
     out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file='${FIXTURES}/flags-all.env' 2>&1)
     echo \"\$out\" | grep -qF 'override: true' || { echo \"override not true\"; echo FAIL; exit 0; }
     echo \"\$out\" | grep -qF 'manual: true' || { echo \"manual not true\"; echo FAIL; exit 0; }
-    echo \"\$out\" | grep -qF 'propagate: true' || { echo \"propagate not true\"; echo FAIL; exit 0; }
     echo PASS
 "
 
@@ -1588,8 +1587,8 @@ source '/stack/bin/lib/env-update/core/parse.sh'
 t "t21a: single recognized flag extracted, rest cleaned" bash -c "
     ${_HOIST_LIBS}
     flags=''; cleaned=''
-    _gs_eu2_hoist_all_flags flags cleaned '(propagate) dockerhub:nginx 1.25'
-    [[ \"\$flags\"   == 'propagate' ]] || { echo \"flags wrong: \$flags\";   echo FAIL; exit 0; }
+    _gs_eu2_hoist_all_flags flags cleaned '(manual) dockerhub:nginx 1.25'
+    [[ \"\$flags\"   == 'manual' ]] || { echo \"flags wrong: \$flags\";   echo FAIL; exit 0; }
     [[ \"\$cleaned\" == 'dockerhub:nginx 1.25' ]] || { echo \"cleaned wrong: \$cleaned\"; echo FAIL; exit 0; }
     echo PASS
 "
@@ -1606,10 +1605,10 @@ t "t21b: flag with value extracted correctly" bash -c "
 t "t21c: multiple recognized flags joined by US (0x1f)" bash -c "
     ${_HOIST_LIBS}
     flags=''; cleaned=''
-    _gs_eu2_hoist_all_flags flags cleaned '(propagate) (override) dockerhub:nginx 1.25'
+    _gs_eu2_hoist_all_flags flags cleaned '(manual) (override) dockerhub:nginx 1.25'
     IFS=\$'\\x1f' read -ra parts <<< \"\$flags\"
-    [[ \"\${parts[0]}\" == 'propagate' ]] || { echo \"part0 wrong: \${parts[0]}\"; echo FAIL; exit 0; }
-    [[ \"\${parts[1]}\" == 'override'  ]] || { echo \"part1 wrong: \${parts[1]}\"; echo FAIL; exit 0; }
+    [[ \"\${parts[0]}\" == 'manual'   ]] || { echo \"part0 wrong: \${parts[0]}\"; echo FAIL; exit 0; }
+    [[ \"\${parts[1]}\" == 'override' ]] || { echo \"part1 wrong: \${parts[1]}\"; echo FAIL; exit 0; }
     [[ \"\$cleaned\" == 'dockerhub:nginx 1.25' ]] || { echo \"cleaned wrong: \$cleaned\"; echo FAIL; exit 0; }
     echo PASS
 "
@@ -1626,8 +1625,8 @@ t "t21d: unrecognized paren kept in cleaned" bash -c "
 t "t21e: recognized flag at end of string, trailing space consumed" bash -c "
     ${_HOIST_LIBS}
     flags=''; cleaned=''
-    _gs_eu2_hoist_all_flags flags cleaned 'dockerhub:nginx 1.25 (propagate)'
-    [[ \"\$flags\"   == 'propagate' ]] || { echo \"flags wrong: \$flags\";   echo FAIL; exit 0; }
+    _gs_eu2_hoist_all_flags flags cleaned 'dockerhub:nginx 1.25 (manual)'
+    [[ \"\$flags\"   == 'manual' ]] || { echo \"flags wrong: \$flags\";   echo FAIL; exit 0; }
     [[ \"\$cleaned\" == 'dockerhub:nginx 1.25' ]] || { echo \"cleaned wrong: \$cleaned\"; echo FAIL; exit 0; }
     echo PASS
 "
@@ -1671,10 +1670,10 @@ t "t21i: tag-filter flag with regex value extracted" bash -c "
 t "t21j: mixed recognized + unrecognized flags, order preserved" bash -c "
     ${_HOIST_LIBS}
     flags=''; cleaned=''
-    _gs_eu2_hoist_all_flags flags cleaned '(propagate) (compat: old-api) (override) dockerhub:bar 2.0'
+    _gs_eu2_hoist_all_flags flags cleaned '(manual) (compat: old-api) (override) dockerhub:bar 2.0'
     IFS=\$'\\x1f' read -ra parts <<< \"\$flags\"
-    [[ \"\${parts[0]}\" == 'propagate' ]] || { echo \"part0 wrong: \${parts[0]}\"; echo FAIL; exit 0; }
-    [[ \"\${parts[1]}\" == 'override'  ]] || { echo \"part1 wrong: \${parts[1]}\"; echo FAIL; exit 0; }
+    [[ \"\${parts[0]}\" == 'manual'   ]] || { echo \"part0 wrong: \${parts[0]}\"; echo FAIL; exit 0; }
+    [[ \"\${parts[1]}\" == 'override' ]] || { echo \"part1 wrong: \${parts[1]}\"; echo FAIL; exit 0; }
     [[ \"\$cleaned\" == '(compat: old-api) dockerhub:bar 2.0' ]] || { echo \"cleaned wrong: \$cleaned\"; echo FAIL; exit 0; }
     echo PASS
 "
@@ -9962,19 +9961,20 @@ t "t100d: (depends-on) record fetches and produces a decision" bash -c "
     echo PASS
 "
 
-# t100e: (propagate) annotation parses without error; --check exits 0
-t "t100e: (propagate) parses without error, --check exits 0" bash -c "
-    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
-    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t100e_cache
+# t100e: (propagate) annotation exits 1 with helpful error (flag removed)
+t "t100e: (propagate) removed — exits 1 with helpful error" bash -c "
     f=\${TMP_DIR}/t100e.env
     printf '# @todo env-update (propagate) dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T100E_VERSION=18.3-alpine3.23\n' > \"\$f\"
-    bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" >/dev/null 2>&1 && echo PASS || { echo 'non-zero exit on (propagate) check'; echo FAIL; exit 0; }
+    out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1) && { echo 'expected exit 1 but got 0; out='\"\$out\"; echo FAIL; exit 0; }
+    printf '%s' \"\$out\" | grep -qF 'unknown flag' || { echo \"expected unknown flag error; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
 "
 
-# t100f: --dump output for a (propagate) record shows 'propagate: true'
-t "t100f: --dump shows propagate: true" bash -c "
+# t100f: flags-all.env no longer contains (propagate) — verify override+manual still parse
+t "t100f: flags-all.env override+manual parse correctly after propagate removal" bash -c "
     out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file='${FIXTURES}/flags-all.env' 2>&1)
-    echo \"\$out\" | grep -qF 'propagate: true' || { echo \"propagate not true in dump; got: \$(echo \"\$out\" | grep propagate)\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'override: true' || { echo \"override not true in dump; got: \$(echo \"\$out\" | grep override)\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'manual: true'   || { echo \"manual not true in dump; got: \$(echo \"\$out\" | grep manual)\"; echo FAIL; exit 0; }
     echo PASS
 "
 
@@ -10739,6 +10739,65 @@ t "t106d: --reference=syntax (valid) exits 0 with output" bash -c "
     rc=\$?
     [[ \"\$rc\" -eq 0 ]] || { echo \"expected exit 0, got \$rc\"; echo FAIL; exit 0; }
     [[ -n \"\$out\" ]] || { echo \"expected output, got empty\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+_flush_section
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 108 — P2 audit: (hold) error, float+watch-major ERROR, RESOLVED replace
+# ═══════════════════════════════════════════════════════════════════════════
+section "108 — P2 audit: (hold) hint, float+watch-major, RESOLVED+replace, Section C"
+
+# t108a: (hold) annotation exits 1 with specific hint message
+t "t108a: (hold) annotation exits 1 with hint about (manual)/(override)" bash -c "
+    f=\${TMP_DIR}/t108a.env
+    printf '# @todo env-update (hold) dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T108A=18.3\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1) && { echo 'expected exit 1 but got 0; out='\"\$out\"; echo FAIL; exit 0; }
+    printf '%s' \"\$out\" | grep -qF '(hold) is not a valid annotation flag' || { echo \"expected hold error; got: \$out\"; echo FAIL; exit 0; }
+    printf '%s' \"\$out\" | grep -qF '(manual) or (override)' || { echo \"expected manual/override hint; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t108b: float current + (watch-major) emits [ERROR] record
+t "t108b: float current + (watch-major) emits [ERROR]" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t108b_cache
+    f=\${TMP_DIR}/t108b.env
+    printf '# @todo env-update (watch-major) dockerhub:_/postgres:18 latest\nGLOBAL_STACK_T108B_VERSION=latest\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --no-fail --env-file=\"\$f\" 2>&1)
+    printf '%s' \"\$out\" | grep -q 'ERROR' || { echo \"expected ERROR in output; got: \$out\"; echo FAIL; exit 0; }
+    printf '%s' \"\$out\" | grep -q 'watch-major' || { echo \"expected watch-major in error; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t108c: --reference=matrix outputs Section C cross-product intersections
+t "t108c: --reference=matrix includes Section C cross-product" bash -c "
+    out=\$(bash '${ENV_UPDATE_V2}' --reference=matrix 2>/dev/null)
+    rc=\$?
+    [[ \"\$rc\" -eq 0 ]] || { echo \"expected exit 0, got \$rc\"; echo FAIL; exit 0; }
+    printf '%s' \"\$out\" | grep -qF 'SECTION C' || { echo \"Section C not in matrix output; got truncated: \$(printf '%s' \"\$out\" | tail -5)\"; echo FAIL; exit 0; }
+    printf '%s' \"\$out\" | grep -qF 'C7. (hold) annotation' || { echo 'C7 not found in output'; echo FAIL; exit 0; }
+    printf '%s' \"\$out\" | grep -qF 'C11.' || { echo 'C11 not found in output'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t108d: RESOLVED + (replace:) cascade fires with --apply-resolve — target is rewritten
+t "t108d: RESOLVED + (replace:) cascade writes target when --apply-resolve used" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t108d_cache
+    f=\${TMP_DIR}/t108d.env
+    printf '# @todo env-update (replace:GLOBAL_STACK_T108D_ALIAS={version}) dockerhub:_/node latest\nGLOBAL_STACK_T108D_VERSION=latest\nGLOBAL_STACK_T108D_ALIAS=old\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --apply --apply-resolve --yes --env-file=\"\$f\" 2>&1)
+    rc=\$?
+    [[ \"\$rc\" -eq 0 ]] || { echo \"apply failed with rc=\$rc; out=\$out\"; echo FAIL; exit 0; }
+    # After apply-resolve, T108D_VERSION should be pinned (no longer 'latest') and
+    # T108D_ALIAS should be rewritten to the same concrete version
+    pinned_ver=\$(grep '^GLOBAL_STACK_T108D_VERSION=' \"\$f\" | cut -d= -f2-)
+    alias_ver=\$(grep '^GLOBAL_STACK_T108D_ALIAS=' \"\$f\" | cut -d= -f2-)
+    [[ \"\$pinned_ver\" != 'latest' ]] || { echo \"VERSION not pinned; still 'latest'; got: \$pinned_ver\"; echo FAIL; exit 0; }
+    [[ \"\$alias_ver\" == \"\$pinned_ver\" ]] || { echo \"ALIAS (\$alias_ver) != VERSION (\$pinned_ver)\"; echo FAIL; exit 0; }
+    printf '%s' \"\$out\" | grep -qF 'REPLACE' || { echo \"no REPLACE marker in output; got: \$out\"; echo FAIL; exit 0; }
     echo PASS
 "
 

@@ -310,12 +310,10 @@ ANNOTATION FLAGS (parenthesised, space-separated, after the @todo keyword)
                       shorter floating tag.
     (version-prefix:STR) Strip leading STR when comparing fetched version to
                       CURRENT_VERSION (e.g. "v" for v1.2.3 → 1.2.3).
-    (propagate)       Parsed and stored by env-update. When --scan is used with
-                      --apply, env-scan reads this flag to force-include the var
-                      in propagation to .env.local and Dockerfiles, even when it
-                      would normally be excluded by env-scan's patterns. Direct
-                      propagation within env-update (without --scan) is not
-                      implemented.
+    (propagate)       REMOVED — this flag was vestigial (parsed but never
+                      enforced). Writing (propagate) in an annotation now exits
+                      with an "unknown flag" error. Remove the flag from any
+                      existing annotations.
     (watch-major[:N]) Emit a [WATCH] signal when a new major (or N-th level) is
                       detected. Default depth = 1 (major boundary).
     (replace:TARGET=template)
@@ -995,5 +993,115 @@ _gs_eu2_show_reference_matrix() {
   printf '    NOT suppressed by --no-notes (safety warning)\n'
   printf '    Summary:     N [WARN] depends-on (if > 0)\n'
   printf '    Status:      ANNOTATION IS PARSED AND STORED. Dependency check IS NOT ENFORCED.\n'
+  printf '\n'
+
+  # ── SECTION C — CROSS-PRODUCT INTERSECTIONS (decision × annotation × CLI flag) ─────────────
+  printf 'SECTION C — Cross-product intersections (decision × annotation × CLI flag)\n'
+  printf '%s\n' '─────────────────────────────────────────────────────────────────────────────────────────────'
+  printf 'These 11 cells document non-obvious behavior at annotation+flag intersections.\n'
+  printf 'None are live-computed — all are static prose referencing the actual engine behavior.\n'
+  printf '\n'
+
+  printf 'C1. (skip:REASON) + (use-sha) — FROZEN wins over SHA\n'
+  printf '    Annotation:  # @todo env-update (skip:legacy) (use-sha) github:owner/repo abc1234\n'
+  printf '    Engine:      skip_reason field set → main.sh forces decision=FROZEN before SHA classifier\n'
+  printf '                 runs. _gs_eu2_classify_sha_decision is never called for FROZEN records.\n'
+  printf '    --apply:     FROZEN record is never written, even when annotation SHA is stale.\n'
+  printf '    Rule:        FROZEN gate (skip:) takes full precedence over all other signals.\n'
+  printf '    Immune to:   --force-auto\n'
+  printf '\n'
+
+  printf 'C2. (lock:REASON) + SHA classifier — LOCK allows annotation sha update\n'
+  printf '    Annotation:  # @todo env-update (lock:LTS) (git:phpredis/phpredis) pecl:redis 6.0.2\n'
+  printf '    Engine:      LOCK sets decision=LOCK. SHA classifier (_gs_eu2_classify_sha_decision)\n'
+  printf '                 runs separately AFTER the primary classifier. For LOCK records:\n'
+  printf '                 VAR= is never changed; annotation CURRENT_VERSION may be updated\n'
+  printf '                 when proposed > current (non-float only).\n'
+  printf '                 If proposed_sha != annotation_sha, the sha: annotation IS also updated.\n'
+  printf '    --apply:     Writes annotation (version + sha update) but NOT VAR=.\n'
+  printf '    Immune to:   --force-auto (cannot change VAR=)\n'
+  printf '\n'
+
+  printf 'C3. Float current + (watch-major) — [ERROR] at check time\n'
+  printf '    Annotation:  # @todo env-update (watch-major) dockerhub:_/node:lts latest\n'
+  printf '    Problem:     _gs_eu2_version_prefix("latest", 1) returns empty string.\n'
+  printf '                 The major-prefix comparison is undefined for floating aliases.\n'
+  printf '    Engine:      When watch_major_depth is set AND _gs_eu2_is_unversioned(current):\n'
+  printf '                 decision overridden to ERROR, error_message set to\n'
+  printf '                 "(watch-major) with floating current version '\''...'\''\''  is undefined — pin first"\n'
+  printf '    Fix:         Pin the current version in the annotation before adding (watch-major).\n'
+  printf '    Example:     # @todo env-update (watch-major) dockerhub:_/node:lts 22.14.0\n'
+  printf '\n'
+
+  printf 'C4. (replace:T=tmpl) + RESOLVED — cascade fires when --apply-resolve is used\n'
+  printf '    Annotation:  # @todo env-update (replace:GLOBAL_STACK_NODE_ALIAS={version}) dockerhub:_/node latest\n'
+  printf '    Without --apply-resolve: RESOLVED is informational — no writes at all.\n'
+  printf '    With --apply --apply-resolve: primary VAR= is pinned AND the replace cascade fires.\n'
+  printf '    Engine:      apply.sh RESOLVED path calls _gs_eu2_apply_replace_target after the\n'
+  printf '                 primary _gs_eu2_apply_single call (same logic as AUTO path).\n'
+  printf '    --dry-run:   [DRY-RUN] lines shown for both the primary pin and each replace target.\n'
+  printf '    --no-fail:   Failing replace targets are skipped (not fatal) when --no-fail is set.\n'
+  printf '\n'
+
+  printf 'C5. --dump --dry-run — --dry-run is silently ignored for --dump\n'
+  printf '    Behavior:    --dump outputs record data only; it never writes files.\n'
+  printf '                 Adding --dry-run has no effect — --dump is already read-only.\n'
+  printf '    Note:        --dump and --check are mutually exclusive (dump exits before fetch).\n'
+  printf '    --format:    Applies to --dump only (text or json). Does NOT affect --check output.\n'
+  printf '\n'
+
+  printf 'C6. --force-auto × RESOLVED — force-auto CANNOT promote RESOLVED to AUTO\n'
+  printf '    Why:         RESOLVED records have floating current values (latest/edge/lts/…).\n'
+  printf '                 Auto-pinning a floating ref requires explicit opt-in (--apply-resolve)\n'
+  printf '                 because the semantics differ: the user intentionally left the value\n'
+  printf '                 floating. --force-auto only bypasses (manual)/(override)/HOLD gates.\n'
+  printf '    To apply:    --apply --apply-resolve (+ optionally --force-auto for any HOLD/MANUAL).\n'
+  printf '    Output:      --check --force-auto still shows RESOLVED records as RESOLVED.\n'
+  printf '\n'
+
+  printf 'C7. (hold) annotation — exits 1 with explicit hint\n'
+  printf '    Problem:     (hold) in an annotation is NOT a valid flag. It was sometimes\n'
+  printf '                 written by users expecting it to "hold" the version.\n'
+  printf '    Pre-fix:     Treated as an unknown flag → cryptic "unknown flag" error.\n'
+  printf '    Post-fix:    Special-cased in parse.sh: exits 1 with:\n'
+  printf '                 "(hold) is not a valid annotation flag.\n'
+  printf '                  Use (manual) or (override) to require a human gate before --apply.\n'
+  printf '                  HOLD decisions are generated automatically when a version would cross\n'
+  printf '                  a major_hint boundary — they do not need an annotation."\n'
+  printf '    Correct:     Use (manual) for a human gate, or set a major_hint to get auto-HOLD.\n'
+  printf '\n'
+
+  printf 'C8. Float + (watch-major) [ERROR] — same as C3\n'
+  printf '    See C3 above. Both C3 and C8 document the same cell from different entry points\n'
+  printf '    (annotation-first vs. flag-first lookup). The behavior is identical.\n'
+  printf '\n'
+
+  printf 'C9. --apply-resolve + (replace:T=tmpl) — same as C4\n'
+  printf '    See C4 above. Both C4 and C9 document the same cell from different entry points\n'
+  printf '    (annotation-first vs. flag-first lookup). The behavior is identical.\n'
+  printf '\n'
+
+  printf 'C10. --stable × --unstable combinations\n'
+  printf '     Combinations and effects:\n'
+  printf '     --stable=full + --unstable=full   BANNED: mutually exclusive — exits 1 at arg validation\n'
+  printf '     --stable=full + --unstable=info   VALID: decisions use stable; [UNSTABLE] info sub-line shown\n'
+  printf '     --stable=info + --unstable=full   VALID: decisions use unstable; [STABLE] info sub-line shown\n'
+  printf '     --stable=info + --unstable=info   VALID: both info sub-lines shown; channel from annotation\n'
+  printf '     --stable      (no =value)         Equivalent to --stable=full\n'
+  printf '     --unstable    (no =value)         Equivalent to --unstable=full\n'
+  printf '     --stable=full (records already on stable): no-op — already on stable channel\n'
+  printf '     --unstable=full + (channel:rc):   channel remains rc (annotation wins; flag sets floor)\n'
+  printf '     Note: --stable=full + --unstable=full is the only banned combination.\n'
+  printf '           All other combinations are valid and composable.\n'
+  printf '\n'
+
+  printf 'C11. --no-cache × --cache-ttl=0\n'
+  printf '     Both bypass cache reads, but with different write-through semantics:\n'
+  printf '     --no-cache:       Bypasses both cache reads AND writes. Nothing is cached.\n'
+  printf '     --cache-ttl=0:    Bypasses cache reads only. Writes are still performed (write-through).\n'
+  printf '                       Effect: every fetch goes to network; result is cached for future runs.\n'
+  printf '     Practical difference: --cache-ttl=0 warms the cache; --no-cache does not.\n'
+  printf '     For CI pipelines wanting no stale reads but warm cache: --cache-ttl=0\n'
+  printf '     For fully fresh, stateless runs: --no-cache\n'
   printf '\n'
 }

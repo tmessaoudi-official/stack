@@ -2526,6 +2526,90 @@ t "t36b: --exclude-local-pattern suppresses forward-check warnings for matching 
 _flush_section
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Section 37 — P2 audit: smoke tests for 5 low-coverage flags
+# Flags: --remove-trailing-spaces, --include-docker-args, --scan-var-prefix,
+#        --scan-ignore-pattern, --source-merged-file
+# ═══════════════════════════════════════════════════════════════════════════
+section "37 — P2 audit: smoke tests for 5 low-coverage flags"
+
+# t37a: --remove-trailing-spaces=true strips trailing whitespace from dest values
+t "t37a: --remove-trailing-spaces=true strips trailing whitespace" bash -c "
+    D='\${TMP_DIR}/t37a'; mkdir -p \"\$D\"
+    # Source has trailing spaces on value
+    printf 'GLOBAL_STACK_T37A=1.0   \n' > \"\$D/.env\"
+    printf '' > \"\$D/.env.local\"
+    bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=false \
+        --remove-trailing-spaces=true --backup=false \
+        --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
+    # The written value should have trailing spaces stripped
+    val=\$(grep 'GLOBAL_STACK_T37A' \"\$D/.env.local\" | cut -d= -f2-)
+    [[ \"\$val\" == '1.0' ]] || { echo \"trailing space not stripped; got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t37b: --include-docker-args=false suppresses docker ARG inclusion in scan output
+t "t37b: --include-docker-args=false flag accepted, run exits 0" bash -c "
+    D='\${TMP_DIR}/t37b'; mkdir -p \"\$D\"
+    printf 'GLOBAL_STACK_T37B=1.0\n' > \"\$D/.env\"
+    printf '' > \"\$D/.env.local\"
+    rc=0
+    bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=false \
+        --include-docker-args=false --backup=false \
+        --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null || rc=\$?
+    [[ \"\$rc\" -eq 0 ]] || { echo \"run failed with exit \$rc\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t37c: --scan-var-prefix=CUSTOM_ restricts var extraction to CUSTOM_* vars
+t "t37c: --scan-var-prefix restricts extracted vars to matching prefix" bash -c "
+    D='\${TMP_DIR}/t37c'; mkdir -p \"\$D\"
+    # Create a mock Dockerfile with both prefixes
+    mkdir -p \"\$D/docker\"
+    printf 'FROM ubuntu\nARG GLOBAL_STACK_T37C=1.0\nARG CUSTOM_T37C=2.0\n' > \"\$D/docker/Dockerfile\"
+    printf 'GLOBAL_STACK_T37C=1.0\nCUSTOM_T37C=2.0\n' > \"\$D/.env\"
+    printf '' > \"\$D/.env.local\"
+    rc=0
+    bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=true \
+        --scan-path=\"\$D/docker\" \
+        --scan-var-prefix='(CUSTOM_)' \
+        --backup=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null || rc=\$?
+    [[ \"\$rc\" -eq 0 ]] || { echo \"run failed with exit \$rc\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t37d: --scan-ignore-pattern excludes matching paths from docker scan
+t "t37d: --scan-ignore-pattern excludes matched paths from scan" bash -c "
+    D='\${TMP_DIR}/t37d'; mkdir -p \"\$D\"
+    mkdir -p \"\$D/docker/ignored\"
+    printf 'FROM ubuntu\nARG GLOBAL_STACK_T37D=1.0\n' > \"\$D/docker/ignored/Dockerfile\"
+    printf 'GLOBAL_STACK_T37D=1.0\n' > \"\$D/.env\"
+    printf '' > \"\$D/.env.local\"
+    rc=0
+    bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=true \
+        --scan-path=\"\$D/docker\" \
+        --scan-ignore-pattern='ignored' \
+        --backup=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null || rc=\$?
+    [[ \"\$rc\" -eq 0 ]] || { echo \"run failed with exit \$rc\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t37e: --source-merged-file=<path> writes merged source to the given path
+t "t37e: --source-merged-file=<path> flag accepted, run exits 0" bash -c "
+    D='\${TMP_DIR}/t37e'; mkdir -p \"\$D\"
+    printf 'GLOBAL_STACK_T37E=1.0\n' > \"\$D/.env\"
+    printf '' > \"\$D/.env.local\"
+    merged=\"\$D/merged.env\"
+    rc=0
+    bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=false \
+        --source-merged-file=\"\$merged\" \
+        --backup=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null || rc=\$?
+    [[ \"\$rc\" -eq 0 ]] || { echo \"run failed with exit \$rc\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+_flush_section
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section

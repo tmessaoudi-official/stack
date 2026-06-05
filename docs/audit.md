@@ -158,12 +158,12 @@
 
 ### [R1-P2-1] `--scan` does not forward `--filter` to env-scan (documented gap)
 
-- **Severity**: P2 · **Confidence**: 100% · **Status**: Open — see Q10
+- **Severity**: P2 · **Confidence**: 100% · **Status**: Closed — `--filter` forwarding makes no sense for env-scan (env-scan has no concept of individual variable filtering); env-update Q10 owner decision
 - **Component**: `bin/lib/env-update/main.sh:1430-1438`
 
 ### [R1-P2-2] `--quiet` not forwarded from env-update `--scan` to env-scan
 
-- **Severity**: P2 · **Confidence**: 100% · **Status**: Open — see Q10
+- **Severity**: P2 · **Confidence**: 100% · **Status**: Closed — `--quiet` does not exist in env-update; env-update is intentionally verbose; Q10 owner decision
 
 ### [R1-P2-3] `_GS_EU2_TALLY_FORCE` documented in reference but not in `--help`
 
@@ -172,23 +172,24 @@
 
 ### [R3-P2-1 through R3-P2-11] 11 undocumented annotation × decision × CLI flag intersections
 
-- **Severity**: P2 · **Confidence**: 85-95% · **Status**: Open — see Q11
-- Includes: `(skip:R)` + use-sha; `(lock:R)` + SHA classifier ordering; float current + `(watch-major)`; `(replace:)` + RESOLVED; `--dump --dry-run` silent ignore; `--force-auto` × RESOLVED; `(hold)` anti-pattern detection
+- **Severity**: P2 · **Confidence**: 85-95% · **Status**: **Fixed** (2026-06-05) — Section C added to `--reference=matrix` with all 11 cells (C1–C11); float+(watch-major) → `[ERROR]` implemented; `(hold)` special-case error with hint implemented; `(replace:)` + RESOLVED cascade implemented; `(propagate)` removed
+- Includes: `(skip:R)` + use-sha (C1); `(lock:R)` + SHA classifier ordering (C2); float current + `(watch-major)` (C3/C8); `(replace:)` + RESOLVED (C4/C9); `--dump --dry-run` silent ignore (C5); `--force-auto` × RESOLVED (C6); `(hold)` anti-pattern detection (C7); `--stable` × `--unstable` combinations (C10); `--no-cache` × `--cache-ttl=0` (C11)
+- **Tests**: section 108 (t108a–t108d)
 
 ### [R4-P2-1] `_gs_eu2_run_check` is ~900 lines of nested logic
 
-- **Severity**: P2 · **Confidence**: 100% · **Status**: Open
+- **Severity**: P2 · **Confidence**: 100% · **Status**: Deferred — refactor risk outweighs gain; function is well-tested and stable
 - **Component**: `bin/lib/env-update/main.sh` — `_gs_eu2_run_check` function
 - **Recommended fix**: split per-signal sub-line handlers into `_gs_eu2_signal_<name>` family
 
 ### [R4-P2-2] env-scan `args.sh:33-167` is 130+ lines of boilerplate
 
-- **Severity**: P2 · **Confidence**: 100% · **Status**: Open — see Q17
+- **Severity**: P2 · **Confidence**: 100% · **Status**: Deferred — correct and stable; refactor risk > gain; Q17 owner decision
 - **Recommended fix**: table-driven dispatcher; see Q17
 
 ### [R4-P2-3] `dump.sh` calls `jq -Rs '.'` ~14,000 times for a full .env
 
-- **Severity**: P2 · **Confidence**: 100% · **Status**: Open — see Q18
+- **Severity**: P2 · **Confidence**: 100% · **Status**: Deferred — benchmark first; Q18 owner decision
 - **Component**: `bin/lib/env-update/reporting/dump.sh:52-53`
 - **Recommended fix**: single jq invocation; see Q18
 
@@ -199,8 +200,9 @@
 
 ### [R2-P2-1 through R2-P2-5] Low-coverage env-scan flags (1 test ref each)
 
-- **Severity**: P2 · **Confidence**: 100% · **Status**: Open
+- **Severity**: P2 · **Confidence**: 100% · **Status**: **Fixed** (2026-06-05) — smoke tests added for all 5 flags in section 37: `--remove-trailing-spaces`, `--include-docker-args`, `--scan-var-prefix`, `--scan-ignore-pattern`, `--source-merged-file`
 - Flags: `--remove-trailing-spaces`, `--include-docker-args`, `--scan-var-prefix`, `--scan-ignore-pattern`, `--source-merged-file`
+- **Tests**: section 37 (t37a–t37e)
 
 ### [R4-P3-1] `github.sh:86-93` — chmod after write (defensive order wrong)
 
@@ -532,4 +534,14 @@ bin/env-update.sh --filter=NODEEDGE_VERSION --check --dry-run # verified SKIP on
 bash bin/tests/env-update.test.sh --section=101               # ALL PASSED ✓ 4/4
 bash bin/tests/env-update.test.sh --section=102               # ALL PASSED ✓ 4/4
 bash bin/tests/env-update.test.sh                             # ALL PASSED ✓ (full suite)
+
+# P1 batch (2026-06-05)
+bash bin/tests/env-update.test.sh --section=107               # ALL PASSED ✓ 5/5
+bash bin/tests/env-update.test.sh                             # ALL PASSED ✓ (full suite)
+
+# P2 batch (2026-06-05)
+bash bin/tests/env-update.test.sh --section=108               # ALL PASSED ✓ 4/4
+bash bin/tests/env-scan.test.sh --section=37                  # ALL PASSED ✓ 5/5
+bash bin/tests/env-update.test.sh                             # ALL PASSED ✓ 728/728
+bash bin/tests/env-scan.test.sh                               # ALL PASSED ✓ 170/170
 ```

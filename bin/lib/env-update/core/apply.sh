@@ -258,6 +258,7 @@ _gs_eu2_apply_updates() {
     # ── RESOLVED path: float-to-concrete pin (requires --apply-resolve) ────
     # RESOLVED entries are informational only. --force-auto does NOT promote them.
     # Only --apply-resolve --apply triggers the write path.
+    # (replace:) cascade fires when --apply-resolve is active, same as AUTO path.
     if [[ "${_decision}" == "RESOLVED" ]]; then
       if [[ "${_GS_EU2_CFG[apply_resolve]:-false}" == "true" ]]; then
         _var="$(_gs_eu2_record_get "${_i}" env_var)"
@@ -267,12 +268,70 @@ _gs_eu2_apply_updates() {
         [[ -z "${_prop}" || "${_prop}" == "${_cur}" ]] && continue
         if [[ "${_dry_run}" == "true" ]]; then
           printf '  [DRY-RUN]  %-55s  %s → %s (float pinned)\n' "${_var}" "${_cur}" "${_prop}"
+          # (replace:) dry-run sub-lines for RESOLVED + --apply-resolve
+          local _res_rep_targets_dr _res_rep_tmpls_dr
+          _res_rep_targets_dr="$(_gs_eu2_record_get "${_i}" replace_targets)"
+          _res_rep_tmpls_dr="$(_gs_eu2_record_get "${_i}" replace_templates)"
+          if [[ -n "${_res_rep_targets_dr}" ]]; then
+            local _res_old_ifs_dr="${IFS}"
+            IFS=$'\x1f'
+            local _res_rt_arr_dr _res_rm_arr_dr
+            read -ra _res_rt_arr_dr <<< "${_res_rep_targets_dr}"
+            read -ra _res_rm_arr_dr <<< "${_res_rep_tmpls_dr}"
+            IFS="${_res_old_ifs_dr}"
+            local _res_ri_dr
+            for (( _res_ri_dr = 0; _res_ri_dr < ${#_res_rt_arr_dr[@]}; _res_ri_dr++ )); do
+              local _res_rt_dr="${_res_rt_arr_dr[${_res_ri_dr}]}"
+              local _res_rm_dr="${_res_rm_arr_dr[${_res_ri_dr}]:-}"
+              local _res_expanded_dr
+              _res_expanded_dr="$(_gs_eu2_expand_replace_template "${_res_rm_dr}" "${_prop}")"
+              printf '  [DRY-RUN]    ↳ (replace) %-47s  → %s\n' "${_res_rt_dr}" "${_res_expanded_dr}"
+            done
+          fi
         else
           # Write concrete version to VAR= and update annotation CURRENT_VERSION from float to concrete.
           _gs_eu2_apply_single "${_env_file}" "${_var}" "${_prop}" "${_raw_ann}" "${_cur}" \
                                "" "" "false" "false" ""
           printf '  [PINNED ]  %-55s  %s → %s\n' "${_var}" "${_cur}" "${_prop}"
           (( ++_n_resolve_applied )) || true
+          # (replace:) cascade for RESOLVED records (same logic as AUTO path)
+          local _res_rep_targets _res_rep_tmpls
+          _res_rep_targets="$(_gs_eu2_record_get "${_i}" replace_targets)"
+          _res_rep_tmpls="$(_gs_eu2_record_get "${_i}" replace_templates)"
+          if [[ -n "${_res_rep_targets}" ]]; then
+            local _res_old_ifs="${IFS}"
+            IFS=$'\x1f'
+            local _res_rt_arr _res_rm_arr
+            read -ra _res_rt_arr <<< "${_res_rep_targets}"
+            read -ra _res_rm_arr <<< "${_res_rep_tmpls}"
+            IFS="${_res_old_ifs}"
+            local _res_ri
+            for (( _res_ri = 0; _res_ri < ${#_res_rt_arr[@]}; _res_ri++ )); do
+              local _res_rt="${_res_rt_arr[${_res_ri}]}"
+              local _res_rm="${_res_rm_arr[${_res_ri}]:-}"
+              local _res_expanded
+              _res_expanded="$(_gs_eu2_expand_replace_template "${_res_rm}" "${_prop}")"
+              if ! grep -q "^${_res_rt}=" "${_env_file}" 2>/dev/null; then
+                printf '  [ERROR]    %-55s  replace: target %s not found in %s\n' \
+                  "${_var}" "${_res_rt}" "${_env_file}" >&2
+                if [[ "${_GS_EU2_CFG[no_fail]:-false}" != "true" ]]; then
+                  [[ -n "${_snapshot}" ]] && cp "${_snapshot}" "${_env_file}" || true
+                  return 1
+                fi
+                continue
+              fi
+              if ! _gs_eu2_apply_replace_target "${_env_file}" "${_res_rt}" "${_res_expanded}"; then
+                printf '  [ERROR]    %-55s  replace: failed to rewrite target %s\n' \
+                  "${_var}" "${_res_rt}" >&2
+                if [[ "${_GS_EU2_CFG[no_fail]:-false}" != "true" ]]; then
+                  [[ -n "${_snapshot}" ]] && cp "${_snapshot}" "${_env_file}" || true
+                  return 1
+                fi
+                continue
+              fi
+              printf '  [REPLACE]    ↳ (replace) %-47s  → %s\n' "${_res_rt}" "${_res_expanded}"
+            done
+          fi
         fi
       fi
       continue
