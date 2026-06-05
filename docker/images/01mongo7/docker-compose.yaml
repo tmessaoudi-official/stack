@@ -8,13 +8,22 @@ services:
         GLOBAL_STACK_IMAGE_MONGO7_VERSION: ${GLOBAL_STACK_IMAGE_MONGO7_VERSION}
       context: ./
       dockerfile: ./docker/images/01mongo7/Dockerfile
+    depends_on:
+      00base:
+        condition: service_healthy
+        required: true
     environment:
       - MONGO_DBS=${GLOBAL_STACK_MONGO7_DBS}
       - MONGODB_PASSWORD=${GLOBAL_STACK_DATABASE_ROOT_PASSWORD}
       - MONGODB_USER=root
       - TZ=${GLOBAL_STACK_TIMEZONE}
+      - GLOBAL_STACK_DOCKER_TOOLS_PATH=${GLOBAL_STACK_DOCKER_TOOLS_PATH}
+      - GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES=${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}
+      - GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS=${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}
+      - GLOBAL_STACK_DOCKER_ROOT_DIST_PATH=${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}
+      - GLOBAL_STACK_WAIT_FOR_TIMEOUT=${GLOBAL_STACK_WAIT_FOR_TIMEOUT}
     healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      test: ["CMD-SHELL", "${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/bin/base-bin/global-stack-base-healthcheck-elapsed.sh 01mongo7 mongosh --eval \"db.adminCommand('ping')\""]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -29,6 +38,8 @@ services:
       stack.version: "${GLOBAL_STACK_VERSION}"
     restart: "on-failure:5"
     volumes:
+      - ./tools:${GLOBAL_STACK_DOCKER_TOOLS_PATH}:rw
+      - ./docker/config/dist/bin:${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/bin:rw
       - ./docker/data/dumps/mongo/7:/opt/dumps:rw
       - 01mongo7_data:/data/db:rw,delegated
       - 01mongo7_configdb:/data/configdb:rw,delegated

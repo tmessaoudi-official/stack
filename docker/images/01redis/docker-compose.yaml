@@ -3,14 +3,26 @@ services:
   01redis:
     init: ${DOCKER_INIT}
     image: redis:${GLOBAL_STACK_REDIS_VERSION}
+    depends_on:
+      00base:
+        condition: service_healthy
+        required: true
+    environment:
+      - GLOBAL_STACK_DOCKER_TOOLS_PATH=${GLOBAL_STACK_DOCKER_TOOLS_PATH}
+      - GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES=${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}
+      - GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS=${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}
+      - GLOBAL_STACK_DOCKER_ROOT_DIST_PATH=${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}
+      - GLOBAL_STACK_WAIT_FOR_TIMEOUT=${GLOBAL_STACK_WAIT_FOR_TIMEOUT}
     ports:
       - ${GLOBAL_STACK_REDIS_PORT_6379:-}6379
     volumes:
+      - ./tools:${GLOBAL_STACK_DOCKER_TOOLS_PATH}:rw
+      - ./docker/config/dist/bin:${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/bin:rw
       - 01redis_data:/data
       - ./${GLOBAL_STACK_SHELL_HISTORY}:/root/${GLOBAL_STACK_SHELL_HISTORY_TARGET}:rw
       - ./${GLOBAL_STACK_SHELL_ZSH_HISTORY}:/root/${GLOBAL_STACK_SHELL_ZSH_HISTORY_TARGET}:rw
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/bin/base-bin/global-stack-base-healthcheck-elapsed.sh 01redis redis-cli ping"]
       interval: 10s
       timeout: 5s
       retries: 5

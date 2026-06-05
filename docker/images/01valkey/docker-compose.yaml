@@ -3,14 +3,26 @@ services:
   01valkey:
     init: ${DOCKER_INIT}
     image: valkey/valkey:${GLOBAL_STACK_VALKEY_VERSION}
+    depends_on:
+      00base:
+        condition: service_healthy
+        required: true
+    environment:
+      - GLOBAL_STACK_DOCKER_TOOLS_PATH=${GLOBAL_STACK_DOCKER_TOOLS_PATH}
+      - GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES=${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}
+      - GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS=${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}
+      - GLOBAL_STACK_DOCKER_ROOT_DIST_PATH=${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}
+      - GLOBAL_STACK_WAIT_FOR_TIMEOUT=${GLOBAL_STACK_WAIT_FOR_TIMEOUT}
     ports:
       - ${GLOBAL_STACK_VALKEY_PORT_6379:-}6379
     volumes:
+      - ./tools:${GLOBAL_STACK_DOCKER_TOOLS_PATH}:rw
+      - ./docker/config/dist/bin:${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/bin:rw
       - 01valkey_data:/data
       - ./${GLOBAL_STACK_SHELL_HISTORY}:/root/${GLOBAL_STACK_SHELL_HISTORY_TARGET}:rw
       - ./${GLOBAL_STACK_SHELL_ZSH_HISTORY}:/root/${GLOBAL_STACK_SHELL_ZSH_HISTORY_TARGET}:rw
     healthcheck:
-      test: ["CMD", "valkey-cli", "ping"]
+      test: ["CMD-SHELL", "${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/bin/base-bin/global-stack-base-healthcheck-elapsed.sh 01valkey valkey-cli ping"]
       interval: 10s
       timeout: 5s
       retries: 5

@@ -8,14 +8,23 @@ services:
         GLOBAL_STACK_IMAGE_MONGOCLIENT_MONGOCLIENT_VERSION: ${GLOBAL_STACK_IMAGE_MONGOCLIENT_MONGOCLIENT_VERSION}
       context: ./
       dockerfile: ./docker/images/02mongoclient-mongoclient/Dockerfile
+    depends_on:
+      00base:
+        condition: service_healthy
+        required: true
     environment:
       - MONGO_URL=${GLOBAL_STACK_MONGOCLIENT_MONGOCLIENT_DEFAULT_MONGO_URL}
+      - GLOBAL_STACK_DOCKER_TOOLS_PATH=${GLOBAL_STACK_DOCKER_TOOLS_PATH}
+      - GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES=${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}
+      - GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS=${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}
+      - GLOBAL_STACK_DOCKER_ROOT_DIST_PATH=${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}
+      - GLOBAL_STACK_WAIT_FOR_TIMEOUT=${GLOBAL_STACK_WAIT_FOR_TIMEOUT}
     networks:
       - public
     ports:
       - ${GLOBAL_STACK_MONGOCLIENT_MONGOCLIENT_PORT_3000:-}3000
     healthcheck:
-      test: ["CMD-SHELL", "curl -fs http://localhost:3000/ -o /dev/null"]
+      test: ["CMD-SHELL", "${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/bin/base-bin/global-stack-base-healthcheck-elapsed.sh 02mongoclient-mongoclient curl -fs http://localhost:3000/ -o /dev/null"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -26,5 +35,7 @@ services:
       stack.version: "${GLOBAL_STACK_VERSION}"
     restart: "on-failure:5"
     volumes:
+      - ./tools:${GLOBAL_STACK_DOCKER_TOOLS_PATH}:rw
+      - ./docker/config/dist/bin:${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/bin:rw
       - ./${GLOBAL_STACK_SHELL_HISTORY}:/home/node/${GLOBAL_STACK_SHELL_HISTORY_TARGET}:rw
       - ./${GLOBAL_STACK_SHELL_ZSH_HISTORY}:/home/node/${GLOBAL_STACK_SHELL_ZSH_HISTORY_TARGET}:rw

@@ -22,6 +22,7 @@ echo -e "\nInstallation complete -- seems like it went well !"
 
 if [ "${3:-update}" = "create" ]; then
   echo -e "$(date '+%d-%m-%Y %H:%M:%S'): $(echo "${2}") - ${HOURS} hours and ${MINUTES} minutes and ${SECONDS} seconds elapsed." > "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/elapsed"
+  chmod o+w "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/elapsed"
 else
   echo -e "$(date '+%d-%m-%Y %H:%M:%S'): $(echo "${2}") - ${HOURS} hours and ${MINUTES} minutes and ${SECONDS} seconds elapsed." >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/elapsed"
 fi

@@ -21,8 +21,10 @@ services:
       - ${GLOBAL_STACK_EXPOSED_VIRTUAL_HOSTS}:${GLOBAL_STACK_HOST_GATEWAY_IP}
     environment:
       - CAROOT=${GLOBAL_STACK_CAROOT}
+      - GLOBAL_STACK_DOCKER_TOOLS_PATH=${GLOBAL_STACK_DOCKER_TOOLS_PATH}
       - GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES=${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}
       - GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS=${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}
+      - GLOBAL_STACK_DOCKER_ROOT_DIST_PATH=${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}
       - AWS_ENDPOINT_URL_S3=${GLOBAL_STACK_BASE_AWS_ENDPOINT_URL_S3}
       - AWS_ENDPOINT_URL_SQS=${GLOBAL_STACK_BASE_AWS_ENDPOINT_URL_SQS}
       - AWS_ENDPOINT_URL_LAMBDA=${GLOBAL_STACK_BASE_AWS_ENDPOINT_URL_LAMBDA}
@@ -40,8 +42,9 @@ services:
       - SERVERLESS_ACCESS_KEY=${GLOBAL_STACK_BASE_SERVERLESS_ACCESS_KEY}
       - GLOBAL_STACK_DOCKER_USER_EMAIL=${GLOBAL_STACK_DOCKER_USER_EMAIL}
       - GLOBAL_STACK_DOCKER_USER_NAME=${GLOBAL_STACK_DOCKER_USER_NAME}
+      - GLOBAL_STACK_WAIT_FOR_TIMEOUT=${GLOBAL_STACK_WAIT_FOR_TIMEOUT}
     healthcheck:
-      test: ["CMD-SHELL", "curl -fs http://localhost:4444/wd/hub/status | grep -q '\"ready\"[[:space:]]*:[[:space:]]*true'"]
+      test: ["CMD-SHELL", "${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/bin/base-bin/global-stack-base-healthcheck-elapsed.sh 01selenium-standalone-chrome sh -c \"curl -fs http://localhost:4444/wd/hub/status | grep -q '\\\"ready\\\"[[:space:]]*:[[:space:]]*true'\""]
       interval: 30s
       timeout: 10s
       retries: 99999

@@ -15,6 +15,10 @@ services:
       # - --default-authentication-plugin=caching_sha2_password
       - --character-set-server=${GLOBAL_STACK_DATABASE_CHARSET}
       - --collation-server=${GLOBAL_STACK_DATABASE_COLLATE}
+    depends_on:
+      00base:
+        condition: service_healthy
+        required: true
     environment:
       - MYSQL_DBS=${GLOBAL_STACK_MYSQL9_DBS}
       - MYSQL_PASSWORD=${GLOBAL_STACK_DATABASE_PASSWORD}
@@ -24,8 +28,13 @@ services:
       - GLOBAL_STACK_DATABASE_COLLATE=${GLOBAL_STACK_DATABASE_COLLATE}
       - MYSQL_ALLOW_EMPTY_PASSWORD=yes
       - TZ=${GLOBAL_STACK_TIMEZONE}
+      - GLOBAL_STACK_DOCKER_TOOLS_PATH=${GLOBAL_STACK_DOCKER_TOOLS_PATH}
+      - GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES=${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}
+      - GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS=${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}
+      - GLOBAL_STACK_DOCKER_ROOT_DIST_PATH=${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}
+      - GLOBAL_STACK_WAIT_FOR_TIMEOUT=${GLOBAL_STACK_WAIT_FOR_TIMEOUT}
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "${GLOBAL_STACK_DOCKER_USER_ID}", "-p${GLOBAL_STACK_DATABASE_PASSWORD}"]
+      test: ["CMD-SHELL", "${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/bin/base-bin/global-stack-base-healthcheck-elapsed.sh 01mysql9 mysqladmin ping -h localhost -u ${GLOBAL_STACK_DOCKER_USER_ID} -p${GLOBAL_STACK_DATABASE_PASSWORD}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -41,6 +50,8 @@ services:
       - ${GLOBAL_STACK_MYSQL9_PORT_3306:-}3306
       - ${GLOBAL_STACK_MYSQL9_PORT_33060:-}33060
     volumes:
+      - ./tools:${GLOBAL_STACK_DOCKER_TOOLS_PATH}:rw
+      - ./docker/config/dist/bin:${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/bin:rw
       - ./docker/data/dumps/mysql/9:/opt/dumps:rw
       - 01mysql9_data:/var/lib/mysql:rw,delegated
       - ./${GLOBAL_STACK_SHELL_HISTORY}:/root/${GLOBAL_STACK_SHELL_HISTORY_TARGET}:rw

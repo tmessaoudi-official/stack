@@ -8,15 +8,24 @@ services:
         GLOBAL_STACK_IMAGE_POSTGRES18_VERSION: ${GLOBAL_STACK_IMAGE_POSTGRES18_VERSION}
       context: ./
       dockerfile: ./docker/images/01postgres18/Dockerfile
+    depends_on:
+      00base:
+        condition: service_healthy
+        required: true
     environment:
       - POSTGRES_DBS=${GLOBAL_STACK_POSTGRES18_DBS}
       - POSTGRES_PASSWORD=${GLOBAL_STACK_DATABASE_ROOT_PASSWORD}
       - POSTGRES_USER=root
       - TZ=${GLOBAL_STACK_TIMEZONE}
+      - GLOBAL_STACK_DOCKER_TOOLS_PATH=${GLOBAL_STACK_DOCKER_TOOLS_PATH}
+      - GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES=${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}
+      - GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS=${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}
+      - GLOBAL_STACK_DOCKER_ROOT_DIST_PATH=${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}
+      - GLOBAL_STACK_WAIT_FOR_TIMEOUT=${GLOBAL_STACK_WAIT_FOR_TIMEOUT}
     networks:
       - public
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U root"]
+      test: ["CMD-SHELL", "${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/bin/base-bin/global-stack-base-healthcheck-elapsed.sh 01postgres18 pg_isready -U root"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -30,6 +39,8 @@ services:
     ports:
       - ${GLOBAL_STACK_POSTGRES18_PORT_5432:-}5432
     volumes:
+      - ./tools:${GLOBAL_STACK_DOCKER_TOOLS_PATH}:rw
+      - ./docker/config/dist/bin:${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/bin:rw
       - ./docker/data/dumps/postgres/18:/opt/dumps:rw
       - 01postgres18_var_lib_postgresql:/var/lib/postgresql:rw,delegated
       - ./${GLOBAL_STACK_SHELL_HISTORY}:/root/${GLOBAL_STACK_SHELL_HISTORY_TARGET}:rw

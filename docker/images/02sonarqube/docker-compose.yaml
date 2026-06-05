@@ -25,8 +25,11 @@ services:
       - ${GLOBAL_STACK_EXPOSED_VIRTUAL_HOSTS}:${GLOBAL_STACK_HOST_GATEWAY_IP}
     environment:
       - CAROOT=${GLOBAL_STACK_CAROOT}
+      - GLOBAL_STACK_DOCKER_TOOLS_PATH=${GLOBAL_STACK_DOCKER_TOOLS_PATH}
       - GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES=${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}
       - GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS=${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}
+      - GLOBAL_STACK_DOCKER_ROOT_DIST_PATH=${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}
+      - GLOBAL_STACK_WAIT_FOR_TIMEOUT=${GLOBAL_STACK_WAIT_FOR_TIMEOUT}
       - SONAR_JDBC_URL=${GLOBAL_STACK_SONARQUBE_JDBC_URL}
       - SONAR_JDBC_USERNAME=${GLOBAL_STACK_SONARQUBE_JDBC_USERNAME}
       - SONAR_JDBC_PASSWORD=${GLOBAL_STACK_SONARQUBE_JDBC_PASSWORD}
@@ -60,7 +63,7 @@ services:
       - 02sonarqube_community_extensions:/opt/sonarqube/extensions
       - 02sonarqube_community_temp:/opt/sonarqube/temp
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:9000/api/system/status | grep -q '\"status\":\"UP\"' || exit 1"]
+      test: ["CMD-SHELL", "${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/bin/base-bin/global-stack-base-healthcheck-elapsed.sh 02sonarqube sh -c 'curl -sf http://localhost:9000/api/system/status | grep -q UP'"]
       interval: 30s
       timeout: 10s
       retries: 99999

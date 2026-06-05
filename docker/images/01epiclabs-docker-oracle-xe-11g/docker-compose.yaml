@@ -17,8 +17,13 @@ services:
       - ORACLE_PASSWORD=${GLOBAL_STACK_DATABASE_ROOT_PASSWORD}
       - RELAX_SECURITY=${GLOBAL_STACK_EPICLABS_DOCKER_ORACLE_XE_11G_RELAX_SECURITY}
       - TZ=${GLOBAL_STACK_TIMEZONE}
+      - GLOBAL_STACK_DOCKER_TOOLS_PATH=${GLOBAL_STACK_DOCKER_TOOLS_PATH}
+      - GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES=${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}
+      - GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS=${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}
+      - GLOBAL_STACK_DOCKER_ROOT_DIST_PATH=${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}
+      - GLOBAL_STACK_WAIT_FOR_TIMEOUT=${GLOBAL_STACK_WAIT_FOR_TIMEOUT}
     healthcheck:
-      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/1521' || exit 1"]
+      test: ["CMD-SHELL", "${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/bin/base-bin/global-stack-base-healthcheck-elapsed.sh 01epiclabs-docker-oracle-xe-11g bash -c 'exec 3<>/dev/tcp/127.0.0.1/1521'"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -39,6 +44,8 @@ services:
       - ${GLOBAL_STACK_EPICLABS_DOCKER_ORACLE_XE_11G_PORT_1521:-}1521
       - ${GLOBAL_STACK_EPICLABS_DOCKER_ORACLE_XE_11G_PORT_8080:-}8080
     volumes:
+      - ./tools:${GLOBAL_STACK_DOCKER_TOOLS_PATH}:rw
+      - ./docker/config/dist/bin:${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/bin:rw
       - ./docker/data/dumps/oracle/epiclabs-xe-11g:/opt/dumps:rw
       - epiclabs_docker_oracle_xe_11g_data:/u01/app/oracle:rw,delegated
       - ./${GLOBAL_STACK_SHELL_HISTORY}:/root/${GLOBAL_STACK_SHELL_HISTORY_TARGET}:rw

@@ -3,6 +3,10 @@ services:
   00corentinth-it-tools:
     init: ${DOCKER_INIT}
     image: corentinth/it-tools:${GLOBAL_STACK_CORENTINTH_IT_TOOLS_VERSION}
+    depends_on:
+      00base:
+        condition: service_healthy
+        required: true
     ports:
       - ${GLOBAL_STACK_CORENTINTH_IT_TOOLS_PORT_80:-}80
     labels:
@@ -12,8 +16,13 @@ services:
     environment:
       - NGINX_VERSION=${GLOBAL_STACK_NGINX_VERSION}
       - NJS_VERSION=${GLOBAL_STACK_CORENTINTH_IT_TOOLS_NJS_VERSION}
+      - GLOBAL_STACK_DOCKER_TOOLS_PATH=${GLOBAL_STACK_DOCKER_TOOLS_PATH}
+      - GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES=${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}
+      - GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS=${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}
+      - GLOBAL_STACK_DOCKER_ROOT_DIST_PATH=${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}
+      - GLOBAL_STACK_WAIT_FOR_TIMEOUT=${GLOBAL_STACK_WAIT_FOR_TIMEOUT}
     healthcheck:
-      test: ["CMD-SHELL", "curl -fs http://localhost:80/ -o /dev/null"]
+      test: ["CMD-SHELL", "${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/bin/base-bin/global-stack-base-healthcheck-elapsed.sh 00corentinth-it-tools curl -fs http://localhost:80/ -o /dev/null"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -22,5 +31,7 @@ services:
     networks:
       - public
     volumes:
+      - ./tools:${GLOBAL_STACK_DOCKER_TOOLS_PATH}:rw
+      - ./docker/config/dist/bin:${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/bin:rw
       - ./${GLOBAL_STACK_SHELL_HISTORY}:/root/${GLOBAL_STACK_SHELL_HISTORY_TARGET}:rw
       - ./${GLOBAL_STACK_SHELL_ZSH_HISTORY}:/root/${GLOBAL_STACK_SHELL_ZSH_HISTORY_TARGET}:rw

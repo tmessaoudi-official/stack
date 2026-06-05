@@ -8,17 +8,26 @@ services:
         GLOBAL_STACK_IMAGE_DPAGE_PGADMIN4_VERSION: ${GLOBAL_STACK_IMAGE_DPAGE_PGADMIN4_VERSION}
       context: ./
       dockerfile: ./docker/images/02dpage-pgadmin4/Dockerfile
+    depends_on:
+      00base:
+        condition: service_healthy
+        required: true
     environment:
       - PGADMIN_DEFAULT_EMAIL=${GLOBAL_STACK_PGADMIN_DEFAULT_EMAIL}
       - PGADMIN_DEFAULT_PASSWORD=${GLOBAL_STACK_PGADMIN_DEFAULT_PASSWORD}
       - PGADMIN_CONFIG_ALLOW_SPECIAL_EMAIL_DOMAINS=['local.io']
+      - GLOBAL_STACK_DOCKER_TOOLS_PATH=${GLOBAL_STACK_DOCKER_TOOLS_PATH}
+      - GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES=${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}
+      - GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS=${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}
+      - GLOBAL_STACK_DOCKER_ROOT_DIST_PATH=${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}
+      - GLOBAL_STACK_WAIT_FOR_TIMEOUT=${GLOBAL_STACK_WAIT_FOR_TIMEOUT}
     networks:
       - public
     ports:
       - ${GLOBAL_STACK_DPAGE_PGADMIN4_PORT_80:-}80
       - ${GLOBAL_STACK_DPAGE_PGADMIN4_PORT_443:-}443
     healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://localhost:80/misc/ping"]
+      test: ["CMD-SHELL", "${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/bin/base-bin/global-stack-base-healthcheck-elapsed.sh 02dpage-pgadmin4 wget -q --spider http://localhost:80/misc/ping"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -29,6 +38,8 @@ services:
       stack.version: "${GLOBAL_STACK_VERSION}"
     restart: "on-failure:5"
     volumes:
+      - ./tools:${GLOBAL_STACK_DOCKER_TOOLS_PATH}:rw
+      - ./docker/config/dist/bin:${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/bin:rw
       - ./docker/data/dumps/dpage-pgadmin4:/var/lib/pgadmin/storage/${GLOBAL_STACK_DOCKER_USER_ID}_local.io:rw
       - pgadmin_lib:/var/lib/pgadmin:rw,delegated
       - ./${GLOBAL_STACK_SHELL_HISTORY}:/root/${GLOBAL_STACK_SHELL_HISTORY_TARGET}:rw

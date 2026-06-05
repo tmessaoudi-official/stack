@@ -23,9 +23,9 @@ if [[ -n "${NODE_INSTALL_PACKAGE_IONIC_CLI_VERSION:-}" && "" != "${NODE_INSTALL_
   ionic config set -g npmClient npm
 fi
 
-if [[ -n "${NODE_INSTALL_PACKAGE_ANGULAR_CLI_VERSION:-}" && "" != "${NODE_INSTALL_PACKAGE_ANGULAR_CLI_VERSION:-}" ]]; then
-  ng config --global cli.packageManager npm
-fi
+# if [[ -n "${NODE_INSTALL_PACKAGE_ANGULAR_CLI_VERSION:-}" && "" != "${NODE_INSTALL_PACKAGE_ANGULAR_CLI_VERSION:-}" ]]; then
+#   ng config --global cli.packageManager npm
+# fi
 
 # if [[ -n "${NODE_INSTALL_PACKAGE_NX_VERSION:-}" && "" != "${NODE_INSTALL_PACKAGE_NX_VERSION:-}" ]]; then
 # #  nx config --global cli.packageManager npm

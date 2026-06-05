@@ -3,18 +3,27 @@ services:
   01axllent-mailpit:
     init: ${DOCKER_INIT}
     image: axllent/mailpit:${GLOBAL_STACK_IMAGE_AXLLENT_MAILPIT_VERSION}
+    depends_on:
+      00base:
+        condition: service_healthy
+        required: true
     environment:
       - MP_DATABASE=/data/mailpit.db
       - MP_MAX_MESSAGES=5000
       - MP_SMTP_AUTH_ACCEPT_ANY=1
       - MP_SMTP_AUTH_ALLOW_INSECURE=1
+      - GLOBAL_STACK_DOCKER_TOOLS_PATH=${GLOBAL_STACK_DOCKER_TOOLS_PATH}
+      - GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES=${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}
+      - GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS=${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}
+      - GLOBAL_STACK_DOCKER_ROOT_DIST_PATH=${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}
+      - GLOBAL_STACK_WAIT_FOR_TIMEOUT=${GLOBAL_STACK_WAIT_FOR_TIMEOUT}
     networks:
       - public
     ports:
       - ${GLOBAL_STACK_AXLLENT_MAILPIT_PORT_1025:-}1025
       - ${GLOBAL_STACK_AXLLENT_MAILPIT_PORT_8025:-}8025
     healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://localhost:8025/"]
+      test: ["CMD-SHELL", "${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/bin/base-bin/global-stack-base-healthcheck-elapsed.sh 01axllent-mailpit wget -q --spider http://localhost:8025/"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -25,6 +34,8 @@ services:
       stack.version: "${GLOBAL_STACK_VERSION}"
     restart: "on-failure:5"
     volumes:
+      - ./tools:${GLOBAL_STACK_DOCKER_TOOLS_PATH}:rw
+      - ./docker/config/dist/bin:${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/bin:rw
       - ${GLOBAL_STACK_AXLLENT_MAILPIT_MP_DATABASE}:/data:rw
       - ./${GLOBAL_STACK_SHELL_HISTORY}:/root/${GLOBAL_STACK_SHELL_HISTORY_TARGET}:rw
       - ./${GLOBAL_STACK_SHELL_ZSH_HISTORY}:/root/${GLOBAL_STACK_SHELL_ZSH_HISTORY_TARGET}:rw

@@ -45,6 +45,11 @@ services:
       - SSL_CERT_FILE=${GLOBAL_STACK_BASE_SSL_CERT_FILE}
       - REQUESTS_CA_BUNDLE=${GLOBAL_STACK_BASE_REQUESTS_CA_BUNDLE}
       - CURL_CA_BUNDLE=${GLOBAL_STACK_BASE_CURL_CA_BUNDLE}
+      - GLOBAL_STACK_DOCKER_TOOLS_PATH=${GLOBAL_STACK_DOCKER_TOOLS_PATH}
+      - GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES=${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}
+      - GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS=${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}
+      - GLOBAL_STACK_DOCKER_ROOT_DIST_PATH=${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}
+      - GLOBAL_STACK_WAIT_FOR_TIMEOUT=${GLOBAL_STACK_WAIT_FOR_TIMEOUT}
     volumes:
       - /etc/ssl/certs/ca-certificates.crt:/etc/ssl/certs/ca-certificates.crt:rw,delegated
       - ./projects:${GLOBAL_STACK_DOCKER_WORKDIR}:rw
@@ -65,7 +70,7 @@ services:
       - ${GLOBAL_STACK_KEYCLOAK_KEYCLOAK_PORT_9990:-}9990
       - ${GLOBAL_STACK_KEYCLOAK_KEYCLOAK_PORT_9000:-}9000
     healthcheck:
-      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 || exit 1"]
+      test: ["CMD-SHELL", "${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/bin/base-bin/global-stack-base-healthcheck-elapsed.sh 02keycloak-keycloak sh -c 'exec 3<>/dev/tcp/127.0.0.1/9000'"]
       interval: 15s
       timeout: 5s
       retries: 10
