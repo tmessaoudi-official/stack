@@ -43,6 +43,7 @@ services:
       - GLOBAL_STACK_DOCKER_USER_EMAIL=${GLOBAL_STACK_DOCKER_USER_EMAIL}
       - GLOBAL_STACK_DOCKER_USER_NAME=${GLOBAL_STACK_DOCKER_USER_NAME}
       - GLOBAL_STACK_WAIT_FOR_TIMEOUT=${GLOBAL_STACK_WAIT_FOR_TIMEOUT}
+      - TZ=${GLOBAL_STACK_TIMEZONE}
     healthcheck:
       test: ["CMD-SHELL", "${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/bin/base-bin/global-stack-base-healthcheck-elapsed.sh 01selenium-standalone-firefox sh -c \"curl -fs http://localhost:4444/wd/hub/status | grep -q '\\\"ready\\\"[[:space:]]*:[[:space:]]*true'\""]
       interval: 30s

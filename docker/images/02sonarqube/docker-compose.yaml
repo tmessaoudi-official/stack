@@ -50,6 +50,7 @@ services:
       - SERVERLESS_ACCESS_KEY=${GLOBAL_STACK_BASE_SERVERLESS_ACCESS_KEY}
       - GLOBAL_STACK_DOCKER_USER_EMAIL=${GLOBAL_STACK_DOCKER_USER_EMAIL}
       - GLOBAL_STACK_DOCKER_USER_NAME=${GLOBAL_STACK_DOCKER_USER_NAME}
+      - TZ=${GLOBAL_STACK_TIMEZONE}
     volumes:
       - /etc/ssl/certs/ca-certificates.crt:/etc/ssl/certs/ca-certificates.crt:rw,delegated
       - ./projects:${GLOBAL_STACK_DOCKER_WORKDIR}:rw
