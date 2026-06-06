@@ -1,5 +1,6 @@
 ---
 name: new-service
+spotlight: true
 description: Use when scaffolding a new Docker service for the /stack project — creates Dockerfile, docker-compose.yaml, and startup script boilerplate from inputs or interactive prompts.
 user-invocable: true
 ---

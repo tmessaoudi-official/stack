@@ -1,5 +1,6 @@
 ---
 name: lint
+spotlight: true
 description: Use when shell scripts, Dockerfiles, or YAML files need quality validation. Use after editing any .sh, Dockerfile*, or .yaml/.yml file.
 user-invocable: true
 ---

@@ -7,6 +7,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_SCAN="${SCRIPT_DIR}/../env-scan.sh"
 TMP_DIR="$(mktemp -d)"
+export TMP_DIR
 trap 'rm -rf "${TMP_DIR}"' EXIT
 
 # ─── colors (auto-disabled when not a tty) ─────────────────────────────────
@@ -2534,7 +2535,7 @@ section "37 — P2 audit: smoke tests for 5 low-coverage flags"
 
 # t37a: --remove-trailing-spaces=true strips trailing whitespace from dest values
 t "t37a: --remove-trailing-spaces=true strips trailing whitespace" bash -c "
-    D='\${TMP_DIR}/t37a'; mkdir -p \"\$D\"
+    D='${TMP_DIR}/t37a'; mkdir -p \"\$D\"
     # Source has trailing spaces on value
     printf 'GLOBAL_STACK_T37A=1.0   \n' > \"\$D/.env\"
     printf '' > \"\$D/.env.local\"
@@ -2549,7 +2550,7 @@ t "t37a: --remove-trailing-spaces=true strips trailing whitespace" bash -c "
 
 # t37b: --include-docker-args=false suppresses docker ARG inclusion in scan output
 t "t37b: --include-docker-args=false flag accepted, run exits 0" bash -c "
-    D='\${TMP_DIR}/t37b'; mkdir -p \"\$D\"
+    D='${TMP_DIR}/t37b'; mkdir -p \"\$D\"
     printf 'GLOBAL_STACK_T37B=1.0\n' > \"\$D/.env\"
     printf '' > \"\$D/.env.local\"
     rc=0
@@ -2562,7 +2563,7 @@ t "t37b: --include-docker-args=false flag accepted, run exits 0" bash -c "
 
 # t37c: --scan-var-prefix=CUSTOM_ restricts var extraction to CUSTOM_* vars
 t "t37c: --scan-var-prefix restricts extracted vars to matching prefix" bash -c "
-    D='\${TMP_DIR}/t37c'; mkdir -p \"\$D\"
+    D='${TMP_DIR}/t37c'; mkdir -p \"\$D\"
     # Create a mock Dockerfile with both prefixes
     mkdir -p \"\$D/docker\"
     printf 'FROM ubuntu\nARG GLOBAL_STACK_T37C=1.0\nARG CUSTOM_T37C=2.0\n' > \"\$D/docker/Dockerfile\"
@@ -2579,7 +2580,7 @@ t "t37c: --scan-var-prefix restricts extracted vars to matching prefix" bash -c 
 
 # t37d: --scan-ignore-pattern excludes matching paths from docker scan
 t "t37d: --scan-ignore-pattern excludes matched paths from scan" bash -c "
-    D='\${TMP_DIR}/t37d'; mkdir -p \"\$D\"
+    D='${TMP_DIR}/t37d'; mkdir -p \"\$D\"
     mkdir -p \"\$D/docker/ignored\"
     printf 'FROM ubuntu\nARG GLOBAL_STACK_T37D=1.0\n' > \"\$D/docker/ignored/Dockerfile\"
     printf 'GLOBAL_STACK_T37D=1.0\n' > \"\$D/.env\"
@@ -2595,7 +2596,7 @@ t "t37d: --scan-ignore-pattern excludes matched paths from scan" bash -c "
 
 # t37e: --source-merged-file=<path> writes merged source to the given path
 t "t37e: --source-merged-file=<path> flag accepted, run exits 0" bash -c "
-    D='\${TMP_DIR}/t37e'; mkdir -p \"\$D\"
+    D='${TMP_DIR}/t37e'; mkdir -p \"\$D\"
     printf 'GLOBAL_STACK_T37E=1.0\n' > \"\$D/.env\"
     printf '' > \"\$D/.env.local\"
     merged=\"\$D/merged.env\"
@@ -2614,7 +2615,7 @@ section "38 — P3 audit: smoke tests for 7 low-coverage flags"
 
 # t38a: --diff-ignore-pattern suppresses diff reports for matching vars
 t "t38a: --diff-ignore-pattern=PATTERN suppresses diff for matching var" bash -c "
-    D='\${TMP_DIR}/t38a'; mkdir -p \"\$D\"
+    D='${TMP_DIR}/t38a'; mkdir -p \"\$D\"
     printf 'GLOBAL_STACK_T38A_TOKEN=secret1\n' > \"\$D/.env\"
     printf 'GLOBAL_STACK_T38A_TOKEN=secret2\n' > \"\$D/.env.local\"
     out=\$(bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=false \
@@ -2627,7 +2628,7 @@ t "t38a: --diff-ignore-pattern=PATTERN suppresses diff for matching var" bash -c
 
 # t38b: --scan-var-ignore-pattern suppresses var extraction for matching names
 t "t38b: --scan-var-ignore-pattern=PATTERN accepted, run exits 0" bash -c "
-    D='\${TMP_DIR}/t38b'; mkdir -p \"\$D\"
+    D='${TMP_DIR}/t38b'; mkdir -p \"\$D\"
     printf 'GLOBAL_STACK_T38B=1.0\n' > \"\$D/.env\"
     printf '' > \"\$D/.env.local\"
     rc=0
@@ -2640,7 +2641,7 @@ t "t38b: --scan-var-ignore-pattern=PATTERN accepted, run exits 0" bash -c "
 
 # t38c: --reverse-check-ignore-pattern suppresses orphan reports for matching vars
 t "t38c: --reverse-check-ignore-pattern=PATTERN accepted, run exits 0" bash -c "
-    D='\${TMP_DIR}/t38c'; mkdir -p \"\$D\"
+    D='${TMP_DIR}/t38c'; mkdir -p \"\$D\"
     printf 'GLOBAL_STACK_T38C=1.0\n' > \"\$D/.env\"
     printf 'GLOBAL_STACK_T38C=1.0\nGLOBAL_STACK_T38C_LOCAL=local\n' > \"\$D/.env.local\"
     rc=0
@@ -2653,7 +2654,7 @@ t "t38c: --reverse-check-ignore-pattern=PATTERN accepted, run exits 0" bash -c "
 
 # t38d: --forward-check-ignore-pattern accepted without error
 t "t38d: --forward-check-ignore-pattern=PATTERN accepted, run exits 0" bash -c "
-    D='\${TMP_DIR}/t38d'; mkdir -p \"\$D\"
+    D='${TMP_DIR}/t38d'; mkdir -p \"\$D\"
     printf 'GLOBAL_STACK_T38D=1.0\n' > \"\$D/.env\"
     printf '' > \"\$D/.env.local\"
     rc=0
@@ -2669,7 +2670,7 @@ t "t38d: --forward-check-ignore-pattern=PATTERN accepted, run exits 0" bash -c "
 # An empty VAR= in .env is still synced to .env.local; the flag suppresses conflict
 # reports for empty values found in scan (docker ARG) output.
 t "t38e: --exclude-explicit-empty=true flag accepted, run exits 0" bash -c "
-    D='\${TMP_DIR}/t38e'; mkdir -p \"\$D\"
+    D='${TMP_DIR}/t38e'; mkdir -p \"\$D\"
     printf 'GLOBAL_STACK_T38E_FILLED=1.0\nGLOBAL_STACK_T38E_EMPTY=\n' > \"\$D/.env\"
     printf '' > \"\$D/.env.local\"
     rc=0
@@ -2682,7 +2683,7 @@ t "t38e: --exclude-explicit-empty=true flag accepted, run exits 0" bash -c "
 
 # t38f: --conflict-ignore-pattern suppresses conflict detection for matching vars
 t "t38f: --conflict-ignore-pattern=PATTERN accepted, run exits 0" bash -c "
-    D='\${TMP_DIR}/t38f'; mkdir -p \"\$D\"
+    D='${TMP_DIR}/t38f'; mkdir -p \"\$D\"
     printf 'GLOBAL_STACK_T38F=1.0\n' > \"\$D/.env\"
     printf '' > \"\$D/.env.local\"
     rc=0
@@ -2695,7 +2696,7 @@ t "t38f: --conflict-ignore-pattern=PATTERN accepted, run exits 0" bash -c "
 
 # t38g: --backup-suffix=<str> uses the custom suffix for backup file names
 t "t38g: --backup-suffix=.mybak creates backup with custom suffix" bash -c "
-    D='\${TMP_DIR}/t38g'; mkdir -p \"\$D\"
+    D='${TMP_DIR}/t38g'; mkdir -p \"\$D\"
     printf 'GLOBAL_STACK_T38G=1.0\n' > \"\$D/.env\"
     printf '' > \"\$D/.env.local\"
     bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=false \

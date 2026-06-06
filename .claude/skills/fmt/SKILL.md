@@ -1,5 +1,6 @@
 ---
 name: fmt
+spotlight: true
 description: Use when shell scripts or YAML files need formatting, or to preview formatting changes before committing. Supports --check, --sh, --yaml flags.
 user-invocable: true
 ---
