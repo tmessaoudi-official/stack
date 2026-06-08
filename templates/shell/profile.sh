@@ -22,22 +22,23 @@ eval "$(grep -vE "${_gs_prof_exclude}" "${_gs_prof_envfile}" | sed 's/^/export /
 eval "$(grep -vE "${_gs_prof_exclude}" "${_gs_prof_envfile}" | sed 's/^/export /')"
 unset _gs_prof_exclude _gs_prof_envfile
 
-sudo chown root:root /opt/${GLOBAL_STACK_DOCKER_USER_ID}/vscode/chrome-sandbox
-sudo chmod 4755 /opt/${GLOBAL_STACK_DOCKER_USER_ID}/vscode/chrome-sandbox
-sudo chown root:root /opt/${GLOBAL_STACK_DOCKER_USER_ID}/windsurf/chrome-sandbox
-sudo chmod 4755 /opt/${GLOBAL_STACK_DOCKER_USER_ID}/windsurf/chrome-sandbox
+sudo chown root:root /opt/${GLOBAL_STACK_DOCKER_USER_ID}/code/chrome-sandbox
+sudo chmod 4755 /opt/${GLOBAL_STACK_DOCKER_USER_ID}/code/chrome-sandbox
+sudo chown root:root /opt/${GLOBAL_STACK_DOCKER_USER_ID}/devin/chrome-sandbox
+sudo chmod 4755 /opt/${GLOBAL_STACK_DOCKER_USER_ID}/devin/chrome-sandbox
 sudo chown root:root /opt/${GLOBAL_STACK_DOCKER_USER_ID}/balena-etcher/chrome-sandbox
 sudo chmod 4755 /opt/${GLOBAL_STACK_DOCKER_USER_ID}/balena-etcher/chrome-sandbox
 
 alias gksudo='pkexec env DISPLAY=$DISPLAY XAUTHORITY=$XAUTHORITY'
-alias code='/opt/${GLOBAL_STACK_DOCKER_USER_ID}/vscode/bin/code'
-alias windsurf='/opt/${GLOBAL_STACK_DOCKER_USER_ID}/windsurf/bin/windsurf'
-alias phpstorm='/opt/${GLOBAL_STACK_DOCKER_USER_ID}/phpstorm/bin/phpstorm'
-alias webstorm='/opt/${GLOBAL_STACK_DOCKER_USER_ID}/webstorm/bin/webstorm'
-alias idea='/opt/${GLOBAL_STACK_DOCKER_USER_ID}/idea/bin/idea'
-alias android-studio='/opt/${GLOBAL_STACK_DOCKER_USER_ID}/android-studio/bin/studio'
+alias balena-etcher='/opt/${GLOBAL_STACK_DOCKER_USER_ID}/balena-etcher/balena-etcher'
+alias code='/opt/${GLOBAL_STACK_DOCKER_USER_ID}/code/bin/code'
+alias devin-desktop='/opt/${GLOBAL_STACK_DOCKER_USER_ID}/devin/bin/devin-desktop'
+alias android-studio='/opt/${GLOBAL_STACK_DOCKER_USER_ID}/intellij/android-studio/bin/studio'
+alias idea='/opt/${GLOBAL_STACK_DOCKER_USER_ID}/intellij/idea/bin/idea'
+alias phpstorm='/opt/${GLOBAL_STACK_DOCKER_USER_ID}/intellij/phpstorm/bin/phpstorm'
+alias webstorm='/opt/${GLOBAL_STACK_DOCKER_USER_ID}/intellij/webstorm/bin/webstorm'
 alias megit='/opt/${GLOBAL_STACK_DOCKER_USER_ID}/megit/megit'
-alias subl='/opt/${GLOBAL_STACK_DOCKER_USER_ID}/sublime_text/sublime_text'
+alias sublime_text='/opt/${GLOBAL_STACK_DOCKER_USER_ID}/sublime_text/sublime_text'
 
 GOROOT=${GLOBAL_STACK_GOROOT}
 export GOROOT
