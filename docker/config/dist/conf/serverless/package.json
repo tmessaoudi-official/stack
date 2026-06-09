@@ -13,7 +13,7 @@
     "aws-sdk": "^2.1693.0"
   },
   "devDependencies": {
-    "typescript": "^5.9.3",
+    "typescript": "^6.0.3",
     "serverless": "^4.33.0",
     "@serverless/utils": "^6.15.0",
     "@serverless/typescript": "^4.30.0",
