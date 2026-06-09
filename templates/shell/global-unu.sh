@@ -41,7 +41,16 @@ if [[ "" != "$(command -v flatpak)" ]]; then
 fi
 
 sudo ${HOME}/.local/bin/gnome-shell-extension-installer.sh --yes --update --restart-shell || echo "Gnome extension installer does not exist"
+
+__GUNU_GIT=false
+if [[ -d ${HOME}/.git ]]; then
+	__GUNU_GIT=true
+	mv ${HOME}/.git ${HOME}/.git.bak
+fi
 gnome-shell-extension-installer.sh --yes --update --restart-shell || echo "Gnome extension installer does not exist"
+if [[ "true" = "${__GUNU_GIT}" ]]; then
+	mv ${HOME}/.git.bak ${HOME}/.git
+fi
 
 mkdir -p ~/.local/bin/ ~/.docker/cli-plugins/ 
 if [[ ! -d /opt/"${USER}" ]]; then
