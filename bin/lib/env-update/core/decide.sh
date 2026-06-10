@@ -13,7 +13,7 @@
 #   4. Proposed is prerelease but current is stable (and unstable_mode != full) → SKIP
 #   5. Proposed sorts before current (downgrade) → SKIP
 #   6. (override) or (manual) flag → MANUAL
-#   7. Major jump without major_hint pin → HOLD
+#   7. Major jump without major_hint pin (and unstable_mode != full) → HOLD
 #   8. Major jump escapes major_hint pin → HOLD
 #   9. Otherwise → AUTO
 
@@ -117,7 +117,7 @@ _gs_eu2_classify_decision() {
   _delta="$(_gs_eu2_semver_delta "${_cur}" "${_prop}")"
 
   # Major jump without major_hint pin → HOLD for review
-  if [[ "${_delta}" == "major" && -z "${_major_hint}" ]]; then
+  if [[ "${_delta}" == "major" && -z "${_major_hint}" && "${_unstable_mode}" != "full" ]]; then
     echo "HOLD"; return 0
   fi
 

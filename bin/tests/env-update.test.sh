@@ -1093,6 +1093,13 @@ t "t16c: major jump with no major_hint → HOLD" bash -c "
     echo PASS
 "
 
+t "t16c2: major jump with no major_hint + unstable_mode=full → AUTO" bash -c "
+    ${_DC_LIBS}
+    result=\$(_gs_eu2_classify_decision '5.0.6' '6.0.0-alpha-1' '' '' '' 'full')
+    [[ \"\$result\" == 'AUTO' ]] || { echo \"got: \$result\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
 t "t16d: override flag → MANUAL regardless of delta" bash -c "
     ${_DC_LIBS}
     result=\$(_gs_eu2_classify_decision '18.3' '18.4' 'true' '' '')
@@ -4489,12 +4496,12 @@ t "t52i: unstable info mode: stable→prerelease still SKIP (no bypass)" bash -c
     echo PASS
 "
 
-# t52j: --unstable full mode: stable current + alpha proposed with major bump → HOLD (not bypassed)
-#        Major guard must still apply even in unstable mode.
-t "t52j: unstable full mode: major jump + prerelease proposed → HOLD (major guard unchanged)" bash -c "
+# t52j: --unstable full mode: stable current + alpha proposed with major bump → AUTO
+#        Both the prerelease guard and the major-jump HOLD gate are bypassed when unstable_mode=full.
+t "t52j: unstable full mode: major jump + prerelease proposed → AUTO (major guard bypassed)" bash -c "
     ${_DC_LIBS52}
     result=\$(_gs_eu2_classify_decision '1.0.0' '2.0.0-alpha1' '' '' '' 'full')
-    [[ \"\$result\" == 'HOLD' ]] || { echo \"expected HOLD for major+prerelease unstable=full (no major_hint), got: '\$result'\"; echo FAIL; exit 0; }
+    [[ \"\$result\" == 'AUTO' ]] || { echo \"expected AUTO for major+prerelease unstable=full (no major_hint), got: '\$result'\"; echo FAIL; exit 0; }
     echo PASS
 "
 
