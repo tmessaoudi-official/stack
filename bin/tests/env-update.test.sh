@@ -4733,10 +4733,11 @@ t "t53p: --stable=full emits per-record WARNING for (channel:unstable) annotatio
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/chk53p
     _tf53p=\"\${TMP_DIR}/t53p.env\"
     printf '# @todo env-update (channel:unstable) dockerhub:_/postgres 17.3-alpine3.23\nGLOBAL_STACK_T53P=17.3-alpine3.23\n' > \"\${_tf53p}\"
-    out=\$(bash '${ENV_UPDATE_V2}' --stable --dump \
+    out=\$(bash '${ENV_UPDATE_V2}' --stable --check \
         --env-file=\"\${_tf53p}\" 2>&1)
     echo \"\$out\" | grep -qF 'WARNING: overriding (channel:unstable)' || { echo \"expected per-record WARNING for channel:unstable; got: '\$out'\"; echo FAIL; exit 0; }
     echo \"\$out\" | grep -qF 'GLOBAL_STACK_T53P' || { echo \"expected varname in WARNING line; got: '\$out'\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'Summary:' || { echo \"expected Summary line (proves --check fetch ran); got: '\$out'\"; echo FAIL; exit 0; }
     echo PASS
 "
 
@@ -5023,6 +5024,16 @@ t "t56q: --force-hold does NOT bypass (override) annotation — stays MANUAL" ba
     printf '# @todo env-update (override) dockerhub:_/postgres 17.3-alpine3.23\nGLOBAL_STACK_T56Q=17.3-alpine3.23\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --force-hold --env-file=\"\$f\" 2>/dev/null)
     echo \"\$out\" | grep -qF '[MANUAL ]' || { echo \"expected MANUAL to remain MANUAL with --force-hold (override): \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t56r: --force-auto + --force-hold mutually exclusive → exit 1" bash -c "
+    f=\$(mktemp)
+    printf '# @todo env-update dockerhub:_/postgres 17.3-alpine3.23\nGLOBAL_STACK_T56R=17.3-alpine3.23\n' > \"\$f\"
+    err=\$(bash '${ENV_UPDATE_V2}' --check --force-auto --force-hold --env-file=\"\$f\" 2>&1); rc=\$?
+    rm -f \"\$f\"
+    [[ \"\$rc\" -ne 0 ]] || { echo \"expected non-zero exit when --force-auto and --force-hold combined, got 0\"; echo FAIL; exit 0; }
+    echo \"\$err\" | grep -qF 'mutually exclusive' || { echo \"expected 'mutually exclusive' in error: \$err\"; echo FAIL; exit 0; }
     echo PASS
 "
 

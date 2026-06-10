@@ -203,6 +203,11 @@ _gs_eu2_parse_args() {
     exit 1
   fi
 
+  if [[ "${_GS_EU2_CFG[force_auto]}" == "true" && "${_GS_EU2_CFG[force_hold]}" == "true" ]]; then
+    printf 'env-update: --force-auto and --force-hold are mutually exclusive — --force-auto already covers all HOLD upgrades\n' >&2
+    exit 1
+  fi
+
   if [[ "${_GS_EU2_CFG[force_auto]}" == "true" && "${_GS_EU2_CFG[apply]}" == "true" ]]; then
     if [[ "${_GS_EU2_CFG[confirm]}" != "Confirm override" ]]; then
       printf 'FATAL: --force-auto --apply requires --confirm="Confirm override" to proceed.\n' >&2
