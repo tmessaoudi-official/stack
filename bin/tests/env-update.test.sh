@@ -4727,6 +4727,19 @@ t "t53o: --stable=info fires [STABLE] sub-line for channel:rc record (stable new
     echo PASS
 "
 
+# t53p: --stable=full emits per-record WARNING on stderr for annotated channel
+t "t53p: --stable=full emits per-record WARNING for (channel:unstable) annotation" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/chk53p
+    _tf53p=\"\${TMP_DIR}/t53p.env\"
+    printf '# @todo env-update (channel:unstable) dockerhub:_/postgres 17.3-alpine3.23\nGLOBAL_STACK_T53P=17.3-alpine3.23\n' > \"\${_tf53p}\"
+    out=\$(bash '${ENV_UPDATE_V2}' --stable --dump \
+        --env-file=\"\${_tf53p}\" 2>&1)
+    echo \"\$out\" | grep -qF 'WARNING: overriding (channel:unstable)' || { echo \"expected per-record WARNING for channel:unstable; got: '\$out'\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'GLOBAL_STACK_T53P' || { echo \"expected varname in WARNING line; got: '\$out'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Section 54 — unstable promotion guard (channel.sh)
 # ═══════════════════════════════════════════════════════════════════════════
@@ -4986,6 +4999,30 @@ t "t56o: --force-hold does NOT bypass (manual) annotation (unlike --force-auto)"
     printf '# @todo env-update (manual) dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T56O=18.3-alpine3.23\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --force-hold --env-file=\"\$f\" 2>/dev/null)
     echo \"\$out\" | grep -qF '[MANUAL ]' || { echo \"expected MANUAL to remain MANUAL with --force-hold: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t56p: --force-hold upgrades HOLD to AUTO (major-bump guard bypass)" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t56p_cache
+    f=\${TMP_DIR}/t56p.env
+    # current=17.3-alpine3.23, fixture returns 18.4-alpine3.23 (major jump, no major_hint → HOLD)
+    # With --force-hold, HOLD must be upgraded to AUTO
+    printf '# @todo env-update dockerhub:_/postgres 17.3-alpine3.23\nGLOBAL_STACK_T56P=17.3-alpine3.23\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --force-hold --env-file=\"\$f\" 2>/dev/null)
+    echo \"\$out\" | grep -qF '[HOLD' && { echo \"HOLD not upgraded to AUTO with --force-hold: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '[AUTO' || { echo \"expected [AUTO after --force-hold upgrade, got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t56q: --force-hold does NOT bypass (override) annotation — stays MANUAL" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t56q_cache
+    f=\${TMP_DIR}/t56q.env
+    # (override) + major jump → normally MANUAL; --force-hold must NOT change this (unlike --force-auto)
+    printf '# @todo env-update (override) dockerhub:_/postgres 17.3-alpine3.23\nGLOBAL_STACK_T56Q=17.3-alpine3.23\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --force-hold --env-file=\"\$f\" 2>/dev/null)
+    echo \"\$out\" | grep -qF '[MANUAL ]' || { echo \"expected MANUAL to remain MANUAL with --force-hold (override): \$out\"; echo FAIL; exit 0; }
     echo PASS
 "
 
@@ -9978,6 +10015,31 @@ t "t98m: B1 summary contains RESOLVE count when RESOLVED records present" bash -
     printf '# @todo env-update dockerhub:_/postgres latest\nGLOBAL_STACK_T98M_VERSION=latest\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
     echo \"\$out\" | grep -qE 'Summary.*RESOLVE' || { echo \"no RESOLVE in summary: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t98n2: --apply without --apply-resolve warns about skipped RESOLVED records" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t98n2_cache
+    f=\${TMP_DIR}/t98n2.env
+    printf '# @todo env-update dockerhub:_/postgres latest\nGLOBAL_STACK_T98N2_VERSION=latest\n' > \"\$f\"
+    mkdir -p \"\${TMP_DIR}/t98n2_cache\"
+    touch \"\${TMP_DIR}/t98n2_cache/last-dry-run-ts\"
+    out=\$(bash '${ENV_UPDATE_V2}' --apply --yes --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF 'RESOLVED record(s) skipped' || { echo \"expected RESOLVED skip warning; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF -- '--apply-resolve' || { echo \"expected --apply-resolve hint in warning; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t98n3: --apply --apply-resolve does NOT emit RESOLVED skip warning" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t98n3_cache
+    f=\${TMP_DIR}/t98n3.env
+    printf '# @todo env-update dockerhub:_/postgres latest\nGLOBAL_STACK_T98N3_VERSION=latest\n' > \"\$f\"
+    mkdir -p \"\${TMP_DIR}/t98n3_cache\"
+    touch \"\${TMP_DIR}/t98n3_cache/last-dry-run-ts\"
+    out=\$(bash '${ENV_UPDATE_V2}' --apply --yes --apply-resolve --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF 'RESOLVED record(s) skipped' && { echo \"unexpected RESOLVED skip warning when --apply-resolve is set; got: \$out\"; echo FAIL; exit 0; }
     echo PASS
 "
 
