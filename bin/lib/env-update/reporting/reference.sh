@@ -782,8 +782,8 @@ _gs_eu2_show_reference_matrix() {
   _r="$(_gs_eu2_classify_decision '3.1.0' '3.2.0-rc1' '' '' '')"
   _matrix_row 'prerelease proposed, stable current, default (SKIP)' '3.1.0' '3.2.0-rc1' "${_r}"
 
-  # Minor prerelease + unstable_mode=full → AUTO: both prerelease guard and major-jump
-  # HOLD gate are bypassed when unstable_mode=full.
+  # Major prerelease + unstable_mode=full → still HOLD: major jump check runs after
+  # prerelease guard bypass. Only minor/patch prerelease bypasses produce AUTO.
   _r="$(_gs_eu2_classify_decision '3.1.0' '3.2.0-rc1' '' '' '' 'full')"
   _matrix_row 'prerelease proposed, unstable_mode=full, minor (AUTO)' '3.1.0' '3.2.0-rc1' "${_r}" 'unstable_mode=full'
 
