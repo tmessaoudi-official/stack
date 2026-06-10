@@ -10,7 +10,11 @@
 #   1. No proposed → SKIP
 #   2. Floating current (nightly/latest/…) + concrete proposed → RESOLVED
 #   3. Current == proposed → SKIP
-#   4. Proposed is prerelease but current is stable (and unstable_mode != full) → SKIP
+#   4. Proposed is prerelease AND current is stable:
+#      - stable_mode=full → SKIP (force-reject)
+#      - unstable_mode=full → bypass (continue)
+#      - record_channel=unstable → HOLD (annotation opt-in, review required)
+#      - otherwise → SKIP
 #   5. Proposed sorts before current (downgrade) → SKIP
 #   6. (override) or (manual) flag → MANUAL
 #   7. Major jump without major_hint pin → HOLD
@@ -25,21 +29,24 @@ source "$(dirname "${BASH_SOURCE[0]}")/semver.sh"
 
 # _gs_eu2_classify_decision — apply the decision ladder to one version update.
 #
-# Args:    $1 current      — current version string (from annotation or VAR=)
-#          $2 proposed     — proposed version string (from fetcher)
-#          $3 override     — "true" → MANUAL (even when proposed > current)
-#          $4 manual       — "true" → MANUAL (same as override; different annotation flag)
-#          $5 major_hint   — pin constraint: proposed must start with this major prefix
-#          $6 unstable_mode— "full" → bypass prerelease guard (allow stable→prerelease AUTO)
+# Args:    $1 current       — current version string (from annotation or VAR=)
+#          $2 proposed      — proposed version string (from fetcher)
+#          $3 override      — "true" → MANUAL (even when proposed > current)
+#          $4 manual        — "true" → MANUAL (same as override; different annotation flag)
+#          $5 major_hint    — pin constraint: proposed must start with this major prefix
+#          $6 unstable_mode — "full" → bypass prerelease guard (allow stable→prerelease AUTO)
+#          $7 stable_mode   — "full" → force-reject prerelease in classifier (overrides all)
+#          $8 record_channel— annotation channel value ("unstable", "rc", ""); when "unstable",
+#                             a stable→prerelease transition becomes HOLD (annotation opt-in)
 # Prints:  one of: AUTO | HOLD | MANUAL | SKIP | RESOLVED
 # Returns: 0 always
 #
 # Note: caller in main.sh strips tag_channel_prefix before calling here so that
 # decide.sh only sees plain semver strings (no leading "dev-" or "nightly-").
-# Note: force-auto in main.sh upgrades HOLD→AUTO after this function returns.
+# Note: force-auto/force-hold in main.sh upgrade HOLD→AUTO after this function returns.
 _gs_eu2_classify_decision() {
   local _cur="${1}" _prop="${2}" _override="${3:-}" _manual="${4:-}" _major_hint="${5:-}" \
-        _unstable_mode="${6:-}"
+        _unstable_mode="${6:-}" _stable_mode="${7:-}" _record_channel="${8:-}"
 
   # No proposed version → skip
   [[ -z "${_prop}" ]] && { echo "SKIP"; return 0; }
@@ -66,12 +73,20 @@ _gs_eu2_classify_decision() {
     echo "SKIP"; return 0
   fi
 
-  # Prerelease guard: don't auto-propose a prerelease when current is stable.
+  # Prerelease guard: proposed is prerelease, current is stable.
   # Handles both dash-separated (6.3.0-rc1) and no-dash (6.3.0RC1) formats.
-  # Bypassed when unstable_mode=full (user explicitly opted in to prerelease tracking).
-  if [[ "${_unstable_mode}" != "full" ]] && \
-     _gs_eu2_is_prerelease "${_prop}" && ! _gs_eu2_is_prerelease "${_cur}"; then
-    echo "SKIP"; return 0
+  # Priority: stable_mode=full (force-reject) > unstable_mode=full (bypass) > channel:unstable (HOLD) > default (SKIP)
+  if _gs_eu2_is_prerelease "${_prop}" && ! _gs_eu2_is_prerelease "${_cur}"; then
+    if [[ "${_stable_mode}" == "full" ]]; then
+      echo "SKIP"; return 0   # --stable=full: force-reject prerelease regardless of channel
+    fi
+    if [[ "${_unstable_mode}" != "full" ]]; then
+      if [[ "${_record_channel}" == "unstable" ]]; then
+        echo "HOLD"; return 0  # annotation opt-in: needs review (major OR minor prerelease)
+      fi
+      echo "SKIP"; return 0    # no opt-in: skip prerelease silently
+    fi
+    # unstable_mode=full: bypass this gate entirely, continue to step 5+
   fi
 
   # Downgrade protection: if proposed sorts before current via sort -V, skip.

@@ -371,8 +371,14 @@ _gs_eu2_classify_record() {
     if [[ "${_cr_using_fallback}" == "true" && -n "${_cr_major_min}" ]]; then
       _cr_major_cls="${_cr_major_min}"
     fi
-    _cr_classified="$(_gs_eu2_classify_decision "${_cr_cur_cls}" "${_cr_prop_cls}" "${_cr_eff_override}" "${_cr_eff_manual}" "${_cr_major_cls}" "${_GS_EU2_CFG[unstable]:-}")"
-    # Phase 2: --force-auto upgrade: HOLD → AUTO (bypasses major-bump guard)
+    local _cr_record_channel
+    _cr_record_channel="$(_gs_eu2_record_get "${_cr_i}" channel)"
+    _cr_classified="$(_gs_eu2_classify_decision "${_cr_cur_cls}" "${_cr_prop_cls}" "${_cr_eff_override}" "${_cr_eff_manual}" "${_cr_major_cls}" "${_GS_EU2_CFG[unstable]:-}" "${_GS_EU2_CFG[stable]:-}" "${_cr_record_channel}")"
+    # Phase 2: --force-hold: HOLD → AUTO only (MANUAL/OVERRIDE flags NOT cleared; unaffected)
+    if [[ "${_GS_EU2_CFG[force_hold]:-false}" == "true" && "${_cr_classified}" == "HOLD" ]]; then
+      _cr_classified="AUTO"
+    fi
+    # Phase 2b: --force-auto upgrade: HOLD → AUTO (MANUAL/OVERRIDE already cleared above)
     if [[ "${_GS_EU2_CFG[force_auto]:-false}" == "true" && "${_cr_classified}" == "HOLD" ]]; then
       _cr_classified="AUTO"
     fi
@@ -1557,6 +1563,7 @@ _gs_eu2_main() {
   # --stable: force channel=stable on all records that have an explicit non-stable channel.
   # Overrides channel:rc, channel:beta, channel:alpha, channel:nightly, channel:unstable, etc.
   # Records already at channel="" or channel="stable" are untouched.
+  # Emits a per-record warning when an annotated channel is suppressed (annotation intent overridden).
   local _stable_overrides=0
   if [[ "${_GS_EU2_CFG[stable]:-}" == "full" ]]; then
     local _sc _scount
@@ -1565,6 +1572,10 @@ _gs_eu2_main() {
       local _existing_sc_channel
       _existing_sc_channel="$(_gs_eu2_record_get "${_sc}" channel)"
       if [[ -n "${_existing_sc_channel}" && "${_existing_sc_channel}" != "stable" ]]; then
+        local _sc_varname
+        _sc_varname="$(_gs_eu2_record_get "${_sc}" env_var)"
+        printf '[STABLE MODE] WARNING: overriding (channel:%s) on %s — annotation intent suppressed by --stable=full\n' \
+          "${_existing_sc_channel}" "${_sc_varname}" >&2
         _gs_eu2_record_set "${_sc}" channel "stable"
         (( _stable_overrides++ )) || true
       fi
@@ -1584,6 +1595,9 @@ _gs_eu2_main() {
   fi
   if [[ "${_GS_EU2_CFG[force_auto]:-false}" == "true" ]]; then
     printf '[FORCE-AUTO MODE] (manual) and (override) gates bypassed\n' >&2
+  fi
+  if [[ "${_GS_EU2_CFG[force_hold]:-false}" == "true" ]]; then
+    printf '[FORCE-HOLD MODE] HOLD decisions upgraded to AUTO (MANUAL/OVERRIDE unaffected)\n' >&2
   fi
   if [[ "${_GS_EU2_CFG[no_notes]:-false}" == "true" ]]; then
     local _nn_count _nn_i _nn_total
@@ -1722,6 +1736,19 @@ _gs_eu2_main() {
           fi
         else
           printf 'Tip: run bin/env-scan.sh to propagate to .env.local and Dockerfiles (or pass --scan)\n' >&2
+        fi
+
+        # Warn when --apply skipped RESOLVED records (require --apply-resolve to pin them)
+        if [[ "${_GS_EU2_CFG[apply_resolve]:-false}" != "true" ]]; then
+          local _n_resolved_skipped=0
+          local _ri
+          for (( _ri=0; _ri<"$(_gs_eu2_record_count)"; _ri++ )); do
+            [[ "$(_gs_eu2_record_get "${_ri}" decision)" == "RESOLVED" ]] && (( ++_n_resolved_skipped )) || true
+          done
+          if [[ "${_n_resolved_skipped}" -gt 0 ]]; then
+            printf '  ↳ %d RESOLVED record(s) skipped — use --apply --apply-resolve to pin floating references\n' \
+              "${_n_resolved_skipped}" >&2
+          fi
         fi
       }
     fi

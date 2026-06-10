@@ -31,7 +31,9 @@ Options:
                           matrix | scenarios | env-scan. Without SECTION, all sections
                           are printed.
   --env-file=<path>       Source .env file (default: /stack/.env)
-  --filter=<regex>        Only parse records whose env_var matches regex
+  --filter=<regex>        Only parse records whose env_var matches regex (case-insensitive ERE).
+                          Special syntax: --filter=type:X matches by fetcher type (exact
+                          match, not regex; e.g. --filter=type:github, --filter=type:dockerhub).
   --exclude=<regex>       Skip records whose env_var matches regex. Composable
                           with --filter: --filter=NODE --exclude=NODEEDGE means
                           all Node vars except NODEEDGE. Empty value is a no-op.
@@ -56,6 +58,8 @@ Options:
   --no-cache              Bypass the fetch cache
   --cache-ttl=<seconds>   Cache TTL in seconds (default: 3600)
   --dry-run               No writes (gates cache, .env, and Dockerfile propagation).
+                          Note: --dry-run is not supported with --apply (mutually exclusive).
+                          Use --check (with or without --dry-run) to preview decisions.
   --with-tags             Force tags-API merge for ALL github: repos in one run.
                           Equivalent to adding (check-tags) to every annotation.
   --unstable / --unstable=full
@@ -124,7 +128,7 @@ Options:
   --backup-suffix=<str>           Suffix anchor for backup filenames; full name is
                                   <file><suffix>.<YYYYMMDD-HHMMSS-PID>. (default: .bak)
 
-  --force-auto                    Override (manual) and (override) annotation flags and HOLD
+  --force-auto                    Override (manual) and (override) annotation flags AND HOLD
                                   decisions — treats them as AUTO-eligible. Useful for
                                   scripted environments where human gates are not appropriate.
                                   NOTE: (lock:REASON) and (skip:REASON) annotation flags are
@@ -135,6 +139,12 @@ Options:
                                   records (version bump without --force-auto).
                                   When used with --apply, requires --confirm="Confirm override"
                                   to proceed (safety gate — prevents accidental use).
+  --force-hold                    Upgrade HOLD decisions to AUTO only. Unlike --force-auto,
+                                  this does NOT bypass (manual) or (override) annotation flags
+                                  — those still produce MANUAL. Use when you want to unblock
+                                  major-bump or channel:unstable HOLD records without broadly
+                                  bypassing manual gates. Requires --confirm="Confirm override"
+                                  with --apply (same safety gate as --force-auto).
   --yes                           Skip the interactive confirmation prompt for --apply.
                                   Required in non-interactive (no TTY) mode — --apply
                                   exits 1 without this flag when stdin is not a terminal.

@@ -140,19 +140,31 @@ _gs_eu2_channel_select_best() {
     return 0
   fi
 
-  # Nightly: only return a version whose tag literally contains "nightly".
-  # If none found → return nothing so the caller (url.sh) falls through to
-  # the Tier-4 nightly directory listing.
+  # Nightly: highest tag containing "nightly" literally.
+  # Falls back to any prerelease if no nightly tag found (consistent with channel:rc behavior).
+  # Stable-promotion: if stable has surpassed the nightly/prerelease, return stable instead.
   if [[ "${_chan}" == "nightly" ]]; then
     local _nightlies=()
     while IFS= read -r _v; do
       [[ -z "${_v}" ]] && continue
       [[ "${_v,,}" == *"nightly"* ]] && _nightlies+=("${_v}")
     done <<< "${_all}"
-    [[ ${#_nightlies[@]} -gt 0 ]] && \
-      printf '%s\n' "$(printf '%s\n' "${_nightlies[@]}" \
-        | awk '{n=$0; sub(/^v/,"",n); printf "%s\t%s\n",n,$0}' \
-        | sort -V -k1,1 | tail -1 | cut -f2-)"
+    local _hn=""
+    [[ ${#_nightlies[@]} -gt 0 ]] && _hn="$(printf '%s\n' "${_nightlies[@]}" \
+      | awk '{n=$0; sub(/^v/,"",n); printf "%s\t%s\n",n,$0}' \
+      | sort -V -k1,1 | tail -1 | cut -f2-)" || true
+    # Fall back to any prerelease if no nightly tag found (consistent with channel:rc behavior)
+    [[ -z "${_hn}" && -n "${_hp}" ]] && _hn="${_hp}"
+    if [[ -n "${_hn}" ]]; then
+      # Stable-promotion: if stable has surpassed nightly/prerelease, return stable
+      if [[ -n "${_hs}" ]]; then
+        local _cmp; _cmp="$(_gs_eu2_semver_compare "${_hs}" "${_hn}")"
+        [[ "${_cmp}" == "newer" ]] && { printf '%s\n' "${_hs}"; return 0; }
+      fi
+      printf '%s\n' "${_hn}"
+    elif [[ -n "${_hs}" ]]; then
+      printf '%s\n' "${_hs}"
+    fi
     return 0
   fi
 

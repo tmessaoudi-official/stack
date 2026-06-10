@@ -22,12 +22,13 @@ if [[ "${_delta}" == "major" && -z "${_major_hint}" ]]; then
 fi
 ```
 
-The only two legitimate paths to AUTO on a major jump are:
+The legitimate paths to AUTO on a major jump are:
 
 | Path | Mechanism | Where |
 |------|-----------|-------|
 | `:N` major-hint pin in annotation | Caller passes `_major_hint`; step 7 is skipped | `decide.sh` step 7 |
 | `--force-auto` one-time override | HOLD→AUTO upgrade applied *after* classify_decision returns | `main.sh` Phase 2 |
+| `--force-hold` one-time override | HOLD→AUTO upgrade (MANUAL/OVERRIDE unaffected) | `main.sh` Phase 2 |
 
 `--unstable=full`, `(channel:unstable)`, and any future channel flag do **not** touch
 step 7. The reverted commit `53b76f15` was wrong precisely because it added an
@@ -40,30 +41,45 @@ step 7. The reverted commit `53b76f15` was wrong precisely because it added an
 GLOBAL_STACK_FOO=17.2.1
 ```
 Fetcher returns `18.0.0`. Decision: **HOLD** — regardless of `--unstable`, `--stable`,
-or `(channel:unstable)` annotation. Only `:18` pin or `--force-auto` can promote to AUTO.
+or `(channel:unstable)` annotation. Only `:18` pin, `--force-auto`, or `--force-hold`
+can promote to AUTO.
 
 ---
 
-### Law 2 — Prerelease guard: stable current + prerelease proposed → SKIP
+### Law 2 — Prerelease guard: step 4 priority ladder
 
 When the current version is stable and the proposed version is a prerelease (e.g.
-`18.0.0-rc1`, `6.3.0beta2`), the result is **SKIP** — not HOLD, not AUTO.
+`18.0.0-rc1`, `6.3.0beta2`), step 4 applies a priority ladder:
+
+| Priority | Condition | Decision |
+|----------|-----------|----------|
+| 1st | `--stable=full` active | **SKIP** (force-reject prerelease regardless of channel) |
+| 2nd | `--unstable=full` active | bypass step 4 entirely (continue to step 5+) |
+| 3rd | annotation `(channel:unstable)` | **HOLD** (annotation opt-in, review required) |
+| default | none of the above | **SKIP** |
 
 **Source**: `bin/lib/env-update/core/decide.sh` step 4:
 
 ```bash
-if [[ "${_unstable_mode}" != "full" ]] && \
-   _gs_eu2_is_prerelease "${_prop}" && ! _gs_eu2_is_prerelease "${_cur}"; then
-  echo "SKIP"; return 0
+if _gs_eu2_is_prerelease "${_prop}" && ! _gs_eu2_is_prerelease "${_cur}"; then
+  if [[ "${_stable_mode}" == "full" ]]; then echo "SKIP"; return 0; fi
+  if [[ "${_unstable_mode}" != "full" ]]; then
+    if [[ "${_record_channel}" == "unstable" ]]; then echo "HOLD"; return 0; fi
+    echo "SKIP"; return 0
+  fi
+  # unstable_mode=full: bypass
 fi
 ```
 
-Only `--unstable=full` (CLI flag) bypasses this guard. The annotation `(channel:unstable)`
-controls the **fetcher** axis (which tags the fetcher returns), not the classifier axis
-(how classify_decision treats those tags). See the Two-Axis Model below.
-
 **Note**: step 4 fires *before* step 7. A prerelease proposed version that also crosses a
-major boundary hits step 4 first → SKIP (not HOLD).
+major boundary hits step 4 first — only if step 4 bypasses (unstable_mode=full) will
+step 7 then fire for the major-jump HOLD check.
+
+**Law 2b — `(channel:unstable)` annotation bridges fetcher and classifier**:
+A record annotated with `(channel:unstable)` now produces **HOLD** (not SKIP) when a
+prerelease is proposed over a stable current — regardless of CLI flags (unless
+`--stable=full` or `--unstable=full` override). This is the annotation opt-in bridge:
+the fetcher is asked for prerelease, and the classifier signals "review before applying."
 
 ---
 
@@ -104,25 +120,34 @@ and manual fields (see `main.sh` Phase 1). The HOLD upgrade then applies in Phas
 
 ---
 
-### Law 5 — HOLD vs SKIP distinction
+### Law 5 — Decision strength hierarchy and force-flag scope
 
-| Decision | Meaning | `--apply` behavior | `--force-auto` effect |
-|----------|---------|-------------------|----------------------|
-| **HOLD** | Update is ready but requires human review | Never written to `.env` | Upgrades to AUTO |
-| **SKIP** | Nothing to do, or change is blocked | Never written to `.env` | No effect |
-| **MANUAL** | Annotated as requiring manual handling | Never written to `.env` | Bypasses annotation, then HOLD upgrade applies |
-| **AUTO** | Safe to apply automatically | Written by `--apply` | Already AUTO |
+| Decision | Meaning | `--apply` behavior | `--force-auto` effect | `--force-hold` effect |
+|----------|---------|-------------------|----------------------|----------------------|
+| **HOLD** | Update ready but requires human review | Never written | Upgrades to AUTO | Upgrades to AUTO |
+| **SKIP** | Nothing to do, or change is blocked | Never written | No effect | No effect |
+| **MANUAL** | Annotated as requiring manual handling | Never written | Bypasses annotation → HOLD upgrade applies | No effect (MANUAL stays MANUAL) |
+| **AUTO** | Safe to apply automatically | Written by `--apply` | Already AUTO | Already AUTO |
+| **LOCK** | Locked by `(lock:REASON)` annotation | Never written | No effect | No effect |
+| **FROZEN** | `(skip:REASON)` annotation | Never written | No effect | No effect |
 
-`--force-auto` only upgrades HOLD→AUTO. It cannot upgrade SKIP→AUTO. SKIP is a terminal
-decision for that classification run.
+**Hierarchy** (immune from highest to lowest): FROZEN > LOCK > HOLD > MANUAL > AUTO.
+
+`--force-auto` bypasses HOLD + MANUAL + OVERRIDE (by clearing the annotation flags before
+classify_decision is called). `--force-hold` bypasses HOLD only — MANUAL/OVERRIDE annotation
+flags are NOT cleared. `--force-auto` cannot upgrade SKIP, LOCK, or FROZEN.
+
+**`--apply` warns on RESOLVED skips**: when `--apply` completes and RESOLVED records were
+present but not written (because `--apply-resolve` was not passed), a warning is emitted:
+`↳ N RESOLVED record(s) skipped — use --apply --apply-resolve to pin floating references`
 
 ---
 
-### Law 6 — `--force-auto` scope: run-wide, not per-record
+### Law 6 — Force-flag scope: run-wide, not per-record
 
-`--force-auto` applies to **all** records in a single invocation. There is no per-record
-opt-in via CLI. The per-record mechanism for targeted major-jump approval is the `:N`
-major-hint pin in the annotation.
+Both `--force-auto` and `--force-hold` apply to **all** records in a single invocation.
+There is no per-record CLI opt-in. The per-record mechanism for targeted major-jump
+approval is the `:N` major-hint pin in the annotation.
 
 ```bash
 # Targeted: only this record can cross to major 18
@@ -131,7 +156,16 @@ GLOBAL_STACK_FOO=17.2.1
 
 # Run-wide: every HOLD in this run becomes AUTO (use carefully)
 bin/env-update.sh --apply --force-auto --confirm="Confirm override"
+
+# Run-wide: every HOLD becomes AUTO, but MANUAL records stay MANUAL
+bin/env-update.sh --apply --force-hold --confirm="Confirm override"
 ```
+
+**`--force-hold` vs `--force-auto`**:
+- `--force-hold`: HOLD→AUTO only. MANUAL and OVERRIDE annotation flags are NOT cleared.
+  Records with `(manual)` or `(override)` remain MANUAL.
+- `--force-auto`: HOLD→AUTO + clears (manual)/(override) flags before classification.
+  Records that would be MANUAL become AUTO-eligible after flag clearing.
 
 ---
 
@@ -165,15 +199,16 @@ skipped by any flag (individual bypass conditions are noted per step). The full 
 | 1 | No proposed version | SKIP | No |
 | 2 | Current is floating (nightly/latest/…) + proposed is concrete | RESOLVED (or MANUAL if annotated) | No |
 | 3 | Current == proposed | SKIP | No |
-| 4 | Proposed is prerelease and current is stable | SKIP | Yes — `--unstable=full` only |
+| 4 | Proposed is prerelease and current is stable | See priority ladder (Law 2) | Priority-dependent |
 | 5 | Proposed sorts before current (downgrade) | SKIP | No (except RC→stable promotion) |
-| 6 | `(override)` or `(manual)` annotation | MANUAL | Yes — `--force-auto` bypasses |
-| 7 | Major jump without `:N` pin | HOLD | No (post-classify force-auto upgrade applies separately) |
+| 6 | `(override)` or `(manual)` annotation | MANUAL | Yes — `--force-auto` clears flags before step |
+| 7 | Major jump without `:N` pin | HOLD | No (post-classify upgrade applies separately) |
 | 8 | Major jump with pin but proposed escapes the pin | HOLD | No |
 | 9 | Otherwise | AUTO | — |
 
 Post-classify phases in `main.sh` (applied after the ladder):
-- **Phase 2**: `--force-auto` HOLD→AUTO upgrade
+- **Phase 2**: `--force-hold` HOLD→AUTO upgrade (MANUAL/OVERRIDE unaffected)
+- **Phase 2b**: `--force-auto` HOLD→AUTO upgrade (MANUAL/OVERRIDE cleared in Phase 1)
 - **Phase 3**: `(lock:REASON)` → LOCK (overrides AUTO/HOLD/MANUAL; not ERROR or skip-gate SKIP)
 - **Phase 4**: SHA classification (SKIP→SHA when annotation `sha:` lags proposed SHA)
 
@@ -216,50 +251,73 @@ regardless of the `--sync-values` setting.
 
 ---
 
-## The Two-Axis Model — Annotations vs CLI Flags
+## The Channel-Classifier Relationship (Two Axes, One Bridge)
 
-These two axes are **independent** and control different parts of the pipeline:
+**Axis 1 — Fetcher channel** (annotation-driven): `(channel:X)` controls which version
+the fetcher returns. Routing is via `bin/lib/env-update/core/channel.sh`.
+
+**Axis 2 — Classifier** (CLI-driven): `--unstable=full` bypasses step 4 globally;
+`--stable=full` force-rejects prerelease in step 4 (highest priority).
+
+**Bridge — annotation opt-in**: `(channel:unstable)` now crosses into the classifier.
+When a record is annotated with `(channel:unstable)`, a prerelease proposed over a stable
+current produces **HOLD** (not SKIP) — regardless of CLI flags (unless overridden by
+`--stable=full` or `--unstable=full`). The annotation signals intent that the classifier
+honors.
 
 ```
-Annotation (channel:unstable)          CLI --unstable=full
+Annotation (channel:unstable)          CLI --unstable=full / --stable=full
          │                                      │
          ▼                                      ▼
   [FETCHER AXIS]                      [CLASSIFIER AXIS]
   channel.sh selects                  decide.sh step 4
-  which tags the fetcher              bypasses prerelease
-  queries from upstream               guard for all records
+  which tags the fetcher              priority ladder:
+  queries from upstream               stable=full → SKIP
+                                      unstable=full → bypass
+                  └── bridge ──►      channel:unstable → HOLD
+                                      default → SKIP
 ```
 
 ### Axis 1 — Annotation `(channel:unstable)`: fetcher axis
 
-`(channel:unstable)` in a `@todo env-update` annotation routes that record's fetcher call
-through `bin/lib/env-update/core/channel.sh`, which selects the highest prerelease tag
-from the upstream source.
+`(channel:unstable)` routes the fetcher through `bin/lib/env-update/core/channel.sh`,
+which selects the highest prerelease tag from the upstream source.
 
-**Source**: `bin/lib/env-update/core/channel.sh`
+It also bridges into the classifier: when the channel is `unstable`, a stable→prerelease
+proposed version produces **HOLD** instead of SKIP (annotation opt-in bridge).
 
-This annotation does **not** set `unstable_mode` inside `_gs_eu2_classify_decision`. When
-classify_decision receives the fetched prerelease version, it still applies step 4 (stable
-current + prerelease proposed → SKIP) unless `--unstable=full` is also present on the CLI.
+**Source**: `bin/lib/env-update/core/channel.sh`; `bin/lib/env-update/core/decide.sh` step 4
 
-### Axis 2 — CLI `--unstable=full`: classifier axis
+### Axis 2 — CLI flags: classifier axis
 
-`--unstable=full` sets `_GS_EU2_CFG[unstable]="full"`, which is passed as `$6` to
-`_gs_eu2_classify_decision`. This bypasses step 4 only — the prerelease guard. All other
-steps (including the major-jump HOLD at step 7) are unaffected.
+- `--unstable=full`: passes `unstable_mode=full` ($6) to `_gs_eu2_classify_decision`,
+  bypassing step 4 entirely. Global for all records.
+- `--stable=full`: passes `stable_mode=full` ($7) to `_gs_eu2_classify_decision`, which
+  force-rejects prerelease at step 4 with highest priority (overrides channel annotation).
+  Also overrides any `(channel:*)` annotation on the fetcher axis and emits a per-record warning.
 
-**Source**: `bin/lib/env-update/core/args.sh` line 102; `main.sh` line 374
+**Source**: `bin/lib/env-update/core/args.sh`; `main.sh`
+
+### Step 4 priority in detail
+
+| Priority | Condition | Result |
+|----------|-----------|--------|
+| 1st | `--stable=full` | SKIP (force-reject, overrides channel annotation) |
+| 2nd | `--unstable=full` | bypass step 4 (continue to step 5+) |
+| 3rd | `(channel:unstable)` annotation | HOLD (opt-in review) |
+| default | none of the above | SKIP |
 
 ### Consequence table
 
-| Annotation | CLI flag | Fetcher returns | Step 4 fires? | Step 7 fires? | Final decision |
+| Annotation | CLI flag | Fetcher returns | Step 4 result | Step 7 fires? | Final decision |
 |------------|----------|-----------------|---------------|---------------|----------------|
-| *(none)* | *(none)* | stable `18.0.0` | No | Yes (major) | **HOLD** |
-| *(none)* | *(none)* | prerelease `18.0.0-rc1` | Yes (stable cur) | — | **SKIP** |
-| `(channel:unstable)` | *(none)* | prerelease `18.0.0-rc1` | Yes (stable cur) | — | **SKIP** |
-| `(channel:unstable)` | `--unstable=full` | prerelease `18.0.0-rc1` | No (bypassed) | Yes (major) | **HOLD** |
-| `:18` pin | *(none)* | stable `18.0.0` | No | No (pin matches) | **AUTO** |
-| *(none)* | `--force-auto` | stable `18.0.0` | No | Yes → upgraded | **AUTO** |
+| *(none)* | *(none)* | stable `18.0.0` | No trigger | Yes (major) | **HOLD** |
+| *(none)* | *(none)* | prerelease `18.0.0-rc1` | SKIP (default) | — | **SKIP** |
+| `(channel:unstable)` | *(none)* | prerelease `6.0.0-alpha-1` | HOLD (bridge) | — | **HOLD** |
+| `(channel:unstable)` | `--unstable=full` | prerelease `18.0.0-rc1` | bypassed | Yes (major) | **HOLD** |
+| `(channel:unstable)` | `--stable=full` | prerelease `18.0.0-rc1` | SKIP (force) | — | **SKIP** |
+| `:18` pin | *(none)* | stable `18.0.0` | No trigger | No (pin matches) | **AUTO** |
+| *(none)* | `--force-auto` | stable `18.0.0` | No trigger | Yes → upgraded | **AUTO** |
 
 ---
 

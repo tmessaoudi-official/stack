@@ -15,7 +15,7 @@
 #
 # Note: --dry-run and --apply are now mutually exclusive. Previously --apply implied
 # --dry-run when combined (v1 behaviour). The current model is: use --check --dry-run
-# for preview, then --apply separately (the 30-min gate in main.sh enforces this).
+# for preview, then --apply separately (--apply triggers a write-confirmation gate).
 
 [[ -n "${_GS_EU2_ARGS_SH_LOADED:-}" ]] && return 0
 readonly _GS_EU2_ARGS_SH_LOADED=1
@@ -58,6 +58,7 @@ _gs_eu2_parse_args() {
       --no-drift)       _GS_EU2_CFG[no_drift]="true" ;;
       --apply-resolve)  _GS_EU2_CFG[apply_resolve]="true" ;;
       --force-auto)     _GS_EU2_CFG[force_auto]="true" ;;
+      --force-hold)     _GS_EU2_CFG[force_hold]="true" ;;
       --changes-only)   _GS_EU2_CFG[changes_only]="true" ;;
       --no-fail)        _GS_EU2_CFG[no_fail]="true" ;;
       --profile|--profile=true)  _GS_EU2_CFG[profile]="true" ;;
@@ -146,6 +147,7 @@ _gs_eu2_parse_args() {
   [[ -z "${_GS_EU2_CFG[no_notes]+set}" ]]     && _GS_EU2_CFG[no_notes]="false"
   [[ -z "${_GS_EU2_CFG[no_drift]+set}" ]]     && _GS_EU2_CFG[no_drift]="false"
   [[ -z "${_GS_EU2_CFG[force_auto]+set}" ]]   && _GS_EU2_CFG[force_auto]="false"
+  [[ -z "${_GS_EU2_CFG[force_hold]+set}" ]]   && _GS_EU2_CFG[force_hold]="false"
   [[ -z "${_GS_EU2_CFG[changes_only]+set}" ]] && _GS_EU2_CFG[changes_only]="false"
   [[ -z "${_GS_EU2_CFG[no_fail]+set}" ]]    && _GS_EU2_CFG[no_fail]="false"
   [[ -z "${_GS_EU2_CFG[yes]+set}" ]]           && _GS_EU2_CFG[yes]="false"
@@ -215,6 +217,24 @@ _gs_eu2_parse_args() {
     printf 'env-update: --force-auto requires --check or --apply to take effect;\n' >&2
     printf '  did you mean --check --force-auto (to preview) or\n' >&2
     printf '  --apply --force-auto --confirm="Confirm override" (to apply)?\n' >&2
+    exit 1
+  fi
+
+  # --force-hold: same confirmation gate as --force-auto when combined with --apply.
+  if [[ "${_GS_EU2_CFG[force_hold]}" == "true" && "${_GS_EU2_CFG[apply]}" == "true" ]]; then
+    if [[ "${_GS_EU2_CFG[confirm]}" != "Confirm override" ]]; then
+      printf 'FATAL: --force-hold --apply requires --confirm="Confirm override" to proceed.\n' >&2
+      exit 1
+    fi
+  fi
+
+  # Error: --force-hold alone (no --check, no --apply) is a no-op and likely a mistake.
+  if [[ "${_GS_EU2_CFG[force_hold]}" == "true" && \
+        "${_GS_EU2_CFG[apply]}" != "true" && \
+        "${_GS_EU2_CFG[check]}" != "true" ]]; then
+    printf 'env-update: --force-hold requires --check or --apply to take effect;\n' >&2
+    printf '  did you mean --check --force-hold (to preview) or\n' >&2
+    printf '  --apply --force-hold --confirm="Confirm override" (to apply)?\n' >&2
     exit 1
   fi
 

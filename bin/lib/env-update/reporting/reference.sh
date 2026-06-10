@@ -147,13 +147,18 @@ GLOBAL CLI FLAGS (env-update)
                          --confirm="Confirm override" with --apply. Does NOT
                          override FROZEN (skip:) or LOCK records. Does NOT promote
                          RESOLVED to AUTO — use --apply-resolve for that.
-    --confirm=TEXT       Confirmation gate for --force-auto --apply. Must be exactly
-                         "Confirm override" (case-sensitive). Required when both
-                         --force-auto and --apply are specified; ignored otherwise.
+    --force-hold         Upgrade HOLD decisions to AUTO only. Does NOT bypass
+                         (manual) or (override) flags — those still produce MANUAL.
+                         Requires --confirm="Confirm override" with --apply.
+    --confirm=TEXT       Confirmation gate for --force-auto/--force-hold --apply.
+                         Must be exactly "Confirm override" (case-sensitive). Required
+                         when --force-auto or --force-hold is combined with --apply.
 
   Input / scope flags:
     --env-file=PATH      Override env file path (default: .env).
-    --filter=REGEX       Process only vars whose name matches REGEX (case-insensitive).
+    --filter=REGEX       Process only vars whose name matches REGEX (case-insensitive ERE).
+                         Special syntax: --filter=type:X matches by fetcher type (exact
+                         match, not regex — e.g. --filter=type:github).
     --exclude=REGEX      Skip records whose env_var matches REGEX. Composable with
                          --filter: --filter=NODE --exclude=NODEEDGE processes all
                          NODE vars except NODEEDGE.

@@ -795,13 +795,14 @@ t "t12f: v-prefixed tags accepted by channel filter (B2)" bash -c "
     echo PASS
 "
 
-t "t12g: nightly channel with only stable versions returns empty (falls through to Tier 4)" bash -c "
+t "t12g: nightly channel with only stable versions returns best stable (stable-promotion fallback)" bash -c "
     source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
     source '/stack/bin/lib/env-update/core/semver.sh'
     source '/stack/bin/lib/env-update/core/channel.sh'
+    # No nightly tags, no prerelease tags — nightly now promotes to stable (consistent with channel:rc)
     versions=\$'v26.0.0\nv26.1.0\nv25.9.0'
     result=\$(_gs_eu2_channel_select_best \"\$versions\" 'nightly')
-    [[ -z \"\$result\" ]] || { echo \"expected empty, got: \$result\"; echo FAIL; exit 0; }
+    [[ \"\$result\" == 'v26.1.0' ]] || { echo \"expected v26.1.0 (stable-promotion), got: \$result\"; echo FAIL; exit 0; }
     echo PASS
 "
 
@@ -815,13 +816,14 @@ t "t12h: nightly channel with nightly-tagged versions returns latest nightly" ba
     echo PASS
 "
 
-t "t12i: nightly channel with mixed stable+nightly returns latest nightly only" bash -c "
+t "t12i: nightly channel with mixed stable+nightly promotes to stable when stable is newer" bash -c "
     source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
     source '/stack/bin/lib/env-update/core/semver.sh'
     source '/stack/bin/lib/env-update/core/channel.sh'
+    # v26.1.0 stable > v26.0.0-nightly* → stable-promotion returns v26.1.0 (consistent with unstable channel)
     versions=\$'v26.1.0\nv26.0.0-nightly20260101abc\nv26.0.0-nightly20260314xyz'
     result=\$(_gs_eu2_channel_select_best \"\$versions\" 'nightly')
-    [[ \"\$result\" == 'v26.0.0-nightly20260314xyz' ]] || { echo \"got: \$result\"; echo FAIL; exit 0; }
+    [[ \"\$result\" == 'v26.1.0' ]] || { echo \"expected v26.1.0 (stable surpassed nightly), got: \$result\"; echo FAIL; exit 0; }
     echo PASS
 "
 
@@ -1129,6 +1131,54 @@ t "t16h: manual flag + upgrade → MANUAL (normal MANUAL upgrade preserved)" bas
     ${_DC_LIBS}
     result=\$(_gs_eu2_classify_decision '18.3' '18.4' '' 'true' '')
     [[ \"\$result\" == 'MANUAL' ]] || { echo \"expected MANUAL for manual+upgrade, got: '\$result'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t16i: channel:unstable + stable current + minor prerelease → HOLD (annotation opt-in bridge)
+t "t16i: channel:unstable + stable current + minor prerelease → HOLD" bash -c "
+    ${_DC_LIBS}
+    result=\$(_gs_eu2_classify_decision '5.0.6' '5.1.0-alpha-1' '' '' '' '' '' 'unstable')
+    [[ \"\$result\" == 'HOLD' ]] || { echo \"got: \$result\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t16j: channel:unstable + stable current + major prerelease → HOLD (step 4 fires before step 7)
+t "t16j: channel:unstable + stable current + major prerelease → HOLD (step 4 before step 7)" bash -c "
+    ${_DC_LIBS}
+    result=\$(_gs_eu2_classify_decision '5.0.6' '6.0.0-alpha-1' '' '' '' '' '' 'unstable')
+    [[ \"\$result\" == 'HOLD' ]] || { echo \"got: \$result\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t16k: stable_mode=full + prerelease + channel:unstable → SKIP (stable=full overrides channel annotation)
+t "t16k: stable_mode=full + prerelease + channel:unstable → SKIP (force-reject wins)" bash -c "
+    ${_DC_LIBS}
+    result=\$(_gs_eu2_classify_decision '5.0.6' '6.0.0-alpha-1' '' '' '' '' 'full' 'unstable')
+    [[ \"\$result\" == 'SKIP' ]] || { echo \"got: \$result\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t16l: unstable_mode=full + stable current + minor prerelease → AUTO (step 4 bypassed entirely)
+t "t16l: unstable_mode=full + stable current + minor prerelease → AUTO (step 4 bypassed)" bash -c "
+    ${_DC_LIBS}
+    result=\$(_gs_eu2_classify_decision '5.0.6' '5.1.0-alpha-1' '' '' '' 'full' '' '')
+    [[ \"\$result\" == 'AUTO' ]] || { echo \"got: \$result\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t16m: no channel, no flags, stable current + prerelease → SKIP (default behavior preserved)
+t "t16m: no channel annotation + prerelease proposed → SKIP (default unchanged)" bash -c "
+    ${_DC_LIBS}
+    result=\$(_gs_eu2_classify_decision '5.0.6' '5.1.0-alpha-1' '' '' '' '' '' '')
+    [[ \"\$result\" == 'SKIP' ]] || { echo \"got: \$result\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t16n: decide.sh major jump still produces HOLD regardless (force_hold is in main.sh, not decide.sh)
+t "t16n: major jump still HOLD in decide.sh (force_hold is main.sh responsibility)" bash -c "
+    ${_DC_LIBS}
+    result=\$(_gs_eu2_classify_decision '5.0.6' '6.0.0' '' '' '' '' '' '')
+    [[ \"\$result\" == 'HOLD' ]] || { echo \"got: \$result\"; echo FAIL; exit 0; }
     echo PASS
 "
 
@@ -4893,6 +4943,49 @@ t "t56j: --force-auto prints [FORCE-AUTO MODE] banner" bash -c "
     printf '# @todo env-update dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T56J=18.3-alpine3.23\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --force-auto --env-file=\"\$f\" 2>&1)
     echo \"\$out\" | grep -qi 'FORCE-AUTO MODE' || { echo \"expected [FORCE-AUTO MODE] banner, got: '\$out'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t56k: --force-hold accepted without error (args parsing)" bash -c "
+    err=\$(bash '${ENV_UPDATE_V2}' --force-hold 2>&1 || true)
+    echo \"\$err\" | grep -qi 'unknown option' && { echo \"--force-hold rejected as unknown: \$err\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t56l: --force-hold alone (no --check, no --apply) exits 1 with usage message" bash -c "
+    err=\$(bash '${ENV_UPDATE_V2}' --force-hold 2>&1 || true)
+    echo \"\$err\" | grep -qi 'requires --check or --apply' || { echo \"expected usage error, got: '\$err'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t56m: --force-hold --apply without --confirm exits 1 with FATAL message" bash -c "
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t56m_cache
+    f=\${TMP_DIR}/t56m.env
+    printf '# @todo env-update dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T56M=18.3-alpine3.23\n' > \"\$f\"
+    mkdir -p \"\${TMP_DIR}/t56m_cache\"
+    err=\$(bash '${ENV_UPDATE_V2}' --apply --yes --force-hold --env-file=\"\$f\" 2>&1 || true)
+    echo \"\$err\" | grep -qiF 'FATAL' || { echo \"expected FATAL message, got: '\$err'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t56n: --force-hold prints [FORCE-HOLD MODE] banner on --check" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t56n_cache
+    f=\${TMP_DIR}/t56n.env
+    printf '# @todo env-update dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T56N=18.3-alpine3.23\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --force-hold --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qi 'FORCE-HOLD MODE' || { echo \"expected [FORCE-HOLD MODE] banner, got: '\$out'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t56o: --force-hold does NOT bypass (manual) annotation (unlike --force-auto)" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t56o_cache
+    f=\${TMP_DIR}/t56o.env
+    # (manual) + newer version → normally MANUAL; --force-hold must NOT change this
+    printf '# @todo env-update (manual) dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T56O=18.3-alpine3.23\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --force-hold --env-file=\"\$f\" 2>/dev/null)
+    echo \"\$out\" | grep -qF '[MANUAL ]' || { echo \"expected MANUAL to remain MANUAL with --force-hold: \$out\"; echo FAIL; exit 0; }
     echo PASS
 "
 
