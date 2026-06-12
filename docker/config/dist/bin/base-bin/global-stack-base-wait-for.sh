@@ -8,6 +8,11 @@ for dependency in "$@"; do
   _elapsed=0
 
   while [ ! -f "${dependency}" ]; do
+    _error_path="${dependency/\/successes\//\/errors\/}"
+    if [[ "${_error_path}" != "${dependency}" && -f "${_error_path}" ]]; then
+      echo "ERROR: dependency failed — error token found: ${_error_path}" >&2
+      exit 1
+    fi
     if ((_elapsed >= _timeout)); then
       echo "ERROR: timed out waiting for ${dependency} after ${_timeout}s" >&2
       exit 1
