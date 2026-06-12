@@ -116,9 +116,9 @@ Items carried over from the original `@todo.md` notes file.
 
 ---
 
-## 🔁 Reload system — implement spec at `docs/specs/reload-system.md`
+## 🔁 Reload system
 
-Full spec with exact diffs, marker inventory, and testing checklist already written. Implement in risk order.
+Implement in risk order.
 
 ### Decisions required first
 
@@ -132,22 +132,22 @@ Full spec with exact diffs, marker inventory, and testing checklist already writ
 
 ### Implementation (ordered by risk — lowest first)
 
-- [ ] **1. `.env` additions** — add all new RELOAD vars with `=false` defaults:
+- [x] **1. `.env` additions** — add all new RELOAD vars with `=false` defaults:
   - After `RELOAD_NVM`: `RELOAD_NODE24`, `RELOAD_NODE26`, `RELOAD_NODEEDGE`
   - After `RELOAD_SDKMAN`: `RELOAD_JAVA17`, `RELOAD_JAVA21`, `RELOAD_JAVA26`
   - After `RELOAD_PYENV`: `RELOAD_PYTHON3`
   - Replace `RELOAD_RUBY`: `RELOAD_RBENV`, `RELOAD_RUBY3`, `RELOAD_RUBY4`
   - Full target block shown in spec §3.1
 
-- [ ] **2. Flutter bug fix** — `GLOBAL_STACK_RELOAD_FLUTTER3` is wired in `03flutter3/docker-compose.yaml` but **never checked in `fvm-start.sh`** — setting it to `true` currently has zero effect. Add 5-line setup-mode block to `docker/config/dist/bin/fvm-bin/global-stack-fvm-start.sh`. See spec §5.5.
+- [x] **2. Flutter bug fix** — `GLOBAL_STACK_RELOAD_FLUTTER3` is wired in `03flutter3/docker-compose.yaml` but **never checked in `fvm-start.sh`** — setting it to `true` currently has zero effect. Add 5-line setup-mode block to `docker/config/dist/bin/fvm-bin/global-stack-fvm-start.sh`. See spec §5.5.
 
-- [ ] **3. Node per-version reload** — add `GLOBAL_STACK_RELOAD_NODE=${GLOBAL_STACK_RELOAD_NODE<N>}` to each of `03node24/26/nodeedge` compose files; add reload block to `nvm-bin/global-stack-nvm-start.sh` setup mode (deletes `tools/versions/node.<VERSION_AS>`). See spec §4.1 + §5.1.
+- [x] **3. Node per-version reload** — add `GLOBAL_STACK_RELOAD_NODE=${GLOBAL_STACK_RELOAD_NODE<N>}` to each of `03node24/26/nodeedge` compose files; add reload block to `nvm-bin/global-stack-nvm-start.sh` setup mode (deletes `tools/versions/node.<VERSION_AS>`). See spec §4.1 + §5.1.
 
-- [ ] **4. Java per-version reload** — add `GLOBAL_STACK_RELOAD_JAVA=${GLOBAL_STACK_RELOAD_JAVA<N>}` to each of `03java17/21/25/26-zulu` compose files (note: these compose files currently pass NO reload var at all); add reload block to `sdkman-bin/global-stack-sdkman-start.sh` setup mode (deletes version marker + SDKMAN candidate dir). See spec §4.2 + §5.2.
+- [x] **4. Java per-version reload** — add `GLOBAL_STACK_RELOAD_JAVA=${GLOBAL_STACK_RELOAD_JAVA<N>}` to each of `03java17/21/25/26-zulu` compose files (note: these compose files currently pass NO reload var at all); add reload block to `sdkman-bin/global-stack-sdkman-start.sh` setup mode (deletes version marker + SDKMAN candidate dir). See spec §4.2 + §5.2.
 
-- [ ] **5. Python per-version reload** — add `GLOBAL_STACK_RELOAD_PYTHON=${GLOBAL_STACK_RELOAD_PYTHON3}` to `03python3/docker-compose.yaml`; add reload block to `pyenv-bin/global-stack-pyenv-start.sh` setup mode. See spec §4.3 + §5.3.
+- [x] **5. Python per-version reload** — add `GLOBAL_STACK_RELOAD_PYTHON=${GLOBAL_STACK_RELOAD_PYTHON3}` to `03python3/docker-compose.yaml`; add reload block to `pyenv-bin/global-stack-pyenv-start.sh` setup mode. See spec §4.3 + §5.3.
 
-- [ ] **6. Ruby reload split (highest risk)** — atomic 3-file update: rename `RELOAD_RUBY` → `RELOAD_RBENV` in `02rbenv/docker-compose.yaml` and in `rbenv-start.sh` install mode; replace `RELOAD_RUBY` with split vars in `03ruby3` + `03ruby4` compose files; add per-version reload block in `rbenv-start.sh` setup mode. All three files must change together. See spec §4.4 + §5.4.
+- [x] **6. Ruby reload split (highest risk)** — atomic 3-file update: rename `RELOAD_RUBY` → `RELOAD_RBENV` in `02rbenv/docker-compose.yaml` and in `rbenv-start.sh` install mode; replace `RELOAD_RUBY` with split vars in `03ruby3` + `03ruby4` compose files; add per-version reload block in `rbenv-start.sh` setup mode. All three files must change together. See spec §4.4 + §5.4.
 
 ---
 
@@ -187,3 +187,9 @@ Full spec with exact diffs, marker inventory, and testing checklist already writ
 
 
 GLOBAL_STACK_WAIT_FOR_TIMEOUT should be read from .env !!
+
+---
+
+## 🔒 Lock system — sdkman USE_LOCKS=false not fully supported
+
+`global-stack-sdkman-start.sh` has its `GLOBAL_STACK_USE_LOCKS` guards commented out (lines 57 and 169), so `flock` runs unconditionally. This is intentional for now: the script doesn't handle `USE_LOCKS=false` cleanly (fd 200 would be opened but flock skipped, leaving a leaked fd). Full fix requires restructuring the lock acquire/release blocks so fd 200 is only opened when locks are enabled. Track this before enabling USE_LOCKS toggling across sdkman containers.
