@@ -29,6 +29,8 @@ Services live in `docker/images/<tier><name>/` and are numbered by build depende
 | `05*` | Combined all-in-one images (`05stable` / `05edge`) | All tier 03 runtimes in one container |
 | `local.*` | Machine-specific custom images (git-ignored) | Project-specific variants |
 
+> **Tier-prefix rule**: the number encodes build-dependency order, nothing else. Four services install nothing into `tools/` despite their tier-02 prefix (`02dpage-pgadmin4`, `02keycloak-keycloak`, `02sonarqube`, `02mongoclient`) — placed there for dependency ordering; `04phpmyadmin` is pgadmin's functional twin in a different tier. Don't infer install behavior from the prefix.
+
 **Build chain**: images build `FROM` the local registry (`local-global-stack-registry.local:5000`). Run `make start-local-registry` before first build. `COMPOSE_BAKE=true` uses BuildX bake; `make generate-buildx` produces the intermediate `docker-bake.local.json`.
 
 **Network**: Single bridge `public` (`172.20.0.0/16`). Root `docker-compose.yaml` defines only this network — each service has its own `docker/images/<name>/docker-compose.yaml`. Services are composed together via the `COMPOSE_FILE` env var (semicolon-separated list in `.env`/`.env.local`).
@@ -42,7 +44,7 @@ Services live in `docker/images/<tier><name>/` and are numbered by build depende
 - `tools/locks/` — optional coordination between containers (controlled by `GLOBAL_STACK_USE_LOCKS`)
 - Container startup scripts live in `docker/config/dist/bin/<runtime>-bin/global-stack-<runtime>-start.sh` (runtime name, not image tier — e.g., `nvm-bin/`, not `02nvm-bin/`)
 - Entrypoint pattern: `CMD ["global-stack-base-sync-bin-n-exec.sh", "global-stack-<runtime>-start.sh"]`
-- `make down` clears `tools/successes/*`, `tools/errors/*`, `tools/locks/*`, `tools/elapsed/*`
+- `make down` clears `tools/successes/*`, `tools/errors/*`, `tools/locks/*`, `tools/elapsed` (single file)
 - **Two-phase model**: tier 02 runs with `MODE=install` (installs the tool), tier 03 runs with `MODE=setup` (configures specific versions). Both use the **same** startup script (e.g., `nvm-start.sh` serves both `02nvm` and `03node*`). The `*_MODE` env var differentiates behavior.
 - **Error tokens**: each service sets `GLOBAL_STACK_ERROR_TOKEN` in compose YAML. On failure, startup creates `tools/errors/<TOKEN>`. Healthcheck: healthy only when error file is absent AND success file is present.
 - **Host-container binding** (the signature feature): startup scripts write env exports to `tools/.shellrc/<runtime>.shellrc` (e.g., `nvm.shellrc`). Host shell sources these files, making container-installed tools available on the host via PATH propagation.
@@ -57,7 +59,7 @@ Services live in `docker/images/<tier><name>/` and are numbered by build depende
 - All project variables use `GLOBAL_STACK_*` prefix; nested `${VAR}` expansion is used extensively
 - `bin/env-scan.sh` syncs `.env` → `.env.local`: adds new vars, detects differences, reports conflicts
 - **Port binding pattern**: `GLOBAL_STACK_<SERVICE>_PORT_<N>=` — empty = no host binding; when set, value must end with `:` (e.g. `42708:`)
-- **Host port range**: `42700–42811` (avoids conflicts with system services)
+- **Host port range**: `42700–42899` (avoids conflicts with system services)
 - `GLOBAL_STACK_DOCKER_USER_ID` (`developer`) is the master credential — all DB passwords, pgAdmin, Keycloak default to it
 - `GLOBAL_STACK_RELOAD_*=true` forces full reinstall of that tier's tools on next container start (slow!)
 
@@ -86,11 +88,13 @@ See `templates/tips/env-update.md` for the full fetcher-type and flag reference.
 
 ### bin/env-scan.sh
 
-**v1.0.0 (stable baseline)** — run `--version` to confirm. 8-phase pipeline: parse args → build source index → scan docker sources → detect conflicts → **backup pre-flight** → sync env files → propagate to Dockerfiles (+ Dockerfile backup) → retention prune → cleanup.
+**v1.0.0 (stable baseline)** — run `--version` to confirm. 8-phase pipeline: parse args → build source index → scan docker sources → detect conflicts → **backup pre-flight** → sync env files → propagate to Dockerfiles (+ Dockerfile backup) → retention prune + cleanup.
 
 Propagation is automatic: any `ARG VAR=value` line in a Dockerfile whose value diverges from the canonical `.env` value is rewritten in-place. Vars with `${` in their `.env` value are skipped (expansion-dependent). Vars matching `_GS_ES_PATTERN_CONFLICT_IGNORE` are protected.
 
 **Key flags**: `--version` (print version and exit), `--sync-values=false` (preserve dest values that differ from source; default is `true` — values are overwritten), `--profile=true` (show timing), `--dry-run` (report only — suppresses both env file sync and Dockerfile propagation), `--no-fail` (always exit 0; only Phase 6 propagation errors suppressed — infrastructure and backup failures remain fatal), `--backup=false` (skip backup this run), `--backup-keep=<N>` (keep N newest backups per file; 0 = unlimited; default 10), `--backup-purge=true` (delete all existing `<file>.bak.*` before run), `--backup-suffix=<str>` (suffix anchor; default `.bak`; full name: `<file><suffix>.<YYYYMMDD-HHMMSS>`)
+
+**TTY behavior**: env-scan prompts on TTY and proceeds silently on non-TTY (no `--yes` required) — opposite of `env-update --apply`, which requires `--yes` in non-TTY.
 
 **Full reference**: `templates/tips/env-scan.md`, `templates/tips/env-update.md`
 
@@ -110,6 +114,8 @@ Propagation is automatic: any `ARG VAR=value` line in a Dockerfile whose value d
 - **CLI-first with API fallback**: activates the correct runtime (nvm/pyenv/rbenv), tries CLI in subshell, falls back to API
 - **NO_COLOR** support per no-color.org; color only when `stdout` is a terminal
 - **Dependencies**: `bash 4.3+`, `curl`, `jq`, `perl`, `sort -V` (GNU coreutils), `sed`, `awk`, `grep`
+- **Function size**: functions >150 lines or nesting >4 levels → decompose (precedent: d953279)
+- **`# Sources:` convention**: lib files declare their dependencies via `# Sources: <file>` header comments but never `source` them — `main.sh` is the single coordinator of all `source` calls
 
 ## Makefile Patterns
 
@@ -130,6 +136,7 @@ make down                            # Stop stack
 make down-n-up                       # Soft restart (down then up, no rebuild)
 make down-n-rebuild-force-recreate   # Full teardown + rebuild + start
 make hard-restart                    # DESTRUCTIVE: wipe all images/volumes, rebuild from scratch
+make soft-restart                    # DESTRUCTIVE: sudo-wipes tools/, restores from var/tools — NOT down-n-up!
 
 # Per-service
 make login-03node24                  # Shell into a container
@@ -143,11 +150,19 @@ bin/env-update.sh --apply                         # apply AUTO decisions (run --
 
 # After updating versions in .env
 bin/env-scan.sh   # Propagate to .env.local + rewrite ARG lines in Dockerfiles (--sync-values=true by default)
+# If a pinned runtime version changed: delete its tools/versions/ marker (or set
+# GLOBAL_STACK_RELOAD_<RUNTIME>=true) — the marker gate is existence-only; skipping
+# this leaves the old version installed and the container unhealthy after a long wait
 make down-n-rebuild-force-recreate
 
 # Env sync / audit
 bin/env-scan.sh --profile=true       # Sync + show timing
 docker compose --env-file .env.local config  # Validate compose resolution
+
+# Rollback a bad env update (env-update --apply / env-scan cascade)
+git checkout -- .env                                  # master is git-tracked
+cp "$(ls -t .env.local.bak.* | head -1)" .env.local   # newest env-scan backup
+bin/env-scan.sh                                       # re-propagate restored values to Dockerfiles
 
 # Build artifacts
 make generate-buildx                 # Regenerate docker-bake.local.json
@@ -158,7 +173,7 @@ make start-local-registry            # Start local TLS registry (port 5000)
 ## Testing & Verification
 
 - **env-scan tests**: `bash bin/tests/env-scan.test.sh` — custom harness with `assert_equals`, `assert_contains`, `assert_not_contains`, `assert_file_exists`
-- **env-update tests**: `bash bin/tests/env-update.test.sh` — 700+ tests across 108 sections (fetchers, cache, semver, apply, args, RESOLVED, --reference…); use `--dry-run --filter=<VAR>` for quick preview; `--offline` is not implemented (use `_GS_EU2_HTTP_FIXTURE_DIR` seam for deterministic offline testing)
+- **env-update tests**: `bash bin/tests/env-update.test.sh` — 700+ tests across 112 sections (fetchers, cache, semver, apply, args, RESOLVED, --reference…); use `--dry-run --filter=<VAR>` for quick preview; `--offline` is not implemented (use `_GS_EU2_HTTP_FIXTURE_DIR` seam for deterministic offline testing)
 - **Shell scripts**: `shellcheck <file>` and `shfmt -d -i 2 -ci -bn <file>` (diff mode)
 - **YAML files**: `yamllint -d relaxed <file>` and `yamlfmt -dry <file>` (dry-run mode)
 - **Formatting**: `/fmt --check` to preview all formatting changes, `/fmt` to apply them
@@ -197,7 +212,7 @@ make start-local-registry            # Start local TLS registry (port 5000)
 **Automatic hooks** (SubagentStop):
 - `subagent-stop-reminder` — fires when a subagent completes; reminds parent to verify Phase 7/8
 
-**Permission rules** (`.claude/settings.json`): safe read-only operations pre-approved (including `docker compose ps/logs`, `shfmt`, `yamlfmt`, `yamllint`, `yq`, `diff`); destructive operations (`rm -rf`, `sudo`, `git push --force`, `docker push`, `make hard-restart`, `docker system prune`, `docker volume rm`, `docker rmi`, `git clean`, `chmod 777`) blocked.
+**Permission rules** (two layers): the project `.claude/settings.json` denies destructive operations (`make hard-restart*`/`soft-restart*`, `sudo`, `rm -rf`, `docker system prune`/`volume rm`/`rmi`, `git clean`, `git push --force`, `chmod 777`, Bash access to `docker/data`/`docker/storage`), asks for stack lifecycle (`make up/down/restart`, `env-update --apply`, `docker buildx prune`) and allows read-only previews (`env-update --check/--dry-run/--dump`, `env-scan --dry-run`, `make log-*`). Additional read-only allows (`docker compose ps/logs`, `shfmt`, `yamlfmt`, `yamllint`, `yq`, `diff`) live in the global `~/.claude/settings.json` layer — a bundle of this project carries only the project layer.
 
 ## Gotchas & Pitfalls
 
@@ -214,20 +229,23 @@ make start-local-registry            # Start local TLS registry (port 5000)
 - **ARG → ENV flow in Dockerfiles**: `ARG` values are build-time only; to expose at runtime: `ARG GLOBAL_STACK_FOO` then `ENV GLOBAL_STACK_FOO=${GLOBAL_STACK_FOO}`
 - **`password = username` convention**: All default service passwords equal `GLOBAL_STACK_DOCKER_USER_ID` (`developer`) — MySQL, Postgres, pgAdmin, Keycloak all share this pattern
 - **`privileged: true` on all containers** — intentional for local dev (needed for Docker-in-Docker, mount operations). Do not flag this as a security issue; it's a known trade-off
-- **`tools/versions/` markers** control reinstall — deleting a marker forces full reinstall of that runtime even without `GLOBAL_STACK_RELOAD_*=true`
+- **`tools/versions/` markers** control reinstall — deleting a marker forces full reinstall of that runtime even without `GLOBAL_STACK_RELOAD_*=true`; when the marker content differs from the current env version, reinstall triggers automatically without needing to delete the marker
 - **`docker-bake.local.json` is generated, not tracked** — if it's stale after env changes, run `make generate-buildx` to regenerate. Stale bake file = wrong build config
 - **BuildKit cache can go stale** — if builds fail with mysterious layer errors, `docker buildx prune` is the escape hatch
 - **Bash-written files bypass all PostToolUse hooks** — linting (shellcheck, hadolint, yamllint), formatting (shfmt), and backup only fire on `Edit`/`Write` tool calls. Files written via `cat >`, heredocs, `sed -i`, or other Bash redirects are invisible to hooks. Always use the `Write` or `Edit` tool when hook coverage matters.
 - **`core.fileMode=false` in `/stack/`** — git ignores all file permission changes; `chmod` edits take effect on disk but are never staged or committed. For permission fixes, note the change explicitly in the commit message of whatever else touches the file; do not expect `git diff` or `git status` to show the mode delta.
 - **Auto-commit in /stack sessions** — commits may be made autonomously when staged changes are ready and tests pass; explicit confirmation not required (user preference for this project; overrides global Rule 10). Use descriptive commit messages following the existing style (`feat:`, `fix:`, `docs:` prefix). If `git commit` is blocked by a hook despite user authorization, present the exact command for manual execution rather than retrying.
-- **LOCAL port range**: `GLOBAL_STACK_LOCAL_*_PORT_*` use host range **41700–41899** (199 slots). Standard `GLOBAL_STACK_*_PORT_*` use 42700–42899. Next free LOCAL slot: 41719.
+- **`make soft-restart` is DESTRUCTIVE** — despite the name it `sudo rm -rf`s `tools/` and restores it from `var/tools`; it is NOT the documented soft restart (`make down-n-up`). A stale `var/tools` means a full multi-10-minute reinstall
+- **`make save` exports EVERY Docker image on the machine** — not just stack images; slow, disk-hungry, undocumented side effect
+- **Host checkout MUST live at `/stack`** — `tools/.shellrc/*.shellrc` exports bake absolute paths (`/stack/tools/...`) shared by containers and host; a checkout at any other path breaks host-container binding
+- **LOCAL port range**: `GLOBAL_STACK_LOCAL_*_PORT_*` use host range **41700–41899** (200 slots). Standard `GLOBAL_STACK_*_PORT_*` use 42700–42899. Next free LOCAL slot: 41719.
 - **LOCAL port var names for `local.05php8-4-...`**: the 7 port vars use SHORT form (`..._RUBY_N_RUST_N_PYTHON_N_JAVA_N_...`, no version suffixes), but `ALLTOGETHER_NAME` uses the LONG form with `05` prefix (`GLOBAL_STACK_LOCAL_05PHP8_4_N_NODE24_N_RUBY4_N_RUST_N_PYTHON3_N_JAVA26_N_ANDROID_N_FLUTTER3_41_9_ALLTOGETHER_NAME`). Pattern: env vars (short) vs healthcheck token (long).
 
 ## Credentials & Stateful Data
 
 - SSH keys go in `docker/config/root/.ssh/` — mounted into all containers
 - Persistent data: `docker/data/<service>/`, `docker/storage/<service>/`
-- **Credential reset**: stop stack, delete `docker/data/<service>/`, restart (fixes auth corruption for MySQL, Postgres, Mongo)
+- **Credential reset**: DB state lives in **named Docker volumes**, NOT `docker/data/` (those are seed-dump mounts). Procedure: `make down`, then `docker volume ls | grep <service>` and `docker volume rm` the matching volume(s) (e.g. `global_stack_2_0_0_local_01mysql9_data`; Postgres uses `_var_lib_postgresql`), then `make up`. Layout rule: `docker/data/` = seed dumps, `docker/storage/` = app state, named volumes = DB state
 
 ## Debugging a Failed Container
 

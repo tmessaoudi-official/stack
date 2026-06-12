@@ -69,7 +69,9 @@ printf '\n******** Starting pyenv %s %s ********\n' "${PYENV_MODE}" "${PYTHON_VE
 mkdir -p "${PYENV_ROOT}"
 
 if [[ "${PYENV_MODE}" = "install" ]]; then
-  if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/pyenv" || "true" = "${GLOBAL_STACK_RELOAD_PYENV}" ]]; then
+  if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/pyenv" ]] || \
+     [[ "$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/pyenv" 2>/dev/null)" != "${GLOBAL_STACK_PYENV_VERSION#v}" ]] || \
+     [[ "true" = "${GLOBAL_STACK_RELOAD_PYENV}" ]]; then
     global-stack-pyenv-iou.sh
   fi
 fi
@@ -89,7 +91,9 @@ printf '%s\n' 'eval "$(pyenv init --path)"' >> "/home/${GLOBAL_STACK_DOCKER_USER
 source "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 
 if [[ "${PYENV_MODE}" = "install" ]]; then
-  if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/pyenv" || "true" = "${GLOBAL_STACK_RELOAD_PYENV}" ]]; then
+  if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/pyenv" ]] || \
+     [[ "$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/pyenv" 2>/dev/null)" != "${GLOBAL_STACK_PYENV_VERSION#v}" ]] || \
+     [[ "true" = "${GLOBAL_STACK_RELOAD_PYENV}" ]]; then
     source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/pyenv.shellrc" && global-stack-pyenv-install-tools.sh
     echo "$(pyenv --version | sed 's/pyenv //')" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/pyenv"
   fi

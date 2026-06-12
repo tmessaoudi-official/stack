@@ -73,7 +73,9 @@ mkdir -p "${NVM_DIR}" "${DENO_INSTALL}/bin" "${BUN_INSTALL}/bin" "${YARN_OFFLINE
 
 # ----------------------------------
 if [[ "${NVM_MODE}" = "install" ]]; then
-  if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/nvm" ]] || [[ "${GLOBAL_STACK_RELOAD_NVM}" = "true" ]]; then
+  if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/nvm" ]] || \
+     [[ "$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/nvm" 2>/dev/null)" != "${GLOBAL_STACK_NVM_VERSION}" ]] || \
+     [[ "${GLOBAL_STACK_RELOAD_NVM}" = "true" ]]; then
     global-stack-nvm-iou.sh
     "${GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN}"/nvm.installer.sh
     echo "${GLOBAL_STACK_NVM_VERSION}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/nvm"

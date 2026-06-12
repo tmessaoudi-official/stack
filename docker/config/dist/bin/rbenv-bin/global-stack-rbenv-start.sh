@@ -69,7 +69,9 @@ printf '\n******** Starting rbenv %s %s ********\n' "${RBENV_MODE}" "${RUBY_VERS
 mkdir -p "${RBENV_ROOT}"
 
 if [[ "${RBENV_MODE}" = "install" ]]; then
-  if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/rbenv" || "true" = "${GLOBAL_STACK_RELOAD_RBENV}" ]]; then
+  if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/rbenv" ]] || \
+     [[ "$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/rbenv" 2>/dev/null)" != "${GLOBAL_STACK_RBENV_VERSION#v}" ]] || \
+     [[ "true" = "${GLOBAL_STACK_RELOAD_RBENV}" ]]; then
     global-stack-rbenv-iou.sh
   fi
 fi
@@ -88,7 +90,9 @@ printf '%s\n' 'eval "$(rbenv init - ${GLOBAL_STACK_SHELL})"' >> "/home/${GLOBAL_
 source "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 
 if [[ "${RBENV_MODE}" = "install" ]]; then
-  if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/rbenv" || "true" = "${GLOBAL_STACK_RELOAD_RBENV}" ]]; then
+  if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/rbenv" ]] || \
+     [[ "$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/rbenv" 2>/dev/null)" != "${GLOBAL_STACK_RBENV_VERSION#v}" ]] || \
+     [[ "true" = "${GLOBAL_STACK_RELOAD_RBENV}" ]]; then
     source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/rbenv.shellrc" && global-stack-rbenv-install-tools.sh
     echo "$(rbenv --version | sed 's/rbenv //')" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/rbenv"
   fi

@@ -67,7 +67,9 @@ printf '\n******** Starting fvm %s %s ********\n' "${FVM_MODE}" "${FLUTTER_VERSI
 mkdir -p "${PUB_CACHE}" "${FVM_CACHE_PATH}" "${FVM_GIT_CACHE_PATH}"
 
 if [[ "${FVM_MODE}" = "install" ]]; then
-  if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/fvm" ]] || [[ "${GLOBAL_STACK_RELOAD_FVM}" = "true" ]]; then
+  if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/fvm" ]] || \
+     [[ "$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/fvm" 2>/dev/null)" != "${GLOBAL_STACK_FVM_VERSION}" ]] || \
+     [[ "${GLOBAL_STACK_RELOAD_FVM}" = "true" ]]; then
     curl --connect-timeout 30 --max-time 300 -fsSL -o "fvm-${FVM_VERSION}-linux-x64.tar.gz" "https://github.com/leoafarias/fvm/releases/download/${FVM_VERSION}/fvm-${FVM_VERSION}-linux-x64.tar.gz"
     tar -xvf fvm-${FVM_VERSION}-linux-x64.tar.gz
     sudo mv fvm/fvm ${GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN}/fvm

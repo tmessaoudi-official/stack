@@ -70,7 +70,9 @@ echo -e "\n******** Starting Phpbrew ${PHPBREW_MODE} ${PHP_VERSION:-} ********"
 
 mkdir -p "${COMPOSER_HOME}" "${COMPOSER_HOME}/bin" "${COMPOSER_SOURCE}" "${SYMFONY_HOME}/bin" "${PHPBREW_ROOT}" "${PHPBREW_BIN}"
 
-if [ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew" ] || [ "${GLOBAL_STACK_RELOAD_PHPBREW}" = "true" ]; then
+if [ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew" ] || \
+   [ "$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew" 2>/dev/null)" != "${GLOBAL_STACK_PHPBREW_VERSION}" ] || \
+   [ "${GLOBAL_STACK_RELOAD_PHPBREW}" = "true" ]; then
   if [ "${PHPBREW_MODE}" = "install" ]; then
     global-stack-phpbrew-install-tools.sh
     global-stack-phpbrew-iou.sh
