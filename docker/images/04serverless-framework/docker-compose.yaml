@@ -39,8 +39,8 @@ services:
       - GLOBAL_STACK_PNPM_STORE_DIR=${GLOBAL_STACK_PNPM_STORE_DIR}
       - NPM_CACHE_DIR=${GLOBAL_STACK_NPM_CACHE_DIR}
       - CYPRESS_CACHE_FOLDER=${GLOBAL_STACK_CYPRESS_CACHE_FOLDER}
-      - NODE_VERSION_AS=${GLOBAL_STACK_NODE24_VERSION_AS}
-      - NODE_VERSION=${GLOBAL_STACK_NODE24_VERSION}
+      - NODE_VERSION_AS=${GLOBAL_STACK_NODE26_VERSION_AS}
+      - NODE_VERSION=${GLOBAL_STACK_NODE26_VERSION}
       - SDKMAN_DIR=${GLOBAL_STACK_SDKMAN_DIR}
       - JAVA_VERSION_AS=${GLOBAL_STACK_JAVA26_VERSION_AS}
       - JAVA_VERSION=${GLOBAL_STACK_JAVA26_VERSION}
@@ -118,7 +118,7 @@ services:
       02rust:
         condition: service_healthy
         required: true
-      03node24:
+      03node26:
         condition: service_healthy
         required: true
       03java26-zulu:

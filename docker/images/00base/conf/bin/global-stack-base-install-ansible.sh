@@ -6,7 +6,7 @@ set -euo pipefail
 . /etc/os-release
 
 # @todo change later
-UBUNTU_CODENAME="questing"
+# UBUNTU_CODENAME="resolute"
 
 # Update repositories
 sudo apt-get update --allow-releaseinfo-change

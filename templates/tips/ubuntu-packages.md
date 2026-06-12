@@ -33,7 +33,7 @@ sudo echo -e "Types: deb\nSigned-By: /usr/share/keyrings/podman.gpg\nArch: $(dpk
 
 # Ansible
 sudo curl -fsSL 'https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x6125E2A8C77F2818FB7BD15B93C4A3FD7BB9C367' | gpg --dearmor | sudo tee /usr/share/keyrings/ansible.gpg
-sudo echo -e "Types: deb\nSigned-By: /usr/share/keyrings/ansible.gpg\nArch: $(dpkg --print-architecture)\nURIs: https://ppa.launchpadcontent.net/ansible/ansible/ubuntu\nSuites: questing\nComponents: main" | sudo tee /etc/apt/sources.list.d/ansible.sources
+sudo echo -e "Types: deb\nSigned-By: /usr/share/keyrings/ansible.gpg\nArch: $(dpkg --print-architecture)\nURIs: https://ppa.launchpadcontent.net/ansible/ansible/ubuntu\nSuites: resolute\nComponents: main" | sudo tee /etc/apt/sources.list.d/ansible.sources
 
 # GitLab Runner
 sudo curl -o /tmp/gitlab-runner.sh "https://packages.gitlab.com/install/repositories/runner/gitlab-runner/script.deb.sh"

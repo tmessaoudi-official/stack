@@ -7,13 +7,15 @@
     "target": "ESNext",
     "outDir": "./build",
     "moduleResolution": "node",
+    "ignoreDeprecations": "6.0",
     "lib": ["ESNext"],
     "rootDir": "./src/handlers/typescript",
     "module": "CommonJS",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "typeRoots": ["node_modules/@types"]
+    "typeRoots": ["node_modules/@types"],
+    "types": ["node"]
   },
   "include": ["src/handlers/typescript"]
 }
