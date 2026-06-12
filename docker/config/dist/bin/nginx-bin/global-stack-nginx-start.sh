@@ -194,5 +194,12 @@ global-stack-base-print-success.sh "${DURATION}" "nginx"
 
 : > "${NGINX_SUCCESSES_PATH}"
 
+if [[ "${GLOBAL_STACK_RELOAD_NGINX:-false}" = "true" ]]; then
+  printf '\nWARN: GLOBAL_STACK_RELOAD_NGINX is still true — set it back to false in .env.local to avoid full reinstall on next restart\n' >&2
+fi
+if [[ "${GLOBAL_STACK_RELOAD_HTTP_COMMON:-false}" = "true" ]]; then
+  printf '\nWARN: GLOBAL_STACK_RELOAD_HTTP_COMMON is still true — set it back to false in .env.local to avoid full reinstall on next restart\n' >&2
+fi
+
 # Prevent the script from exiting
 sleep infinity

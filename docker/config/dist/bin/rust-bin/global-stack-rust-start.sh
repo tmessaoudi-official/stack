@@ -62,4 +62,8 @@ global-stack-base-print-success.sh "${DURATION}" "rust"
 echo -e "\nWriting success"
 : > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/rust"
 
+if [ "${GLOBAL_STACK_RELOAD_RUST:-false}" = "true" ]; then
+  printf '\nWARN: GLOBAL_STACK_RELOAD_RUST is still true — set it back to false in .env.local to avoid full reinstall on next restart\n' >&2
+fi
+
 sleep infinity

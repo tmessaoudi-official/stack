@@ -166,4 +166,11 @@ if [ "${PHPBREW_MODE}" = "setup" ]; then
   fi
 fi
 
+if [ "${PHPBREW_MODE:-}" = "install" ] && [ "${GLOBAL_STACK_RELOAD_PHPBREW:-false}" = "true" ]; then
+  printf '\nWARN: GLOBAL_STACK_RELOAD_PHPBREW is still true — set it back to false in .env.local to avoid full reinstall on next restart\n' >&2
+fi
+if [ "${PHPBREW_MODE:-}" = "setup" ] && [ "${GLOBAL_STACK_RELOAD_PHP:-false}" = "true" ]; then
+  printf '\nWARN: GLOBAL_STACK_RELOAD_PHP is still true — set it back to false in .env.local to avoid full reinstall on next restart\n' >&2
+fi
+
 sleep infinity

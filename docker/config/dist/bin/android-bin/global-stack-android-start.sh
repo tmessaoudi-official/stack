@@ -97,4 +97,8 @@ global-stack-base-print-success.sh "${DURATION}" "android"
 
 : > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/android"
 
+if [ "${GLOBAL_STACK_RELOAD_ANDROID:-false}" = "true" ]; then
+  printf '\nWARN: GLOBAL_STACK_RELOAD_ANDROID is still true — set it back to false in .env.local to avoid full reinstall on next restart\n' >&2
+fi
+
 sleep infinity

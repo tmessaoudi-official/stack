@@ -169,4 +169,11 @@ if [[ "${NVM_MODE}" = "setup" ]]; then
   fi
 fi
 
+if [[ "${NVM_MODE:-}" = "install" ]] && [[ "${GLOBAL_STACK_RELOAD_NVM:-false}" = "true" ]]; then
+  printf '\nWARN: GLOBAL_STACK_RELOAD_NVM is still true — set it back to false in .env.local to avoid full reinstall on next restart\n' >&2
+fi
+if [[ "${NVM_MODE:-}" = "setup" ]] && [[ "${GLOBAL_STACK_RELOAD_NODE:-false}" = "true" ]]; then
+  printf '\nWARN: GLOBAL_STACK_RELOAD_NODE is still true — set it back to false in .env.local to avoid full reinstall on next restart\n' >&2
+fi
+
 sleep infinity

@@ -149,4 +149,11 @@ echo "# global-stack-setup-finished" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${
 DURATION="${SECONDS}"
 global-stack-base-print-success.sh "${DURATION}" "rbenv (${RUBY_VERSION:-})"
 
+if [[ "${RBENV_MODE:-}" = "install" ]] && [[ "${GLOBAL_STACK_RELOAD_RBENV:-false}" = "true" ]]; then
+  printf '\nWARN: GLOBAL_STACK_RELOAD_RBENV is still true — set it back to false in .env.local to avoid full reinstall on next restart\n' >&2
+fi
+if [[ "${RBENV_MODE:-}" = "setup" ]] && [[ "${GLOBAL_STACK_RELOAD_RUBY:-false}" = "true" ]]; then
+  printf '\nWARN: GLOBAL_STACK_RELOAD_RUBY is still true — set it back to false in .env.local to avoid full reinstall on next restart\n' >&2
+fi
+
 sleep infinity

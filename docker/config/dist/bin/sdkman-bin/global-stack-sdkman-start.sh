@@ -173,4 +173,11 @@ if [[ "${SDKMAN_MODE}" = "setup" ]]; then
   # fi
 fi
 
+if [[ "${SDKMAN_MODE:-}" = "install" ]] && [[ "${GLOBAL_STACK_RELOAD_SDKMAN:-false}" = "true" ]]; then
+  printf '\nWARN: GLOBAL_STACK_RELOAD_SDKMAN is still true — set it back to false in .env.local to avoid full reinstall on next restart\n' >&2
+fi
+if [[ "${SDKMAN_MODE:-}" = "setup" ]] && [[ "${GLOBAL_STACK_RELOAD_JAVA:-false}" = "true" ]]; then
+  printf '\nWARN: GLOBAL_STACK_RELOAD_JAVA is still true — set it back to false in .env.local to avoid full reinstall on next restart\n' >&2
+fi
+
 sleep infinity

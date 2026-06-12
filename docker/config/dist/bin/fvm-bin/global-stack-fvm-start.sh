@@ -126,4 +126,11 @@ if [[ "${FVM_MODE}" = "setup" ]]; then
   fi
 fi
 
+if [[ "${FVM_MODE:-}" = "install" ]] && [[ "${GLOBAL_STACK_RELOAD_FVM:-false}" = "true" ]]; then
+  printf '\nWARN: GLOBAL_STACK_RELOAD_FVM is still true — set it back to false in .env.local to avoid full reinstall on next restart\n' >&2
+fi
+if [[ "${FVM_MODE:-}" = "setup" ]] && [[ "${GLOBAL_STACK_RELOAD_FLUTTER:-false}" = "true" ]]; then
+  printf '\nWARN: GLOBAL_STACK_RELOAD_FLUTTER is still true — set it back to false in .env.local to avoid full reinstall on next restart\n' >&2
+fi
+
 sleep infinity

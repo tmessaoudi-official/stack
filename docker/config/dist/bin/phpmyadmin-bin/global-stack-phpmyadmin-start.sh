@@ -94,4 +94,8 @@ global-stack-base-print-success.sh "${DURATION}" "phpmyadmin"
 
 : > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/phpmyadmin"
 
+if [ "${GLOBAL_STACK_RELOAD_PHPMYADMIN:-false}" = "true" ]; then
+  printf '\nWARN: GLOBAL_STACK_RELOAD_PHPMYADMIN is still true — set it back to false in .env.local to avoid full reinstall on next restart\n' >&2
+fi
+
 sleep infinity
