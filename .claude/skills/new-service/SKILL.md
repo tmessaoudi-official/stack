@@ -281,7 +281,7 @@ Manual steps:
 
    # --- <NAME> ---
    # @todo env-update dockerhub:library/<NAME> latest
-   GLOBAL_STACK_<NAME_UPPER>_VERSION=TODO
+   GLOBAL_STACK_<NAME_UPPER>_VERSION=latest
    [if HOST_PORT] <PORT_VAR>=          # empty = no host binding; set to "<HOST_PORT>:" to bind
 
 2. Append to COMPOSE_FILE in .env:
