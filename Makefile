@@ -18,7 +18,7 @@ default: help
 .PHONY: help mkdir-p touch create-paths generate-buildx docker-cli create-buildx-builder \
 	start-local-registry build up up-build up-build-force-recreate down \
 	down-n-rebuild down-n-rebuild-force-recreate rebuild rebuild-force-recreate \
-	down-n-up exec restart save commit restore log-follow hard-restart soft-restart \
+	down-n-up exec restart health wait-healthy save commit restore log-follow hard-restart soft-restart \
 	login-00base login-00corentinth-it-tools \
 	login-01axllent-mailpit login-01caddy login-01epiclabs-docker-oracle-xe-11g \
 	login-01httpd login-01localstack-localstack login-01mariadb12 login-01mongo7 \
@@ -446,6 +446,18 @@ exec:
 
 restart:
 	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="restart" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
+health:
+	@echo "=== Success tokens ===" && ls tools/successes/ 2>/dev/null || echo "(none)"
+	@echo "=== Error tokens ===" && ls tools/errors/ 2>/dev/null || echo "(none)"
+	@echo "=== Container status ===" && docker compose --env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV} ps --format "table {{.Name}}\t{{.Status}}\t{{.Health}}" 2>/dev/null || true
+wait-healthy:
+	@bash -c 'echo "Waiting for stack to settle..."; \
+	while docker compose --env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV} ps --format "{{.Health}}" 2>/dev/null | grep -q starting; do \
+		printf "  %s healthy, %s failed — still starting...\n" "$$(ls tools/successes/ 2>/dev/null | wc -l | tr -d " ")" "$$(ls tools/errors/ 2>/dev/null | wc -l | tr -d " ")"; \
+		sleep 10; \
+	done; \
+	printf "Stack settled: %s healthy, %s failed\n" "$$(ls tools/successes/ 2>/dev/null | wc -l | tr -d " ")" "$$(ls tools/errors/ 2>/dev/null | wc -l | tr -d " ")"'
+	@if [ "$$(ls tools/errors/ 2>/dev/null | wc -l)" -gt 0 ]; then echo "Failed services:" && ls tools/errors/; exit 1; fi
 save:
 	source ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV} && docker save $$(docker images --format '{{.Repository}}:{{.Tag}}') -o var/images/stack-${GLOBAL_STACK_VERSION}.tar
 commit:
