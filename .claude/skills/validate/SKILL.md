@@ -18,6 +18,7 @@ Validate the Docker Compose configuration and environment consistency.
 4. **Tier dependency check**: For each active `03*` service, verify its corresponding `02*` tier manager is also in COMPOSE_FILE
 5. **Port-var colon check**: For every non-empty `GLOBAL_STACK_*_PORT_*` variable in `.env.local`, verify the value ends with `:` — run: `grep -E '^GLOBAL_STACK_[A-Z0-9_]+_PORT_[A-Z0-9_]+=.+' .env.local | grep -v ':$' | grep -v '^#'` — any match is a misconfigured port var that will silently concatenate host and container port numbers (e.g. `427083306` instead of `42708:3306`)
 6. **Local compose override detection**: Check for git-ignored machine-specific overrides — run: `find . -maxdepth 3 -name 'docker-compose*.local.yaml' 2>/dev/null` — list any found files so the user is aware they may silently override tracked compose configs
+7. **Runtime health coherence** *(skip if stack is not running)*: If `docker compose --env-file .env.local ps -q 2>/dev/null` returns any container IDs, check token state — run: `echo "Healthy: $(ls tools/successes/ 2>/dev/null | wc -l | tr -d ' ')  Failed: $(ls tools/errors/ 2>/dev/null | wc -l | tr -d ' ')"` — if any error tokens exist, list them: `ls tools/errors/ 2>/dev/null`; a non-empty errors directory means one or more services failed to start
 
 ## Output:
 - Pass/fail for each check
