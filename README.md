@@ -1,9 +1,6 @@
 # stack
 
-# Bugs
-Lock files create problems when waiting and then trying to show waiting for what when the other has finished and removed the lock file
-## Run make or make help to see how to set up the project 
-Dockerized local development environment
+Dockerized local development environment. Run `make help` to see all available targets.
 
 # Important 
 
@@ -34,21 +31,21 @@ you can add to them they will be available in your containers
 docker/config/dist/conf/phpmyadmin/config.user.inc.php contains the default server (docker image)
 you add to it or change to load new local/distant servers
 # PGadmin (postgres)
-create folder if not exists : docker/data/postgres/xx
-docker/images/02dpage-pgadmin4/dist/conf/servers.json — contains the default server (copied into image by Dockerfile)
+`docker/images/02dpage-pgadmin4/dist/conf/servers.json` — contains the default server (copied into the image by Dockerfile)
 you add to it or change to load new local/distant servers
-# Mongoclient (nosqlclient)
 
 # Selenium
-and add the virtual hosts you defined in your apache containers, apache ip address will be replaced automatically after by the real address of the container
-or you can add new lines and define ip ad domains
-to make them accessbile to selenium when running google chrome
-change the env variable GLOBAL_STACK_EXPOSED_VIRTUAL_HOSTS
+1. Set `GLOBAL_STACK_EXPOSED_VIRTUAL_HOSTS` to the virtual hosts defined in your Apache/Nginx containers
+2. The container IP addresses are resolved automatically at startup and injected into the browser hosts file
 
 # Compose
-change les fichier docker-compose utilisé dans le fichier env.local COMPOSE_FILE pour avoir le stack que tu veux
-# Up 
-make down-n-rebuild-force-recreate --ignore-errors --keep-going
+Set `COMPOSE_FILE` in `.env.local` to select which services to start. See `make help` for syntax.
+
+# Up
+make up
+
+# After a version change (make down-n-rebuild-force-recreate) or full teardown (make hard-restart)
+See `make help` for details.
 # SSL
 ####execute this command in apache container
 ####as many as your virtualhosts
