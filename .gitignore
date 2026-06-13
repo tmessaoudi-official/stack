@@ -63,6 +63,9 @@ Taskfile.yaml
 
 /docker/logs/**/*.log
 
+# Machine-local audit journal written by env-update --apply (advisory, not committed)
+/docs/env-update-journal.log
+
 /docker/config/dist/conf/**/sites-available/*.conf
 /docker/config/dist/conf/**/sites-available/*.caddy
 /docker/config/dist/conf/**/*.caddy

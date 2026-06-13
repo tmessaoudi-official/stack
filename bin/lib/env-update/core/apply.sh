@@ -3,8 +3,9 @@
 #
 # Exports:   _gs_eu2_apply_single  _gs_eu2_apply_replace_target
 #            _gs_eu2_expand_replace_template  _gs_eu2_apply_updates
+#            _gs_eu2_journal_append
 # Sources:   core/records.sh  core/git.sh
-# Deps:      awk, mktemp, mv, cp
+# Deps:      awk, mktemp, mv, cp, date
 # Env:       _GS_EU2_CFG (env_file, dry_run, no_fail, backup, backup_keep,
 #                         backup_purge, backup_suffix, apply_resolve)
 #
@@ -22,6 +23,31 @@ source "$(dirname "${BASH_SOURCE[0]}")/records.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/git.sh"
 # shellcheck source=./semver.sh
 source "$(dirname "${BASH_SOURCE[0]}")/semver.sh"
+
+# _gs_eu2_journal_append — append one audit line to docs/env-update-journal.log.
+#
+# Args:    $1 var      — env variable name
+#          $2 old      — current (pre-apply) value
+#          $3 new      — new value being written
+#          $4 decision — "AUTO" or "RESOLVED"
+#          $5 channel  — annotation channel value ("stable", "unstable", empty → "latest")
+# Reads:   BASH_SOURCE[0] to derive repo root
+# Sets:    nothing
+# Prints:  nothing (all errors silently suppressed)
+# Returns: 0 always (journal failure must never abort apply)
+# Side fx: creates docs/env-update-journal.log if absent; writes one line
+_gs_eu2_journal_append() {
+  local _var="${1}" _old="${2}" _new="${3}" _decision="${4}" _channel="${5:-}"
+  [[ -z "${_channel}" ]] && _channel="latest"
+  local _self_dir
+  _self_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)" || return 0
+  # apply.sh lives at bin/lib/env-update/core/ — four levels up is the repo root.
+  local _journal="${_self_dir}/../../../../docs/env-update-journal.log"
+  mkdir -p "$(dirname "${_journal}")" 2>/dev/null || true
+  printf '%s %s %s → %s [%s] [%s]\n' \
+    "$(date -Iseconds)" "${_var}" "${_old}" "${_new}" "${_decision}" "${_channel}" \
+    >> "${_journal}" 2>/dev/null || true
+}
 
 # _gs_eu2_apply_single — rewrite a VAR=value line and its annotation in one awk pass.
 #
@@ -303,6 +329,8 @@ _gs_eu2_apply_updates() {
           _gs_eu2_apply_single "${_env_file}" "${_var}" "${_prop}" "${_raw_ann}" "${_cur}" \
                                "" "" "false" "false" ""
           printf '  [PINNED ]  %-55s  %s → %s\n' "${_var}" "${_cur}" "${_prop}"
+          _gs_eu2_journal_append "${_var}" "${_cur}" "${_prop}" "RESOLVED" \
+            "$(_gs_eu2_record_get "${_i}" channel)"
           (( ++_n_resolve_applied )) || true
           # (replace:) cascade for RESOLVED records (same logic as AUTO path)
           local _res_rep_targets _res_rep_tmpls
@@ -407,6 +435,8 @@ _gs_eu2_apply_updates() {
       _gs_eu2_apply_single "${_env_file}" "${_var}" "${_prop}" "${_raw_ann}" "${_cur}" \
                             "${_old_sha_tok2}" "${_new_sha_tok2}" "${_use_sha:-false}" "false" "${_new_sha}"
       printf '  [APPLIED]  %-55s  %s → %s\n' "${_var}" "${_cur}" "${_prop}"
+      _gs_eu2_journal_append "${_var}" "${_cur}" "${_prop}" "AUTO" \
+        "$(_gs_eu2_record_get "${_i}" channel)"
       if [[ "${_auto_has_sha_update}" == "true" ]]; then
         (( ++_n_auto_sha_applied )) || true
       else
