@@ -1642,7 +1642,9 @@ _gs_eu2_main() {
   fi
   # --scan requires --apply to take effect: env-scan only runs after env file is written.
   if [[ "${_GS_EU2_CFG[scan]:-false}" == "true" && "${_GS_EU2_CFG[apply]:-false}" != "true" ]]; then
-    printf 'WARNING: --scan has no effect without --apply — env-scan runs only after the env file is rewritten\n' >&2
+    printf 'FATAL: --scan requires --apply — env-scan only runs after the env file is rewritten\n' >&2
+    printf '  did you mean: --apply --scan?\n' >&2
+    exit 1
   fi
 
   if [[ "true" == "${_GS_EU2_CFG[dump]}" ]]; then

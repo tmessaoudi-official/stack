@@ -8310,8 +8310,8 @@ t "t83c: --apply --scan --backup=false — env-scan receives --backup=false flag
     echo PASS
 "
 
-# t83d: --scan without --apply → env-scan NOT invoked (scan only runs after successful apply)
-t "t83d: --scan without --apply — env-scan not invoked, exit 0" bash -c "
+# t83d: --scan without --apply → FATAL error, exit 1, env-scan NOT invoked
+t "t83d: --scan without --apply — FATAL exit 1, env-scan not invoked" bash -c "
     export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t83d_cache
     f=\${TMP_DIR}/t83d.env
@@ -8321,9 +8321,10 @@ t "t83d: --scan without --apply — env-scan not invoked, exit 0" bash -c "
     printf '#!/bin/bash\ntouch \"%s\"\nexit 0\n' \"\$sentinel\" > \"\$mock\"
     chmod +x \"\$mock\"
     export _GS_EU2_ENV_SCAN_PATH=\"\$mock\"
-    bash '${ENV_UPDATE_V2}' --scan --env-file=\"\$f\" >/dev/null 2>&1
+    err=\$(bash '${ENV_UPDATE_V2}' --scan --env-file=\"\$f\" 2>&1 >/dev/null)
     rc=\$?
-    [[ \$rc -eq 0 ]] || { echo \"expected exit 0, got \$rc\"; echo FAIL; exit 0; }
+    [[ \$rc -eq 1 ]] || { echo \"expected exit 1, got \$rc\"; echo FAIL; exit 0; }
+    [[ \"\$err\" == *FATAL* ]] || { echo \"expected FATAL in stderr, got: \$err\"; echo FAIL; exit 0; }
     [[ ! -f \"\$sentinel\" ]] || { echo \"mock env-scan must NOT be invoked without --apply\"; echo FAIL; exit 0; }
     echo PASS
 "
@@ -8656,42 +8657,44 @@ t "t88b: SHA annotation with existing date suffix — new annotation has no date
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
-section "89 — --scan warning without --apply"
+section "89 — --scan error without --apply"
 # ═══════════════════════════════════════════════════════════════════════════
 
 _T89_ENV='# @todo env-update dockerhub:_/postgres:18 18.3-alpine3.23
 GLOBAL_STACK_PG18_T89=18.3-alpine3.23'
 
-# t89a: --scan alone (no --check, no --apply) → warning emitted
-t "t89a: --scan without --apply warns on stderr" bash -c "
+# t89a: --scan alone (no --check, no --apply) → FATAL error, exit 1
+t "t89a: --scan without --apply exits 1 with FATAL error" bash -c "
     export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
     f=\${TMP_DIR}/t89a.env
     printf '%s\n' '${_T89_ENV}' > \"\$f\"
-    out=\$(bash '${ENV_UPDATE_V2}' --scan --env-file=\"\$f\" 2>&1 || true)
-    echo \"\$out\" | grep -qF 'WARNING: --scan has no effect without --apply' \
-        || { echo \"expected --scan warning; got: \$out\"; echo FAIL; exit 0; }
+    out=\$(bash '${ENV_UPDATE_V2}' --scan --env-file=\"\$f\" 2>&1); rc=\$?
+    [[ \$rc -eq 1 ]] || { echo \"expected exit 1, got \$rc\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'FATAL' \
+        || { echo \"expected FATAL in stderr; got: \$out\"; echo FAIL; exit 0; }
     echo PASS
 "
 
-# t89b: --check alone (no --scan) → no scan warning emitted
-t "t89b: --check without --scan does not emit scan warning" bash -c "
+# t89b: --check alone (no --scan) → no scan FATAL emitted, exit 0
+t "t89b: --check without --scan does not emit scan error" bash -c "
     export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
     f=\${TMP_DIR}/t89b.env
     printf '%s\n' '${_T89_ENV}' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --check --no-cache --env-file=\"\$f\" 2>&1 || true)
-    echo \"\$out\" | grep -qF '--scan has no effect' \
-        && { echo \"unexpected --scan warning in --check-only output: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'FATAL' \
+        && { echo \"unexpected FATAL in --check-only output: \$out\"; echo FAIL; exit 0; }
     echo PASS
 "
 
-# t89c: --dry-run --scan (--dry-run does not imply --apply) → warning emitted
-t "t89c: --dry-run --scan without --apply warns on stderr" bash -c "
+# t89c: --dry-run --scan (--dry-run does not imply --apply) → FATAL error, exit 1
+t "t89c: --dry-run --scan without --apply exits 1 with FATAL error" bash -c "
     export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
     f=\${TMP_DIR}/t89c.env
     printf '%s\n' '${_T89_ENV}' > \"\$f\"
-    out=\$(bash '${ENV_UPDATE_V2}' --dry-run --scan --env-file=\"\$f\" 2>&1 || true)
-    echo \"\$out\" | grep -qF 'WARNING: --scan has no effect without --apply' \
-        || { echo \"expected --scan warning on --dry-run --scan; got: \$out\"; echo FAIL; exit 0; }
+    out=\$(bash '${ENV_UPDATE_V2}' --dry-run --scan --env-file=\"\$f\" 2>&1); rc=\$?
+    [[ \$rc -eq 1 ]] || { echo \"expected exit 1, got \$rc\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'FATAL' \
+        || { echo \"expected FATAL in stderr; got: \$out\"; echo FAIL; exit 0; }
     echo PASS
 "
 
@@ -8708,8 +8711,8 @@ t "t89d: --apply --scan does not emit the scan warning" bash -c "
     chmod +x \"\$mock\"
     export _GS_EU2_ENV_SCAN_PATH=\"\$mock\"
     out=\$(bash '${ENV_UPDATE_V2}' --apply --yes --scan --env-file=\"\$f\" 2>&1 || true)
-    echo \"\$out\" | grep -qF '--scan has no effect' \
-        && { echo \"unexpected --scan warning when --apply is active: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'FATAL' \
+        && { echo \"unexpected FATAL when --apply is active: \$out\"; echo FAIL; exit 0; }
     echo PASS
 "
 
