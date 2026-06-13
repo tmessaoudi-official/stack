@@ -1085,35 +1085,35 @@ source '/stack/bin/lib/env-update/core/decide.sh'
 
 t "t16a: same version → SKIP (up-to-date)" bash -c "
     ${_DC_LIBS}
-    result=\$(_gs_eu2_classify_decision '18.4' '18.4' '' '' '')
+    result=\$(_gs_eu2_classify_decision '18.4' '18.4' '' '')
     [[ \"\$result\" == 'SKIP' ]] || { echo \"got: \$result\"; echo FAIL; exit 0; }
     echo PASS
 "
 
 t "t16b: patch bump → AUTO" bash -c "
     ${_DC_LIBS}
-    result=\$(_gs_eu2_classify_decision '18.3' '18.4' '' '' '')
+    result=\$(_gs_eu2_classify_decision '18.3' '18.4' '' '')
     [[ \"\$result\" == 'AUTO' ]] || { echo \"got: \$result\"; echo FAIL; exit 0; }
     echo PASS
 "
 
 t "t16c: major jump with no major_hint → HOLD" bash -c "
     ${_DC_LIBS}
-    result=\$(_gs_eu2_classify_decision '17.5' '18.4' '' '' '')
+    result=\$(_gs_eu2_classify_decision '17.5' '18.4' '' '')
     [[ \"\$result\" == 'HOLD' ]] || { echo \"got: \$result\"; echo FAIL; exit 0; }
     echo PASS
 "
 
 t "t16d: override flag → MANUAL regardless of delta" bash -c "
     ${_DC_LIBS}
-    result=\$(_gs_eu2_classify_decision '18.3' '18.4' 'true' '' '')
+    result=\$(_gs_eu2_classify_decision '18.3' '18.4' 'true' '')
     [[ \"\$result\" == 'MANUAL' ]] || { echo \"got: \$result\"; echo FAIL; exit 0; }
     echo PASS
 "
 
 t "t16e: proposed older than current → SKIP (downgrade protection, B1)" bash -c "
     ${_DC_LIBS}
-    result=\$(_gs_eu2_classify_decision '1.29.3' '1.2.5' '' '' '')
+    result=\$(_gs_eu2_classify_decision '1.29.3' '1.2.5' '' '')
     [[ \"\$result\" == 'SKIP' ]] || { echo \"downgrade not prevented: got \$result\"; echo FAIL; exit 0; }
     echo PASS
 "
@@ -1122,7 +1122,7 @@ t "t16e: proposed older than current → SKIP (downgrade protection, B1)" bash -
 t "t16f: manual flag + downgrade → SKIP not MANUAL (aleph.js regression guard)" bash -c "
     ${_DC_LIBS}
     # Simulates aleph.js: current=1.0.0-beta.44, proposed=v0.3.0-beta.19 (older)
-    result=\$(_gs_eu2_classify_decision '1.0.0-beta.44' 'v0.3.0-beta.19' '' 'true' '' 'full')
+    result=\$(_gs_eu2_classify_decision '1.0.0-beta.44' 'v0.3.0-beta.19' 'true' '' 'full')
     [[ \"\$result\" == 'SKIP' ]] || { echo \"expected SKIP for manual+downgrade, got: '\$result'\"; echo FAIL; exit 0; }
     echo PASS
 "
@@ -1130,7 +1130,7 @@ t "t16f: manual flag + downgrade → SKIP not MANUAL (aleph.js regression guard)
 # t16g: override=true + downgrade → SKIP (same rule: downgrade beats override)
 t "t16g: override flag + downgrade → SKIP not MANUAL" bash -c "
     ${_DC_LIBS}
-    result=\$(_gs_eu2_classify_decision '18.4' '18.3' 'true' '' '')
+    result=\$(_gs_eu2_classify_decision '18.4' '18.3' 'true' '')
     [[ \"\$result\" == 'SKIP' ]] || { echo \"expected SKIP for override+downgrade, got: '\$result'\"; echo FAIL; exit 0; }
     echo PASS
 "
@@ -1138,7 +1138,7 @@ t "t16g: override flag + downgrade → SKIP not MANUAL" bash -c "
 # t16h: manual=true + upgrade → still MANUAL (the normal case must remain unaffected)
 t "t16h: manual flag + upgrade → MANUAL (normal MANUAL upgrade preserved)" bash -c "
     ${_DC_LIBS}
-    result=\$(_gs_eu2_classify_decision '18.3' '18.4' '' 'true' '')
+    result=\$(_gs_eu2_classify_decision '18.3' '18.4' 'true' '')
     [[ \"\$result\" == 'MANUAL' ]] || { echo \"expected MANUAL for manual+upgrade, got: '\$result'\"; echo FAIL; exit 0; }
     echo PASS
 "
@@ -1146,7 +1146,7 @@ t "t16h: manual flag + upgrade → MANUAL (normal MANUAL upgrade preserved)" bas
 # t16i: channel:unstable + stable current + minor prerelease → HOLD (annotation opt-in bridge)
 t "t16i: channel:unstable + stable current + minor prerelease → HOLD" bash -c "
     ${_DC_LIBS}
-    result=\$(_gs_eu2_classify_decision '5.0.6' '5.1.0-alpha-1' '' '' '' '' '' 'unstable')
+    result=\$(_gs_eu2_classify_decision '5.0.6' '5.1.0-alpha-1' '' '' '' '' 'unstable')
     [[ \"\$result\" == 'HOLD' ]] || { echo \"got: \$result\"; echo FAIL; exit 0; }
     echo PASS
 "
@@ -1154,7 +1154,7 @@ t "t16i: channel:unstable + stable current + minor prerelease → HOLD" bash -c 
 # t16j: channel:unstable + stable current + major prerelease → HOLD (step 4 fires before step 7)
 t "t16j: channel:unstable + stable current + major prerelease → HOLD (step 4 before step 7)" bash -c "
     ${_DC_LIBS}
-    result=\$(_gs_eu2_classify_decision '5.0.6' '6.0.0-alpha-1' '' '' '' '' '' 'unstable')
+    result=\$(_gs_eu2_classify_decision '5.0.6' '6.0.0-alpha-1' '' '' '' '' 'unstable')
     [[ \"\$result\" == 'HOLD' ]] || { echo \"got: \$result\"; echo FAIL; exit 0; }
     echo PASS
 "
@@ -1162,7 +1162,7 @@ t "t16j: channel:unstable + stable current + major prerelease → HOLD (step 4 b
 # t16k: stable_mode=full + prerelease + channel:unstable → SKIP (stable=full overrides channel annotation)
 t "t16k: stable_mode=full + prerelease + channel:unstable → SKIP (force-reject wins)" bash -c "
     ${_DC_LIBS}
-    result=\$(_gs_eu2_classify_decision '5.0.6' '6.0.0-alpha-1' '' '' '' '' 'full' 'unstable')
+    result=\$(_gs_eu2_classify_decision '5.0.6' '6.0.0-alpha-1' '' '' '' 'full' 'unstable')
     [[ \"\$result\" == 'SKIP' ]] || { echo \"got: \$result\"; echo FAIL; exit 0; }
     echo PASS
 "
@@ -1170,7 +1170,7 @@ t "t16k: stable_mode=full + prerelease + channel:unstable → SKIP (force-reject
 # t16l: unstable_mode=full + stable current + minor prerelease → AUTO (step 4 bypassed entirely)
 t "t16l: unstable_mode=full + stable current + minor prerelease → AUTO (step 4 bypassed)" bash -c "
     ${_DC_LIBS}
-    result=\$(_gs_eu2_classify_decision '5.0.6' '5.1.0-alpha-1' '' '' '' 'full' '' '')
+    result=\$(_gs_eu2_classify_decision '5.0.6' '5.1.0-alpha-1' '' '' 'full' '' '')
     [[ \"\$result\" == 'AUTO' ]] || { echo \"got: \$result\"; echo FAIL; exit 0; }
     echo PASS
 "
@@ -1178,7 +1178,7 @@ t "t16l: unstable_mode=full + stable current + minor prerelease → AUTO (step 4
 # t16m: no channel, no flags, stable current + prerelease → SKIP (default behavior preserved)
 t "t16m: no channel annotation + prerelease proposed → SKIP (default unchanged)" bash -c "
     ${_DC_LIBS}
-    result=\$(_gs_eu2_classify_decision '5.0.6' '5.1.0-alpha-1' '' '' '' '' '' '')
+    result=\$(_gs_eu2_classify_decision '5.0.6' '5.1.0-alpha-1' '' '' '' '' '')
     [[ \"\$result\" == 'SKIP' ]] || { echo \"got: \$result\"; echo FAIL; exit 0; }
     echo PASS
 "
@@ -1186,7 +1186,7 @@ t "t16m: no channel annotation + prerelease proposed → SKIP (default unchanged
 # t16n: decide.sh major jump still produces HOLD regardless (force_hold is in main.sh, not decide.sh)
 t "t16n: major jump still HOLD in decide.sh (force_hold is main.sh responsibility)" bash -c "
     ${_DC_LIBS}
-    result=\$(_gs_eu2_classify_decision '5.0.6' '6.0.0' '' '' '' '' '' '')
+    result=\$(_gs_eu2_classify_decision '5.0.6' '6.0.0' '' '' '' '' '')
     [[ \"\$result\" == 'HOLD' ]] || { echo \"got: \$result\"; echo FAIL; exit 0; }
     echo PASS
 "
@@ -1620,7 +1620,7 @@ t "t20c: semver_delta — numeric versions unaffected by codename fix" bash -c "
 
 t "t20d: classify — same-codename ubuntu update → AUTO (not HOLD)" bash -c "
     ${_DC_LIBS20}
-    result=\$(_gs_eu2_classify_decision 'resolute-20260108' 'resolute-20260413' '' '' '')
+    result=\$(_gs_eu2_classify_decision 'resolute-20260108' 'resolute-20260413' '' '')
     [[ \"\$result\" == 'AUTO' ]] || { echo \"got: \$result\"; echo FAIL; exit 0; }
     echo PASS
 "
@@ -1629,7 +1629,7 @@ t "t20e: classify — unversioned current (nightly) + concrete proposed → RESO
     ${_DC_LIBS20}
     # Post-Batch1: nightly + concrete proposed emits RESOLVED, not SKIP.
     # RESOLVED is informational (requires --apply-resolve --apply to pin).
-    result=\$(_gs_eu2_classify_decision 'nightly' '2024.10.22-7ca5933' '' '' '')
+    result=\$(_gs_eu2_classify_decision 'nightly' '2024.10.22-7ca5933' '' '')
     [[ \"\$result\" == 'RESOLVED' ]] || { echo \"got: \$result (expected RESOLVED)\"; echo FAIL; exit 0; }
     echo PASS
 "
@@ -1895,7 +1895,7 @@ t "t25c: pipeline (classify_decision) produces HOLD when major constraint would 
     source '/stack/bin/lib/env-update/core/semver.sh'
     source '/stack/bin/lib/env-update/core/decide.sh'
     # major_hint=17 but proposed=18.4 → HOLD
-    result=\$(_gs_eu2_classify_decision '17.5' '18.4' '' '' '17')
+    result=\$(_gs_eu2_classify_decision '17.5' '18.4' '' '17')
     [[ \"\$result\" == 'HOLD' ]] || { echo \"expected HOLD, got: \$result\"; echo FAIL; exit 0; }
     echo PASS
 "
@@ -1915,7 +1915,8 @@ t "t25d: full pipeline HOLD for major-pin escape (end-to-end, no fetcher HOLD in
     override=\$(_gs_eu2_record_get \$idx override)
     manual=\$(_gs_eu2_record_get \$idx manual)
     major=\$(_gs_eu2_record_get \$idx major_hint)
-    classified=\$(_gs_eu2_classify_decision \"\$cur\" \"\$prop\" \"\$override\" \"\$manual\" \"\$major\")
+    gate=''; [[ \"\$override\" == 'true' || \"\$manual\" == 'true' ]] && gate='true'
+    classified=\$(_gs_eu2_classify_decision \"\$cur\" \"\$prop\" \"\$gate\" \"\$major\")
     _gs_eu2_record_set \$idx decision \"\$classified\"
     decision=\$(_gs_eu2_record_get \$idx decision)
     [[ \"\$decision\" == 'HOLD' ]] || { echo \"expected HOLD, got: \$decision\"; echo FAIL; exit 0; }
@@ -3065,7 +3066,8 @@ t "t33h: sdkmanager without (manual) annotation produces AUTO (not MANUAL) via f
     major=\$(_gs_eu2_record_get \$idx major_hint)
     [[ -z \"\$manual\" ]] || { echo \"fetcher must not set manual field; got: '\$manual'\"; echo FAIL; exit 0; }
     # Full classification: with no (manual) flag, a newer version should yield AUTO
-    decision=\$(_gs_eu2_classify_decision '36.0.0' \"\$proposed\" \"\$override\" \"\$manual\" \"\$major\")
+    gate=''; [[ \"\$override\" == 'true' || \"\$manual\" == 'true' ]] && gate='true'
+    decision=\$(_gs_eu2_classify_decision '36.0.0' \"\$proposed\" \"\$gate\" \"\$major\")
     [[ \"\$decision\" != 'MANUAL' ]] || { echo \"got MANUAL without (manual) annotation — add (manual) to annotation instead\"; echo FAIL; exit 0; }
     echo PASS
 "
@@ -3155,7 +3157,7 @@ t "t36c: same date-sha → SKIP (classify_decision integration)" bash -c "
     source '/stack/bin/lib/env-update/config/defaults.sh'
     ${_SV_LIBS}
     source '/stack/bin/lib/env-update/core/decide.sh'
-    result=\$(_gs_eu2_classify_decision '20260315-abc1234d' '20260315-abc1234d' '' '' '')
+    result=\$(_gs_eu2_classify_decision '20260315-abc1234d' '20260315-abc1234d' '' '')
     [[ \"\$result\" == 'SKIP' ]] || { echo \"expected SKIP for same date-sha, got: '\$result'\"; echo FAIL; exit 0; }
     echo PASS
 "
@@ -3164,7 +3166,7 @@ t "t36d: newer date-sha → AUTO (classify_decision integration)" bash -c "
     source '/stack/bin/lib/env-update/config/defaults.sh'
     ${_SV_LIBS}
     source '/stack/bin/lib/env-update/core/decide.sh'
-    result=\$(_gs_eu2_classify_decision '20260315-abc1234d' '20260316-def5678e' '' '' '')
+    result=\$(_gs_eu2_classify_decision '20260315-abc1234d' '20260316-def5678e' '' '')
     [[ \"\$result\" == 'AUTO' ]] || { echo \"expected AUTO for newer date-sha, got: '\$result'\"; echo FAIL; exit 0; }
     echo PASS
 "
@@ -3743,42 +3745,42 @@ source '/stack/bin/lib/env-update/core/decide.sh'
 
 t "t42a: stable current + no-dash RC proposed → SKIP (not AUTO)" bash -c "
     ${_CD_LIBS42}
-    result=\$(_gs_eu2_classify_decision '6.3.0' '6.3.0RC1' '' '' '')
+    result=\$(_gs_eu2_classify_decision '6.3.0' '6.3.0RC1' '' '')
     [[ \"\$result\" == 'SKIP' ]] || { echo \"expected SKIP for stable→RC (no dash), got: '\$result'\"; echo FAIL; exit 0; }
     echo PASS
 "
 
 t "t42b: stable current + dash RC proposed → SKIP" bash -c "
     ${_CD_LIBS42}
-    result=\$(_gs_eu2_classify_decision '1.2.3' '1.3.0-rc1' '' '' '')
+    result=\$(_gs_eu2_classify_decision '1.2.3' '1.3.0-rc1' '' '')
     [[ \"\$result\" == 'SKIP' ]] || { echo \"expected SKIP for stable→rc1 (with dash), got: '\$result'\"; echo FAIL; exit 0; }
     echo PASS
 "
 
 t "t42c: stable current + alpha proposed → SKIP" bash -c "
     ${_CD_LIBS42}
-    result=\$(_gs_eu2_classify_decision '2.0.0' '2.1.0alpha1' '' '' '')
+    result=\$(_gs_eu2_classify_decision '2.0.0' '2.1.0alpha1' '' '')
     [[ \"\$result\" == 'SKIP' ]] || { echo \"expected SKIP for stable→alpha, got: '\$result'\"; echo FAIL; exit 0; }
     echo PASS
 "
 
 t "t42d: prerelease current + prerelease proposed → AUTO (both pre-release)" bash -c "
     ${_CD_LIBS42}
-    result=\$(_gs_eu2_classify_decision '1.0.0-rc1' '1.0.0-rc2' '' '' '')
+    result=\$(_gs_eu2_classify_decision '1.0.0-rc1' '1.0.0-rc2' '' '')
     [[ \"\$result\" == 'AUTO' ]] || { echo \"expected AUTO for rc1→rc2, got: '\$result'\"; echo FAIL; exit 0; }
     echo PASS
 "
 
 t "t42e: stable current + stable proposed → AUTO (normal upgrade)" bash -c "
     ${_CD_LIBS42}
-    result=\$(_gs_eu2_classify_decision '6.3.0' '6.3.1' '' '' '')
+    result=\$(_gs_eu2_classify_decision '6.3.0' '6.3.1' '' '')
     [[ \"\$result\" == 'AUTO' ]] || { echo \"expected AUTO for stable patch bump, got: '\$result'\"; echo FAIL; exit 0; }
     echo PASS
 "
 
 t "t42f: stable alpine-tagged current + stable alpine-tagged proposed → AUTO" bash -c "
     ${_CD_LIBS42}
-    result=\$(_gs_eu2_classify_decision '8.6.1-alpine3.23' '8.6.3-alpine3.23' '' '' '')
+    result=\$(_gs_eu2_classify_decision '8.6.1-alpine3.23' '8.6.3-alpine3.23' '' '')
     [[ \"\$result\" == 'AUTO' ]] || { echo \"expected AUTO for alpine patch bump, got: '\$result'\"; echo FAIL; exit 0; }
     echo PASS
 "
@@ -3939,21 +3941,21 @@ source '/stack/bin/lib/env-update/core/decide.sh'
 
 t "t46a: classify — same version + override=true → SKIP (not MANUAL)" bash -c "
     ${_DC46_LIBS}
-    result=\$(_gs_eu2_classify_decision '18.3' '18.3' 'true' '' '')
+    result=\$(_gs_eu2_classify_decision '18.3' '18.3' 'true' '')
     [[ \"\$result\" == 'SKIP' ]] || { echo \"expected SKIP, got: '\$result'\"; echo FAIL; exit 0; }
     echo PASS
 "
 
 t "t46b: classify — same version + manual=true → SKIP (not MANUAL)" bash -c "
     ${_DC46_LIBS}
-    result=\$(_gs_eu2_classify_decision '2.2.0' '2.2.0' '' 'true' '')
+    result=\$(_gs_eu2_classify_decision '2.2.0' '2.2.0' 'true' '')
     [[ \"\$result\" == 'SKIP' ]] || { echo \"expected SKIP, got: '\$result'\"; echo FAIL; exit 0; }
     echo PASS
 "
 
 t "t46c: classify — override=true but version changed → still MANUAL" bash -c "
     ${_DC46_LIBS}
-    result=\$(_gs_eu2_classify_decision '18.3' '18.4' 'true' '' '')
+    result=\$(_gs_eu2_classify_decision '18.3' '18.4' 'true' '')
     [[ \"\$result\" == 'MANUAL' ]] || { echo \"expected MANUAL for changed version with override, got: '\$result'\"; echo FAIL; exit 0; }
     echo PASS
 "
@@ -4253,7 +4255,7 @@ t "t50d: 1.0.0 → 2.0.0 (normal semver major) still → major (regression guard
 t "t50e: v20260311 → v20260512 via classify_decision → AUTO (not HOLD)" bash -c "
     source '/stack/bin/lib/env-update/config/defaults.sh'
     ${_CD_LIBS50}
-    result=\$(_gs_eu2_classify_decision 'v20260311' 'v20260512' '' '' '')
+    result=\$(_gs_eu2_classify_decision 'v20260311' 'v20260512' '' '')
     [[ \"\$result\" == 'AUTO' ]] || { echo \"expected AUTO for YYYYMMDD date bump, got: '\$result'\"; echo FAIL; exit 0; }
     echo PASS
 "
@@ -4479,7 +4481,7 @@ t "t52a: --unstable flag accepted (no unknown-option error)" bash -c "
 #       stable current (1.2.3) + prerelease proposed (1.3.0-rc1) → AUTO (not SKIP)
 t "t52b: unstable full mode: stable→prerelease classified AUTO (prerelease guard bypassed)" bash -c "
     ${_DC_LIBS52}
-    result=\$(_gs_eu2_classify_decision '1.2.3' '1.3.0-rc1' '' '' '' 'full')
+    result=\$(_gs_eu2_classify_decision '1.2.3' '1.3.0-rc1' '' '' 'full')
     [[ \"\$result\" == 'AUTO' ]] || { echo \"expected AUTO for stable→rc1 with unstable=full, got: '\$result'\"; echo FAIL; exit 0; }
     echo PASS
 "
@@ -4487,7 +4489,7 @@ t "t52b: unstable full mode: stable→prerelease classified AUTO (prerelease gua
 # t52c: classify_decision with unstable_mode=full still respects manual flag → MANUAL
 t "t52c: unstable full mode: manual flag still forces MANUAL" bash -c "
     ${_DC_LIBS52}
-    result=\$(_gs_eu2_classify_decision '1.2.3' '1.3.0-rc1' '' 'true' '' 'full')
+    result=\$(_gs_eu2_classify_decision '1.2.3' '1.3.0-rc1' 'true' '' 'full')
     [[ \"\$result\" == 'MANUAL' ]] || { echo \"expected MANUAL for manual+unstable=full, got: '\$result'\"; echo FAIL; exit 0; }
     echo PASS
 "
@@ -4495,7 +4497,7 @@ t "t52c: unstable full mode: manual flag still forces MANUAL" bash -c "
 # t52d: classify_decision with unstable_mode=full still respects override flag → MANUAL
 t "t52d: unstable full mode: override flag still forces MANUAL" bash -c "
     ${_DC_LIBS52}
-    result=\$(_gs_eu2_classify_decision '1.2.3' '1.3.0-rc1' 'true' '' '' 'full')
+    result=\$(_gs_eu2_classify_decision '1.2.3' '1.3.0-rc1' 'true' '' 'full')
     [[ \"\$result\" == 'MANUAL' ]] || { echo \"expected MANUAL for override+unstable=full, got: '\$result'\"; echo FAIL; exit 0; }
     echo PASS
 "
@@ -4503,7 +4505,7 @@ t "t52d: unstable full mode: override flag still forces MANUAL" bash -c "
 # t52e: classify_decision without unstable mode still SKIPs stable→prerelease (regression guard)
 t "t52e: without unstable mode: stable→prerelease still SKIP (regression guard)" bash -c "
     ${_DC_LIBS52}
-    result=\$(_gs_eu2_classify_decision '1.2.3' '1.3.0-rc1' '' '' '')
+    result=\$(_gs_eu2_classify_decision '1.2.3' '1.3.0-rc1' '' '')
     [[ \"\$result\" == 'SKIP' ]] || { echo \"expected SKIP without unstable mode, got: '\$result'\"; echo FAIL; exit 0; }
     echo PASS
 "
@@ -4543,7 +4545,7 @@ t "t52h: --unstable full mode sets channel=unstable on records without annotatio
 # t52i: --unstable=info mode does NOT change classify_decision output (SKIP stays SKIP)
 t "t52i: unstable info mode: stable→prerelease still SKIP (no bypass)" bash -c "
     ${_DC_LIBS52}
-    result=\$(_gs_eu2_classify_decision '1.2.3' '1.3.0-rc1' '' '' '' 'info')
+    result=\$(_gs_eu2_classify_decision '1.2.3' '1.3.0-rc1' '' '' 'info')
     [[ \"\$result\" == 'SKIP' ]] || { echo \"expected SKIP for info mode (no bypass), got: '\$result'\"; echo FAIL; exit 0; }
     echo PASS
 "
@@ -4552,7 +4554,7 @@ t "t52i: unstable info mode: stable→prerelease still SKIP (no bypass)" bash -c
 #        Major guard must still apply even in unstable mode.
 t "t52j: unstable full mode: major jump + prerelease proposed → HOLD (major guard unchanged)" bash -c "
     ${_DC_LIBS52}
-    result=\$(_gs_eu2_classify_decision '1.0.0' '2.0.0-alpha1' '' '' '' 'full')
+    result=\$(_gs_eu2_classify_decision '1.0.0' '2.0.0-alpha1' '' '' 'full')
     [[ \"\$result\" == 'HOLD' ]] || { echo \"expected HOLD for major+prerelease unstable=full (no major_hint), got: '\$result'\"; echo FAIL; exit 0; }
     echo PASS
 "
@@ -5059,28 +5061,28 @@ source '/stack/bin/lib/env-update/core/decide.sh'
 
 t "t57a: rc2→stable same base → AUTO (not SKIP)" bash -c "
     ${_CD_LIBS57}
-    result=\$(_gs_eu2_classify_decision '37.0.0-rc2' '37.0.0' '' '' '')
+    result=\$(_gs_eu2_classify_decision '37.0.0-rc2' '37.0.0' '' '')
     [[ \"\$result\" == 'AUTO' ]] || { echo \"expected AUTO for rc2→stable, got: '\$result'\"; echo FAIL; exit 0; }
     echo PASS
 "
 
 t "t57b: alpha1→stable same base → AUTO (not SKIP)" bash -c "
     ${_CD_LIBS57}
-    result=\$(_gs_eu2_classify_decision '1.0.0-alpha1' '1.0.0' '' '' '')
+    result=\$(_gs_eu2_classify_decision '1.0.0-alpha1' '1.0.0' '' '')
     [[ \"\$result\" == 'AUTO' ]] || { echo \"expected AUTO for alpha→stable, got: '\$result'\"; echo FAIL; exit 0; }
     echo PASS
 "
 
 t "t57c: prerelease→lower stable different base → SKIP (genuine downgrade)" bash -c "
     ${_CD_LIBS57}
-    result=\$(_gs_eu2_classify_decision '2.0.0-beta3' '1.9.9' '' '' '')
+    result=\$(_gs_eu2_classify_decision '2.0.0-beta3' '1.9.9' '' '')
     [[ \"\$result\" == 'SKIP' ]] || { echo \"expected SKIP for downgrade to lower base, got: '\$result'\"; echo FAIL; exit 0; }
     echo PASS
 "
 
 t "t57d: stable→RC same base → SKIP (not a promotion)" bash -c "
     ${_CD_LIBS57}
-    result=\$(_gs_eu2_classify_decision '3.0.0' '3.0.0-rc1' '' '' '')
+    result=\$(_gs_eu2_classify_decision '3.0.0' '3.0.0-rc1' '' '')
     [[ \"\$result\" == 'SKIP' ]] || { echo \"expected SKIP for stable→RC, got: '\$result'\"; echo FAIL; exit 0; }
     echo PASS
 "
@@ -5089,7 +5091,7 @@ t "t57d: stable→RC same base → SKIP (not a promotion)" bash -c "
 # stripping the platform suffix remains a SKIP (sort -V path still applies).
 t "t57e: alpine-tagged→bare same numeric base → SKIP (platform suffix, not prerelease)" bash -c "
     ${_CD_LIBS57}
-    result=\$(_gs_eu2_classify_decision '3.0.0-alpine3.23' '3.0.0' '' '' '')
+    result=\$(_gs_eu2_classify_decision '3.0.0-alpine3.23' '3.0.0' '' '')
     [[ \"\$result\" == 'SKIP' ]] || { echo \"expected SKIP for alpine→bare (platform suffix not prerelease), got: '\$result'\"; echo FAIL; exit 0; }
     echo PASS
 "
@@ -5946,7 +5948,7 @@ t "t52b-a: --unstable=info keeps stable decision, does not promote to prerelease
     source '/stack/bin/lib/env-update/core/semver.sh'
     source '/stack/bin/lib/env-update/core/decide.sh'
     # unstable=info mode → classify_decision uses 'info' → stable→prerelease stays SKIP
-    result=\$(_gs_eu2_classify_decision '1.2.3' '1.3.0-rc1' '' '' '' 'info')
+    result=\$(_gs_eu2_classify_decision '1.2.3' '1.3.0-rc1' '' '' 'info')
     [[ \"\$result\" == 'SKIP' ]] || { echo \"expected SKIP for unstable=info, got: '\$result'\"; echo FAIL; exit 0; }
     echo PASS
 "
@@ -5956,7 +5958,7 @@ t "t52b-b: --unstable=full promotes stable→prerelease to AUTO (guard bypassed)
     source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
     source '/stack/bin/lib/env-update/core/semver.sh'
     source '/stack/bin/lib/env-update/core/decide.sh'
-    result=\$(_gs_eu2_classify_decision '1.2.3' '1.3.0-rc1' '' '' '' 'full')
+    result=\$(_gs_eu2_classify_decision '1.2.3' '1.3.0-rc1' '' '' 'full')
     [[ \"\$result\" == 'AUTO' ]] || { echo \"expected AUTO for unstable=full, got: '\$result'\"; echo FAIL; exit 0; }
     echo PASS
 "
@@ -6102,7 +6104,7 @@ t "t53h: downgrade guard fires when current rc version > proposed stable (stripp
     # Simulate: current=dev-0.40.1-rc.223, proposed=v0.40.0
     # Pre-strip tcp from both: cur=0.40.1-rc.223, prop=0.40.0
     # sort -V: 0.40.0 < 0.40.1-rc.223 → proposed is older → SKIP
-    result=\$(_gs_eu2_classify_decision '0.40.1-rc.223' '0.40.0' '' '' '')
+    result=\$(_gs_eu2_classify_decision '0.40.1-rc.223' '0.40.0' '' '')
     [[ \"\$result\" == 'SKIP' ]] || { echo \"expected SKIP for downgrade, got: '\$result'\"; echo FAIL; exit 0; }
     echo PASS
 "
@@ -8232,7 +8234,7 @@ source '/stack/bin/lib/env-update/core/decide.sh'
 # t82a: v-prefixed proposed within same major → should be AUTO not HOLD
 t "t82a: v-prefixed proposed + major_hint within same major → AUTO" bash -c "
     ${_DC_LIBS82}
-    result=\$(_gs_eu2_classify_decision '17.5' 'v17.6' '' '' '17')
+    result=\$(_gs_eu2_classify_decision '17.5' 'v17.6' '' '17')
     [[ \"\$result\" == 'AUTO' ]] || { echo \"got: \$result (expected AUTO)\"; echo FAIL; exit 0; }
     echo PASS
 "
@@ -8240,7 +8242,7 @@ t "t82a: v-prefixed proposed + major_hint within same major → AUTO" bash -c "
 # t82b: v-prefixed proposed with different major → should be HOLD
 t "t82b: v-prefixed proposed + major_hint different major → HOLD" bash -c "
     ${_DC_LIBS82}
-    result=\$(_gs_eu2_classify_decision '17.5' 'v18.0' '' '' '17')
+    result=\$(_gs_eu2_classify_decision '17.5' 'v18.0' '' '17')
     [[ \"\$result\" == 'HOLD' ]] || { echo \"got: \$result (expected HOLD)\"; echo FAIL; exit 0; }
     echo PASS
 "
@@ -8248,7 +8250,7 @@ t "t82b: v-prefixed proposed + major_hint different major → HOLD" bash -c "
 # t82c: no v-prefix (baseline) — must remain AUTO
 t "t82c: no v-prefix + major_hint within same major → AUTO (baseline)" bash -c "
     ${_DC_LIBS82}
-    result=\$(_gs_eu2_classify_decision '17.5' '17.6' '' '' '17')
+    result=\$(_gs_eu2_classify_decision '17.5' '17.6' '' '17')
     [[ \"\$result\" == 'AUTO' ]] || { echo \"got: \$result (expected AUTO)\"; echo FAIL; exit 0; }
     echo PASS
 "
@@ -9957,56 +9959,56 @@ source '/stack/bin/lib/env-update/core/decide.sh'
 
 t "t98a: _cur=latest, _prop=18.3-alpine3.23 → RESOLVED" bash -c "
     ${_DC_LIBS98}
-    result=\$(_gs_eu2_classify_decision 'latest' '18.3-alpine3.23' '' '' '')
+    result=\$(_gs_eu2_classify_decision 'latest' '18.3-alpine3.23' '' '')
     [[ \"\$result\" == 'RESOLVED' ]] || { echo \"got: \$result\"; echo FAIL; exit 0; }
     echo PASS
 "
 
 t "t98b: _cur=stable, _prop=3.2.1 → RESOLVED (extended float set)" bash -c "
     ${_DC_LIBS98}
-    result=\$(_gs_eu2_classify_decision 'stable' '3.2.1' '' '' '')
+    result=\$(_gs_eu2_classify_decision 'stable' '3.2.1' '' '')
     [[ \"\$result\" == 'RESOLVED' ]] || { echo \"got: \$result\"; echo FAIL; exit 0; }
     echo PASS
 "
 
 t "t98c: _cur=lts, _prop=20.18.0 → RESOLVED (extended float set)" bash -c "
     ${_DC_LIBS98}
-    result=\$(_gs_eu2_classify_decision 'lts' '20.18.0' '' '' '')
+    result=\$(_gs_eu2_classify_decision 'lts' '20.18.0' '' '')
     [[ \"\$result\" == 'RESOLVED' ]] || { echo \"got: \$result\"; echo FAIL; exit 0; }
     echo PASS
 "
 
 t "t98d: _cur=current, _prop=22.14.0 → RESOLVED (extended float set)" bash -c "
     ${_DC_LIBS98}
-    result=\$(_gs_eu2_classify_decision 'current' '22.14.0' '' '' '')
+    result=\$(_gs_eu2_classify_decision 'current' '22.14.0' '' '')
     [[ \"\$result\" == 'RESOLVED' ]] || { echo \"got: \$result\"; echo FAIL; exit 0; }
     echo PASS
 "
 
 t "t98e: _cur=latest, _prop=latest → SKIP (proposed also unversioned)" bash -c "
     ${_DC_LIBS98}
-    result=\$(_gs_eu2_classify_decision 'latest' 'latest' '' '' '')
+    result=\$(_gs_eu2_classify_decision 'latest' 'latest' '' '')
     [[ \"\$result\" == 'SKIP' ]] || { echo \"got: \$result\"; echo FAIL; exit 0; }
     echo PASS
 "
 
 t "t98f: _cur=latest, _prop='' → SKIP (no proposed)" bash -c "
     ${_DC_LIBS98}
-    result=\$(_gs_eu2_classify_decision 'latest' '' '' '' '')
+    result=\$(_gs_eu2_classify_decision 'latest' '' '' '')
     [[ \"\$result\" == 'SKIP' ]] || { echo \"got: \$result\"; echo FAIL; exit 0; }
     echo PASS
 "
 
 t "t98g: _cur=latest, _prop=18.3-alpine3.23, manual=true → MANUAL" bash -c "
     ${_DC_LIBS98}
-    result=\$(_gs_eu2_classify_decision 'latest' '18.3-alpine3.23' '' 'true' '')
+    result=\$(_gs_eu2_classify_decision 'latest' '18.3-alpine3.23' 'true' '')
     [[ \"\$result\" == 'MANUAL' ]] || { echo \"got: \$result\"; echo FAIL; exit 0; }
     echo PASS
 "
 
 t "t98h: _cur=latest, _prop=18.3-alpine3.23, override=true → MANUAL" bash -c "
     ${_DC_LIBS98}
-    result=\$(_gs_eu2_classify_decision 'latest' '18.3-alpine3.23' 'true' '' '')
+    result=\$(_gs_eu2_classify_decision 'latest' '18.3-alpine3.23' 'true' '')
     [[ \"\$result\" == 'MANUAL' ]] || { echo \"got: \$result\"; echo FAIL; exit 0; }
     echo PASS
 "
@@ -10216,7 +10218,7 @@ t "t101a: newer nightly (May-25 short SHA) is NOT a downgrade over May-24 long S
     ${_NODEEDGE_DECIDE_LIBS}
     cv='v27.0.0-nightly20260524837910d298'
     pv='v27.0.0-nightly202605252e3daf6e4d'
-    result=\$(_gs_eu2_classify_decision \"\${cv#v}\" \"\${pv#v}\" '' '' '' 'full')
+    result=\$(_gs_eu2_classify_decision \"\${cv#v}\" \"\${pv#v}\" '' '' 'full')
     [[ \"\$result\" != 'SKIP' ]] || { echo \"got SKIP — false downgrade still fires; May-25 nightly should be accepted as upgrade\"; echo FAIL; exit 0; }
     echo PASS
 "
@@ -10228,7 +10230,7 @@ t "t101b: same-date different-SHA nightly does not falsely SKIP (downgrade guard
     ${_NODEEDGE_DECIDE_LIBS}
     cv='27.0.0-nightly20260524837910d298'
     pv='27.0.0-nightly20260524abc1234def'
-    result=\$(_gs_eu2_classify_decision \"\$cv\" \"\$pv\" '' '' '' 'full')
+    result=\$(_gs_eu2_classify_decision \"\$cv\" \"\$pv\" '' '' 'full')
     [[ \"\$result\" != 'SKIP' ]] || { echo \"got SKIP — same-date nightly falsely seen as downgrade; expected AUTO or MANUAL\"; echo FAIL; exit 0; }
     echo PASS
 "
@@ -10238,7 +10240,7 @@ t "t101c: older nightly (May-24 proposed vs May-25 current) still produces SKIP 
     ${_NODEEDGE_DECIDE_LIBS}
     cv='27.0.0-nightly202605252e3daf6e4d'
     pv='27.0.0-nightly20260524837910d298'
-    result=\$(_gs_eu2_classify_decision \"\$cv\" \"\$pv\" '' '' '' 'full')
+    result=\$(_gs_eu2_classify_decision \"\$cv\" \"\$pv\" '' '' 'full')
     [[ \"\$result\" == 'SKIP' ]] || { echo \"expected SKIP for real downgrade, got: '\$result'\"; echo FAIL; exit 0; }
     echo PASS
 "
@@ -10246,9 +10248,9 @@ t "t101c: older nightly (May-24 proposed vs May-25 current) still produces SKIP 
 # t101d: non-nightly versions are unaffected — plain semver still works
 t "t101d: plain semver versions pass through decide.sh unchanged after normalization" bash -c "
     ${_NODEEDGE_DECIDE_LIBS}
-    result=\$(_gs_eu2_classify_decision '27.0.0' '27.1.0' '' '' '')
+    result=\$(_gs_eu2_classify_decision '27.0.0' '27.1.0' '' '')
     [[ \"\$result\" == 'AUTO' ]] || { echo \"expected AUTO for plain minor bump, got: '\$result'\"; echo FAIL; exit 0; }
-    result2=\$(_gs_eu2_classify_decision '27.1.0' '27.0.0' '' '' '')
+    result2=\$(_gs_eu2_classify_decision '27.1.0' '27.0.0' '' '')
     [[ \"\$result2\" == 'SKIP' ]] || { echo \"expected SKIP for plain downgrade, got: '\$result2'\"; echo FAIL; exit 0; }
     echo PASS
 "

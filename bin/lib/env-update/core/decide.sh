@@ -16,7 +16,7 @@
 #      - record_channel=unstable → HOLD (annotation opt-in, review required)
 #      - otherwise → SKIP
 #   5. Proposed sorts before current (downgrade) → SKIP
-#   6. (override) or (manual) flag → MANUAL
+#   6. manual_or_override flag → MANUAL
 #   7. Major jump without major_hint pin → HOLD
 #   8. Major jump escapes major_hint pin → HOLD
 #   9. Otherwise → AUTO
@@ -29,15 +29,14 @@ source "$(dirname "${BASH_SOURCE[0]}")/semver.sh"
 
 # _gs_eu2_classify_decision — apply the decision ladder to one version update.
 #
-# Args:    $1 current       — current version string (from annotation or VAR=)
-#          $2 proposed      — proposed version string (from fetcher)
-#          $3 override      — "true" → MANUAL (even when proposed > current)
-#          $4 manual        — "true" → MANUAL (same as override; different annotation flag)
-#          $5 major_hint    — pin constraint: proposed must start with this major prefix
-#          $6 unstable_mode — "full" → bypass prerelease guard (allow stable→prerelease AUTO)
-#          $7 stable_mode   — "full" → force-reject prerelease in classifier (overrides all)
-#          $8 record_channel— annotation channel value ("unstable", "rc", ""); when "unstable",
-#                             a stable→prerelease transition becomes HOLD (annotation opt-in)
+# Args:    $1 current            — current version string (from annotation or VAR=)
+#          $2 proposed           — proposed version string (from fetcher)
+#          $3 manual_or_override — "true" → MANUAL (set when annotation is (manual) or (override))
+#          $4 major_hint         — pin constraint: proposed must start with this major prefix
+#          $5 unstable_mode      — "full" → bypass prerelease guard (allow stable→prerelease AUTO)
+#          $6 stable_mode        — "full" → force-reject prerelease in classifier (overrides all)
+#          $7 record_channel     — annotation channel value ("unstable", "rc", ""); when "unstable",
+#                                  a stable→prerelease transition becomes HOLD (annotation opt-in)
 # Prints:  one of: AUTO | HOLD | MANUAL | SKIP | RESOLVED
 # Returns: 0 always
 #
@@ -45,8 +44,8 @@ source "$(dirname "${BASH_SOURCE[0]}")/semver.sh"
 # decide.sh only sees plain semver strings (no leading "dev-" or "nightly-").
 # Note: force-auto/force-hold in main.sh upgrade HOLD→AUTO after this function returns.
 _gs_eu2_classify_decision() {
-  local _cur="${1}" _prop="${2}" _override="${3:-}" _manual="${4:-}" _major_hint="${5:-}" \
-        _unstable_mode="${6:-}" _stable_mode="${7:-}" _record_channel="${8:-}"
+  local _cur="${1}" _prop="${2}" _manual_or_override="${3:-}" _major_hint="${4:-}" \
+        _unstable_mode="${5:-}" _stable_mode="${6:-}" _record_channel="${7:-}"
 
   # No proposed version → skip
   [[ -z "${_prop}" ]] && { echo "SKIP"; return 0; }
@@ -59,7 +58,7 @@ _gs_eu2_classify_decision() {
   if _gs_eu2_is_unversioned "${_cur}"; then
     if [[ -n "${_prop}" ]] && ! _gs_eu2_is_unversioned "${_prop}"; then
       # Concrete version resolved from a floating ref.
-      if [[ "${_override}" == "true" || "${_manual}" == "true" ]]; then
+      if [[ "${_manual_or_override}" == "true" ]]; then
         echo "MANUAL"; return 0   # (manual)/(override) flag on a float → MANUAL
       fi
       echo "RESOLVED"; return 0
@@ -123,7 +122,7 @@ _gs_eu2_classify_decision() {
 
   # Override or manual flags → MANUAL (only reached when proposed > current AND no
   # prerelease guard fired — i.e. a genuine forward version change).
-  if [[ "${_override}" == "true" || "${_manual}" == "true" ]]; then
+  if [[ "${_manual_or_override}" == "true" ]]; then
     echo "MANUAL"; return 0
   fi
 

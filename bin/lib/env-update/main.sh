@@ -374,7 +374,9 @@ _gs_eu2_classify_record() {
     fi
     local _cr_record_channel
     _cr_record_channel="$(_gs_eu2_record_get "${_cr_i}" channel)"
-    _cr_classified="$(_gs_eu2_classify_decision "${_cr_cur_cls}" "${_cr_prop_cls}" "${_cr_eff_override}" "${_cr_eff_manual}" "${_cr_major_cls}" "${_GS_EU2_CFG[unstable]:-}" "${_GS_EU2_CFG[stable]:-}" "${_cr_record_channel}")"
+    local _cr_gate=""
+    [[ "${_cr_eff_override}" == "true" || "${_cr_eff_manual}" == "true" ]] && _cr_gate="true"
+    _cr_classified="$(_gs_eu2_classify_decision "${_cr_cur_cls}" "${_cr_prop_cls}" "${_cr_gate}" "${_cr_major_cls}" "${_GS_EU2_CFG[unstable]:-}" "${_GS_EU2_CFG[stable]:-}" "${_cr_record_channel}")"
     # Phase 2: --force-hold: HOLD → AUTO only (MANUAL/OVERRIDE flags NOT cleared; unaffected)
     if [[ "${_GS_EU2_CFG[force_hold]:-false}" == "true" && "${_cr_classified}" == "HOLD" ]]; then
       _cr_classified="AUTO"
