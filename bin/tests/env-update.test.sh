@@ -680,6 +680,15 @@ t "t11d: cache_key sanitizes colons and slashes" bash -c "
     echo PASS
 "
 
+t "t11d2: different fetch_extract values → different cache filenames" bash -c "
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/cache11d2
+    source '/stack/bin/lib/env-update/core/cache.sh'
+    f1=\$(_gs_eu2_cache_key_to_file 'url:https://example.com:v([0-9.]+)::stable')
+    f2=\$(_gs_eu2_cache_key_to_file 'url:https://example.com:Version:([0-9.]+)::stable')
+    [[ \"\$f1\" != \"\$f2\" ]] || { echo \"collision: different extract patterns mapped to same file: \$f1\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
 t "t11e: --no-cache prints [NO-CACHE MODE] banner" bash -c "
     export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t11e_cache

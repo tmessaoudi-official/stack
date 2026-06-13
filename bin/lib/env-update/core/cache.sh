@@ -10,8 +10,10 @@
 #            _GS_EU2_CACHE_TTL (default: 3600 seconds; set by main.sh from _GS_EU2_CFG)
 #
 # Cache key → filename: special chars (:, /, @, space) replaced with _ to produce
-# a safe flat-file name.  Atomic writes (tmp+mv) prevent partial reads from
-# concurrent fetches hitting the same key.  Dry-run mode skips cache writes (C4).
+# a safe flat-file prefix; an 8-char md5 hash of the full key is appended so that
+# keys differing only in sanitized characters map to distinct files.  Atomic writes
+# (tmp+mv) prevent partial reads from concurrent fetches hitting the same key.
+# Dry-run mode skips cache writes (C4).
 
 [[ -n "${_GS_EU2_CACHE_SH_LOADED:-}" ]] && return 0
 readonly _GS_EU2_CACHE_SH_LOADED=1
@@ -27,10 +29,14 @@ _GS_EU2_CACHE_TTL="${_GS_EU2_CACHE_TTL:-3600}"
 # Args:    $1 key — cache key (e.g. "github:owner/repo:stable")
 # Prints:  absolute path to the cache file (file may or may not exist)
 # Returns: 0 always
+# Note:    A short md5 hash is appended to the sanitized prefix so that keys
+#          differing only in sanitized characters map to distinct files.
 _gs_eu2_cache_key_to_file() {
   local _key="${1}"
   local _safe="${_key//[:\/@ ]/_}"
-  printf '%s/%s.cache' "${_GS_EU2_CACHE_DIR}" "${_safe}"
+  local _hash
+  _hash="$(printf '%s' "${_key}" | md5sum | cut -c1-8)"
+  printf '%s/%s_%s.cache' "${_GS_EU2_CACHE_DIR}" "${_safe}" "${_hash}"
 }
 
 # _gs_eu2_cache_read — return cached value if fresh, else signal miss.

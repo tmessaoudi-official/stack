@@ -74,9 +74,9 @@ _gs_eu2_fetch_url() {
   _version_prefix="$(_gs_eu2_record_get "${_idx}" version_prefix)"
   _no_cache="${_GS_EU2_CFG[no_cache]:-false}"
 
-  # Build a stable cache key covering all discriminating fields
+  # Build a stable cache key covering all discriminating fields (extract values included)
   local _cache_key
-  _cache_key="url:${_identifier}:${_fetch_extract:+fe}:${_fetch_json:+fj}:${_url_probe:+up}:${_channel}"
+  _cache_key="url:${_identifier}:${_fetch_extract:-}:${_fetch_json:-}:${_url_probe:+up}:${_channel}"
 
   # Cache read (skip when no_cache=true)
   if [[ "${_no_cache}" != "true" ]]; then
