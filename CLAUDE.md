@@ -183,6 +183,8 @@ make start-local-registry            # Start local TLS registry (port 5000)
 - **Compose validation**: `docker compose --env-file .env.local config` or `make generate-buildx`
 - **Health check status**: `ls tools/successes/` (healthy) and `ls tools/errors/` (failed)
 - **env-update cache**: `/tmp/global-stack-env-update-cache/` (TTL 3600s); use `--no-cache` to bypass
+- **Startup script dry-run**: `GS_STARTUP_DRY_RUN=1 bash docker/config/dist/bin/nvm-bin/global-stack-nvm-start.sh` — exits before any install; tests the prologue loads and script parses. In containers: PATH includes `/usr/local/bin`; on host: prepend `PATH="/stack/docker/config/dist/bin/base-bin:$PATH"`.
+- **Shared prologue**: `docker/config/dist/bin/base-bin/global-stack-base-prologue.sh` — defines `stackCatch` + `trap` for all startup scripts (49 scripts source it). Excluded: caddy/httpd/nginx/android-setup scripts (deliberate 141/1-exempt variant).
 
 ## Claude Code Tooling
 

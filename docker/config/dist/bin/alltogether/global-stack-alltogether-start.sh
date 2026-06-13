@@ -3,17 +3,7 @@
 set -xeE -o pipefail
 shopt -s extdebug
 IFS=$'\n\t'
-stackCatch() {
-  if [[ "${1}" != "0" ]]; then
-    # error handling goes here
-    echo "Error detected !!"
-    printf "$(date '+%d-%m-%Y %H:%M:%S'): Error - ** line: %s ** ** message: %s ** global-stack-alltogether-start.sh\n" "${2}" "${3}" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/elapsed"
-    [[ -n "${GLOBAL_STACK_ERROR_TOKEN:-}" ]] && printf 'line: %s\ncommand: %s\n' "${2}" "${3}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}/${GLOBAL_STACK_ERROR_TOKEN}"
-    exit 1
-  fi
-}
-trap 'stackCatch ${?} ${LINENO} "${BASH_COMMAND}"' EXIT ERR PIPE SIGPIPE SIGHUP
-
+source global-stack-base-prologue.sh
 SECONDS=0
 
 sed -i '/# global-stack-setup-started/,/# global-stack-setup-finished/d' "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"

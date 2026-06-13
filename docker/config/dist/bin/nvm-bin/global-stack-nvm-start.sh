@@ -3,18 +3,7 @@
 set -xeE -o pipefail
 shopt -s extdebug
 IFS=$'\n\t'
-stackCatch() {
-  if [[ "${1}" != "0" ]]; then
-    # error handling goes here
-    echo "Error detected !!"
-    printf "$(date '+%d-%m-%Y %H:%M:%S'): Error - ** line: %s ** ** message: %s ** nvm (%s) %s global-stack-nvm-start.sh\n" "${2}" "${3}" "${_node_version_label}" "${NVM_MODE:-}" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/elapsed"
-    [[ -n "${GLOBAL_STACK_ERROR_TOKEN:-}" ]] && printf 'line: %s\ncommand: %s\n' "${2}" "${3}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}/${GLOBAL_STACK_ERROR_TOKEN}"
-    exit 1
-  fi
-}
-
-trap 'stackCatch ${?} ${LINENO} "${BASH_COMMAND}"' EXIT ERR PIPE SIGPIPE SIGHUP
-
+source global-stack-base-prologue.sh
 _node_version_label="${NODE_VERSION_AS:-${NODE_VERSION:-}}"
 
 SECONDS=0

@@ -3,16 +3,7 @@
 set -xeE -o pipefail
 shopt -s extdebug
 IFS=$'\n\t'
-trap 'stackCatch ${?} ${LINENO} "${BASH_COMMAND}"' EXIT ERR PIPE SIGPIPE SIGHUP
-stackCatch() {
-  if [ "${1}" != "0" ]; then
-    # error handling goes here
-    echo "Error detected !!"
-    echo -e "$(date '+%d-%m-%Y %H:%M:%S'): Error - ** line: ${2} ** ** message: ${3} ** phpbrew (${PHP_VERSION_AS}) ${PHPBREW_MODE:-} global-stack-phpbrew-php8.5-setup-version.sh" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/elapsed"
-    [[ -n "${GLOBAL_STACK_ERROR_TOKEN:-}" ]] && printf 'line: %s\ncommand: %s\n' "${2}" "${3}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}/${GLOBAL_STACK_ERROR_TOKEN}"
-    exit 1
-  fi
-}
+source global-stack-base-prologue.sh
 
 if [[ ! -f ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/frankenphp/frankenphp-${GLOBAL_STACK_FRANKENPHP_VERSION}.tar.gz ]]; then
     FRANKENPHP_REFS_VALUE=$( { [[ "${GLOBAL_STACK_FRANKENPHP_VERSION}" =~ ^[0-9a-f]{7,40}$ ]] && echo "archive/${GLOBAL_STACK_FRANKENPHP_VERSION}"; } || { [[ "${GLOBAL_STACK_FRANKENPHP_VERSION}" =~ ^v?[0-9]+(\.[0-9]+)*(-.+)?$ ]] && echo "archive/refs/tags/${GLOBAL_STACK_FRANKENPHP_VERSION}"; } || echo "archive/refs/heads/${GLOBAL_STACK_FRANKENPHP_VERSION}" )
