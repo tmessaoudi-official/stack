@@ -111,15 +111,18 @@ CMD ["global-stack-base-sync-bin-n-exec.sh", "global-stack-<RUNTIME>-start.sh"]
 
 ## Phase 3: Create `docker/images/<NAME>/docker-compose.yaml`
 
+The compose file uses `extends` to inherit shared config from the base fragment, then adds only service-specific overrides. This is the real pattern used by all tier 02/03 services.
+
 ### If `HEALTH_TYPE=file` (tier 02/03 default):
 
 ```yaml
+---
 services:
   <NAME>:
-    init: true
+    extends:
+      file: docker/config/compose-fragments/base.compose.yaml
+      service: base
     build:
-      context: ../../../
-      dockerfile: docker/images/<NAME>/Dockerfile
       args:
         BUILDKIT_INLINE_CACHE: 1
         GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS: ${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}
@@ -127,8 +130,8 @@ services:
         GLOBAL_STACK_VERSION: ${GLOBAL_STACK_VERSION}
         # TODO: Mirror any ARG lines from Dockerfile here
         # GLOBAL_STACK_<NAME_UPPER>_VERSION: ${GLOBAL_STACK_<NAME_UPPER>_VERSION}
-    cap_add:
-      - NET_ADMIN
+      context: ./
+      dockerfile: ./docker/images/<NAME>/Dockerfile
     depends_on:
       00base:
         condition: service_healthy
@@ -137,60 +140,30 @@ services:
       # <PARENT_IMAGE>:
       #   condition: service_healthy
       #   required: true
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     environment:
-      GLOBAL_STACK_DOCKER_TOOLS_PATH: ${GLOBAL_STACK_DOCKER_TOOLS_PATH}
-      GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES: ${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}
-      GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS: ${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}
-      GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS: ${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}
-      GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS: ${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}
-      GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC: ${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}
-      GLOBAL_STACK_DOCKER_USER_ID: ${GLOBAL_STACK_DOCKER_USER_ID}
-      GLOBAL_STACK_DOCKER_GROUP_ID: ${GLOBAL_STACK_DOCKER_GROUP_ID}
-      GLOBAL_STACK_USE_LOCKS: ${GLOBAL_STACK_USE_LOCKS}
-      GLOBAL_STACK_ERROR_TOKEN: <NAME>_error
+      - GLOBAL_STACK_ERROR_TOKEN=<NAME>_error
       # TODO: Add service-specific env vars (GLOBAL_STACK_<NAME_UPPER>_*)
       # TODO: Add MODE var if two-phase (install/setup):
-      # <RUNTIME_UPPER>_MODE: ${GLOBAL_STACK_<NAME_UPPER>_MODE:-setup}
+      # - <RUNTIME_UPPER>_MODE=${GLOBAL_STACK_<NAME_UPPER>_MODE:-setup}
     healthcheck:
-      test: >
-        bash -c '
-          [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}/<NAME>_error" ]] &&
-          [[ -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/<NAME>_success" ]]
-        '
+      test: ["CMD-SHELL", "! test -f ${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}/<NAME>_error && test -f ${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/<NAME>_success || exit 1"]
       interval: 30s
       timeout: 10s
       start_period: 24h
       retries: 99999
-    hostname: <NAME>
+    image: ${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}:${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_PORT_5000}/local_global_stack_<NAME>:${GLOBAL_STACK_VERSION}
     labels:
       stack.service: "<NAME>"
       stack.tier: "TODO"  # replace: base | infra | manager | runtime | tool | combined
       stack.version: "${GLOBAL_STACK_VERSION}"
-    networks:
-      - public
     # TODO: Add port binding if needed:
     # ports:
     #   - "${<PORT_VAR>:-}<HOST_PORT>"
-    restart: on-failure:5
-    volumes:
-      - ${GLOBAL_STACK_DOCKER_CA_PATH}:/usr/local/share/ca-certificates/mkcert:ro
-      - ${GLOBAL_STACK_PROJECTS_PATH}:${GLOBAL_STACK_PROJECTS_PATH}
-      - ${GLOBAL_STACK_DOCKER_TOOLS_PATH}:${GLOBAL_STACK_DOCKER_TOOLS_PATH}
-      - ${GLOBAL_STACK_DOCKER_HISTORY_PATH}:/home/${GLOBAL_STACK_DOCKER_USER_ID}/.bash_history
-      - ./docker/config/root:/root:ro
-      - ./docker/config/dist/bin:/usr/local/bin:ro
-      - ./docker/config/dist/conf:/etc/global-stack:ro
-    working_dir: ${GLOBAL_STACK_PROJECTS_PATH}
-
-networks:
-  public:
-    external: true
-    name: ${COMPOSE_PROJECT_NAME}_${GLOBAL_STACK_VERSION}_public
 ```
 
 If `HOST_PORT` was provided: uncomment the `ports:` block and fill `<PORT_VAR>` and `<HOST_PORT>`.
+
+The `extends` fragment provides: `init`, `cap_add`, `extra_hosts`, `restart`, `volumes`, `networks`, `working_dir`, `hostname`, `privileged`, and core environment vars (`GLOBAL_STACK_DOCKER_TOOLS_PATH*`, `GLOBAL_STACK_DOCKER_USER_ID`, etc.) — do NOT duplicate these in the override.
 
 ### If `HEALTH_TYPE=curl` (tier 01):
 
@@ -227,13 +200,20 @@ VERSION_MARKER="${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/<RUNTIME>"
 
 MODE="${<RUNTIME_UPPER>_MODE:-setup}"
 
-trap 'echo "ERROR in <RUNTIME> startup (line $LINENO)" >&2; touch "$ERROR_MARKER"; exit 1' ERR
+stackCatch() {
+  if [[ "${1}" != "0" ]]; then
+    echo "Error detected !!"
+    printf "$(date '+%d-%m-%Y %H:%M:%S'): Error - ** line: %s ** ** message: %s ** <RUNTIME>\n" "${2}" "${3}" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/elapsed"
+    [[ -n "${GLOBAL_STACK_ERROR_TOKEN:-}" ]] && printf 'line: %s\ncommand: %s\n' "${2}" "${3}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}/${GLOBAL_STACK_ERROR_TOKEN}"
+    exit 1
+  fi
+}
+trap 'stackCatch ${?} ${LINENO} "${BASH_COMMAND}"' EXIT ERR PIPE SIGPIPE SIGHUP
 
-# Uncomment to wait for a dependency's success marker:
-# source global-stack-base-wait-for.sh
-# wait_for_success "<PARENT_IMAGE>_success"
+# Uncomment to wait for a dependency's success marker (pass the full path):
+# global-stack-base-wait-for.sh "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/<PARENT_IMAGE>_success"
 
-rm -f "$ERROR_MARKER"
+rm -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}/${GLOBAL_STACK_ERROR_TOKEN:-<RUNTIME>_error}"
 
 if [[ "$MODE" == "install" ]]; then
   # TODO: Check version marker to skip reinstall on re-run:
@@ -296,8 +276,9 @@ Manual steps:
 4. Add to .PHONY in Makefile:
    login-<NAME> log-<NAME> log-follow-<NAME> restart-<NAME>
 
-5. Run to verify:
-   bin/env-scan.sh --dry-run
+5. Verify then sync env:
+   bin/env-scan.sh --dry-run   # preview propagation
+   bin/env-scan.sh             # apply: adds new vars to .env.local and rewrites Dockerfile ARGs
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
