@@ -1,7 +1,7 @@
 #!/bin/bash
 # passes.sh — shared second-pass fetch helpers for unstable=info and stable=info modes.
 #
-# Exports:   _gs_eu2_run_second_passes
+# Exports:   _gs_eu2_run_one_pass  _gs_eu2_run_second_passes
 # Sources:   core/records.sh  core/semver.sh  (resolved at call time via main.sh)
 # Deps:      bash 4.3+
 # Env:       _GS_EU2_CFG (associative array — read for unstable/stable flags)
@@ -19,6 +19,60 @@
 
 [[ -n "${_GS_EU2_PASSES_SH_LOADED:-}" ]] && return 0
 readonly _GS_EU2_PASSES_SH_LOADED=1
+
+# _gs_eu2_run_one_pass — save/channel-swap/refetch/restore/store for one info pass.
+#
+# Args:    $1 record_index  — 0-based record index
+#          $2 target_chan   — channel to temporarily swap to ("unstable" or "stable")
+#          $3 store_field   — record field to write result into ("unstable_proposed" / "stable_proposed")
+#          $4 store_mode    — "prerelease": store only if result is a prerelease AND genuinely newer
+#                             "stable":    store only if result is a non-prerelease AND different
+# Reads:   record fields: channel, proposed_version, decision, error_message
+# Sets:    record field <store_field> when the store condition is met
+# Prints:  nothing
+# Returns: 0 always
+_gs_eu2_run_one_pass() {
+  local _op_i="${1}" _target_chan="${2}" _store_field="${3}" _store_mode="${4}"
+
+  local _op_saved_chan _op_saved_prop _op_saved_dec _op_saved_err
+  _op_saved_chan="$(_gs_eu2_record_get "${_op_i}" channel)"
+  _op_saved_prop="$(_gs_eu2_record_get "${_op_i}" proposed_version)"
+  _op_saved_dec="$(_gs_eu2_record_get "${_op_i}" decision)"
+  _op_saved_err="$(_gs_eu2_record_get "${_op_i}" error_message)"
+
+  _gs_eu2_record_set "${_op_i}" channel          "${_target_chan}"
+  _gs_eu2_record_set "${_op_i}" proposed_version ""
+  _gs_eu2_record_set "${_op_i}" decision         ""
+  _gs_eu2_record_set "${_op_i}" error_message    ""
+  _gs_eu2_dispatch_fetcher "${_op_i}"
+
+  local _op_ver
+  _op_ver="$(_gs_eu2_record_get "${_op_i}" proposed_version)"
+
+  _gs_eu2_record_set "${_op_i}" channel          "${_op_saved_chan}"
+  _gs_eu2_record_set "${_op_i}" proposed_version "${_op_saved_prop}"
+  _gs_eu2_record_set "${_op_i}" decision         "${_op_saved_dec}"
+  _gs_eu2_record_set "${_op_i}" error_message    "${_op_saved_err}"
+
+  if [[ "${_store_mode}" == "prerelease" ]]; then
+    if [[ -n "${_op_ver}" && "${_op_ver}" != "${_op_saved_prop}" ]] && \
+       _gs_eu2_is_prerelease "${_op_ver}"; then
+      local _op_store="true"
+      if [[ -n "${_op_saved_prop}" ]]; then
+        local _op_cmp
+        _op_cmp="$(_gs_eu2_semver_compare "${_op_saved_prop}" "${_op_ver}")"
+        [[ "${_op_cmp}" != "older" ]] && _op_store="false"
+      fi
+      [[ "${_op_store}" == "true" ]] && \
+        _gs_eu2_record_set "${_op_i}" "${_store_field}" "${_op_ver}"
+    fi
+  else
+    if [[ -n "${_op_ver}" && "${_op_ver}" != "${_op_saved_prop}" ]] && \
+       ! _gs_eu2_is_prerelease "${_op_ver}"; then
+      _gs_eu2_record_set "${_op_i}" "${_store_field}" "${_op_ver}"
+    fi
+  fi
+}
 
 # _gs_eu2_run_second_passes — run unstable=info and stable=info second-pass fetches.
 #
@@ -46,35 +100,7 @@ _gs_eu2_run_second_passes() {
     local _sp_ui_chan
     _sp_ui_chan="$(_gs_eu2_record_get "${_sp_i}" channel)"
     if [[ "${_sp_ui_chan}" != "unstable" ]]; then
-      local _sp_ui_saved_prop _sp_ui_saved_decision _sp_ui_saved_err
-      _sp_ui_saved_prop="$(_gs_eu2_record_get "${_sp_i}" proposed_version)"
-      _sp_ui_saved_decision="$(_gs_eu2_record_get "${_sp_i}" decision)"
-      _sp_ui_saved_err="$(_gs_eu2_record_get "${_sp_i}" error_message)"
-      _gs_eu2_record_set "${_sp_i}" channel          "unstable"
-      _gs_eu2_record_set "${_sp_i}" proposed_version ""
-      _gs_eu2_record_set "${_sp_i}" decision         ""
-      _gs_eu2_record_set "${_sp_i}" error_message    ""
-      _gs_eu2_dispatch_fetcher "${_sp_i}"
-      local _sp_ui_ver
-      _sp_ui_ver="$(_gs_eu2_record_get "${_sp_i}" proposed_version)"
-      _gs_eu2_record_set "${_sp_i}" channel          "${_sp_ui_chan}"
-      _gs_eu2_record_set "${_sp_i}" proposed_version "${_sp_ui_saved_prop}"
-      _gs_eu2_record_set "${_sp_i}" decision         "${_sp_ui_saved_decision}"
-      _gs_eu2_record_set "${_sp_i}" error_message    "${_sp_ui_saved_err}"
-      # Store unstable_proposed only if it's a prerelease, different from stable proposed,
-      # AND genuinely newer than the stable proposed (not a backward step).
-      if [[ -n "${_sp_ui_ver}" && "${_sp_ui_ver}" != "${_sp_ui_saved_prop}" ]] && \
-         _gs_eu2_is_prerelease "${_sp_ui_ver}"; then
-        local _sp_ui_store="true"
-        if [[ -n "${_sp_ui_saved_prop}" ]]; then
-          local _sp_ui_cmp
-          _sp_ui_cmp="$(_gs_eu2_semver_compare "${_sp_ui_saved_prop}" "${_sp_ui_ver}")"
-          # "older" means stable is older than unstable — i.e. unstable is genuinely newer
-          [[ "${_sp_ui_cmp}" != "older" ]] && _sp_ui_store="false"
-        fi
-        [[ "${_sp_ui_store}" == "true" ]] && \
-          _gs_eu2_record_set "${_sp_i}" unstable_proposed "${_sp_ui_ver}"
-      fi
+      _gs_eu2_run_one_pass "${_sp_i}" "unstable" "unstable_proposed" "prerelease"
     fi
   fi
 
@@ -86,27 +112,7 @@ _gs_eu2_run_second_passes() {
     local _sp_si_chan
     _sp_si_chan="$(_gs_eu2_record_get "${_sp_i}" channel)"
     if [[ -n "${_sp_si_chan}" && "${_sp_si_chan}" != "stable" ]]; then
-      local _sp_si_saved_prop _sp_si_saved_decision _sp_si_saved_err
-      _sp_si_saved_prop="$(_gs_eu2_record_get "${_sp_i}" proposed_version)"
-      _sp_si_saved_decision="$(_gs_eu2_record_get "${_sp_i}" decision)"
-      _sp_si_saved_err="$(_gs_eu2_record_get "${_sp_i}" error_message)"
-      _gs_eu2_record_set "${_sp_i}" channel          "stable"
-      _gs_eu2_record_set "${_sp_i}" proposed_version ""
-      _gs_eu2_record_set "${_sp_i}" decision         ""
-      _gs_eu2_record_set "${_sp_i}" error_message    ""
-      _gs_eu2_dispatch_fetcher "${_sp_i}"
-      local _sp_si_ver
-      _sp_si_ver="$(_gs_eu2_record_get "${_sp_i}" proposed_version)"
-      _gs_eu2_record_set "${_sp_i}" channel          "${_sp_si_chan}"
-      _gs_eu2_record_set "${_sp_i}" proposed_version "${_sp_si_saved_prop}"
-      _gs_eu2_record_set "${_sp_i}" decision         "${_sp_si_saved_decision}"
-      _gs_eu2_record_set "${_sp_i}" error_message    "${_sp_si_saved_err}"
-      # Store stable_proposed only if it's non-empty, not a prerelease,
-      # and different from the main proposed (suppress when identical).
-      if [[ -n "${_sp_si_ver}" && "${_sp_si_ver}" != "${_sp_si_saved_prop}" ]] && \
-         ! _gs_eu2_is_prerelease "${_sp_si_ver}"; then
-        _gs_eu2_record_set "${_sp_i}" stable_proposed "${_sp_si_ver}"
-      fi
+      _gs_eu2_run_one_pass "${_sp_i}" "stable" "stable_proposed" "stable"
     fi
   fi
 }
