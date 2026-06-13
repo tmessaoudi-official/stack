@@ -469,6 +469,7 @@ restore:
 log-follow:
 	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs --follow" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
 hard-restart:
+	@test -d var/tools || { echo "FATAL: var/tools/ is missing — cannot proceed with hard-restart. Restore it from a backup or run 'make save && make load' first."; exit 1; }
 	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="down" GLOBAL_STACK_DOCKER_CLI_EXEC_FLAGS="--rmi all --volumes --remove-orphans" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
 	docker system prune -a -f --volumes
 	yes y | docker-reclaim-disk-space-script.sh || echo 'script does not exist'
@@ -482,6 +483,7 @@ hard-restart:
 	$(MAKE) build --silent --ignore-errors --keep-going --warn-undefined-variables
 	$(MAKE) up --silent --ignore-errors --keep-going --warn-undefined-variables
 soft-restart:
+	@test -d var/tools || { echo "FATAL: var/tools/ is missing — cannot proceed with soft-restart. Restore it from a backup or run 'make save && make load' first."; exit 1; }
 	$(MAKE) down --silent --ignore-errors --keep-going --warn-undefined-variables
 	sudo rm -rf tools
 	cp -R var/tools/ tools
