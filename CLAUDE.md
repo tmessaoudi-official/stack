@@ -47,6 +47,7 @@ Services live in `docker/images/<tier><name>/` and are numbered by build depende
 - `make down` clears `tools/successes/*`, `tools/errors/*`, `tools/locks/*`, `tools/elapsed` (single file)
 - **Two-phase model**: tier 02 runs with `MODE=install` (installs the tool), tier 03 runs with `MODE=setup` (configures specific versions). Both use the **same** startup script (e.g., `nvm-start.sh` serves both `02nvm` and `03node*`). The `*_MODE` env var differentiates behavior.
 - **Error tokens**: each service sets `GLOBAL_STACK_ERROR_TOKEN` in compose YAML. On failure, startup creates `tools/errors/<TOKEN>`. Healthcheck: healthy only when error file is absent AND success file is present.
+- **Token invariant**: Success token and error token MUST use the same identifier string. Error token is single-sourced via `GLOBAL_STACK_ERROR_TOKEN`; success token is `tools/successes/${GLOBAL_STACK_ERROR_TOKEN}`. Never use a different literal for the success write — a mismatch yields a permanently-unhealthy-yet-functional container masked by the 24h start_period.
 - **Host-container binding** (the signature feature): startup scripts write env exports to `tools/.shellrc/<runtime>.shellrc` (e.g., `nvm.shellrc`). Host shell sources these files, making container-installed tools available on the host via PATH propagation.
 
 ## Environment Variable System

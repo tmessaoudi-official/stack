@@ -19,6 +19,19 @@ Validate the Docker Compose configuration and environment consistency.
 5. **Port-var colon check**: For every non-empty `GLOBAL_STACK_*_PORT_*` variable in `.env.local`, verify the value ends with `:` — run: `grep -E '^GLOBAL_STACK_[A-Z0-9_]+_PORT_[A-Z0-9_]+=.+' .env.local | grep -v ':$' | grep -v '^#'` — any match is a misconfigured port var that will silently concatenate host and container port numbers (e.g. `427083306` instead of `42708:3306`)
 6. **Local compose override detection**: Check for git-ignored machine-specific overrides — run: `find . -maxdepth 3 -name 'docker-compose*.local.yaml' 2>/dev/null` — list any found files so the user is aware they may silently override tracked compose configs
 7. **Runtime health coherence** *(skip if stack is not running)*: If `docker compose --env-file .env.local ps -q 2>/dev/null` returns any container IDs, check token state — run: `echo "Healthy: $(ls tools/successes/ 2>/dev/null | wc -l | tr -d ' ')  Failed: $(ls tools/errors/ 2>/dev/null | wc -l | tr -d ' ')"` — if any error tokens exist, list them: `ls tools/errors/ 2>/dev/null`; a non-empty errors directory means one or more services failed to start
+8. **Success-token coherence check**: For each service compose file under `docker/images/`, verify that the success token literal in the healthcheck matches the `GLOBAL_STACK_ERROR_TOKEN` value. The invariant is: both tokens MUST use the same identifier string (e.g. `GLOBAL_STACK_ERROR_TOKEN=nvm` → healthcheck must test `successes/nvm`). Run:
+   ```bash
+   for f in docker/images/*/docker-compose.yaml; do
+     svc=$(dirname "$f" | xargs basename)
+     err_token=$(grep 'GLOBAL_STACK_ERROR_TOKEN=' "$f" 2>/dev/null | grep -oP 'GLOBAL_STACK_ERROR_TOKEN=\K\S+')
+     ok_token=$(grep -oP 'TOOLS_PATH_SUCCESSES\}/\K[^"& ]+' "$f" 2>/dev/null | head -1)
+     [[ -z "$err_token" ]] && continue
+     if [[ "$err_token" != "$ok_token" ]]; then
+       echo "[WARN] $svc: ERROR_TOKEN='$err_token' but healthcheck success token='$ok_token' — mismatch will yield permanently-unhealthy container"
+     fi
+   done
+   ```
+   Any `[WARN]` line is a P0 — the mismatched token means the healthcheck can never pass even when the service ran successfully.
 
 ## Output:
 - Pass/fail for each check
