@@ -80,7 +80,7 @@ See `templates/tips/env-update.md` for the full fetcher-type and flag reference.
 
 **v2.0.0 (all fetcher types)** — parses `.env` annotations, fetches latest versions across all 12 fetcher types (dockerhub, github, ghcr, npm, pecl, pypi, quay, rubygems, sdkman, sdkmanager, url, codeberg), streams a `[AUTO|HOLD|SKIP|ERROR]` report, and can apply AUTO decisions back to `.env`.
 
-**Key flags**: `--check` (fetch + report), `--apply` (apply AUTO decisions; implies `--check`), `--apply-resolve` (also apply RESOLVED decisions — floating→concrete rewrites; requires `--apply`), `--dry-run` (no writes), `--filter=<regex>`, `--no-cache`, `--format=text|json`, `--dump`, `--env-file=<path>`, `--cache-ttl=<N>`, `--with-tags`, `--unstable[=full|info]` (prerelease channel mode), `--stable[=full|info]` (stable channel mode; only `--stable=full + --unstable=full` is banned), `--no-notes` (suppress note sub-lines), `--changes-only` (hide up-to-date SKIP records), `--no-drift` (suppress [DRIFT]/[REPLACE-DRIFT] sub-lines), `--no-fail` (always exit 0; only ERROR fetch decisions suppressed — usage/backup errors remain fatal), `--scan` (run `bin/env-scan.sh` after `--apply` to propagate updated values to `.env.local` and Dockerfiles), `--force-auto` (bypass `(manual)`/`(override)`/`HOLD` gates; requires `--confirm="Confirm override"` with `--apply`; emits advisory when used without `--apply`), `--force-hold` (upgrade HOLD decisions to AUTO only — `(manual)`/`(override)` unaffected; requires `--confirm="Confirm override"` with `--apply`), `--confirm=TEXT` (confirmation gate for `--force-auto`/`--force-hold` with `--apply`), `--reference[=SECTION]` (print annotation/fetcher/decision reference and exit)
+**Key flags** (workflow-critical): `--check` (fetch + report), `--apply` (apply AUTO; non-TTY needs `--yes`), `--apply-resolve` (also apply RESOLVED; requires `--apply`), `--dry-run` (no writes), `--filter=<regex>`, `--scan` (run env-scan after `--apply`), `--format=text|json`, `--force-auto`/`--force-hold` with `--confirm="Confirm override"` (override gates). 30+ flags total in full reference.
 
 **Apply gate**: `--apply` is self-guarding — TTY prompts before writing; non-TTY requires `--yes`. Use `--check --dry-run` to preview without writing. Add `--yes` to `--apply` for scripted/CI use.
 
@@ -92,7 +92,7 @@ See `templates/tips/env-update.md` for the full fetcher-type and flag reference.
 
 Propagation is automatic: any `ARG VAR=value` line in a Dockerfile whose value diverges from the canonical `.env` value is rewritten in-place. Vars with `${` in their `.env` value are skipped (expansion-dependent). Vars matching `_GS_ES_PATTERN_CONFLICT_IGNORE` are protected.
 
-**Key flags**: `--version` (print version and exit), `--sync-values=false` (preserve dest values that differ from source; default is `true` — values are overwritten), `--profile=true` (show timing), `--dry-run` (report only — suppresses both env file sync and Dockerfile propagation), `--no-fail` (always exit 0; only Phase 6 propagation errors suppressed — infrastructure and backup failures remain fatal), `--backup=false` (skip backup this run), `--backup-keep=<N>` (keep N newest backups per file; 0 = unlimited; default 10), `--backup-purge=true` (delete all existing `<file>.bak.*` before run), `--backup-suffix=<str>` (suffix anchor; default `.bak`; full name: `<file><suffix>.<YYYYMMDD-HHMMSS>`)
+**Key flags** (workflow-critical): `--dry-run` (report only), `--sync-values=false` (preserve dest values), `--profile=true` (show timing), `--no-fail` (always exit 0), `--backup-keep=<N>` (default 10), `--backup-purge=true`. See full reference for all flags.
 
 **TTY behavior**: env-scan prompts on TTY and proceeds silently on non-TTY (no `--yes` required) — opposite of `env-update --apply`, which requires `--yes` in non-TTY.
 
@@ -192,15 +192,7 @@ make start-local-registry            # Start local TLS registry (port 5000)
 - `/env-diff` — show divergences between `.env` and `.env.local`
 - `/service-info <name>` — deep-dive on one service (compose, Dockerfile, startup, health, ports, versions)
 - `/recent` — quick context: recent commits, uncommitted changes, changed file stats (global command)
-- `/bundle` — *(global command — works in any project)* bundle config into a portable `.tar.gz`; `--scope project` (default) LLM-generalizes this project's CLAUDE.md + .claude/ into a rich template with ADAPT markers; `--scope global` exports `~/.claude/` as-is; `--scope all` produces both archives
-- `/install` — *(global command — works in any project)* install a bundle: Phase 0 detects existing `.claude/` (asks replace/manual-merge); bash installer runs; Phase 5 probes target project and fills ADAPT markers in-place
-- `/adapt-project` — *(global command)* explore the project deeply and fill all ADAPT markers in CLAUDE.md + .claude/ (from an imported bundle); safe to re-run (idempotent if no markers remain)
-- `/repair` — detect and repair config drift: scans CLAUDE.md + .claude/ vs project reality (files, tools, commands, structure), presents a plan, waits for confirmation; supports `--check` (report only) and `--apply` (auto-fix without prompting)
-- `/sleuth` — *(global command)* behavioral bug hunter: 10 parallel agents hunt silent failures, logic traps, contract violations, cross-component inconsistencies; confidence-scored report, never auto-fixes
-- `/gaps` — *(global command)* incompleteness detector: finds TODO markers, stubs, partial features, promised-but-missing code, template placeholders; prioritized roadmap, never auto-applies
-- `/mega-analysis` — *(global command)* full pipeline in one command: repair → audit → skill-audit → inspect × 2 → sleuth × 2 → gaps × 2 → inspect --vision × 2 → retrospective → memory-promote → handoff; versioned delta report at `~/.claude/projects/meta-reports/YYYY-MM-DD/full-analysis[-runN].md`; `--quick` ~30 min, default ~2 hr
-- `/skill-audit` — *(global command)* per-skill 15-dimension deep report: 4 parallel agents analyze every skill file (frontmatter completeness, trigger specificity, ask-human gate compliance, convergence gate compliance, cold-start readiness…); never auto-applies
-- `/memory-promote` — *(global command)* analyze project memory files and propose promotions to CLAUDE.md (global) or agent def (project-specific); never auto-applies
+- *(global commands — see `~/.claude/refs/SKILLS.md` for details)*: `/bundle`, `/install`, `/adapt-project`, `/repair`, `/sleuth`, `/gaps`, `/mega-analysis`, `/skill-audit`, `/memory-promote`
 - `/new-service <name> [--parent <image>] [--runtime <name>] [--port <n>]` — scaffold a new service (Dockerfile, compose, startup script, printed `.env` + Makefile lines); args-first with interactive fallback
 
 **Automatic hooks** (PostToolUse on Edit/Write):
@@ -249,31 +241,14 @@ make start-local-registry            # Start local TLS registry (port 5000)
 
 ## Debugging a Failed Container
 
-When a service fails to start or becomes unhealthy:
+Use `/debug-service <name>` — executes the 6-step runbook read-only and reports a root-cause hypothesis with suggested next actions. Quick manual checks:
 
 ```bash
-# 1. Check what failed
 ls tools/errors/                          # Which error tokens exist?
-cat tools/errors/<TOKEN>                  # Error details (if written)
-
-# 2. Check logs
-make log-follow-<service>                 # Tail the container logs
-# or: docker compose --env-file .env.local logs <service>
-
-# 3. Shell into the container (if still running)
-make login-<service>                      # Interactive shell
-
-# 4. Check the startup script
-# Find it: docker/config/dist/bin/<runtime>-bin/global-stack-<runtime>-start.sh
-# The runtime name is the tool (nvm, phpbrew, sdkman), NOT the tier number
-
-# 5. Check tier dependencies
-# Is the tier 02 manager healthy? (e.g., 02nvm must be healthy before 03node*)
-ls tools/successes/ | grep <tier02-name>
-
-# 6. Nuclear option: force reinstall
-# Set GLOBAL_STACK_RELOAD_<RUNTIME>=true in .env.local, restart
-# Remember to set it back to false after!
+make log-follow-<service>                 # Tail container logs
+make login-<service>                      # Shell into container (if running)
+ls tools/successes/ | grep <tier02-name>  # Check tier 02 manager health
+# Nuclear: set GLOBAL_STACK_RELOAD_<RUNTIME>=true in .env.local, restart, then reset to false
 ```
 
 ## Claude Code Configuration
