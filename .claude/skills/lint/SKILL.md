@@ -8,7 +8,7 @@ user-invocable: true
 Find and validate all shell scripts and Dockerfiles in this project for quality issues.
 
 ## Shell Scripts
-1. Find all `.sh` files under `bin/`: `find bin -name "*.sh" -type f`
+1. Find all `.sh` files under `bin/`, `docker/config/dist/bin/` (container startup scripts), `.claude/hooks/`, and `templates/shell/`: `find bin docker/config/dist/bin .claude/hooks templates/shell -name "*.sh" -type f`
 2. Run `bash -n` syntax check on each file
 3. Run `shellcheck -x -S warning` on each file
 4. Report results grouped by file, with severity
@@ -19,7 +19,7 @@ Find and validate all shell scripts and Dockerfiles in this project for quality 
 3. Report results grouped by file
 
 ## YAML Files
-1. Find all YAML files: `find . -name "*.yaml" -o -name "*.yml" | grep -v "^\./tools/" | grep -v "^\./var/"`
+1. Find all YAML files (excluding third-party and stateful data): `find . \( -name "*.yaml" -o -name "*.yml" \) | grep -v "^\./tools/" | grep -v "^\./var/" | grep -v "^\./projects/" | grep -v "^\./docker/data/" | grep -v "^\./docker/storage/" | grep -v "node_modules"`
 2. Run `yamllint -d relaxed` on each file
 3. Report results grouped by file, with line references
 

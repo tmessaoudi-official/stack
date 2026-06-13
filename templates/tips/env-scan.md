@@ -335,26 +335,40 @@ or `ARG FOO=value`) is detected and maintained after propagation.
 
 ## RELOAD Variables — Forcing Runtime Reinstall
 
-The following `GLOBAL_STACK_RELOAD_*` variables control whether a container reinstalls
-its entire runtime on next start. Set to `true` in `.env.local`, then restart the
-container. **Always reset to `false` after the reinstall completes** — leaving it `true`
-forces a full reinstall on every container start (can take 30+ minutes).
+The following `GLOBAL_STACK_RELOAD_*` variables (defined in `.env`) control whether a
+container reinstalls its tool manager or a specific runtime version on next start. Set
+to `true` in `.env.local`, then restart the container. **Always reset to `false` after
+the reinstall completes** — leaving it `true` forces a full reinstall on every container
+start (can take 30+ minutes).
 
 | Variable | Effect |
 |---|---|
-| `GLOBAL_STACK_RELOAD_NODE` | Force NVM reinstall + Node.js version reinstall |
-| `GLOBAL_STACK_RELOAD_PHP` | Force phpbrew reinstall + PHP version reinstall |
-| `GLOBAL_STACK_RELOAD_PYTHON` | Force pyenv reinstall + Python version reinstall |
-| `GLOBAL_STACK_RELOAD_RUBY` | Force rbenv reinstall + Ruby version reinstall |
-| `GLOBAL_STACK_RELOAD_RBENV` | Alias for `GLOBAL_STACK_RELOAD_RUBY` (rbenv-specific) |
-| `GLOBAL_STACK_RELOAD_JAVA` | Force SDKMAN reinstall + Java version reinstall |
-| `GLOBAL_STACK_RELOAD_FLUTTER` | Force FVM reinstall + Flutter version reinstall |
+| `GLOBAL_STACK_RELOAD_NVM` | Force NVM (manager) reinstall |
+| `GLOBAL_STACK_RELOAD_NODE24` / `_NODE26` / `_NODEEDGE` | Force that Node.js version reinstall |
+| `GLOBAL_STACK_RELOAD_PHPBREW` | Force phpbrew (manager) reinstall |
+| `GLOBAL_STACK_RELOAD_PHP8_4` / `_PHP8_5` / `_PHPEDGE` | Force that PHP version reinstall |
+| `GLOBAL_STACK_RELOAD_PYENV` | Force pyenv (manager) reinstall |
+| `GLOBAL_STACK_RELOAD_PYTHON3` | Force Python 3 reinstall |
+| `GLOBAL_STACK_RELOAD_RBENV` | Force rbenv (manager) reinstall — distinct from the Ruby version vars below |
+| `GLOBAL_STACK_RELOAD_RUBY3` / `_RUBY4` | Force that Ruby version reinstall |
+| `GLOBAL_STACK_RELOAD_SDKMAN` | Force SDKMAN (manager) reinstall |
+| `GLOBAL_STACK_RELOAD_JAVA17` / `_JAVA21` / `_JAVA26` | Force that Java version reinstall |
+| `GLOBAL_STACK_RELOAD_FVM` | Force FVM (manager) reinstall |
+| `GLOBAL_STACK_RELOAD_FLUTTER3` | Force Flutter 3 reinstall |
 
-**RELOAD anchor pattern**: All `GLOBAL_STACK_RELOAD_*` vars are excluded from the
-scan-var-ignore pattern by default (they match `GLOBAL_STACK_RELOAD_(NODE|PHP|...)=`
-which is in `_GS_ES_PATTERN_SCAN_VAR_IGNORE`). This means they are extracted from
-Dockerfiles but never trigger "missing variable" warnings — they are deliberately
-not in source `.env` because they are machine-local flags set only in `.env.local`.
+> **Compose-internal mapped names**: each tier-03 compose file maps its per-version var
+> to a generic container-internal name — e.g. `GLOBAL_STACK_RELOAD_NODE=${GLOBAL_STACK_RELOAD_NODE24}`
+> in `docker/images/03node24/docker-compose.yaml`. The generic names (`RELOAD_NODE`,
+> `RELOAD_PHP`, `RELOAD_PYTHON`, `RELOAD_RUBY`, `RELOAD_JAVA`, `RELOAD_FLUTTER`) exist
+> **only inside containers**; setting them in `.env` or `.env.local` does nothing —
+> compose always overwrites them from the per-version vars above.
+
+**RELOAD anchor pattern**: the compose-internal generic names are **included in**
+`_GS_ES_PATTERN_SCAN_VAR_IGNORE` (the pattern `GLOBAL_STACK_RELOAD_(NODE|PHP|PYTHON|RUBY|JAVA|FLUTTER)=`
+in `bin/lib/env-scan/config/defaults.sh`), so they are never extracted during the
+Docker-source scan and therefore never trigger "missing variable" warnings. They are
+deliberately absent from `.env` — they exist only as container-internal names produced
+by the compose mapping; the real user-settable per-tier vars in the table above ARE in `.env`.
 
 ---
 

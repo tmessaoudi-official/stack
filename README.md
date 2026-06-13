@@ -35,7 +35,7 @@ docker/config/dist/conf/phpmyadmin/config.user.inc.php contains the default serv
 you add to it or change to load new local/distant servers
 # PGadmin (postgres)
 create folder if not exists : docker/data/postgres/xx
-docker/images/02dpage-pgadmin4/config/servers.json container the default server (docker image)
+docker/images/02dpage-pgadmin4/dist/conf/servers.json — contains the default server (copied into image by Dockerfile)
 you add to it or change to load new local/distant servers
 # Mongoclient (nosqlclient)
 

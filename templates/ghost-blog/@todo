@@ -1,1 +1,8 @@
-move conf/bin to docker/config/dist/bin
+DEPRECATED — update before use:
+1. Move conf/bin/ → docker/config/dist/bin/ghost-blog-bin/ (and update Dockerfile COPY)
+2. Fix mkcert init: USER node cannot write system CA — use user-space approach
+3. Add stackCatch error trap to startup script
+4. Replace curl healthcheck with tools/successes/<TOKEN> file-based check
+5. Add GLOBAL_STACK_ERROR_TOKEN to docker-compose.yaml
+6. Fix depends_on: 01mariadb11 → 01mariadb12
+7. Fix DOCKER_INIT → GLOBAL_STACK_DOCKER_INIT

@@ -1,3 +1,10 @@
+# =============================================================================
+# DEPRECATED TEMPLATE — needs update before use. Known issues:
+#   1. depends_on 01mariadb11: that service no longer exists; use 01mariadb12
+#   2. init: ${DOCKER_INIT} should be init: ${GLOBAL_STACK_DOCKER_INIT} (GLOBAL_STACK_ prefix)
+#   3. healthcheck uses curl; replace with file-based token check (tools/successes/)
+#   4. GLOBAL_STACK_ERROR_TOKEN env var is missing (required by stackCatch)
+# =============================================================================
 ---
 services:
   ghost-blog:

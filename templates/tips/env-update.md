@@ -1468,7 +1468,8 @@ using `awk` + a tempfile + `mv`. It updates two things in one pass:
 Before the first write, a timestamped backup is created:
 
 ```bash
-cp -a /stack/.env /stack/.env.bak.$(date +%s)
+cp -a /stack/.env "/stack/.env.bak.$(date +%Y%m%d-%H%M%S)-$$"
+# e.g. /stack/.env.bak.20260612-143052-12345  (<file><suffix>.<YYYYMMDD-HHMMSS>-<pid>)
 ```
 
 If the backup fails (disk full, permissions, etc.), the apply aborts. The backup path is

@@ -12,6 +12,9 @@
 #
 # Replaces: annotations-ref.sh (renamed 2026-05-24)
 # Called by: main.sh when --reference[=SECTION] is passed
+#
+# NOTE: This file is the authoritative source for @todo env-update annotation
+#       grammar. Always update here first; do not copy from .env examples.
 
 [[ -n "${_GS_EU2_REFERENCE_SH_LOADED:-}" ]] && return 0
 readonly _GS_EU2_REFERENCE_SH_LOADED=1

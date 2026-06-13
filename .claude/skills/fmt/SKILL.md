@@ -8,8 +8,8 @@ user-invocable: true
 Format shell scripts and YAML files using shfmt and yamlfmt.
 
 ## Default behavior (no arguments):
-1. **Shell scripts**: find all `.sh` files under `bin/` and format with `shfmt -w -i 2 -ci -bn`
-2. **YAML files**: find all `.yaml`/`.yml` files under `docker/images/` and format with `yamlfmt`
+1. **Shell scripts**: find all `.sh` files in the same scope as `/lint` — `find bin docker/config/dist/bin .claude/hooks templates/shell -name "*.sh" -type f` — and format with `shfmt -w -i 2 -ci -bn`
+2. **YAML files**: find all `.yaml`/`.yml` files in the same scope as `/lint` (includes the root `docker-compose.yaml`, excludes third-party and stateful data) — `find . \( -name "*.yaml" -o -name "*.yml" \) | grep -v "^\./tools/" | grep -v "^\./var/" | grep -v "^\./projects/" | grep -v "^\./docker/data/" | grep -v "^\./docker/storage/" | grep -v "node_modules"` — and format with `yamlfmt`
 3. Report which files were modified
 
 ## With arguments ($ARGUMENTS):
