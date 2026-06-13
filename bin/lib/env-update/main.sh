@@ -12,6 +12,7 @@
 # Deps:      bash 4.3+, tput (for terminal width detection)
 # Env:       _GS_EU2_CFG (associative array), _GS_EU2_TALLY_* (module-level state),
 #            _GS_EU2_TALLY_FORCE=1 (test hook: bypass TTY gate for tally)
+#            _GS_EU2_APPLY_GATE_FORCE_TTY=true (test hook: treat stdin as TTY in confirm_apply)
 #            _GS_EU2_ENV_SCAN_PATH (test hook: override env-scan.sh path for --scan)
 #            _GS_EU2_MAX_VAR_LEN (set by _gs_eu2_check_prescan_width, read by run_check)
 set -eEuo pipefail
@@ -1485,7 +1486,7 @@ _gs_eu2_confirm_apply() {
   if [[ "${_GS_EU2_CFG[yes]:-false}" == "true" ]]; then
     return 0
   fi
-  if [[ ! -t 0 ]]; then
+  if [[ ! -t 0 && "${_GS_EU2_APPLY_GATE_FORCE_TTY:-false}" != "true" ]]; then
     printf 'env-update: --apply requires --yes in non-interactive mode (no TTY detected).\n' >&2
     printf '  Run with --yes to bypass this gate, or use --dry-run to preview without writing.\n' >&2
     exit 1

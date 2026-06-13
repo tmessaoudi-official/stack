@@ -8504,6 +8504,40 @@ t "t84c: --check --dry-run — guard does not apply to check mode, exit 0 withou
     echo PASS
 "
 
+# t84d: confirm_apply with FORCE_TTY + y → proceeds (exit 0)
+t "t84d: confirm_apply with FORCE_TTY + y → proceeds (exit 0)" bash -c "
+    f=\${TMP_DIR}/t84d.env
+    printf '# @todo env-update dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T84D=18.0-alpine3.20\n' > \"\$f\"
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_APPLY_GATE_FORCE_TTY=true
+    out=\$(printf 'y\n' | bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$f\" 2>&1); rc=\$?
+    [[ \$rc -eq 0 ]] || { echo \"expected exit 0, got \$rc: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t84e: confirm_apply with FORCE_TTY + n → aborts (exit 1)
+t "t84e: confirm_apply with FORCE_TTY + n → aborts (exit 1)" bash -c "
+    f=\${TMP_DIR}/t84e.env
+    printf '# @todo env-update dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T84E=18.0-alpine3.20\n' > \"\$f\"
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_APPLY_GATE_FORCE_TTY=true
+    out=\$(printf 'n\n' | bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$f\" 2>&1); rc=\$?
+    [[ \$rc -ne 0 ]] || { echo \"expected non-zero exit, got \$rc\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qi 'abort' || { echo \"expected 'Aborted' message, got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t84f: confirm_apply with FORCE_TTY + garbage input → aborts (exit 1)
+t "t84f: confirm_apply with FORCE_TTY + garbage input → aborts (exit 1)" bash -c "
+    f=\${TMP_DIR}/t84f.env
+    printf '# @todo env-update dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T84F=18.0-alpine3.20\n' > \"\$f\"
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_APPLY_GATE_FORCE_TTY=true
+    out=\$(printf 'maybe\n' | bash '${ENV_UPDATE_V2}' --apply --env-file=\"\$f\" 2>&1); rc=\$?
+    [[ \$rc -ne 0 ]] || { echo \"expected non-zero exit for garbage input, got \$rc\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Section 85 — --dump mutual exclusion with --check / --apply
 # ═══════════════════════════════════════════════════════════════════════════
