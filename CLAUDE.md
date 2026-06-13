@@ -204,7 +204,7 @@ make start-local-registry            # Start local TLS registry (port 5000)
 **Automatic hooks** (SubagentStop):
 - `subagent-stop-reminder` — fires when a subagent completes; reminds parent to verify Phase 7/8
 
-**Permission rules** (two layers): the project `.claude/settings.json` denies destructive operations (`make hard-restart*`/`soft-restart*`, `sudo`, `rm -rf`, `docker system prune`/`volume rm`/`rmi`, `git clean`, `git push --force`, `chmod 777`, Bash access to `docker/data`/`docker/storage`), asks for stack lifecycle (`make up/down/restart`, `env-update --apply`, `docker buildx prune`) and allows read-only previews (`env-update --check/--dry-run/--dump`, `env-scan --dry-run`, `make log-*`). Additional read-only allows (`docker compose ps/logs`, `shfmt`, `yamlfmt`, `yamllint`, `yq`, `diff`) live in the global `~/.claude/settings.json` layer — a bundle of this project carries only the project layer.
+**Permission rules** (two layers): the project `.claude/settings.json` denies destructive operations (`make hard-restart*`/`soft-restart*`, `sudo`, `rm -rf`, `docker system prune`/`volume rm`/`volume prune`/`container prune`/`image prune`/`network prune`/`rmi`/`compose down -v`, `git clean`, `git push --force`, `chmod 777`, Bash access to `docker/data`/`docker/storage`), asks for stack lifecycle (`make up/down/restart`, `env-update --apply`, `docker buildx prune`) and allows read-only previews (`env-update --check/--dry-run/--dump`, `env-scan --dry-run`, `make log-*`). Additional read-only allows (`docker compose ps/logs`, `shfmt`, `yamlfmt`, `yamllint`, `yq`, `diff`) live in the global `~/.claude/settings.json` layer — a bundle of this project carries only the project layer.
 
 ## Gotchas & Pitfalls
 
