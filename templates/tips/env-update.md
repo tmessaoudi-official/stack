@@ -615,7 +615,7 @@ tool output. All output is plain text.
 When `--apply` is active:
 
 ```
-Backup: /stack/.env.bak.1716123456
+Backup: /stack/.env.bak.20260612-143052-12345
 [APPLIED]  GLOBAL_STACK_POSTGRES18_VERSION              18.3-alpine3.23 → 18.4-alpine3.23
 [APPLIED]  GLOBAL_STACK_NODE24_VERSION                  24.15.0 → 24.16.0
 [LOCK]     GLOBAL_STACK_MODSEC_MOD_VERSION              annotation: v0.0.9-beta1 → v0.0.12-beta1
