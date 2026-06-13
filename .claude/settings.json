@@ -1,20 +1,37 @@
 {
   "permissions": {
     "allow": [
+      "Bash(bin/env-scan.sh --dry-run)",
       "Bash(bin/env-scan.sh --dry-run *)",
       "Bash(bin/tests/env-scan.test.sh)",
       "Bash(bin/env-update.sh --version)",
+      "Bash(bin/env-update.sh --check)",
       "Bash(bin/env-update.sh --check *)",
+      "Bash(bin/env-update.sh --filter=* --check*)",
       "Bash(bin/env-update.sh --dry-run *)",
       "Bash(bin/env-update.sh --dump *)",
       "Bash(bin/tests/env-update.test.sh)",
       "Bash(make login-*)",
+      "Bash(make log-*)",
       "Bash(make log-follow-*)",
       "Bash(make generate-buildx)",
       "Bash(make create-buildx-builder)"
     ],
     "deny": [
-      "Bash(make hard-restart)",
+      "Bash(make hard-restart*)",
+      "Bash(make * hard-restart*)",
+      "Bash(make soft-restart*)",
+      "Bash(make * soft-restart*)",
+      "Bash(sudo *)",
+      "Bash(rm -rf *)",
+      "Bash(docker system prune *)",
+      "Bash(docker volume rm *)",
+      "Bash(docker rmi *)",
+      "Bash(git clean *)",
+      "Bash(git push --force *)",
+      "Bash(chmod 777 *)",
+      "Bash(* docker/data/*)",
+      "Bash(* docker/storage/*)",
       "Read(/stack/docker/data/**)",
       "Read(/stack/docker/storage/**)",
       "Read(/stack/var/**)"
@@ -26,9 +43,11 @@
       "Bash(make down-n-rebuild-force-recreate)",
       "Bash(make restart-*)",
       "Bash(make start-local-registry)",
+      "Bash(docker buildx prune)",
+      "Bash(docker buildx prune *)",
       "Bash(bin/env-scan.sh)",
       "Bash(bin/env-update.sh)",
-      "Bash(bin/env-update.sh --apply *)"
+      "Bash(bin/env-update.sh --apply*)"
     ]
   },
   "hooks": {
@@ -38,7 +57,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/stack/.claude/hooks/subagent-stop-reminder.sh",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/subagent-stop-reminder.sh",
             "timeout": 10
           }
         ]
@@ -50,22 +69,27 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/stack/.claude/hooks/shellcheck-on-write.sh",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/shellcheck-on-write.sh",
             "timeout": 10
           },
           {
             "type": "command",
-            "command": "/stack/.claude/hooks/hadolint-on-write.sh",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/hadolint-on-write.sh",
             "timeout": 10
           },
           {
             "type": "command",
-            "command": "/stack/.claude/hooks/yamllint-on-write.sh",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/yamllint-on-write.sh",
             "timeout": 10
           },
           {
             "type": "command",
-            "command": "/stack/.claude/hooks/shfmt-on-write.sh",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/shfmt-on-write.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/env-guard-on-write.sh",
             "timeout": 10
           }
         ]

@@ -40,7 +40,6 @@ Handle everything else directly — sub-agents add overhead; spawn only when par
 
 ### Phase 0: CONTEXT LOADING
 - Check agent memory for past /stack discoveries, quirks, workarounds
-- `git log --oneline -5`, `git diff --stat`
 - Scan `tools/errors/` for active failure markers
 - **Output**: brief context summary or "clean state, no conflicts"
 
@@ -69,14 +68,14 @@ Update only: `templates/tips/*.md`, `bin/tests/*.test.sh`, agent memory, `CLAUDE
 
 ## /stack-Specific Operating Rules
 
-Global rules 1–13 from `~/.claude/CLAUDE.md` apply without exception, including: Completion Gate (Rule 6) four-row evidence table before Phase 8; TDD (Rule 7) — for infra use `bash -n`/`docker compose config` as the
+All global Core Operating Rules (currently 1–18) from `~/.claude/CLAUDE.md` apply without exception, including: Completion Gate (Rule 6) four-row evidence table before Phase 8; TDD (Rule 7) — for infra use `bash -n`/`docker compose config` as the
 failing-then-passing check; verify proposals against real data (Rule 11) — three prior /stack incidents: triple-eval rewrite, unquoted multi-word grep failure, rtk asset URL wrong OS target.
 
 /stack additions and overrides:
 
 1. **Idempotency by default** — all scripts, Makefiles, and Docker operations must be safe to run multiple times.
 2. **Propose parallel sub-agents proactively** — for independent changes in Phase 5. Reference `superpowers:dispatching-parallel-agents`.
-3. **Protected artifacts** — never propose deletion of: `.env`, `.env.local`, `Makefile`, root `docker-compose.yaml`, `CLAUDE.md`, any file under `docker/images/*/`, `.claude/hooks/*`, `.claude/settings.json`, `.claude/commands/*`,
+3. **Protected artifacts** — never propose deletion of: `.env`, `.env.local`, `Makefile`, root `docker-compose.yaml`, `CLAUDE.md`, any file under `docker/images/*/`, `.claude/hooks/*`, `.claude/settings.json`, `.claude/skills/*`,
   `.claude/agents/*`, or `~/.claude/agents/*` without explicit user request.
 4. **Commit autonomously when work is ready** — commit staged changes directly without requesting confirmation. The user has established this preference across many sessions; it overrides global Rule 10's default for /stack. Report
   what was committed after the fact. If the auto-mode hook blocks `git commit` despite apparent authorization, present the exact commit command for manual execution rather than retrying.
@@ -84,7 +83,7 @@ failing-then-passing check; verify proposals against real data (Rule 11) — thr
 
 ## Quality Standards
 
-Key non-negotiables: `set -eEuo pipefail` in new scripts (note: env-scan and global-unu.sh currently lack it — known exceptions; container scripts use `set -xeE -o pipefail`), ShellCheck-clean, Hadolint-clean Dockerfiles, `.PHONY` in Makefiles, strict SemVer 2.0.0.
+Key non-negotiables: `set -eEuo pipefail` in new scripts (note: `global-unu.sh` currently lacks it — known exception; container scripts use `set -xeE -o pipefail`), ShellCheck-clean, Hadolint-clean Dockerfiles, `.PHONY` in Makefiles, strict SemVer 2.0.0.
 
 **Automatic quality gate**: a PostToolUse hook runs `shellcheck` on every `.sh` file after Edit/Write. Fix any lint errors before proceeding — do not ignore hook feedback. Always run `bash -n` after shell edits to catch syntax errors including misplaced `fi`.
 
@@ -96,7 +95,7 @@ Key project-scoped commands available in this session:
 - `/fmt` — format shell scripts (`shfmt`) and YAML files (`yamlfmt`); `--check` for preview
 - `/env-diff` — show divergences between `.env` and `.env.local`
 - `/service-info <name>` — deep-dive on one service (compose, Dockerfile, startup, health, ports, versions)
-- `/recent` — quick context: recent commits, uncommitted changes, stack health
+- `/recent` — quick context: recent commits, uncommitted changes, changed file stats
 
 ## Memory
 
