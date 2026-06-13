@@ -316,6 +316,7 @@ bin/env-update.sh [OPTIONS]
 | Variable | Description |
 |----------|-------------|
 | `_GS_EU2_TALLY_FORCE=1` | Bypasses the stderr TTY gate so the live running tally displays even when stderr is not a terminal. Use cases: CI pipelines (GitHub Actions, GitLab CI), terminal multiplexers (tmux, screen) that don't expose TTY on stderr, any non-interactive shell wanting live progress during a long `--check` run. Default: unset (TTY gate active). Note: the column-width gate (`--tally=auto` requires ≥ 130 cols) still applies unless combined with `--tally=full`. |
+| `_GS_EU2_APPLY_GATE_FORCE_TTY=true` | Forces the `--apply` TTY gate to treat stdin as interactive even when it is not a terminal. Use case: automated tests that exercise the TTY-prompt code path without requiring a real TTY. Default: unset. |
 
 ### Typical usage patterns
 
@@ -1489,6 +1490,20 @@ bin/env-update.sh --apply --scan
 If `env-scan.sh` fails, a warning is printed but the apply exit code is still 0 (the `.env`
 was already updated successfully).
 
+### Apply journal
+
+Every `--apply` run that writes at least one change appends an audit line to
+`docs/env-update-journal.log` (created on first write; never overwrites):
+
+```
+2026-06-13T18:24:01 AUTO GLOBAL_STACK_NODE24_VERSION 22.12.0 -> 24.1.0
+2026-06-13T18:24:01 RESOLVED GLOBAL_STACK_POSTGRES18_VERSION 18.2 -> 18.3-alpine3.23
+```
+
+One line per variable changed; format: `TIMESTAMP DECISION VAR OLD_VALUE -> NEW_VALUE`.
+`RESOLVED` changes are only appended when `--apply-resolve` is also passed.
+The journal is append-only and never affects the apply exit code.
+
 ---
 
 ## 10. Multi-Variable Patterns
@@ -1685,7 +1700,7 @@ These do not abort the tool — they set `decision=ERROR` and move to the next r
 bash bin/tests/env-update.test.sh
 ```
 
-The test suite runs 692+ tests across 106 sections covering: lexer, parsing, flag dispatch,
+The test suite runs 749+ tests across 112 sections covering: lexer, parsing, flag dispatch,
 HTTP seam, all 12 fetchers, cache, channel selection, tag flags, semver, decision classifier,
 apply logic, and error paths.
 

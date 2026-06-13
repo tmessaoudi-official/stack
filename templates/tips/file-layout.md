@@ -9,10 +9,13 @@ bin/env-update.sh                    # Version checker entry point (all 12 fetch
 bin/env-scan.sh                      # Env sync tool entry point
 bin/lib/env-update/                  # Modular env-update library
   config/   defaults, prerelease_markers
-  core/     apply, args, cache, channel, decide, parse, passes, records, semver, tag_flags, ubuntu
+  core/     apply, args, cache, channel, decide, drift, git, parallel, parse, passes, records, semver, tag_flags, ubuntu
+  reporting/ dump, help, profile, reference, summary, tally
   fetchers/ codeberg, dockerhub, ghcr, github, npm, pecl, pypi, quay, rubygems, sdkman, sdkmanager, url
 bin/lib/env-scan/                    # Modular env-scan library
 bin/tests/env-scan.test.sh           # Test suite (custom harness)
+bin/tests/env-update.test.sh         # Test suite (749+ tests, 112 sections)
+bin/tests/startup-prologue.test.sh   # Test suite for base-prologue.sh + GS_STARTUP_DRY_RUN seam
 docker/images/<tier><name>/          # Per-image Dockerfile + docker-compose.yaml
 docker/config/dist/bin/              # Container startup scripts
 docker/config/dist/conf/             # Per-service runtime configs
@@ -33,4 +36,4 @@ templates/tips/                      # markdown cheat sheets
 templates/shell/                     # Host system shell config templates
 ```
 
-> Per-service `docker-compose.yaml` files repeat the `environment:` block — Docker Compose v3 dropped cross-file YAML anchors, so the duplication is intentional.
+> Per-service `docker-compose.yaml` files use `extends:` to pull in shared `environment:` blocks from `docker/config/compose-fragments/` (base-env, node-packages, php-packages, etc.). Services without a matching fragment still repeat their `environment:` block directly — Docker Compose v3 dropped cross-file YAML anchors, so direct repetition is intentional for those services.

@@ -176,7 +176,7 @@ make start-local-registry            # Start local TLS registry (port 5000)
 ## Testing & Verification
 
 - **env-scan tests**: `bash bin/tests/env-scan.test.sh` — custom harness with `assert_equals`, `assert_contains`, `assert_not_contains`, `assert_file_exists`
-- **env-update tests**: `bash bin/tests/env-update.test.sh` — 700+ tests across 112 sections (fetchers, cache, semver, apply, args, RESOLVED, --reference…); use `--dry-run --filter=<VAR>` for quick preview; `--offline` is not implemented (use `_GS_EU2_HTTP_FIXTURE_DIR` seam for deterministic offline testing)
+- **env-update tests**: `bash bin/tests/env-update.test.sh` — 749+ tests across 112 sections (fetchers, cache, semver, apply, args, RESOLVED, --reference…); use `--dry-run --filter=<VAR>` for quick preview; `--offline` is not implemented (use `_GS_EU2_HTTP_FIXTURE_DIR` seam for deterministic offline testing)
 - **Shell scripts**: `shellcheck <file>` and `shfmt -d -i 2 -ci -bn <file>` (diff mode)
 - **YAML files**: `yamllint -d relaxed <file>` and `yamlfmt -dry <file>` (dry-run mode)
 - **Formatting**: `/fmt --check` to preview all formatting changes, `/fmt` to apply them
@@ -184,7 +184,8 @@ make start-local-registry            # Start local TLS registry (port 5000)
 - **Health check status**: `ls tools/successes/` (healthy) and `ls tools/errors/` (failed)
 - **env-update cache**: `/tmp/global-stack-env-update-cache/` (TTL 3600s); use `--no-cache` to bypass
 - **Startup script dry-run**: `GS_STARTUP_DRY_RUN=1 bash docker/config/dist/bin/nvm-bin/global-stack-nvm-start.sh` — exits before any install; tests the prologue loads and script parses. In containers: PATH includes `/usr/local/bin`; on host: prepend `PATH="/stack/docker/config/dist/bin/base-bin:$PATH"`.
-- **Shared prologue**: `docker/config/dist/bin/base-bin/global-stack-base-prologue.sh` — defines `stackCatch` + `trap` for all startup scripts (49 scripts source it). Excluded: caddy/httpd/nginx/android-setup scripts (deliberate 141/1-exempt variant).
+- **Shared prologue**: `docker/config/dist/bin/base-bin/global-stack-base-prologue.sh` — defines `stackCatch` + `trap` for all startup scripts (49 scripts source it). Excluded: caddy/httpd/nginx server scripts, android-setup, localstack, selenium-chrome/firefox, serverless, and utility helper scripts (deliberate 141/1-exempt variant).
+- **Startup prologue tests**: `bash bin/tests/startup-prologue.test.sh` — covers prologue syntax/shellcheck, `bash -n` on all 49 sourcing scripts, `GS_STARTUP_DRY_RUN=1` exit-early, `stackCatch` error token writing and clean-exit no-op.
 
 ## Claude Code Tooling
 
@@ -209,7 +210,7 @@ make start-local-registry            # Start local TLS registry (port 5000)
 **Automatic hooks** (SubagentStop):
 - `subagent-stop-reminder` — fires when a subagent completes; reminds parent to verify Phase 7/8
 
-**Permission rules** (two layers): the project `.claude/settings.json` denies destructive operations (`make hard-restart*`/`soft-restart*`, `sudo`, `rm -rf`, `docker system prune`/`volume rm`/`volume prune`/`container prune`/`image prune`/`network prune`/`rmi`/`compose down -v`, `git clean`, `git push --force`, `chmod 777`, Bash access to `docker/data`/`docker/storage`), asks for stack lifecycle (`make up/down/restart`, `env-update --apply`, `docker buildx prune`) and allows read-only previews (`env-update --check/--dry-run/--dump`, `env-scan --dry-run`, `make log-*`). Additional read-only allows (`docker compose ps/logs`, `shfmt`, `yamlfmt`, `yamllint`, `yq`, `diff`) live in the global `~/.claude/settings.json` layer — a bundle of this project carries only the project layer.
+**Permission rules** (two layers): the project `.claude/settings.json` denies destructive operations (`make hard-restart*`/`soft-restart*`, `sudo`, `rm -rf`, `docker system prune`/`volume rm`/`volume prune`/`container prune`/`image prune`/`network prune`/`rmi`/`compose down -v`, `git clean`, `git push --force`, `chmod 777`, Bash access to `docker/data`/`docker/storage`, Read access to `docker/data`/`docker/storage`/`var`), asks for stack lifecycle (`make up/down/restart`, `env-update --apply`, `docker buildx prune`) and allows read-only previews (`env-update --check/--dry-run/--dump`, `env-scan --dry-run`, `make log-*`). Additional read-only allows (`docker compose ps/logs`, `shfmt`, `yamlfmt`, `yamllint`, `yq`, `diff`) live in the global `~/.claude/settings.json` layer — a bundle of this project carries only the project layer.
 
 ## Gotchas & Pitfalls
 
