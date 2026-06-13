@@ -15,70 +15,33 @@ GLOBAL_STACK_DOCKER_CLI_NO_COMPOSE_BAKE ?= ${COMPOSE_BAKE}
 
 default: help
 
+SERVICES_SHELL := \
+	00base 00corentinth-it-tools \
+	01axllent-mailpit 01caddy 01epiclabs-docker-oracle-xe-11g \
+	01httpd 01localstack-localstack 01mariadb12 01mongo7 \
+	01mysql9 01nginx \
+	01selenium-standalone-chrome 01selenium-standalone-firefox \
+	02fvm 02keycloak-keycloak \
+	02mongoclient-mongoclient 02nvm 02phpbrew 02pyenv \
+	02rbenv 02rust 02sdkman 02sonarqube \
+	03flutter3 03java17-zulu 03java21-zulu 03java26-zulu \
+	03node26 03node24 03nodeedge \
+	03php8-4 03php8-5 03phpedge \
+	03python3 03ruby3 03ruby4 \
+	04android 04phpmyadmin 04serverless-framework \
+	05edge 05stable
+
+SERVICES_SH := 01postgres18 01redis 01valkey 02dpage-pgadmin4
+
+SERVICES_ALL := $(SERVICES_SHELL) $(SERVICES_SH)
+
 .PHONY: help mkdir-p touch create-paths generate-buildx docker-cli create-buildx-builder \
 	start-local-registry build up up-build up-build-force-recreate down \
 	down-n-rebuild down-n-rebuild-force-recreate rebuild rebuild-force-recreate \
 	down-n-up exec restart health wait-healthy save commit restore log-follow hard-restart soft-restart \
-	login-00base login-00corentinth-it-tools \
-	login-01axllent-mailpit login-01caddy login-01epiclabs-docker-oracle-xe-11g \
-	login-01httpd login-01localstack-localstack login-01mariadb12 login-01mongo7 \
-	login-01mysql9 login-01nginx login-01postgres18 login-01redis \
-	login-01selenium-standalone-chrome login-01selenium-standalone-firefox \
-	login-01valkey \
-	login-02dpage-pgadmin4 login-02fvm login-02keycloak-keycloak \
-	login-02mongoclient-mongoclient login-02nvm login-02phpbrew login-02pyenv \
-	login-02rbenv login-02rust login-02sdkman login-02sonarqube \
-	login-03java17-zulu login-03flutter3 login-03java21-zulu login-03java26-zulu \
-	login-03node24 login-03node26 login-03nodeedge \
-	login-03php8-4 login-03php8-5 login-03phpedge \
-	login-03python3 login-03ruby3 login-03ruby4 \
-	login-04android login-04phpmyadmin login-04serverless-framework \
-	login-05edge login-05stable \
-	log-00base log-00corentinth-it-tools \
-	log-01axllent-mailpit log-01caddy log-01epiclabs-docker-oracle-xe-11g \
-	log-01httpd log-01localstack-localstack log-01mariadb12 log-01mongo7 \
-	log-01mysql9 log-01nginx log-01postgres18 log-01redis \
-	log-01selenium-standalone-chrome log-01selenium-standalone-firefox \
-	log-01valkey \
-	log-02dpage-pgadmin4 log-02fvm log-02keycloak-keycloak \
-	log-02mongoclient-mongoclient log-02nvm log-02phpbrew log-02pyenv \
-	log-02rbenv log-02rust log-02sdkman log-02sonarqube \
-	log-03flutter3 log-03java17-zulu log-03java21-zulu log-03java26-zulu \
-	log-03node24 log-03node26 log-03nodeedge \
-	log-03php8-4 log-03php8-5 log-03phpedge \
-	log-03python3 log-03ruby3 log-03ruby4 \
-	log-04android log-04phpmyadmin log-04serverless-framework \
-	log-05edge log-05stable \
-	log-follow-00base log-follow-00corentinth-it-tools \
-	log-follow-01axllent-mailpit log-follow-01caddy log-follow-01epiclabs-docker-oracle-xe-11g \
-	log-follow-01httpd log-follow-01localstack-localstack log-follow-01mariadb12 log-follow-01mongo7 \
-	log-follow-01mysql9 log-follow-01nginx log-follow-01postgres18 log-follow-01redis \
-	log-follow-01selenium-standalone-chrome log-follow-01selenium-standalone-firefox \
-	log-follow-01valkey \
-	log-follow-02dpage-pgadmin4 log-follow-02fvm log-follow-02keycloak-keycloak \
-	log-follow-02mongoclient-mongoclient log-follow-02nvm log-follow-02phpbrew log-follow-02pyenv \
-	log-follow-02rbenv log-follow-02rust log-follow-02sdkman log-follow-02sonarqube \
-	log-follow-03flutter3 log-follow-03java17-zulu log-follow-03java21-zulu log-follow-03java26-zulu \
-	log-follow-03node24 log-follow-03node26 log-follow-03nodeedge \
-	log-follow-03php8-4 log-follow-03php8-5 log-follow-03phpedge \
-	log-follow-03python3 log-follow-03ruby3 log-follow-03ruby4 \
-	log-follow-04android log-follow-04phpmyadmin log-follow-04serverless-framework \
-	log-follow-05edge log-follow-05stable \
-	restart-00base restart-00corentinth-it-tools \
-	restart-01axllent-mailpit restart-01caddy restart-01epiclabs-docker-oracle-xe-11g \
-	restart-01httpd restart-01localstack-localstack restart-01mariadb12 restart-01mongo7 \
-	restart-01mysql9 restart-01nginx restart-01postgres18 restart-01redis \
-	restart-01selenium-standalone-chrome restart-01selenium-standalone-firefox \
-	restart-01valkey \
-	restart-02dpage-pgadmin4 restart-02fvm restart-02keycloak-keycloak \
-	restart-02mongoclient-mongoclient restart-02nvm restart-02phpbrew restart-02pyenv \
-	restart-02rbenv restart-02rust restart-02sdkman restart-02sonarqube \
-	restart-03flutter3 restart-03java17-zulu restart-03java21-zulu restart-03java26-zulu \
-	restart-03node24 restart-03node26 restart-03nodeedge \
-	restart-03php8-4 restart-03php8-5 restart-03phpedge \
-	restart-03python3 restart-03ruby3 restart-03ruby4 \
-	restart-04android restart-04phpmyadmin restart-04serverless-framework \
-	restart-05edge restart-05stable
+	$(foreach s,$(SERVICES_SHELL),login-$(s)) \
+	$(foreach s,$(SERVICES_SH),login-$(s)) \
+	$(foreach s,$(SERVICES_ALL),log-$(s) log-follow-$(s) restart-$(s))
 
 # Macro: login with ${GLOBAL_STACK_SHELL} (bash/zsh capable containers)
 define login-service-shell
@@ -110,195 +73,12 @@ restart-$(1):
 	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="restart" GLOBAL_STACK_DOCKER_CLI_SERVICE="$(1)" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file $${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
 endef
 
-# login targets — shell-capable containers
-$(eval $(call login-service-shell,00base))
-$(eval $(call login-service-shell,00corentinth-it-tools))
-$(eval $(call login-service-shell,01axllent-mailpit))
-$(eval $(call login-service-shell,01caddy))
-$(eval $(call login-service-shell,01epiclabs-docker-oracle-xe-11g))
-$(eval $(call login-service-shell,01httpd))
-$(eval $(call login-service-shell,01localstack-localstack))
-$(eval $(call login-service-shell,01mariadb12))
-$(eval $(call login-service-shell,01mongo7))
-$(eval $(call login-service-shell,01mysql9))
-$(eval $(call login-service-shell,01nginx))
-$(eval $(call login-service-shell,01selenium-standalone-chrome))
-$(eval $(call login-service-shell,01selenium-standalone-firefox))
-$(eval $(call login-service-shell,02fvm))
-$(eval $(call login-service-shell,02keycloak-keycloak))
-$(eval $(call login-service-shell,02mongoclient-mongoclient))
-$(eval $(call login-service-shell,02nvm))
-$(eval $(call login-service-shell,02phpbrew))
-$(eval $(call login-service-shell,02pyenv))
-$(eval $(call login-service-shell,02rbenv))
-$(eval $(call login-service-shell,02rust))
-$(eval $(call login-service-shell,02sdkman))
-$(eval $(call login-service-shell,02sonarqube))
-$(eval $(call login-service-shell,03flutter3))
-$(eval $(call login-service-shell,03java17-zulu))
-$(eval $(call login-service-shell,03java21-zulu))
-$(eval $(call login-service-shell,03java26-zulu))
-$(eval $(call login-service-shell,03node26))
-$(eval $(call login-service-shell,03node24))
-$(eval $(call login-service-shell,03nodeedge))
-$(eval $(call login-service-shell,03php8-4))
-$(eval $(call login-service-shell,03php8-5))
-$(eval $(call login-service-shell,03phpedge))
-$(eval $(call login-service-shell,03python3))
-$(eval $(call login-service-shell,03ruby3))
-$(eval $(call login-service-shell,03ruby4))
-$(eval $(call login-service-shell,04android))
-$(eval $(call login-service-shell,04phpmyadmin))
-$(eval $(call login-service-shell,04serverless-framework))
-$(eval $(call login-service-shell,05edge))
-$(eval $(call login-service-shell,05stable))
-
-# login targets — sh-only containers
-$(eval $(call login-service-sh,01postgres18))
-$(eval $(call login-service-sh,01redis))
-$(eval $(call login-service-sh,01valkey))
-$(eval $(call login-service-sh,02dpage-pgadmin4))
-
-# log targets
-$(eval $(call log-service,00base))
-$(eval $(call log-service,00corentinth-it-tools))
-$(eval $(call log-service,01axllent-mailpit))
-$(eval $(call log-service,01caddy))
-$(eval $(call log-service,01epiclabs-docker-oracle-xe-11g))
-$(eval $(call log-service,01httpd))
-$(eval $(call log-service,01localstack-localstack))
-$(eval $(call log-service,01mariadb12))
-$(eval $(call log-service,01mongo7))
-$(eval $(call log-service,01mysql9))
-$(eval $(call log-service,01nginx))
-$(eval $(call log-service,01postgres18))
-$(eval $(call log-service,01redis))
-$(eval $(call log-service,01selenium-standalone-chrome))
-$(eval $(call log-service,01selenium-standalone-firefox))
-$(eval $(call log-service,01valkey))
-$(eval $(call log-service,02dpage-pgadmin4))
-$(eval $(call log-service,02fvm))
-$(eval $(call log-service,02keycloak-keycloak))
-$(eval $(call log-service,02mongoclient-mongoclient))
-$(eval $(call log-service,02nvm))
-$(eval $(call log-service,02phpbrew))
-$(eval $(call log-service,02pyenv))
-$(eval $(call log-service,02rbenv))
-$(eval $(call log-service,02rust))
-$(eval $(call log-service,02sdkman))
-$(eval $(call log-service,02sonarqube))
-$(eval $(call log-service,03flutter3))
-$(eval $(call log-service,03java17-zulu))
-$(eval $(call log-service,03java21-zulu))
-$(eval $(call log-service,03java26-zulu))
-$(eval $(call log-service,03node26))
-$(eval $(call log-service,03node24))
-$(eval $(call log-service,03nodeedge))
-$(eval $(call log-service,03php8-4))
-$(eval $(call log-service,03php8-5))
-$(eval $(call log-service,03phpedge))
-$(eval $(call log-service,03python3))
-$(eval $(call log-service,03ruby3))
-$(eval $(call log-service,03ruby4))
-$(eval $(call log-service,04android))
-$(eval $(call log-service,04phpmyadmin))
-$(eval $(call log-service,04serverless-framework))
-$(eval $(call log-service,05edge))
-$(eval $(call log-service,05stable))
-
-# log-follow targets
-$(eval $(call log-follow-service,00base))
-$(eval $(call log-follow-service,00corentinth-it-tools))
-$(eval $(call log-follow-service,01axllent-mailpit))
-$(eval $(call log-follow-service,01caddy))
-$(eval $(call log-follow-service,01epiclabs-docker-oracle-xe-11g))
-$(eval $(call log-follow-service,01httpd))
-$(eval $(call log-follow-service,01localstack-localstack))
-$(eval $(call log-follow-service,01mariadb12))
-$(eval $(call log-follow-service,01mongo7))
-$(eval $(call log-follow-service,01mysql9))
-$(eval $(call log-follow-service,01nginx))
-$(eval $(call log-follow-service,01postgres18))
-$(eval $(call log-follow-service,01redis))
-$(eval $(call log-follow-service,01selenium-standalone-chrome))
-$(eval $(call log-follow-service,01selenium-standalone-firefox))
-$(eval $(call log-follow-service,01valkey))
-$(eval $(call log-follow-service,02dpage-pgadmin4))
-$(eval $(call log-follow-service,02fvm))
-$(eval $(call log-follow-service,02keycloak-keycloak))
-$(eval $(call log-follow-service,02mongoclient-mongoclient))
-$(eval $(call log-follow-service,02nvm))
-$(eval $(call log-follow-service,02phpbrew))
-$(eval $(call log-follow-service,02pyenv))
-$(eval $(call log-follow-service,02rbenv))
-$(eval $(call log-follow-service,02rust))
-$(eval $(call log-follow-service,02sdkman))
-$(eval $(call log-follow-service,02sonarqube))
-$(eval $(call log-follow-service,03flutter3))
-$(eval $(call log-follow-service,03java17-zulu))
-$(eval $(call log-follow-service,03java21-zulu))
-$(eval $(call log-follow-service,03java26-zulu))
-$(eval $(call log-follow-service,03node26))
-$(eval $(call log-follow-service,03node24))
-$(eval $(call log-follow-service,03nodeedge))
-$(eval $(call log-follow-service,03php8-4))
-$(eval $(call log-follow-service,03php8-5))
-$(eval $(call log-follow-service,03phpedge))
-$(eval $(call log-follow-service,03python3))
-$(eval $(call log-follow-service,03ruby3))
-$(eval $(call log-follow-service,03ruby4))
-$(eval $(call log-follow-service,04android))
-$(eval $(call log-follow-service,04phpmyadmin))
-$(eval $(call log-follow-service,04serverless-framework))
-$(eval $(call log-follow-service,05edge))
-$(eval $(call log-follow-service,05stable))
-
-# restart targets
-$(eval $(call restart-service,00base))
-$(eval $(call restart-service,00corentinth-it-tools))
-$(eval $(call restart-service,01axllent-mailpit))
-$(eval $(call restart-service,01caddy))
-$(eval $(call restart-service,01epiclabs-docker-oracle-xe-11g))
-$(eval $(call restart-service,01httpd))
-$(eval $(call restart-service,01localstack-localstack))
-$(eval $(call restart-service,01mariadb12))
-$(eval $(call restart-service,01mongo7))
-$(eval $(call restart-service,01mysql9))
-$(eval $(call restart-service,01nginx))
-$(eval $(call restart-service,01postgres18))
-$(eval $(call restart-service,01redis))
-$(eval $(call restart-service,01selenium-standalone-chrome))
-$(eval $(call restart-service,01selenium-standalone-firefox))
-$(eval $(call restart-service,01valkey))
-$(eval $(call restart-service,02dpage-pgadmin4))
-$(eval $(call restart-service,02fvm))
-$(eval $(call restart-service,02keycloak-keycloak))
-$(eval $(call restart-service,02mongoclient-mongoclient))
-$(eval $(call restart-service,02nvm))
-$(eval $(call restart-service,02phpbrew))
-$(eval $(call restart-service,02pyenv))
-$(eval $(call restart-service,02rbenv))
-$(eval $(call restart-service,02rust))
-$(eval $(call restart-service,02sdkman))
-$(eval $(call restart-service,02sonarqube))
-$(eval $(call restart-service,03flutter3))
-$(eval $(call restart-service,03java17-zulu))
-$(eval $(call restart-service,03java21-zulu))
-$(eval $(call restart-service,03java26-zulu))
-$(eval $(call restart-service,03node26))
-$(eval $(call restart-service,03node24))
-$(eval $(call restart-service,03nodeedge))
-$(eval $(call restart-service,03php8-4))
-$(eval $(call restart-service,03php8-5))
-$(eval $(call restart-service,03phpedge))
-$(eval $(call restart-service,03python3))
-$(eval $(call restart-service,03ruby3))
-$(eval $(call restart-service,03ruby4))
-$(eval $(call restart-service,04android))
-$(eval $(call restart-service,04phpmyadmin))
-$(eval $(call restart-service,04serverless-framework))
-$(eval $(call restart-service,05edge))
-$(eval $(call restart-service,05stable))
+# Generate login/log/log-follow/restart targets from service lists
+$(foreach s,$(SERVICES_SHELL),$(eval $(call login-service-shell,$(s))))
+$(foreach s,$(SERVICES_SH),$(eval $(call login-service-sh,$(s))))
+$(foreach s,$(SERVICES_ALL),$(eval $(call log-service,$(s))))
+$(foreach s,$(SERVICES_ALL),$(eval $(call log-follow-service,$(s))))
+$(foreach s,$(SERVICES_ALL),$(eval $(call restart-service,$(s))))
 
 help:
 	@echo "Welcome to the multipurpose dockerized stack\n"
