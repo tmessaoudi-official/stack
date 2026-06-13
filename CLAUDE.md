@@ -152,8 +152,10 @@ bin/env-update.sh --apply                         # apply AUTO decisions (run --
 # After updating versions in .env
 bin/env-scan.sh   # Propagate to .env.local + rewrite ARG lines in Dockerfiles (--sync-values=true by default)
 # If a pinned runtime version changed: delete its tools/versions/ marker (or set
-# GLOBAL_STACK_RELOAD_<RUNTIME>=true) — the marker gate is existence-only; skipping
-# this leaves the old version installed and the container unhealthy after a long wait
+# GLOBAL_STACK_RELOAD_<RUNTIME>=true) — the marker gate compares content against the
+# current env version and triggers reinstall automatically on mismatch; however tier-03
+# per-version markers (e.g. node.24, php.8.4) are existence-only and must be deleted
+# manually to force reinstall of that specific version.
 make down-n-rebuild-force-recreate
 
 # Env sync / audit
