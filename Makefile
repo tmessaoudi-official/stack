@@ -386,6 +386,11 @@ start-local-registry:
 build: create-paths generate-buildx
 	# change the order of this in local.Makefile
 	#  --no-cache --progress=plain
+	@curl -fks https://$(GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS):$(GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_PORT_5000)/v2/ >/dev/null 2>&1 \
+	  || { echo "FATAL: local registry not running — run 'make start-local-registry' first"; exit 1; }
+	@_cert="docker/registry/certs/$(GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS).crt"; \
+	  [ -f "$$_cert" ] && openssl x509 -noout -checkend 2592000 -in "$$_cert" 2>/dev/null \
+	  || { [ -f "$$_cert" ] && echo "WARNING: local registry cert expires within 30 days — run 'make start-local-registry' to rotate"; }; true
 	@echo "=== Building all targets (tagged: push+load, untagged: load only) ==="; \
 	_failed_file=$$(mktemp) || { echo "Error: mktemp failed"; exit 1; }; \
 	trap "rm -f $$_failed_file" EXIT; \
