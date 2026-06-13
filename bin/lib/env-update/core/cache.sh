@@ -3,7 +3,7 @@
 #
 # Exports:   _gs_eu2_cache_read  _gs_eu2_cache_write
 #            _gs_eu2_cache_invalidate  _gs_eu2_cache_clear_all
-#            _gs_eu2_cache_key_to_file
+#            _gs_eu2_cache_key_to_file  _gs_eu2_cache_try_load
 # Sources:   config/defaults.sh
 # Deps:      date, stat (GNU or BSD), mktemp, mv
 # Env:       _GS_EU2_CACHE_DIR (default: /tmp/global-stack-env-update-cache)
@@ -109,4 +109,29 @@ _gs_eu2_cache_invalidate() {
 # Side fx: removes _GS_EU2_CACHE_DIR and all its contents
 _gs_eu2_cache_clear_all() {
   rm -rf "${_GS_EU2_CACHE_DIR}"
+}
+
+# _gs_eu2_cache_try_load — probe cache, populate record if hit, signal miss.
+#
+# Args:    $1 idx           — record index
+#          $2 cache_key     — cache key to look up
+#          $3 major_hint    — (optional) desired major hint string
+#          $4 major_hint_min — (optional) fallback major hint string
+# Reads:   _GS_EU2_CFG[no_cache], cache file
+# Sets:    record field proposed_version (on hit); using_fallback_major "true" (on fallback)
+# Returns: 0 on cache hit (record populated, caller should return 0)
+#          1 on cache miss or no_cache=true
+_gs_eu2_cache_try_load() {
+  local _idx="${1}" _cache_key="${2}" _mh="${3:-}" _mh_min="${4:-}"
+  [[ "${_GS_EU2_CFG[no_cache]:-false}" == "true" ]] && return 1
+  local _cached
+  _cached="$(_gs_eu2_cache_read "${_cache_key}")" || return 1
+  [[ -n "${_cached}" ]] || return 1
+  if [[ -n "${_mh_min}" \
+        && "${_cached}" =~ ^v?"${_mh_min}"([.^_-]|$) \
+        && ! "${_cached}" =~ ^v?"${_mh}"([.^_-]|$) ]]; then
+    _gs_eu2_record_set "${_idx}" using_fallback_major "true"
+  fi
+  _gs_eu2_record_set "${_idx}" proposed_version "${_cached}"
+  return 0
 }

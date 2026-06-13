@@ -78,14 +78,8 @@ _gs_eu2_fetch_url() {
   local _cache_key
   _cache_key="url:${_identifier}:${_fetch_extract:-}:${_fetch_json:-}:${_url_probe:+up}:${_channel}"
 
-  # Cache read (skip when no_cache=true)
-  if [[ "${_no_cache}" != "true" ]]; then
-    local _cached
-    if _cached="$(_gs_eu2_cache_read "${_cache_key}")" && [[ -n "${_cached}" ]]; then
-      _gs_eu2_record_set "${_idx}" proposed_version "${_cached}"
-      return 0
-    fi
-  fi
+  # Cache read
+  _gs_eu2_cache_try_load "${_idx}" "${_cache_key}" && return 0
 
   local _proposed=""
 

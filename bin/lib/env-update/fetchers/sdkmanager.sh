@@ -137,13 +137,7 @@ _gs_eu2_fetch_sdkmanager() {
   local _cache_key="sdkmanager:${_identifier}:${_channel}"
 
   # Cache read
-  if [[ "${_no_cache}" != "true" ]]; then
-    local _cached
-    if _cached="$(_gs_eu2_cache_read "${_cache_key}")" && [[ -n "${_cached}" ]]; then
-      _gs_eu2_record_set "${_idx}" proposed_version "${_cached}"
-      return 0
-    fi
-  fi
+  _gs_eu2_cache_try_load "${_idx}" "${_cache_key}" "${_major_hint:-}" "${_major_hint_min:-}" && return 0
 
   # Get sdkmanager list output
   local _list_output

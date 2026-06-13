@@ -70,18 +70,7 @@ _gs_eu2_fetch_pypi() {
   local _cache_key="pypi:${_identifier}:${_major_hint}:${_major_hint_min}:${_channel}:${_wm_depth_ck}"
 
   # Cache read
-  if [[ "${_no_cache}" != "true" ]]; then
-    local _cached
-    if _cached="$(_gs_eu2_cache_read "${_cache_key}")" && [[ -n "${_cached}" ]]; then
-      if [[ -n "${_major_hint_min}" && -n "${_cached}" \
-            && "${_cached}" =~ ^v?"${_major_hint_min}"([.^_-]|$) \
-            && ! "${_cached}" =~ ^v?"${_major_hint}"([.^_-]|$) ]]; then
-        _gs_eu2_record_set "${_idx}" using_fallback_major "true"
-      fi
-      _gs_eu2_record_set "${_idx}" proposed_version "${_cached}"
-      return 0
-    fi
-  fi
+  _gs_eu2_cache_try_load "${_idx}" "${_cache_key}" "${_major_hint:-}" "${_major_hint_min:-}" && return 0
 
   local _url="https://pypi.org/pypi/${_identifier}/json"
 
