@@ -188,7 +188,7 @@ Implement in risk order.
 
 GLOBAL_STACK_WAIT_FOR_TIMEOUT should be read from .env !!
 
-- [ ] **Atomic shellrc writes — 13 startup scripts** — all `*-start.sh` scripts write `.shellrc` exports via `>` + multiple `>>` redirects (non-atomic). A crash between the first truncation and the last append leaves a partial `.shellrc` on the shared `tools/` volume. Fix: wrap all exports in `{ ... } > service.shellrc.tmp && mv service.shellrc.tmp service.shellrc`. Affects: nvm, sdkman, phpbrew, rbenv, pyenv, fvm, android, phpmyadmin, serverless, alltogether, base-prepare-shell, base-install-mise. Low practical risk (set -eE aborts on write failure and no success token is written), but worth fixing in a dedicated sprint.
+- [ ] **Atomic shellrc writes — 13 startup scripts** — all `*-start.sh` scripts write `.shellrc` exports via `>` + multiple `>>` redirects (non-atomic). Two risk angles: (1) a crash between the first truncation and the last append leaves a partial `.shellrc` on the shared `tools/` volume; (2) the host shell sourcing a `.shellrc` file concurrently with an in-progress write may read a partially-written file. Fix: wrap all exports in `{ ... } > service.shellrc.tmp && mv service.shellrc.tmp service.shellrc` (atomic rename guarantees the host sees either the old complete file or the new complete file). Affects: nvm, sdkman, phpbrew, rbenv, pyenv, fvm, android, phpmyadmin, serverless, alltogether, base-prepare-shell, base-install-mise. Low practical risk (set -eE aborts on write failure and no success token is written; host sources shellrc at login not continuously), but worth fixing in a dedicated sprint.
 
 ---
 
