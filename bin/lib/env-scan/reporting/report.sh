@@ -99,6 +99,7 @@ _gs_es_show_differences() {
 			}
 			NR == FNR { source[key]=nval; next }
 			(exclude_pattern != "" && key ~ exclude_pattern) { print $0; next }
+			/[[:space:]]*#[[:space:]]*@local-keep/ { print $0; next }
 			(key in source) && (nval != source[key]) { print key "=" source[key]; next }
 			{ print $0; next }' "${src_file}" "${dest_file}" >"${dest_file}.updated.tmp.${count}" && mv "${dest_file}.updated.tmp.${count}" "${dest_file}"
 		if [[ "true" = "${_GS_ES_CFG[debug]}" ]]; then

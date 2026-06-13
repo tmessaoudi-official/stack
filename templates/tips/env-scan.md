@@ -168,6 +168,24 @@ line immediately before their corresponding key.
 Local-only keys (present in `.env.local` but not in `.env`) are preserved in a footer
 section under a `# --- local-only keys (not present in .env) ---` marker.
 
+### Per-variable opt-out: `# @local-keep`
+
+Add `# @local-keep` as an inline comment on any line in `.env.local` to prevent
+env-scan from overwriting that value, even when `--sync-values=true` (the default):
+
+```bash
+GLOBAL_STACK_MYSQL9_VERSION=8.0.1  # @local-keep
+```
+
+The annotation is preserved verbatim — env-scan never strips it. Spacing before `#`
+is flexible: `#@local-keep`, `# @local-keep`, and `#  @local-keep` are all recognised.
+Note: place a space before `#` to avoid the value being read as `8.0.1#@local-keep`
+by tools that do not treat bare `#` as a comment delimiter (Docker Compose requires
+a space or line-start before `#` for comment syntax).
+
+This is composable with `--sync-values=false`: that flag already preserves all dest
+values; `@local-keep` is only meaningful when `--sync-values=true` is active.
+
 ---
 
 ## Missing Variable Checks

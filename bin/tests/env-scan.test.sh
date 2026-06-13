@@ -2713,6 +2713,58 @@ t "t38g: --backup-suffix=.mybak creates backup with custom suffix" bash -c "
 _flush_section
 
 # ═══════════════════════════════════════════════════════════════════════════
+section "39 — @local-keep annotation"
+# ═══════════════════════════════════════════════════════════════════════════
+
+# t39a: pinned var with # @local-keep is not overwritten by sync-values=true
+t "t39a: @local-keep preserves dest value when sync-values=true" bash -c "
+    D='${TMP_DIR}/t39a'; mkdir -p \"\$D\"
+    # src has PINNED=src_val and FREE=src_val
+    # dest has PINNED=local_pin (annotated) and FREE=local_override (not annotated)
+    # After sync: FREE must be overwritten (proves sync is active); PINNED must stay
+    printf 'GLOBAL_STACK_PINNED=src_val\nGLOBAL_STACK_FREE=src_val\n' > \"\$D/.env\"
+    printf 'GLOBAL_STACK_PINNED=local_pin  # @local-keep\nGLOBAL_STACK_FREE=local_override\n' > \"\$D/.env.local\"
+    bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=false --sync-values=true \
+        --check-missing=false --show-added-entries=false --show-different-entries=false \
+        --backup=false 2>&1 >/dev/null
+    # FREE must be overwritten (sync is active)
+    grep -q 'GLOBAL_STACK_FREE=src_val' \"\$D/.env.local\" || { echo \"FREE was not synced — sync inactive\"; echo FAIL; exit 0; }
+    # PINNED value must still be local_pin
+    grep -q 'GLOBAL_STACK_PINNED=local_pin' \"\$D/.env.local\" || { echo \"PINNED value was overwritten despite @local-keep\"; echo FAIL; exit 0; }
+    # PINNED annotation must still be present on the same line
+    grep -q 'GLOBAL_STACK_PINNED=local_pin.*# @local-keep' \"\$D/.env.local\" || { echo \"@local-keep annotation was stripped\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t39b: annotation variants (#@local-keep, spaced variants) are all honoured
+t "t39b: annotation variants #@local-keep and  # @local-keep are honoured" bash -c "
+    D='${TMP_DIR}/t39b'; mkdir -p \"\$D\"
+    printf 'GLOBAL_STACK_A=src\nGLOBAL_STACK_B=src\n' > \"\$D/.env\"
+    # A uses no-space variant; B uses extra-space variant
+    printf 'GLOBAL_STACK_A=local_a  #@local-keep\nGLOBAL_STACK_B=local_b   #  @local-keep\n' > \"\$D/.env.local\"
+    bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=false --sync-values=true \
+        --check-missing=false --show-added-entries=false --show-different-entries=false \
+        --backup=false 2>&1 >/dev/null
+    grep -q 'GLOBAL_STACK_A=local_a' \"\$D/.env.local\" || { echo \"A overwritten despite #@local-keep\"; echo FAIL; exit 0; }
+    grep -q 'GLOBAL_STACK_B=local_b' \"\$D/.env.local\" || { echo \"B overwritten despite #  @local-keep\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t39c: @local-keep has no effect when sync-values=false (composability check)
+t "t39c: @local-keep + sync-values=false: both mechanisms independently preserve dest" bash -c "
+    D='${TMP_DIR}/t39c'; mkdir -p \"\$D\"
+    printf 'GLOBAL_STACK_KEY=src_val\n' > \"\$D/.env\"
+    printf 'GLOBAL_STACK_KEY=local_val  # @local-keep\n' > \"\$D/.env.local\"
+    bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=false --sync-values=false \
+        --check-missing=false --show-added-entries=false --show-different-entries=false \
+        --backup=false 2>&1 >/dev/null
+    grep -q 'GLOBAL_STACK_KEY=local_val' \"\$D/.env.local\" || { echo \"value changed with sync-values=false\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+_flush_section
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section
