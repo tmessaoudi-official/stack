@@ -85,28 +85,20 @@ source "$(dirname "${BASH_SOURCE[0]}")/core/passes.sh"
 # Note: this DRY helper (I2) replaces three identical 12-fetcher case blocks
 # that previously appeared separately in run_check, unstable-info second-pass,
 # and stable-info second-pass.
+# Note: dispatch is dynamic — calls _gs_eu2_fetch_<type> when the function exists.
+#       Adding a new fetcher requires only: (1) new fetcher file, (2) one source line.
+#       No case label needed. Unknown types fall through to decision=SKIP.
 _gs_eu2_dispatch_fetcher() {
   local _df_i="${1}"
   local _df_type
   _df_type="$(_gs_eu2_record_get "${_df_i}" type)"
-  case "${_df_type}" in
-    codeberg)   _gs_eu2_fetch_codeberg   "${_df_i}" ;;
-    dockerhub)  _gs_eu2_fetch_dockerhub  "${_df_i}" ;;
-    github)     _gs_eu2_fetch_github     "${_df_i}" ;;
-    quay)       _gs_eu2_fetch_quay       "${_df_i}" ;;
-    npm)        _gs_eu2_fetch_npm        "${_df_i}" ;;
-    pypi)       _gs_eu2_fetch_pypi       "${_df_i}" ;;
-    rubygems)   _gs_eu2_fetch_rubygems   "${_df_i}" ;;
-    sdkman)     _gs_eu2_fetch_sdkman     "${_df_i}" ;;
-    sdkmanager) _gs_eu2_fetch_sdkmanager "${_df_i}" ;;
-    pecl)       _gs_eu2_fetch_pecl       "${_df_i}" ;;
-    url)        _gs_eu2_fetch_url        "${_df_i}" ;;
-    ghcr)       _gs_eu2_fetch_ghcr       "${_df_i}" ;;
-    *)
-      _gs_eu2_record_set "${_df_i}" decision      "SKIP"
-      _gs_eu2_record_set "${_df_i}" error_message "unknown fetcher type '${_df_type}' — check annotation syntax"
-      ;;
-  esac
+  local _df_fn="_gs_eu2_fetch_${_df_type}"
+  if declare -F "${_df_fn}" >/dev/null 2>&1; then
+    "${_df_fn}" "${_df_i}"
+  else
+    _gs_eu2_record_set "${_df_i}" decision      "SKIP"
+    _gs_eu2_record_set "${_df_i}" error_message "unknown fetcher type '${_df_type}' — check annotation syntax"
+  fi
 }
 
 # ── Tally helpers ────────────────────────────────────────────────────────────
