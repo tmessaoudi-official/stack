@@ -81,11 +81,17 @@ fi
 
 if [[ "${FVM_MODE}" = "install" ]]; then
   printf '\nWriting /.shellrc/.fvm.shellrc\n'
-  echo "export FVM_CACHE_PATH=${FVM_CACHE_PATH}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/fvm.shellrc"
-  echo "export FVM_GIT_CACHE_PATH=${FVM_GIT_CACHE_PATH}" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/fvm.shellrc"
-  echo "export FVM_USE_GIT_CACHE=${FVM_USE_GIT_CACHE}" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/fvm.shellrc"
-  echo "export FVM_FLUTTER_URL=${FVM_FLUTTER_URL}" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/fvm.shellrc"
-  echo "export PUB_CACHE=${PUB_CACHE}" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/fvm.shellrc"
+  # E-4: write to a temp file then atomic-rename onto the shared volume so the
+  # host never sources a partially-written fvm.shellrc (rename is atomic on the
+  # same filesystem; both paths live under TOOLS_PATH_SHELLRC).
+  fvm_shellrc="${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/fvm.shellrc"
+  {
+    echo "export FVM_CACHE_PATH=${FVM_CACHE_PATH}"
+    echo "export FVM_GIT_CACHE_PATH=${FVM_GIT_CACHE_PATH}"
+    echo "export FVM_USE_GIT_CACHE=${FVM_USE_GIT_CACHE}"
+    echo "export FVM_FLUTTER_URL=${FVM_FLUTTER_URL}"
+    echo "export PUB_CACHE=${PUB_CACHE}"
+  } > "${fvm_shellrc}.tmp" && mv "${fvm_shellrc}.tmp" "${fvm_shellrc}"
 fi
 # ----------------------------------
 

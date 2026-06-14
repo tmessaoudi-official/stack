@@ -117,16 +117,22 @@ fi
 
 if [ "${PHPBREW_MODE}" = "install" ]; then
   echo -e "\nWriting /shellrc/phpbrew.shellrc"
-  echo "export PHPBREW_BIN=${PHPBREW_BIN}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/phpbrew.shellrc"
-  echo "export PHPBREW_HOME=${PHPBREW_HOME}" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/phpbrew.shellrc"
-  echo "export PHPBREW_ROOT=${PHPBREW_ROOT}" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/phpbrew.shellrc"
-  echo "export PHPBREW_SRC=${PHPBREW_SRC}" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/phpbrew.shellrc"
-  echo "export PHPBREW_SET_PROMPT=${PHPBREW_SET_PROMPT}" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/phpbrew.shellrc"
-  echo "export PHPBREW_SKIP_INIT=${PHPBREW_SKIP_INIT}" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/phpbrew.shellrc"
-  echo "export PHPBREW_RC_ENABLE=${PHPBREW_RC_ENABLE}" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/phpbrew.shellrc"
-  echo "export COMPOSER_HOME=${COMPOSER_HOME}" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/phpbrew.shellrc"
-  echo "export COMPOSER_SOURCE=${COMPOSER_SOURCE}" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/phpbrew.shellrc"
-  echo "export SYMFONY_HOME=${SYMFONY_HOME}" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/phpbrew.shellrc"
+  # E-4: write to a temp file then atomic-rename onto the shared volume so the
+  # host never sources a partially-written phpbrew.shellrc (rename is atomic on
+  # the same filesystem; both paths live under TOOLS_PATH_SHELLRC).
+  phpbrew_shellrc="${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/phpbrew.shellrc"
+  {
+    echo "export PHPBREW_BIN=${PHPBREW_BIN}"
+    echo "export PHPBREW_HOME=${PHPBREW_HOME}"
+    echo "export PHPBREW_ROOT=${PHPBREW_ROOT}"
+    echo "export PHPBREW_SRC=${PHPBREW_SRC}"
+    echo "export PHPBREW_SET_PROMPT=${PHPBREW_SET_PROMPT}"
+    echo "export PHPBREW_SKIP_INIT=${PHPBREW_SKIP_INIT}"
+    echo "export PHPBREW_RC_ENABLE=${PHPBREW_RC_ENABLE}"
+    echo "export COMPOSER_HOME=${COMPOSER_HOME}"
+    echo "export COMPOSER_SOURCE=${COMPOSER_SOURCE}"
+    echo "export SYMFONY_HOME=${SYMFONY_HOME}"
+  } > "${phpbrew_shellrc}.tmp" && mv "${phpbrew_shellrc}.tmp" "${phpbrew_shellrc}"
 fi
 
 # ----------------------------------

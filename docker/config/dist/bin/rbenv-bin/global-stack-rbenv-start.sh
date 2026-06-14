@@ -67,7 +67,11 @@ fi
 
 if [[ "${RBENV_MODE}" = "install" ]]; then
   printf '\nWriting /shellrc/rbenv.shellrc\n'
-  echo "export RBENV_ROOT=${RBENV_ROOT}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/rbenv.shellrc"
+  # E-4: write to a temp file then atomic-rename onto the shared volume so the
+  # host never sources a partially-written rbenv.shellrc (rename is atomic on
+  # the same filesystem; both paths live under TOOLS_PATH_SHELLRC).
+  rbenv_shellrc="${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/rbenv.shellrc"
+  echo "export RBENV_ROOT=${RBENV_ROOT}" > "${rbenv_shellrc}.tmp" && mv "${rbenv_shellrc}.tmp" "${rbenv_shellrc}"
 fi
 
 if [[ "${RBENV_MODE}" = "setup" ]]; then

@@ -221,6 +221,55 @@ else
   printf '  %b✗%b  stackCatch does not write error token on clean exit\n' "${C_RED}" "${C_RESET}"
 fi
 
+# ─── Section 7: atomic shellrc writes (E-4) ─────────────────────────────────
+# Each shared-volume *.shellrc writer must publish via a temp file + atomic
+# rename (mv tmp -> final) so the host never sources a partially-written file.
+# Assert (a) an atomic `mv "<tmp>" "<...shellrc>"` exists, and (b) no bare
+# redirect writes the final .shellrc path outside the temp grouping.
+printf '\n%b── Section 7: atomic shellrc writes (E-4)%b\n' "${C_BOLD}" "${C_RESET}"
+
+# script:shellrc-basename pairs for the shared-volume writers (Source A only)
+ATOMIC_SHELLRC=(
+  "nvm-bin/global-stack-nvm-start.sh:nvm.shellrc"
+  "phpbrew-bin/global-stack-phpbrew-start.sh:phpbrew.shellrc"
+  "fvm-bin/global-stack-fvm-start.sh:fvm.shellrc"
+  "pyenv-bin/global-stack-pyenv-start.sh:pyenv.shellrc"
+  "rbenv-bin/global-stack-rbenv-start.sh:rbenv.shellrc"
+  "sdkman-bin/global-stack-sdkman-start.sh:sdkman.shellrc"
+  "base-bin/global-stack-base-install-mise.sh:mise.shellrc"
+)
+
+for pair in "${ATOMIC_SHELLRC[@]}"; do
+  script="${pair%%:*}"
+  base="${pair##*:}"
+  path="${DIST_BIN}/${script}"
+
+  # (a) must publish via temp+atomic-rename: assign a var to the final .shellrc
+  # path, redirect the export block to "<var>.tmp", then `mv "<var>.tmp" "<var>"`.
+  # Match (i) a "<...>.tmp" redirect target and (ii) an `mv "<...>.tmp" "<...>"`
+  # rename — the basename appears in the var assignment, not the mv line.
+  if grep -Eq "${base}\"" "${path}" \
+    && grep -Eq "mv[[:space:]]+\"[^\"]*\.tmp\"[[:space:]]+\"[^\"]*\"" "${path}" \
+    && grep -Eq ">[[:space:]]+\"[^\"]*\.tmp\"" "${path}"; then
+    PASS=$((PASS + 1))
+    printf '  %b✓%b  %s publishes %s via atomic mv\n' "${C_GREEN}" "${C_RESET}" "${script}" "${base}"
+  else
+    FAIL=$((FAIL + 1))
+    FAILURES+=("${script} missing atomic mv for ${base}")
+    printf '  %b✗%b  %s missing atomic mv for %s\n' "${C_RED}" "${C_RESET}" "${script}" "${base}"
+  fi
+
+  # (b) must NOT write the final .shellrc via a direct redirect (> or >>) to its path
+  if grep -Eq ">>?[[:space:]]+\"[^\"]*${base}\"" "${path}"; then
+    FAIL=$((FAIL + 1))
+    FAILURES+=("${script} still writes ${base} via direct redirect")
+    printf '  %b✗%b  %s still redirects directly to %s\n' "${C_RED}" "${C_RESET}" "${script}" "${base}"
+  else
+    PASS=$((PASS + 1))
+    printf '  %b✓%b  %s has no direct redirect to %s\n' "${C_GREEN}" "${C_RESET}" "${script}" "${base}"
+  fi
+done
+
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
 if [[ "${FAIL}" -eq 0 ]]; then

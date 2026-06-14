@@ -119,18 +119,24 @@ fi
 
 if [[ "${NVM_MODE}" = "install" ]]; then
   printf '\nWriting /.shellrc/.nvm.shellrc\n'
-  echo "export NVM_DIR=${NVM_DIR}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/nvm.shellrc"
-  echo "export DENO_INSTALL=${DENO_INSTALL}" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/nvm.shellrc"
-  echo "export DENO_INSTALL_ROOT=${DENO_INSTALL_ROOT}" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/nvm.shellrc"
-  echo "export DENO_DIR=${DENO_DIR}" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/nvm.shellrc"
-  echo "export YARN_OFFLINE_MIRROR=${YARN_OFFLINE_MIRROR}" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/nvm.shellrc"
-  echo "export YARN_CACHE_FOLDER=${YARN_CACHE_FOLDER}" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/nvm.shellrc"
-  echo "export YARN_GLOBAL_FOLDER=${YARN_GLOBAL_FOLDER}" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/nvm.shellrc"
-  echo "export GLOBAL_STACK_PNPM_GLOBAL_DIR=${GLOBAL_STACK_PNPM_GLOBAL_DIR}" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/nvm.shellrc"
-  echo "export PNPM_HOME=${PNPM_HOME}" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/nvm.shellrc"
-  echo "export GLOBAL_STACK_PNPM_STORE_DIR=${GLOBAL_STACK_PNPM_STORE_DIR}" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/nvm.shellrc"
-  echo "export CYPRESS_CACHE_FOLDER=${CYPRESS_CACHE_FOLDER}" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/nvm.shellrc"
-  echo "export NPM_CACHE_DIR=${NPM_CACHE_DIR}" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/nvm.shellrc"
+  # E-4: write to a temp file then atomic-rename onto the shared volume so the
+  # host never sources a partially-written nvm.shellrc (rename is atomic on the
+  # same filesystem; both paths live under TOOLS_PATH_SHELLRC).
+  nvm_shellrc="${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/nvm.shellrc"
+  {
+    echo "export NVM_DIR=${NVM_DIR}"
+    echo "export DENO_INSTALL=${DENO_INSTALL}"
+    echo "export DENO_INSTALL_ROOT=${DENO_INSTALL_ROOT}"
+    echo "export DENO_DIR=${DENO_DIR}"
+    echo "export YARN_OFFLINE_MIRROR=${YARN_OFFLINE_MIRROR}"
+    echo "export YARN_CACHE_FOLDER=${YARN_CACHE_FOLDER}"
+    echo "export YARN_GLOBAL_FOLDER=${YARN_GLOBAL_FOLDER}"
+    echo "export GLOBAL_STACK_PNPM_GLOBAL_DIR=${GLOBAL_STACK_PNPM_GLOBAL_DIR}"
+    echo "export PNPM_HOME=${PNPM_HOME}"
+    echo "export GLOBAL_STACK_PNPM_STORE_DIR=${GLOBAL_STACK_PNPM_STORE_DIR}"
+    echo "export CYPRESS_CACHE_FOLDER=${CYPRESS_CACHE_FOLDER}"
+    echo "export NPM_CACHE_DIR=${NPM_CACHE_DIR}"
+  } > "${nvm_shellrc}.tmp" && mv "${nvm_shellrc}.tmp" "${nvm_shellrc}"
 fi
 # ----------------------------------
 

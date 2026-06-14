@@ -135,7 +135,11 @@ fi
 
 if [[ "${SDKMAN_MODE}" = "install" ]]; then
   printf '\nWriting /shellrc/sdkman.shellrc\n'
-  echo "export SDKMAN_DIR=${SDKMAN_DIR}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/sdkman.shellrc"
+  # E-4: write to a temp file then atomic-rename onto the shared volume so the
+  # host never sources a partially-written sdkman.shellrc (rename is atomic on
+  # the same filesystem; both paths live under TOOLS_PATH_SHELLRC).
+  sdkman_shellrc="${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/sdkman.shellrc"
+  echo "export SDKMAN_DIR=${SDKMAN_DIR}" > "${sdkman_shellrc}.tmp" && mv "${sdkman_shellrc}.tmp" "${sdkman_shellrc}"
 fi
 
 global-stack-base-init-mkcert.sh

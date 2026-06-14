@@ -69,7 +69,11 @@ fi
 
 if [[ "${PYENV_MODE}" = "install" ]]; then
   printf '\nWriting /shellrc/pyenv.shellrc\n'
-  echo "export PYENV_ROOT=${PYENV_ROOT}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/pyenv.shellrc"
+  # E-4: write to a temp file then atomic-rename onto the shared volume so the
+  # host never sources a partially-written pyenv.shellrc (rename is atomic on
+  # the same filesystem; both paths live under TOOLS_PATH_SHELLRC).
+  pyenv_shellrc="${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/pyenv.shellrc"
+  echo "export PYENV_ROOT=${PYENV_ROOT}" > "${pyenv_shellrc}.tmp" && mv "${pyenv_shellrc}.tmp" "${pyenv_shellrc}"
 fi
 
 if [[ "${PYENV_MODE}" = "setup" ]]; then
