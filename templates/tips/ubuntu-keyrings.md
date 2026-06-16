@@ -8,6 +8,11 @@ sudo apt-key adv --keyserver hkps://keyserver.ubuntu.com --refresh-keys
 sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 690951F1A4DE0F905496E8C6C793BFA2FA577F07
 sudo apt-key export 690951F1A4DE0F905496E8C6C793BFA2FA577F07 | gpg --dearmor | sudo dd of=/usr/share/keyrings/my-package-name.gpg
 
+Newest with ubuntu 26.04 ! 
+sudo gpg --no-default-keyring --keyring /usr/share/keyrings/obsproject.gpg \
+  --keyserver keyserver.ubuntu.com \
+  --recv-keys BC7345F522079769F5BBE987EFC71127F425E228
+
 # With key file
 curl -fsSL https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/xUbuntu_20.04/Release.key | sudo gpg --dearmor -o /usr/share/keyrings/podman-archive.gpg
 
@@ -25,7 +30,7 @@ echo "deb [trusted=yes signed-by=/etc/apt/keyrings/bruno.gpg] http://debian.useb
 newest method (ubuntu 25.10 and above)
 Types: deb
 Signed-by: /usr/share/keyrings/my-package-name.gpg
-Arch=amd64
+Arch: amd64
 URIs: http://ppa.xxxx.xxxx
-Suites: focal
+Suites: resolute
 Components: main
