@@ -1,0 +1,3 @@
+# Treat bundle archives as binary — no text diffing or EOL normalization.
+*.tar.gz binary
+*.tgz binary
