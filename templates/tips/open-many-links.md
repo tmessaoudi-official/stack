@@ -2,7 +2,7 @@
 
 # Ubuntu dist check
 
-look for jammynoble|oracular|plucky|questing and try to replace them with resolute (if resolute dist exists else replace with the newest available dist) (look is there is a release)
+look for jammy|noble|oracular|plucky|questing and try to replace them with resolute (if resolute dist exists else replace with the newest available dist) (look is there is a release)
 
 
 ```bash
