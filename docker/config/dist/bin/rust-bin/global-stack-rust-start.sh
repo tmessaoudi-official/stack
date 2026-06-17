@@ -44,6 +44,7 @@ source "${CARGO_HOME}/env"
 global-stack-base-init-mkcert.sh
 global-stack-rust-install-jujutsu.sh
 global-stack-rust-install-mergiraf.sh
+global-stack-rust-install-cargo-zigbuild.sh
 global-stack-base-prepare-shell.sh
 echo "# global-stack-setup-finished" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 
