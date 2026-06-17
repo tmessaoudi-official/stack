@@ -25,8 +25,9 @@
 #
 # RETRY STRATEGY (_gs_eu2_http_get_core)
 #   Two-level: inner curl --retry 3 handles TCP/DNS failures; outer 3-attempt
-#   loop with exponential back-off handles HTTP 429 rate-limiting (5s, 10s).
-#   Together: up to 9 curl attempts per URL, outer back-off on 429 only.
+#   loop with exponential back-off handles HTTP 429 rate-limiting and 502/503/504
+#   transient server errors (5s, 10s back-off). 404 and other 4xx are NOT retried.
+#   Together: up to 9 curl attempts per URL, outer back-off on 429 and 5xx only.
 
 [[ -n "${_GS_EU2_CURL_SH_LOADED:-}" ]] && return 0
 readonly _GS_EU2_CURL_SH_LOADED=1
@@ -72,12 +73,19 @@ _gs_eu2_fixture_path() {
 # Args:    $1 url   — fully qualified URL to fetch
 #          $2 token — optional Bearer auth token (empty = unauthenticated)
 # Prints:  response body on success
-# Returns: 0 on success; 1 on failure (network error, HTTP 4xx/5xx, repeated 429)
+# Returns: 0 on success; 1 on failure (network error, HTTP 4xx/5xx, repeated 429/5xx)
 # Side fx: stores body in _GS_EU2_HTTP_MEMO keyed on "${url}:${auth_flag}"
 #
 # Callers must handle fixture-seam and memo fast-paths before calling this.
 # Retry strategy: inner curl --retry 3 for TCP errors; outer 3-attempt loop
-# with 5s/10s back-off for HTTP 429. Total: up to 9 curl attempts per URL.
+# with 5s/10s back-off for HTTP 429 (rate-limit) and 502/503/504 (transient 5xx).
+# 404 and other 4xx are NOT retried — they are definitive client-error signals.
+# Together: up to 9 curl attempts per URL, outer back-off on 429 and 5xx only.
+_gs_eu2_is_retryable_status() {
+  local _s="${1}"
+  [[ "${_s}" == "429" || "${_s}" == "502" || "${_s}" == "503" || "${_s}" == "504" ]]
+}
+
 _gs_eu2_http_get_core() {
   local _url="${1}" _token="${2:-}"
   local _body_tmp _curl_stderr_file
@@ -102,15 +110,29 @@ _gs_eu2_http_get_core() {
         "${_url}" 2>"${_curl_stderr_file}")"
     fi
     _curl_exit=$?
-    [[ "${_http_status}" != "429" ]] && break
+    # Break immediately unless the status is retryable (429 rate-limit or 5xx transient).
+    _gs_eu2_is_retryable_status "${_http_status}" || break
     [[ $_attempt -lt 3 ]] && {
-      printf 'env-update: rate-limited (HTTP 429), retry %d/3 in %ds\n' "$_attempt" "$((_attempt * 5))" >&2
+      if [[ "${_http_status}" == "429" ]]; then
+        printf 'env-update: rate-limited (HTTP 429), retry %d/3 in %ds\n' \
+          "$_attempt" "$((_attempt * 5))" >&2
+      else
+        printf 'env-update: transient HTTP %s (5xx), retry %d/3 in %ds\n' \
+          "${_http_status}" "$_attempt" "$((_attempt * 5))" >&2
+      fi
       sleep $((_attempt * 5))
     }
   done
 
   if [[ "${_http_status}" == "429" ]]; then
     printf 'env-update: rate-limited by %s after 3 attempts — try again later\n' "${_url}" >&2
+    rm -f "${_body_tmp}" "${_curl_stderr_file}"
+    return 1
+  fi
+
+  if _gs_eu2_is_retryable_status "${_http_status}"; then
+    printf 'env-update: transient HTTP %s from %s after 3 attempts — try again later\n' \
+      "${_http_status}" "${_url}" >&2
     rm -f "${_body_tmp}" "${_curl_stderr_file}"
     return 1
   fi
