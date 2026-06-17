@@ -454,7 +454,11 @@ PER-FETCHER DEEP-DIVE
   codeberg:OWNER/REPO
     API:       https://codeberg.org/api/v1/repos/OWNER/REPO/releases
                + /api/v1/repos/OWNER/REPO/tags (with check-tags)
-    Auth:      None required for public repos (Gitea-based).
+    Auth:      None required for public repos (Gitea/Forgejo-based). Optional:
+               set CODEBERG_TOKEN or GLOBAL_STACK_CODEBERG_TOKEN to raise the API
+               rate limit. Sent as "Authorization: token <TOKEN>" (Gitea/Forgejo
+               scheme, NOT Bearer). The token does NOT work around upstream list-
+               endpoint timeouts/504s (a server-side condition).
     Tags:      (check-tags) merges tags + releases, same as github.
     Channel:   Prerelease detection via is_prerelease field.
 

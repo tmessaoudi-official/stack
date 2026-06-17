@@ -11018,6 +11018,278 @@ t "t108d: RESOLVED + (replace:) cascade writes target when --apply-resolve used"
 _flush_section
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Section 109 — network hardening: timeout/5xx retry, honest errors, CODEBERG_TOKEN
+# ═══════════════════════════════════════════════════════════════════════════
+# Root cause context: Codeberg list endpoints (/tags, /releases) intermittently
+# return HTTP 504 after ~30s during server-side degradation. With curl --max-time 15,
+# curl aborts at 15s with exit 28 / HTTP 000 BEFORE the 504 arrives. These tests
+# verify the retry loop treats BOTH curl-timeout (exit 28 / 000) AND HTTP 429/502/503/504
+# as retryable, emits honest per-mode error messages, fast-fails 404, and that
+# CODEBERG_TOKEN is sent with the Gitea/Forgejo-canonical "token" auth scheme.
+section "109 — network hardening: timeout/5xx retry + honest errors + CODEBERG_TOKEN"
+
+# t109a: curl exit 28 / HTTP 000 (timeout) on attempt 1, 200 on attempt 2 → success after retry
+t "t109a: http_get_core retries curl-timeout (exit 28/000) and recovers" bash -c "
+    source '/stack/bin/lib/env-update/http/curl.sh'
+    _fake_dir=\"\${TMP_DIR}/t109a_curl\"
+    mkdir -p \"\${_fake_dir}\"
+    printf '0' > \"\${_fake_dir}/.call_count\"
+    cat > \"\${_fake_dir}/curl\" <<'FAKECURL'
+#!/bin/bash
+# Fake curl: simulate operation-timeout (exit 28, http_code 000) on call 1, 200 after.
+_cf=\"\$(dirname \"\$0\")/.call_count\"
+_c=\$(( \$(cat \"\${_cf}\" 2>/dev/null || echo 0) + 1 ))
+printf '%d' \"\${_c}\" > \"\${_cf}\"
+_out=''
+_w=''
+for _a in \"\$@\"; do
+    [[ \"\${_w}\" == y ]] && { _out=\"\${_a}\"; _w=''; continue; }
+    [[ \"\${_a}\" == '-o' ]] && _w=y
+done
+if [[ \"\${_c}\" -le 1 ]]; then
+    [[ -n \"\${_out}\" ]] && printf '' > \"\${_out}\"
+    printf '000'      # curl prints 000 for http_code on a timeout
+    exit 28           # CURLE_OPERATION_TIMEDOUT
+else
+    [[ -n \"\${_out}\" ]] && printf '{\"name\":\"ok\"}' > \"\${_out}\"
+    printf '200'
+    exit 0
+fi
+FAKECURL
+    chmod +x \"\${_fake_dir}/curl\"
+    printf '#!/bin/bash\nexit 0\n' > \"\${_fake_dir}/sleep\"; chmod +x \"\${_fake_dir}/sleep\"
+    out=\$(PATH=\"\${_fake_dir}:\${PATH}\" _gs_eu2_http_get_core 'https://example.com/x' 2>&1)
+    rc=\$?
+    [[ \"\${rc}\" -eq 0 ]] || { echo \"expected 0 after retry, rc=\${rc}; out=\${out}\"; echo FAIL; exit 0; }
+    printf '%s' \"\${out}\" | grep -q 'ok' || { echo \"expected body 'ok'; got: \${out}\"; echo FAIL; exit 0; }
+    [[ \"\$(cat \"\${_fake_dir}/.call_count\")\" -gt 1 ]] || { echo 'no retry happened'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t109b: persistent curl-timeout → ERROR with honest 'upstream timeout' message
+t "t109b: persistent curl-timeout fails with 'upstream timeout' message" bash -c "
+    source '/stack/bin/lib/env-update/http/curl.sh'
+    _fake_dir=\"\${TMP_DIR}/t109b_curl\"
+    mkdir -p \"\${_fake_dir}\"
+    printf '0' > \"\${_fake_dir}/.call_count\"
+    cat > \"\${_fake_dir}/curl\" <<'FAKECURL'
+#!/bin/bash
+_cf=\"\$(dirname \"\$0\")/.call_count\"
+printf '%d' \$(( \$(cat \"\${_cf}\" 2>/dev/null || echo 0) + 1 )) > \"\${_cf}\"
+_out=''
+_w=''
+for _a in \"\$@\"; do
+    [[ \"\${_w}\" == y ]] && { _out=\"\${_a}\"; _w=''; continue; }
+    [[ \"\${_a}\" == '-o' ]] && _w=y
+done
+[[ -n \"\${_out}\" ]] && printf '' > \"\${_out}\"
+printf '000'; exit 28
+FAKECURL
+    chmod +x \"\${_fake_dir}/curl\"
+    printf '#!/bin/bash\nexit 0\n' > \"\${_fake_dir}/sleep\"; chmod +x \"\${_fake_dir}/sleep\"
+    rc=0
+    out=\$(PATH=\"\${_fake_dir}:\${PATH}\" _gs_eu2_http_get_core 'https://example.com/x' 2>&1) || rc=\$?
+    [[ \"\${rc}\" -ne 0 ]] || { echo \"expected non-zero exit; out=\${out}\"; echo FAIL; exit 0; }
+    [[ \"\$(cat \"\${_fake_dir}/.call_count\")\" -ge 3 ]] || { echo 'expected >=3 attempts'; echo FAIL; exit 0; }
+    printf '%s' \"\${out}\" | grep -qi 'timeout' || { echo \"expected 'timeout' in msg; got: \${out}\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t109c: HTTP 504 then 200 → success after retry (transient 5xx covered)
+t "t109c: http_get_core retries HTTP 504 and recovers" bash -c "
+    source '/stack/bin/lib/env-update/http/curl.sh'
+    _fake_dir=\"\${TMP_DIR}/t109c_curl\"
+    mkdir -p \"\${_fake_dir}\"
+    printf '0' > \"\${_fake_dir}/.call_count\"
+    cat > \"\${_fake_dir}/curl\" <<'FAKECURL'
+#!/bin/bash
+_cf=\"\$(dirname \"\$0\")/.call_count\"
+_c=\$(( \$(cat \"\${_cf}\" 2>/dev/null || echo 0) + 1 ))
+printf '%d' \"\${_c}\" > \"\${_cf}\"
+_out=''
+_w=''
+for _a in \"\$@\"; do
+    [[ \"\${_w}\" == y ]] && { _out=\"\${_a}\"; _w=''; continue; }
+    [[ \"\${_a}\" == '-o' ]] && _w=y
+done
+if [[ \"\${_c}\" -le 1 ]]; then
+    [[ -n \"\${_out}\" ]] && printf '' > \"\${_out}\"
+    printf '504'; exit 0
+else
+    [[ -n \"\${_out}\" ]] && printf '{\"name\":\"ok\"}' > \"\${_out}\"
+    printf '200'; exit 0
+fi
+FAKECURL
+    chmod +x \"\${_fake_dir}/curl\"
+    printf '#!/bin/bash\nexit 0\n' > \"\${_fake_dir}/sleep\"; chmod +x \"\${_fake_dir}/sleep\"
+    out=\$(PATH=\"\${_fake_dir}:\${PATH}\" _gs_eu2_http_get_core 'https://example.com/x' 2>&1)
+    rc=\$?
+    [[ \"\${rc}\" -eq 0 ]] || { echo \"expected 0 after retry; rc=\${rc}; out=\${out}\"; echo FAIL; exit 0; }
+    printf '%s' \"\${out}\" | grep -q 'ok' || { echo \"expected 'ok'; got: \${out}\"; echo FAIL; exit 0; }
+    [[ \"\$(cat \"\${_fake_dir}/.call_count\")\" -gt 1 ]] || { echo 'no retry'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t109d: persistent 503 → ERROR with 'transient upstream error' message
+t "t109d: persistent 503 fails with 'transient upstream error' message" bash -c "
+    source '/stack/bin/lib/env-update/http/curl.sh'
+    _fake_dir=\"\${TMP_DIR}/t109d_curl\"
+    mkdir -p \"\${_fake_dir}\"
+    printf '0' > \"\${_fake_dir}/.call_count\"
+    cat > \"\${_fake_dir}/curl\" <<'FAKECURL'
+#!/bin/bash
+_cf=\"\$(dirname \"\$0\")/.call_count\"
+printf '%d' \$(( \$(cat \"\${_cf}\" 2>/dev/null || echo 0) + 1 )) > \"\${_cf}\"
+_out=''
+_w=''
+for _a in \"\$@\"; do
+    [[ \"\${_w}\" == y ]] && { _out=\"\${_a}\"; _w=''; continue; }
+    [[ \"\${_a}\" == '-o' ]] && _w=y
+done
+[[ -n \"\${_out}\" ]] && printf '' > \"\${_out}\"
+printf '503'; exit 0
+FAKECURL
+    chmod +x \"\${_fake_dir}/curl\"
+    printf '#!/bin/bash\nexit 0\n' > \"\${_fake_dir}/sleep\"; chmod +x \"\${_fake_dir}/sleep\"
+    rc=0
+    out=\$(PATH=\"\${_fake_dir}:\${PATH}\" _gs_eu2_http_get_core 'https://example.com/x' 2>&1) || rc=\$?
+    [[ \"\${rc}\" -ne 0 ]] || { echo 'expected non-zero exit'; echo FAIL; exit 0; }
+    [[ \"\$(cat \"\${_fake_dir}/.call_count\")\" -ge 3 ]] || { echo 'expected >=3 attempts'; echo FAIL; exit 0; }
+    printf '%s' \"\${out}\" | grep -qi 'transient upstream error' \
+        || { echo \"expected 'transient upstream error' msg; got: \${out}\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t109e: 404 fast-fails — exactly one curl call, no retry
+t "t109e: 404 fast-fails with no retry" bash -c "
+    source '/stack/bin/lib/env-update/http/curl.sh'
+    _fake_dir=\"\${TMP_DIR}/t109e_curl\"
+    mkdir -p \"\${_fake_dir}\"
+    printf '0' > \"\${_fake_dir}/.call_count\"
+    cat > \"\${_fake_dir}/curl\" <<'FAKECURL'
+#!/bin/bash
+_cf=\"\$(dirname \"\$0\")/.call_count\"
+printf '%d' \$(( \$(cat \"\${_cf}\" 2>/dev/null || echo 0) + 1 )) > \"\${_cf}\"
+_out=''
+_w=''
+for _a in \"\$@\"; do
+    [[ \"\${_w}\" == y ]] && { _out=\"\${_a}\"; _w=''; continue; }
+    [[ \"\${_a}\" == '-o' ]] && _w=y
+done
+[[ -n \"\${_out}\" ]] && printf '' > \"\${_out}\"
+printf '404'; exit 0
+FAKECURL
+    chmod +x \"\${_fake_dir}/curl\"
+    printf '#!/bin/bash\nexit 0\n' > \"\${_fake_dir}/sleep\"; chmod +x \"\${_fake_dir}/sleep\"
+    rc=0
+    PATH=\"\${_fake_dir}:\${PATH}\" _gs_eu2_http_get_core 'https://example.com/x' 2>/dev/null || rc=\$?
+    [[ \"\${rc}\" -ne 0 ]] || { echo 'expected non-zero exit for 404'; echo FAIL; exit 0; }
+    [[ \"\$(cat \"\${_fake_dir}/.call_count\")\" -eq 1 ]] \
+        || { echo \"expected 1 call (no retry), got \$(cat \"\${_fake_dir}/.call_count\")\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t109f: CODEBERG_TOKEN sent with 'Authorization: token <TOKEN>' (Gitea/Forgejo scheme, NOT Bearer)
+t "t109f: CODEBERG_TOKEN sent as 'Authorization: token' (not Bearer)" bash -c "
+    source '/stack/bin/lib/env-update/http/curl.sh'
+    _fake_dir=\"\${TMP_DIR}/t109f_curl\"
+    mkdir -p \"\${_fake_dir}\"
+    # Fake curl dumps its header args to \$(dirname \\\$0)/.headers (resolved at runtime).
+    cat > \"\${_fake_dir}/curl\" <<'FAKECURL'
+#!/bin/bash
+printf '%s\n' \"\$@\" > \"\$(dirname \"\$0\")/.headers\"
+_out=''
+_w=''
+for _a in \"\$@\"; do
+    [[ \"\${_w}\" == y ]] && { _out=\"\${_a}\"; _w=''; continue; }
+    [[ \"\${_a}\" == '-o' ]] && _w=y
+done
+[[ -n \"\${_out}\" ]] && printf '[]' > \"\${_out}\"
+printf '200'; exit 0
+FAKECURL
+    chmod +x \"\${_fake_dir}/curl\"
+    # Call the auth wrapper directly with the 'token' scheme
+    PATH=\"\${_fake_dir}:\${PATH}\" _gs_eu2_http_get_auth 'https://codeberg.org/api/v1/repos/x/y/tags?limit=50' 'SECRET123' 'token' >/dev/null 2>&1
+    grep -q 'Authorization: token SECRET123' \"\${_fake_dir}/.headers\" \
+        || { echo \"expected 'Authorization: token SECRET123'; got: \$(cat \"\${_fake_dir}/.headers\")\"; echo FAIL; exit 0; }
+    grep -q 'Authorization: Bearer' \"\${_fake_dir}/.headers\" \
+        && { echo \"must NOT use Bearer for codeberg; got: \$(cat \"\${_fake_dir}/.headers\")\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t109g: empty token → unauthenticated (no Authorization header sent)
+t "t109g: empty CODEBERG_TOKEN sends no Authorization header" bash -c "
+    source '/stack/bin/lib/env-update/http/curl.sh'
+    _fake_dir=\"\${TMP_DIR}/t109g_curl\"
+    mkdir -p \"\${_fake_dir}\"
+    cat > \"\${_fake_dir}/curl\" <<'FAKECURL'
+#!/bin/bash
+printf '%s\n' \"\$@\" > \"\$(dirname \"\$0\")/.headers\"
+_out=''
+_w=''
+for _a in \"\$@\"; do
+    [[ \"\${_w}\" == y ]] && { _out=\"\${_a}\"; _w=''; continue; }
+    [[ \"\${_a}\" == '-o' ]] && _w=y
+done
+[[ -n \"\${_out}\" ]] && printf '[]' > \"\${_out}\"
+printf '200'; exit 0
+FAKECURL
+    chmod +x \"\${_fake_dir}/curl\"
+    # Empty token → unauthenticated path, no Authorization header
+    PATH=\"\${_fake_dir}:\${PATH}\" _gs_eu2_http_get_auth 'https://codeberg.org/api/v1/repos/x/y/tags' '' 'token' >/dev/null 2>&1
+    grep -q 'Authorization:' \"\${_fake_dir}/.headers\" \
+        && { echo \"unexpected Authorization header for empty token; got: \$(cat \"\${_fake_dir}/.headers\")\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t109h: codeberg fetcher honest error_message on tags-fallback failure (unreachable/timeout)
+t "t109h: codeberg tags-fallback failure sets honest 'unreachable or timed out' error" bash -c "
+    source '/stack/bin/lib/env-update/config/defaults.sh'
+    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+    source '/stack/bin/lib/env-update/core/records.sh'
+    source '/stack/bin/lib/env-update/core/semver.sh'
+    source '/stack/bin/lib/env-update/core/channel.sh'
+    source '/stack/bin/lib/env-update/core/tag_flags.sh'
+    source '/stack/bin/lib/env-update/core/cache.sh'
+    source '/stack/bin/lib/env-update/http/curl.sh'
+    source '/stack/bin/lib/env-update/fetchers/codeberg.sh'
+    _fake_dir=\"\${TMP_DIR}/t109h_curl\"
+    mkdir -p \"\${_fake_dir}\"
+    cat > \"\${_fake_dir}/curl\" <<'FAKECURL'
+#!/bin/bash
+_out=''
+_w=''
+for _a in \"\$@\"; do
+    [[ \"\${_w}\" == y ]] && { _out=\"\${_a}\"; _w=''; continue; }
+    [[ \"\${_a}\" == '-o' ]] && _w=y
+done
+[[ -n \"\${_out}\" ]] && printf '' > \"\${_out}\"
+# releases → 404 (control-flow to tags); tags → persistent timeout (000/exit 28)
+if printf '%s' \"\$@\" | grep -q '/releases'; then
+    printf '404'; exit 0
+else
+    printf '000'; exit 28
+fi
+FAKECURL
+    chmod +x \"\${_fake_dir}/curl\"
+    printf '#!/bin/bash\nexit 0\n' > \"\${_fake_dir}/sleep\"; chmod +x \"\${_fake_dir}/sleep\"
+    export _GS_EU2_CACHE_DIR=\"\${TMP_DIR}/t109h_cache\"
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'codeberg'
+    _gs_eu2_record_set \$idx identifier 'testorg/tags-only'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_TAGSONLY_VERSION'
+    PATH=\"\${_fake_dir}:\${PATH}\" _gs_eu2_fetch_codeberg \$idx 2>/dev/null
+    decision=\$(_gs_eu2_record_get \$idx decision)
+    err=\$(_gs_eu2_record_get \$idx error_message)
+    [[ \"\${decision}\" == 'ERROR' ]] || { echo \"expected ERROR, got '\${decision}'\"; echo FAIL; exit 0; }
+    printf '%s' \"\${err}\" | grep -qi 'unreachable or timed out' \
+        || { echo \"expected honest unreachable/timeout msg; got: '\${err}'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+_flush_section
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section

@@ -29,18 +29,34 @@ source "$(dirname "${BASH_SOURCE[0]}")/../core/cache.sh"
 # shellcheck source=./../http/curl.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../http/curl.sh"
 
+# _gs_eu2_cb_token — resolve the optional Codeberg auth token.
+#
+# Reads:   CODEBERG_TOKEN, then GLOBAL_STACK_CODEBERG_TOKEN (both optional)
+# Prints:  the token string, or empty if neither is set
+# Returns: 0 always
+#
+# Optional: absent → unauthenticated (default). Present → sent with the Gitea/Forgejo
+# canonical "Authorization: token <TOKEN>" scheme (NOT Bearer). Mirrors GITHUB_TOKEN
+# parity for github/ghcr. The token raises Codeberg's API rate limit; it does NOT
+# work around upstream list-endpoint timeouts/504s (a server-side condition).
+_gs_eu2_cb_token() {
+  printf '%s' "${CODEBERG_TOKEN:-${GLOBAL_STACK_CODEBERG_TOKEN:-}}"
+}
+
 # _gs_eu2_cb_fetch_tags — fetch tag list from Codeberg tags endpoint.
 #
 # Args:    $1 identifier — "owner/repo" string
 # Prints:  newline-separated tag names
 # Returns: 0 on success; non-zero on HTTP failure
-# Side fx: may read/write cache (via _gs_eu2_http_get)
+# Side fx: may read/write cache (via _gs_eu2_http_get_auth)
+# Auth:    optional CODEBERG_TOKEN via "token" scheme (Gitea/Forgejo)
 _gs_eu2_cb_fetch_tags() {
   local _identifier="${1}"
   local _url="https://codeberg.org/api/v1/repos/${_identifier}/tags?limit=50"
-  local _resp
+  local _resp _tok
+  _tok="$(_gs_eu2_cb_token)"
 
-  if ! _resp="$(_gs_eu2_http_get "${_url}" 2>/dev/null)"; then
+  if ! _resp="$(_gs_eu2_http_get_auth "${_url}" "${_tok}" "token" 2>/dev/null)"; then
     return 1
   fi
 
@@ -85,7 +101,9 @@ _gs_eu2_fetch_codeberg() {
   _releases_tmp="$(mktemp)"
   local _releases_ok=false _releases_empty=false
   local _releases_url="https://codeberg.org/api/v1/repos/${_identifier}/releases?limit=50&page=1"
-  if _gs_eu2_http_get "${_releases_url}" 2>/dev/null > "${_releases_tmp}"; then
+  local _cb_tok
+  _cb_tok="$(_gs_eu2_cb_token)"
+  if _gs_eu2_http_get_auth "${_releases_url}" "${_cb_tok}" "token" 2>/dev/null > "${_releases_tmp}"; then
     _releases_ok=true
     local _count
     _count="$(jq 'length' "${_releases_tmp}" 2>/dev/null || printf '0')"
@@ -101,7 +119,7 @@ _gs_eu2_fetch_codeberg() {
     if ! _raw_tags="$(_gs_eu2_cb_fetch_tags "${_identifier}")"; then
       rm -f "${_releases_tmp}"
       _gs_eu2_record_set "${_idx}" decision      "ERROR"
-      _gs_eu2_record_set "${_idx}" error_message "fetch failed for codeberg:${_identifier}"
+      _gs_eu2_record_set "${_idx}" error_message "codeberg API unreachable or timed out for ${_identifier} (try again later)"
       return 0
     fi
   fi

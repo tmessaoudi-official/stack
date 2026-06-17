@@ -1281,7 +1281,9 @@ PKG_REPO_PATH=stable/xUbuntu_24.04
 
 **Tag flags:** Full pipeline applies.
 
-**No auth required.**
+**Auth (optional):** No auth required for public repos. Set `CODEBERG_TOKEN` or `GLOBAL_STACK_CODEBERG_TOKEN` to raise the API rate limit. The token is sent as `Authorization: token <TOKEN>` — the Gitea/Forgejo-canonical scheme, **not** GitHub's `Bearer`. Absent → unauthenticated (default behaviour). Note: the token raises rate limits only; it does **not** work around upstream list-endpoint timeouts or `504` gateway errors (a server-side Codeberg condition — see the network-hardening note below).
+
+**Network resilience:** The shared HTTP layer retries transient conditions — curl operation timeout (exit 28 / HTTP `000`), `429`, and `502`/`503`/`504` — with 3 attempts and exponential back-off. `404` and other `4xx` fast-fail (the releases-`404` is the control-flow trigger for the tags fallback). With `--max-time 15`, a sustained upstream outage exhausts all attempts at ~15s each and reports an honest `upstream timeout`/`transient upstream error` message; the retry exists for transient single blips, not outages.
 
 **Version prefix:** Applied after channel selection.
 
