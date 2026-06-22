@@ -34,6 +34,9 @@ local.*docker-bake.json
 Dockerfile*.local
 Dockerfile*.local.bak.*
 
+# Claude bundle deploy backups — git history is the rollback, baks are local-only churn
+claude-setup/*.bak.*
+
 local.*Dockerfile
 local.*Makefile
 
