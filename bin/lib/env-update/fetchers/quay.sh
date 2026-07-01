@@ -135,7 +135,7 @@ _gs_eu2_fetch_quay() {
       fi
     fi
     local _unconstrained_best
-    _unconstrained_best="$(_gs_eu2_channel_select_best "${_wm_tags}" "stable")"
+    _unconstrained_best="$(_gs_eu2_channel_select_best "${_wm_tags}" "${_channel:-stable}")"
     if [[ -n "${_unconstrained_best}" ]]; then
       local _vp_wm
       _vp_wm="$(_gs_eu2_record_get "${_idx}" version_prefix)"

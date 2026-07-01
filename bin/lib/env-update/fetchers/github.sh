@@ -335,7 +335,7 @@ _gs_eu2_fetch_github() {
       fi
     fi
     local _unconstrained_best
-    _unconstrained_best="$(_gs_eu2_channel_select_best "${_wm_tags}" "stable")"
+    _unconstrained_best="$(_gs_eu2_channel_select_best "${_wm_tags}" "${_channel:-stable}")"
     if [[ -n "${_unconstrained_best}" ]]; then
       # Conditional re-prepend: only if the original raw tag had the channel prefix
       if [[ -n "${_tcp}" ]] && \

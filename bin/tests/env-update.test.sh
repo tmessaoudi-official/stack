@@ -5879,6 +5879,37 @@ t "t58s: rubygems watch-major — newer major in fixture, latest_unconstrained=3
     echo PASS
 "
 
+# t58t: (watch-major)(channel:unstable) — new major exists ONLY as a prerelease.
+# watchrc fixture: 17.x stable + 18.0-rc1/rc2 (RC-only, no stable 18.x). Pin to major 17.
+# Regression guard for the hardcoded-\"stable\" bug in the watch-major unconstrained scan:
+# with channel:unstable the RC-only next major MUST surface as [WATCH] 17 → 18.
+# Before the fix, dockerhub.sh:168 forced the \"stable\" channel and dropped the RC, so
+# latest_unconstrained stayed on 17.x and no WATCH fired.
+t "t58t: watch-major honors channel:unstable — RC-only next major fires [WATCH]" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t58t_cache
+    f=\${TMP_DIR}/t58t.env
+    printf '# @todo env-update (watch-major) (channel:unstable) dockerhub:_/watchrc:17 17.5\nGLOBAL_STACK_WATCHRC=17.5\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null)
+    echo \"\$out\" | grep -qF '[WATCH]' || { echo \"expected [WATCH] sub-line for RC-only next major, got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '18' || { echo \"expected 18 (RC major) in WATCH output, got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t58u: (watch-major) WITHOUT channel — stable-channel semantics preserved.
+# Same watchrc fixture (18.x is RC-only). With the default stable channel, a prerelease-only
+# next major must NOT fire [WATCH] (conservative behavior — don't nag about an RC that may
+# never ship a stable). Confirms the fix scopes the RC surfacing to channel:unstable only.
+t "t58u: watch-major without channel stays silent for RC-only next major" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t58u_cache
+    f=\${TMP_DIR}/t58u.env
+    printf '# @todo env-update (watch-major) dockerhub:_/watchrc:17 17.5\nGLOBAL_STACK_WATCHRC2=17.5\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null)
+    echo \"\$out\" | grep -qF '[WATCH]' && { echo \"unexpected [WATCH] for RC-only next major on stable channel: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Section 19b — --apply e2e pipeline tests
 # ═══════════════════════════════════════════════════════════════════════════

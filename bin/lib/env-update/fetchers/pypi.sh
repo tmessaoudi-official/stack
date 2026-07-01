@@ -163,7 +163,7 @@ _gs_eu2_fetch_pypi() {
       fi
     fi
     local _unconstrained_best
-    _unconstrained_best="$(_gs_eu2_channel_select_best "${_wm_versions}" "stable")"
+    _unconstrained_best="$(_gs_eu2_channel_select_best "${_wm_versions}" "${_channel:-stable}")"
     [[ -n "${_unconstrained_best}" ]] && \
       _gs_eu2_record_set "${_idx}" latest_unconstrained "${_unconstrained_best}"
   fi
