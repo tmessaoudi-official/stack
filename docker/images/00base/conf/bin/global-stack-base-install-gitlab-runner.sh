@@ -7,7 +7,7 @@ set -euo pipefail
 . /etc/os-release
 
 # @todo change later
-UBUNTU_CODENAME="questing"
+# UBUNTU_CODENAME="resolute"
 sudo apt-get update --allow-releaseinfo-change
 sudo curl -o /tmp/gitlab-runner.sh "https://packages.gitlab.com/install/repositories/runner/gitlab-runner/script.deb.sh"
 sudo chmod a+x /tmp/gitlab-runner.sh

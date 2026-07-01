@@ -40,7 +40,7 @@ df -h
 ## What can go wrong
 
 - **PPAs**: third-party PPAs for the old release break on upgrade. Disable them before upgrading, re-enable after (if a new-release version exists).
-- **Docker APT source**: the Docker APT repo uses Ubuntu codenames in its URL (`jammy`, `noble`, etc.). After upgrade, `apt update` will fail until you update `/etc/apt/sources.list.d/docker.sources` with the new codename.
+- **Docker APT source**: the Docker APT repo uses Ubuntu codenames in its URL (`resolute`, etc.). After upgrade, `apt update` will fail until you update `/etc/apt/sources.list.d/docker.sources` with the new codename.
 - **Custom kernels**: out-of-tree kernel modules (nvidia, VirtualBox, etc.) need to be rebuilt for the new kernel. The upgrade process may warn you but won't rebuild them automatically.
 - **Config file conflicts**: `do-release-upgrade` will prompt you about modified config files (Apache, SSH, etc.) — read the diff before choosing to keep your version or take the new one.
 

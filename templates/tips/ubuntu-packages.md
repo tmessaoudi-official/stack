@@ -38,9 +38,9 @@ sudo echo -e "Types: deb\nSigned-By: /usr/share/keyrings/ansible.gpg\nArch: $(dp
 # GitLab Runner
 sudo curl -o /tmp/gitlab-runner.sh "https://packages.gitlab.com/install/repositories/runner/gitlab-runner/script.deb.sh"
 sudo chmod a+x /tmp/gitlab-runner.sh
-sudo os=ubuntu dist=questing /tmp/gitlab-runner.sh
+sudo os=ubuntu dist=resolute /tmp/gitlab-runner.sh
 sudo rm /tmp/gitlab-runner.sh /etc/apt/sources.list.d/runner_gitlab-runner.list
-echo -e "Types: deb\nSigned-By: /etc/apt/keyrings/runner_gitlab-runner-archive-keyring.gpg\nArch: $(dpkg --print-architecture)\nURIs: https://packages.gitlab.com/runner/gitlab-runner/ubuntu/\nSuites: questing\nComponents: main\n\nTypes: deb-src\nSigned-By: /etc/apt/keyrings/runner_gitlab-runner-archive-keyring.gpg\nArch: $(dpkg --print-architecture)\nURIs: https://packages.gitlab.com/runner/gitlab-runner/ubuntu/\nSuites: questing\nComponents: main" | sudo dd of=/etc/apt/sources.list.d/runner_gitlab-runner.sources
+echo -e "Types: deb\nSigned-By: /etc/apt/keyrings/runner_gitlab-runner-archive-keyring.gpg\nArch: $(dpkg --print-architecture)\nURIs: https://packages.gitlab.com/runner/gitlab-runner/ubuntu/\nSuites: resolute\nComponents: main\n\nTypes: deb-src\nSigned-By: /etc/apt/keyrings/runner_gitlab-runner-archive-keyring.gpg\nArch: $(dpkg --print-architecture)\nURIs: https://packages.gitlab.com/runner/gitlab-runner/ubuntu/\nSuites: resolute\nComponents: main" | sudo dd of=/etc/apt/sources.list.d/runner_gitlab-runner.sources
 
 
 sudo apt-get update --allow-releaseinfo-change

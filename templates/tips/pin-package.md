@@ -1,6 +1,6 @@
 # APT Package Pinning
 
-**What it solves**: Installing or holding a specific version of a package from a specific APT repository, even when a newer version is available from another source. Common use cases: pinning a security package to `jammy-security` instead of `jammy-updates`, or preventing a package from being upgraded.
+**What it solves**: Installing or holding a specific version of a package from a specific APT repository, even when a newer version is available from another source. Common use cases: pinning a security package to `resolute-security` instead of `resolute-updates`, or preventing a package from being upgraded.
 
 ## Pin a package to a specific release pocket
 
@@ -50,13 +50,13 @@ sudo apt-get install PACKAGE=VERSION
 sudo apt-get install nginx=1.18.0-6ubuntu14
 ```
 
-## Real-world example: pinning to jammy-security
+## Real-world example: pinning to resolute-security
 
-You want a package from `jammy-security` (vetted security updates only) rather than `jammy-updates` (all updates, including non-security ones):
+You want a package from `resolute-security` (vetted security updates only) rather than `resolute-updates` (all updates, including non-security ones):
 
 ```
 Package: libssl3
-Pin: release n=jammy-security
+Pin: release n=resolute-security
 Pin-Priority: 990
 ```
 

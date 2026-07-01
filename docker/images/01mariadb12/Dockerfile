@@ -16,7 +16,6 @@ SHELL ["/bin/bash", "-xeEu", "-o", "pipefail", "-c"]
 COPY docker/images/01mariadb12/conf/etc/ /etc/mysql/mariadb.conf.d/
 COPY docker/images/01mariadb12/conf/initdb/ /docker-entrypoint-initdb.d/
 
-
 RUN chown -R root:root /root/ \
     && find /root/ -type f -exec chmod 600 {} \; \
     && find /root/ -type d -exec chmod 700 {} \; \
