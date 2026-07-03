@@ -1,8 +1,8 @@
 # shellcheck disable=SC2148
-ARG GLOBAL_STACK_IMAGE_MARIADB12_VERSION=13.0.1-resolute-rc
+ARG GLOBAL_STACK_IMAGE_MARIADB13_VERSION=13.0.1-resolute-rc
 
 # shellcheck disable=SC2148
-FROM mariadb:${GLOBAL_STACK_IMAGE_MARIADB12_VERSION}
+FROM mariadb:${GLOBAL_STACK_IMAGE_MARIADB13_VERSION}
 
 LABEL maintainer="Takieddine Messaoudi <takieddine.messaoudi.official@gmail.com>" \
       info="local_global_stack"
@@ -13,8 +13,8 @@ USER root
 
 SHELL ["/bin/bash", "-xeEu", "-o", "pipefail", "-c"]
 
-COPY docker/images/01mariadb12/conf/etc/ /etc/mysql/mariadb.conf.d/
-COPY docker/images/01mariadb12/conf/initdb/ /docker-entrypoint-initdb.d/
+COPY docker/images/01mariadb13/conf/etc/ /etc/mysql/mariadb.conf.d/
+COPY docker/images/01mariadb13/conf/initdb/ /docker-entrypoint-initdb.d/
 
 RUN chown -R root:root /root/ \
     && find /root/ -type f -exec chmod 600 {} \; \

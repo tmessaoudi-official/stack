@@ -45,7 +45,7 @@ Key invariant: base ONLY clears `successes/base` and `elapsed`. It does NOT clea
 |---|---|---|---|
 | `01mysql9` | DB | `mysqladmin ping -h localhost -u $MYSQL_USER -p$MYSQL_PASSWORD` | bash ✓ |
 | `01postgres18` | DB | `pg_isready -U root` | Alpine (**sh only**) |
-| `01mariadb12` | DB | `mysqladmin ping -h localhost -u $MYSQL_USER -p$MYSQL_PASSWORD` | bash ✓ |
+| `01mariadb13` | DB | `mysqladmin ping -h localhost -u $MYSQL_USER -p$MYSQL_PASSWORD` | bash ✓ |
 | `01mongo7` | DB | `mongosh --eval 'db.runCommand("ping")'` | bash ✓ |
 | `01redis` | Cache | `redis-cli ping` | Alpine (**sh only**) |
 | `01valkey` | Cache | `valkey-cli ping` | Alpine (**sh only**) |
@@ -255,7 +255,7 @@ needed. Verify the container's default shell (`sh`) is available for the healthc
 |---|---|---|
 | `01mysql9` | `mysqladmin ping -h localhost -u $MYSQL_USER -p$MYSQL_PASSWORD` | `global-stack-base-healthcheck-elapsed.sh 01mysql9 mysqladmin ping -h localhost -u $MYSQL_USER -p$MYSQL_PASSWORD` |
 | `01postgres18` | `pg_isready -U root` | `global-stack-base-healthcheck-elapsed.sh 01postgres18 pg_isready -U root` |
-| `01mariadb12` | `mysqladmin ping -h localhost -u $MYSQL_USER -p$MYSQL_PASSWORD` | `global-stack-base-healthcheck-elapsed.sh 01mariadb12 mysqladmin ping -h localhost -u $MYSQL_USER -p$MYSQL_PASSWORD` |
+| `01mariadb13` | `mysqladmin ping -h localhost -u $MYSQL_USER -p$MYSQL_PASSWORD` | `global-stack-base-healthcheck-elapsed.sh 01mariadb13 mysqladmin ping -h localhost -u $MYSQL_USER -p$MYSQL_PASSWORD` |
 | `01mongo7` | `mongosh --eval 'db.runCommand("ping")'` | `global-stack-base-healthcheck-elapsed.sh 01mongo7 mongosh --eval 'db.runCommand("ping")'` |
 | `01redis` | `redis-cli ping` | `global-stack-base-healthcheck-elapsed.sh 01redis redis-cli ping` |
 | `01valkey` | `valkey-cli ping` | `global-stack-base-healthcheck-elapsed.sh 01valkey valkey-cli ping` |

@@ -1,14 +1,14 @@
 ---
 services:
-  01mariadb12:
+  01mariadb13:
     init: ${DOCKER_INIT}
     build:
       args:
         BUILDKIT_INLINE_CACHE: 1
-        GLOBAL_STACK_IMAGE_MARIADB12_VERSION: ${GLOBAL_STACK_IMAGE_MARIADB12_VERSION}
+        GLOBAL_STACK_IMAGE_MARIADB13_VERSION: ${GLOBAL_STACK_IMAGE_MARIADB13_VERSION}
         GLOBAL_STACK_IMAGE_UBUNTU_VERSION: ${GLOBAL_STACK_IMAGE_UBUNTU_VERSION}
       context: ./
-      dockerfile: ./docker/images/01mariadb12/Dockerfile
+      dockerfile: ./docker/images/01mariadb13/Dockerfile
     command:
       - mariadbd
       - --default-authentication-plugin=caching_sha2_password
@@ -19,7 +19,7 @@ services:
         condition: service_healthy
         required: true
     environment:
-      - MARIADB_DBS=${GLOBAL_STACK_MARIADB12_DBS}
+      - MARIADB_DBS=${GLOBAL_STACK_MARIADB13_DBS}
       - MYSQL_PASSWORD=${GLOBAL_STACK_DATABASE_PASSWORD}
       - MYSQL_ROOT_PASSWORD=${GLOBAL_STACK_DATABASE_ROOT_PASSWORD}
       - MYSQL_USER=${GLOBAL_STACK_DATABASE_USER}
@@ -33,31 +33,31 @@ services:
       - GLOBAL_STACK_DOCKER_ROOT_DIST_PATH=${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}
       - GLOBAL_STACK_WAIT_FOR_TIMEOUT=${GLOBAL_STACK_WAIT_FOR_TIMEOUT}
     healthcheck:
-      test: ["CMD-SHELL", "${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/bin/base-bin/global-stack-base-healthcheck-elapsed.sh 01mariadb12 healthcheck.sh --connect --innodb_initialized"]
+      test: ["CMD-SHELL", "${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/bin/base-bin/global-stack-base-healthcheck-elapsed.sh 01mariadb13 healthcheck.sh --connect --innodb_initialized"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 30s
     labels:
-      stack.service: "01mariadb12"
+      stack.service: "01mariadb13"
       stack.tier: "database"
       stack.version: "${GLOBAL_STACK_VERSION}"
     networks:
       - public
     restart: "on-failure:5"
     ports:
-      - ${GLOBAL_STACK_MARIADB12_PORT_3306:-}3306
+      - ${GLOBAL_STACK_MARIADB13_PORT_3306:-}3306
     volumes:
       - ./tools:${GLOBAL_STACK_DOCKER_TOOLS_PATH}:rw
       - ./docker/config/dist/bin:${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/bin:rw
       - ./docker/data/dumps/mariadb/12:/opt/dumps:rw
-      - 01mariadb12_data:/var/lib/mysql:rw,delegated
+      - 01mariadb13_data:/var/lib/mysql:rw,delegated
       - ./${GLOBAL_STACK_SHELL_HISTORY}:/root/${GLOBAL_STACK_SHELL_HISTORY_TARGET}:rw
       - ./${GLOBAL_STACK_SHELL_ZSH_HISTORY}:/root/${GLOBAL_STACK_SHELL_ZSH_HISTORY_TARGET}:rw
         # - ./var/database-history/.mariadb_history:/root/.mariadb_history:rw,delegated
-        # - source: ./docker/logs/mariadb/12
+        # - source: ./docker/logs/mariadb/13
         #   target: /var/log/mysql
         #   type: bind
 volumes:
-  01mariadb12_data:
-    name: ${COMPOSE_PROJECT_NAME}_${GLOBAL_STACK_VERSION}_01mariadb12_data
+  01mariadb13_data:
+    name: ${COMPOSE_PROJECT_NAME}_${GLOBAL_STACK_VERSION}_01mariadb13_data

@@ -24,10 +24,10 @@ $cfg['Servers'][$i]['ssl_ca'] = $_SERVER['CAROOT'] . '/rootCA-Bundle.pem';
 $cfg['Servers'][$i]['ssl_ca_path'] = $_SERVER['CAROOT'];
 $cfg['Servers'][$i]['ssl_verify'] = false;
 
-/* Server: 01mariadb12 [2] */
+/* Server: 01mariadb13 [2] */
 $i++;
 $cfg['Servers'][$i]['verbose'] = 'Mariadb 12';
-$cfg['Servers'][$i]['host'] = '01mariadb12';
+$cfg['Servers'][$i]['host'] = '01mariadb13';
 $cfg['Servers'][$i]['port'] = 3306;
 $cfg['Servers'][$i]['socket'] = '';
 $cfg['Servers'][$i]['auth_type'] = 'cookie';

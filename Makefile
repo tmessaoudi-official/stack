@@ -18,7 +18,7 @@ default: help
 SERVICES_SHELL := \
 	00base 00corentinth-it-tools \
 	01axllent-mailpit 01caddy 01epiclabs-docker-oracle-xe-11g \
-	01httpd 01localstack-localstack 01mariadb12 01mongo7 \
+	01httpd 01localstack-localstack 01mariadb13 01mongo7 \
 	01mysql9 01nginx \
 	01selenium-standalone-chrome 01selenium-standalone-firefox \
 	02fvm 02keycloak-keycloak \

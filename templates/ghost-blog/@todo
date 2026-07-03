@@ -4,5 +4,5 @@ DEPRECATED — update before use:
 3. Add stackCatch error trap to startup script
 4. Replace curl healthcheck with tools/successes/<TOKEN> file-based check
 5. Add GLOBAL_STACK_ERROR_TOKEN to docker-compose.yaml
-6. Fix depends_on: 01mariadb11 → 01mariadb12
+6. Fix depends_on: 01mariadb11 → 01mariadb13
 7. Fix DOCKER_INIT → GLOBAL_STACK_DOCKER_INIT

@@ -2,7 +2,7 @@
 
 $cfg['Servers'][1] = [
     'auth_type' => 'cookie',
-    'host' => '01mariadb12',
+    'host' => '01mariadb13',
     'compress' => false,
     'AllowNoPassword' => true,
 ];
