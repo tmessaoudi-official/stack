@@ -187,11 +187,8 @@ while read -r line; do
 done < <(awk '!seen[$0]++' .env)
 
 # then those
-for _GS_EU_MD_NODE_VERSION in $(compgen -v | grep -E '^GLOBAL_STACK_NODE([0-9]+|EDGE|[0-9]+_[0-9]+)_VERSION$'); do echo ""; echo "Node ${_GS_EU_MD_NODE_VERSION}: ${!_GS_EU_MD_NODE_VERSION}"; nvm use ${!_GS_EU_MD_NODE_VERSION}; npm --global outdated; done
-GLOBA_STACK_CURRENT_DIRECTORY=$(pwd)
-cd /stack/tools/serverless-framework
-npm outdated
-cd "${GLOBA_STACK_CURRENT_DIRECTORY}"
+for _GS_EU_MD_NODE_VERSION in $(compgen -v | grep -E '^GLOBAL_STACK_NODE([0-9]+|EDGE|[0-9]+_[0-9]+)_VERSION$'); do echo ""; echo "Node ${_GS_EU_MD_NODE_VERSION}: ${!_GS_EU_MD_NODE_VERSION}"; nvm use "${!_GS_EU_MD_NODE_VERSION}"; npm --global outdated; done
+(cd /stack/tools/serverless-framework && npm outdated)
 for _GS_EU_MD_PYTHON_VERSION in $(compgen -v | grep -E '^GLOBAL_STACK_PYTHON([0-9]+|EDGE|[0-9]+_[0-9]+)_VERSION$'); do echo ""; echo "Python ${_GS_EU_MD_PYTHON_VERSION}: ${!_GS_EU_MD_PYTHON_VERSION}"; /stack/tools/pyenv/versions/"${!_GS_EU_MD_PYTHON_VERSION}"/bin/pip"${!_GS_EU_MD_PYTHON_VERSION%.*}" list --outdated; done
 sdkmanager --sdk_root="${ANDROID_HOME}" --list
 
@@ -202,7 +199,7 @@ echo "sdkman_healthcheck_enable=true" > "${HOME}/.sdkman/etc/config"
 
 source "${HOME}/.sdkman/etc/config"
 
-rm -rf ${HOME}/.sdkman/etc/config
+rm -rf "${HOME}/.sdkman/etc/config"
 # Enumerate sdkman tools dynamically from .env @todo env-update annotations so this
 # list can never drift: extract each sdkman:TOOL identifier (the char class stops at
 # the ':' before any :major suffix, so java:17 → java), strip the prefix, dedup.
