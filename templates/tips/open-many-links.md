@@ -70,6 +70,10 @@ while read -r line; do
   elif [[ "${line}" =~ codeberg:([a-zA-Z0-9_.-]+)/([a-zA-Z0-9_.-]+) ]]; then
     _type="codeberg"
     url="https://codeberg.org/${BASH_REMATCH[1]}/${BASH_REMATCH[2]}/releases"
+  # ghcr:owner/image (GitHub Container Registry) — ghcr.io redirects to the GitHub package page
+  elif [[ "${line}" =~ ghcr:([a-zA-Z0-9_.-]+)/([a-zA-Z0-9_.-]+) ]]; then
+    _type="ghcr"
+    url="https://ghcr.io/${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
   # dockerhub:_/image (official library image) — must come before generic user/image to avoid /r/_/image
   elif [[ "${line}" =~ dockerhub:_/([a-zA-Z0-9_.-]+) ]]; then
     _type="dockerhub"
@@ -199,18 +203,14 @@ echo "sdkman_healthcheck_enable=true" > "${HOME}/.sdkman/etc/config"
 source "${HOME}/.sdkman/etc/config"
 
 rm -rf ${HOME}/.sdkman/etc/config
-echo "ant";        sdk list ant        | grep ""
-echo "gradle";     sdk list gradle     | grep ""
-echo "kotlin";     sdk list kotlin     | grep ""
-echo "maven";      sdk list maven      | grep ""
-echo "pomchecker"; sdk list pomchecker | grep ""
-echo "springboot"; sdk list springboot | grep ""
-echo "tomcat";     sdk list tomcat     | grep ""
-echo "groovy";     sdk list groovy     | grep ""
-echo "micronaut";  sdk list micronaut  | grep ""
-echo "quarkus";    sdk list quarkus    | grep ""
-echo "spark";      sdk list spark      | grep ""
-echo "java";       sdk list java       | grep ""
+# Enumerate sdkman tools dynamically from .env @todo env-update annotations so this
+# list can never drift: extract each sdkman:TOOL identifier (the char class stops at
+# the ':' before any :major suffix, so java:17 → java), strip the prefix, dedup.
+while read -r _GS_EU_MD_SDK_TOOL; do
+  [[ -z "${_GS_EU_MD_SDK_TOOL}" ]] && continue
+  echo "${_GS_EU_MD_SDK_TOOL}"
+  sdk list "${_GS_EU_MD_SDK_TOOL}" | grep ""
+done < <(grep -E '@todo.*env-update.*sdkman:' .env | grep -oE 'sdkman:[a-zA-Z0-9_-]+' | sed 's/^sdkman://' | sort -u)
 
 echo "sdkman_healthcheck_enable=false" > "${HOME}/.sdkman/etc/config"
 
