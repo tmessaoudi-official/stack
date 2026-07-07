@@ -79,6 +79,10 @@ echo -e "\n******** Starting Phpbrew ${PHPBREW_MODE} ${PHP_VERSION:-} ********"
 
 mkdir -p "${COMPOSER_HOME}" "${COMPOSER_HOME}/bin" "${COMPOSER_SOURCE}" "${SYMFONY_HOME}/bin" "${PHPBREW_ROOT}" "${PHPBREW_BIN}"
 
+# ckpt4: version-drift WARN only (single source: gs_version_gate). Reinstall
+# decision stays with the existing content-compare below (behavior unchanged);
+# `|| true` satisfies the set -eE ERR-trap invariant for a discard-decision call.
+gs_version_gate "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew" "${GLOBAL_STACK_PHPBREW_VERSION}" "phpbrew" >/dev/null || true
 if [ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew" ] || \
    [ "$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew" 2>/dev/null)" != "${GLOBAL_STACK_PHPBREW_VERSION}" ] || \
    [ "${GLOBAL_STACK_RELOAD_PHPBREW}" = "true" ]; then

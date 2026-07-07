@@ -709,6 +709,58 @@ pkg_check "non-tolerant + failed command → set -e aborts (error token written)
 pkg_check "non-tolerant + failed command → NO marker written" \
   bash -c '[[ ! -f "'"${TOLV}"'/tol.2.pkg.foo" ]]'
 
+# ─── Section 14: ckpt-4 manager/rust version-drift WARN probe wiring ────────
+# Each manager + rust script must carry the additive gs_version_gate PROBE (a
+# discard-decision `>/dev/null` call whose only effect is the stderr WARN — the
+# install condition is untouched). This static check is the Coverage row for
+# ckpt 4: the probe is unreachable under GS_STARTUP_DRY_RUN (prologue exits
+# first), so bash -n proves parse only. The exact fixed-string fragment pins the
+# marker path AND the expected expr — notably the `#v` strip on pyenv/rbenv,
+# whose omission would spuriously WARN every boot. The WARN mechanism itself is
+# already covered by Section 8.
+printf '\n%b── Section 14: ckpt-4 manager/rust WARN probe wiring%b\n' "${C_BOLD}" "${C_RESET}"
+
+PROBE_WIRING=(
+  'nvm-bin/global-stack-nvm-start.sh|gs_version_gate "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/nvm" "${GLOBAL_STACK_NVM_VERSION}" "nvm" >/dev/null'
+  'phpbrew-bin/global-stack-phpbrew-start.sh|gs_version_gate "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew" "${GLOBAL_STACK_PHPBREW_VERSION}" "phpbrew" >/dev/null'
+  'pyenv-bin/global-stack-pyenv-start.sh|gs_version_gate "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/pyenv" "${GLOBAL_STACK_PYENV_VERSION#v}" "pyenv" >/dev/null'
+  'rbenv-bin/global-stack-rbenv-start.sh|gs_version_gate "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/rbenv" "${GLOBAL_STACK_RBENV_VERSION#v}" "rbenv" >/dev/null'
+  'sdkman-bin/global-stack-sdkman-start.sh|gs_version_gate "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/sdkman" "${GLOBAL_STACK_SDKMAN_VERSION}" "sdkman" >/dev/null'
+  'fvm-bin/global-stack-fvm-start.sh|gs_version_gate "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/fvm" "${GLOBAL_STACK_FVM_VERSION}" "fvm" >/dev/null'
+  'rust-bin/global-stack-rust-start.sh|gs_version_gate "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/rust" "${GLOBAL_STACK_RUST_VERSION}" "rust" >/dev/null'
+)
+
+for pair in "${PROBE_WIRING[@]}"; do
+  script="${pair%%|*}"
+  fragment="${pair#*|}"
+  path="${DIST_BIN}/${script}"
+  if grep -Fq "${fragment}" "${path}"; then
+    PASS=$((PASS + 1))
+    printf '  %b✓%b  %s carries correct WARN probe\n' "${C_GREEN}" "${C_RESET}" "$(basename "${script}")"
+  else
+    FAIL=$((FAIL + 1))
+    FAILURES+=("${script} missing/incorrect ckpt-4 WARN probe")
+    printf '  %b✗%b  %s missing/incorrect WARN probe\n' "${C_RED}" "${C_RESET}" "$(basename "${script}")"
+  fi
+done
+
+# Exactly-once guarantee for the two-block scripts (pyenv/rbenv/rust): the probe
+# fragment must appear exactly ONCE so the WARN does not fire twice per boot.
+for pair in "${PROBE_WIRING[@]}"; do
+  script="${pair%%|*}"
+  fragment="${pair#*|}"
+  path="${DIST_BIN}/${script}"
+  n="$(grep -Fc "${fragment}" "${path}" 2>/dev/null || echo 0)"
+  if [[ "${n}" -eq 1 ]]; then
+    PASS=$((PASS + 1))
+    printf '  %b✓%b  %s WARN probe appears exactly once\n' "${C_GREEN}" "${C_RESET}" "$(basename "${script}")"
+  else
+    FAIL=$((FAIL + 1))
+    FAILURES+=("${script} ckpt-4 WARN probe count=${n} (want 1)")
+    printf '  %b✗%b  %s WARN probe count=%s (want 1)\n' "${C_RED}" "${C_RESET}" "$(basename "${script}")" "${n}"
+  fi
+done
+
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
 if [[ "${FAIL}" -eq 0 ]]; then

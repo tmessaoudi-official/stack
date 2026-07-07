@@ -76,6 +76,12 @@ printf '\n******** Starting rbenv %s %s ********\n' "${RBENV_MODE}" "${RUBY_VERS
 mkdir -p "${RBENV_ROOT}"
 
 if [[ "${RBENV_MODE}" = "install" ]]; then
+  # ckpt4: version-drift WARN only (single source: gs_version_gate). Reinstall
+  # decision stays with the existing content-compare below (behavior unchanged).
+  # Expected uses the same `#v` strip the compare uses (marker stores `rbenv
+  # --version` == pin without the leading v — loop-proof). One probe for both
+  # guarded blocks so the WARN fires exactly once. `|| true` per ERR-trap invariant.
+  gs_version_gate "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/rbenv" "${GLOBAL_STACK_RBENV_VERSION#v}" "rbenv" >/dev/null || true
   if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/rbenv" ]] || \
      [[ "$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/rbenv" 2>/dev/null)" != "${GLOBAL_STACK_RBENV_VERSION#v}" ]] || \
      [[ "true" = "${GLOBAL_STACK_RELOAD_RBENV}" ]]; then

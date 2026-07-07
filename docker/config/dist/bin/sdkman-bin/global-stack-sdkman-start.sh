@@ -82,6 +82,11 @@ printf '\n******** Starting sdkman %s %s ********\n' "${SDKMAN_MODE}" "${JAVA_VE
 SDK_LATEST_VERSION=${GLOBAL_STACK_SDKMAN_VERSION}
 SDK_CURRENT_VERSION=$([[ -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/sdkman" ]] && cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/sdkman" || echo "null")
 
+# ckpt4: version-drift WARN only (single source: gs_version_gate). Reinstall
+# decision stays with the bespoke SDK_LATEST/SDK_CURRENT compare below (the
+# @todo current-vs-candidate design is deliberate — behavior unchanged);
+# `|| true` satisfies the set -eE ERR-trap invariant for a discard-decision call.
+gs_version_gate "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/sdkman" "${GLOBAL_STACK_SDKMAN_VERSION}" "sdkman" >/dev/null || true
 if [[ "${SDK_LATEST_VERSION}" != "${SDK_CURRENT_VERSION}" ]]; then
   rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN}/sdkman.installer.sh"
   #curl -fsSL -o "${GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN}/sdkman.installer.sh" "https://get.sdkman.io"

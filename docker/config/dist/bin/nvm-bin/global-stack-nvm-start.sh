@@ -81,6 +81,10 @@ mkdir -p "${NVM_DIR}" "${DENO_INSTALL}/bin" "${BUN_INSTALL}/bin" "${YARN_OFFLINE
 
 # ----------------------------------
 if [[ "${NVM_MODE}" = "install" ]]; then
+  # ckpt4: version-drift WARN only (single source: gs_version_gate). Reinstall
+  # decision stays with the existing content-compare below (behavior unchanged);
+  # `|| true` satisfies the set -eE ERR-trap invariant for a discard-decision call.
+  gs_version_gate "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/nvm" "${GLOBAL_STACK_NVM_VERSION}" "nvm" >/dev/null || true
   if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/nvm" ]] || \
      [[ "$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/nvm" 2>/dev/null)" != "${GLOBAL_STACK_NVM_VERSION}" ]] || \
      [[ "${GLOBAL_STACK_RELOAD_NVM}" = "true" ]]; then

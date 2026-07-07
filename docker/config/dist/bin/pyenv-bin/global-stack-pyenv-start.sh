@@ -78,6 +78,12 @@ printf '\n******** Starting pyenv %s %s ********\n' "${PYENV_MODE}" "${PYTHON_VE
 mkdir -p "${PYENV_ROOT}"
 
 if [[ "${PYENV_MODE}" = "install" ]]; then
+  # ckpt4: version-drift WARN only (single source: gs_version_gate). Reinstall
+  # decision stays with the existing content-compare below (behavior unchanged).
+  # Expected uses the same `#v` strip the compare uses (marker stores `pyenv
+  # --version` == pin without the leading v — loop-proof). One probe for both
+  # guarded blocks so the WARN fires exactly once. `|| true` per ERR-trap invariant.
+  gs_version_gate "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/pyenv" "${GLOBAL_STACK_PYENV_VERSION#v}" "pyenv" >/dev/null || true
   if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/pyenv" ]] || \
      [[ "$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/pyenv" 2>/dev/null)" != "${GLOBAL_STACK_PYENV_VERSION#v}" ]] || \
      [[ "true" = "${GLOBAL_STACK_RELOAD_PYENV}" ]]; then
