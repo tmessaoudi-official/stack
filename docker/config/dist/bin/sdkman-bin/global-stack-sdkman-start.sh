@@ -130,26 +130,34 @@ if [[ "${SDKMAN_MODE}" = "setup" ]]; then
   source /usr/local/bin/global-stack-base-setup-packages.sh
   source /home/"${GLOBAL_STACK_DOCKER_USER_ID}"/${GLOBAL_STACK_SHELL_RC_TARGET}
 
-  if [[ -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/java.${JAVA_VERSION_AS:-${JAVA_VERSION:-}}" ]]; then
-    set +E
-    global_stack_base_setup_packages \
-      --prefix='SDKMAN' \
-      --command='echo -e "**** Using ${PACKAGE_NAME} ${PACKAGE_VERSION} ${PACKAGE_COMMAND_SUFFIX}"' \
-      --command='sdk use ${PACKAGE_NAME} "${PACKAGE_VERSION}"' \
-      --command='echo "sdk use ${PACKAGE_NAME} "${PACKAGE_VERSION}"" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"' \
-      --command='chmod -R a+rwx "${SDKMAN_DIR}"/candidates/"${PACKAGE_NAME}"/"${PACKAGE_VERSION}"/bin'
-    set -E
-  else
-    set +E
-    global_stack_base_setup_packages \
-      --prefix='SDKMAN' \
-      --command='echo -e "**** Installing/Updating and using ${PACKAGE_NAME} ${PACKAGE_VERSION} ${PACKAGE_COMMAND_SUFFIX}"' \
-      --command='sdk install "${PACKAGE_NAME}" "${PACKAGE_VERSION}" ${PACKAGE_COMMAND_SUFFIX}' \
-      --command='sdk use ${PACKAGE_NAME} "${PACKAGE_VERSION}"' \
-      --command='echo "sdk use ${PACKAGE_NAME} "${PACKAGE_VERSION}"" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"' \
-      --command='chmod -R a+rwx "${SDKMAN_DIR}"/candidates/"${PACKAGE_NAME}"/"${PACKAGE_VERSION}"/bin'
-    set -E
-  fi
+  # Install loop: gated per-slot by markers so only new/changed sdkman candidates
+  # are installed — a package-only bump is detected even when the java runtime
+  # marker is unchanged (the former dual-branch only installed when the runtime
+  # marker was absent). Slot-keyed markers keep the maven/gradle/groovy/spark
+  # multi-slot cases distinct. sdkman candidates are JDK-independent, so a java
+  # runtime bump (ckpt-2 gate wiped java.<AS>.pkg.*) just re-installs them
+  # idempotently. --cleanup-command uninstalls the OLD version on a bump
+  # (candidates accumulate). set +E: sdk commands return non-zero benignly.
+  set +E
+  global_stack_base_setup_packages \
+    --prefix='SDKMAN' \
+    --marker-prefix="java.${JAVA_VERSION_AS:-${JAVA_VERSION:-}}" \
+    --cleanup-command='sdk uninstall ${PACKAGE_NAME} "${PACKAGE_OLD_VERSION}" || true' \
+    --command='echo -e "**** Installing/Updating ${PACKAGE_NAME} ${PACKAGE_VERSION} ${PACKAGE_COMMAND_SUFFIX}"' \
+    --command='sdk install "${PACKAGE_NAME}" "${PACKAGE_VERSION}" ${PACKAGE_COMMAND_SUFFIX}'
+  set -E
+
+  # Activation loop: `sdk use` + shellrc line + chmod run EVERY boot for EVERY
+  # package (NO --marker-prefix) so PATH/shellrc are correct even when nothing was
+  # reinstalled. Runs after the install loop so every candidate exists.
+  set +E
+  global_stack_base_setup_packages \
+    --prefix='SDKMAN' \
+    --command='echo -e "**** Using ${PACKAGE_NAME} ${PACKAGE_VERSION} ${PACKAGE_COMMAND_SUFFIX}"' \
+    --command='sdk use ${PACKAGE_NAME} "${PACKAGE_VERSION}"' \
+    --command='echo "sdk use ${PACKAGE_NAME} "${PACKAGE_VERSION}"" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"' \
+    --command='chmod -R a+rwx "${SDKMAN_DIR}"/candidates/"${PACKAGE_NAME}"/"${PACKAGE_VERSION}"/bin'
+  set -E
 fi
 
 if [[ "${SDKMAN_MODE}" = "install" ]]; then
