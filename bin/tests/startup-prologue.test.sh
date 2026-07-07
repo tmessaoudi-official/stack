@@ -397,6 +397,129 @@ for pair in "${GATE_WIRING[@]}"; do
 done
 printf '  (checked %d wired runtime scripts)\n' "${gate_wired_count}"
 
+# ─── Section 10: base-setup-packages per-slot marker gate (checkpoint 3a) ───
+# The package engine must key markers by INSTALL_PACKAGE SLOT, not package NAME,
+# so multiple slots sharing a name (maven_vx1/vx2) get DISTINCT markers and do
+# NOT flip-flop-reinstall every boot. It must skip dummy/empty slots, reinstall
+# only a bumped slot, and fire --cleanup-command with the OLD version on a bump.
+printf '\n%b── Section 10: base-setup-packages per-slot marker gate%b\n' "${C_BOLD}" "${C_RESET}"
+
+cat >"${TMP_DIR}/test-pkg.sh" <<'TESTEOF'
+#!/bin/bash
+set -xeE -o pipefail
+shopt -s extdebug
+IFS=$'\n\t'
+source global-stack-base-prologue.sh
+source global-stack-base-setup-packages.sh
+global_stack_base_setup_packages "$@"
+TESTEOF
+chmod +x "${TMP_DIR}/test-pkg.sh"
+
+PKG_VERSIONS="${TMP_DIR}/pkgversions"
+PKG_LOG="${TMP_DIR}/pkg-install.log"
+CLEANUP_LOG="${TMP_DIR}/pkg-cleanup.log"
+
+# Runner: synthetic packages via env — two maven slots (same NAME, distinct
+# slots), one dummy, one empty-version. Installs append to PKG_LOG, cleanups to
+# CLEANUP_LOG. VX1/VX2 overridable per scenario. Extra args ("$@") pass through.
+run_pkg() {
+  env \
+    GLOBAL_STACK_ERROR_TOKEN=pkg-token \
+    GLOBAL_STACK_DOCKER_TOOLS_PATH="${TMP_DIR}" \
+    GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS="${PKG_ERR:-${TMP_DIR}}" \
+    GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS="${PKG_VERSIONS}" \
+    PKG_LOG="${PKG_LOG}" \
+    CLEANUP_LOG="${CLEANUP_LOG}" \
+    TESTRT_INSTALL_PACKAGE_MAVEN_VX1_VERSION="${VX1:-1.0}" \
+    TESTRT_CONFIG_PACKAGE_MAVEN_VX1_NAME=maven \
+    TESTRT_INSTALL_PACKAGE_MAVEN_VX2_VERSION="${VX2:-2.0}" \
+    TESTRT_CONFIG_PACKAGE_MAVEN_VX2_NAME=maven \
+    TESTRT_INSTALL_PACKAGE_DUMMYPKG_VERSION=9.9 \
+    TESTRT_CONFIG_PACKAGE_DUMMYPKG_NAME=dummy \
+    TESTRT_INSTALL_PACKAGE_EMPTYVER_VERSION="" \
+    TESTRT_CONFIG_PACKAGE_EMPTYVER_NAME=someempty \
+    PATH="${DIST_BIN}/base-bin:${PATH}" \
+    bash "${TMP_DIR}/test-pkg.sh" \
+    --prefix=TESTRT \
+    "$@" \
+    --command='printf "install %s %s\n" "${PACKAGE_NAME}" "${PACKAGE_VERSION}" >> "${PKG_LOG}"'
+}
+
+pkg_check() {
+  # $1 label, $2 = 0/1 condition already evaluated by caller via "$@" test
+  local label="$1"
+  shift
+  if "$@"; then
+    PASS=$((PASS + 1))
+    printf '  %b✓%b  %s\n' "${C_GREEN}" "${C_RESET}" "${label}"
+  else
+    FAIL=$((FAIL + 1))
+    FAILURES+=("${label}")
+    printf '  %b✗%b  %s\n' "${C_RED}" "${C_RESET}" "${label}"
+  fi
+}
+
+# 10a: first run installs both maven slots + writes 2 DISTINCT slot markers
+rm -rf "${PKG_VERSIONS}"
+mkdir -p "${PKG_VERSIONS}"
+: >"${PKG_LOG}"
+run_pkg --marker-prefix=test.1 >/dev/null 2>&1 || true
+n_first=$(grep -c '^install maven' "${PKG_LOG}" 2>/dev/null || true)
+pkg_check "first run installs both maven slots (2 installs)" [ "${n_first}" = "2" ]
+pkg_check "slot markers are distinct (maven_vx1 + maven_vx2 both exist)" \
+  bash -c '[[ -f "'"${PKG_VERSIONS}"'/test.1.pkg.maven_vx1" && -f "'"${PKG_VERSIONS}"'/test.1.pkg.maven_vx2" ]]'
+pkg_check "dummy slot writes no marker" \
+  bash -c '[[ ! -f "'"${PKG_VERSIONS}"'/test.1.pkg.dummypkg" ]]'
+pkg_check "empty-version slot writes no marker" \
+  bash -c '[[ ! -f "'"${PKG_VERSIONS}"'/test.1.pkg.emptyver" ]]'
+
+# 10b (CERTIFICATION): second run, same versions → ZERO reinstalls (no flip-flop)
+: >"${PKG_LOG}"
+run_pkg --marker-prefix=test.1 >/dev/null 2>&1 || true
+n_second=$(grep -c '^install' "${PKG_LOG}" 2>/dev/null || true)
+pkg_check "second run with same versions → ZERO reinstalls (slot collision fixed)" \
+  [ "${n_second}" = "0" ]
+
+# 10c: bump only VX1 → only that slot reinstalls, marker updated
+: >"${PKG_LOG}"
+VX1=1.1 run_pkg --marker-prefix=test.1 >/dev/null 2>&1 || true
+n_bump=$(grep -c '^install' "${PKG_LOG}" 2>/dev/null || true)
+got_bump=$(grep -c '^install maven 1.1' "${PKG_LOG}" 2>/dev/null || true)
+pkg_check "bump one slot → exactly one reinstall" [ "${n_bump}" = "1" ]
+pkg_check "bump reinstalls the correct (bumped) version" [ "${got_bump}" = "1" ]
+
+# 10d: --cleanup-command fires with OLD version on a bump, NOT on first install
+rm -f "${PKG_VERSIONS}/test.2."*
+: >"${CLEANUP_LOG}"
+VX1=5.0 run_pkg --marker-prefix=test.2 \
+  --cleanup-command='printf "cleanup %s %s\n" "${PACKAGE_NAME}" "${PACKAGE_OLD_VERSION}" >> "${CLEANUP_LOG}"' \
+  >/dev/null 2>&1 || true
+n_clean_first=$(grep -c '^cleanup' "${CLEANUP_LOG}" 2>/dev/null || true)
+pkg_check "cleanup-command does NOT fire on first install" [ "${n_clean_first}" = "0" ]
+: >"${CLEANUP_LOG}"
+VX1=5.1 run_pkg --marker-prefix=test.2 \
+  --cleanup-command='printf "cleanup %s %s\n" "${PACKAGE_NAME}" "${PACKAGE_OLD_VERSION}" >> "${CLEANUP_LOG}"' \
+  >/dev/null 2>&1 || true
+got_clean=$(grep -c '^cleanup maven 5.0' "${CLEANUP_LOG}" 2>/dev/null || true)
+pkg_check "cleanup-command fires with OLD version on a bump" [ "${got_clean}" = "1" ]
+
+# 10e: backward compat — no --marker-prefix runs every command, writes no markers
+rm -rf "${PKG_VERSIONS}"
+mkdir -p "${PKG_VERSIONS}"
+: >"${PKG_LOG}"
+run_pkg >/dev/null 2>&1 || true
+n_compat=$(grep -c '^install maven' "${PKG_LOG}" 2>/dev/null || true)
+pkg_check "no --marker-prefix → legacy behavior (both installs run)" [ "${n_compat}" = "2" ]
+pkg_check "no --marker-prefix → writes no slot markers" \
+  bash -c 'compgen -G "'"${PKG_VERSIONS}"'/*.pkg.*" >/dev/null && exit 1 || exit 0'
+
+# 10f: ERR-trap safety — package gate runs under set -eE, tools/errors stays empty
+pkg_errors_empty() { [[ -z "$(ls -A "${TMP_DIR}/pkgerr" 2>/dev/null)" ]]; }
+rm -rf "${PKG_VERSIONS}" "${TMP_DIR}/pkgerr"
+mkdir -p "${PKG_VERSIONS}" "${TMP_DIR}/pkgerr"
+PKG_ERR="${TMP_DIR}/pkgerr" run_pkg --marker-prefix=test.3 >/dev/null 2>&1 || true
+pkg_check "package gate ERR-trap safe (no error token written)" pkg_errors_empty
+
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
 if [[ "${FAIL}" -eq 0 ]]; then

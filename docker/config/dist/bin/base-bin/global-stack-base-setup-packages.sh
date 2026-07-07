@@ -8,6 +8,8 @@
 
 global_stack_base_setup_packages() {
     local PREFIX
+    local MARKER_PREFIX=""
+    local CLEANUP_COMMAND=""
     local COMMAND_COUNTER=0
     local -A COMMANDS=()
 
@@ -17,6 +19,18 @@ global_stack_base_setup_packages() {
         case "${__CURRENT_ARG__}" in
             --prefix=*)
                 PREFIX="$(echo "${__CURRENT_ARG__}" | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+                ;;
+            --marker-prefix=*)
+                # Opt-in: enables per-slot version markers at
+                # ${VERSIONS}/<marker-prefix>.pkg.<slot>. When empty (default) the
+                # loop keeps its legacy behavior — run every command, no markers.
+                MARKER_PREFIX="$(echo "${__CURRENT_ARG__}" | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+                ;;
+            --cleanup-command=*)
+                # Optional template eval'd (with PACKAGE_OLD_VERSION in scope) before
+                # a slot reinstall — used only by accumulate-type managers (sdkman
+                # `sdk uninstall`, ruby `gem uninstall`) to remove the old version.
+                CLEANUP_COMMAND="$(echo "${__CURRENT_ARG__}" | sed 's/^--[a-zA-Z0-9_-]\+=//')"
                 ;;
             --command=*)
                 COMMANDS[${COMMAND_COUNTER}]="$(echo "${__CURRENT_ARG__}" | sed 's/^--[a-zA-Z0-9_-]\+=//')"
@@ -53,10 +67,40 @@ global_stack_base_setup_packages() {
         fi
 
         if [[ -n "${PACKAGE_NAME}" && -n "${PACKAGE_VERSION}" ]]; then
+            # Per-slot marker gate (opt-in via --marker-prefix). Marker is keyed by
+            # the INSTALL_PACKAGE SLOT (e.g. maven_vx1), NOT the package name, so
+            # multiple slots sharing a name get DISTINCT markers and never
+            # flip-flop-reinstall. absent → install; equal → skip; differ → warn +
+            # optional cleanup(OLD) + reinstall. set -eE safe: gs_version_gate
+            # returns 0 (WARN on stderr); the cleanup eval is || true.
+            local _slot="" _pkg_marker="" _pkg_decision="install"
+            if [[ -n "${MARKER_PREFIX}" ]]; then
+                _slot="${VARIABLE_NAME#"${PREFIX}"_INSTALL_PACKAGE_}"
+                _slot="${_slot%_VERSION}"
+                _slot="${_slot,,}"
+                _pkg_marker="${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/${MARKER_PREFIX}.pkg.${_slot}"
+                _pkg_decision="$(gs_version_gate "${_pkg_marker}" "${PACKAGE_VERSION}" "${MARKER_PREFIX}.pkg.${_slot}")"
+                if [[ "${_pkg_decision}" = "skip" ]]; then
+                    continue
+                fi
+                if [[ "${_pkg_decision}" = "reinstall" && -n "${CLEANUP_COMMAND}" ]]; then
+                    local PACKAGE_OLD_VERSION
+                    PACKAGE_OLD_VERSION="$(cat "${_pkg_marker}" 2>/dev/null || true)"
+                    if [[ -n "${PACKAGE_OLD_VERSION}" && "${PACKAGE_OLD_VERSION}" != "${PACKAGE_VERSION}" ]]; then
+                        # Caller cleanup template (PACKAGE_OLD_VERSION in scope); non-fatal.
+                        eval "${CLEANUP_COMMAND}" || true
+                    fi
+                fi
+            fi
             for (( INDEX=0; INDEX<${#COMMANDS[@]}; INDEX++ )); do
                 # Commands are caller-provided templates evaluated in the current env context (see --command= arg).
                 eval "${COMMANDS[${INDEX}]}"
             done
+            # Record the installed version only after the commands ran, so a failed
+            # install (set -e abort) does NOT leave a satisfied marker behind.
+            if [[ -n "${_pkg_marker}" ]]; then
+                echo "${PACKAGE_VERSION}" > "${_pkg_marker}"
+            fi
         fi
     done
 }
