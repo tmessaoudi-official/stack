@@ -772,7 +772,9 @@ _pes_ref_a='github.com/php/php-src@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
 _pes_ref_b='github.com/php/php-src@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
 _pes_marker="${TMP_DIR}/versions/php.edge.build"
 
-# 15a: sidecar absent → install (silent; first boot adopts baseline, no forced rebuild)
+# 15a: sidecar absent → gate returns install (the start script treats this as a forced
+# rebuild — see 15e — so the pre-existing php-master is rebuilt to the tracked SHA and the
+# sidecar never records an unbuilt ref; fires once per enablement/RELOAD, never a loop).
 rm -f "${_pes_marker}"
 assert_output_contains "15a: sidecar absent → install" "DECISION=install" run_gate "${_pes_marker}" "${_pes_ref_a}"
 
@@ -804,6 +806,9 @@ assert_pass "15e: success-gated sidecar write present (echo PHP_VERSION > php.ed
   grep -Eq 'php\.edge\.build"$' "${_pes_start}"
 assert_pass "15e: edge gate is guarded on PHP_VERSION_AS=edge" \
   grep -q '"${PHP_VERSION_AS}" = "edge"' "${_pes_start}"
+# force rebuild on NON-skip (absent OR differ) so the sidecar never records an unbuilt ref
+assert_pass "15e: edge gate forces rebuild whenever gate != skip (absent or differ)" \
+  grep -Eq '\$\{_edge_gate\}" != "skip"' "${_pes_start}"
 assert_pass "15e: RELOAD path drops the sidecar for edge" \
   grep -Eq 'PHP_VERSION_AS.*= .edge.*php\.edge\.build|edge.* rm -f .*php\.edge\.build' "${_pes_start}"
 # Guard against over-broad glob that would sweep the sidecar: no 'php.edge.*' wildcard.

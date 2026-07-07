@@ -68,18 +68,30 @@ if [ "${PHPBREW_MODE}" = "setup" ]; then
   # php.edge SHA drift gate (checkpoint 7). The main php.edge marker is invariant
   # ("php-master", consumed as the install dirname), so the content-compare above never
   # rebuilds edge on an upstream commit. Compare the resolved build ref
-  # (PHP_VERSION = github.com/php/php-src@<sha>) against the php.edge.build SIDECAR; on a
-  # SHA change (sidecar present & differs) force a full rebuild. Per the agreed strategy we
-  # do NOT depend on phpbrew's replace-vs-skip behaviour — REMOVE the marker AND clean the
-  # php-master build/install dirs (mirroring the RELOAD path) so a fresh build is certain.
-  # Sidecar ABSENT (first boot with SHA tracking) is silent "install": no forced rebuild —
-  # the sidecar is written as the baseline at success time below. set -eE safe (helper
-  # returns 0; rm -f || true).
+  # (PHP_VERSION = github.com/php/php-src@<sha>) against the php.edge.build SIDECAR and
+  # force a full rebuild whenever the gate is NOT "skip":
+  #   - "reinstall" (sidecar present & differs): the SHA moved (gate already WARNed).
+  #   - "install"   (sidecar absent): first enablement / fresh / post-RELOAD. We MUST
+  #     rebuild here too, otherwise the pre-existing php-master (built from the old ref)
+  #     stays installed while the sidecar written at success time would claim the new
+  #     SHA — a lying marker + edge never actually reaching the tracked commit. Forcing
+  #     the rebuild keeps the sidecar truthful. Idempotent: `make down` does NOT clear
+  #     versions/, so the sidecar persists and "install" fires exactly once per
+  #     enablement/RELOAD — never a per-boot loop.
+  # Per the agreed strategy we do NOT depend on phpbrew's replace-vs-skip behaviour —
+  # REMOVE the php.edge marker AND clean the php-master build/install dirs (mirroring the
+  # RELOAD path) so the install branch below does a certain fresh build. set -eE safe
+  # (helper returns 0; rm -f || true).
   if [ "${PHP_VERSION_AS}" = "edge" ]; then
     _edge_sidecar="${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/php.edge.build"
     _edge_gate="$(gs_version_gate "${_edge_sidecar}" "${PHP_VERSION}" "php.edge (build ${PHP_VERSION})")"
-    if [ "${_edge_gate}" = "reinstall" ]; then
-      printf '\nphp.edge build ref changed → forcing rebuild of %s\n' "${PHP_VERSION_NAME}"
+    if [ "${_edge_gate}" != "skip" ]; then
+      if [ "${_edge_gate}" = "reinstall" ]; then
+        printf '\nphp.edge build ref changed → forcing rebuild of %s\n' "${PHP_VERSION_NAME}"
+      else
+        printf '\nphp.edge SHA-tracking baseline absent → building %s from the tracked ref %s\n' \
+          "${PHP_VERSION_NAME}" "${PHP_VERSION}"
+      fi
       rm -rf "${PHPBREW_ROOT}/php/${PHP_VERSION_NAME}" "${PHPBREW_ROOT}/build/${PHP_VERSION_NAME}" \
              "${PHPBREW_BIN}/frankenphp-${GLOBAL_STACK_FRANKENPHP_VERSION}-${PHP_VERSION_NAME}"
       rm -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/php.edge.pkg."* || true
