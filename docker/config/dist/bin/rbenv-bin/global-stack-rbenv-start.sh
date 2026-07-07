@@ -45,6 +45,24 @@ if [[ "${RBENV_MODE}" = "setup" ]]; then
     rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/ruby.${RUBY_VERSION_AS:-${RUBY_VERSION:-}}" "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/ruby.${RUBY_VERSION_AS:-${RUBY_VERSION:-}}"
   fi
 
+  # Version-mismatch gate: compare against the raw $RUBY_VERSION pin. The marker
+  # stores the rbenv-resolved version (RBENV_VERSION) which == the raw value for
+  # fully-qualified pins. On mismatch, warn + clean the old rbenv version dir and
+  # package markers, then drop the marker so the setup block reinstalls +
+  # repopulates. set -eE safe (helper returns 0, WARN on stderr).
+  _ruby_label="${RUBY_VERSION_AS:-${RUBY_VERSION:-}}"
+  _ruby_marker="${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/ruby.${_ruby_label}"
+  _ruby_gate="$(gs_version_gate "${_ruby_marker}" "${RUBY_VERSION:-}" "ruby.${_ruby_label}")"
+  if [[ "${_ruby_gate}" == "reinstall" ]]; then
+    _ruby_old="$(cat "${_ruby_marker}" 2>/dev/null || true)"
+    if [[ -n "${_ruby_old}" && "${_ruby_old}" != "${RUBY_VERSION:-}" ]]; then
+      printf '\nCleaning old ruby version dir %s\n' "${_ruby_old}"
+      rm -rf "${RBENV_ROOT}/versions/${_ruby_old}"
+    fi
+    rm -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/ruby.${_ruby_label}.pkg."* || true
+    rm -f "${_ruby_marker}"
+  fi
+
   if [[ "true" = "${GLOBAL_STACK_USE_LOCKS}" ]]; then
     printf '\nAcquiring rbenv lock ...\n'
     exec 200>"${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/rbenv.flock"

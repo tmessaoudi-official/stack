@@ -54,6 +54,25 @@ if [[ "${SDKMAN_MODE}" = "setup" ]]; then
     printf '\nReloading java %s ...\n' "${JAVA_VERSION_AS:-${JAVA_VERSION:-}}"
     rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/java.${JAVA_VERSION_AS:-${JAVA_VERSION:-}}" "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/java.${JAVA_VERSION_AS:-${JAVA_VERSION:-}}"
   fi
+
+  # Version-mismatch gate: compare against $JAVA_VERSION (the raw value the marker
+  # stores — sdkman uses prebuilt binaries, no resolver). On mismatch, warn +
+  # clean the old java candidate dir and package markers, then drop the marker so
+  # the setup block below reinstalls the new JDK. sdkman package candidates
+  # (maven/gradle/…) are JDK-independent, so re-`sdk use` on the fresh markers is
+  # harmless/idempotent. set -eE safe (helper returns 0, WARN on stderr).
+  _java_label="${JAVA_VERSION_AS:-${JAVA_VERSION:-}}"
+  _java_marker="${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/java.${_java_label}"
+  _java_gate="$(gs_version_gate "${_java_marker}" "${JAVA_VERSION:-}" "java.${_java_label}")"
+  if [[ "${_java_gate}" == "reinstall" ]]; then
+    _java_old="$(cat "${_java_marker}" 2>/dev/null || true)"
+    if [[ -n "${_java_old}" && "${_java_old}" != "${JAVA_VERSION:-}" ]]; then
+      printf '\nCleaning old java candidate dir %s\n' "${_java_old}"
+      rm -rf "${SDKMAN_DIR}/candidates/java/${_java_old}"
+    fi
+    rm -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/java.${_java_label}.pkg."* || true
+    rm -f "${_java_marker}"
+  fi
 fi
 
 printf '\n******** Starting sdkman %s %s ********\n' "${SDKMAN_MODE}" "${JAVA_VERSION:-}"

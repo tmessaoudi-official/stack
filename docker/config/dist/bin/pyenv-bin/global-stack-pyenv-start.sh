@@ -47,6 +47,24 @@ if [[ "${PYENV_MODE}" = "setup" ]]; then
     rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/python.${PYTHON_VERSION_AS:-${PYTHON_VERSION:-}}" "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/python.${PYTHON_VERSION_AS:-${PYTHON_VERSION:-}}"
   fi
 
+  # Version-mismatch gate: compare against the raw $PYTHON_VERSION pin (NOT the
+  # empty-at-gate-time $PYENV_VERSION). The marker stores the pyenv-resolved
+  # version which == the raw value for fully-qualified pins. On mismatch, warn +
+  # clean the old pyenv version dir and package markers, then drop the marker so
+  # the setup block reinstalls + repopulates. set -eE safe (helper returns 0).
+  _python_label="${PYTHON_VERSION_AS:-${PYTHON_VERSION:-}}"
+  _python_marker="${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/python.${_python_label}"
+  _python_gate="$(gs_version_gate "${_python_marker}" "${PYTHON_VERSION:-}" "python.${_python_label}")"
+  if [[ "${_python_gate}" == "reinstall" ]]; then
+    _python_old="$(cat "${_python_marker}" 2>/dev/null || true)"
+    if [[ -n "${_python_old}" && "${_python_old}" != "${PYTHON_VERSION:-}" ]]; then
+      printf '\nCleaning old python version dir %s\n' "${_python_old}"
+      rm -rf "${PYENV_ROOT}/versions/${_python_old}"
+    fi
+    rm -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/python.${_python_label}.pkg."* || true
+    rm -f "${_python_marker}"
+  fi
+
   if [[ "true" = "${GLOBAL_STACK_USE_LOCKS}" ]]; then
     printf '\nAcquiring pyenv lock ...\n'
     exec 200>"${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/pyenv.flock"

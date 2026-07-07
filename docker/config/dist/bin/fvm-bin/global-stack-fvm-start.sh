@@ -43,6 +43,23 @@ if [[ "${FVM_MODE}" = "setup" ]]; then
     rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/flutter.${FLUTTER_VERSION_AS:-${FLUTTER_VERSION:-}}" "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/flutter.${FLUTTER_VERSION_AS:-${FLUTTER_VERSION:-}}"
   fi
 
+  # Version-mismatch gate: compare against $FLUTTER_VERSION (the raw value the
+  # marker stores — no resolver). On mismatch, warn + clean the old fvm version
+  # dir, then drop the marker so the setup block below reinstalls the new SDK.
+  # flutter has no package loop → no per-package markers to invalidate. set -eE
+  # safe (helper returns 0, WARN on stderr).
+  _flutter_label="${FLUTTER_VERSION_AS:-${FLUTTER_VERSION:-}}"
+  _flutter_marker="${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/flutter.${_flutter_label}"
+  _flutter_gate="$(gs_version_gate "${_flutter_marker}" "${FLUTTER_VERSION:-}" "flutter.${_flutter_label}")"
+  if [[ "${_flutter_gate}" == "reinstall" ]]; then
+    _flutter_old="$(cat "${_flutter_marker}" 2>/dev/null || true)"
+    if [[ -n "${_flutter_old}" && "${_flutter_old}" != "${FLUTTER_VERSION:-}" ]]; then
+      printf '\nCleaning old flutter version dir %s\n' "${_flutter_old}"
+      rm -rf "${FVM_CACHE_PATH}/versions/${_flutter_old}"
+    fi
+    rm -f "${_flutter_marker}"
+  fi
+
   if [[ "true" = "${GLOBAL_STACK_USE_LOCKS}" ]]; then
     printf '\nAcquiring fvm lock ...\n'
     exec 200>"${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/fvm.flock"

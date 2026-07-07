@@ -42,6 +42,24 @@ if [ "${PHPBREW_MODE}" = "setup" ]; then
     PHPBREW_PHP_BUILD_PATH="${PHPBREW_ROOT}/build/${PHPBREW_PHP}"
     rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/php.${PHP_VERSION_AS}" "${PHPBREW_BIN}/frankenphp-${GLOBAL_STACK_FRANKENPHP_VERSION}-${PHP_VERSION_NAME}" "${PHPBREW_PHP_PATH}/" "${PHPBREW_PHP_BUILD_PATH}/"
   fi
+
+  # Version-mismatch gate: compare against $PHP_VERSION_NAME (the value the marker
+  # actually stores — the phpbrew install dirname, e.g. php-8.4.23). On mismatch,
+  # warn + clean the old php + build dirs and package markers, then drop the marker
+  # so the install/setup blocks below rebuild the new version. php.edge is inert
+  # here (marker=php-master==$PHP_VERSION_NAME → skip); its SHA drift is handled by
+  # the checkpoint-7 sidecar. set -eE safe (helper returns 0, WARN on stderr).
+  _php_marker="${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/php.${PHP_VERSION_AS}"
+  _php_gate="$(gs_version_gate "${_php_marker}" "${PHP_VERSION_NAME}" "php.${PHP_VERSION_AS}")"
+  if [ "${_php_gate}" = "reinstall" ]; then
+    _php_old="$(cat "${_php_marker}" 2>/dev/null || true)"
+    if [ -n "${_php_old}" ] && [ "${_php_old}" != "${PHP_VERSION_NAME}" ]; then
+      printf '\nCleaning old php version dir %s\n' "${_php_old}"
+      rm -rf "${PHPBREW_ROOT}/php/${_php_old}" "${PHPBREW_ROOT}/build/${_php_old}"
+    fi
+    rm -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/php.${PHP_VERSION_AS}.pkg."* || true
+    rm -f "${_php_marker}"
+  fi
   sleep 1
   
   global-stack-base-wait-for.sh \
