@@ -187,6 +187,13 @@ _gs_eu2_signal_drift() {
     _drift_ann_sha="$(_gs_eu2_record_get "${_i}" annotation_sha)"
     _drift_use_sha="$(_gs_eu2_record_get "${_i}" use_sha)"
     if [[ "${_drift_use_sha}" == "true" ]]; then
+      # (use-sha) VAR= may carry a (version-prefix:) applied at write time (e.g.
+      # github.com/php/php-src@<sha> for php.edge); the annotation sha: token is bare.
+      # Strip the prefix before comparing so an up-to-date prefixed VAR does not
+      # false-fire [DRIFT] against the bare sha.
+      local _drift_vp
+      _drift_vp="$(_gs_eu2_record_get "${_i}" version_prefix)"
+      [[ -n "${_drift_vp}" ]] && _drift_actual="${_drift_actual#"${_drift_vp}"}"
       # Case 3: use-sha record — compare VAR= value vs. annotation sha
       if [[ -n "${_drift_actual}" && -n "${_drift_ann_sha}" \
             && "${_drift_actual}" != "${_drift_ann_sha}" ]]; then

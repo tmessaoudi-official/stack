@@ -62,6 +62,11 @@ _gs_eu2_journal_append() {
 #          $9  annotation_only— "true" → skip VAR= rewrite (LOCK path: annotation updated only)
 #          $10 bare_sha       — raw 40-char SHA without date (used for the VAR= value only;
 #                               prevents date leaking into the variable value — Bug E fix)
+#          $11 ver_prefix     — (version-prefix:) string prepended to bare_sha for the VAR=
+#                               value in use_sha mode (e.g. "github.com/php/php-src@" for
+#                               php.edge → VAR=github.com/php/php-src@<sha>). Empty = bare SHA
+#                               (default; all existing PECL use-sha entries). The annotation
+#                               sha: token stays bare regardless — only VAR= is prefixed.
 # Reads:   file on disk
 # Sets:    nothing (writes to file via awk + tmp+mv)
 # Prints:  error message to stderr on mktemp/awk/mv failure
@@ -74,13 +79,13 @@ _gs_eu2_journal_append() {
 _gs_eu2_apply_single() {
   local _file="${1}" _var="${2}" _new="${3}" _raw_ann="${4:-}" _cur="${5:-}" \
         _cur_sha="${6:-}" _new_sha="${7:-}" _use_sha="${8:-false}" \
-        _annotation_only="${9:-false}" _bare_sha="${10:-}"
+        _annotation_only="${9:-false}" _bare_sha="${10:-}" _ver_prefix="${11:-}"
   local _tmp
   _tmp="$(mktemp)" || { printf 'env-update/apply: mktemp failed\n' >&2; return 1; }
   awk -v var="${_var}" -v newval="${_new}" -v raw_ann="${_raw_ann}" \
       -v curval="${_cur}" -v cur_sha="${_cur_sha}" -v new_sha="${_new_sha}" \
       -v use_sha="${_use_sha}" -v annotation_only="${_annotation_only}" \
-      -v bare_sha="${_bare_sha}" '
+      -v bare_sha="${_bare_sha}" -v ver_prefix="${_ver_prefix}" '
     /^[[:space:]]*#/ {
       if (raw_ann != "" && $0 == raw_ann) {
         line = $0
@@ -115,8 +120,10 @@ _gs_eu2_apply_single() {
       if ((newval == "" && use_sha != "true") || annotation_only == "true") { print; next }
       # Use bare_sha (no date) for the VAR= value when use_sha is active.
       # new_sha may carry "HASH (YYYY-MM-DD)" for the annotation line — do not leak the date
-      # into the variable value itself.
-      val = (use_sha == "true" && bare_sha != "") ? bare_sha : newval
+      # into the variable value itself. ver_prefix (version-prefix:) is prepended to the SHA
+      # for the VAR= value only (e.g. github.com/php/php-src@<sha> for php.edge); empty for
+      # all existing use-sha entries, so their VAR= stays a bare SHA (backward-compatible).
+      val = (use_sha == "true" && bare_sha != "") ? (ver_prefix bare_sha) : newval
       print var "=" val; next
     }
     { print }
@@ -256,10 +263,14 @@ _gs_eu2_apply_updates() {
         (( ++_n_sha_would )) || true
       else
         # Annotation sha: is always updated.
-        # When use_sha=true (e.g. PECL use-sha), VAR= is also updated with the new bare SHA
-        # so that [DRIFT] does not immediately re-fire after --apply.
+        # When use_sha=true (e.g. PECL use-sha, or github use-sha for php.edge), VAR= is also
+        # updated with the new SHA so that [DRIFT] does not immediately re-fire after --apply.
+        # ver_prefix (version-prefix:) is prepended to the VAR= SHA only (bare for PECL entries;
+        # github.com/php/php-src@ for php.edge); the annotation sha: token stays bare.
+        local _ver_prefix
+        _ver_prefix="$(_gs_eu2_record_get "${_i}" version_prefix)"
         _gs_eu2_apply_single "${_env_file}" "${_var}" "" "${_raw_ann}" "" \
-                              "${_old_sha_tok}" "${_new_sha_tok}" "${_use_sha:-false}" "false" "${_new_sha}"
+                              "${_old_sha_tok}" "${_new_sha_tok}" "${_use_sha:-false}" "false" "${_new_sha}" "${_ver_prefix}"
         printf '  [SHA]      %-55s  sha:%s → sha:%s\n' "${_var}" "${_ann_sha:0:8}" "${_new_sha:0:8}"
         (( ++_n_sha_applied )) || true
       fi
@@ -432,8 +443,13 @@ _gs_eu2_apply_updates() {
       fi
     else
       # 10th arg bare_sha: raw SHA without date, for the VAR= line when use_sha=true.
+      # 11th arg ver_prefix: (version-prefix:) prepended to the VAR= SHA (empty for existing
+      # use-sha entries → bare SHA, unchanged). Edge normally reaches the SHA-only branch via
+      # version suppression, so this AUTO path is a consistency safeguard.
+      local _auto_ver_prefix
+      _auto_ver_prefix="$(_gs_eu2_record_get "${_i}" version_prefix)"
       _gs_eu2_apply_single "${_env_file}" "${_var}" "${_prop}" "${_raw_ann}" "${_cur}" \
-                            "${_old_sha_tok2}" "${_new_sha_tok2}" "${_use_sha:-false}" "false" "${_new_sha}"
+                            "${_old_sha_tok2}" "${_new_sha_tok2}" "${_use_sha:-false}" "false" "${_new_sha}" "${_auto_ver_prefix}"
       printf '  [APPLIED]  %-55s  %s → %s\n' "${_var}" "${_cur}" "${_prop}"
       _gs_eu2_journal_append "${_var}" "${_cur}" "${_prop}" "AUTO" \
         "$(_gs_eu2_record_get "${_i}" channel)"

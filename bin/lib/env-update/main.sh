@@ -455,6 +455,13 @@ _gs_eu2_should_hide_record() {
   _sh_use_sha="$(_gs_eu2_record_get "${_sh_i}" use_sha)"
   _sh_ann_sha="$(_gs_eu2_record_get "${_sh_i}" annotation_sha)"
   if [[ "${_sh_use_sha}" == "true" ]]; then
+    # (use-sha) VAR= may carry a (version-prefix:) applied at write time; the
+    # annotation sha: token is bare. Strip the prefix before comparing so an
+    # up-to-date prefixed VAR (e.g. github.com/php/php-src@<sha>) does not
+    # false-signal [DRIFT] against the bare sha.
+    local _sh_vp
+    _sh_vp="$(_gs_eu2_record_get "${_sh_i}" version_prefix)"
+    [[ -n "${_sh_vp}" ]] && _sh_actual="${_sh_actual#"${_sh_vp}"}"
     [[ -n "${_sh_actual}" && -n "${_sh_ann_sha}" \
        && "${_sh_actual}" != "${_sh_ann_sha}" ]] && return 1  # show
   else

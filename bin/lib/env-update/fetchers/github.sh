@@ -203,6 +203,38 @@ _gs_eu2_fetch_github() {
   _manual="$(_gs_eu2_record_get "${_idx}" manual)"
   _tcp="$(_gs_eu2_record_get "${_idx}" tag_channel_prefix)"
 
+  # ── (git:owner/repo)+(use-sha) short-circuit: HEAD commit-SHA tracking ──────
+  # A moving ref (e.g. php-src master, tracked via php.edge) publishes no tag that
+  # advances per commit, so the tag pipeline below cannot detect drift. When BOTH
+  # (git:owner/repo) AND (use-sha) are set on a github: source, resolve that repo's
+  # HEAD SHA and set it as proposed_sha, then SUPPRESS version resolution by pinning
+  # proposed_version to the current token (a floating alias such as `next`). This
+  # (a) skips the tag pipeline that would otherwise fabricate a release tag, and
+  # (b) forces a SHA-only decision so the AUTO apply path never rewrites the alias.
+  # Requiring BOTH flags is deliberate: (use-sha) alone stays the generic "write the
+  # sha to VAR=" mode (its VAR value / annotation sha: are managed elsewhere — e.g. the
+  # drift-matrix regression vehicles), and (git:) alone keeps tag behaviour. Only the
+  # explicit pairing means "resolve this repo's HEAD as the version". The (version-prefix:)
+  # flag is applied to the SHA at write time (apply.sh), not here — sha: stays bare.
+  local _use_sha_gh _git_repo_gh
+  _use_sha_gh="$(_gs_eu2_record_get "${_idx}" use_sha)"
+  _git_repo_gh="$(_gs_eu2_record_get "${_idx}" git_repo)"
+  if [[ -n "${_git_repo_gh}" && "${_use_sha_gh}" == "true" ]]; then
+    local _gh_head_sha=""
+    _gh_head_sha="$(_gs_eu2_github_get_commit_sha "${_git_repo_gh}" "HEAD" 2>/dev/null)" || true
+    if [[ -z "${_gh_head_sha}" ]]; then
+      _gs_eu2_record_set "${_idx}" decision      "ERROR"
+      _gs_eu2_record_set "${_idx}" error_message "github use-sha: could not resolve HEAD SHA for '${_git_repo_gh}'"
+      return 0
+    fi
+    _gs_eu2_record_set "${_idx}" proposed_sha "${_gh_head_sha}"
+    local _gh_head_date=""
+    _gh_head_date="$(_gs_eu2_github_get_commit_date "${_git_repo_gh}" "${_gh_head_sha}" 2>/dev/null)" || true
+    [[ -n "${_gh_head_date}" ]] && _gs_eu2_record_set "${_idx}" proposed_sha_date "${_gh_head_date}"
+    _gs_eu2_record_set "${_idx}" proposed_version "$(_gs_eu2_record_get "${_idx}" current_version)"
+    return 0
+  fi
+
   # ── Check-tags merge mode (per-annotation flag or --with-tags CLI flag) ────
   local _check_tags _with_tags _merge_mode
   _check_tags="$(_gs_eu2_record_get "${_idx}" check_tags)"

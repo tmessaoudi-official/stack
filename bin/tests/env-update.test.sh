@@ -11342,6 +11342,96 @@ FAKECURL
     echo PASS
 "
 
+# ═══════════════════════════════════════════════════════════════════════════
+section "110 — github (use-sha) HEAD tracking + version-prefix on SHA (php.edge)"
+
+# t110a: parse — (use-sha)(version-prefix:) github: annotation records the flags + identifier
+t "t110a: parse github use-sha annotation → use_sha + version_prefix + identifier" bash -c "
+    f=\${TMP_DIR}/t110a.env
+    printf '%s\n%s\n' \
+      '# @todo env-update (use-sha) (git:php/php-src) (version-prefix:github.com/php/php-src@) github:php/php-src next sha:9390b68d5d68c03bbfddf5ae7b48a28751b1b62b' \
+      'GLOBAL_STACK_T110A=github.com/php/php-src@9390b68d5d68c03bbfddf5ae7b48a28751b1b62b' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -q 'type: github'                                || { echo \"no type:github\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -q 'identifier: php/php-src'                     || { echo \"no identifier\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -q 'use_sha: true'                              || { echo \"use_sha not true\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -q 'git_repo: php/php-src'                       || { echo \"no git_repo\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -q 'version_prefix: github.com/php/php-src@'     || { echo \"no version_prefix\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t110b: apply_single with use_sha + version_prefix → VAR= gets the FULL ref; annotation sha: stays BARE
+t "t110b: apply_single use_sha+prefix writes full ref to VAR, bare sha: to annotation" bash -c "
+    source '/stack/bin/lib/env-update/core/apply.sh'
+    f=\${TMP_DIR}/t110b.env
+    ann='# @todo env-update (use-sha) (version-prefix:github.com/php/php-src@) github:php/php-src next sha:0000000000000000000000000000000000000000'
+    printf '%s\n%s\n' \"\$ann\" 'GLOBAL_STACK_T110B=github.com/php/php-src@0000000000000000000000000000000000000000' > \"\$f\"
+    _gs_eu2_apply_single \"\$f\" 'GLOBAL_STACK_T110B' '' \"\$ann\" '' \
+        '0000000000000000000000000000000000000000' 'abc123def456abc123def456abc123def456abcd' \
+        'true' 'false' 'abc123def456abc123def456abc123def456abcd' 'github.com/php/php-src@'
+    grep -q '^GLOBAL_STACK_T110B=github.com/php/php-src@abc123def456abc123def456abc123def456abcd\$' \"\$f\" \
+        || { echo 'VAR not full ref'; cat \"\$f\"; echo FAIL; exit 0; }
+    grep -q 'sha:abc123def456abc123def456abc123def456abcd' \"\$f\" \
+        || { echo 'annotation sha: not bare-updated'; cat \"\$f\"; echo FAIL; exit 0; }
+    grep -q 'sha:github.com' \"\$f\" && { echo 'annotation sha: wrongly prefixed'; cat \"\$f\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t110c: BACKWARD-COMPAT — empty version_prefix → VAR= gets the BARE sha (existing PECL use-sha behaviour)
+t "t110c: apply_single use_sha + empty prefix → VAR= is bare sha (PECL regression guard)" bash -c "
+    source '/stack/bin/lib/env-update/core/apply.sh'
+    f=\${TMP_DIR}/t110c.env
+    ann='# @todo env-update (use-sha) pecl:raphf (git:m6w6/ext-raphf) 2.0.2 sha:0000000000000000000000000000000000000000'
+    printf '%s\n%s\n' \"\$ann\" 'GLOBAL_STACK_T110C=0000000000000000000000000000000000000000' > \"\$f\"
+    _gs_eu2_apply_single \"\$f\" 'GLOBAL_STACK_T110C' '' \"\$ann\" '' \
+        '0000000000000000000000000000000000000000' 'abc123def456abc123def456abc123def456abcd' \
+        'true' 'false' 'abc123def456abc123def456abc123def456abcd' ''
+    grep -q '^GLOBAL_STACK_T110C=abc123def456abc123def456abc123def456abcd\$' \"\$f\" \
+        || { echo 'VAR not bare sha'; cat \"\$f\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t110d: fetcher — (use-sha) github: sets proposed_sha from HEAD and SUPPRESSES version to current
+t "t110d: fetch_github use-sha sets proposed_sha + pins proposed_version to current" bash -c "
+    source '/stack/bin/lib/env-update/config/defaults.sh'
+    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+    source '/stack/bin/lib/env-update/core/records.sh'
+    source '/stack/bin/lib/env-update/core/semver.sh'
+    source '/stack/bin/lib/env-update/core/channel.sh'
+    source '/stack/bin/lib/env-update/core/tag_flags.sh'
+    source '/stack/bin/lib/env-update/core/cache.sh'
+    source '/stack/bin/lib/env-update/http/curl.sh'
+    source '/stack/bin/lib/env-update/fetchers/github.sh'
+    _fake=\"\${TMP_DIR}/t110d_curl\"; mkdir -p \"\$_fake\"
+    cat > \"\${_fake}/curl\" <<'FC'
+#!/bin/bash
+_out=''; _w=''
+for _a in \"\$@\"; do [[ \"\${_w}\" == y ]] && { _out=\"\${_a}\"; _w=''; continue; }; [[ \"\${_a}\" == '-o' ]] && _w=y; done
+if printf '%s' \"\$@\" | grep -q 'per_page'; then
+    [[ -n \"\${_out}\" ]] && printf '[{\"sha\":\"abc123def456abc123def456abc123def456abcd\"}]' > \"\${_out}\"
+else
+    [[ -n \"\${_out}\" ]] && printf '{\"commit\":{\"author\":{\"date\":\"2026-01-01T00:00:00Z\"}}}' > \"\${_out}\"
+fi
+printf '200'; exit 0
+FC
+    chmod +x \"\${_fake}/curl\"
+    printf '#!/bin/bash\nexit 0\n' > \"\${_fake}/sleep\"; chmod +x \"\${_fake}/sleep\"
+    export _GS_EU2_CACHE_DIR=\"\${TMP_DIR}/t110d_cache\"
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'github'
+    _gs_eu2_record_set \$idx identifier      'php/php-src'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_T110D'
+    _gs_eu2_record_set \$idx use_sha         'true'
+    _gs_eu2_record_set \$idx git_repo        'php/php-src'
+    _gs_eu2_record_set \$idx current_version 'next'
+    PATH=\"\${_fake}:\${PATH}\" _gs_eu2_fetch_github \$idx 2>/dev/null
+    ps=\$(_gs_eu2_record_get \$idx proposed_sha)
+    pv=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$ps\" == 'abc123def456abc123def456abc123def456abcd' ]] || { echo \"proposed_sha='\$ps'\"; echo FAIL; exit 0; }
+    [[ \"\$pv\" == 'next' ]] || { echo \"proposed_version='\$pv' (expected suppressed to 'next')\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
 _flush_section
 
 # ═══════════════════════════════════════════════════════════════════════════
