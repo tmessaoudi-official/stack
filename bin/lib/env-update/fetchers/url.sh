@@ -146,8 +146,13 @@ _gs_eu2_fetch_url() {
   # and use the GitHub releases/tags API directly (avoids HTML scraping).
   # Reuses github.sh exported helpers — does NOT call _gs_eu2_fetch_github
   # to avoid double-writing the record.
+  #
+  # Channel guard: skip Tier 3 when channel:nightly. The urls: field on a
+  # nightly record points at a GitHub repo whose releases/tags are *stable*
+  # only; letting Tier 3 fire first would return the highest stable tag and
+  # mask Tier 4's channel:nightly directory listing (the correct source).
   # ────────────────────────────────────────────────────────────────────────
-  if [[ -n "${_urls}" ]]; then
+  if [[ -n "${_urls}" && "${_channel}" != "nightly" ]]; then
     local _tok="${GITHUB_TOKEN:-${GLOBAL_STACK_GITHUB_TOKEN:-}}"
     local _ref_url
     for _ref_url in ${_urls}; do

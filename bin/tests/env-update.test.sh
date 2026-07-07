@@ -3331,6 +3331,30 @@ t "t37k: dir-listing channel:nightly — extracts latest nightly entry" bash -c 
     echo PASS
 "
 
+# Regression: tier precedence — a record carrying BOTH channel:nightly AND a
+# urls: field must NOT let Tier 3 (GitHub redirect) fire first and mask Tier 4's
+# channel:nightly directory listing. Real case: GLOBAL_STACK_NODEEDGE_VERSION
+# (.env:517) fetched nodejs/node GitHub *stable* tags (v26.4.0) instead of the
+# nightly build listing. Tier 3 must be gated on channel != nightly.
+# Isolated cache dir is load-bearing: the cache key omits urls: and is therefore
+# byte-identical to t37k's, so a shared dir would serve a cache hit and bypass
+# the tier logic entirely (test would pass pre-fix, hiding the bug).
+t "t37k2: tier precedence — channel:nightly + urls: uses Tier 4 nightly, not Tier 3 GitHub stable" bash -c "
+    ${_URL_LIBS}
+    export _GS_EU2_CACHE_DIR=\"\${TMP_DIR}/url_cache_nightly_urls\"
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type           'url'
+    _gs_eu2_record_set \$idx identifier     'https://nodejs.org/download/nightly/'
+    _gs_eu2_record_set \$idx channel        'nightly'
+    _gs_eu2_record_set \$idx urls           'https://github.com/nodejs/node'
+    _gs_eu2_record_set \$idx current_version 'v26.0.0-nightly20260313def5678ab'
+    _gs_eu2_record_set \$idx env_var        'GLOBAL_STACK_NODEEDGE_VERSION'
+    _gs_eu2_fetch_url \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$val\" == 'v26.0.0-nightly20260314abc1234ef' ]] || { echo \"expected Tier-4 nightly v26.0.0-nightly20260314abc1234ef, got: '\$val' (Tier 3 GitHub stable masked Tier 4)\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
 # ── Tier 5 (url-probe) ────────────────────────────────────────────────────
 
 t "t37l: url-probe — finds first matching codename path (kubic unstable noble)" bash -c "
