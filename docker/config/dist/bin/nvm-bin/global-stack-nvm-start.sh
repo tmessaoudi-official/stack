@@ -46,6 +46,25 @@ if [[ "${NVM_MODE}" = "setup" ]]; then
     rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/node.${_node_version_label}" "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/node.${_node_version_label}"
   fi
 
+  # Version-mismatch gate: if the recorded node version differs from the pinned
+  # NODE_VERSION, warn + clean the old version dir and this runtime's package
+  # markers, then drop the version marker so the install/setup blocks below
+  # reinstall and repopulate the new version. Compare against the raw pin: the
+  # marker stores $(nvm version "$NODE_VERSION") == the raw value for fully-
+  # qualified pins (verified on-disk incl. nightly). set -eE safe: helper returns
+  # 0 and emits the decision on stdout (WARN on stderr).
+  _node_marker="${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/node.${_node_version_label}"
+  _node_gate="$(gs_version_gate "${_node_marker}" "${NODE_VERSION:-}" "node.${_node_version_label}")"
+  if [[ "${_node_gate}" == "reinstall" ]]; then
+    _node_old="$(cat "${_node_marker}" 2>/dev/null || true)"
+    if [[ -n "${_node_old}" && "${_node_old}" != "${NODE_VERSION:-}" ]]; then
+      printf '\nCleaning old node version dir %s\n' "${_node_old}"
+      rm -rf "${NVM_DIR}/versions/node/${_node_old}"
+    fi
+    rm -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/node.${_node_version_label}.pkg."* || true
+    rm -f "${_node_marker}"
+  fi
+
   if [[ "true" = "${GLOBAL_STACK_USE_LOCKS}" ]]; then
     printf '\nAcquiring nvm lock ...\n'
     exec 200>"${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/nvm.flock"

@@ -363,6 +363,40 @@ else
   printf '  %b✗%b  differ marker did not WARN\n' "${C_RED}" "${C_RESET}"
 fi
 
+# ─── Section 9: version-gate wiring — correct compare target per runtime ────
+# Each wired tier-03 startup script must pass the CORRECT expected version var to
+# gs_version_gate (the loop-proof lynchpin). Notably python MUST compare against
+# $PYTHON_VERSION, not the empty-at-gate-time $PYENV_VERSION. Un-wired scripts are
+# skipped so this section grows coverage across the checkpoint-2 per-runtime commits.
+printf '\n%b── Section 9: version-gate wiring (compare target)%b\n' "${C_BOLD}" "${C_RESET}"
+
+GATE_WIRING=(
+  "nvm-bin/global-stack-nvm-start.sh:NODE_VERSION"
+  "phpbrew-bin/global-stack-phpbrew-start.sh:PHP_VERSION_NAME"
+  "pyenv-bin/global-stack-pyenv-start.sh:PYTHON_VERSION"
+  "rbenv-bin/global-stack-rbenv-start.sh:RUBY_VERSION"
+  "sdkman-bin/global-stack-sdkman-start.sh:JAVA_VERSION"
+  "fvm-bin/global-stack-fvm-start.sh:FLUTTER_VERSION"
+)
+
+gate_wired_count=0
+for pair in "${GATE_WIRING[@]}"; do
+  script="${pair%%:*}"
+  var="${pair##*:}"
+  path="${DIST_BIN}/${script}"
+  grep -q "gs_version_gate" "${path}" 2>/dev/null || continue
+  gate_wired_count=$((gate_wired_count + 1))
+  if grep -Eq "gs_version_gate .*\\\$\\{${var}[:}]" "${path}"; then
+    PASS=$((PASS + 1))
+    printf '  %b✓%b  %s gates on $%s\n' "${C_GREEN}" "${C_RESET}" "$(basename "${script}")" "${var}"
+  else
+    FAIL=$((FAIL + 1))
+    FAILURES+=("${script} wrong gate compare target (expected \$${var})")
+    printf '  %b✗%b  %s does NOT gate on $%s\n' "${C_RED}" "${C_RESET}" "$(basename "${script}")" "${var}"
+  fi
+done
+printf '  (checked %d wired runtime scripts)\n' "${gate_wired_count}"
+
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
 if [[ "${FAIL}" -eq 0 ]]; then
