@@ -35,7 +35,7 @@ SERVICES_SH := 01postgres18 01redis 01valkey 02dpage-pgadmin4
 
 SERVICES_ALL := $(SERVICES_SHELL) $(SERVICES_SH)
 
-.PHONY: help mkdir-p touch create-paths generate-buildx docker-cli create-buildx-builder \
+.PHONY: help mkdir-p touch create-paths generate-buildx docker-cli create-buildx-builder check-image-versions \
 	start-local-registry build up up-build up-build-force-recreate down \
 	down-n-rebuild down-n-rebuild-force-recreate rebuild rebuild-force-recreate \
 	down-n-up exec restart health wait-healthy save commit restore log-follow hard-restart soft-restart \
@@ -203,7 +203,14 @@ build: create-paths generate-buildx
 	  exit 1; \
 	fi; \
 	echo "=== Build complete ==="
-up: create-paths generate-buildx
+# ckpt5: non-fatal host-side preflight — warns when a .env image pin has drifted
+# from the Dockerfile ARG (built image stale; `up` won't rebuild it). Read-only,
+# always exits 0; the `|| true` is a second guard so it can never block `up`.
+check-image-versions:
+	@bash bin/check-image-versions.sh || true
+
+# up (and therefore down-n-up: down up) runs the image-version preflight first.
+up: create-paths generate-buildx check-image-versions
 	rm -rf ${BUILDX_BAKE_FILE} ${COMPOSE_FULL_FILE}
 	GLOBAL_STACK_DOCKER_CLI_NO_COMPOSE_BAKE="false" $(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="up" GLOBAL_STACK_DOCKER_CLI_EXEC_FLAGS="--remove-orphans --detach" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
 up-build: create-paths generate-buildx
