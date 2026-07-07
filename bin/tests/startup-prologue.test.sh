@@ -93,7 +93,7 @@ printf '  (checked %d migrated scripts)\n' "${migrated_count}"
 printf '\n%b── Section 3: GS_STARTUP_DRY_RUN=1 dry-run seam%b\n' "${C_BOLD}" "${C_RESET}"
 
 # Create a minimal test script that sources the prologue
-cat > "${TMP_DIR}/test-script.sh" << 'TESTEOF'
+cat >"${TMP_DIR}/test-script.sh" <<'TESTEOF'
 #!/bin/bash
 set -xeE -o pipefail
 shopt -s extdebug
@@ -107,11 +107,11 @@ chmod +x "${TMP_DIR}/test-script.sh"
 # H-3: GS_STARTUP_DRY_RUN=1 must exit 0 before install code
 dry_run_out=$(
   GLOBAL_STACK_ERROR_TOKEN=test-prologue \
-  GLOBAL_STACK_DOCKER_TOOLS_PATH="${TMP_DIR}" \
-  GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS="${TMP_DIR}" \
-  GS_STARTUP_DRY_RUN=1 \
-  PATH="${DIST_BIN}/base-bin:${PATH}" \
-  bash "${TMP_DIR}/test-script.sh" 2>&1
+    GLOBAL_STACK_DOCKER_TOOLS_PATH="${TMP_DIR}" \
+    GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS="${TMP_DIR}" \
+    GS_STARTUP_DRY_RUN=1 \
+    PATH="${DIST_BIN}/base-bin:${PATH}" \
+    bash "${TMP_DIR}/test-script.sh" 2>&1
 )
 dry_run_exit=$?
 
@@ -147,11 +147,11 @@ printf '\n%b── Section 4: GS_STARTUP_DRY_RUN=0 (default) reaches install cod
 
 normal_out=$(
   GLOBAL_STACK_ERROR_TOKEN=test-prologue \
-  GLOBAL_STACK_DOCKER_TOOLS_PATH="${TMP_DIR}" \
-  GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS="${TMP_DIR}" \
-  GS_STARTUP_DRY_RUN=0 \
-  PATH="${DIST_BIN}/base-bin:${PATH}" \
-  bash "${TMP_DIR}/test-script.sh" 2>&1
+    GLOBAL_STACK_DOCKER_TOOLS_PATH="${TMP_DIR}" \
+    GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS="${TMP_DIR}" \
+    GS_STARTUP_DRY_RUN=0 \
+    PATH="${DIST_BIN}/base-bin:${PATH}" \
+    bash "${TMP_DIR}/test-script.sh" 2>&1
 )
 
 if echo "${normal_out}" | grep -q "INSTALL_REACHED"; then
@@ -166,7 +166,7 @@ fi
 # ─── Section 5: stackCatch writes error token on non-zero exit ─────────────
 printf '\n%b── Section 5: stackCatch error token behavior%b\n' "${C_BOLD}" "${C_RESET}"
 
-cat > "${TMP_DIR}/test-fail.sh" << 'TESTEOF'
+cat >"${TMP_DIR}/test-fail.sh" <<'TESTEOF'
 #!/bin/bash
 set -xeE -o pipefail
 shopt -s extdebug
@@ -195,7 +195,7 @@ fi
 # ─── Section 6: stackCatch is no-op on exit 0 ────────────────────────────
 printf '\n%b── Section 6: stackCatch clean exit%b\n' "${C_BOLD}" "${C_RESET}"
 
-cat > "${TMP_DIR}/test-pass.sh" << 'TESTEOF'
+cat >"${TMP_DIR}/test-pass.sh" <<'TESTEOF'
 #!/bin/bash
 set -xeE -o pipefail
 shopt -s extdebug
@@ -269,6 +269,99 @@ for pair in "${ATOMIC_SHELLRC[@]}"; do
     printf '  %b✓%b  %s has no direct redirect to %s\n' "${C_GREEN}" "${C_RESET}" "${script}" "${base}"
   fi
 done
+
+# ─── Section 8: gs_version_gate content-compare + ERR-trap safety ───────────
+# gs_version_gate <marker> <expected> <label> emits a decision on STDOUT
+# (install|skip|reinstall) and, on a real mismatch, a WARN on STDERR. It MUST
+# be set -eE / ERR-trap safe: the internal mismatch test returning non-zero must
+# never fire stackCatch (which would write tools/errors/<token> and mask the
+# container as permanently unhealthy behind the 24h start_period).
+printf '\n%b── Section 8: gs_version_gate content-compare + ERR-trap safety%b\n' "${C_BOLD}" "${C_RESET}"
+
+# Runner: sources the prologue under full strict mode + ERR trap, then calls the
+# gate exactly as a startup script will (captured into a var). Prints
+# "DECISION=<word>" on stdout; any error token lands in ${TMP_DIR}/errors8.
+cat >"${TMP_DIR}/test-gate.sh" <<'TESTEOF'
+#!/bin/bash
+set -xeE -o pipefail
+shopt -s extdebug
+IFS=$'\n\t'
+source global-stack-base-prologue.sh
+dec="$(gs_version_gate "${GATE_MARKER}" "${GATE_EXPECTED}" "${GATE_LABEL:-test}")"
+printf 'DECISION=%s\n' "${dec}"
+TESTEOF
+chmod +x "${TMP_DIR}/test-gate.sh"
+
+run_gate() {
+  # $1 marker path, $2 expected, returns combined stdout+stderr; error token → errors8/
+  local marker="$1" expected="$2"
+  rm -rf "${TMP_DIR}/errors8"
+  mkdir -p "${TMP_DIR}/errors8"
+  GLOBAL_STACK_ERROR_TOKEN=gate-token \
+    GLOBAL_STACK_DOCKER_TOOLS_PATH="${TMP_DIR}" \
+    GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS="${TMP_DIR}/errors8" \
+    GATE_MARKER="${marker}" \
+    GATE_EXPECTED="${expected}" \
+    GATE_LABEL="node.24" \
+    PATH="${DIST_BIN}/base-bin:${PATH}" \
+    bash "${TMP_DIR}/test-gate.sh" 2>&1
+}
+
+errors8_empty() { [[ -z "$(ls -A "${TMP_DIR}/errors8" 2>/dev/null)" ]]; }
+
+# 8a: absent marker → install, exit 0, no error token, no WARN
+gate_marker="${TMP_DIR}/versions/node.24"
+rm -f "${gate_marker}"
+mkdir -p "${TMP_DIR}/versions"
+out8a=$(run_gate "${gate_marker}" "v24.18.0") && exit8a=0 || exit8a=$?
+if [[ "${exit8a}" -eq 0 ]] && echo "${out8a}" | grep -q "DECISION=install" && errors8_empty; then
+  PASS=$((PASS + 1))
+  printf '  %b✓%b  absent marker → install, exit 0, no error token\n' "${C_GREEN}" "${C_RESET}"
+else
+  FAIL=$((FAIL + 1))
+  FAILURES+=("gate: absent marker → install")
+  printf '  %b✗%b  absent marker → install (exit %d, out: %s)\n' "${C_RED}" "${C_RESET}" "${exit8a}" "${out8a:0:80}"
+fi
+if ! echo "${out8a}" | grep -q "WARN"; then
+  PASS=$((PASS + 1))
+  printf '  %b✓%b  absent marker is silent (no WARN)\n' "${C_GREEN}" "${C_RESET}"
+else
+  FAIL=$((FAIL + 1))
+  FAILURES+=("gate: absent marker must be silent")
+  printf '  %b✗%b  absent marker emitted WARN\n' "${C_RED}" "${C_RESET}"
+fi
+
+# 8b: matching marker → skip, exit 0, no error token, no WARN (equal must not churn)
+printf 'v24.18.0' >"${gate_marker}"
+out8b=$(run_gate "${gate_marker}" "v24.18.0") && exit8b=0 || exit8b=$?
+if [[ "${exit8b}" -eq 0 ]] && echo "${out8b}" | grep -q "DECISION=skip" && errors8_empty; then
+  PASS=$((PASS + 1))
+  printf '  %b✓%b  equal marker → skip, exit 0, NO error token (ERR-trap safe)\n' "${C_GREEN}" "${C_RESET}"
+else
+  FAIL=$((FAIL + 1))
+  FAILURES+=("gate: equal → skip + errors empty")
+  printf '  %b✗%b  equal → skip (exit %d, errors empty=%s, out: %s)\n' "${C_RED}" "${C_RESET}" "${exit8b}" "$(errors8_empty && echo yes || echo NO)" "${out8b:0:80}"
+fi
+
+# 8c: differing marker → reinstall + WARN, exit 0, NO error token (the loop/mask case)
+printf 'v24.17.0' >"${gate_marker}"
+out8c=$(run_gate "${gate_marker}" "v24.18.0") && exit8c=0 || exit8c=$?
+if [[ "${exit8c}" -eq 0 ]] && echo "${out8c}" | grep -q "DECISION=reinstall" && errors8_empty; then
+  PASS=$((PASS + 1))
+  printf '  %b✓%b  differ marker → reinstall, exit 0, NO error token (ERR-trap safe)\n' "${C_GREEN}" "${C_RESET}"
+else
+  FAIL=$((FAIL + 1))
+  FAILURES+=("gate: differ → reinstall + errors empty")
+  printf '  %b✗%b  differ → reinstall (exit %d, errors empty=%s, out: %s)\n' "${C_RED}" "${C_RESET}" "${exit8c}" "$(errors8_empty && echo yes || echo NO)" "${out8c:0:80}"
+fi
+if echo "${out8c}" | grep -q "WARN"; then
+  PASS=$((PASS + 1))
+  printf '  %b✓%b  differ marker emits WARN on stderr\n' "${C_GREEN}" "${C_RESET}"
+else
+  FAIL=$((FAIL + 1))
+  FAILURES+=("gate: differ must WARN")
+  printf '  %b✗%b  differ marker did not WARN\n' "${C_RED}" "${C_RESET}"
+fi
 
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'

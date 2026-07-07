@@ -22,14 +22,52 @@ stackCatch() {
     echo "Error detected !!"
     printf '%s: Error - ** line: %s ** ** command: %s **\n' \
       "$(date '+%d-%m-%Y %H:%M:%S')" "${2:-?}" "${3:-?}" \
-      >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH:-/tmp}/elapsed"
-    [[ -n "${GLOBAL_STACK_ERROR_TOKEN:-}" ]] && \
-      printf 'line: %s\ncommand: %s\n' "${2:-?}" "${3:-?}" \
-      > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS:-/tmp}/${GLOBAL_STACK_ERROR_TOKEN}"
+      >>"${GLOBAL_STACK_DOCKER_TOOLS_PATH:-/tmp}/elapsed"
+    [[ -n "${GLOBAL_STACK_ERROR_TOKEN:-}" ]] \
+      && printf 'line: %s\ncommand: %s\n' "${2:-?}" "${3:-?}" \
+        >"${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS:-/tmp}/${GLOBAL_STACK_ERROR_TOKEN}"
     exit 1
   fi
 }
 trap 'stackCatch ${?} ${LINENO} "${BASH_COMMAND}"' EXIT ERR PIPE SIGPIPE SIGHUP
+
+# gs_version_gate <marker_path> <expected_value> [label]
+#
+# Content-compare gate for tools/versions/<marker> files. Emits ONE decision word
+# on STDOUT — install | skip | reinstall — and, only on a real mismatch (marker
+# exists but its content differs from <expected_value>), a loud WARN on STDERR.
+#
+#   install    marker absent            → first install, silent
+#   skip       marker == expected       → up to date, silent
+#   reinstall  marker != expected       → version changed, WARN + caller reinstalls
+#
+# ERR-trap safe by contract: this runs sourced into `set -eE` with the stackCatch
+# ERR trap armed. Every path ends in `return 0` and the only comparison that can
+# be false lives inside `if`, so the gate NEVER returns non-zero for a normal
+# decision — a non-zero return would fire stackCatch, write tools/errors/<token>,
+# and mask the container as permanently unhealthy behind the 24h start_period.
+# Callers capture the decision (e.g. `dec="$(gs_version_gate ...)"`); the WARN
+# goes to STDERR so it is never swallowed by the command substitution.
+gs_version_gate() {
+  local _gvg_marker="${1:-}" _gvg_expected="${2:-}" _gvg_label="${3:-${1:-marker}}"
+  local _gvg_current
+
+  if [[ ! -f "${_gvg_marker}" ]]; then
+    printf 'install\n'
+    return 0
+  fi
+
+  _gvg_current="$(cat "${_gvg_marker}" 2>/dev/null || true)"
+  if [[ "${_gvg_current}" == "${_gvg_expected}" ]]; then
+    printf 'skip\n'
+    return 0
+  fi
+
+  printf 'WARN: %s version changed (marker=%s expected=%s) — reinstalling\n' \
+    "${_gvg_label}" "${_gvg_current}" "${_gvg_expected}" >&2
+  printf 'reinstall\n'
+  return 0
+}
 
 # Dry-run seam: GS_STARTUP_DRY_RUN=1 exits before any install work.
 # Usage: GS_STARTUP_DRY_RUN=1 bash global-stack-nvm-start.sh
