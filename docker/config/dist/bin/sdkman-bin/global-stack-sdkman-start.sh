@@ -142,6 +142,8 @@ if [[ "${SDKMAN_MODE}" = "setup" ]]; then
   global_stack_base_setup_packages \
     --prefix='SDKMAN' \
     --marker-prefix="java.${JAVA_VERSION_AS:-${JAVA_VERSION:-}}" \
+    --tolerant \
+    --success-check='[[ -d "${SDKMAN_DIR}/candidates/${PACKAGE_NAME}/${PACKAGE_VERSION}" ]]' \
     --cleanup-command='sdk uninstall ${PACKAGE_NAME} "${PACKAGE_OLD_VERSION}" || true' \
     --command='echo -e "**** Installing/Updating ${PACKAGE_NAME} ${PACKAGE_VERSION} ${PACKAGE_COMMAND_SUFFIX}"' \
     --command='sdk install "${PACKAGE_NAME}" "${PACKAGE_VERSION}" ${PACKAGE_COMMAND_SUFFIX}'

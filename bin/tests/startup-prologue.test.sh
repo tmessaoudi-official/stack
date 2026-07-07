@@ -646,6 +646,69 @@ n_pip3=$(grep -c '^pip pipx' "${PIP_LOG}" 2>/dev/null || true)
 pkg_check "runtime bump → python reinstalls" [ "${n_inst3}" = "1" ]
 pkg_check "runtime bump → pip globals repopulate on fresh interpreter (no empty-globals)" [ "${n_pip3}" = "1" ]
 
+# ─── Section 13: --tolerant marker guard (checkpoint 3e) ───────────────────
+# Under a tolerant caller (sdkman runs set +E; `sdk install` can fail without
+# aborting), a FAILED install must NOT leave a satisfied slot marker — otherwise
+# the next boot skips and the package is silently, permanently missing. The guard
+# must be opt-in (--tolerant): the set -e callers (node/php/python/ruby) must keep
+# fail-loud behavior, NOT be silently disarmed.
+printf '\n%b── Section 13: --tolerant marker guard%b\n' "${C_BOLD}" "${C_RESET}"
+
+cat >"${TMP_DIR}/test-tol.sh" <<'TESTEOF'
+#!/bin/bash
+set -xeE -o pipefail
+shopt -s extdebug
+IFS=$'\n\t'
+source global-stack-base-prologue.sh
+source global-stack-base-setup-packages.sh
+global_stack_base_setup_packages "$@"
+TESTEOF
+chmod +x "${TMP_DIR}/test-tol.sh"
+
+TOLV="${TMP_DIR}/tolversions"
+run_tol() {
+  env \
+    GLOBAL_STACK_ERROR_TOKEN=tol-token \
+    GLOBAL_STACK_DOCKER_TOOLS_PATH="${TMP_DIR}" \
+    GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS="${TOL_ERR:-${TMP_DIR}}" \
+    GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS="${TOLV}" \
+    TESTTOL_INSTALL_PACKAGE_FOO_VERSION=1.0 \
+    TESTTOL_CONFIG_PACKAGE_FOO_NAME=foo \
+    PATH="${DIST_BIN}/base-bin:${PATH}" \
+    bash "${TMP_DIR}/test-tol.sh" --prefix=TESTTOL "$@"
+}
+
+# 13a: TOLERANT + failing install command → marker NOT written (retry next boot)
+rm -rf "${TOLV}"
+mkdir -p "${TOLV}"
+run_tol --marker-prefix=tol.1 --tolerant --command='false' >/dev/null 2>&1 || true
+pkg_check "tolerant + failed install → NO marker written (retryable)" \
+  bash -c '[[ ! -f "'"${TOLV}"'/tol.1.pkg.foo" ]]'
+
+# 13b: TOLERANT + command succeeds but --success-check fails → marker NOT written
+rm -rf "${TOLV}"
+mkdir -p "${TOLV}"
+run_tol --marker-prefix=tol.1 --tolerant --success-check='false' --command='true' >/dev/null 2>&1 || true
+pkg_check "tolerant + success-check fails → NO marker written" \
+  bash -c '[[ ! -f "'"${TOLV}"'/tol.1.pkg.foo" ]]'
+
+# 13c: TOLERANT + command + success-check both pass → marker IS written
+rm -rf "${TOLV}"
+mkdir -p "${TOLV}"
+run_tol --marker-prefix=tol.1 --tolerant --success-check='true' --command='true' >/dev/null 2>&1 || true
+pkg_check "tolerant + success → marker written" \
+  bash -c '[[ -f "'"${TOLV}"'/tol.1.pkg.foo" ]]'
+
+# 13d: NON-tolerant + failing command → aborts under set -e (error token written),
+# proving the majority path is NOT silently disarmed
+rm -rf "${TOLV}" "${TMP_DIR}/tolerr"
+mkdir -p "${TOLV}" "${TMP_DIR}/tolerr"
+TOL_ERR="${TMP_DIR}/tolerr" run_tol --marker-prefix=tol.2 --command='false' >/dev/null 2>&1 || true
+pkg_check "non-tolerant + failed command → set -e aborts (error token written)" \
+  bash -c '[[ -n "$(ls -A "'"${TMP_DIR}"'/tolerr" 2>/dev/null)" ]]'
+pkg_check "non-tolerant + failed command → NO marker written" \
+  bash -c '[[ ! -f "'"${TOLV}"'/tol.2.pkg.foo" ]]'
+
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
 if [[ "${FAIL}" -eq 0 ]]; then

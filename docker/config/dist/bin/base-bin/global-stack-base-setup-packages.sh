@@ -10,6 +10,8 @@ global_stack_base_setup_packages() {
     local PREFIX
     local MARKER_PREFIX=""
     local CLEANUP_COMMAND=""
+    local TOLERANT=""
+    local SUCCESS_CHECK=""
     local COMMAND_COUNTER=0
     local -A COMMANDS=()
 
@@ -31,6 +33,19 @@ global_stack_base_setup_packages() {
                 # a slot reinstall — used only by accumulate-type managers (sdkman
                 # `sdk uninstall`, ruby `gem uninstall`) to remove the old version.
                 CLEANUP_COMMAND="$(echo "${__CURRENT_ARG__}" | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+                ;;
+            --tolerant)
+                # Only for set +E callers (sdkman): a failed install command must
+                # NOT write a satisfied marker. set -e callers omit this and stay
+                # fail-loud (a failed install aborts before the marker write).
+                TOLERANT=1
+                ;;
+            --success-check=*)
+                # Optional predicate (eval'd, PACKAGE_NAME/PACKAGE_VERSION in scope)
+                # that must pass for the marker to be written in --tolerant mode —
+                # for when the install command's exit code alone is not trustworthy
+                # (e.g. `sdk install`; cf. the JDK candidate-dir check).
+                SUCCESS_CHECK="$(echo "${__CURRENT_ARG__}" | sed 's/^--[a-zA-Z0-9_-]\+=//')"
                 ;;
             --command=*)
                 COMMANDS[${COMMAND_COUNTER}]="$(echo "${__CURRENT_ARG__}" | sed 's/^--[a-zA-Z0-9_-]\+=//')"
@@ -92,14 +107,30 @@ global_stack_base_setup_packages() {
                     fi
                 fi
             fi
+            local _cmd_ok=1
             for (( INDEX=0; INDEX<${#COMMANDS[@]}; INDEX++ )); do
                 # Commands are caller-provided templates evaluated in the current env context (see --command= arg).
-                eval "${COMMANDS[${INDEX}]}"
+                if [[ -n "${TOLERANT}" ]]; then
+                    # Tolerant callers run under set +E; capture a failed command so
+                    # a satisfied marker is NOT written for a failed install.
+                    eval "${COMMANDS[${INDEX}]}" || _cmd_ok=0
+                else
+                    # Default (set -e) callers: a failed command aborts here — loud,
+                    # before the marker write below — never a silent stale marker.
+                    eval "${COMMANDS[${INDEX}]}"
+                fi
             done
-            # Record the installed version only after the commands ran, so a failed
-            # install (set -e abort) does NOT leave a satisfied marker behind.
+            # Record the installed version only after a SUCCESSFUL install, so a
+            # failed one does NOT leave a satisfied marker (which would skip the
+            # slot forever — silently). Non-tolerant: reaching here means set -e did
+            # not abort → success. Tolerant: all commands exited 0 AND (if given)
+            # the --success-check predicate passes.
             if [[ -n "${_pkg_marker}" ]]; then
-                echo "${PACKAGE_VERSION}" > "${_pkg_marker}"
+                if [[ -z "${TOLERANT}" ]]; then
+                    echo "${PACKAGE_VERSION}" > "${_pkg_marker}"
+                elif [[ "${_cmd_ok}" = "1" ]] && { [[ -z "${SUCCESS_CHECK}" ]] || eval "${SUCCESS_CHECK}"; }; then
+                    echo "${PACKAGE_VERSION}" > "${_pkg_marker}"
+                fi
             fi
         fi
     done
