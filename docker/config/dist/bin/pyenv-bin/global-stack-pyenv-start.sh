@@ -131,16 +131,6 @@ if [[ "${PYENV_MODE}" = "setup" ]]; then
     export PYENV_VERSION=$(global-stack-pyenv-find-latest.sh "${PYTHON_VERSION}")
     source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/pyenv.shellrc" && global-stack-pyenv-python${PYTHON_VERSION_AS}-install-version.sh
 
-    source /usr/local/bin/global-stack-base-setup-packages.sh
-    source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/pyenv.shellrc"
-    eval "$(pyenv init -)"
-    eval "$(pyenv init --path)"
-    pyenv shell
-    global_stack_base_setup_packages \
-      --prefix='PYTHON' \
-      --command='echo -e "**** Installing/Updating ${PACKAGE_NAME} ${PACKAGE_VERSION} ${PACKAGE_COMMAND_SUFFIX}"' \
-      --command='pip install ${PACKAGE_NAME}==${PACKAGE_VERSION} ${PACKAGE_COMMAND_SUFFIX}'
-
     source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/pyenv.shellrc" && eval "$(pyenv init -)" && eval "$(pyenv init --path)" && pyenv shell && global-stack-pyenv-python${PYTHON_VERSION_AS}-setup-version.sh
   fi
   if [[ "" != "${PYENV_VERSION}" ]]; then
@@ -150,6 +140,24 @@ if [[ "${PYENV_MODE}" = "setup" ]]; then
   if [[ "" = "${PYENV_VERSION}" ]]; then
     export PYENV_VERSION=$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/python.${PYTHON_VERSION_AS:-${PYTHON_VERSION:-}}")
   fi
+
+  # Package loop runs EVERY boot — pyenv is activated and PYENV_VERSION is now
+  # resolved (from find-latest above OR read back from the marker) — gated
+  # per-package by slot markers, so a package-only bump is detected even when the
+  # python runtime marker is unchanged; unchanged packages skip cheaply. On a
+  # runtime bump the checkpoint-2 gate wiped python.<AS>.pkg.*, so this
+  # repopulates globals on the freshly installed interpreter. (setup-version.sh is
+  # a no-op, so relocating this past it is safe.)
+  source /usr/local/bin/global-stack-base-setup-packages.sh
+  source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/pyenv.shellrc"
+  eval "$(pyenv init -)"
+  eval "$(pyenv init --path)"
+  pyenv shell
+  global_stack_base_setup_packages \
+    --prefix='PYTHON' \
+    --marker-prefix="python.${PYTHON_VERSION_AS:-${PYTHON_VERSION:-}}" \
+    --command='echo -e "**** Installing/Updating ${PACKAGE_NAME} ${PACKAGE_VERSION} ${PACKAGE_COMMAND_SUFFIX}"' \
+    --command='pip install ${PACKAGE_NAME}==${PACKAGE_VERSION} ${PACKAGE_COMMAND_SUFFIX}'
 
   if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/python.${PYTHON_VERSION_AS:-${PYTHON_VERSION:-}}" || "true" = "${GLOBAL_STACK_RELOAD_PYENV}" ]]; then
     source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/pyenv.shellrc" && eval "$(pyenv init -)" && pyenv shell && pyenv local "${PYENV_VERSION}" && global-stack-pyenv-python${PYTHON_VERSION_AS}-setup-version.sh

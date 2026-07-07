@@ -122,16 +122,25 @@ if [[ "${RBENV_MODE}" = "setup" ]]; then
 
   if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/ruby.${RUBY_VERSION_AS:-${RUBY_VERSION:-}}" || "true" = "${GLOBAL_STACK_RELOAD_RUBY}" ]]; then
     source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/rbenv.shellrc" && rbenv install --verbose --skip-existing --keep "${RBENV_VERSION}"
-    source /usr/local/bin/global-stack-base-setup-packages.sh
-    source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/rbenv.shellrc"
-    eval "$(rbenv init - --no-rehash ${GLOBAL_STACK_SHELL})"
-    global_stack_base_setup_packages \
-      --prefix='RUBY' \
-      --command='echo -e "**** Installing/Updating ${PACKAGE_NAME} ${PACKAGE_VERSION} ${PACKAGE_COMMAND_SUFFIX}"' \
-      --command='gem --backtrace --debug install ${PACKAGE_NAME}:${PACKAGE_VERSION} ${PACKAGE_COMMAND_SUFFIX}'
-
     source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/rbenv.shellrc" && eval "$(rbenv init - --no-rehash ${GLOBAL_STACK_SHELL})" && global-stack-rbenv-ruby${RUBY_VERSION_AS}-setup-version.sh
   fi
+
+  # Package loop runs EVERY boot (ruby installed above / already present, rbenv
+  # activated here, RBENV_VERSION resolved at :121), gated per-package by slot
+  # markers, so a package-only bump is detected even when the ruby runtime marker
+  # is unchanged; unchanged gems skip cheaply. On a runtime bump the checkpoint-2
+  # gate wiped ruby.<AS>.pkg.*, repopulating gems on the fresh interpreter. gems
+  # accumulate, so --cleanup-command uninstalls the OLD version on a bump.
+  # (setup-version.sh is a no-op, so relocating this past it is safe.)
+  source /usr/local/bin/global-stack-base-setup-packages.sh
+  source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/rbenv.shellrc"
+  eval "$(rbenv init - --no-rehash ${GLOBAL_STACK_SHELL})"
+  global_stack_base_setup_packages \
+    --prefix='RUBY' \
+    --marker-prefix="ruby.${RUBY_VERSION_AS:-${RUBY_VERSION:-}}" \
+    --cleanup-command='gem uninstall ${PACKAGE_NAME} -v "${PACKAGE_OLD_VERSION}" -x -I || true' \
+    --command='echo -e "**** Installing/Updating ${PACKAGE_NAME} ${PACKAGE_VERSION} ${PACKAGE_COMMAND_SUFFIX}"' \
+    --command='gem --backtrace --debug install ${PACKAGE_NAME}:${PACKAGE_VERSION} ${PACKAGE_COMMAND_SUFFIX}'
 
   if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/ruby.${RUBY_VERSION_AS:-${RUBY_VERSION:-}}" || "true" = "${GLOBAL_STACK_RELOAD_RUBY}" ]]; then
     source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/rbenv.shellrc" && eval "$(rbenv init - --no-rehash ${GLOBAL_STACK_SHELL})" && rbenv shell && rbenv local "${RBENV_VERSION}" && global-stack-rbenv-ruby${RUBY_VERSION_AS}-setup-version.sh

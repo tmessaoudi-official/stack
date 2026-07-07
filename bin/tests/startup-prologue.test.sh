@@ -553,6 +553,99 @@ for pair in "${PKG_WIRING[@]}"; do
 done
 printf '  (checked %d package-gated scripts)\n' "${pkg_wired_count}"
 
+# ─── Section 12: python runtime-gate + package-loop composition (ckpt 3c) ──
+# Integration of the REAL gs_version_gate (runtime gate) + REAL
+# base-setup-packages (relocated package loop) exactly as pyenv-start.sh chains
+# them. NOTE: the full startup script cannot be run in this harness — it does
+# sed -i / echo >> to a hardcoded /home/<user>/ path and ends in `sleep infinity`
+# (that is why Section 2 only bash -n's it). This composes the mechanism the
+# relocation depends on; the full-container reinstall path is exercised manually
+# / in the bump-versions workflow. Covers the empty-globals P0: a runtime SKIP
+# must NOT wipe pkg markers (no recompile); a runtime REINSTALL must wipe them so
+# globals repopulate on the fresh interpreter.
+printf '\n%b── Section 12: python gate+loop composition (mechanism)%b\n' "${C_BOLD}" "${C_RESET}"
+
+cat >"${TMP_DIR}/test-pyflow.sh" <<'TESTEOF'
+#!/bin/bash
+set -xeE -o pipefail
+shopt -s extdebug
+IFS=$'\n\t'
+source global-stack-base-prologue.sh
+source global-stack-base-setup-packages.sh
+_label="${PYTHON_VERSION_AS:-${PYTHON_VERSION}}"
+_marker="${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/python.${_label}"
+# --- runtime gate (mirrors pyenv-start.sh checkpoint-2 block) ---
+_dec="$(gs_version_gate "${_marker}" "${PYTHON_VERSION}" "python.${_label}")"
+if [[ "${_dec}" == "reinstall" ]]; then
+  _old="$(cat "${_marker}" 2>/dev/null || true)"
+  [[ -n "${_old}" && "${_old}" != "${PYTHON_VERSION}" ]] && rm -rf "${PYENV_ROOT}/versions/${_old}"
+  rm -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/python.${_label}.pkg."* || true
+  rm -f "${_marker}"
+fi
+# --- runtime install (fake) writes the marker when absent (mirrors the script) ---
+if [[ ! -f "${_marker}" ]]; then
+  printf 'pyenv-install %s\n' "${PYTHON_VERSION}" >>"${INSTALL_LOG}"
+  echo "${PYTHON_VERSION}" >"${_marker}"
+fi
+# --- relocated package loop, every boot (mirrors ckpt-3b/3c relocation) ---
+global_stack_base_setup_packages \
+  --prefix='PYTHON' \
+  --marker-prefix="python.${_label}" \
+  --command='printf "pip %s %s\n" "${PACKAGE_NAME}" "${PACKAGE_VERSION}" >> "${PIP_LOG}"'
+TESTEOF
+chmod +x "${TMP_DIR}/test-pyflow.sh"
+
+PYV="${TMP_DIR}/pyversions"
+INSTALL_LOG="${TMP_DIR}/py-install.log"
+PIP_LOG="${TMP_DIR}/py-pip.log"
+
+run_pyflow() {
+  env \
+    GLOBAL_STACK_ERROR_TOKEN=py-token \
+    GLOBAL_STACK_DOCKER_TOOLS_PATH="${TMP_DIR}" \
+    GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS="${TMP_DIR}" \
+    GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS="${PYV}" \
+    PYENV_ROOT="${TMP_DIR}/pyenvroot" \
+    PYTHON_VERSION="${PYVER:-3.14.6}" \
+    PYTHON_VERSION_AS=3 \
+    INSTALL_LOG="${INSTALL_LOG}" \
+    PIP_LOG="${PIP_LOG}" \
+    TESTRT_INSTALL_PACKAGE_UNUSED_VERSION="" \
+    PYTHON_INSTALL_PACKAGE_PIPX_VERSION="${PIPX:-1.0}" \
+    PYTHON_CONFIG_PACKAGE_PIPX_NAME=pipx \
+    PATH="${DIST_BIN}/base-bin:${PATH}" \
+    bash "${TMP_DIR}/test-pyflow.sh"
+}
+
+# 12a: first boot — runtime installs + pip installs + markers written
+rm -rf "${PYV}" "${TMP_DIR}/pyenvroot"
+mkdir -p "${PYV}" "${TMP_DIR}/pyenvroot/versions/3.14.6"
+: >"${INSTALL_LOG}"
+: >"${PIP_LOG}"
+run_pyflow >/dev/null 2>&1 || true
+n_inst=$(grep -c '^pyenv-install' "${INSTALL_LOG}" 2>/dev/null || true)
+n_pip=$(grep -c '^pip pipx' "${PIP_LOG}" 2>/dev/null || true)
+pkg_check "first boot: python installed + pip package installed" \
+  bash -c '[[ "'"${n_inst}"'" = "1" && "'"${n_pip}"'" = "1" && -f "'"${PYV}"'/python.3" && -f "'"${PYV}"'/python.3.pkg.pipx" ]]'
+
+# 12b (no-recompile trap): second boot, same version → NO pyenv-install, NO pip
+: >"${INSTALL_LOG}"
+: >"${PIP_LOG}"
+run_pyflow >/dev/null 2>&1 || true
+n_inst2=$(grep -c '^pyenv-install' "${INSTALL_LOG}" 2>/dev/null || true)
+n_pip2=$(grep -c '^pip' "${PIP_LOG}" 2>/dev/null || true)
+pkg_check "second boot same version → NO python recompile (skip)" [ "${n_inst2}" = "0" ]
+pkg_check "second boot same version → NO pip reinstall (pkg markers preserved)" [ "${n_pip2}" = "0" ]
+
+# 12c (empty-globals P0): runtime bump → python reinstalls AND pip repopulates
+: >"${INSTALL_LOG}"
+: >"${PIP_LOG}"
+PYVER=3.14.7 run_pyflow >/dev/null 2>&1 || true
+n_inst3=$(grep -c '^pyenv-install' "${INSTALL_LOG}" 2>/dev/null || true)
+n_pip3=$(grep -c '^pip pipx' "${PIP_LOG}" 2>/dev/null || true)
+pkg_check "runtime bump → python reinstalls" [ "${n_inst3}" = "1" ]
+pkg_check "runtime bump → pip globals repopulate on fresh interpreter (no empty-globals)" [ "${n_pip3}" = "1" ]
+
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
 if [[ "${FAIL}" -eq 0 ]]; then
