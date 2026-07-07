@@ -151,16 +151,20 @@ bin/env-update.sh --apply                         # apply AUTO decisions (run --
 
 # After updating versions in .env
 bin/env-scan.sh   # Propagate to .env.local + rewrite ARG lines in Dockerfiles (--sync-values=true by default)
-# If a pinned runtime version changed: delete its tools/versions/ marker (or set
-# GLOBAL_STACK_RELOAD_<RUNTIME>=true) — the marker gate compares content against the
-# current env version and triggers reinstall automatically on mismatch; however tier-03
-# per-version markers (e.g. node.24, php.8.4) are existence-only and must be deleted
-# manually to force reinstall of that specific version.
+# If a pinned version changed: nothing to do — on next restart the content-compare
+# gate (gs_version_gate) detects the marker != env mismatch, prints a loud WARN, and
+# auto-reinstalls. This now applies to ALL tier-03 per-version markers (node.24,
+# php.8.4, …) and to per-package slot markers (tools/versions/<rt>.<AS>.pkg.<slot>),
+# so a package-only bump is detected too. Managers (nvm/pyenv/…) + rust also WARN on
+# a manager-version bump but reinstall the manager only (no cascade to runtimes).
+# Set GLOBAL_STACK_RELOAD_<RUNTIME>=true only to force a full unconditional reinstall.
 make down-n-rebuild-force-recreate
 
 # Env sync / audit
 bin/env-scan.sh --profile=true       # Sync + show timing
 docker compose --env-file .env.local config  # Validate compose resolution
+make check-image-versions            # WARN if a .env image pin drifted from a Dockerfile ARG
+                                     # (built image stale; auto-run as a non-fatal preflight of `up`)
 
 # Rollback a bad env update (env-update --apply / env-scan cascade)
 git checkout -- .env                                  # master is git-tracked
@@ -227,7 +231,7 @@ make start-local-registry            # Start local TLS registry (port 5000)
 - **ARG → ENV flow in Dockerfiles**: `ARG` values are build-time only; to expose at runtime: `ARG GLOBAL_STACK_FOO` then `ENV GLOBAL_STACK_FOO=${GLOBAL_STACK_FOO}`
 - **`password = username` convention**: All default service passwords equal `GLOBAL_STACK_DOCKER_USER_ID` (`developer`) — MySQL, Postgres, pgAdmin, Keycloak all share this pattern
 - **`privileged: true` on all containers** — intentional for local dev (needed for Docker-in-Docker, mount operations). Do not flag this as a security issue; it's a known trade-off
-- **`tools/versions/` markers** control reinstall — deleting a marker forces full reinstall of that runtime even without `GLOBAL_STACK_RELOAD_*=true`; when the marker content differs from the current env version, reinstall triggers automatically without needing to delete the marker
+- **`tools/versions/` markers** control reinstall — all are **content-compared** by the `gs_version_gate` helper (in `base-bin/global-stack-base-prologue.sh`): when a marker's content differs from the current env version, reinstall triggers automatically **with a loud WARN** (no manual marker deletion needed). This covers managers, tier-03 per-version markers (`node.24`, `php.8.4`, …), and per-package slot markers (`<rt>.<AS>.pkg.<slot>`). Deleting a marker still forces reinstall, and `GLOBAL_STACK_RELOAD_*=true` forces a full unconditional one. Note: `make down` clears `successes/`+`errors/`+`locks/` but NOT `versions/`, so these markers persist across restarts as designed. Exception: `php.edge` (branch `next`) has a constant marker string, so drift is NOT auto-detected — it still needs a manual `RELOAD` (SHA-tracking is not yet implemented)
 - **`docker-bake.local.json` is generated, not tracked** — if it's stale after env changes, run `make generate-buildx` to regenerate. Stale bake file = wrong build config
 - **BuildKit cache can go stale** — if builds fail with mysterious layer errors, `docker buildx prune` is the escape hatch
 - **Bash-written files bypass all PostToolUse hooks** — linting (shellcheck, hadolint, yamllint), formatting (shfmt), and backup only fire on `Edit`/`Write` tool calls. Files written via `cat >`, heredocs, `sed -i`, or other Bash redirects are invisible to hooks. Always use the `Write` or `Edit` tool when hook coverage matters.
