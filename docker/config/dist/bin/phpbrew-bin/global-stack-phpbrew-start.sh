@@ -97,16 +97,19 @@ if [ "${PHPBREW_MODE}" = "setup" ]; then
   echo -e "\n*** Activating php version ${PHP_VERSION_NAME}"
   global-stack-phpbrew-reload-bash.sh
 
-  if [ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/php.${PHP_VERSION_AS}" ]; then
-    echo -e "\n**** stack-phpbrew-setup-packages.sh"
-    
-    source /usr/local/bin/global-stack-base-setup-packages.sh
-    source "/home/${GLOBAL_STACK_DOCKER_USER_ID}/.phpbrew.shellrc"
-    global_stack_base_setup_packages \
-      --prefix='PHP' \
-      --command='echo -e "**** Installing/Updating ${PACKAGE_NAME} ${PACKAGE_VERSION} ${PACKAGE_COMMAND_SUFFIX}"' \
-      --command='phpbrew --debug --verbose --profile ext install ${PACKAGE_NAME} ${PACKAGE_VERSION} ${PACKAGE_COMMAND_SUFFIX}'
-  fi
+  # PECL ext loop runs EVERY boot after activation, gated per-package by slot
+  # markers (--marker-prefix), so a package-only bump is detected even when the
+  # php runtime marker is unchanged; unchanged exts skip cheaply. On a runtime
+  # bump the checkpoint-2 gate wiped php.<AS>.pkg.* (php.edge.pkg.* for edge —
+  # never the php.edge.build sidecar).
+  echo -e "\n**** stack-phpbrew-setup-packages.sh"
+  source /usr/local/bin/global-stack-base-setup-packages.sh
+  source "/home/${GLOBAL_STACK_DOCKER_USER_ID}/.phpbrew.shellrc"
+  global_stack_base_setup_packages \
+    --prefix='PHP' \
+    --marker-prefix="php.${PHP_VERSION_AS}" \
+    --command='echo -e "**** Installing/Updating ${PACKAGE_NAME} ${PACKAGE_VERSION} ${PACKAGE_COMMAND_SUFFIX}"' \
+    --command='phpbrew --debug --verbose --profile ext install ${PACKAGE_NAME} ${PACKAGE_VERSION} ${PACKAGE_COMMAND_SUFFIX}'
 
   if [ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/php.${PHP_VERSION_AS}" ]; then
     source "/home/${GLOBAL_STACK_DOCKER_USER_ID}/.phpbrew.shellrc" && mkdir -p "${PHPBREW_ROOT}/php/${PHPBREW_PHP}/var/db"

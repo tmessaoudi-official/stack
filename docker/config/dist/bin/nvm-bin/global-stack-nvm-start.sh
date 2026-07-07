@@ -108,14 +108,20 @@ if [[ "${NVM_MODE}" = "setup" ]]; then
   printf '\nUsing node %s\n' "${NODE_VERSION:-}"
   nvm use "${NODE_VERSION:-}"
 
+  # Package loop runs EVERY boot (after `nvm use`, so node is on PATH), gated
+  # per-package by slot markers (--marker-prefix). A package-only version bump is
+  # therefore detected even when the node runtime marker is unchanged; unchanged
+  # packages skip cheaply. On a runtime bump the checkpoint-2 gate wiped
+  # node.<AS>.pkg.*, so this repopulates globals on the freshly installed runtime.
+  source /usr/local/bin/global-stack-base-setup-packages.sh
+  global_stack_base_setup_packages \
+    --prefix='NODE' \
+    --marker-prefix="node.${_node_version_label}" \
+    --command='echo -e "**** Installing/Updating ${PACKAGE_NAME} ${PACKAGE_VERSION} ${PACKAGE_COMMAND_SUFFIX}"' \
+    --command='echo "y" | npm add --global --force ${PACKAGE_NAME}@${PACKAGE_VERSION} ${PACKAGE_COMMAND_SUFFIX}'
+
   if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/node.${_node_version_label}" ]]; then
     printf '\nSetting up node %s\n' "${NODE_VERSION:-}"
-
-    source /usr/local/bin/global-stack-base-setup-packages.sh
-    global_stack_base_setup_packages \
-      --prefix='NODE' \
-      --command='echo -e "**** Installing/Updating ${PACKAGE_NAME} ${PACKAGE_VERSION} ${PACKAGE_COMMAND_SUFFIX}"' \
-      --command='echo "y" | npm add --global --force ${PACKAGE_NAME}@${PACKAGE_VERSION} ${PACKAGE_COMMAND_SUFFIX}'
 
     global-stack-nvm-node${NODE_VERSION_AS}-setup.sh
     if [[ -n "${GLOBAL_STACK_NODE_UPGRADE}" ]] && [[ "${GLOBAL_STACK_NODE_UPGRADE}" = "true" ]]; then

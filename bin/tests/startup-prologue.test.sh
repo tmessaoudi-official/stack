@@ -520,6 +520,39 @@ mkdir -p "${PKG_VERSIONS}" "${TMP_DIR}/pkgerr"
 PKG_ERR="${TMP_DIR}/pkgerr" run_pkg --marker-prefix=test.3 >/dev/null 2>&1 || true
 pkg_check "package gate ERR-trap safe (no error token written)" pkg_errors_empty
 
+# ─── Section 11: package loop wired with --marker-prefix (ckpt 3b/3c/3d) ────
+# A runtime that installs packages must pass --marker-prefix="<runtime>.<...>" so
+# the per-slot gate is active. Scripts not yet wired (still legacy) are skipped so
+# this section grows coverage across the checkpoint-3 sub-commits.
+printf '\n%b── Section 11: package loop --marker-prefix wiring%b\n' "${C_BOLD}" "${C_RESET}"
+
+PKG_WIRING=(
+  "nvm-bin/global-stack-nvm-start.sh:node"
+  "phpbrew-bin/global-stack-phpbrew-start.sh:php"
+  "pyenv-bin/global-stack-pyenv-start.sh:python"
+  "rbenv-bin/global-stack-rbenv-start.sh:ruby"
+  "sdkman-bin/global-stack-sdkman-start.sh:java"
+)
+
+pkg_wired_count=0
+for pair in "${PKG_WIRING[@]}"; do
+  script="${pair%%:*}"
+  name="${pair##*:}"
+  path="${DIST_BIN}/${script}"
+  grep -q "global_stack_base_setup_packages" "${path}" 2>/dev/null || continue
+  grep -q -- "--marker-prefix" "${path}" 2>/dev/null || continue
+  pkg_wired_count=$((pkg_wired_count + 1))
+  if grep -Eq -- "--marker-prefix=\"${name}\." "${path}"; then
+    PASS=$((PASS + 1))
+    printf '  %b✓%b  %s package loop gated with --marker-prefix=%s.*\n' "${C_GREEN}" "${C_RESET}" "$(basename "${script}")" "${name}"
+  else
+    FAIL=$((FAIL + 1))
+    FAILURES+=("${script} --marker-prefix not keyed on ${name}.")
+    printf '  %b✗%b  %s --marker-prefix not keyed on %s.\n' "${C_RED}" "${C_RESET}" "$(basename "${script}")" "${name}"
+  fi
+done
+printf '  (checked %d package-gated scripts)\n' "${pkg_wired_count}"
+
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
 if [[ "${FAIL}" -eq 0 ]]; then
