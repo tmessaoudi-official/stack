@@ -761,6 +761,55 @@ for pair in "${PROBE_WIRING[@]}"; do
   fi
 done
 
+# ─── Section 15: php.edge SHA sidecar gate (checkpoint 7) ───────────────────
+printf '\n%b── Section 15: php.edge SHA sidecar gate (checkpoint 7)%b\n' "${C_BOLD}" "${C_RESET}"
+
+# The php.edge main marker is invariant ("php-master"), so drift is tracked via a
+# SIDECAR (php.edge.build) holding the resolved build ref github.com/php/php-src@<sha>.
+# Reuse the Section-8 run_gate runner to prove the sidecar compare has the right
+# semantics for a build-ref-shaped value (slashes + '@' + dots).
+_pes_ref_a='github.com/php/php-src@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+_pes_ref_b='github.com/php/php-src@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+_pes_marker="${TMP_DIR}/versions/php.edge.build"
+
+# 15a: sidecar absent → install (silent; first boot adopts baseline, no forced rebuild)
+rm -f "${_pes_marker}"
+assert_output_contains "15a: sidecar absent → install" "DECISION=install" run_gate "${_pes_marker}" "${_pes_ref_a}"
+
+# 15b: sidecar equal → skip (no rebuild loop when SHA unchanged)
+mkdir -p "$(dirname "${_pes_marker}")"; printf '%s' "${_pes_ref_a}" > "${_pes_marker}"
+assert_output_contains "15b: sidecar == build ref → skip" "DECISION=skip" run_gate "${_pes_marker}" "${_pes_ref_a}"
+
+# 15c: sidecar differs (SHA moved) → reinstall + loud WARN
+printf '%s' "${_pes_ref_a}" > "${_pes_marker}"
+assert_output_contains "15c: sidecar != build ref → reinstall" "DECISION=reinstall" run_gate "${_pes_marker}" "${_pes_ref_b}"
+assert_output_contains "15c: sidecar mismatch emits WARN" "WARN" run_gate "${_pes_marker}" "${_pes_ref_b}"
+
+# 15d: GLOB SAFETY (P1 invariant) — the package-marker sweep 'php.edge.pkg.*' must
+# NOT remove the php.edge.build sidecar. Getting this wrong destroys drift tracking.
+assert_pass "15d: 'php.edge.pkg.*' sweep does not remove php.edge.build sidecar" bash -c '
+  d=$(mktemp -d)
+  : > "$d/php.edge.build"
+  : > "$d/php.edge.pkg.redis"
+  : > "$d/php.edge.pkg.xdebug"
+  rm -f "$d"/php.edge.pkg.*
+  [[ -f "$d/php.edge.build" && ! -e "$d/php.edge.pkg.redis" && ! -e "$d/php.edge.pkg.xdebug" ]]
+'
+
+# 15e: STATIC — phpbrew-start.sh wires the three edge constructs.
+_pes_start="${DIST_BIN}/phpbrew-bin/global-stack-phpbrew-start.sh"
+assert_pass "15e: edge sidecar drift gate present (gs_version_gate on php.edge.build)" \
+  grep -Eq 'gs_version_gate "\$\{GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS\}/php\.edge\.build"|_edge_sidecar=.*php\.edge\.build' "${_pes_start}"
+assert_pass "15e: success-gated sidecar write present (echo PHP_VERSION > php.edge.build)" \
+  grep -Eq 'php\.edge\.build"$' "${_pes_start}"
+assert_pass "15e: edge gate is guarded on PHP_VERSION_AS=edge" \
+  grep -q '"${PHP_VERSION_AS}" = "edge"' "${_pes_start}"
+assert_pass "15e: RELOAD path drops the sidecar for edge" \
+  grep -Eq 'PHP_VERSION_AS.*= .edge.*php\.edge\.build|edge.* rm -f .*php\.edge\.build' "${_pes_start}"
+# Guard against over-broad glob that would sweep the sidecar: no 'php.edge.*' wildcard.
+assert_fail "15e: no over-broad 'php.edge.*' glob that would sweep the sidecar" \
+  grep -q 'php\.edge\.\*' "${_pes_start}"
+
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
 if [[ "${FAIL}" -eq 0 ]]; then

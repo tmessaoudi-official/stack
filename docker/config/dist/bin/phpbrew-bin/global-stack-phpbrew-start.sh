@@ -41,6 +41,10 @@ if [ "${PHPBREW_MODE}" = "setup" ]; then
     PHPBREW_PHP_PATH="${PHPBREW_ROOT}/php/${PHPBREW_PHP}"
     PHPBREW_PHP_BUILD_PATH="${PHPBREW_ROOT}/build/${PHPBREW_PHP}"
     rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/php.${PHP_VERSION_AS}" "${PHPBREW_BIN}/frankenphp-${GLOBAL_STACK_FRANKENPHP_VERSION}-${PHP_VERSION_NAME}" "${PHPBREW_PHP_PATH}/" "${PHPBREW_PHP_BUILD_PATH}/"
+    # php.edge RELOAD must also drop the SHA sidecar so the next boot rebuilds from the
+    # resolved build ref. Keep this narrow: a broadened php.edge dot-wildcard sweep would
+    # also delete the per-package markers, so target php.edge.build explicitly.
+    [ "${PHP_VERSION_AS}" = "edge" ] && rm -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/php.edge.build"
   fi
 
   # Version-mismatch gate: compare against $PHP_VERSION_NAME (the value the marker
@@ -59,6 +63,28 @@ if [ "${PHPBREW_MODE}" = "setup" ]; then
     fi
     rm -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/php.${PHP_VERSION_AS}.pkg."* || true
     rm -f "${_php_marker}"
+  fi
+
+  # php.edge SHA drift gate (checkpoint 7). The main php.edge marker is invariant
+  # ("php-master", consumed as the install dirname), so the content-compare above never
+  # rebuilds edge on an upstream commit. Compare the resolved build ref
+  # (PHP_VERSION = github.com/php/php-src@<sha>) against the php.edge.build SIDECAR; on a
+  # SHA change (sidecar present & differs) force a full rebuild. Per the agreed strategy we
+  # do NOT depend on phpbrew's replace-vs-skip behaviour — REMOVE the marker AND clean the
+  # php-master build/install dirs (mirroring the RELOAD path) so a fresh build is certain.
+  # Sidecar ABSENT (first boot with SHA tracking) is silent "install": no forced rebuild —
+  # the sidecar is written as the baseline at success time below. set -eE safe (helper
+  # returns 0; rm -f || true).
+  if [ "${PHP_VERSION_AS}" = "edge" ]; then
+    _edge_sidecar="${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/php.edge.build"
+    _edge_gate="$(gs_version_gate "${_edge_sidecar}" "${PHP_VERSION}" "php.edge (build ${PHP_VERSION})")"
+    if [ "${_edge_gate}" = "reinstall" ]; then
+      printf '\nphp.edge build ref changed → forcing rebuild of %s\n' "${PHP_VERSION_NAME}"
+      rm -rf "${PHPBREW_ROOT}/php/${PHP_VERSION_NAME}" "${PHPBREW_ROOT}/build/${PHP_VERSION_NAME}" \
+             "${PHPBREW_BIN}/frankenphp-${GLOBAL_STACK_FRANKENPHP_VERSION}-${PHP_VERSION_NAME}"
+      rm -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/php.edge.pkg."* || true
+      rm -f "${_php_marker}" "${_edge_sidecar}"
+    fi
   fi
   sleep 1
   
@@ -178,6 +204,15 @@ fi
 if [ "${PHPBREW_MODE}" = "setup" ]; then
   echo -e "\nWriting version"
   echo "${PHP_VERSION_NAME}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/php.${PHP_VERSION_AS}"
+  # php.edge SHA sidecar (checkpoint 7): the main php.edge marker is always "php-master"
+  # (the install dirname consumed by PATH scripts) and cannot record commit drift. Store the
+  # resolved build ref (PHP_VERSION = github.com/php/php-src@<sha>) so the setup-mode gate
+  # rebuilds when the SHA moves. SUCCESS-GATED: this line is reached only after a verified
+  # build (set -eE + prologue ERR trap abort earlier on any failure), so a failed edge build
+  # never leaves a satisfied sidecar — same discipline as the package engine's --tolerant.
+  if [ "${PHP_VERSION_AS}" = "edge" ]; then
+    echo "${PHP_VERSION}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/php.edge.build"
+  fi
   echo -e "\nWriting success"
   : > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/php.${PHP_VERSION_AS}"
   
