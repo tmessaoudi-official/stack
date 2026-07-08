@@ -65,6 +65,8 @@ source "$(dirname "${BASH_SOURCE[0]}")/reporting/reference.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/reporting/dump.sh"
 # shellcheck source=./reporting/summary.sh
 source "$(dirname "${BASH_SOURCE[0]}")/reporting/summary.sh"
+# shellcheck source=./reporting/color.sh
+source "$(dirname "${BASH_SOURCE[0]}")/reporting/color.sh"
 # shellcheck source=./reporting/profile.sh
 source "$(dirname "${BASH_SOURCE[0]}")/reporting/profile.sh"
 # shellcheck source=./core/apply.sh
@@ -543,8 +545,18 @@ _gs_eu2_print_check_summary() {
   # RESOLVE column: shown only when at least one RESOLVED record exists
   local _ps_resolve_col=""
   (( _ps_n_resolved > 0 )) && _ps_resolve_col=" ${_ps_n_resolved} RESOLVE,"
-  printf '  Summary: %d AUTO,%s %d SHA, %d HOLD, %d MANUAL, %d LOCK, %d SKIP, %d FROZEN, %d FALLBACK, %d ERROR  (%s)\n' \
-    "${_ps_n_auto}" "${_ps_resolve_col}" "${_ps_n_sha}" "${_ps_n_hold}" "${_ps_n_manual}" "${_ps_n_lock}" "${_ps_n_skip}" "${_ps_n_frozen}" "${_ps_n_fallback}" "${_ps_n_error}" "${_ps_checked_suffix}"
+  # Counts colored via _gs_eu2_cnum (category color when > 0, plain when 0/off); SKIP stays plain.
+  printf '  Summary: %s AUTO,%s %s SHA, %s HOLD, %s MANUAL, %s LOCK, %s SKIP, %s FROZEN, %s FALLBACK, %s ERROR  (%s)\n' \
+    "$(_gs_eu2_cnum "${_ps_n_auto}" "${_GS_EU2_C_GREEN}")" "${_ps_resolve_col}" \
+    "$(_gs_eu2_cnum "${_ps_n_sha}" "${_GS_EU2_C_GREEN}")" \
+    "$(_gs_eu2_cnum "${_ps_n_hold}" "${_GS_EU2_C_YELLOW}")" \
+    "$(_gs_eu2_cnum "${_ps_n_manual}" "${_GS_EU2_C_YELLOW}")" \
+    "$(_gs_eu2_cnum "${_ps_n_lock}" "${_GS_EU2_C_CYAN}")" \
+    "$(_gs_eu2_cnum "${_ps_n_skip}" "")" \
+    "$(_gs_eu2_cnum "${_ps_n_frozen}" "${_GS_EU2_C_CYAN}")" \
+    "$(_gs_eu2_cnum "${_ps_n_fallback}" "${_GS_EU2_C_YELLOW}")" \
+    "$(_gs_eu2_cnum "${_ps_n_error}" "${_GS_EU2_C_ERR}")" \
+    "${_ps_checked_suffix}"
 
   # Secondary signals sub-line: WATCH, DRIFT (with fixable count), DOWNGRADE, REPLACE-DRIFT, +sha, +replace.
   # DRIFT, DOWNGRADE, REPLACE-DRIFT, and +replace suppressed when --no-drift is active.
@@ -564,10 +576,17 @@ _gs_eu2_print_check_summary() {
     _ps_sec_replace_cascade="${_ps_n_replace_cascade}"
   fi
   if (( _ps_sec_watch > 0 || _ps_sec_drift > 0 || _ps_sec_down > 0 || _ps_sec_down_force > 0 || _ps_sec_sha_anno > 0 || _ps_sec_replace_drift > 0 || _ps_sec_replace_cascade > 0 || _ps_sec_resolved > 0 || _ps_n_warn_depends_on > 0 )); then
-    printf '    ↳ %d WATCH · %d DRIFT (%d fixable) · %d DOWNGRADE · %d FORCE-DOWNGRADE · %d REPLACE-DRIFT · %d +sha · %d +replace' \
-      "${_ps_sec_watch}" "${_ps_sec_drift}" "${_ps_sec_fixable}" "${_ps_sec_down}" "${_ps_sec_down_force}" "${_ps_sec_replace_drift}" "${_ps_sec_sha_anno}" "${_ps_sec_replace_cascade}"
-    (( _ps_sec_resolved > 0 )) && printf ' · +resolve %d' "${_ps_sec_resolved}"
-    (( _ps_n_warn_depends_on > 0 )) && printf ' · %d depends-on-warn' "${_ps_n_warn_depends_on}"
+    printf '    ↳ %s WATCH · %s DRIFT (%s fixable) · %s DOWNGRADE · %s FORCE-DOWNGRADE · %s REPLACE-DRIFT · %s +sha · %s +replace' \
+      "$(_gs_eu2_cnum "${_ps_sec_watch}" "${_GS_EU2_C_DIMCYAN}")" \
+      "$(_gs_eu2_cnum "${_ps_sec_drift}" "${_GS_EU2_C_MAGENTA}")" \
+      "$(_gs_eu2_cnum "${_ps_sec_fixable}" "${_GS_EU2_C_MAGENTA}")" \
+      "$(_gs_eu2_cnum "${_ps_sec_down}" "${_GS_EU2_C_ERR}")" \
+      "$(_gs_eu2_cnum "${_ps_sec_down_force}" "${_GS_EU2_C_ERR}")" \
+      "$(_gs_eu2_cnum "${_ps_sec_replace_drift}" "${_GS_EU2_C_MAGENTA}")" \
+      "$(_gs_eu2_cnum "${_ps_sec_sha_anno}" "${_GS_EU2_C_GREEN}")" \
+      "$(_gs_eu2_cnum "${_ps_sec_replace_cascade}" "${_GS_EU2_C_GREEN}")"
+    (( _ps_sec_resolved > 0 )) && printf ' · +resolve %s' "$(_gs_eu2_cnum "${_ps_sec_resolved}" "${_GS_EU2_C_GREEN}")"
+    (( _ps_n_warn_depends_on > 0 )) && printf ' · %s depends-on-warn' "$(_gs_eu2_cnum "${_ps_n_warn_depends_on}" "${_GS_EU2_C_YELLOW}")"
     printf '\n'
   fi
 }
@@ -778,6 +797,18 @@ _gs_eu2_run_check() {
       *)        _tag="[SKIP   ]"; (( ++_n_skip ))     || true ;;
     esac
 
+    # Colorize the decision label (color vars empty when color off → byte-identical no-op).
+    # SKIP stays plain (normal behavior); FROZEN (SKIP + skip flag) reads as intentionally pinned.
+    local _tag_c=""
+    case "${_decision}" in
+      AUTO | SHA | RESOLVED) _tag_c="${_GS_EU2_C_GREEN}" ;;
+      HOLD | MANUAL)         _tag_c="${_GS_EU2_C_YELLOW}" ;;
+      ERROR)                 _tag_c="${_GS_EU2_C_ERR}" ;;
+      LOCK)                  _tag_c="${_GS_EU2_C_CYAN}" ;;
+      SKIP) [[ -n "${_skip_reason}" ]] && _tag_c="${_GS_EU2_C_CYAN}" ;;
+    esac
+    [[ -n "${_tag_c}" ]] && _tag="${_tag_c}${_tag}${_GS_EU2_C_R}"
+
     # ── Reason label + change string ─────────────────────────────────────────
     # _gs_eu2_compute_reason_label: HOLD/MANUAL/LOCK reason suffix (e.g. "← major pin")
     # _gs_eu2_compute_change_string: full inline change text (e.g. "1.2.0 → 1.3.0 ← major pin")
@@ -962,6 +993,9 @@ _gs_eu2_main() {
   _gs_eu2_profile_start
   _gs_eu2_parse_args "${@}"
   _gs_eu2_profile_end "Parse args"
+
+  # Decide output color once, after args (format known), before any check/apply output.
+  _gs_eu2_color_init
 
   # --reference: print comprehensive reference and exit (before any env file access)
   if [[ "${_GS_EU2_CFG[reference]:-false}" == "true" ]]; then

@@ -317,6 +317,8 @@ bin/env-update.sh [OPTIONS]
 |----------|-------------|
 | `_GS_EU2_TALLY_FORCE=1` | Bypasses the stderr TTY gate so the live running tally displays even when stderr is not a terminal. Use cases: CI pipelines (GitHub Actions, GitLab CI), terminal multiplexers (tmux, screen) that don't expose TTY on stderr, any non-interactive shell wanting live progress during a long `--check` run. Default: unset (TTY gate active). Note: the column-width gate (`--tally=auto` requires ≥ 130 cols) still applies unless combined with `--tally=full`. |
 | `_GS_EU2_APPLY_GATE_FORCE_TTY=true` | Forces the `--apply` TTY gate to treat stdin as interactive even when it is not a terminal. Use case: automated tests that exercise the TTY-prompt code path without requiring a real TTY. Default: unset. |
+| `_GS_EU2_COLOR_FORCE=1` | Bypasses the stdout TTY gate so colored decision labels/tags/counts display even when stdout is not a terminal (CI, tmux, tests). The `NO_COLOR`, `TERM=dumb`, and `--format=json` gates still suppress color regardless. Default: unset (stdout-TTY gate active). |
+| `NO_COLOR` | Standard [no-color.org](https://no-color.org) opt-out — when set (any value), all env-update color output is suppressed, overriding `_GS_EU2_COLOR_FORCE`. |
 
 ### Typical usage patterns
 
@@ -607,9 +609,29 @@ Empty fields are printed as `field: ` (empty value).
 
 ### Color output
 
-Color is not currently implemented in the `--check` streaming output. The `NO_COLOR`
-environment variable is respected by the test harness colors but is not applied to the main
-tool output. All output is plain text.
+Decision labels, signal sub-line tags, and Summary counts are colored in both the `--check`
+report and the `--apply` output. Up-to-date `[SKIP]` is left plain (normal behavior); the palette is:
+
+| Category | Color |
+|----------|-------|
+| `[AUTO]` `[SHA]` `[RESOLVE]` `[APPLIED]` `[REPLACE]` | green |
+| `[HOLD]` `[MANUAL]` `[FALLBACK]` `[WARN]` `[PIN-MISS]` | yellow |
+| `[ERROR]` `[DOWNGRADE]` `[FORCE-DOWNGRADE]` | bold red |
+| `[DRIFT]` `[REPLACE-DRIFT]` | magenta |
+| `[LOCK]` `[FROZEN]` `[PINNED]` | cyan |
+| `[WATCH]` `[UNSTABLE]` `[STABLE]` | dim cyan |
+| `[DRY-RUN]` | dim |
+| `[SKIP]` (up-to-date) | none |
+
+Summary counts are tinted by category only when greater than zero. Color is enabled only when
+`stdout` is a TTY, `NO_COLOR` is unset, `TERM` is not `dumb`, and `--format` is not `json`;
+piped/redirected output and `--format=json` are always plain text. Set `_GS_EU2_COLOR_FORCE=1`
+to bypass the stdout-TTY gate (e.g. CI, tmux, tests) — the `NO_COLOR`/`TERM=dumb`/`json` gates
+still apply.
+
+The gate keys on `stdout`; a few `--apply` diagnostics (`[ERROR]`, the uncommitted-changes
+`[SKIP]`) print to `stderr`, so `env-update --apply 2>err.txt` with a colored TTY on stdout can
+write ANSI into the redirected `stderr`. Set `NO_COLOR=1` to guarantee plain stderr in that case.
 
 ### --apply output
 

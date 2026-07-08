@@ -259,7 +259,7 @@ _gs_eu2_apply_updates() {
       [[ -n "${_ann_sha_date}" ]] && _old_sha_tok="${_ann_sha} (${_ann_sha_date})"
 
       if [[ "${_dry_run}" == "true" ]]; then
-        printf '  [DRY-RUN]  %-55s  sha:%s → sha:%s\n' "${_var}" "${_ann_sha:0:8}" "${_new_sha:0:8}"
+        printf "  ${_GS_EU2_C_DIM}[DRY-RUN]${_GS_EU2_C_R}  %-55s  sha:%s → sha:%s\n" "${_var}" "${_ann_sha:0:8}" "${_new_sha:0:8}"
         (( ++_n_sha_would )) || true
       else
         # Annotation sha: is always updated.
@@ -271,7 +271,7 @@ _gs_eu2_apply_updates() {
         _ver_prefix="$(_gs_eu2_record_get "${_i}" version_prefix)"
         _gs_eu2_apply_single "${_env_file}" "${_var}" "" "${_raw_ann}" "" \
                               "${_old_sha_tok}" "${_new_sha_tok}" "${_use_sha:-false}" "false" "${_new_sha}" "${_ver_prefix}"
-        printf '  [SHA]      %-55s  sha:%s → sha:%s\n' "${_var}" "${_ann_sha:0:8}" "${_new_sha:0:8}"
+        printf "  ${_GS_EU2_C_GREEN}[SHA]${_GS_EU2_C_R}      %-55s  sha:%s → sha:%s\n" "${_var}" "${_ann_sha:0:8}" "${_new_sha:0:8}"
         (( ++_n_sha_applied )) || true
       fi
       continue
@@ -289,14 +289,14 @@ _gs_eu2_apply_updates() {
       # Only rewrite annotation when proposed differs from annotation version (idempotency).
       [[ -z "${_prop}" || "${_prop}" == "${_cur}" ]] && continue
       if [[ "${_dry_run}" == "true" ]]; then
-        printf '  [DRY-RUN]  %-55s  annotation: %s → %s (locked — VAR= untouched)\n' \
+        printf "  ${_GS_EU2_C_DIM}[DRY-RUN]${_GS_EU2_C_R}  %-55s  annotation: %s → %s (locked — VAR= untouched)\n" \
           "${_var}" "${_cur}" "${_prop}"
         (( ++_n_lock_would )) || true
       else
         # 10th arg bare_sha: unused (annotation_only=true, VAR= untouched), pass "".
         _gs_eu2_apply_single "${_env_file}" "${_var}" "${_prop}" "${_raw_ann}" "${_cur}" \
                               "" "" "false" "true" ""
-        printf '  [LOCK]     %-55s  annotation: %s → %s\n' "${_var}" "${_cur}" "${_prop}"
+        printf "  ${_GS_EU2_C_CYAN}[LOCK]${_GS_EU2_C_R}     %-55s  annotation: %s → %s\n" "${_var}" "${_cur}" "${_prop}"
         (( ++_n_lock_applied )) || true
       fi
       continue
@@ -314,7 +314,7 @@ _gs_eu2_apply_updates() {
         _raw_ann="$(_gs_eu2_record_get "${_i}" raw_annotation)"
         [[ -z "${_prop}" || "${_prop}" == "${_cur}" ]] && continue
         if [[ "${_dry_run}" == "true" ]]; then
-          printf '  [DRY-RUN]  %-55s  %s → %s (float pinned)\n' "${_var}" "${_cur}" "${_prop}"
+          printf "  ${_GS_EU2_C_DIM}[DRY-RUN]${_GS_EU2_C_R}  %-55s  %s → %s (float pinned)\n" "${_var}" "${_cur}" "${_prop}"
           # (replace:) dry-run sub-lines for RESOLVED + --apply-resolve
           local _res_rep_targets_dr _res_rep_tmpls_dr
           _res_rep_targets_dr="$(_gs_eu2_record_get "${_i}" replace_targets)"
@@ -332,14 +332,14 @@ _gs_eu2_apply_updates() {
               local _res_rm_dr="${_res_rm_arr_dr[${_res_ri_dr}]:-}"
               local _res_expanded_dr
               _res_expanded_dr="$(_gs_eu2_expand_replace_template "${_res_rm_dr}" "${_prop}")"
-              printf '  [DRY-RUN]    ↳ (replace) %-47s  → %s\n' "${_res_rt_dr}" "${_res_expanded_dr}"
+              printf "  ${_GS_EU2_C_DIM}[DRY-RUN]${_GS_EU2_C_R}    ↳ (replace) %-47s  → %s\n" "${_res_rt_dr}" "${_res_expanded_dr}"
             done
           fi
         else
           # Write concrete version to VAR= and update annotation CURRENT_VERSION from float to concrete.
           _gs_eu2_apply_single "${_env_file}" "${_var}" "${_prop}" "${_raw_ann}" "${_cur}" \
                                "" "" "false" "false" ""
-          printf '  [PINNED ]  %-55s  %s → %s\n' "${_var}" "${_cur}" "${_prop}"
+          printf "  ${_GS_EU2_C_CYAN}[PINNED ]${_GS_EU2_C_R}  %-55s  %s → %s\n" "${_var}" "${_cur}" "${_prop}"
           _gs_eu2_journal_append "${_var}" "${_cur}" "${_prop}" "RESOLVED" \
             "$(_gs_eu2_record_get "${_i}" channel)"
           (( ++_n_resolve_applied )) || true
@@ -361,7 +361,7 @@ _gs_eu2_apply_updates() {
               local _res_expanded
               _res_expanded="$(_gs_eu2_expand_replace_template "${_res_rm}" "${_prop}")"
               if ! grep -q "^${_res_rt}=" "${_env_file}" 2>/dev/null; then
-                printf '  [ERROR]    %-55s  replace: target %s not found in %s\n' \
+                printf "  ${_GS_EU2_C_ERR}[ERROR]${_GS_EU2_C_R}    %-55s  replace: target %s not found in %s\n" \
                   "${_var}" "${_res_rt}" "${_env_file}" >&2
                 if [[ "${_GS_EU2_CFG[no_fail]:-false}" != "true" ]]; then
                   [[ -n "${_snapshot}" ]] && cp "${_snapshot}" "${_env_file}" || true
@@ -370,7 +370,7 @@ _gs_eu2_apply_updates() {
                 continue
               fi
               if ! _gs_eu2_apply_replace_target "${_env_file}" "${_res_rt}" "${_res_expanded}"; then
-                printf '  [ERROR]    %-55s  replace: failed to rewrite target %s\n' \
+                printf "  ${_GS_EU2_C_ERR}[ERROR]${_GS_EU2_C_R}    %-55s  replace: failed to rewrite target %s\n" \
                   "${_var}" "${_res_rt}" >&2
                 if [[ "${_GS_EU2_CFG[no_fail]:-false}" != "true" ]]; then
                   [[ -n "${_snapshot}" ]] && cp "${_snapshot}" "${_env_file}" || true
@@ -378,7 +378,7 @@ _gs_eu2_apply_updates() {
                 fi
                 continue
               fi
-              printf '  [REPLACE]    ↳ (replace) %-47s  → %s\n' "${_res_rt}" "${_res_expanded}"
+              printf "  ${_GS_EU2_C_GREEN}[REPLACE]${_GS_EU2_C_R}    ↳ (replace) %-47s  → %s\n" "${_res_rt}" "${_res_expanded}"
             done
           fi
         fi
@@ -415,7 +415,7 @@ _gs_eu2_apply_updates() {
     if [[ "${_dry_run}" == "true" ]]; then
       local _display_proposed="${_prop}"
       [[ "${_use_sha:-false}" == "true" && -n "${_new_sha}" ]] && _display_proposed="${_new_sha}"
-      printf '  [DRY-RUN]  %-55s  %s → %s\n' "${_var}" "${_cur}" "${_display_proposed}"
+      printf "  ${_GS_EU2_C_DIM}[DRY-RUN]${_GS_EU2_C_R}  %-55s  %s → %s\n" "${_var}" "${_cur}" "${_display_proposed}"
       if [[ "${_auto_has_sha_update}" == "true" ]]; then
         (( ++_n_auto_sha_would )) || true
       else
@@ -438,7 +438,7 @@ _gs_eu2_apply_updates() {
           local _rm_dr="${_rm_arr_dr[${_ri_dr}]:-}"
           local _expanded_dr
           _expanded_dr="$(_gs_eu2_expand_replace_template "${_rm_dr}" "${_prop}")"
-          printf '  [DRY-RUN]    ↳ (replace) %-47s  → %s\n' "${_rt_dr}" "${_expanded_dr}"
+          printf "  ${_GS_EU2_C_DIM}[DRY-RUN]${_GS_EU2_C_R}    ↳ (replace) %-47s  → %s\n" "${_rt_dr}" "${_expanded_dr}"
         done
       fi
     else
@@ -450,7 +450,7 @@ _gs_eu2_apply_updates() {
       _auto_ver_prefix="$(_gs_eu2_record_get "${_i}" version_prefix)"
       _gs_eu2_apply_single "${_env_file}" "${_var}" "${_prop}" "${_raw_ann}" "${_cur}" \
                             "${_old_sha_tok2}" "${_new_sha_tok2}" "${_use_sha:-false}" "false" "${_new_sha}" "${_auto_ver_prefix}"
-      printf '  [APPLIED]  %-55s  %s → %s\n' "${_var}" "${_cur}" "${_prop}"
+      printf "  ${_GS_EU2_C_GREEN}[APPLIED]${_GS_EU2_C_R}  %-55s  %s → %s\n" "${_var}" "${_cur}" "${_prop}"
       _gs_eu2_journal_append "${_var}" "${_cur}" "${_prop}" "AUTO" \
         "$(_gs_eu2_record_get "${_i}" channel)"
       if [[ "${_auto_has_sha_update}" == "true" ]]; then
@@ -477,7 +477,7 @@ _gs_eu2_apply_updates() {
           _expanded="$(_gs_eu2_expand_replace_template "${_rm}" "${_prop}")"
           # Verify the target VAR exists in the env file before rewriting.
           if ! grep -q "^${_rt}=" "${_env_file}" 2>/dev/null; then
-            printf '  [ERROR]    %-55s  replace: target %s not found in %s\n' \
+            printf "  ${_GS_EU2_C_ERR}[ERROR]${_GS_EU2_C_R}    %-55s  replace: target %s not found in %s\n" \
               "${_var}" "${_rt}" "${_env_file}" >&2
             if [[ "${_GS_EU2_CFG[no_fail]:-false}" != "true" ]]; then
               # Roll back to pre-apply snapshot — primary var was already written
@@ -487,7 +487,7 @@ _gs_eu2_apply_updates() {
             continue
           fi
           if ! _gs_eu2_apply_replace_target "${_env_file}" "${_rt}" "${_expanded}"; then
-            printf '  [ERROR]    %-55s  replace: failed to rewrite target %s\n' \
+            printf "  ${_GS_EU2_C_ERR}[ERROR]${_GS_EU2_C_R}    %-55s  replace: failed to rewrite target %s\n" \
               "${_var}" "${_rt}" >&2
             if [[ "${_GS_EU2_CFG[no_fail]:-false}" != "true" ]]; then
               [[ -n "${_snapshot}" ]] && cp "${_snapshot}" "${_env_file}" || true
@@ -495,7 +495,7 @@ _gs_eu2_apply_updates() {
             fi
             continue
           fi
-          printf '  [REPLACE]    ↳ (replace) %-47s  → %s\n' "${_rt}" "${_expanded}"
+          printf "  ${_GS_EU2_C_GREEN}[REPLACE]${_GS_EU2_C_R}    ↳ (replace) %-47s  → %s\n" "${_rt}" "${_expanded}"
         done
       fi
     fi
@@ -543,7 +543,7 @@ _gs_eu2_apply_updates() {
       [[ "${_sk_tgt_actual}" == "${_sk_exp_cur}" ]] && continue
       # Verify target exists in the env file
       if ! grep -q "^${_sk_rt}=" "${_env_file}" 2>/dev/null; then
-        printf '  [ERROR]    %-55s  replace-only: target %s not found in %s\n' \
+        printf "  ${_GS_EU2_C_ERR}[ERROR]${_GS_EU2_C_R}    %-55s  replace-only: target %s not found in %s\n" \
           "${_sk_var}" "${_sk_rt}" "${_env_file}" >&2
         if [[ "${_GS_EU2_CFG[no_fail]:-false}" != "true" ]]; then
           [[ -n "${_snapshot}" ]] && cp "${_snapshot}" "${_env_file}" || true
@@ -552,11 +552,11 @@ _gs_eu2_apply_updates() {
         continue
       fi
       if [[ "${_dry_run}" == "true" ]]; then
-        printf '  [DRY-RUN]  %-55s  ↳ replace-only %s → %s\n' "${_sk_var}" "${_sk_rt}" "${_sk_exp_cur}"
+        printf "  ${_GS_EU2_C_DIM}[DRY-RUN]${_GS_EU2_C_R}  %-55s  ↳ replace-only %s → %s\n" "${_sk_var}" "${_sk_rt}" "${_sk_exp_cur}"
         (( ++_n_replace_only_would )) || true
       else
         _gs_eu2_apply_replace_target "${_env_file}" "${_sk_rt}" "${_sk_exp_cur}"
-        printf '  [REPLACE]    ↳ (replace) %-47s  → %s  (replace-only)\n' "${_sk_rt}" "${_sk_exp_cur}"
+        printf "  ${_GS_EU2_C_GREEN}[REPLACE]${_GS_EU2_C_R}    ↳ (replace) %-47s  → %s  (replace-only)\n" "${_sk_rt}" "${_sk_exp_cur}"
         (( ++_n_replace_only_applied )) || true
       fi
     done

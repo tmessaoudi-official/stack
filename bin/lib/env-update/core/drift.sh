@@ -45,7 +45,7 @@ _gs_eu2_signal_fallback() {
   local _using_fallback_disp
   _using_fallback_disp="$(_gs_eu2_record_get "${_i}" using_fallback_major)"
   if [[ "${_using_fallback_disp}" == "true" && -n "${_major_min}" ]]; then
-    printf '%10s↳ [FALLBACK] major=%s not yet in registry — using fallback major=%s\n' \
+    printf "%10s↳ ${_GS_EU2_C_YELLOW}[FALLBACK]${_GS_EU2_C_R} major=%s not yet in registry — using fallback major=%s\n" \
       "" "${_major}" "${_major_min}"
     (( ++_n_fallback )) || true
   fi
@@ -60,7 +60,7 @@ _gs_eu2_signal_pin_miss() {
     local _pin_uc
     _pin_uc="$(_gs_eu2_record_get "${_i}" latest_unconstrained)"
     if [[ -n "${_pin_uc}" ]]; then
-      printf '%10s↳ [PIN-MISS] major=%s not yet in registry — globally latest: %s\n' \
+      printf "%10s↳ ${_GS_EU2_C_YELLOW}[PIN-MISS]${_GS_EU2_C_R} major=%s not yet in registry — globally latest: %s\n" \
         "" "${_major}" "${_pin_uc}"
     fi
   fi
@@ -87,7 +87,7 @@ _gs_eu2_signal_watch() {
           local _wm_higher
           _wm_higher="$(printf '%s\n%s\n' "${_wm_cur_pfx}" "${_wm_lat_pfx}" | sort -V | tail -1)"
           if [[ "${_wm_higher}" == "${_wm_lat_pfx}" ]]; then
-            printf '%10s↳ [WATCH] New generation available: %s (depth %s: %s → %s)\n' \
+            printf "%10s↳ ${_GS_EU2_C_DIMCYAN}[WATCH]${_GS_EU2_C_R} New generation available: %s (depth %s: %s → %s)\n" \
               "" "${_wm_latest}" "${_wm_depth_r}" "${_wm_cur_pfx}" "${_wm_lat_pfx}"
             (( ++_n_watch )) || true
           fi
@@ -136,7 +136,7 @@ _gs_eu2_signal_unstable() {
     local _unstable_disp
     _unstable_disp="$(_gs_eu2_record_get "${_i}" unstable_proposed)"
     if [[ -n "${_unstable_disp}" && "${_unstable_disp}" != "${_cur}" ]]; then
-      printf '%10s↳ [UNSTABLE] unstable: %s\n' "" "${_unstable_disp}"
+      printf "%10s↳ ${_GS_EU2_C_DIMCYAN}[UNSTABLE]${_GS_EU2_C_R} unstable: %s\n" "" "${_unstable_disp}"
     fi
   fi
   return 0
@@ -150,7 +150,7 @@ _gs_eu2_signal_stable() {
     local _stable_disp
     _stable_disp="$(_gs_eu2_record_get "${_i}" stable_proposed)"
     if [[ -n "${_stable_disp}" && "${_stable_disp}" != "${_cur}" ]]; then
-      printf '%10s↳ [STABLE] stable: %s\n' "" "${_stable_disp}"
+      printf "%10s↳ ${_GS_EU2_C_DIMCYAN}[STABLE]${_GS_EU2_C_R} stable: %s\n" "" "${_stable_disp}"
     fi
   fi
   return 0
@@ -163,7 +163,7 @@ _gs_eu2_signal_depends_on() {
   local _depends_on
   _depends_on="$(_gs_eu2_record_get "${_i}" depends_on)"
   if [[ -n "${_depends_on}" ]]; then
-    printf '%10s↳ [WARN] (depends-on:%s) not enforced — dependency ordering\n' \
+    printf "%10s↳ ${_GS_EU2_C_YELLOW}[WARN]${_GS_EU2_C_R} (depends-on:%s) not enforced — dependency ordering\n" \
       "" "${_depends_on}"
     printf '%10s         unimplemented; verify %s manually before --apply\n' \
       "" "${_depends_on%%:*}"
@@ -198,23 +198,23 @@ _gs_eu2_signal_drift() {
       if [[ -n "${_drift_actual}" && -n "${_drift_ann_sha}" \
             && "${_drift_actual}" != "${_drift_ann_sha}" ]]; then
         if [[ "${_decision}" == "LOCK" ]]; then
-          printf '%10s↳ [DRIFT] var SHA (%s) differs from annotation sha:(%s) — locked; update annotation or revert VAR= manually\n' \
+          printf "%10s↳ ${_GS_EU2_C_MAGENTA}[DRIFT]${_GS_EU2_C_R} var SHA (%s) differs from annotation sha:(%s) — locked; update annotation or revert VAR= manually\n" \
             "" "${_drift_actual:0:8}" "${_drift_ann_sha:0:8}"
         elif [[ -n "${_skip_reason}" ]]; then
-          printf '%10s↳ [DRIFT] var SHA (%s) differs from annotation sha:(%s) — frozen by skip flag; update annotation or revert VAR= manually\n' \
+          printf "%10s↳ ${_GS_EU2_C_MAGENTA}[DRIFT]${_GS_EU2_C_R} var SHA (%s) differs from annotation sha:(%s) — frozen by skip flag; update annotation or revert VAR= manually\n" \
             "" "${_drift_actual:0:8}" "${_drift_ann_sha:0:8}"
         elif [[ "${_decision}" == "SKIP" ]]; then
-          printf '%10s↳ [DRIFT] var SHA (%s) differs from annotation sha:(%s) — update annotation or revert VAR= manually (--apply skips up-to-date records)\n' \
+          printf "%10s↳ ${_GS_EU2_C_MAGENTA}[DRIFT]${_GS_EU2_C_R} var SHA (%s) differs from annotation sha:(%s) — update annotation or revert VAR= manually (--apply skips up-to-date records)\n" \
             "" "${_drift_actual:0:8}" "${_drift_ann_sha:0:8}"
         elif [[ "${_decision}" == "HOLD" || "${_decision}" == "MANUAL" ]]; then
-          printf '%10s↳ [DRIFT] var SHA (%s) differs from annotation sha:(%s) — --force-auto --apply to resolve\n' \
+          printf "%10s↳ ${_GS_EU2_C_MAGENTA}[DRIFT]${_GS_EU2_C_R} var SHA (%s) differs from annotation sha:(%s) — --force-auto --apply to resolve\n" \
             "" "${_drift_actual:0:8}" "${_drift_ann_sha:0:8}"
         elif [[ "${_decision}" == "ERROR" ]]; then
-          printf '%10s↳ [DRIFT] var SHA (%s) differs from annotation sha:(%s) — fetch failed; fix error then re-run\n' \
+          printf "%10s↳ ${_GS_EU2_C_MAGENTA}[DRIFT]${_GS_EU2_C_R} var SHA (%s) differs from annotation sha:(%s) — fetch failed; fix error then re-run\n" \
             "" "${_drift_actual:0:8}" "${_drift_ann_sha:0:8}"
         else
           # AUTO or SHA: --apply can resolve
-          printf '%10s↳ [DRIFT] var SHA (%s) differs from annotation sha:(%s) — re-run --apply to resolve\n' \
+          printf "%10s↳ ${_GS_EU2_C_MAGENTA}[DRIFT]${_GS_EU2_C_R} var SHA (%s) differs from annotation sha:(%s) — re-run --apply to resolve\n" \
             "" "${_drift_actual:0:8}" "${_drift_ann_sha:0:8}"
         fi
         _drift_fired=true
@@ -223,30 +223,30 @@ _gs_eu2_signal_drift() {
       if [[ -z "${_drift_actual}" && -n "${_drift_ann_ver}" ]]; then
         # Case 1: empty var — decision-aware enable-warning
         if [[ "${_decision}" == "LOCK" ]]; then
-          printf '%10s↳ [DRIFT] var is empty — annotation locked at %s; feature disabled (set VAR= manually to re-enable — lock blocks --apply and --force-auto)\n' \
+          printf "%10s↳ ${_GS_EU2_C_MAGENTA}[DRIFT]${_GS_EU2_C_R} var is empty — annotation locked at %s; feature disabled (set VAR= manually to re-enable — lock blocks --apply and --force-auto)\n" \
             "" "${_drift_ann_ver}"
           _drift_fired=true
         elif [[ -n "${_skip_reason}" ]]; then
           : # skip-gate blocks apply; empty var is intentional — no drift message
         elif [[ "${_decision}" == "HOLD" ]]; then
-          printf '%10s↳ [DRIFT] var is empty — annotation tracks %s (feature disabled? --force-auto --apply will write it to enable)\n' \
+          printf "%10s↳ ${_GS_EU2_C_MAGENTA}[DRIFT]${_GS_EU2_C_R} var is empty — annotation tracks %s (feature disabled? --force-auto --apply will write it to enable)\n" \
             "" "${_drift_ann_ver}"
           _drift_fired=true
         elif [[ "${_decision}" == "MANUAL" ]]; then
-          printf '%10s↳ [DRIFT] var is empty — annotation tracks %s (feature disabled? --force-auto --apply will write it to enable)\n' \
+          printf "%10s↳ ${_GS_EU2_C_MAGENTA}[DRIFT]${_GS_EU2_C_R} var is empty — annotation tracks %s (feature disabled? --force-auto --apply will write it to enable)\n" \
             "" "${_drift_ann_ver}"
           _drift_fired=true
         elif [[ "${_decision}" == "AUTO" ]]; then
-          printf '%10s↳ [DRIFT] var is empty — annotation tracks %s (feature disabled? --apply will write %s to enable it)\n' \
+          printf "%10s↳ ${_GS_EU2_C_MAGENTA}[DRIFT]${_GS_EU2_C_R} var is empty — annotation tracks %s (feature disabled? --apply will write %s to enable it)\n" \
             "" "${_drift_ann_ver}" "${_prop:-${_drift_ann_ver}}"
           _drift_fired=true
         elif [[ "${_decision}" == "SHA" ]]; then
-          printf '%10s↳ [DRIFT] var is empty — annotation tracks %s (feature disabled? set VAR= manually to enable)\n' \
+          printf "%10s↳ ${_GS_EU2_C_MAGENTA}[DRIFT]${_GS_EU2_C_R} var is empty — annotation tracks %s (feature disabled? set VAR= manually to enable)\n" \
             "" "${_drift_ann_ver}"
           _drift_fired=true
         else
           # SKIP (up-to-date, not skip-gate) or ERROR: informational only
-          printf '%10s↳ [DRIFT] var is empty — annotation tracks %s (feature disabled?)\n' \
+          printf "%10s↳ ${_GS_EU2_C_MAGENTA}[DRIFT]${_GS_EU2_C_R} var is empty — annotation tracks %s (feature disabled?)\n" \
             "" "${_drift_ann_ver}"
           _drift_fired=true
         fi
@@ -267,42 +267,42 @@ _gs_eu2_signal_drift() {
         fi
         # Decision-aware message (B2-B11)
         if [[ "${_decision}" == "LOCK" ]]; then
-          printf '%10s↳ [DRIFT] annotation says %s but VAR=%s — locked; update annotation manually to resolve\n' \
+          printf "%10s↳ ${_GS_EU2_C_MAGENTA}[DRIFT]${_GS_EU2_C_R} annotation says %s but VAR=%s — locked; update annotation manually to resolve\n" \
             "" "${_drift_ann_ver}" "${_drift_actual}"
           _drift_fired=true
         elif [[ -n "${_skip_reason}" ]]; then
-          printf '%10s↳ [DRIFT] annotation says %s but VAR=%s — frozen by skip flag; update annotation manually to resolve\n' \
+          printf "%10s↳ ${_GS_EU2_C_MAGENTA}[DRIFT]${_GS_EU2_C_R} annotation says %s but VAR=%s — frozen by skip flag; update annotation manually to resolve\n" \
             "" "${_drift_ann_ver}" "${_drift_actual}"
           _drift_fired=true
         elif [[ "${_decision}" == "HOLD" ]]; then
           if [[ "${_drift_dir_downgrade}" == "true" ]]; then
-            printf '%10s↳ [DRIFT] annotation says %s but VAR=%s%s\n' \
+            printf "%10s↳ ${_GS_EU2_C_MAGENTA}[DRIFT]${_GS_EU2_C_R} annotation says %s but VAR=%s%s\n" \
               "" "${_drift_ann_ver}" "${_drift_actual}" "${_drift_dir_msg}"
           else
-            printf '%10s↳ [DRIFT] annotation says %s but VAR=%s — --force-auto --apply to resolve\n' \
+            printf "%10s↳ ${_GS_EU2_C_MAGENTA}[DRIFT]${_GS_EU2_C_R} annotation says %s but VAR=%s — --force-auto --apply to resolve\n" \
               "" "${_drift_ann_ver}" "${_drift_actual}"
           fi
           _drift_fired=true
         elif [[ "${_decision}" == "MANUAL" ]]; then
           if [[ "${_drift_dir_downgrade}" == "true" ]]; then
-            printf '%10s↳ [DRIFT] annotation says %s but VAR=%s%s\n' \
+            printf "%10s↳ ${_GS_EU2_C_MAGENTA}[DRIFT]${_GS_EU2_C_R} annotation says %s but VAR=%s%s\n" \
               "" "${_drift_ann_ver}" "${_drift_actual}" "${_drift_dir_msg}"
           else
-            printf '%10s↳ [DRIFT] annotation says %s but VAR=%s — --force-auto --apply to resolve\n' \
+            printf "%10s↳ ${_GS_EU2_C_MAGENTA}[DRIFT]${_GS_EU2_C_R} annotation says %s but VAR=%s — --force-auto --apply to resolve\n" \
               "" "${_drift_ann_ver}" "${_drift_actual}"
           fi
           _drift_fired=true
         elif [[ "${_decision}" == "ERROR" ]]; then
-          printf '%10s↳ [DRIFT] annotation says %s but VAR=%s%s — fetch failed; fix error then re-run\n' \
+          printf "%10s↳ ${_GS_EU2_C_MAGENTA}[DRIFT]${_GS_EU2_C_R} annotation says %s but VAR=%s%s — fetch failed; fix error then re-run\n" \
             "" "${_drift_ann_ver}" "${_drift_actual}" "${_drift_dir_msg:-}"
           _drift_fired=true
         elif [[ "${_decision}" == "SKIP" && -z "${_skip_reason}" ]]; then
-          printf '%10s↳ [DRIFT] annotation says %s but VAR=%s%s — update annotation or revert VAR= manually (--apply skips up-to-date records)\n' \
+          printf "%10s↳ ${_GS_EU2_C_MAGENTA}[DRIFT]${_GS_EU2_C_R} annotation says %s but VAR=%s%s — update annotation or revert VAR= manually (--apply skips up-to-date records)\n" \
             "" "${_drift_ann_ver}" "${_drift_actual}" "${_drift_dir_msg:-}"
           _drift_fired=true
         else
           # AUTO, SHA — neutral fallback when non-semver (no _drift_dir_msg)
-          printf '%10s↳ [DRIFT] annotation says %s but VAR=%s%s\n' \
+          printf "%10s↳ ${_GS_EU2_C_MAGENTA}[DRIFT]${_GS_EU2_C_R} annotation says %s but VAR=%s%s\n" \
             "" "${_drift_ann_ver}" "${_drift_actual}" "${_drift_dir_msg:- — re-run --apply or update annotation}"
           _drift_fired=true
         fi
@@ -362,7 +362,7 @@ _gs_eu2_signal_replace_drift() {
         if [[ "${_decision}" == "AUTO" || "${_decision}" == "SHA" ]]; then
           if [[ "${_rd_stale_now}" == "true" || "${_rd_update_pending}" == "true" ]]; then
             if [[ "${_rd_stale_now}" == "true" ]]; then
-              printf '%10s↳ (replace) %-47s  %s → %s  [REPLACE-DRIFT]\n' \
+              printf "%10s↳ (replace) %-47s  %s → %s  ${_GS_EU2_C_MAGENTA}[REPLACE-DRIFT]${_GS_EU2_C_R}\n" \
                 "" "${_rd_rt}" "${_rd_tgt_actual}" "${_rd_exp_prop}"
             else
               printf '%10s↳ (replace) %-47s  %s → %s\n' \
@@ -370,21 +370,21 @@ _gs_eu2_signal_replace_drift() {
             fi
           fi
         elif [[ "${_decision}" == "SKIP" && -z "${_skip_reason}" && "${_rd_stale_now}" == "true" ]]; then
-          printf '%10s↳ [REPLACE-DRIFT] %s  actual=%s ≠ expected=%s — run --apply to fix\n' \
+          printf "%10s↳ ${_GS_EU2_C_MAGENTA}[REPLACE-DRIFT]${_GS_EU2_C_R} %s  actual=%s ≠ expected=%s — run --apply to fix\n" \
             "" "${_rd_rt}" "${_rd_tgt_actual}" "${_rd_exp_cur}"
         elif [[ ( "${_decision}" == "HOLD" || "${_decision}" == "MANUAL" ) \
                 && "${_rd_stale_now}" == "true" ]]; then
-          printf '%10s↳ [REPLACE-DRIFT] %s  actual=%s ≠ expected=%s — run --force-auto --apply to fix\n' \
+          printf "%10s↳ ${_GS_EU2_C_MAGENTA}[REPLACE-DRIFT]${_GS_EU2_C_R} %s  actual=%s ≠ expected=%s — run --force-auto --apply to fix\n" \
             "" "${_rd_rt}" "${_rd_tgt_actual}" "${_rd_exp_cur}"
         elif [[ ( "${_decision}" == "HOLD" || "${_decision}" == "MANUAL" ) \
                 && "${_rd_stale_now}" == "false" && "${_rd_update_pending}" == "true" ]]; then
           printf '%10s↳ (replace) %-47s  → %s  (with --force-auto --apply)\n' \
             "" "${_rd_rt}" "${_rd_exp_prop}"
         elif [[ -n "${_skip_reason}" && "${_rd_stale_now}" == "true" ]]; then
-          printf '%10s↳ [REPLACE-DRIFT] %s  actual=%s ≠ expected=%s — informational only (frozen)\n' \
+          printf "%10s↳ ${_GS_EU2_C_MAGENTA}[REPLACE-DRIFT]${_GS_EU2_C_R} %s  actual=%s ≠ expected=%s — informational only (frozen)\n" \
             "" "${_rd_rt}" "${_rd_tgt_actual}" "${_rd_exp_cur}"
         elif [[ "${_decision}" == "LOCK" && "${_rd_stale_now}" == "true" ]]; then
-          printf '%10s↳ [REPLACE-DRIFT] %s  actual=%s ≠ expected=%s — informational only (locked)\n' \
+          printf "%10s↳ ${_GS_EU2_C_MAGENTA}[REPLACE-DRIFT]${_GS_EU2_C_R} %s  actual=%s ≠ expected=%s — informational only (locked)\n" \
             "" "${_rd_rt}" "${_rd_tgt_actual}" "${_rd_exp_cur}"
         fi
 

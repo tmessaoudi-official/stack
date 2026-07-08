@@ -11439,6 +11439,121 @@ _flush_section
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section
 
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 111 — output color (decision tags + summary counts, gated)
+# ═══════════════════════════════════════════════════════════════════════════
+section "111 — output color (tags + summary, gated)"
+
+t "t111a: --check default (non-TTY) emits no ANSI color codes" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --no-cache --env-file='${FIXTURES}/combined-real-world.env' 2>&1)
+    unset _GS_EU2_HTTP_FIXTURE_DIR
+    echo \"\$out\" | grep -qF '[0;32m' && { echo 'found green ANSI when color should be off'; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '[AUTO'  || { echo 'plain [AUTO tag missing'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t111b: _GS_EU2_COLOR_FORCE=1 colors [AUTO] green" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    out=\$(_GS_EU2_COLOR_FORCE=1 bash '${ENV_UPDATE_V2}' --check --dry-run --no-cache --env-file='${FIXTURES}/combined-real-world.env' 2>&1)
+    unset _GS_EU2_HTTP_FIXTURE_DIR
+    echo \"\$out\" | grep -qF '[0;32m' || { echo 'green ANSI missing under FORCE'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t111c: [SKIP] label is NOT colored under FORCE (normal-behavior exemption)" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    out=\$(_GS_EU2_COLOR_FORCE=1 bash '${ENV_UPDATE_V2}' --check --dry-run --no-cache --env-file='${FIXTURES}/combined-real-world.env' 2>&1)
+    unset _GS_EU2_HTTP_FIXTURE_DIR
+    skip=\$(echo \"\$out\" | grep -F '[SKIP')
+    [[ -n \"\$skip\" ]] || { echo 'no SKIP line found'; echo FAIL; exit 0; }
+    echo \"\$skip\" | grep -qF '[0;3' && { echo 'SKIP label was colored'; echo FAIL; exit 0; }
+    echo \"\$skip\" | grep -qF '[2m'  && { echo 'SKIP label was dimmed'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t111d: [ERROR] label colored bold red under FORCE" bash -c "
+    f=\${TMP_DIR}/t111d.env
+    printf '# @todo env-update dockerhub:_/no-such-image-xyzzy999 1.0.0\nGLOBAL_STACK_COLOR_ERR_TEST_VERSION=1.0.0\n' > \"\$f\"
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    out=\$(_GS_EU2_COLOR_FORCE=1 bash '${ENV_UPDATE_V2}' --check --dry-run --no-cache --env-file=\"\$f\" 2>&1)
+    unset _GS_EU2_HTTP_FIXTURE_DIR
+    echo \"\$out\" | grep -qF '[1;31m' || { echo 'bold-red ANSI missing for ERROR'; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '[ERROR' || { echo 'plain [ERROR tag missing'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t111e: NO_COLOR overrides _GS_EU2_COLOR_FORCE" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    out=\$(NO_COLOR=1 _GS_EU2_COLOR_FORCE=1 bash '${ENV_UPDATE_V2}' --check --dry-run --no-cache --env-file='${FIXTURES}/combined-real-world.env' 2>&1)
+    unset _GS_EU2_HTTP_FIXTURE_DIR
+    echo \"\$out\" | grep -qF '[0;32m' && { echo 'color present despite NO_COLOR'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t111f: TERM=dumb overrides _GS_EU2_COLOR_FORCE" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    out=\$(TERM=dumb _GS_EU2_COLOR_FORCE=1 bash '${ENV_UPDATE_V2}' --check --dry-run --no-cache --env-file='${FIXTURES}/combined-real-world.env' 2>&1)
+    unset _GS_EU2_HTTP_FIXTURE_DIR
+    echo \"\$out\" | grep -qF '[0;32m' && { echo 'color present despite TERM=dumb'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t111g: --format=json suppresses color even under FORCE" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    out=\$(_GS_EU2_COLOR_FORCE=1 bash '${ENV_UPDATE_V2}' --check --format=json --dry-run --no-cache --env-file='${FIXTURES}/combined-real-world.env' 2>&1)
+    unset _GS_EU2_HTTP_FIXTURE_DIR
+    echo \"\$out\" | grep -qF '[0;32m' && { echo 'color present in json mode'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t111h: --apply colors [APPLIED] green under FORCE, none when off" bash -c "
+    cp '${FIXTURES}/combined-real-world.env' \"\${TMP_DIR}/t111h_on.env\"
+    cp '${FIXTURES}/combined-real-world.env' \"\${TMP_DIR}/t111h_off.env\"
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    on=\$(_GS_EU2_COLOR_FORCE=1 bash '${ENV_UPDATE_V2}' --apply --yes --no-cache --env-file=\"\${TMP_DIR}/t111h_on.env\" 2>&1)
+    off=\$(bash '${ENV_UPDATE_V2}' --apply --yes --no-cache --env-file=\"\${TMP_DIR}/t111h_off.env\" 2>&1)
+    unset _GS_EU2_HTTP_FIXTURE_DIR
+    echo \"\$on\"  | grep -qF '[0;32m' || { echo 'apply [APPLIED] not green under FORCE; got: '\$on; echo FAIL; exit 0; }
+    echo \"\$off\" | grep -qF '[0;32m' && { echo 'apply colored when off; got: '\$off; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t111i: [DRIFT] sub-line colored magenta under FORCE" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t111i_cache
+    f=\${TMP_DIR}/t111i.env
+    printf '# @todo env-update github:testowner/testrepo 1.0.0\nGLOBAL_STACK_T111I=\n' > \"\$f\"
+    out=\$(_GS_EU2_COLOR_FORCE=1 bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[0;35m' || { echo 'DRIFT not magenta under FORCE; got: '\$out; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '[DRIFT]' || { echo 'plain [DRIFT] tag missing'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t111j: Summary line colors non-zero AUTO count green under FORCE" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    out=\$(_GS_EU2_COLOR_FORCE=1 bash '${ENV_UPDATE_V2}' --check --dry-run --no-cache --env-file='${FIXTURES}/combined-real-world.env' 2>&1)
+    unset _GS_EU2_HTTP_FIXTURE_DIR
+    sumline=\$(echo \"\$out\" | grep -F 'Summary:')
+    [[ -n \"\$sumline\" ]] || { echo 'no Summary line'; echo FAIL; exit 0; }
+    echo \"\$sumline\" | grep -qF '[0;32m' || { echo 'summary AUTO count not green; got: '\$sumline; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t111k: secondary summary line colors non-zero DRIFT count magenta under FORCE" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t111k_cache
+    f=\${TMP_DIR}/t111k.env
+    printf '# @todo env-update github:testowner/testrepo 1.0.0\nGLOBAL_STACK_T111K=\n' > \"\$f\"
+    out=\$(_GS_EU2_COLOR_FORCE=1 bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    secline=\$(echo \"\$out\" | grep -F 'DRIFT (')
+    [[ -n \"\$secline\" ]] || { echo 'no secondary signals line'; echo FAIL; exit 0; }
+    echo \"\$secline\" | grep -qF '[0;35m' || { echo 'secondary DRIFT count not magenta; got: '\$secline; echo FAIL; exit 0; }
+    echo PASS
+"
+
+_flush_section
+
 TOTAL=$(( PASS + FAIL ))
 BAR="━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
