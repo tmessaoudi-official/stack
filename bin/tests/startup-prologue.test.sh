@@ -815,6 +815,121 @@ assert_pass "15e: RELOAD path drops the sidecar for edge" \
 assert_fail "15e: no over-broad 'php.edge.*' glob that would sweep the sidecar" \
   grep -q 'php\.edge\.\*' "${_pes_start}"
 
+# ─── Section 16: gs_install_retry_purge (download-cache self-heal) ──────────
+printf '\n%b── Section 16: gs_install_retry_purge%b\n' "${C_BOLD}" "${C_RESET}"
+
+# 16a: success on first attempt → returns 0, cache untouched.
+assert_pass "16a: keeps cache + returns 0 when command succeeds first try" \
+  bash -c '
+    source "$0"
+    trap - ERR EXIT PIPE SIGPIPE SIGHUP
+    d=$(mktemp -d); mkdir -p "$d/cache"; : > "$d/cache/keep"
+    gs_install_retry_purge "$d/cache" true; rc=$?
+    [[ $rc -eq 0 && -f "$d/cache/keep" ]]
+  ' "${PROLOGUE}"
+
+# 16b: fail-then-succeed → purges cache, retries once, returns 0, command ran twice.
+assert_pass "16b: purges cache + retries once, returns 0 on 2nd-try success" \
+  bash -c '
+    source "$0"
+    trap - ERR EXIT PIPE SIGPIPE SIGHUP
+    d=$(mktemp -d); mkdir -p "$d/cache"; : > "$d/cache/poison"
+    c="$d/cnt"; echo 0 > "$c"
+    ft() { local n; n=$(cat "$c"); n=$((n+1)); echo "$n" > "$c"; [[ "$n" -ge 2 ]]; }
+    gs_install_retry_purge "$d/cache" ft; rc=$?
+    [[ $rc -eq 0 && ! -e "$d/cache/poison" && "$(cat "$c")" == "2" ]]
+  ' "${PROLOGUE}"
+
+# 16c: always-fail → purges cache, returns non-zero (second failure propagates).
+assert_pass "16c: purges cache + returns non-zero when both attempts fail" \
+  bash -c '
+    source "$0"
+    trap - ERR EXIT PIPE SIGPIPE SIGHUP
+    d=$(mktemp -d); mkdir -p "$d/cache"; : > "$d/cache/poison"
+    gs_install_retry_purge "$d/cache" false; rc=$?
+    [[ $rc -ne 0 && ! -e "$d/cache/poison" ]]
+  ' "${PROLOGUE}"
+
+# 16d: empty cache_dir arg → no purge attempt, still returns the command status (no crash).
+assert_pass "16d: empty cache_dir arg is safe (skips purge, still returns fail)" \
+  bash -c '
+    source "$0"
+    trap - ERR EXIT PIPE SIGPIPE SIGHUP
+    gs_install_retry_purge "" false; rc=$?
+    [[ $rc -ne 0 ]]
+  ' "${PROLOGUE}"
+
+# 16e: STATIC — nvm-start.sh wires the helper around `nvm install`.
+_nvm_start="${DIST_BIN}/nvm-bin/global-stack-nvm-start.sh"
+assert_pass "16e: nvm-start.sh wires gs_install_retry_purge around nvm install" \
+  grep -Eq 'gs_install_retry_purge .*nvm install' "${_nvm_start}"
+
+# 16f: LINCHPIN — under the REAL armed stackCatch trap + set -eE, a first-attempt
+# failure inside the helper's `if` must NOT fire stackCatch; the retry must run and
+# succeed. Proves the fix is not a silent no-op (first failure exiting → retry skipped).
+cat >"${TMP_DIR}/test-heal-recover.sh" <<'TESTEOF'
+#!/bin/bash
+set -xeE -o pipefail
+shopt -s extdebug
+IFS=$'\n\t'
+source global-stack-base-prologue.sh
+nvm() { local n; n=$(cat "${HEAL_CNT}"); n=$((n + 1)); echo "${n}" >"${HEAL_CNT}"; [[ "${n}" -ge 2 ]]; }
+gs_install_retry_purge "${HEAL_CACHE}" nvm install v1
+echo "HEAL_REACHED_END"
+TESTEOF
+chmod +x "${TMP_DIR}/test-heal-recover.sh"
+mkdir -p "${TMP_DIR}/heal-errors" "${TMP_DIR}/heal-cache"
+: >"${TMP_DIR}/heal-cache/poison"
+echo 0 >"${TMP_DIR}/heal-cnt"
+_heal_out=$(
+  GLOBAL_STACK_ERROR_TOKEN=heal-token \
+    GLOBAL_STACK_DOCKER_TOOLS_PATH="${TMP_DIR}" \
+    GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS="${TMP_DIR}/heal-errors" \
+    HEAL_CNT="${TMP_DIR}/heal-cnt" HEAL_CACHE="${TMP_DIR}/heal-cache" \
+    PATH="${DIST_BIN}/base-bin:${PATH}" \
+    bash "${TMP_DIR}/test-heal-recover.sh" 2>&1
+)
+_heal_exit=$?
+if [[ "${_heal_exit}" -eq 0 && ! -f "${TMP_DIR}/heal-errors/heal-token" ]] \
+  && echo "${_heal_out}" | grep -q "HEAL_REACHED_END" \
+  && [[ ! -e "${TMP_DIR}/heal-cache/poison" ]]; then
+  PASS=$((PASS + 1))
+  printf '  %b✓%b  16f: first failure does NOT trip stackCatch; retry runs + succeeds (no token)\n' "${C_GREEN}" "${C_RESET}"
+else
+  FAIL=$((FAIL + 1))
+  FAILURES+=("16f: first-failure ERR-trap suppression + retry")
+  printf '  %b✗%b  16f: first failure does NOT trip stackCatch (exit=%d token=%s)\n' "${C_RED}" "${C_RESET}" "${_heal_exit}" "$([[ -f "${TMP_DIR}/heal-errors/heal-token" ]] && echo present || echo absent)"
+fi
+
+# 16g: MIRROR — when BOTH attempts fail, the second failure must propagate loudly:
+# stackCatch fires and writes the error token (container fails visibly, not silently).
+cat >"${TMP_DIR}/test-heal-fail.sh" <<'TESTEOF'
+#!/bin/bash
+set -xeE -o pipefail
+shopt -s extdebug
+IFS=$'\n\t'
+source global-stack-base-prologue.sh
+nvm() { return 1; }
+gs_install_retry_purge "${HEAL_CACHE2}" nvm install v1
+echo "SHOULD_NOT_REACH"
+TESTEOF
+chmod +x "${TMP_DIR}/test-heal-fail.sh"
+mkdir -p "${TMP_DIR}/heal-errors2" "${TMP_DIR}/heal-cache2"
+GLOBAL_STACK_ERROR_TOKEN=heal-token2 \
+  GLOBAL_STACK_DOCKER_TOOLS_PATH="${TMP_DIR}" \
+  GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS="${TMP_DIR}/heal-errors2" \
+  HEAL_CACHE2="${TMP_DIR}/heal-cache2" \
+  PATH="${DIST_BIN}/base-bin:${PATH}" \
+  bash "${TMP_DIR}/test-heal-fail.sh" >/dev/null 2>&1 || true
+if [[ -f "${TMP_DIR}/heal-errors2/heal-token2" ]]; then
+  PASS=$((PASS + 1))
+  printf '  %b✓%b  16g: second (persistent) failure propagates — error token written\n' "${C_GREEN}" "${C_RESET}"
+else
+  FAIL=$((FAIL + 1))
+  FAILURES+=("16g: persistent failure propagates to error token")
+  printf '  %b✗%b  16g: second failure did NOT write error token (would mask failure)\n' "${C_RED}" "${C_RESET}"
+fi
+
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
 if [[ "${FAIL}" -eq 0 ]]; then

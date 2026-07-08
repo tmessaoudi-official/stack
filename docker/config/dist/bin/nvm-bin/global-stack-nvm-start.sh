@@ -105,7 +105,10 @@ echo "[ -s \"${NVM_DIR}/bash_completion\" ] && \. \"${NVM_DIR}/bash_completion\"
 if [[ "${NVM_MODE}" = "setup" ]]; then
   if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/node.${_node_version_label}" ]]; then
     printf '\nInstalling node version %s\n' "${_node_version_label}"
-    nvm install "${NODE_VERSION:-}"
+    # Self-heal a corrupt/partial cached download: nvm reuses .cache/src/node-<VER> on
+    # every retry and cannot recover (empty expected checksum), so a download corrupted
+    # under concurrent-rebuild load loops forever. Purge this version's cache + retry once.
+    gs_install_retry_purge "${NVM_DIR}/.cache/src/node-${NODE_VERSION:-}" nvm install "${NODE_VERSION:-}"
   fi
 
   echo "nvm use ${NODE_VERSION:-}" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"

@@ -69,6 +69,33 @@ gs_version_gate() {
   return 0
 }
 
+# gs_install_retry_purge <cache_dir> <command...>
+#
+# Run <command>; if it fails, `rm -rf <cache_dir>` and run it once more. Guards a
+# runtime installer that reuses a persistent download cache and cannot self-heal a
+# corrupt/partial artifact — e.g. nvm on a nightly download interrupted under
+# concurrent-rebuild load: it reuses the poisoned tarball every boot and dies on an
+# empty expected checksum, looping forever behind the 24h start_period.
+#
+# ERR-trap safe by contract (sourced into `set -eE` with the stackCatch trap armed):
+# the FIRST attempt runs inside `if`, so a recoverable failure does NOT fire the trap;
+# the retry is the function's final command, so a SECOND failure propagates (real
+# error → caller's trap writes tools/errors/<token>, as before this guard existed).
+# <cache_dir> empty → no purge (still retries). The purge is `rm -rf` only on failure.
+gs_install_retry_purge() {
+  local _girp_cache="${1:-}"
+  shift
+  if "$@"; then
+    return 0
+  fi
+  printf 'WARN: install failed — purging download cache (%s) and retrying once\n' \
+    "${_girp_cache:-<none>}" >&2
+  if [[ -n "${_girp_cache}" ]]; then
+    rm -rf "${_girp_cache}"
+  fi
+  "$@"
+}
+
 # Dry-run seam: GS_STARTUP_DRY_RUN=1 exits before any install work.
 # Usage: GS_STARTUP_DRY_RUN=1 bash global-stack-nvm-start.sh
 if [[ "${GS_STARTUP_DRY_RUN:-0}" == "1" ]]; then
