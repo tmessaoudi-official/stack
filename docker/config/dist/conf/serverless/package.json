@@ -13,7 +13,7 @@
     "aws-sdk": "^2.1693.0"
   },
   "devDependencies": {
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
     "serverless": "^4.33.0",
     "@serverless/utils": "^6.15.0",
     "@serverless/typescript": "^4.30.0",
@@ -21,7 +21,7 @@
     "@types/aws-lambda": "^8.10.161",
     "@types/node": "^26.1.0",
     "serverless-s3-local": "^0.8.5",
-    "serverless-offline-sqs": "^8.0.0",
+    "serverless-offline-sqs": "^9.0.1",
     "serverless-offline-sns": "^1.0.3",
     "serverless-offline": "^14.5.0"
   }
