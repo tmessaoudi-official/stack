@@ -6,8 +6,6 @@
     "allowJs": true,
     "target": "ESNext",
     "outDir": "./build",
-    "moduleResolution": "node",
-    "ignoreDeprecations": "6.0",
     "lib": ["ESNext"],
     "rootDir": "./src/handlers/typescript",
     "module": "CommonJS",
