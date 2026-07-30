@@ -3,6 +3,7 @@
 set -xeE -o pipefail
 
 if [[ -n "${GLOBAL_STACK_MERGIRAF_VERSION}" && "" = "$(command -v mergiraf)" ]]; then
+    sudo rm -rf /tmp/mergiraf
     sudo mkdir /tmp/mergiraf
     sudo chmod -R a+rwx /tmp/mergiraf
     sudo chown -R "${GLOBAL_STACK_DOCKER_USER_ID}:${GLOBAL_STACK_DOCKER_GROUP_ID}" /tmp/mergiraf
