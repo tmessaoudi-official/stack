@@ -48,7 +48,7 @@ _GS_EU2_PRERELEASE_MARKERS=(
   '\.dev' '-dev([0-9.]|$)'
   '[0-9]a[0-9]' '[0-9]b[0-9]'
   'milestone' '[.-]m[0-9]' '-cr[0-9]' '-ea'
-  '-next\.'
+  '-next\.' '-b\.' '-rc\.'
 )
 readonly _GS_EU2_PRERELEASE_MARKERS
 
