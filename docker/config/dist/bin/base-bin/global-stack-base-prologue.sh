@@ -28,9 +28,9 @@
 #   GLOBAL_STACK_DOCKER_TOOLS_PATH         append log dir      (default /tmp)
 #   GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS  per-token error dir (default /tmp)
 #   GLOBAL_STACK_ERROR_TOKEN               enables the per-token error file
-#   GLOBAL_STACK_TRACE_STDERR              1 = mirror report to stderr (default 1)
-#   GLOBAL_STACK_TRACE_ARGS                1 = include function args (default 0, extdebug)
-#   GLOBAL_STACK_EXIT_PASSTHROUGH          1 = exit with real code (default 1; 0 = always 1)
+#   GLOBAL_INTERNAL_STACK_TRACE_STDERR              1 = mirror report to stderr (default 1)
+#   GLOBAL_INTERNAL_STACK_TRACE_ARGS                1 = include function args (default 0, extdebug)
+#   GLOBAL_INTERNAL_STACK_EXIT_PASSTHROUGH          1 = exit with real code (default 1; 0 = always 1)
 
 if [[ -z "${BASH_VERSION:-}" ]]; then
   printf 'global-stack-base-prologue.sh: bash is required\n' >&2
@@ -39,9 +39,9 @@ fi
 
 : "${GLOBAL_STACK_DOCKER_TOOLS_PATH:=/tmp}"
 : "${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS:=/tmp}"
-: "${GLOBAL_STACK_TRACE_STDERR:=1}"
-: "${GLOBAL_STACK_TRACE_ARGS:=0}"
-: "${GLOBAL_STACK_EXIT_PASSTHROUGH:=1}"
+: "${GLOBAL_INTERNAL_STACK_TRACE_STDERR:=1}"
+: "${GLOBAL_INTERNAL_STACK_TRACE_ARGS:=0}"
+: "${GLOBAL_INTERNAL_STACK_EXIT_PASSTHROUGH:=1}"
 
 declare -a _STACK_REPORT=()
 
@@ -67,7 +67,7 @@ _stack_abspath() {
 # BASH_ARGV is a flat stack, newest frame first, each frame's args reversed.
 _stack_frame_args() {
   local frame="${1:-0}" i base=0 n out=""
-  [[ "${GLOBAL_STACK_TRACE_ARGS}" == "1" ]] || return 0
+  [[ "${GLOBAL_INTERNAL_STACK_TRACE_ARGS}" == "1" ]] || return 0
   n="${_sc_argc[frame]}"
   [[ -n "${n}" ]] && (( n > 0 )) || return 0
   for (( i = 0; i < frame; i++ )); do base=$(( base + ${_sc_argc[i]:-0} )); done
@@ -79,7 +79,7 @@ _stack_frame_args() {
 _stack_chain_trace() {
   local entry line
   local -a chain=()
-  IFS='|' read -r -a chain <<<"${GLOBAL_STACK_SCRIPT_CHAIN:-}"
+  IFS='|' read -r -a chain <<<"${GLOBAL_INTERNAL_STACK_SCRIPT_CHAIN:-}"
   if (( ${#chain[@]} == 0 )); then
     _stack_say "    (empty)"
     return 0
@@ -186,10 +186,10 @@ stackCatch() {
     } >"${errdir}/${GLOBAL_STACK_ERROR_TOKEN}" 2>/dev/null || true
   fi
 
-  [[ "${GLOBAL_STACK_TRACE_STDERR}" == "1" ]] \
+  [[ "${GLOBAL_INTERNAL_STACK_TRACE_STDERR}" == "1" ]] \
     && printf '%s\n' "${_STACK_REPORT[@]}" >&2
 
-  if [[ "${GLOBAL_STACK_EXIT_PASSTHROUGH}" == "1" ]]; then
+  if [[ "${GLOBAL_INTERNAL_STACK_EXIT_PASSTHROUGH}" == "1" ]]; then
     exit "${code}"
   fi
   exit 1
@@ -210,10 +210,10 @@ _stack_register_chain() {
   local entry
   entry="$(_stack_abspath "${0}")#$$"
   # The chain already ends with our PID if this process registered before.
-  if [[ "${GLOBAL_STACK_SCRIPT_CHAIN:-}" != *"#$$" ]]; then
-    GLOBAL_STACK_SCRIPT_CHAIN="${GLOBAL_STACK_SCRIPT_CHAIN:+${GLOBAL_STACK_SCRIPT_CHAIN}|}${entry}"
+  if [[ "${GLOBAL_INTTERNAL_STACK_SCRIPT_CHAIN:-}" != *"#$$" ]]; then
+    GLOBAL_INTERNAL_STACK_SCRIPT_CHAIN="${GLOBAL_INTERNAL_STACK_SCRIPT_CHAIN:+${GLOBAL_INTERNAL_STACK_SCRIPT_CHAIN}|}${entry}"
   fi
-  export GLOBAL_STACK_SCRIPT_CHAIN
+  export GLOBAL_INTERNAL_STACK_SCRIPT_CHAIN
 }
 _stack_register_chain
 
