@@ -114,6 +114,9 @@ sudo apt-get install -y --fix-missing \
 # ── PHP (base CLI for bootstrapping) ─────────────────────────────────────────
 
 sudo apt-get install -y --fix-missing \
+    systemtap-sdt-dev \
+    libsnmp-dev \
+    libtidy-dev \
     php8.5-cli \
     php8.5-phar \
     php8.5-readline \

@@ -73,6 +73,9 @@ RUN apt-get update --allow-releaseinfo-change \
     libgpgme-dev \
     libc-ares-dev \
     libsystemd-dev \
+    systemtap-sdt-dev \
+    libsnmp-dev \
+    libtidy-dev \
     # php8.5 is intentionally installed here as the bootstrap PHP version required by phpbrew.
     # phpbrew needs a working PHP binary to function — this is NOT the target PHP version
     # for end-user images. The actual PHP version for each image (8.2, 8.3, 8.4, etc.)
