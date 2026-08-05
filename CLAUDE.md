@@ -1,18 +1,62 @@
 # CLAUDE.md
 
 > **/stack infrastructure and development tasks** (Docker, Bash scripts, Makefile, services, env-update, env-scan, Dockerfiles, compose configs) **MUST be delegated to the `global-stack-lead-dev` agent** (subagent_type: `global-stack-lead-dev`).
-> **Non-/stack tasks** (general development, research, analysis, content creation, tooling outside this project) are handled directly in the main conversation using the global reasoning framework defined in `~/.claude/CLAUDE.md`.
+> **Non-/stack tasks** (general development, research, analysis, content creation, tooling outside this project) are handled directly in the main conversation using the global reasoning framework defined in `~/.claude/CLAUDE.md` — which in a remote container **only exists because `scripts/claude-bootstrap/install.sh` puts it there** (see § "Claude container bootstrap").
+> **On any conflict between that framework and this file, THIS FILE WINS.**
 
 ---
 
 This file provides guidance to Claude Code when working with code in this repository.
+
+## Every reply ends with a status marker — NO EXCEPTIONS
+
+Developer directive, 2026-08-05. **The last line of every reply is exactly one of these two markers.**
+A reply without one is unfinished.
+
+```
+❓ QUESTION — <one line naming the decision>
+⏹ NO QUESTION — <what you are waiting on, or why you stopped>
+```
+
+**Why it exists:** without it the developer cannot tell a question from a pause — both are just prose that stopped — so they do not know whether the turn is waiting on them. The marker is the signal, not a decoration.
+
+- **`❓ QUESTION`** — you are BLOCKED and need a decision. The numbered options go in the **body, above the marker**: recommended option FIRST with its reason, each option stating its own consequence and resulting after-state, and a final *"none of these / challenge the premise"* escape. Then stop and wait.
+- **`⏹ NO QUESTION`** — nothing is being asked. State explicitly what you are blocked on — a background job, a pending pull, a build, or nothing at all — so the developer knows whether a reply is needed.
+
+**Applies to every reply without exception**, including one-line answers, status updates, error reports and acknowledgements.
+
+## Questions are plain text — `AskUserQuestion` is FORBIDDEN
+
+`AskUserQuestion` **times out in this remote container** — confirmed by the developer, 2026-08-05. A question asked that way hangs the turn and can be lost with no trace, and a gate that cannot fire is worse than no gate. Every question to the developer is ordinary prose: context, a minimal concrete example, numbered options, the **recommended option first with its reason**, and a visible *"none of these / challenge the premise"* escape — then STOP and wait. Protocol: `.claude/skills/ask-human/SKILL.md`.
+
+Partial mechanical backing: every skill in `.claude/skills/` declares `disallowed-tools: AskUserQuestion`, which removes the tool from the pool while that skill is active. The grant clears on the next user message, so outside a skill the discipline is yours.
+
+**Do not ask about routine work.** The standing directive for this repo is *no interrupts*: state the task size, announce the plan, then build it. Asking is reserved for the cases in § "When this protocol is mandatory" of that skill — chiefly a genuinely ambiguous request where two readings produce materially different work, or a change that would weaken a documented invariant or gotcha.
+
+## Branch policy — `master` only
+
+Developer directive, 2026-08-05: **all work lands on `master`.** Never create another branch, never push anywhere else. This holds even when a session is provisioned with a suggested feature branch — switch to `master` and work there. Combined with § "Auto-commit in /stack sessions" (below), the loop is: change → verify → `git commit` → `git push -u origin master`, autonomously, no confirmation needed.
+
+**Commit messages**: the developer's email only, and **no `Co-Authored-By` trailer** (directive 2026-08-05 — they sign and re-push the commits themselves afterwards). `bin/git-strip-coauthored.sh` exists to clean up history where one slipped in.
+
+## Claude container bootstrap
+
+Remote Claude containers for this repo are **ephemeral**: `~/.claude` starts empty every session and the repository is re-cloned fresh. Because this file routes non-/stack work to "the global reasoning framework defined in `~/.claude/CLAUDE.md`", that reference used to dangle — verified 2026-08-05, a fresh container had no `~/.claude/CLAUDE.md` at all. `scripts/claude-bootstrap/` fixes that: a `SessionStart` hook runs `install.sh`, which copies the framework, `THINKING.md`, `BLAST-RADIUS.md` and `hooks/log-helpers.sh` into `~/.claude/`. Full detail — including the provenance of each file and what was deliberately *not* imported — is in `scripts/claude-bootstrap/README.md`.
+
+Three consequences worth knowing before you work in a container session:
+
+- **`.claude/settings.json` cannot be written by Claude** (classifier-blocked — it is Claude's own permission surface; verified denied here on 2026-08-05). Changes travel through the repo instead: write `scripts/claude-bootstrap/settings.json.pending`, commit it, and the developer runs `bash scripts/claude-bootstrap/apply-pending-settings.sh`, which validates with `jq`, backs up the old file, applies it and deletes the pending copy.
+- **The five `PostToolUse` lint hooks silently no-op in the container** — `shellcheck`, `hadolint`, `yamllint`, `shfmt` and `yamlfmt` are not installed there. They work on the developer's machine. From a container session, lint explicitly before committing (see § "Testing & Verification").
+- **Permissions are allow-list only** (`defaultMode: auto`, no `deny`, no `ask`) — developer ruling, because he drives this container from the web app with no terminal to approve an `ask` from. Nothing therefore *mechanically* blocks a destructive stack command; `scripts/claude-bootstrap/BLAST-RADIUS.md` carries that weight by discipline, and its `/stack` table lists the specific blast radii (`make soft-restart`, `docker volume rm`, `RELOAD` flags, `env-update --apply`, `make save`).
+
+**Context compaction writes a handoff.** A `PreCompact` hook (`scripts/claude-bootstrap/hooks/precompact-handoff.sh`) writes `var/claude/handoff/latest.md` — git state, uncommitted paths, `tools/` health markers, the last 8 user messages verbatim, and where to resume — immediately before the context is compacted. **Read it first after a compaction.** It is deterministic (no LLM call); `GS_HANDOFF_LLM=1` opts into a narrative, `GS_HANDOFF_DIR` overrides the location. Everything under `var/` is gitignored.
 
 ## What This Project Is
 
 **Global Stack** (`global_stack`) is a single-developer Dockerized local development environment. It runs many containerized services (databases, web servers, language runtimes, tooling) via Docker Compose on Linux. All services share a common Docker bridge network and a bind-mounted `tools/` volume.
 
 - **Version**: `2_0_0_local` — **Platform**: Linux only
-- **Remote**: GitLab — single `master` branch
+- **Remote**: single `master` branch. GitLab on the developer's machine; the remote Claude containers clone from GitHub (`tmessaoudi-official/stack`) — same single-branch policy either way (see § "Branch policy")
 - **Developer**: single developer
 
 ## Architecture — Image Tier Hierarchy
@@ -190,6 +234,9 @@ make start-local-registry            # Start local TLS registry (port 5000)
 - **Startup script dry-run**: `GS_STARTUP_DRY_RUN=1 bash docker/config/dist/bin/nvm-bin/global-stack-nvm-start.sh` — exits before any install; tests the prologue loads and script parses. In containers: PATH includes `/usr/local/bin`; on host: prepend `PATH="/stack/docker/config/dist/bin/base-bin:$PATH"`.
 - **Shared prologue**: `docker/config/dist/bin/base-bin/global-stack-base-prologue.sh` — defines `stackCatch` + `trap` for all startup scripts (49 scripts source it). Excluded: caddy/httpd/nginx server scripts, android-setup, localstack, selenium-chrome/firefox, serverless, and utility helper scripts (deliberate 141/1-exempt variant).
 - **Startup prologue tests**: `bash bin/tests/startup-prologue.test.sh` — covers prologue syntax/shellcheck, `bash -n` on all 49 sourcing scripts, `GS_STARTUP_DRY_RUN=1` exit-early, `stackCatch` error token writing and clean-exit no-op.
+- **PreCompact handoff tests**: `bash bin/tests/precompact-handoff.test.sh` — 37 assertions over `scripts/claude-bootstrap/hooks/precompact-handoff.sh`: the always-exit-0 contract on every failure path, git + `tools/` health blocks, verbatim user-intent extraction, harness-turn noise filtering, `jq -Rrs` encoding, and the `GS_HANDOFF_DIR` override.
+
+> **In a remote container, lint manually — the hooks are dead.** `shellcheck`, `hadolint`, `yamllint`, `shfmt` and `yamlfmt` are **not installed** in the remote Claude container, so the five `PostToolUse` hooks and both `/lint` and `/fmt` silently no-op there. They work on the developer's machine. To gate a container session properly, fetch static binaries once into a scratch dir and run them explicitly at the project's own threshold — `shellcheck -x -S warning -f gcc <file>` (matching `.claude/hooks/shellcheck-on-write.sh`, so info-level SC2015/SC2016 are correctly below the bar) and `shfmt -l -i 2 -ci -bn <file>`. `bash -n` is always available and catches syntax errors with no install at all.
 
 ## Claude Code Tooling
 
@@ -201,8 +248,23 @@ make start-local-registry            # Start local TLS registry (port 5000)
 - `/stack-health` — health markers, container status, version markers
 - `/env-diff` — show divergences between `.env` and `.env.local`
 - `/service-info <name>` — deep-dive on one service (compose, Dockerfile, startup, health, ports, versions)
-- `/recent` — quick context: recent commits, uncommitted changes, changed file stats (global command)
-- *(global commands — see `~/.claude/refs/SKILLS.md` for details)*: `/bundle`, `/install`, `/adapt-project`, `/repair`, `/sleuth`, `/gaps`, `/mega-analysis`, `/skill-audit`, `/memory-promote`
+- `/debug-service <name>` — read-only 6-step runbook on a failing service, ending in a root-cause hypothesis
+- `/new-service <name>` — scaffold a new service (Dockerfile, compose, startup script, printed `.env` + Makefile lines)
+- `/bump-versions` — guided `env-update` check → approval gate → apply → `env-scan` propagation → rebuild reminder
+
+**Workflow + review skills** (ported from the developer's bundle, adapted to `/stack` — all repo-native under `.claude/skills/`, no install):
+- `/ask-human` — the plain-text question protocol (see § "Questions are plain text"). **Not optional reading**: it is the only sanctioned way to ask anything
+- `/handoff` — save session state so the next session resumes cleanly
+- `/pre-commit` — analyse staged changes for blast radius + produce the evidence table before committing
+- `/sweep` — Phase 6 second sweep over uncommitted changes
+- `/expanding-context` — widen context at the start of Phase 1 before committing to an approach
+- `/sleuth` — hunt hidden behavioural bugs: silent failures, logic traps, contract violations
+- `/inspect` — full project health inspection (security, dead code, deprecations, error handling)
+- `/gaps` — find incomplete implementations, stubs, TODO markers, unfulfilled promises
+- `/cross-check` — validate a spec or doc for contradictions, undefined terms, unstated assumptions
+- `/aggregate-findings` — deduplicate and synthesise findings across the review skills above
+
+> **There is no `~/.claude/refs/SKILLS.md` and no `~/.claude/skills/` in a remote container** — the bundle's 48 global skills are not installed there, so the global commands this file used to list (`/bundle`, `/install`, `/adapt-project`, `/repair`, `/mega-analysis`, `/skill-audit`, `/memory-promote`, `/recent`) are **unavailable in container sessions**. They still work on the developer's machine, where the bundle is installed. `/recent` in particular is redundant here: the PreCompact handoff already emits git state, uncommitted paths and recent commits automatically.
 - `/new-service <name> [--parent <image>] [--runtime <name>] [--port <n>]` — scaffold a new service (Dockerfile, compose, startup script, printed `.env` + Makefile lines); args-first with interactive fallback
 
 **Automatic hooks** (PostToolUse on Edit/Write):
@@ -266,20 +328,44 @@ ls tools/successes/ | grep <tier02-name>  # Check tier 02 manager health
 Claude Code's configuration for this project lives in:
 
 ```
-~/.claude/CLAUDE.md                      # Global reasoning framework (all projects)
-~/.claude/settings.json                  # Global settings (model, plugins)
-/stack/.claude/agents/global-stack-lead-dev.md  # /stack infrastructure agent definition (project-scoped)
-.claude/settings.json                    # Project permissions, hooks
+~/.claude/CLAUDE.md                      # Global reasoning framework — INSTALLED BY THE BOOTSTRAP
+~/.claude/THINKING.md                    #   in a container (empty otherwise); on the dev's machine
+~/.claude/BLAST-RADIUS.md                #   these come from his own bundle install
+~/.claude/hooks/log-helpers.sh           # log_obs() — sourced by the .claude/hooks/* scripts below
+~/.claude/settings.json                  # Global settings (model, plugins) — never touched by this repo
+
+claude-setup/claude-setup-global.tar.gz  # The dev's machine bundle: PROVENANCE for the three docs above
+scripts/claude-bootstrap/                # Restores the framework into the ephemeral container
+  README.md                              #   provenance table + what was deliberately NOT imported
+  install.sh                             #   SessionStart hook; idempotent `cp -u`, one-directional
+  CLAUDE-global.md                       #   bundle framework + the /stack adaptation header
+  THINKING.md                            #   bundle, byte-identical
+  BLAST-RADIUS.md                        #   bundle + the /stack blast-radius table
+  apply-pending-settings.sh              #   dev-side applier for settings.json.pending
+  settings.json.pending                  #   only present when a settings change is awaiting the dev
+  hooks/precompact-handoff.sh            #   PreCompact hook -> var/claude/handoff/latest.md
+  hooks/log-helpers.sh                   #   log_obs(), never fatal (framework Rule 13)
+bin/tests/precompact-handoff.test.sh     # 37 assertions over the PreCompact hook
+
+.claude/settings.json                    # Project permissions + hooks — CLAUDE CANNOT WRITE THIS
 .claude/settings.local.json              # Local UI preferences (gitignored)
+.claude/agents/                          # Agent definitions (project-scoped)
+  global-stack-lead-dev.md               #   /stack infrastructure orchestrator
+  stack-infra-reviewer.md                #   review lens for the certification ladder
 .claude/hooks/                           # PostToolUse + SubagentStop hook scripts
-  shellcheck-on-write.sh                 # Lint .sh files on write
-  hadolint-on-write.sh                   # Lint Dockerfiles on write
-  yamllint-on-write.sh                   # Validate YAML on write
-  shfmt-on-write.sh                      # Check shell formatting on write
+  shellcheck-on-write.sh                 # Lint .sh files on write        }
+  hadolint-on-write.sh                   # Lint Dockerfiles on write      } all five silently
+  yamllint-on-write.sh                   # Validate YAML on write         } no-op in the remote
+  shfmt-on-write.sh                      # Check shell formatting         } container — the tools
+  env-guard-on-write.sh                  # Guard .env edits               } are not installed there
   subagent-stop-reminder.sh              # SubagentStop: remind parent to verify Phase 7/8
-.claude/skills/                          # Slash skill definitions
-  lint/SKILL.md  fmt/SKILL.md  check-versions/SKILL.md  validate/SKILL.md
-  stack-health/SKILL.md  env-diff/SKILL.md  service-info/SKILL.md  new-service/SKILL.md
+.claude/skills/                          # Slash skill definitions (read in place, no install)
+  lint/  fmt/  check-versions/  bump-versions/  validate/  stack-health/
+  env-diff/  service-info/  new-service/  debug-service/            # domain skills
+  ask-human/  handoff/  pre-commit/  sweep/  expanding-context/     # workflow skills
+  sleuth/  inspect/  gaps/  cross-check/  aggregate-findings/       # review skills
+
+var/claude/handoff/                      # PreCompact handoffs (gitignored via the blanket /var rule)
 ```
 
 ## File Layout Quick Reference
@@ -290,4 +376,6 @@ See `templates/tips/file-layout.md`.
 
 > **Core Operating Rules 6 & 7** (Completion Gate and TDD) are defined in the global `~/.claude/CLAUDE.md` and apply here without exception.
 
-> **Remember**: Delegate /stack infrastructure tasks to `global-stack-lead-dev`; handle non-/stack tasks directly with the global reasoning framework. Use `/lint` before committing shell changes. Check for trailing `;` in `COMPOSE_FILE`. Verify with `--dry-run` before applying changes. Tier 02 = install, tier 03 = setup — same startup script, different `MODE`.
+> **Remember**: Delegate /stack infrastructure tasks to `global-stack-lead-dev`; handle non-/stack tasks directly with the global reasoning framework. Use `/lint` before committing shell changes — and in a container, lint manually, because the hooks are dead there. Check for trailing `;` in `COMPOSE_FILE`. Verify with `--dry-run` before applying changes. Tier 02 = install, tier 03 = setup — same startup script, different `MODE`.
+
+> **And on every single reply, without exception**: ask in **plain text** (never `AskUserQuestion` — it times out here), work on **`master`** only, and end with a **`❓ QUESTION` / `⏹ NO QUESTION`** marker as the literal last line.
