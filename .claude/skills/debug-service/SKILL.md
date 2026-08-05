@@ -3,6 +3,7 @@ name: debug-service
 spotlight: true
 description: Use when a stack service fails to start or becomes unhealthy — executes the 6-step "Debugging a Failed Container" runbook read-only and reports a root-cause hypothesis with suggested next actions.
 user-invocable: true
+disallowed-tools: AskUserQuestion
 ---
 
 Run the 6-step "Debugging a Failed Container" runbook from CLAUDE.md for one service — **strictly read-only**.

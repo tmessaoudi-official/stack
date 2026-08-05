@@ -3,6 +3,7 @@ name: check-versions
 spotlight: true
 description: Use when checking for outdated dependencies, Docker images, or language runtime versions tracked in .env with @todo env-update annotations.
 user-invocable: true
+disallowed-tools: AskUserQuestion
 ---
 
 Run the automated version checker in preview mode to find outdated dependencies.
