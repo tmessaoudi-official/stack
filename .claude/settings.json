@@ -1,62 +1,116 @@
 {
   "permissions": {
+    "defaultMode": "auto",
     "allow": [
-      "Bash(bin/env-scan.sh --dry-run)",
-      "Bash(bin/env-scan.sh --dry-run *)",
-      "Bash(bin/tests/env-scan.test.sh)",
-      "Bash(bin/env-update.sh --version)",
-      "Bash(bin/env-update.sh --check)",
-      "Bash(bin/env-update.sh --check *)",
-      "Bash(bin/env-update.sh --filter=* --check*)",
-      "Bash(bin/env-update.sh --dry-run *)",
-      "Bash(bin/env-update.sh --dump *)",
-      "Bash(bin/tests/env-update.test.sh)",
-      "Bash(make login-*)",
-      "Bash(make log-*)",
-      "Bash(make log-follow-*)",
-      "Bash(make generate-buildx)",
-      "Bash(make create-buildx-builder)"
-    ],
-    "deny": [
-      "Bash(make hard-restart*)",
-      "Bash(make * hard-restart*)",
-      "Bash(make soft-restart*)",
-      "Bash(make * soft-restart*)",
-      "Bash(sudo *)",
-      "Bash(rm -rf *)",
-      "Bash(docker system prune *)",
-      "Bash(docker volume rm *)",
-      "Bash(docker volume prune *)",
-      "Bash(docker container prune *)",
-      "Bash(docker image prune *)",
-      "Bash(docker network prune *)",
-      "Bash(docker compose down -v *)",
-      "Bash(docker-compose down -v *)",
-      "Bash(docker rmi *)",
-      "Bash(git clean *)",
-      "Bash(git push --force *)",
-      "Bash(chmod 777 *)",
-      "Bash(* docker/data/*)",
-      "Bash(* docker/storage/*)",
-      "Read(/stack/docker/data/**)",
-      "Read(/stack/docker/storage/**)",
-      "Read(/stack/var/**)"
-    ],
-    "ask": [
-      "Bash(make up)",
-      "Bash(make down)",
-      "Bash(make down-n-up)",
-      "Bash(make down-n-rebuild-force-recreate)",
-      "Bash(make restart-*)",
-      "Bash(make start-local-registry)",
-      "Bash(docker buildx prune)",
-      "Bash(docker buildx prune *)",
-      "Bash(bin/env-scan.sh)",
-      "Bash(bin/env-update.sh)",
-      "Bash(bin/env-update.sh --apply*)"
+      "Bash(git:*)",
+      "Bash(make:*)",
+      "Bash(docker:*)",
+      "Bash(docker compose:*)",
+      "Bash(bin/env-scan.sh:*)",
+      "Bash(bin/env-update.sh:*)",
+      "Bash(bin/check-image-versions.sh:*)",
+      "Bash(bin/tests/:*)",
+      "Bash(bin/:*)",
+      "Bash(scripts/:*)",
+      "Bash(bash bin/:*)",
+      "Bash(bash scripts/:*)",
+      "Bash(shellcheck:*)",
+      "Bash(hadolint:*)",
+      "Bash(yamllint:*)",
+      "Bash(shfmt:*)",
+      "Bash(yamlfmt:*)",
+      "Bash(jq:*)",
+      "Bash(yq:*)",
+      "Bash(ls:*)",
+      "Bash(cat:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(grep:*)",
+      "Bash(rg:*)",
+      "Bash(find:*)",
+      "Bash(wc:*)",
+      "Bash(sed:*)",
+      "Bash(awk:*)",
+      "Bash(cut:*)",
+      "Bash(sort:*)",
+      "Bash(uniq:*)",
+      "Bash(tr:*)",
+      "Bash(diff:*)",
+      "Bash(stat:*)",
+      "Bash(file:*)",
+      "Bash(du:*)",
+      "Bash(df:*)",
+      "Bash(tree:*)",
+      "Bash(xargs:*)",
+      "Bash(realpath:*)",
+      "Bash(dirname:*)",
+      "Bash(basename:*)",
+      "Bash(printf:*)",
+      "Bash(echo:*)",
+      "Bash(mkdir:*)",
+      "Bash(cp:*)",
+      "Bash(mv:*)",
+      "Bash(rm:*)",
+      "Bash(ln:*)",
+      "Bash(chmod:*)",
+      "Bash(touch:*)",
+      "Bash(tar:*)",
+      "Bash(gzip:*)",
+      "Bash(curl:*)",
+      "Bash(env:*)",
+      "Bash(timeout:*)",
+      "Bash(nproc:*)",
+      "Bash(uname:*)",
+      "Bash(command:*)",
+      "Bash(which:*)",
+      "Bash(compgen:*)",
+      "Bash(bash:*)",
+      "Bash(python3:*)",
+      "Bash(perl:*)",
+      "Read",
+      "Edit",
+      "Write",
+      "Glob",
+      "Grep",
+      "WebFetch",
+      "WebSearch",
+      "mcp__github"
     ]
   },
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR:-.}\"/scripts/claude-bootstrap/install.sh",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "auto",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR:-.}\"/scripts/claude-bootstrap/hooks/precompact-handoff.sh",
+            "timeout": 30
+          }
+        ]
+      },
+      {
+        "matcher": "manual",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR:-.}\"/scripts/claude-bootstrap/hooks/precompact-handoff.sh",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
     "SubagentStop": [
       {
         "matcher": "",
