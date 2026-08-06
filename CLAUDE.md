@@ -303,6 +303,9 @@ make start-local-registry            # Start local TLS registry (port 5000)
 - `/pre-commit` — analyse staged changes for blast radius + produce the evidence table before committing
 - `/sweep` — Phase 6 second sweep over uncommitted changes
 - `/expanding-context` — widen context at the start of Phase 1 before committing to an approach
+- `/converge` — run § "Certification ladder" mechanically: 3 reviewer lenses, two consecutive clean rounds, cap 5. Autonomous by default; honours the STANDARD carve-out for docs-only diffs
+- `/retrospective` — deliberate end-of-session learning capture into `var/claude/memory/`
+- `/forge` — adversarial design critique with the Chesterton's Fence gate (a fence whose WHY is in § Gotchas is never challenged)
 - `/sleuth` — hunt hidden behavioural bugs: silent failures, logic traps, contract violations
 - `/inspect` — full project health inspection (security, dead code, deprecations, error handling)
 - `/gaps` — find incomplete implementations, stubs, TODO markers, unfulfilled promises
@@ -396,7 +399,9 @@ bin/tests/precompact-handoff.test.sh     # 37 assertions over the PreCompact hoo
 .claude/settings.local.json              # Local UI preferences (gitignored)
 .claude/agents/                          # Agent definitions (project-scoped)
   global-stack-lead-dev.md               #   /stack infrastructure orchestrator
-  stack-infra-reviewer.md                #   review lens for the certification ladder
+  stack-infra-reviewer.md                #   ladder lens 1: correctness + regression
+  completeness-reviewer.md               #   ladder lens 2: completeness + blast radius
+  reproducibility-reviewer.md            #   ladder lens 3: clean-clone + destructive posture
 .claude/hooks/                           # PostToolUse + SubagentStop hook scripts
   shellcheck-on-write.sh                 # Lint .sh files on write        }
   hadolint-on-write.sh                   # Lint Dockerfiles on write      } all five silently
@@ -408,7 +413,9 @@ bin/tests/precompact-handoff.test.sh     # 37 assertions over the PreCompact hoo
   lint/  fmt/  check-versions/  bump-versions/  validate/  stack-health/
   env-diff/  service-info/  new-service/  debug-service/            # domain skills
   ask-human/  handoff/  pre-commit/  sweep/  expanding-context/     # workflow skills
-  sleuth/  inspect/  gaps/  cross-check/  aggregate-findings/       # review skills
+  converge/  retrospective/                                         #   (converge runs the ladder)
+  sleuth/  inspect/  gaps/  forge/  cross-check/                    # review skills
+  aggregate-findings/                                               #   (synthesises the above)
 
 var/claude/handoff/                      # PreCompact handoffs (gitignored via the blanket /var rule)
 ```

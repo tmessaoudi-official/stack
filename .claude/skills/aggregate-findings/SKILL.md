@@ -17,7 +17,7 @@ disallowed-tools: AskUserQuestion
      per `.claude/skills/ask-human/SKILL.md`; every reply ends with a `❓ QUESTION` / `⏹ NO QUESTION`
      marker as its literal last line.
   2. NO `advisor()` HERE. Independent certification = fresh-context read-only reviewer subagents
-     (`.claude/agents/stack-infra-reviewer.md`); self-grading must be DISCLOSED as self-graded.
+     (the 3-lens panel in `.claude/agents/` — `stack-infra-reviewer`, `completeness-reviewer`, `reproducibility-reviewer`; see `CLAUDE.md` § "Certification ladder"); self-grading must be DISCLOSED as self-graded.
   3. REPORTS GO TO `var/claude/…` in the repo — gitignored by the blanket `/var` rule, never committed.
   4. ≤5 concurrent subagents, and every agent writes its raw output under `var/claude/reports/raw/`
      BEFORE returning — autocompact fires here and in-conversation results do not survive it.

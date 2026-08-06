@@ -32,6 +32,47 @@ of `~/.claude`: `~/.claude.json` holds the OAuth account, `userID` and `machineI
 tree is one `git add -A` away from history. The upstream port this was adapted from did exactly that
 behind a commented-out block; it is omitted here rather than merely disabled.
 
+## Skills and agents — repo-native, no install
+
+The skills live under `.claude/skills/` and Claude Code reads them **in place** from the clone;
+`install.sh` does not touch them. **23** in total — 10 domain + 13 ported:
+
+- **10 domain skills**, pre-existing and /stack-specific: `/lint`, `/fmt`, `/check-versions`,
+  `/bump-versions`, `/validate`, `/stack-health`, `/env-diff`, `/service-info`, `/debug-service`,
+  `/new-service`.
+- **13 ported from the bundle** (2026-08-05/06), each carrying an adaptation header that records what
+  was changed and why: `/ask-human`, `/handoff`, `/pre-commit`, `/sweep`, `/expanding-context`,
+  `/converge`, `/retrospective`, `/sleuth`, `/inspect`, `/gaps`, `/forge`, `/cross-check`,
+  `/aggregate-findings`. That is the same 13-skill core the four sibling repos (`phorj`, `pdfturbo`,
+  `twes-in`, `rent-watch`) converged on.
+
+All 23 declare `disallowed-tools: AskUserQuestion`, which removes the tool from the pool while a skill
+is active — the only mechanical backing the plain-text question rule has, and it clears on the next
+user message.
+
+The review skills each add a **mandatory `/stack` lens K** on top of the generic dimensions, because
+the generic A–J set does not know what makes this repo fail: infrastructure divergence (`/sleuth`),
+configuration hygiene (`/inspect`), and a per-service completeness matrix (`/gaps`).
+
+### Agent definitions — the certification panel
+
+`advisor()` does not exist in this environment, so the reviewer subagents in `.claude/agents/` are the
+**top** rung of certification, not a fallback. `CLAUDE.md` § "Certification ladder" is authoritative;
+`/converge` executes it mechanically.
+
+| Lens | Agent |
+|---|---|
+| correctness + regression | `stack-infra-reviewer` |
+| completeness + blast radius | `completeness-reviewer` |
+| reproducibility + destructive posture + secrets | `reproducibility-reviewer` |
+
+Plus `global-stack-lead-dev`, the pre-existing orchestrator that /stack infrastructure work is
+delegated to. `completeness-reviewer` is the one lens name shared with `pdfturbo`, `twes-in` and
+`rent-watch` — the content is per-project, the lens is the convention.
+
+Deliberately **not** imported: the bundle's memory-pipeline and config-portability families, all 57
+`mcp/**` files, and `/qa-sweep` (browser QA — this project has no application UI).
+
 ## Questions are PLAIN TEXT — `AskUserQuestion` is forbidden here
 
 Developer ruling, 2026-08-05. `AskUserQuestion` **times out in this container**, so a question asked

@@ -17,7 +17,7 @@ disallowed-tools: AskUserQuestion
      `.claude/skills/ask-human/SKILL.md`. Every reply ends with a `❓ QUESTION` / `⏹ NO QUESTION`
      marker as its literal last line.
   2. NO `advisor()` HERE. Independent certification = fresh-context read-only reviewer subagents
-     (`.claude/agents/stack-infra-reviewer.md`). Self-grading is the last resort and MUST be
+     (the 3-lens panel in `.claude/agents/` — `stack-infra-reviewer`, `completeness-reviewer`, `reproducibility-reviewer`; see `CLAUDE.md` § "Certification ladder"). Self-grading is the last resort and MUST be
      DISCLOSED as self-graded in the output.
   3. REPORTS GO TO `var/claude/…` in the repo — gitignored by the blanket `/var` rule, survives
      compaction inside the session, never committed. NOT `~/.claude/projects/…`, which is wiped when

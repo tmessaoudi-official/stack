@@ -18,7 +18,7 @@ disallowed-tools: AskUserQuestion
      then STOP and wait. Protocol: `.claude/skills/ask-human/SKILL.md`. Every reply also ends with a
      `❓ QUESTION` / `⏹ NO QUESTION` marker as its literal last line.
   2. NO `advisor()` HERE — independent certification = fresh-context read-only reviewer subagents
-     (`.claude/agents/stack-infra-reviewer.md`). Self-grading is the last resort and MUST be disclosed.
+     (the 3-lens panel in `.claude/agents/` — `stack-infra-reviewer`, `completeness-reviewer`, `reproducibility-reviewer`; see `CLAUDE.md` § "Certification ladder"). Self-grading is the last resort and MUST be disclosed.
   3. REPORTS GO TO `var/claude/…` in the repo — gitignored by the blanket `/var` rule. NOT
      `~/.claude/projects/…`: that is wiped when the container is reclaimed.
   4. PROJECT RULES WIN on any conflict: `/stack/CLAUDE.md` — delegation to `global-stack-lead-dev`,
