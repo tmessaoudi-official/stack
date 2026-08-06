@@ -91,4 +91,12 @@ Rules:
   autonomously authorised. Prefer committing over describing
 - If nothing meaningful to hand off, write: "No active work."
 
+**After writing the file, append `<!-- manual -->` on its own line at the very end.** This marker is
+honoured by `scripts/claude-bootstrap/hooks/precompact-handoff.sh`: when it is present the PreCompact
+hook leaves `latest.md` alone and writes only its timestamped archive, so a handoff you wrote
+deliberately is not clobbered by the next automatic compaction. Without the marker the auto handoff
+overwrites `latest.md` — which is the correct default, but the wrong outcome for a note a human chose
+to save. The guard is real, not documentation: it is asserted by `bin/tests/precompact-handoff.test.sh`
+on **both** the default and the `GS_HANDOFF_LLM=1` write paths.
+
 Say "Saved." when done — nothing else, plus the mandatory status marker.

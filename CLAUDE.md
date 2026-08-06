@@ -54,7 +54,17 @@ Takieddine MESSAOUDI <takieddine.messaoudi.official@gmail.com>
 - The container's SessionStart sets the git identity to `Claude <noreply@anthropic.com>`, so the repo identity must be set explicitly with `git config user.name` / `user.email` at the start of a session. **Check it before the first commit of any session — the default is wrong.**
 - The developer pulls, signs and re-pushes the commits afterwards; signing rewrites the SHAs, so after they do, `git fetch && git reset --hard origin/master` (verify the tree hash matches first).
 
-**`deny` rules stay empty**, inherited from the sibling repos' ruling: in a cloud session a denied command is an unrecoverable dead end, because there is no terminal in which to run it by hand. Note that rent-watch does carry four `Read`/`Edit(./.env)` path denies — those are deliberately **not** adopted here, because `env-update`/`env-scan` must edit `.env`, and `.claude/hooks/env-guard-on-write.sh` already guards those edits by warning rather than blocking.
+## No permission denies — full autonomy is required, not preferred
+
+Developer ruling, 2026-08-06, verbatim: *"there should be no permissions denies! in this env claude code in the web! because if you are denied to do something i can't run it myself! so there must be full autonomy!"*
+
+`.claude/settings.json` therefore carries **`defaultMode: auto`, an allow-list, and no `deny` or `ask` tier at all**. This is not a preference to be re-litigated — it is a property of the environment. A denied command in a cloud session is an **unrecoverable dead end**: the developer is driving from the web/mobile app and has no terminal in which to run it by hand, so "denied" means the work simply stops. That makes a `deny` rule strictly worse than no rule, however well-intentioned.
+
+Three consequences:
+
+- **Never propose adding a `deny` or `ask` entry**, and never add one to `settings.json.pending`. If a command looks dangerous enough to gate, the gate is a plain-text question (`/ask-human`) before running it — not a config rule that blocks it.
+- **rent-watch's four `Read`/`Edit(./.env)` path denies are explicitly NOT adopted here.** Their own cross-repo audit lists them as a P2 to port to all four siblings; that recommendation is **rejected for `/stack`** on two independent grounds: this ruling, and the fact that `env-update`/`env-scan`/`env-diff` must read *and* write `.env` as their core function, so the deny would break the project's main workflow rather than guard it. `.claude/hooks/env-guard-on-write.sh` is the right mechanism — it warns on a `.env` edit and lets the turn continue.
+- **Nothing mechanically stops a destructive command**, so the discipline carries the whole load: `scripts/claude-bootstrap/BLAST-RADIUS.md` § the `/stack` table, and § "When this protocol is mandatory" in `/ask-human`. Machine-level protections stay in the developer's personal global settings, which this repo never touches.
 
 ## Certification ladder — governs every 3C/6C gate
 
@@ -251,7 +261,7 @@ make down-n-rebuild-force-recreate
 
 # Env sync / audit
 bin/env-scan.sh --profile=true       # Sync + show timing
-docker compose --env-file .env.local config  # Validate compose resolution
+docker compose --env-file .env.local config -q   # Validate compose resolution (-q: never print expanded env_file)
 make check-image-versions            # WARN if a .env image pin drifted from a Dockerfile ARG
                                      # (built image stale; auto-run as a non-fatal preflight of `up`)
 
@@ -273,13 +283,14 @@ make start-local-registry            # Start local TLS registry (port 5000)
 - **Shell scripts**: `shellcheck <file>` and `shfmt -d -i 2 -ci -bn <file>` (diff mode)
 - **YAML files**: `yamllint -d relaxed <file>` and `yamlfmt -dry <file>` (dry-run mode)
 - **Formatting**: `/fmt --check` to preview all formatting changes, `/fmt` to apply them
-- **Compose validation**: `docker compose --env-file .env.local config` or `make generate-buildx`
+- **Compose validation**: `docker compose --env-file .env.local config -q` or `make generate-buildx`. **Always `-q`** — without it, `config` expands every `env_file` entry and prints the resolved values (all DB passwords, `GLOBAL_STACK_DOCKER_USER_ID`) to stdout, where they can end up in a report, a handoff or a commit message. The exit code is the only signal you need.
 - **Health check status**: `ls tools/successes/` (healthy) and `ls tools/errors/` (failed)
 - **env-update cache**: `/tmp/global-stack-env-update-cache/` (TTL 3600s); use `--no-cache` to bypass
 - **Startup script dry-run**: `GS_STARTUP_DRY_RUN=1 bash docker/config/dist/bin/nvm-bin/global-stack-nvm-start.sh` — exits before any install; tests the prologue loads and script parses. In containers: PATH includes `/usr/local/bin`; on host: prepend `PATH="/stack/docker/config/dist/bin/base-bin:$PATH"`.
 - **Shared prologue**: `docker/config/dist/bin/base-bin/global-stack-base-prologue.sh` — defines `stackCatch` + `trap` for all startup scripts (49 scripts source it). Excluded: caddy/httpd/nginx server scripts, android-setup, localstack, selenium-chrome/firefox, serverless, and utility helper scripts (deliberate 141/1-exempt variant).
 - **Startup prologue tests**: `bash bin/tests/startup-prologue.test.sh` — covers prologue syntax/shellcheck, `bash -n` on all 49 sourcing scripts, `GS_STARTUP_DRY_RUN=1` exit-early, `stackCatch` error token writing and clean-exit no-op.
-- **PreCompact handoff tests**: `bash bin/tests/precompact-handoff.test.sh` — 37 assertions over `scripts/claude-bootstrap/hooks/precompact-handoff.sh`: the always-exit-0 contract on every failure path, git + `tools/` health blocks, verbatim user-intent extraction, harness-turn noise filtering, `jq -Rrs` encoding, and the `GS_HANDOFF_DIR` override.
+- **PreCompact handoff tests**: `bash bin/tests/precompact-handoff.test.sh` — 42 assertions over `scripts/claude-bootstrap/hooks/precompact-handoff.sh`: the always-exit-0 contract on every failure path, git + `tools/` health blocks, verbatim user-intent extraction, harness-turn noise filtering, `jq -Rrs` encoding, the `GS_HANDOFF_DIR` override, and the `<!-- manual -->` guard on both write paths.
+- **install.sh tests**: `bash bin/tests/install.test.sh` — 26 assertions pinning **the repo is always the truth**: unconditional `cp -f`, the one-time `.pre-bootstrap.bak` snapshot, and its never-rewrite guard (which matters because all five sibling repos ship this hook, so opening a sibling installs its copy over yours). Sabotage-verified: reverting to `cp -u` fails 4.
 
 > **In a remote container, lint manually — the hooks are dead.** `shellcheck`, `hadolint`, `yamllint`, `shfmt` and `yamlfmt` are **not installed** in the remote Claude container, so the five `PostToolUse` hooks and both `/lint` and `/fmt` silently no-op there. They work on the developer's machine. To gate a container session properly, fetch static binaries once into a scratch dir and run them explicitly at the project's own threshold — `shellcheck -x -S warning -f gcc <file>` (matching `.claude/hooks/shellcheck-on-write.sh`, so info-level SC2015/SC2016 are correctly below the bar) and `shfmt -l -i 2 -ci -bn <file>`. `bash -n` is always available and catches syntax errors with no install at all.
 
@@ -385,7 +396,7 @@ Claude Code's configuration for this project lives in:
 claude-setup/claude-setup-global.tar.gz  # The dev's machine bundle: PROVENANCE for the three docs above
 scripts/claude-bootstrap/                # Restores the framework into the ephemeral container
   README.md                              #   provenance table + what was deliberately NOT imported
-  install.sh                             #   SessionStart hook; idempotent `cp -u`, one-directional
+  install.sh                             #   SessionStart hook; unconditional cp -f, one-directional
   CLAUDE-global.md                       #   bundle framework + the /stack adaptation header
   THINKING.md                            #   bundle, byte-identical
   BLAST-RADIUS.md                        #   bundle + the /stack blast-radius table
@@ -393,7 +404,8 @@ scripts/claude-bootstrap/                # Restores the framework into the ephem
   settings.json.pending                  #   only present when a settings change is awaiting the dev
   hooks/precompact-handoff.sh            #   PreCompact hook -> var/claude/handoff/latest.md
   hooks/log-helpers.sh                   #   log_obs(), never fatal (framework Rule 13)
-bin/tests/precompact-handoff.test.sh     # 37 assertions over the PreCompact hook
+bin/tests/precompact-handoff.test.sh     # 42 assertions over the PreCompact hook
+bin/tests/install.test.sh                # 26 assertions over install.sh (repo-is-truth)
 
 .claude/settings.json                    # Project permissions + hooks — CLAUDE CANNOT WRITE THIS
 .claude/settings.local.json              # Local UI preferences (gitignored)

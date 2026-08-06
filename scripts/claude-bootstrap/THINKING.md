@@ -2,7 +2,14 @@
 
 > Standalone reference — NOT auto-loaded at session start. Maintained as a separate file so the framework library can evolve independently of the operational config. Use Read or `@THINKING.md` when you want frameworks loaded explicitly.
 >
-> **Maintenance rule**: after adding any new framework, run `wc -l ~/.claude/THINKING.md`. If over 120 lines, check for duplicates and consolidate. Run `/audit --section=B` after significant additions to catch drift against CLAUDE.md.
+> **Maintenance rule — edit the REPO copy, never the installed one.** The file to change is
+> `scripts/claude-bootstrap/THINKING.md` in the repo; `~/.claude/THINKING.md` is a **generated copy**
+> that `install.sh` overwrites unconditionally at every SessionStart (the repo is the truth). A
+> hand-edit of the installed copy is therefore destroyed at the next session start, silently. After
+> adding a framework, run `wc -l scripts/claude-bootstrap/THINKING.md`; if over 120 lines, check for
+> duplicates and consolidate. (Upstream said to check `~/.claude/THINKING.md` — under the old `cp -u`
+> behaviour that hand-edit became permanently newer than the repo copy and diverged unrecoverably
+> instead; either way, the repo copy is the one to touch.)
 
 ## Software Craftsmanship & Thinking Frameworks
 

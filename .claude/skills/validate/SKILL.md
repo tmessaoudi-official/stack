@@ -34,9 +34,57 @@ Validate the Docker Compose configuration and environment consistency.
    ```
    Any `[WARN]` line is a P0 — the mismatched token means the healthcheck can never pass even when the service ran successfully.
 
-## Output:
-- Pass/fail for each check
+## Step 0 — tool preflight (run FIRST, and report it)
+
+Never claim a check that did not run. In the remote container `docker`, `hadolint`, `yamllint`, `shfmt`
+and `yamlfmt` are all **absent**, so most of this skill degrades to a read. Record which tools exist and
+carry that into the output:
+
+```bash
+command -v docker yamllint hadolint shellcheck 2>/dev/null; docker compose version 2>/dev/null | head -1
+```
+
+Each missing tool turns its step into `SKIP <step>: <tool> not installed` — never `PASS`. A skipped step
+reported as passing is the failure this preflight exists to prevent.
+
+## Step 9 — syntax checks (always available, no tools needed)
+
+These work everywhere, including a container with nothing installed:
+
+```bash
+# every tracked shell script
+git ls-files '*.sh' | while read -r f; do bash -n "$f" || echo "FAIL $f"; done
+# the Makefile parses and its targets resolve
+make -n up >/dev/null 2>&1 || echo "WARN Makefile: 'make -n up' did not resolve"
+# every tracked JSON
+git ls-files '*.json' | while read -r f; do jq empty <"$f" 2>/dev/null || echo "FAIL $f"; done
+```
+
+> **`docker compose config` MUST always be run with `-q`.** Without it, `config` expands every
+> `env_file` entry and prints the resolved values — including `GLOBAL_STACK_DOCKER_USER_ID` and every
+> derived DB password — to stdout, from where they can end up in a report, a handoff note or a commit
+> message. **The exit code is the only signal needed.** Never capture, display or log its stdout.
+> (Rule adopted from the bundle's `validate-infra` skill; step 2 above already complies.)
+
+## Output — and it doubles as the Rule 6/7 Coverage row
+
+- Pass / fail / **skip** for each check, with the reason for every skip
 - If any check fails, explain the issue and how to fix it
 - If all pass, report "Stack configuration is valid"
+
+Then emit this block, which is the **Coverage evidence** the completion gate requires for an infra
+change (`CLAUDE.md` → global Rule 6/7: infra TDD means `bash -n` / `docker compose config -q` /
+`--dry-run` checks, and the output pasted as evidence):
+
+```
+## Coverage evidence (infra)
+Ran      : <the exact commands that executed>
+Result   : <N passed, M failed, K skipped>
+Skipped  : <each skipped check + the missing tool>
+Unverified here: <e.g. "stack health — Docker not running in this container">
+```
+
+That last line is not optional. An infra change certified without it is claiming coverage it does not
+have, which is precisely what the completeness lens will refute.
 
 $ARGUMENTS

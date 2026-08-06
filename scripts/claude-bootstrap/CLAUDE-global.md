@@ -36,23 +36,35 @@
       `⏹ NO QUESTION — <what you are waiting on>` as the literal last line. See the project
       `CLAUDE.md` § "Every reply ends with a status marker", which is authoritative.
     • **`advisor()` does not exist here**, so the CERTIFICATION LADDER's fresh-context
-      reviewer-subagent tier is the TOP rung, not a fallback. Use `.claude/agents/` definitions
-      (`stack-infra-reviewer`) rather than improvising the lens from memory.
+      reviewer-subagent tier is the TOP rung, not a fallback. Use the three `.claude/agents/`
+      definitions — `stack-infra-reviewer` (correctness+regression), `completeness-reviewer`
+      (completeness+blast-radius), `reproducibility-reviewer` (clean-clone + destructive posture +
+      secrets) — rather than improvising a lens from memory. The project `CLAUDE.md` § "Certification
+      ladder" is authoritative on the tier, and `/converge` runs the panel mechanically.
     • **Skills are REPO-NATIVE** under `.claude/skills/` and need no install. There is no
       `~/.claude/refs/SKILLS.md` and no `~/.claude/skills/` — ignore references to both.
     • **Plans live in the REPO** (`docs/plans/<topic>.plan.md`, each carrying its own
       `## Decisions Log`). There is no `plan-location` sentinel, no question about where plans go,
       and an out-of-repo plan file is explicitly NOT the record of truth — only committed state
       survives container reclaim.
-    • **Rule 13's `log_obs()`** lives at `scripts/claude-bootstrap/hooks/log-helpers.sh`, not
-      `~/.claude/hooks/log-helpers.sh`. Default log destination: `$OBS_LOG`, else
-      `~/.claude/logs/hooks-errors.log` (ephemeral — a hook whose output must survive writes under
-      `var/claude/`).
-    • **Permissions are allow-list only** (`defaultMode: auto`, no `deny`, no `ask`) — the developer
-      drives this container from the web/mobile app, where an `ask` can block him with no terminal to
-      approve from. Machine-level protections stay in his personal global settings, which this repo
-      never touches. Corollary: nothing mechanically stops a destructive command here, so
-      BLAST-RADIUS.md's *reasoning* carries the weight its file inventory no longer does.
+    • **Rule 13's `log_obs()`** lives at `scripts/claude-bootstrap/hooks/log-helpers.sh` (installed to
+      `~/.claude/hooks/` so the project's PostToolUse hooks can source it). Its default destination is
+      the IN-REPO `var/claude/logs/hooks-errors.log`, NOT `~/.claude/logs/` — the upstream default is
+      wiped when the container is reclaimed, so every line a hook logged in a real session was
+      unreadable by the time anyone looked. `$OBS_LOG` still overrides, for tests.
+    • **NO PERMISSION DENIES AT ALL** (`defaultMode: auto`, allow-list, no `deny`, no `ask`) —
+      developer ruling 2026-08-06: *"if you are denied to do something i can't run it myself! so there
+      must be full autonomy!"* In a cloud session a denied command is an unrecoverable dead end,
+      because the developer has no terminal in which to run it by hand. Never propose adding a `deny`
+      or `ask` entry; if something needs gating, gate it with a plain-text question, not a config rule.
+      See the project `CLAUDE.md` § "No permission denies", which is authoritative. Corollary: nothing
+      mechanically stops a destructive command here, so BLAST-RADIUS.md's *reasoning* carries the
+      weight its file inventory no longer does.
+    • **`docker compose config` MUST be run with `-q`.** Without it, `config` expands every `env_file`
+      entry and prints the resolved values to stdout — every DB password included — where they can land
+      in a report, a handoff or a commit message. The exit code is the only signal needed. (Ported from
+      the bundle's `validate-infra` skill, which is the one bundle skill whose subject matter is
+      native to /stack.)
 ═══════════════════════════════════════════════════════════════════════════════════════ -->
 # Global Reasoning Framework
 
@@ -245,7 +257,7 @@ Provide verification instructions scaled to task size:
 
 | Dimension | What to verify | Required evidence |
 |---|---|---|
-| **Coverage** | Every new/changed behavior has a test | Paste test run output or name the exact test cases added; if no test suite exists, say so explicitly. **For infra tasks** (Dockerfile, compose, Makefile, env vars): TDD means `bash -n` / `docker compose config` / `--dry-run` checks (see Rule 7 — test-driven) — paste that output as Coverage evidence. |
+| **Coverage** | Every new/changed behavior has a test | Paste test run output or name the exact test cases added; if no test suite exists, say so explicitly. **For infra tasks** (Dockerfile, compose, Makefile, env vars): TDD means `bash -n` / `docker compose config -q` / `--dry-run` checks (see Rule 7 — test-driven; `-q` is mandatory, it stops `config` printing expanded env_file secrets) — paste that output as Coverage evidence. |
 | **Docs** | Every changed public interface is documented | Show the updated help text, CLAUDE.md section, README diff, or command description — something a human can read |
 | **Config** | Claude can do its job correctly in future sessions | Show what was updated in CLAUDE.md / agent definition / README — or state "no config impact" with one-line reasoning |
 | **Blast radius** | No callers, references, or dependent files left stale | Show `grep` output for the changed symbol/flag/function/path and account for every hit |
@@ -264,7 +276,7 @@ A task is **not complete** until all four dimensions are addressed. Skipping a d
  
    **Hard rule — no exceptions:** When a task writes or modifies test code, the tests MUST be *executed* (not just compiled) before the task is declared complete. Paste the actual runner output (test names + pass/fail counts) in the response. Saying "the tests compile" or "the tests should pass" is not evidence — it is a lie of omission. If tests cannot be run in the current environment, say so explicitly and explain why, then ask the user how to proceed. Never silently skip exécution.
 
-   **TDD for infra tasks**: Pure infrastructure changes (Dockerfile edits, compose config, Makefile targets, env var additions) have no unit-testable behavior — for these, TDD means: first write a `--dry-run` / `docker compose config` / `bash -n` check that *detects the gap*, verify it flags the problem, then implement the fix and verify the check passes.
+   **TDD for infra tasks**: Pure infrastructure changes (Dockerfile edits, compose config, Makefile targets, env var additions) have no unit-testable behavior — for these, TDD means: first write a `--dry-run` / `docker compose config -q` / `bash -n` check that *detects the gap*, verify it flags the problem, then implement the fix and verify the check passes.
 
    **Bash script isolation (scripts that call `$SCRIPT_DIR/x.sh`)**: When writing tests for a bash script that invokes collaborators via `"$SCRIPT_DIR/collaborator.sh"`, running from a different directory won't help — `SCRIPT_DIR` resolves from `BASH_SOURCE[0]` and always points to the original location. Pattern: (1) `cp script-under-test.sh "$TMPDIR/"`, (2) create fake collaborator at `"$TMPDIR/collaborator.sh"`, (3) symlink sourced deps (`ln -sf real/common.sh "$TMPDIR/common.sh"`), (4) run via `bash "$TMPDIR/script-under-test.sh"` — `SCRIPT_DIR` then resolves to `$TMPDIR`.
 
@@ -410,7 +422,24 @@ Trigger words that signal `loop` is needed: *"keep doing"*, *"monitor"*, *"every
 
    **Relationship to other rules**: Rule 11 (verify proposals) defines *how* to check a claim; this rule defines *how to label* the result — every Rule 11 check ends in a Rule 18 grade. Rule 14 (root cause) is the fix-scoped case of this same discipline: a root cause must reach [Verified] here before Rule 14 permits writing a fix.
 
-## Memory System Toggles
+## Memory System Toggles — NOT APPLICABLE HERE
+
+> **None of the machinery in this section exists in this container.** There is no
+> `~/.claude/hooks/session-remember/`, no `MEMORY.md` index, no per-project memory home under
+> `~/.claude/projects/<slug>/`, and no LLM capture pipeline — the whole 20-file family was ruled OUT on
+> import, because its store lives in `~/.claude` and is wiped when the container is reclaimed. It would
+> re-learn and re-forget every session.
+>
+> **What replaces it in /stack**: git is the memory. Durable facts live in `CLAUDE.md` § "Gotchas &
+> Pitfalls" and `templates/tips/`; decisions live in `docs/plans/<topic>.plan.md` § "Decisions Log";
+> in-session continuity comes from the PreCompact handoff (`var/claude/handoff/latest.md`) and, on
+> demand, `/handoff`. `/retrospective` writes session-scoped notes to `var/claude/memory/`, which is
+> gitignored and dies with the container by design — anything worth more than that graduates into a
+> committed `CLAUDE.md` entry.
+>
+> Read the rest of this section for its *reasoning* about what belongs in memory versus a report — that
+> distinction still applies — but not for its inventory of files or its toggles. None of the paths below
+> are real here, and `SR_MODEL` / `SR_TZ` / the tunables set nothing.
 
 The session-remember pipeline (`~/.claude/hooks/session-remember/`) has two file-presence kill switches:
 

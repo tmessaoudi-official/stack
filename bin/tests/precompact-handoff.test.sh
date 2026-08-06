@@ -212,6 +212,38 @@ grep -q 'none present' "${ROOT}/var/claude/handoff/latest.md" 2>/dev/null \
   || ko "no markers: expected the 'none present' wording"
 rm -rf "${ROOT}"
 
+# ── Case 7b: a MANUAL latest.md is preserved, on BOTH write paths ──────────
+# `/handoff` marks a hand-written latest.md with `<!-- manual -->`. Without the guard the next
+# compaction clobbers it, so following the documented ritual loses the note exactly when it matters.
+ROOT="$(make_repo)"
+mkdir -p "${ROOT}/var/claude/handoff"
+printf '# My deliberate handoff\n\nDo not lose this.\n\n<!-- manual -->\n' \
+  >"${ROOT}/var/claude/handoff/latest.md"
+PAYLOAD="$(jq -nc --arg c "${ROOT}" '{cwd:$c,session_id:"manual"}')"
+run_hook "${PAYLOAD}" "OBS_LOG=${ROOT}/obs.log"
+rc=$?
+[[ $rc -eq 0 ]] && ok "manual marker: exit 0" || ko "manual marker: exit $rc"
+grep -q 'Do not lose this' "${ROOT}/var/claude/handoff/latest.md" 2>/dev/null \
+  && ok "manual marker: latest.md preserved, not clobbered" \
+  || ko "manual marker: latest.md was overwritten despite the marker"
+n_arch=$(find "${ROOT}/var/claude/handoff" -maxdepth 1 -name 'handoff-*.md' -type f | wc -l | tr -d ' ')
+[[ "${n_arch}" == "1" ]] && ok "manual marker: the auto handoff still lands in its own archive" \
+  || ko "manual marker: expected 1 archive, found ${n_arch}"
+grep -q 'manual — kept' "${ROOT}/obs.log" 2>/dev/null \
+  && ok "manual marker: logged the decision to keep it" || ko "manual marker: no log line explaining the skip"
+rm -rf "${ROOT}"
+
+# The converse: WITHOUT the marker, latest.md must be refreshed (the default must stay the default).
+ROOT="$(make_repo)"
+mkdir -p "${ROOT}/var/claude/handoff"
+printf '# stale auto handoff\n\nsupersede me\n' >"${ROOT}/var/claude/handoff/latest.md"
+PAYLOAD="$(jq -nc --arg c "${ROOT}" '{cwd:$c,session_id:"auto"}')"
+run_hook "${PAYLOAD}"
+grep -q 'supersede me' "${ROOT}/var/claude/handoff/latest.md" 2>/dev/null \
+  && ko "no marker: latest.md was NOT refreshed — the guard is too broad" \
+  || ok "no marker: latest.md refreshed as normal (guard is marker-scoped)"
+rm -rf "${ROOT}"
+
 # ── Case 8: unwritable handoff dir → STILL exit 0 (the whole contract) ─────
 # A parent that is a regular file makes mkdir -p fail even for root, unlike chmod 000.
 BLOCKER="$(mktemp)"

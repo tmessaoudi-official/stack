@@ -12,9 +12,9 @@ the framework has to travel in the repo.
 | `CLAUDE-global.md` | The 8-phase workflow + core rules + mental models, with a `/stack` adaptation header. The body is the dev's bundle verbatim **except** the amendments listed in that header | Bundle `claude-setup-global-20260722-103235` |
 | `THINKING.md` | Thinking-frameworks library (loaded on demand, not at session start) | Same bundle, **byte-identical** |
 | `BLAST-RADIUS.md` | Pre-flight state checks for destructive commands, + a `/stack` blast-radius table | Same bundle + `/stack` note |
-| `install.sh` | Idempotent `cp -u` into `~/.claude/` (never clobbers a newer user copy) | New |
+| `install.sh` | Unconditional `cp -f` into `~/.claude/` — **the repo is always the truth**; a pre-existing target is snapshotted once to `<name>.pre-bootstrap.bak` | New |
 | `hooks/precompact-handoff.sh` | **PreCompact hook** — writes a deterministic handoff to `var/claude/handoff/` just before context compaction | Bundle hook, substantially adapted |
-| `hooks/log-helpers.sh` | `log_obs()` structured logging, never fatal (framework Rule 13) | Bundle |
+| `hooks/log-helpers.sh` | `log_obs()` structured logging, never fatal (framework Rule 13). Logs to the **in-repo** `var/claude/logs/` — the bundle's `~/.claude/logs/` default is wiped on container reclaim, so every line a hook logged in a real session was unreadable | Bundle + the rent-watch/twes-in fix |
 | `apply-pending-settings.sh` | Applies a `settings.json.pending` that Claude is classifier-blocked from writing (see below) | New |
 
 The source bundle is committed at **`claude-setup/claude-setup-global.tar.gz`** (sha256 `74b18d40…`),
@@ -24,13 +24,40 @@ tarball was in the repo but referenced by nothing.
 Runs automatically via the `SessionStart` hook in `.claude/settings.json`. Safe to run by hand:
 
 ```bash
-bash scripts/claude-bootstrap/install.sh      # idempotent; silent no-op when current
+bash scripts/claude-bootstrap/install.sh      # idempotent: the same bytes land every time
 ```
 
+**The repo is always the truth** (developer ruling, 2026-08-06, ported from rent-watch). The copy is
+**unconditional** — the same bytes land every time, which is the point of the ruling. This replaced
+`cp -u`, whose header claimed "a hand-edited (newer) `~/.claude` file is never clobbered". That claim
+was **false**: `cp -u` copies when the *source* is newer, and a fresh `git clone` stamps every file
+with the clone time, so on a real workstation it clobbered anyway — while after a hand-edit of the
+target it silently did nothing and the repo quietly stopped being the truth. Neither outcome was
+chosen; both depended on mtimes nobody tracked. `bin/tests/install.test.sh` pins the new contract.
+
+So that unconditional copying cannot destroy a global framework irrecoverably, a target that predates
+this hook is snapshotted **once** to `<name>.pre-bootstrap.bak` and never written again. It is a safety
+net, not a second source of truth — nothing reads it back. The *never-rewrite* half is load-bearing
+specifically because **all five sibling repos ship this hook**: opening `twes-in` installs its copy
+over ours, so on the next session the target differs from our source again, and a naive snapshot would
+overwrite the irreplaceable original with a sibling's copy.
+
 `install.sh` is **one-directional** (repo → `~/.claude`) on purpose. It must never copy anything *out*
-of `~/.claude`: `~/.claude.json` holds the OAuth account, `userID` and `machineID`, and this working
-tree is one `git add -A` away from history. The upstream port this was adapted from did exactly that
-behind a commented-out block; it is omitted here rather than merely disabled.
+of `~/.claude`: `~/.claude.json` holds the OAuth account, `userID` and `machineID`, and **this repo is
+public** and one `git add -A` away from history. The upstream port this descends from (phorj) carried,
+commented out, a block doing exactly that:
+
+```bash
+# cp -R /root/.claude /root/.claude.json <repo>/claude-bundle
+# git add claude-bundle && commit && push --force-with-lease
+```
+
+It is absent here **by construction** and must never return, not even commented out: a disabled
+credential-exfiltration path inside a `SessionStart` hook is one uncomment away from publishing the
+developer's OAuth tokens. phorj deleted its own copy on 2026-08-06 for the same reason, having verified
+it never ran. `/claude-bundle/` is additionally gitignored as belt-and-braces, and
+`bin/tests/install.test.sh` asserts the absence against a **comment-stripped** copy of the script — the
+header quotes the forbidden block deliberately, and a naive grep would match that explanation.
 
 ## Skills and agents — repo-native, no install
 
