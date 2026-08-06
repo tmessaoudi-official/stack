@@ -55,6 +55,6 @@ echo
 echo "Applied. Review the diff, then:"
 echo "    git add .claude/settings.json scripts/claude-bootstrap/settings.json.pending"
 echo "    git commit -m 'chore(claude): apply the allow-list-only settings + bootstrap hooks'"
-echo "    git push -u origin master"
+echo "    git push"
 echo
 echo "Nothing was staged, committed or pushed by this script."

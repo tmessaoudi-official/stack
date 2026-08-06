@@ -1,5 +1,6 @@
 ---
 name: gaps
+spotlight: true
 description: Use when hunting for incomplete implementations, missing features, unfulfilled promises, stubs, TODO markers, partial feature flags, or undocumented capabilities across the project.
 user-invocable: true
 args: "[--quick] [--focus=<A..K>] [--target=<path>] [--priority=high]"

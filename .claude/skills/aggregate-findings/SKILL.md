@@ -1,5 +1,6 @@
 ---
 name: aggregate-findings
+spotlight: true
 description: Cross-stage synthesis of review reports — deduplicates findings that appear across /inspect, /sleuth, /gaps, /sweep and /cross-check runs. Produces one prioritized master list with cross-references instead of N separate reports. Use after running two or more of those skills.
 user-invocable: true
 args: "[--top=N] [--since=<date>]"

@@ -116,9 +116,9 @@ always sit ABOVE the marker.
 
 ## When it is NOT needed
 
-- **`git add` / `git commit` / `git push` are autonomously authorised** — `CLAUDE.md` § "Auto-commit
-  in /stack sessions" and § "Branch policy". Never ask permission to commit or to push to `master`.
-  Asking is the violation here, not the commit.
+- **`git add` / `git commit` / `git push` are autonomously authorised** — `CLAUDE.md`
+  § "Git autonomy". Never ask permission to commit or to push to `master`. Asking is the violation
+  here, not the commit. (Push with plain `git push` — never `-u`; see that section.)
 - Routine judgement calls with an obvious default, and pure information questions.
 
 Asking about everything is its own failure — it converts the developer into a decision queue. The

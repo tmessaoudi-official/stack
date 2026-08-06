@@ -1,5 +1,6 @@
 ---
 name: sweep
+spotlight: true
 description: Use when running a Phase 6 second sweep on uncommitted changes before committing, or reviewing code written outside the standard agent workflow.
 user-invocable: true
 disallowed-tools: AskUserQuestion

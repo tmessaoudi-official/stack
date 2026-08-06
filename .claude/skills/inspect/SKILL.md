@@ -1,5 +1,6 @@
 ---
 name: inspect
+spotlight: true
 description: Use when performing a full project health inspection across security, dead code, deprecations, error handling, documentation staleness, test coverage, and configuration hygiene.
 user-invocable: true
 args: "[--quick] [--focus=<A..K>] [--target=<path>]"

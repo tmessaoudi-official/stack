@@ -15,7 +15,7 @@ disallowed-tools: AskUserQuestion
      plain prose per `.claude/skills/ask-human/SKILL.md`, and every reply ends with a
      `❓ QUESTION` / `⏹ NO QUESTION` marker as its literal last line.
   2. NO TASK GATE. `git add` / `git commit` / `git push` are autonomously authorised
-     (`CLAUDE.md` § "Auto-commit in /stack sessions" + § "Branch policy"), so this skill's job is the
+     (`CLAUDE.md` § "Git autonomy"), so this skill's job is the
      evidence table and the blast-radius check — never asking permission.
   3. REPORTS: this skill persists nothing; the commit itself is the durable artifact.
   4. PROJECT RULES WIN on any conflict: `/stack/CLAUDE.md`.
@@ -65,7 +65,7 @@ finding, not a check-in, and it is reported in plain text per `/ask-human`.
 2. `git rev-parse --is-inside-work-tree 2>/dev/null` — if it fails: `ERROR: Not inside a git repository` and stop.
 3. `git diff --staged --name-only` — if empty: `ERROR: No staged changes. Stage files with git add first.` and stop.
 4. **Branch check**: `git rev-parse --abbrev-ref HEAD`. If it is not `master`, that is a finding, not a
-   warning — `CLAUDE.md` § "Branch policy" says all work lands on `master`. Report it and stop.
+   warning — `CLAUDE.md` § "Git autonomy" says all work lands on `master`. Report it and stop.
 5. Detect active merge/rebase (`.git/MERGE_HEAD`, `.git/rebase-merge/`) — if either exists:
    `WARN: merge or rebase in progress — evidence table will be produced but the commit command suppressed.`
 
@@ -167,7 +167,7 @@ If all four evidence rows are **OK** — and since committing is autonomously au
 git commit -F - <<'MSG'
 <commit message here>
 MSG
-git push -u origin master
+git push
 ```
 
 If any row is **INCOMPLETE**: list what is missing, do NOT commit, and do NOT present the command.
@@ -182,7 +182,7 @@ Add the missing staged changes and re-run `/pre-commit`.
 | `git` not in PATH | ERROR + stop |
 | Not inside a git repo | ERROR + stop |
 | No staged changes | ERROR + stop |
-| HEAD is not `master` | FINDING + stop — violates § "Branch policy" |
+| HEAD is not `master` | FINDING + stop — violates § "Git autonomy" |
 | Active merge or rebase | WARN — produce the table, suppress the commit |
 | `grep` unavailable | Skip that symbol; note "grep unavailable for `<symbol>`" in the blast-radius row |
 | Staged deletion | All remaining callers are blast-radius items |

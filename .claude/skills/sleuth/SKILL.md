@@ -1,5 +1,6 @@
 ---
 name: sleuth
+spotlight: true
 description: Use when hunting for hidden behavioral bugs — silent failures, logic traps, contract violations, cross-component inconsistencies, and edge-case mishandling that tests and linters do not catch.
 user-invocable: true
 args: "[--quick] [--focus=<A..K>] [--target=<path>]"

@@ -8,9 +8,9 @@
 
   STANDING ADAPTATIONS:
     • On ANY conflict, the project rules (`/stack/CLAUDE.md`) WIN. Three of them override this file:
-      – § "Auto-commit in /stack sessions" overrides **Rule 10**: autonomous `git add` + `git commit`
+      – § "Git autonomy" overrides **Rule 10**: autonomous `git add` + `git commit`
         are AUTHORIZED for green work in this project; no per-commit confirmation.
-      – § "Branch policy" (dev directive, 2026-08-05): all work lands on **`master`**. Never create
+      – § "Git autonomy" (dev directive, 2026-08-05): all work lands on **`master`**. Never create
         another branch, never push elsewhere.
       – § Routing: /stack infrastructure work is DELEGATED to the `global-stack-lead-dev` agent.
     • Machine-specific integrations are ABSENT in this ephemeral container and are therefore
@@ -370,7 +370,7 @@ Trigger words that signal `loop` is needed: *"keep doing"*, *"monitor"*, *"every
    |--------|--------|
    | **Phase 0 session start** | Glob `docs/plans/*.plan.md`. If found: read and announce — *"Restoring from `docs/plans/<topic>.plan.md` — N decisions from prior session."* This check is mandatory, not optional. Also read `var/claude/handoff/latest.md` if present — the PreCompact hook writes the pre-compaction state there. (No statusline pointer here; there is no statusline in this container.) |
    | **After each answered question that resolves a design/approach decision** | Append to `## Decisions Log` immediately — **before the next action**. This is a paired action, not a reminder. Does not apply to task-gate confirmations (size/proceed gates). |
-   | **Phase 4 plan approval** | `mkdir -p docs/plans && git add docs/plans/<topic>.plan.md`. No sentinel to read, no location question. Committing IS autonomously authorized in this project (project `CLAUDE.md` § "Auto-commit in /stack sessions" overrides Rule 10) — and committing the plan is what makes it survive. |
+   | **Phase 4 plan approval** | `mkdir -p docs/plans && git add docs/plans/<topic>.plan.md`. No sentinel to read, no location question. Committing IS autonomously authorized in this project (project `CLAUDE.md` § "Git autonomy" overrides Rule 10) — and committing the plan is what makes it survive. |
    | **Phase 8 completion** | Propose deleting the plan file in plain text, showing the exact command (`git rm docs/plans/<topic>.plan.md`). Proceed only if approved. |
 
    **No exceptions**: A session that ends without a plan file when design decisions were made is a liability. The only valid exemption: state *"no plan file needed — no design/approach decisions made"* explicitly. That statement is itself the record.

@@ -1,5 +1,6 @@
 ---
 name: handoff
+spotlight: true
 description: Use at the end of a session to save current state so the next session can continue cleanly without losing context about what was done, what is pending, and any non-obvious gotchas.
 user-invocable: true
 disallowed-tools: AskUserQuestion
