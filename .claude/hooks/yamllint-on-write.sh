@@ -2,7 +2,7 @@
 # PostToolUse hook: runs yamllint on YAML files after Edit/Write
 set -euo pipefail
 
-_HELPERS="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}/.claude/hooks/log-helpers.sh"
+_HELPERS="$HOME/.claude/hooks/log-helpers.sh"
 # shellcheck disable=SC1090
 [[ -f "$_HELPERS" ]] && source "$_HELPERS" 2>/dev/null || true
 # Rule 13: never fatal — define a no-op fallback when helpers are absent

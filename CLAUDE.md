@@ -414,8 +414,9 @@ bin/tests/precompact-handoff.test.sh     # 42 assertions over the PreCompact hoo
   shfmt-on-write.sh                      # Check shell formatting         } tools are installed
   env-guard-on-write.sh                  # Guard .env edits               }
   precompact-handoff.sh                  # PreCompact -> var/claude/handoff/latest.md
-  log-helpers.sh                         # log_obs() — SOURCED by the hooks above, not itself a
-                                         #   hook (unregistered + mode 644 by design)
+                                         # (log_obs(): the hooks above source the GLOBAL
+                                         #  ~/.claude/hooks/log-helpers.sh, no-op stub when absent —
+                                         #  global-is-reference ruling, 2026-08-18; no repo copy)
 .claude/skills/                          # Slash skill definitions (read in place, no install)
   lint/  fmt/  check-versions/  bump-versions/  validate/  stack-health/
   env-diff/  service-info/  new-service/  debug-service/            # domain skills
