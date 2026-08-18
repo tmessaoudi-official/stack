@@ -476,6 +476,43 @@ The change touches `.claude/**` only, which is the **STANDARD** carve-out in `/s
 MAXIMAL two-clean-round panel. **However**, the outstanding MAXIMAL debt from Phase A is
 independent and still owed (see § "Certification status").
 
+## rent-watch slice — EXECUTED 2026-08-18 (commit `8f2e3e3`, unpushed)
+
+First per-repo de-contamination slice, ruled 2026-08-18 (rent-watch first because the developer
+starts working there ASAP). 27 files, +898/−255. What it did:
+
+- **CLAUDE.md**: plain-text §, `❓`/`⏹` marker rule, and the "advisor() does not exist" ladder claim
+  all replaced; bootstrap-reinstall claim, dead `BLAST-RADIUS.md` link, and the file-layout /
+  Claude-config bootstrap rows corrected; vendored handoff hook + test documented in § "Claude
+  config in this repo" (S3 requires that).
+- **Skills**: `ask-human` re-inverted to the `AskUserQuestion` protocol (question-QUALITY rules kept
+  verbatim); 15 frontmatters stripped; ~13 skill bodies' container-era adaptation notes corrected in
+  place (81+ substitutions: plain-text note, NO-advisor note, `--scope` removal note, wiped-container
+  rationale, `/home/user/rent-watch` path, "ask in plain text" phrasing). The dormant guarded
+  bootstrap code in `drift-scan.sh` (S1 `sys.exit(0)` skip, S3 `-e` guards) was left as-is — green.
+- **PreCompact handoff (D4-for-one-repo)**: `/stack`'s hook vendored byte-identical to
+  `.claude/hooks/precompact-handoff.sh`; test at `.claude/hooks/tests/test-precompact-handoff.sh`
+  (one line adapted: SUT path), 42/42 green in place; modes 100755 in git (`core.fileMode=false`
+  here too — `git update-index --chmod=+x` was required).
+- **Registration**: `.claude/settings.json.proposed` (valid JSON, delta = the two PreCompact
+  matchers) + hand-off `/tmp/apply-settings-rent-watch-20260818.sh`. Until applied, drift-scan
+  reports exactly one P2 (unregistered hook) — expected, not drift.
+- **OPEN-QUESTIONS.md**: superseding Decisions-Log ruling appended (the 2026-08-06 ban's rationale
+  died with the container).
+- Verified: drift-scan `P0=0 P1=0 P2=1`; tenure-guard 66/66; ci-workflow 11/11; handoff suite 42/42;
+  shellcheck clean. Diff touches no `src/`, `config/` or `tests/` → STANDARD tier (one reviewer,
+  three lenses, one clean round).
+
+**D2 note**: S4b untouched — `deny` stays `[]` in both the live settings and the proposal, so the
+slice does not prejudge D2.
+
+**The recipe for the remaining repos** (pdfturbo, phorj, twes-in — same disease, same cure): strip
+frontmatters → re-invert `ask-human` → correct the numbered adaptation notes in every skill body
+(the notes are per-repo rewordings of the same template; whitespace-tolerant regex catches ~90%,
+then hand-patch stragglers by grep) → CLAUDE.md sections → dead bootstrap pointers in
+README/.gitignore/env/hook comments → vendor handoff + test + settings proposal → full grep sweep +
+repo's own gates.
+
 ## Resume checklist after a compact
 
 - [ ] Phase A — 4 sibling settings.json unwired, `scripts/claude-bootstrap/` removed everywhere
