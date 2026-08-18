@@ -3,7 +3,6 @@ name: env-diff
 spotlight: true
 description: Use when comparing .env (master reference) with .env.local (active config) to find divergences, missing vars, or port mismatches.
 user-invocable: true
-disallowed-tools: AskUserQuestion
 ---
 
 Show differences between `.env` (master reference) and `.env.local` (active config).

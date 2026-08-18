@@ -3,7 +3,6 @@ name: bump-versions
 spotlight: true
 description: Use when applying pending version updates end-to-end — guided env-update check, explicit approval gate, apply, env-scan propagation, and rebuild reminder. Use after /check-versions reports AUTO entries.
 user-invocable: true
-disallowed-tools: AskUserQuestion
 ---
 
 Guided version-update flow: check → confirm → apply → propagate → rebuild reminder.
