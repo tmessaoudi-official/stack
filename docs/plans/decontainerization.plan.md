@@ -8,6 +8,28 @@
 > below and are open questions, not settled decisions. Do not act on the original wording of the
 > "13 duplicate skills" decision or the Phase D path-denies for rent-watch without reading them.
 
+---
+
+## ⏭️ NEXT SESSION STARTS HERE — four open decisions, to be taken one at a time
+
+Agreed with the developer 2026-08-18, immediately before a context compaction: **Phase A is done
+and pushed; the next session walks these four decisions one by one.** Nothing else should start
+until they are settled — three of them exist because a premise in this very plan turned out to be
+false, so acting first and asking later is exactly the failure mode to avoid.
+
+| # | Decision | Why it is open | Options |
+|---|---|---|---|
+| **D1** | What to do with the 13 "generic" skills in each repo | The plan's premise *"they are duplicates of the global bundle"* is **false**. `/stack`'s `converge` is 21,850 B vs global 14,061 B with 13 refs to this repo's reviewer agents; rent-watch's are larger still (`forge` 40,241 vs 27,278). **All are currently RESTORED** — nothing lost yet. | delete none (status quo) · re-audit individually and delete only genuinely thin ones · delete all anyway |
+| **D2** | Phase D permission tiers vs rent-watch's invariant | rent-watch `CLAUDE.md` rules `deny` stays **empty**, and its `drift-scan.sh` §S4b **mechanically asserts** it — specifically so a sibling port cannot reintroduce one. Phase D would trip that gate. | exempt rent-watch · change its ruling AND its scanner together · drop the path denies everywhere |
+| **D3** | Whether to proceed into Phases B/C prose | ~98 files across the 5 repos still cite `scripts/claude-bootstrap/`; the plain-text-question sections, the `❓`/`⏹` marker rules and the "advisor() does not exist" ladder claims are all still live. **All prose, none executable** — verified. | do it now, repo by repo · defer · do only the false claims (e.g. `/stack`'s 15/23 `disallowed-tools` sentence) |
+| **D4** | Vendor the PreCompact handoff into the 4 siblings | `/stack` got it back this session (42/42 green) after the plan's "the global hook covers it" premise was refuted. **pdfturbo, phorj, twes-in and rent-watch still have no working handoff** — their `settings.json` registrations were removed and nothing replaced them. | vendor into all 4 (same fix as `/stack`) · leave them on no handoff · pick per repo |
+
+**State going in:** all five repos `dirty:0 ahead:0`, everything pushed. Certification is **0 of 2
+clean rounds** — the one round that ran was on a moving tree and does not count, so a fresh panel
+against a frozen commit is owed regardless of which decisions are taken.
+
+---
+
 **Scope:** `/stack`, `/stack/projects/pdfturbo`, `/stack/projects/phorj`,
 `/stack/projects/rent-watch`, `/stack/projects/twes-in`.
 **Explicitly OUT of scope:** `/stack/projects/invoiceninja` (WIP fork import, own session).
@@ -337,7 +359,7 @@ Reviewer findings still OPEN (all disclosed Phase B/C scope, none executable):
 
 1. Run `! bash /tmp/apply-decontainerization-20260818.sh` — sibling `settings.json` hook removal,
    `/stack` `lint`+`fmt` frontmatter, the phorj commit, and all five pushes.
-2. Resolve the three ⚠️ entries in the Decisions Log above.
+2. Resolve **D1–D4** in § "NEXT SESSION STARTS HERE" at the top of this file — one at a time.
 3. Phase B/C prose: the five `CLAUDE.md` files still carry the plain-text-question section, the
    `❓`/`⏹` marker rule, the ladder's "advisor() does not exist" claim, and now-stale
    `scripts/claude-bootstrap/` references. **None of this is started.**
