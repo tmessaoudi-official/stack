@@ -8,30 +8,14 @@
 
 This file provides guidance to Claude Code when working with code in this repository.
 
-## Every reply ends with a status marker — NO EXCEPTIONS
+## Questions — `AskUserQuestion`, sparingly
 
-Developer directive, 2026-08-05. **The last line of every reply is exactly one of these two markers.**
-A reply without one is unfinished.
+Questions to the developer use the **`AskUserQuestion` tool**, per the global framework: options with the recommended one FIRST (labelled, with its reason) and a visible *"none of these / challenge the premise"* escape. Protocol details: `.claude/skills/stack-ask-human/SKILL.md` (renamed from `ask-human` 2026-08-18 — a repo skill may not share a global skill's name).
 
-```
-❓ QUESTION — <one line naming the decision>
-⏹ NO QUESTION — <what you are waiting on, or why you stopped>
-```
-
-**Why it exists:** without it the developer cannot tell a question from a pause — both are just prose that stopped — so they do not know whether the turn is waiting on them. The marker is the signal, not a decoration.
-
-- **`❓ QUESTION`** — you are BLOCKED and need a decision. The numbered options go in the **body, above the marker**: recommended option FIRST with its reason, each option stating its own consequence and resulting after-state, and a final *"none of these / challenge the premise"* escape. Then stop and wait.
-- **`⏹ NO QUESTION`** — nothing is being asked. State explicitly what you are blocked on — a background job, a pending pull, a build, or nothing at all — so the developer knows whether a reply is needed.
-
-**Applies to every reply without exception**, including one-line answers, status updates, error reports and acknowledgements.
-
-## Questions are plain text — `AskUserQuestion` is FORBIDDEN
-
-`AskUserQuestion` **times out in this remote container** — confirmed by the developer, 2026-08-05. A question asked that way hangs the turn and can be lost with no trace, and a gate that cannot fire is worse than no gate. Every question to the developer is ordinary prose: context, a minimal concrete example, numbered options, the **recommended option first with its reason**, and a visible *"none of these / challenge the premise"* escape — then STOP and wait. Protocol: `.claude/skills/ask-human/SKILL.md`.
-
-Partial mechanical backing: every skill in `.claude/skills/` declares `disallowed-tools: AskUserQuestion`, which removes the tool from the pool while that skill is active. The grant clears on the next user message, so outside a skill the discipline is yours.
+> The container-era plain-text protocol and the `❓`/`⏹` end-of-reply markers (developer directive, 2026-08-05) are **RETIRED** (2026-08-18). They existed because `AskUserQuestion` timed out in the dead cloud container; on this machine it works, `askUserQuestionTimeout` is `"never"` globally, and the marker's rationale (a prose question being indistinguishable from a pause) dies with the prose protocol.
 
 **Do not ask about routine work.** The standing directive for this repo is *no interrupts*: state the task size, announce the plan, then build it. Asking is reserved for the cases in § "When this protocol is mandatory" of that skill — chiefly a genuinely ambiguous request where two readings produce materially different work, or a change that would weaken a documented invariant or gotcha.
+
 
 ## Git autonomy — overrides global Rule 10
 
@@ -51,7 +35,7 @@ Takieddine MESSAOUDI <takieddine.messaoudi.official@gmail.com>
 ```
 
 - **Never a `Co-Authored-By` trailer, and never a `Claude-Session` trailer.** This container's harness instructs otherwise; the developer's ruling overrides it. Commit messages carry the human author and nothing else. Matches all four sibling repos (`phorj`, `pdfturbo`, `twes-in`, `rent-watch` — verified 2026-08-06: 20/20 of their recent commits use this address, and zero carry a co-author trailer). `bin/git-strip-coauthored.sh` cleans history where one slipped in.
-- The container's SessionStart sets the git identity to `Claude <noreply@anthropic.com>`, so the repo identity must be set explicitly with `git config user.name` / `user.email` at the start of a session. **Check it before the first commit of any session — the default is wrong.**
+- A harness may set a different default identity (the dead cloud container set `Claude <noreply@anthropic.com>`), so the repo identity must be verified with `git config user.name` / `user.email`. **Check it before the first commit of any session.**
 - The developer pulls, signs and re-pushes the commits afterwards; signing rewrites the SHAs, so after they do, `git fetch && git reset --hard origin/master` (verify the tree hash matches first).
 
 ## No permission denies — full autonomy is required, not preferred
@@ -62,13 +46,15 @@ Developer ruling, 2026-08-06, verbatim: *"there should be no permissions denies!
 
 Three consequences:
 
-- **Never propose adding a `deny` or `ask` entry**, and never add one to `settings.json.pending`. If a command looks dangerous enough to gate, the gate is a plain-text question (`/ask-human`) before running it — not a config rule that blocks it.
+- **Never propose adding a `deny` or `ask` entry**, and never add one to `settings.json.pending`. If a command looks dangerous enough to gate, the gate is a question (`/stack-ask-human`) before running it — not a config rule that blocks it.
 - **rent-watch's four `Read`/`Edit(./.env)` path denies are explicitly NOT adopted here.** Their own cross-repo audit lists them as a P2 to port to all four siblings; that recommendation is **rejected for `/stack`** on two independent grounds: this ruling, and the fact that `env-update`/`env-scan`/`env-diff` must read *and* write `.env` as their core function, so the deny would break the project's main workflow rather than guard it. `.claude/hooks/env-guard-on-write.sh` is the right mechanism — it warns on a `.env` edit and lets the turn continue.
-- **Nothing mechanically stops a destructive command**, so the discipline carries the whole load: `docs/BLAST-RADIUS.md` § the `/stack` table, and § "When this protocol is mandatory" in `/ask-human`. That file is kept IN THIS REPO deliberately — the global `~/.claude/BLAST-RADIUS.md` carries only `make hard-restart` and none of the `/stack`-specific radii, so a pointer at the global copy would silently lose `make soft-restart`, `docker volume rm`, the `RELOAD` flags, `env-update --apply` and `make save`. Machine-level protections stay in the developer's personal global settings, which this repo never touches.
+- **Nothing mechanically stops a destructive command**, so the discipline carries the whole load: `docs/BLAST-RADIUS.md` § the `/stack` table, and § "When this protocol is mandatory" in `/stack-ask-human`. That file is kept IN THIS REPO deliberately — the global `~/.claude/BLAST-RADIUS.md` carries only `make hard-restart` and none of the `/stack`-specific radii, so a pointer at the global copy would silently lose `make soft-restart`, `docker volume rm`, the `RELOAD` flags, `env-update --apply` and `make save`. Machine-level protections stay in the developer's personal global settings, which this repo never touches.
 
 ## Certification ladder — governs every 3C/6C gate
 
-`advisor()` does not exist in this environment, so independent certification comes from **fresh-context, read-only, adversarial reviewer subagents** in `.claude/agents/` — that is the TOP rung here, not a fallback. Three lenses, one agent each:
+`advisor()` **is available on this machine** (verified 2026-08-18) and is the FIRST rung: call it
+per the global framework. The panel of record for gate rounds is the set of **fresh-context,
+read-only, adversarial reviewer subagents** in `.claude/agents/`. Three lenses, one agent each:
 
 | Lens | Agent |
 |---|---|
@@ -78,7 +64,7 @@ Three consequences:
 
 Each reviewer **reads the actual diff, code and tests itself** — never certify from the author's narrative — and is chartered to REFUTE, not approve. `/converge` runs the panel mechanically.
 
-**Tier: MAXIMAL by default** — all three lenses, **two consecutive fully-clean rounds**, any finding resets the counter, cap 5 rounds → then ask in plain text (never silently proceed). Rationale: this stack's characteristic failure is *silent* — a token mismatch yields a container that works while reporting unhealthy for 24h, a drifted `ARG` yields a stale image while `.env` looks right, and a startup-script edit lands on every tier-03 consumer at once. None of those is caught by a passing test suite, and none is confined to one service.
+**Tier: MAXIMAL by default** — all three lenses, **two consecutive fully-clean rounds**, any finding resets the counter, cap 5 rounds → then ask via `AskUserQuestion` (never silently proceed). Rationale: this stack's characteristic failure is *silent* — a token mismatch yields a container that works while reporting unhealthy for 24h, a drifted `ARG` yields a stale image while `.env` looks right, and a startup-script edit lands on every tier-03 consumer at once. None of those is caught by a passing test suite, and none is confined to one service.
 
 **The one carve-out is mechanical, not a judgement call:** if `git diff --name-only` touches no operational surface, STANDARD is enough — one reviewer, three lenses in a single pass, one clean round. Docs, `CLAUDE.md`, `templates/tips/`, `docs/` and `.claude/**` edits qualify. Anything under `docker/`, `bin/`, `Makefile`, `.env` or `docker-compose.yaml` does not.
 
@@ -86,11 +72,11 @@ Each reviewer **reads the actual diff, code and tests itself** — never certify
 
 Availability chain: reviewer subagents → (if subagents are unavailable) three distinct-lens self-passes **with mandatory disclosure that certification was self-graded**. Never silently skip a gate.
 
-**What the panel cannot verify here, and must say so:** Docker is not running in the remote container and the linters are not installed, so "the stack comes up healthy" and "lint clean" are both unverifiable from a container session. A CLEAN verdict that hides an unverifiable dimension is a false certification.
+**What the panel cannot verify, it must say so:** "the stack comes up healthy" needs Docker and a 10+ minute bring-up, which a review round rarely runs. A CLEAN verdict that hides an unverifiable dimension is a false certification.
 
 ## Plans live in the repo
 
-Every plan or spec produced here is persisted at **`docs/plans/<topic>.plan.md`**, each carrying its own `## Decisions Log` (`- [YYYY-MM-DD HH:MM] AGREED: <one-sentence decision>`), appended in the same change as the ruling. The container is reclaimed and only committed state survives, so an out-of-repo plan file is never the record of truth. There is no plan-location sentinel to ask about, and no `~/.claude/run/` statusline pointer — neither exists here.
+Every plan or spec produced here is persisted at **`docs/plans/<topic>.plan.md`**, each carrying its own `## Decisions Log` (`- [YYYY-MM-DD HH:MM] AGREED: <one-sentence decision>`), appended in the same change as the ruling. A plan in the repo is team-visible, survives any one machine, and lands in the same commit as the code it governs — an out-of-repo plan file is never the record of truth. There is no plan-location sentinel to ask about, and no `~/.claude/run/` statusline pointer — neither exists here.
 
 Reports and handoffs go to `var/claude/**` (gitignored via the blanket `/var` rule). **Never** `~/.claude/projects/…` — that is wiped when the container is reclaimed. Anything that must outlive the container graduates into a `CLAUDE.md` § Gotchas entry or a `templates/tips/` reference, as a reviewed commit.
 
@@ -100,15 +86,15 @@ This repo used to ship `scripts/claude-bootstrap/`, wired as a `SessionStart` ho
 
 Removing it was not cosmetic: `install.sh` did an unconditional `cp -f` of an in-repo, container-era framework copy over `~/.claude/CLAUDE.md` — a copy that banned `AskUserQuestion`. All five sibling repos shipped that hook, so opening any of them rewrote the global framework with a stale copy, and the one-shot `.pre-bootstrap.bak` safety net was already spent.
 
-Two files that lived in that directory were **innocent of the clobber and are kept**, vendored into the repo so a clean clone still works: `.claude/hooks/precompact-handoff.sh` (with its 42-assertion suite) and `.claude/hooks/log-helpers.sh`. `BLAST-RADIUS.md` likewise moved to `docs/BLAST-RADIUS.md`.
+Two files from that directory were briefly vendored into `.claude/hooks/` the same day (`precompact-handoff.sh` + `log-helpers.sh`) and **removed again under the 2026-08-18 global-is-reference ruling**: anything that exists in `~/.claude/` must not be duplicated in a repo. The hooks now source the GLOBAL `log-helpers.sh` (no-op stub when absent), and session handoffs are the GLOBAL PreCompact hook's job. `BLAST-RADIUS.md` moved to `docs/BLAST-RADIUS.md` (kept — the global copy lacks the /stack-specific radii).
 
 Two consequences worth knowing before you work here:
 
 - **`.claude/settings.json` cannot be written by Claude** (classifier-blocked — it is Claude's own permission surface). The old `settings.json.pending` + `apply-pending-settings.sh` route died with the bootstrap. Current route: hand the developer a single `! bash /tmp/<script>.sh` that does the `jq` transform, validates it, backs up the original and commits the result.
 - **The `PostToolUse` lint hooks are live here** — `shellcheck`, `hadolint`, `yamllint`, `shfmt` and `yamlfmt` are installed on this machine (verified 2026-08-18). The old "they silently no-op in the container" caveat no longer applies; do not cite it as a reason to skip linting.
-- **Permissions are allow-list only** (`defaultMode: auto`, no `deny`, no `ask`) — developer ruling, because he drives this container from the web app with no terminal to approve an `ask` from. Nothing therefore *mechanically* blocks a destructive stack command; `docs/BLAST-RADIUS.md` carries that weight by discipline, and its `/stack` table lists the specific blast radii (`make soft-restart`, `docker volume rm`, `RELOAD` flags, `env-update --apply`, `make save`).
+- **Permissions are allow-list only** (`defaultMode: auto`, no `deny`, no `ask`) — developer ruling (recorded when sessions ran in a terminal-less web container; the ruling stands). Nothing therefore *mechanically* blocks a destructive stack command; `docs/BLAST-RADIUS.md` carries that weight by discipline, and its `/stack` table lists the specific blast radii (`make soft-restart`, `docker volume rm`, `RELOAD` flags, `env-update --apply`, `make save`).
 
-**Context compaction writes a handoff.** A `PreCompact` hook (`.claude/hooks/precompact-handoff.sh`) writes `var/claude/handoff/latest.md` — git state, uncommitted paths, `tools/` health markers, the last 8 user messages verbatim, and where to resume — immediately before the context is compacted. **Read it first after a compaction.** It is deterministic (no LLM call); `GS_HANDOFF_LLM=1` opts into a narrative, `GS_HANDOFF_DIR` overrides the location. Everything under `var/` is gitignored.
+**Context compaction writes a handoff — via the GLOBAL PreCompact hook** (`~/.claude/hooks/precompact-handoff.sh`), which feeds the developer's memory pipeline that SessionStart reads back. The repo carries no copy (global-is-reference ruling, 2026-08-18; the vendored copy, its 42-assertion suite and its settings.json registration were removed the same day they arrived). Everything under `var/` is gitignored scratch.
 
 ## What This Project Is
 
@@ -293,9 +279,6 @@ make start-local-registry            # Start local TLS registry (port 5000)
 - **Startup script dry-run**: `GS_STARTUP_DRY_RUN=1 bash docker/config/dist/bin/nvm-bin/global-stack-nvm-start.sh` — exits before any install; tests the prologue loads and script parses. In containers: PATH includes `/usr/local/bin`; on host: prepend `PATH="/stack/docker/config/dist/bin/base-bin:$PATH"`.
 - **Shared prologue**: `docker/config/dist/bin/base-bin/global-stack-base-prologue.sh` — defines `stackCatch` + `trap` for all startup scripts (49 scripts source it). Excluded: caddy/httpd/nginx server scripts, android-setup, localstack, selenium-chrome/firefox, serverless, and utility helper scripts (deliberate 141/1-exempt variant).
 - **Startup prologue tests**: `bash bin/tests/startup-prologue.test.sh` — covers prologue syntax/shellcheck, `bash -n` on all 49 sourcing scripts, `GS_STARTUP_DRY_RUN=1` exit-early, `stackCatch` error token writing and clean-exit no-op.
-- **PreCompact handoff tests**: `bash bin/tests/precompact-handoff.test.sh` — 42 assertions over `.claude/hooks/precompact-handoff.sh`: the always-exit-0 contract on every failure path, git + `tools/` health blocks, verbatim user-intent extraction, harness-turn noise filtering, `jq -Rrs` encoding, the `GS_HANDOFF_DIR` override, and the `<!-- manual -->` guard on both write paths.
-
-> **In a remote container, lint manually — the hooks are dead.** `shellcheck`, `hadolint`, `yamllint`, `shfmt` and `yamlfmt` are **not installed** in the remote Claude container, so the five `PostToolUse` hooks and both `/lint` and `/fmt` silently no-op there. They work on the developer's machine. To gate a container session properly, fetch static binaries once into a scratch dir and run them explicitly at the project's own threshold — `shellcheck -x -S warning -f gcc <file>` (matching `.claude/hooks/shellcheck-on-write.sh`, so info-level SC2015/SC2016 are correctly below the bar) and `shfmt -l -i 2 -ci -bn <file>`. `bash -n` is always available and catches syntax errors with no install at all.
 
 ## Claude Code Tooling
 
@@ -311,22 +294,10 @@ make start-local-registry            # Start local TLS registry (port 5000)
 - `/new-service <name>` — scaffold a new service (Dockerfile, compose, startup script, printed `.env` + Makefile lines)
 - `/bump-versions` — guided `env-update` check → approval gate → apply → `env-scan` propagation → rebuild reminder
 
-**Workflow + review skills** (ported from the developer's bundle, adapted to `/stack` — all repo-native under `.claude/skills/`, no install):
-- `/ask-human` — the plain-text question protocol (see § "Questions are plain text"). **Not optional reading**: it is the only sanctioned way to ask anything
-- `/handoff` — save session state so the next session resumes cleanly
-- `/pre-commit` — analyse staged changes for blast radius + produce the evidence table before committing
-- `/sweep` — Phase 6 second sweep over uncommitted changes
-- `/expanding-context` — widen context at the start of Phase 1 before committing to an approach
-- `/converge` — run § "Certification ladder" mechanically: 3 reviewer lenses, two consecutive clean rounds, cap 5. Autonomous by default; honours the STANDARD carve-out for docs-only diffs
-- `/retrospective` — deliberate end-of-session learning capture into `var/claude/memory/`
-- `/forge` — adversarial design critique with the Chesterton's Fence gate (a fence whose WHY is in § Gotchas is never challenged)
-- `/sleuth` — hunt hidden behavioural bugs: silent failures, logic traps, contract violations
-- `/inspect` — full project health inspection (security, dead code, deprecations, error handling)
-- `/gaps` — find incomplete implementations, stubs, TODO markers, unfulfilled promises
-- `/cross-check` — validate a spec or doc for contradictions, undefined terms, unstated assumptions
-- `/aggregate-findings` — deduplicate and synthesise findings across the review skills above
-
-> **There is no `~/.claude/refs/SKILLS.md` and no `~/.claude/skills/` in a remote container** — the bundle's 48 global skills are not installed there, so the global commands this file used to list (`/bundle`, `/install`, `/adapt-project`, `/repair`, `/mega-analysis`, `/skill-audit`, `/memory-promote`, `/recent`) are **unavailable in container sessions**. They still work on the developer's machine, where the bundle is installed. `/recent` in particular is redundant here: the PreCompact handoff already emits git state, uncommitted paths and recent commits automatically.
+**Workflow + review skills — the GLOBAL install's, plus two repo-specific ones** (global-is-reference ruling, 2026-08-18: the 13 repo-local copies of global skills were deleted; the repo now carries only what has no global equivalent):
+- `/stack-ask-human` — the question protocol with this repo's extra rules (destructive-op gates, `.env` writes, `RELOAD` flags). See § "Questions"
+- `/stack-lenses` — **load this BEFORE running any global review skill here.** It carries the /stack review dimensions (token invariant, MODE tiers, env cascade, port rules), sleuth lens K (infrastructure divergence) and the repo conventions the deleted copies used to enforce
+- `/sweep`, `/sleuth`, `/inspect`, `/gaps`, `/forge`, `/cross-check`, `/converge`, `/pre-commit`, `/aggregate-findings`, `/handoff`, `/retrospective`, `/expanding-context` — all from `~/.claude/skills/` (the developer's global install, 47 skills). `/converge` still runs § "Certification ladder" with the three repo reviewer agents
 - `/new-service <name> [--parent <image>] [--runtime <name>] [--port <n>]` — scaffold a new service (Dockerfile, compose, startup script, printed `.env` + Makefile lines); args-first with interactive fallback
 
 **Automatic hooks** (PostToolUse on Edit/Write):
@@ -335,10 +306,9 @@ make start-local-registry            # Start local TLS registry (port 5000)
 - `yamllint` — validates `.yaml`/`.yml` files on every write
 - `shfmt` — checks shell formatting on `.sh` writes (reports diff, doesn't auto-fix)
 
-**Automatic hooks** (PreCompact):
-- `precompact-handoff` — writes `var/claude/handoff/latest.md` before the context is compacted, and refuses to overwrite a hand-written one marked `<!-- manual -->`
+**Automatic hooks** (PreCompact): none in the repo — the GLOBAL `~/.claude/hooks/precompact-handoff.sh` writes the handoff into the developer's memory pipeline (global-is-reference ruling, 2026-08-18).
 
-**Permission rules** (two layers): the project `.claude/settings.json` denies destructive operations (`make hard-restart*`/`soft-restart*`, `sudo`, `rm -rf`, `docker system prune`/`volume rm`/`volume prune`/`container prune`/`image prune`/`network prune`/`rmi`/`compose down -v`, `git clean`, `git push --force`, `chmod 777`, Bash access to `docker/data`/`docker/storage`, Read access to `docker/data`/`docker/storage`/`var`), asks for stack lifecycle (`make up/down/restart`, `env-update --apply`, `docker buildx prune`) and allows read-only previews (`env-update --check/--dry-run/--dump`, `env-scan --dry-run`, `make log-*`). Additional read-only allows (`docker compose ps/logs`, `shfmt`, `yamlfmt`, `yamllint`, `yq`, `diff`) live in the global `~/.claude/settings.json` layer — a bundle of this project carries only the project layer.
+**Permission rules**: `.claude/settings.json` is **allow-list only** — `defaultMode: auto`, 73 `allow` entries, **no `deny` and no `ask` tier at all** [Verified 2026-08-18: `jq '.permissions'`] — per § "No permission denies". (An earlier version of this paragraph described a deny/ask tier that predates that ruling and never matched the live file.) Additional read-only allows live in the global `~/.claude/settings.json` layer.
 
 ## Gotchas & Pitfalls
 
@@ -398,7 +368,6 @@ Claude Code's configuration for this project lives in:
 claude-setup/claude-setup-global.tar.gz  # The dev's machine bundle: PROVENANCE for the docs above
 docs/BLAST-RADIUS.md                     # The /stack blast-radius table — kept IN REPO because the
                                          #   global copy carries only `make hard-restart`
-bin/tests/precompact-handoff.test.sh     # 42 assertions over the PreCompact hook
 
 .claude/settings.json                    # Project permissions + hooks — CLAUDE CANNOT WRITE THIS
 .claude/settings.local.json              # Local UI preferences (gitignored)
@@ -413,17 +382,15 @@ bin/tests/precompact-handoff.test.sh     # 42 assertions over the PreCompact hoo
   yamllint-on-write.sh                   # Validate YAML on write         } this machine — the
   shfmt-on-write.sh                      # Check shell formatting         } tools are installed
   env-guard-on-write.sh                  # Guard .env edits               }
-  precompact-handoff.sh                  # PreCompact -> var/claude/handoff/latest.md
                                          # (log_obs(): the hooks above source the GLOBAL
                                          #  ~/.claude/hooks/log-helpers.sh, no-op stub when absent —
                                          #  global-is-reference ruling, 2026-08-18; no repo copy)
 .claude/skills/                          # Slash skill definitions (read in place, no install)
   lint/  fmt/  check-versions/  bump-versions/  validate/  stack-health/
   env-diff/  service-info/  new-service/  debug-service/            # domain skills
-  ask-human/  handoff/  pre-commit/  sweep/  expanding-context/     # workflow skills
-  converge/  retrospective/                                         #   (converge runs the ladder)
-  sleuth/  inspect/  gaps/  forge/  cross-check/                    # review skills
-  aggregate-findings/                                               #   (synthesises the above)
+  stack-ask-human/  stack-lenses/        # the two repo-specific workflow/review skills; every
+                                         #   other workflow/review skill comes from ~/.claude/skills/
+                                         #   (global-is-reference ruling, 2026-08-18)
 
 var/claude/handoff/                      # PreCompact handoffs (gitignored via the blanket /var rule)
 ```
@@ -438,4 +405,4 @@ See `templates/tips/file-layout.md`.
 
 > **Remember**: Delegate /stack infrastructure tasks to `global-stack-lead-dev`; handle non-/stack tasks directly with the global reasoning framework. Use `/lint` before committing shell changes — and in a container, lint manually, because the hooks are dead there. Check for trailing `;` in `COMPOSE_FILE`. Verify with `--dry-run` before applying changes. Tier 02 = install, tier 03 = setup — same startup script, different `MODE`.
 
-> **And on every single reply, without exception**: ask in **plain text** (never `AskUserQuestion` — it times out here), work on **`master`** only, and end with a **`❓ QUESTION` / `⏹ NO QUESTION`** marker as the literal last line.
+> **And on every single reply**: ask via **`AskUserQuestion`** (the plain-text protocol and the `❓`/`⏹` markers are RETIRED — see § "Questions"), and work on **`master`** only.
