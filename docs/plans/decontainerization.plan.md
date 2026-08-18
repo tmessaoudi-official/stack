@@ -192,6 +192,36 @@ and document the new tiers instead.
 4. Produce the Rule 6 four-dimension evidence table.
 5. One commit per repo, conventional-commit subject, correct identity.
 
+### Phase G — ONE bundled hand-off script (developer runs it)
+
+Two things Claude cannot do here: `git push` is **denied by this machine's permission layer**
+[Verified 2026-08-18: plain `git push` and a compound form both refused], and
+`.claude/settings.json` is classifier-blocked for Claude to write. Both are handed over **together,
+in a single script written at the very end** — decided 2026-08-18, not one script per repo and not
+a push-only script beforehand.
+
+Write `/tmp/apply-decontainerization-<YYYYMMDD>.sh` (`#!/usr/bin/env bash`, `set -euo pipefail`)
+that, for each of the 5 repos:
+
+1. Validates `.claude/settings.json.proposed` with `jq empty`, backs up the live
+   `.claude/settings.json` to `.bak.$(date +%s)`, moves the proposal into place, deletes the
+   proposal. Skips cleanly if no proposal exists for that repo.
+2. Runs `git push` on the default branch. **Plain `git push`, never `-u`.**
+3. Prints a per-repo PASS/FAIL summary and exits non-zero if any step failed.
+
+Hand over exactly one line: `! bash /tmp/apply-decontainerization-<YYYYMMDD>.sh`.
+
+Two carry-overs this script must not drop:
+
+- The planning commit `a243989` is **unpushed** (`master` ahead 1) and rides along in step 2.
+- `/stack`'s remote is misspelled **`orgin`**, not `origin`. Do **not** silently rename it inside
+  the script — surface it in the summary and let the developer decide.
+
+Note for Phase D: the ruling is that `git push` *is* authorised in these repos, so if the denial
+turns out to come from a `deny`/`ask` rule the developer controls, the honest fix is a settings
+change — not a permanent manual step. Investigate while the permission tiers are open anyway, and
+if it resolves, step 2 becomes unnecessary.
+
 ---
 
 ## Resume checklist after a compact
