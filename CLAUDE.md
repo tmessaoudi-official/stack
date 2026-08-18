@@ -1,7 +1,7 @@
 # CLAUDE.md
 
 > **/stack infrastructure and development tasks** (Docker, Bash scripts, Makefile, services, env-update, env-scan, Dockerfiles, compose configs) **MUST be delegated to the `global-stack-lead-dev` agent** (subagent_type: `global-stack-lead-dev`).
-> **Non-/stack tasks** (general development, research, analysis, content creation, tooling outside this project) are handled directly in the main conversation using the global reasoning framework defined in `~/.claude/CLAUDE.md` — which in a remote container **only exists because `scripts/claude-bootstrap/install.sh` puts it there** (see § "Claude container bootstrap").
+> **Non-/stack tasks** (general development, research, analysis, content creation, tooling outside this project) are handled directly in the main conversation using the global reasoning framework defined in `~/.claude/CLAUDE.md` — the developer's own persistent install, which this repo never writes (see § "The container-era bootstrap is GONE").
 > **On any conflict between that framework and this file, THIS FILE WINS.**
 
 ---
@@ -64,7 +64,7 @@ Three consequences:
 
 - **Never propose adding a `deny` or `ask` entry**, and never add one to `settings.json.pending`. If a command looks dangerous enough to gate, the gate is a plain-text question (`/ask-human`) before running it — not a config rule that blocks it.
 - **rent-watch's four `Read`/`Edit(./.env)` path denies are explicitly NOT adopted here.** Their own cross-repo audit lists them as a P2 to port to all four siblings; that recommendation is **rejected for `/stack`** on two independent grounds: this ruling, and the fact that `env-update`/`env-scan`/`env-diff` must read *and* write `.env` as their core function, so the deny would break the project's main workflow rather than guard it. `.claude/hooks/env-guard-on-write.sh` is the right mechanism — it warns on a `.env` edit and lets the turn continue.
-- **Nothing mechanically stops a destructive command**, so the discipline carries the whole load: `scripts/claude-bootstrap/BLAST-RADIUS.md` § the `/stack` table, and § "When this protocol is mandatory" in `/ask-human`. Machine-level protections stay in the developer's personal global settings, which this repo never touches.
+- **Nothing mechanically stops a destructive command**, so the discipline carries the whole load: `docs/BLAST-RADIUS.md` § the `/stack` table, and § "When this protocol is mandatory" in `/ask-human`. That file is kept IN THIS REPO deliberately — the global `~/.claude/BLAST-RADIUS.md` carries only `make hard-restart` and none of the `/stack`-specific radii, so a pointer at the global copy would silently lose `make soft-restart`, `docker volume rm`, the `RELOAD` flags, `env-update --apply` and `make save`. Machine-level protections stay in the developer's personal global settings, which this repo never touches.
 
 ## Certification ladder — governs every 3C/6C gate
 
@@ -80,7 +80,7 @@ Each reviewer **reads the actual diff, code and tests itself** — never certify
 
 **Tier: MAXIMAL by default** — all three lenses, **two consecutive fully-clean rounds**, any finding resets the counter, cap 5 rounds → then ask in plain text (never silently proceed). Rationale: this stack's characteristic failure is *silent* — a token mismatch yields a container that works while reporting unhealthy for 24h, a drifted `ARG` yields a stale image while `.env` looks right, and a startup-script edit lands on every tier-03 consumer at once. None of those is caught by a passing test suite, and none is confined to one service.
 
-**The one carve-out is mechanical, not a judgement call:** if `git diff --name-only` touches no operational surface, STANDARD is enough — one reviewer, three lenses in a single pass, one clean round. Docs, `CLAUDE.md`, `templates/tips/`, `docs/`, `.claude/**` and `scripts/claude-bootstrap/**` edits qualify. Anything under `docker/`, `bin/`, `Makefile`, `.env` or `docker-compose.yaml` does not.
+**The one carve-out is mechanical, not a judgement call:** if `git diff --name-only` touches no operational surface, STANDARD is enough — one reviewer, three lenses in a single pass, one clean round. Docs, `CLAUDE.md`, `templates/tips/`, `docs/` and `.claude/**` edits qualify. Anything under `docker/`, `bin/`, `Makefile`, `.env` or `docker-compose.yaml` does not.
 
 **A tier-02/tier-03 startup script or a `.env` cascade change always gets MAXIMAL**, against a **frozen commit** — freeze first, because a round run on a moving tree cannot count toward the two-clean requirement.
 
@@ -94,17 +94,21 @@ Every plan or spec produced here is persisted at **`docs/plans/<topic>.plan.md`*
 
 Reports and handoffs go to `var/claude/**` (gitignored via the blanket `/var` rule). **Never** `~/.claude/projects/…` — that is wiped when the container is reclaimed. Anything that must outlive the container graduates into a `CLAUDE.md` § Gotchas entry or a `templates/tips/` reference, as a reviewed commit.
 
-## Claude container bootstrap
+## The container-era bootstrap is GONE (removed 2026-08-18)
 
-Remote Claude containers for this repo are **ephemeral**: `~/.claude` starts empty every session and the repository is re-cloned fresh. Because this file routes non-/stack work to "the global reasoning framework defined in `~/.claude/CLAUDE.md`", that reference used to dangle — verified 2026-08-05, a fresh container had no `~/.claude/CLAUDE.md` at all. `scripts/claude-bootstrap/` fixes that: a `SessionStart` hook runs `install.sh`, which copies the framework, `THINKING.md`, `BLAST-RADIUS.md` and `hooks/log-helpers.sh` into `~/.claude/`. Full detail — including the provenance of each file and what was deliberately *not* imported — is in `scripts/claude-bootstrap/README.md`.
+This repo used to ship `scripts/claude-bootstrap/`, wired as a `SessionStart` hook, because remote Claude containers started with an empty `~/.claude` every session. **That environment is dead and the directory is deleted.** `~/.claude/` is now the developer's own persistent install, and this repo never writes it.
 
-Three consequences worth knowing before you work in a container session:
+Removing it was not cosmetic: `install.sh` did an unconditional `cp -f` of an in-repo, container-era framework copy over `~/.claude/CLAUDE.md` — a copy that banned `AskUserQuestion`. All five sibling repos shipped that hook, so opening any of them rewrote the global framework with a stale copy, and the one-shot `.pre-bootstrap.bak` safety net was already spent.
 
-- **`.claude/settings.json` cannot be written by Claude** (classifier-blocked — it is Claude's own permission surface; verified denied here on 2026-08-05). Changes travel through the repo instead: write `scripts/claude-bootstrap/settings.json.pending`, commit it, and the developer runs `bash scripts/claude-bootstrap/apply-pending-settings.sh`, which validates with `jq`, backs up the old file, applies it and deletes the pending copy.
-- **The five `PostToolUse` lint hooks silently no-op in the container** — `shellcheck`, `hadolint`, `yamllint`, `shfmt` and `yamlfmt` are not installed there. They work on the developer's machine. From a container session, lint explicitly before committing (see § "Testing & Verification").
-- **Permissions are allow-list only** (`defaultMode: auto`, no `deny`, no `ask`) — developer ruling, because he drives this container from the web app with no terminal to approve an `ask` from. Nothing therefore *mechanically* blocks a destructive stack command; `scripts/claude-bootstrap/BLAST-RADIUS.md` carries that weight by discipline, and its `/stack` table lists the specific blast radii (`make soft-restart`, `docker volume rm`, `RELOAD` flags, `env-update --apply`, `make save`).
+Two files that lived in that directory were **innocent of the clobber and are kept**, vendored into the repo so a clean clone still works: `.claude/hooks/precompact-handoff.sh` (with its 42-assertion suite) and `.claude/hooks/log-helpers.sh`. `BLAST-RADIUS.md` likewise moved to `docs/BLAST-RADIUS.md`.
 
-**Context compaction writes a handoff.** A `PreCompact` hook (`scripts/claude-bootstrap/hooks/precompact-handoff.sh`) writes `var/claude/handoff/latest.md` — git state, uncommitted paths, `tools/` health markers, the last 8 user messages verbatim, and where to resume — immediately before the context is compacted. **Read it first after a compaction.** It is deterministic (no LLM call); `GS_HANDOFF_LLM=1` opts into a narrative, `GS_HANDOFF_DIR` overrides the location. Everything under `var/` is gitignored.
+Two consequences worth knowing before you work here:
+
+- **`.claude/settings.json` cannot be written by Claude** (classifier-blocked — it is Claude's own permission surface). The old `settings.json.pending` + `apply-pending-settings.sh` route died with the bootstrap. Current route: hand the developer a single `! bash /tmp/<script>.sh` that does the `jq` transform, validates it, backs up the original and commits the result.
+- **The `PostToolUse` lint hooks are live here** — `shellcheck`, `hadolint`, `yamllint`, `shfmt` and `yamlfmt` are installed on this machine (verified 2026-08-18). The old "they silently no-op in the container" caveat no longer applies; do not cite it as a reason to skip linting.
+- **Permissions are allow-list only** (`defaultMode: auto`, no `deny`, no `ask`) — developer ruling, because he drives this container from the web app with no terminal to approve an `ask` from. Nothing therefore *mechanically* blocks a destructive stack command; `docs/BLAST-RADIUS.md` carries that weight by discipline, and its `/stack` table lists the specific blast radii (`make soft-restart`, `docker volume rm`, `RELOAD` flags, `env-update --apply`, `make save`).
+
+**Context compaction writes a handoff.** A `PreCompact` hook (`.claude/hooks/precompact-handoff.sh`) writes `var/claude/handoff/latest.md` — git state, uncommitted paths, `tools/` health markers, the last 8 user messages verbatim, and where to resume — immediately before the context is compacted. **Read it first after a compaction.** It is deterministic (no LLM call); `GS_HANDOFF_LLM=1` opts into a narrative, `GS_HANDOFF_DIR` overrides the location. Everything under `var/` is gitignored.
 
 ## What This Project Is
 
@@ -289,8 +293,7 @@ make start-local-registry            # Start local TLS registry (port 5000)
 - **Startup script dry-run**: `GS_STARTUP_DRY_RUN=1 bash docker/config/dist/bin/nvm-bin/global-stack-nvm-start.sh` — exits before any install; tests the prologue loads and script parses. In containers: PATH includes `/usr/local/bin`; on host: prepend `PATH="/stack/docker/config/dist/bin/base-bin:$PATH"`.
 - **Shared prologue**: `docker/config/dist/bin/base-bin/global-stack-base-prologue.sh` — defines `stackCatch` + `trap` for all startup scripts (49 scripts source it). Excluded: caddy/httpd/nginx server scripts, android-setup, localstack, selenium-chrome/firefox, serverless, and utility helper scripts (deliberate 141/1-exempt variant).
 - **Startup prologue tests**: `bash bin/tests/startup-prologue.test.sh` — covers prologue syntax/shellcheck, `bash -n` on all 49 sourcing scripts, `GS_STARTUP_DRY_RUN=1` exit-early, `stackCatch` error token writing and clean-exit no-op.
-- **PreCompact handoff tests**: `bash bin/tests/precompact-handoff.test.sh` — 42 assertions over `scripts/claude-bootstrap/hooks/precompact-handoff.sh`: the always-exit-0 contract on every failure path, git + `tools/` health blocks, verbatim user-intent extraction, harness-turn noise filtering, `jq -Rrs` encoding, the `GS_HANDOFF_DIR` override, and the `<!-- manual -->` guard on both write paths.
-- **install.sh tests**: `bash bin/tests/install.test.sh` — 26 assertions pinning **the repo is always the truth**: unconditional `cp -f`, the one-time `.pre-bootstrap.bak` snapshot, and its never-rewrite guard (which matters because all five sibling repos ship this hook, so opening a sibling installs its copy over yours). Sabotage-verified: reverting to `cp -u` fails 4.
+- **PreCompact handoff tests**: `bash bin/tests/precompact-handoff.test.sh` — 42 assertions over `.claude/hooks/precompact-handoff.sh`: the always-exit-0 contract on every failure path, git + `tools/` health blocks, verbatim user-intent extraction, harness-turn noise filtering, `jq -Rrs` encoding, the `GS_HANDOFF_DIR` override, and the `<!-- manual -->` guard on both write paths.
 
 > **In a remote container, lint manually — the hooks are dead.** `shellcheck`, `hadolint`, `yamllint`, `shfmt` and `yamlfmt` are **not installed** in the remote Claude container, so the five `PostToolUse` hooks and both `/lint` and `/fmt` silently no-op there. They work on the developer's machine. To gate a container session properly, fetch static binaries once into a scratch dir and run them explicitly at the project's own threshold — `shellcheck -x -S warning -f gcc <file>` (matching `.claude/hooks/shellcheck-on-write.sh`, so info-level SC2015/SC2016 are correctly below the bar) and `shfmt -l -i 2 -ci -bn <file>`. `bash -n` is always available and catches syntax errors with no install at all.
 
@@ -332,8 +335,8 @@ make start-local-registry            # Start local TLS registry (port 5000)
 - `yamllint` — validates `.yaml`/`.yml` files on every write
 - `shfmt` — checks shell formatting on `.sh` writes (reports diff, doesn't auto-fix)
 
-**Automatic hooks** (SubagentStop):
-- `subagent-stop-reminder` — fires when a subagent completes; reminds parent to verify Phase 7/8
+**Automatic hooks** (PreCompact):
+- `precompact-handoff` — writes `var/claude/handoff/latest.md` before the context is compacted, and refuses to overwrite a hand-written one marked `<!-- manual -->`
 
 **Permission rules** (two layers): the project `.claude/settings.json` denies destructive operations (`make hard-restart*`/`soft-restart*`, `sudo`, `rm -rf`, `docker system prune`/`volume rm`/`volume prune`/`container prune`/`image prune`/`network prune`/`rmi`/`compose down -v`, `git clean`, `git push --force`, `chmod 777`, Bash access to `docker/data`/`docker/storage`, Read access to `docker/data`/`docker/storage`/`var`), asks for stack lifecycle (`make up/down/restart`, `env-update --apply`, `docker buildx prune`) and allows read-only previews (`env-update --check/--dry-run/--dump`, `env-scan --dry-run`, `make log-*`). Additional read-only allows (`docker compose ps/logs`, `shfmt`, `yamlfmt`, `yamllint`, `yq`, `diff`) live in the global `~/.claude/settings.json` layer — a bundle of this project carries only the project layer.
 
@@ -387,25 +390,15 @@ ls tools/successes/ | grep <tier02-name>  # Check tier 02 manager health
 Claude Code's configuration for this project lives in:
 
 ```
-~/.claude/CLAUDE.md                      # Global reasoning framework — INSTALLED BY THE BOOTSTRAP
-~/.claude/THINKING.md                    #   in a container (empty otherwise); on the dev's machine
-~/.claude/BLAST-RADIUS.md                #   these come from his own bundle install
-~/.claude/hooks/log-helpers.sh           # log_obs() — sourced by the .claude/hooks/* scripts below
+~/.claude/CLAUDE.md                      # Global reasoning framework — the developer's own install
+~/.claude/THINKING.md                    #   from his bundle. This repo NEVER writes these; the
+~/.claude/BLAST-RADIUS.md                #   container-era bootstrap that did was removed 2026-08-18
 ~/.claude/settings.json                  # Global settings (model, plugins) — never touched by this repo
 
-claude-setup/claude-setup-global.tar.gz  # The dev's machine bundle: PROVENANCE for the three docs above
-scripts/claude-bootstrap/                # Restores the framework into the ephemeral container
-  README.md                              #   provenance table + what was deliberately NOT imported
-  install.sh                             #   SessionStart hook; unconditional cp -f, one-directional
-  CLAUDE-global.md                       #   bundle framework + the /stack adaptation header
-  THINKING.md                            #   bundle, byte-identical
-  BLAST-RADIUS.md                        #   bundle + the /stack blast-radius table
-  apply-pending-settings.sh              #   dev-side applier for settings.json.pending
-  settings.json.pending                  #   only present when a settings change is awaiting the dev
-  hooks/precompact-handoff.sh            #   PreCompact hook -> var/claude/handoff/latest.md
-  hooks/log-helpers.sh                   #   log_obs(), never fatal (framework Rule 13)
+claude-setup/claude-setup-global.tar.gz  # The dev's machine bundle: PROVENANCE for the docs above
+docs/BLAST-RADIUS.md                     # The /stack blast-radius table — kept IN REPO because the
+                                         #   global copy carries only `make hard-restart`
 bin/tests/precompact-handoff.test.sh     # 42 assertions over the PreCompact hook
-bin/tests/install.test.sh                # 26 assertions over install.sh (repo-is-truth)
 
 .claude/settings.json                    # Project permissions + hooks — CLAUDE CANNOT WRITE THIS
 .claude/settings.local.json              # Local UI preferences (gitignored)
@@ -414,13 +407,15 @@ bin/tests/install.test.sh                # 26 assertions over install.sh (repo-i
   stack-infra-reviewer.md                #   ladder lens 1: correctness + regression
   completeness-reviewer.md               #   ladder lens 2: completeness + blast radius
   reproducibility-reviewer.md            #   ladder lens 3: clean-clone + destructive posture
-.claude/hooks/                           # PostToolUse + SubagentStop hook scripts
+.claude/hooks/                           # PostToolUse + PreCompact hook scripts
   shellcheck-on-write.sh                 # Lint .sh files on write        }
-  hadolint-on-write.sh                   # Lint Dockerfiles on write      } all five silently
-  yamllint-on-write.sh                   # Validate YAML on write         } no-op in the remote
-  shfmt-on-write.sh                      # Check shell formatting         } container — the tools
-  env-guard-on-write.sh                  # Guard .env edits               } are not installed there
-  subagent-stop-reminder.sh              # SubagentStop: remind parent to verify Phase 7/8
+  hadolint-on-write.sh                   # Lint Dockerfiles on write      } all five are LIVE on
+  yamllint-on-write.sh                   # Validate YAML on write         } this machine — the
+  shfmt-on-write.sh                      # Check shell formatting         } tools are installed
+  env-guard-on-write.sh                  # Guard .env edits               }
+  precompact-handoff.sh                  # PreCompact -> var/claude/handoff/latest.md
+  log-helpers.sh                         # log_obs() — SOURCED by the hooks above, not itself a
+                                         #   hook (unregistered + mode 644 by design)
 .claude/skills/                          # Slash skill definitions (read in place, no install)
   lint/  fmt/  check-versions/  bump-versions/  validate/  stack-health/
   env-diff/  service-info/  new-service/  debug-service/            # domain skills

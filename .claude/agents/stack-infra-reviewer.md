@@ -63,8 +63,7 @@ two halves can disagree while everything still appears to work.
    ones relevant to the diff and report the real PASS/FAIL counts:
    ```bash
    bash bin/tests/env-scan.test.sh; bash bin/tests/env-update.test.sh
-   bash bin/tests/startup-prologue.test.sh; bash bin/tests/precompact-handoff.test.sh
-   bash bin/tests/check-image-versions.test.sh
+   bash bin/tests/startup-prologue.test.sh; bash bin/tests/check-image-versions.test.sh
    ```
    A behavioural change with no test is your finding. For a startup script, the minimum bar is
    `GS_STARTUP_DRY_RUN=1 bash <script>` (it exits before installing anything) plus `bash -n`.
