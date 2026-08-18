@@ -1,7 +1,12 @@
 # De-containerization Plan — restore AskUserQuestion + advisor-aware ladder
 
-> **Status: APPROVED, NOT STARTED.** Written 2026-08-18 before a context compact.
-> Resume by reading this file top to bottom. Nothing has been modified yet.
+> **Status: PHASE A COMPLETE (P0 defused). Phases B–G partially done.** Written 2026-08-18 before a
+> context compact; execution resumed 2026-08-18 after it. Resume by reading this file top to bottom,
+> then § "Execution log" at the end for exactly what is done and what is left.
+>
+> **Two of this plan's own findings turned out to be WRONG.** Both are recorded in the Decisions Log
+> below and are open questions, not settled decisions. Do not act on the original wording of the
+> "13 duplicate skills" decision or the Phase D path-denies for rent-watch without reading them.
 
 **Scope:** `/stack`, `/stack/projects/pdfturbo`, `/stack/projects/phorj`,
 `/stack/projects/rent-watch`, `/stack/projects/twes-in`.
@@ -27,6 +32,10 @@ reviewer-lens ladder as the certification path whenever `advisor()` is unavailab
 - [2026-08-18 11:05] AGREED: Certification enforcement lives **globally**, by extending the existing `~/.claude/hooks/advisor-completion-guard.sh` to accept a `*-reviewer` subagent as well as `advisor()`. Not replicated per-repo.
 - [2026-08-18 11:05] AGREED: Skip `invoiceninja` this round.
 - [2026-08-18 11:05] AGREED: Execute **inline, sequentially, repo by repo** — not parallel subagents. The five `CLAUDE.md` files phrase the same rules differently; that is prose judgment, and parallel agents would re-introduce the drift being cleaned up.
+- [2026-08-18 13:30] ⚠️ **REFUTED — the "13 generic skills are duplicates" premise is false.** Measured against `~/.claude/skills/`: `/stack`'s `converge` is 21,850 B vs global 14,061 B with 13 references to this repo's own reviewer agents; rent-watch's are larger still (`forge` 40,241 vs 27,278, `sleuth` 35,983 vs 23,856, `inspect` 39,343 vs 28,165, `converge` 24,546 vs 14,061) with 24–44 domain references each. These are heavily adapted repo-local skills. **All were restored pending a decision** — deleting them would discard substantial work. OPEN: delete none / delete only the ones that are genuinely thin / re-audit individually.
+- [2026-08-18 13:30] ⚠️ **REFUTED — rent-watch's `repair` skill was never a duplicate.** It ships `.claude/skills/repair/drift-scan.sh` (31,732 B), which has **no global equivalent** and which rent-watch CI executes as a gate. Deleting it broke CI. Restored.
+- [2026-08-18 13:30] ⚠️ **CONFLICT — Phase D's path denies contradict rent-watch's own invariant.** rent-watch `CLAUDE.md` states `deny` is empty and stays empty, and `drift-scan.sh` § S4b **asserts** it, specifically so the entry "cannot creep back in a later port from a sibling repo." Applying Phase D to rent-watch would trip its own gate. OPEN: exempt rent-watch / change its ruling and its scanner / drop the path denies everywhere.
+- [2026-08-18 13:30] AGREED: Where the classifier blocks Claude (`settings.json*` of any name, `/stack`'s `lint` + `fmt` SKILL.md, the phorj commit), the work goes into ONE hand-off script rather than being retried or worked around.
 
 ---
 
@@ -223,6 +232,43 @@ change — not a permanent manual step. Investigate while the permission tiers a
 if it resolves, step 2 becomes unnecessary.
 
 ---
+
+## Execution log — 2026-08-18 (post-compact session)
+
+### Done and committed
+
+| Repo | Commit | What |
+|---|---|---|
+| /stack | `aa13971` | bootstrap removed; `bin/tests/{install,precompact-handoff}.test.sh` removed; 10 domain skills restored; 8 of them stripped of the AskUserQuestion ban |
+| rent-watch | `a8cfae7` | bootstrap removed; `ci.yml` + `test-ci-workflow.sh` + `drift-scan.sh` S1 corrected for it |
+| pdfturbo | `3bb130b` | bootstrap removed |
+| twes-in | `b1d2069` | bootstrap removed |
+| phorj | — | staged only; commit classifier-blocked ×3, rides in the hand-off script |
+
+**P0 is defused.** `scripts/claude-bootstrap/` no longer exists in any of the five repos, so the
+still-registered `SessionStart` hooks find nothing and exit 127 harmlessly. Verified by simulating
+the hook exactly as registered: `~/.claude/CLAUDE.md` stayed 57,075 bytes with 0 `FORBIDDEN`
+mentions.
+
+### Verified facts that correct this plan
+
+- `~/.claude/CLAUDE.md` was **never clobbered** — 57,075 B, 0 `FORBIDDEN`, differs from
+  `.pre-bootstrap.bak` only by the `{{TZ}}` → `Europe/Paris` resolution.
+- The 10-vs-13 `/stack` skill split in this plan is **exactly right** — reproduced independently
+  by diffing every deleted skill against `~/.claude/skills/`.
+- `shellcheck`, `yamllint`, `shfmt` and `hadolint` are all **PRESENT** on this machine, so Phase C's
+  instruction to delete the "linters not installed" caveat is correct.
+- `askUserQuestionTimeout` is `"never"` — confirmed.
+
+### Left to do
+
+1. Run `! bash /tmp/apply-decontainerization-20260818.sh` — sibling `settings.json` hook removal,
+   `/stack` `lint`+`fmt` frontmatter, the phorj commit, and all five pushes.
+2. Resolve the three ⚠️ entries in the Decisions Log above.
+3. Phase B/C prose: the five `CLAUDE.md` files still carry the plain-text-question section, the
+   `❓`/`⏹` marker rule, the ladder's "advisor() does not exist" claim, and now-stale
+   `scripts/claude-bootstrap/` references. **None of this is started.**
+4. Phase D permissions and Phase E `## Git autonomy` sections — not started.
 
 ## Resume checklist after a compact
 
