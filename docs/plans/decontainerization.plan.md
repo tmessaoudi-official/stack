@@ -262,6 +262,30 @@ mentions.
   instruction to delete the "linters not installed" caveat is correct.
 - `askUserQuestionTimeout` is `"never"` — confirmed.
 
+### Hand-off script — executed 2026-08-18, two bugs found by running it
+
+`/tmp/apply-decontainerization-20260818.sh` ran and applied everything it was meant to, but the run
+exposed two defects that static review had not:
+
+1. **Step 2 had no commit step.** It stripped the `AskUserQuestion` ban from `/stack`'s `lint` and
+   `fmt` SKILL.md and left them uncommitted, so the repo was pushed without them. Closed by
+   `029d5d2`. Every mutating step in a hand-off script needs its own commit — the script had them
+   for steps 1 and 2b and it was easy to miss the one that didn't.
+2. **`git commit` commits the whole index, not just the added path.** Step 1 ran
+   `git add .claude/settings.json && git commit`, but phorj's index already held its staged
+   bootstrap deletions and hook fixes — so phorj's entire de-containerization landed under the
+   short message *"unregister the deleted claude-bootstrap hooks"* instead of its own detailed one.
+   Content is correct and complete; only the message is thin. **Not amended** — force-push is not
+   authorised, and the commit is on its way to the remote.
+
+The run was also **killed part-way through phorj's `pre-push`** (it compiles
+`clippy --all-features` from scratch, several minutes). Nothing was left half-applied: every repo
+was committed and clean, three were simply unpushed. Finished by
+`/tmp/push-remaining-20260818.sh`.
+
+Gates that ran green on the way: pdfturbo `206 files / 2370 tests`; phorj size-gate, surface-ratchet,
+wasm-check, doc-guards and microbench-gate all OK.
+
 ### Certification status — NOT certified
 
 One `completeness-reviewer` round ran and returned **11 findings (2×P0, 3×P1, 3×P2, 3×P3)**. All the
