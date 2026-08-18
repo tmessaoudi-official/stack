@@ -138,9 +138,9 @@ skim past your real findings:
 ```
 
 Convergence: **clean = zero new findings.** A finding means fix → re-review, and the round counter
-resets. Cap at 5 rounds; if findings are still open at the cap, say so in plain text with options —
-never silently certify. `AskUserQuestion` is forbidden in this container (it times out); every question
-is plain prose per `.claude/skills/ask-human/SKILL.md`.
+resets. Cap at 5 rounds; if findings are still open at the cap, report them with options and
+never silently certify (the orchestrating session asks the developer via `AskUserQuestion` — a
+subagent has no question tool; protocol: `.claude/skills/stack-ask-human/SKILL.md`).
 
 Finally: **CERTIFIED with no `Verified with` section is not a certification.** If you ran nothing, say
 that plainly — "no verification was possible in this environment because X" is a useful, honest result.
