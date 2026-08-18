@@ -286,6 +286,33 @@ was committed and clean, three were simply unpushed. Finished by
 Gates that ran green on the way: pdfturbo `206 files / 2370 tests`; phorj size-gate, surface-ratchet,
 wasm-check, doc-guards and microbench-gate all OK.
 
+### Collateral finding — phorj's PHP oracle had drifted (fixed, `e0d5b9be`)
+
+phorj's `pre-push` gate blocked the de-containerization push with two failing tests
+(`conformance_single_file_golden`, `all_examples_transpile_and_match_php`). **Not caused by this
+work** — the phorj commit touches zero source files and its source tree is byte-identical to its
+parent.
+
+`scripts/toolchain.env` pinned `php-8.5.8` literally. The stack moved to **php-8.5.9**, that path
+stopped existing, and the candidate loop fell through to `php8.5` on PATH — `/bin/php8.5`, an
+**8.5.4 build with no bcmath**. The transpiler emits ~42 `bc*()` calls, so the PHP leg could not run
+at all. One transpiled `conformance/lang/decimal.phg`, two interpreters:
+
+| PHP | Result |
+|---|---|
+| `/bin/php8.5` (what the gate used) | `Call to undefined function bcmul()`, exit 255 |
+| `php-8.5.9` | byte-identical to `phg run`, exit 0 |
+
+Fixed by resolving the oracle **by capability rather than by pinned version**: glob `php-8.5.*`
+newest-first, require `bcmath`, reject a candidate without it, and warn loudly if none qualifies.
+Re-pinning to 8.5.9 was rejected as a fix — `toolchain.env` records the *same* misdiagnosis on
+2026-07-09, so a fresh pin only resets the timer. Gate now reports `[pre-push] OK` with
+43 WIN / 0 blocking regressions.
+
+**Lesson worth keeping: a "failing test" in this stack is as likely to be a drifted toolchain as
+broken code, and the fallback that hid it turned "oracle missing" into "gate against something that
+cannot run the output".**
+
 ### Certification status — NOT certified
 
 One `completeness-reviewer` round ran and returned **11 findings (2×P0, 3×P1, 3×P2, 3×P3)**. All the
