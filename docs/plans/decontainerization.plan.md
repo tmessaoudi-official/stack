@@ -19,7 +19,7 @@ false, so acting first and asking later is exactly the failure mode to avoid.
 
 | # | Decision | Why it is open | Options |
 |---|---|---|---|
-| **D1** | What to do with the 13 "generic" skills in each repo | The plan's premise *"they are duplicates of the global bundle"* is **false**. `/stack`'s `converge` is 21,850 B vs global 14,061 B with 13 refs to this repo's reviewer agents; rent-watch's are larger still (`forge` 40,241 vs 27,278). **All are currently RESTORED** — nothing lost yet. | delete none (status quo) · re-audit individually and delete only genuinely thin ones · delete all anyway |
+| **D1** ✅ | **DECIDED — option 3 (merge).** See § "D1 — DECIDED 2026-08-18" below; that section is executable as written. | Premise *"they are duplicates"* was FALSE. Local copies are independently rewritten, 42–57% smaller in words, and every one carries container-era adaptation notes. | **Merge `forge`/`sleuth`/`inspect`, de-contaminate the other ten in place.** Sub-questions (a) Roadmap re-import (b) push `forge` notes 7–8 up (c) all-at-once vs one-at-a-time — STILL OPEN, ask first. |
 | **D2** | Phase D permission tiers vs rent-watch's invariant | rent-watch `CLAUDE.md` rules `deny` stays **empty**, and its `drift-scan.sh` §S4b **mechanically asserts** it — specifically so a sibling port cannot reintroduce one. Phase D would trip that gate. | exempt rent-watch · change its ruling AND its scanner together · drop the path denies everywhere |
 | **D3** | Whether to proceed into Phases B/C prose | ~98 files across the 5 repos still cite `scripts/claude-bootstrap/`; the plain-text-question sections, the `❓`/`⏹` marker rules and the "advisor() does not exist" ladder claims are all still live. **All prose, none executable** — verified. | do it now, repo by repo · defer · do only the false claims (e.g. `/stack`'s 15/23 `disallowed-tools` sentence) |
 | **D4** | Vendor the PreCompact handoff into the 4 siblings | `/stack` got it back this session (42/42 green) after the plan's "the global hook covers it" premise was refuted. **pdfturbo, phorj, twes-in and rent-watch still have no working handoff** — their `settings.json` registrations were removed and nothing replaced them. | vendor into all 4 (same fix as `/stack`) · leave them on no handoff · pick per repo |
@@ -58,6 +58,10 @@ reviewer-lens ladder as the certification path whenever `advisor()` is unavailab
 - [2026-08-18 13:30] ⚠️ **REFUTED — rent-watch's `repair` skill was never a duplicate.** It ships `.claude/skills/repair/drift-scan.sh` (31,732 B), which has **no global equivalent** and which rent-watch CI executes as a gate. Deleting it broke CI. Restored.
 - [2026-08-18 13:30] ⚠️ **CONFLICT — Phase D's path denies contradict rent-watch's own invariant.** rent-watch `CLAUDE.md` states `deny` is empty and stays empty, and `drift-scan.sh` § S4b **asserts** it, specifically so the entry "cannot creep back in a later port from a sibling repo." Applying Phase D to rent-watch would trip its own gate. OPEN: exempt rent-watch / change its ruling and its scanner / drop the path denies everywhere.
 - [2026-08-18 13:30] AGREED: Where the classifier blocks Claude (`settings.json*` of any name, `/stack`'s `lint` + `fmt` SKILL.md, the phorj commit), the work goes into ONE hand-off script rather than being retried or worked around.
+- [2026-08-18 17:40] AGREED (**D1 RESOLVED**): **Option 3 — merge.** `forge`, `sleuth` and `inspect` are merged (two-way, not re-based); the other ten local skills are de-contaminated in place. Full executable spec in § "D1 — DECIDED 2026-08-18". Three sub-questions (a/b/c) remain open and must be asked before execution.
+- [2026-08-18 17:40] VERIFIED: **`advisor()` IS available on this machine** — `/home/developer/.claude/hooks/advisor-completion-guard.sh` exists and global `CLAUDE.md` references it. Adaptation note 2 ("NO `advisor()` HERE") in all three skills is therefore FALSE and must be reverted. This also affects `/stack/CLAUDE.md` § "Certification ladder", which still claims `advisor()` does not exist — that is D3 prose work.
+- [2026-08-18 17:40] AGREED: **`Step 4b: Self-Reflection` stays REMOVED** from local `sleuth` and `inspect`, against the global copies which still have it. Reason: these skills freeze at Step 4b. The local copies are ahead of global here; do not "restore" it. Record the reason in the file so a later pass cannot helpfully undo it.
+- [2026-08-18 17:40] AGREED: **`--vision` stays out of `inspect` permanently** (no UI in this project) — this is the one adaptation note that is correct and not container-era.
 - [2026-08-18 15:30] ⚠️ **REFUTED — "the global `~/.claude/hooks/precompact-handoff.sh` covers this" (Phase A step 2) is false.** The global hook writes to `~/.claude/projects/<slug>/memory/sessions`, has **no `<!-- manual -->` guard** and no `GS_HANDOFF_DIR` override; `/stack/CLAUDE.md` documents `var/claude/handoff/latest.md`. Observed directly: the compaction on 2026-08-18 produced **no handoff at all**. RESOLVED by vendoring `precompact-handoff.sh` + its 42-assertion suite into `/stack/.claude/hooks/` — `install.sh` was the clobber problem, this hook was innocent. Re-registration is in the hand-off script. **The four sibling repos still have no working PreCompact handoff** — same fix needed there.
 - [2026-08-18 15:30] AGREED: Anything salvaged from `scripts/claude-bootstrap/` is **vendored in-repo**, never sourced from `~/.claude/`, so a clean clone still works. Applied to `log-helpers.sh` (all 5 `/stack` hooks repointed off `$HOME`), `precompact-handoff.sh`, and `BLAST-RADIUS.md` → `docs/BLAST-RADIUS.md`.
 
@@ -357,13 +361,117 @@ Reviewer findings still OPEN (all disclosed Phase B/C scope, none executable):
 
 ### Left to do
 
-1. Run `! bash /tmp/apply-decontainerization-20260818.sh` — sibling `settings.json` hook removal,
-   `/stack` `lint`+`fmt` frontmatter, the phorj commit, and all five pushes.
+1. ~~Run `/tmp/apply-decontainerization-20260818.sh`~~ — **DONE 2026-08-18.** All five repos
+   committed and pushed; the script is spent and `/tmp` is not durable, do not look for it.
 2. Resolve **D1–D4** in § "NEXT SESSION STARTS HERE" at the top of this file — one at a time.
+   **D1 is DECIDED** (option 3, merge) — its executable spec is § "D1 — DECIDED 2026-08-18" near
+   the end of this file. **D2, D3 and D4 are still open.**
 3. Phase B/C prose: the five `CLAUDE.md` files still carry the plain-text-question section, the
    `❓`/`⏹` marker rule, the ladder's "advisor() does not exist" claim, and now-stale
    `scripts/claude-bootstrap/` references. **None of this is started.**
 4. Phase D permissions and Phase E `## Git autonomy` sections — not started.
+
+---
+
+## D1 — DECIDED 2026-08-18: option 3 (merge), spec below is EXECUTABLE AS WRITTEN
+
+> **Developer chose option 3** of the D1 option set: merge the three regressed skills
+> (`forge`, `sleuth`, `inspect`) rather than keep-as-is or delete. The other ten local skills
+> are de-contaminated in place, unchanged in structure.
+>
+> **This section is self-contained.** Everything needed to execute it was measured on
+> 2026-08-18 and is written out below — no prior conversation context is required.
+
+### Measurements (all [Verified] 2026-08-18)
+
+| skill | global words | local words | local is | `diff -u` hunks | lines in common |
+|---|---|---|---|---|---|
+| `forge` | 3,946 | 2,277 | −42% | 1 | 77 / ~230 |
+| `sleuth` | 3,529 | 1,883 | −47% | 1 | 45 / ~230 |
+| `inspect` | 4,111 | 1,754 | −57% | 1 | 52 / ~230 |
+
+Local paths: `/stack/.claude/skills/<n>/SKILL.md`.
+Global paths: `/home/developer/.claude/skills/<n>/SKILL.md`.
+
+**These are independently rewritten documents sharing a skeleton, not edited copies.** A
+line-level three-way merge is the WRONG tool and must not be attempted. The merge spec is
+driven by the numbered *adaptation-note block* at the top of each local file, which states
+exactly why it diverged.
+
+### The adaptation notes, graded
+
+**DEAD — container-era rationale, revert these:**
+
+| note | local line numbers (`forge` / `sleuth` / `inspect`) | claim | why it is dead |
+|---|---|---|---|
+| 1 | 23 / 16 / 17 | "`AskUserQuestion` TIMES OUT in this container" | the container is gone |
+| 2 | 27 / 21 / 20 | "NO `advisor()` HERE" | **`/home/developer/.claude/hooks/advisor-completion-guard.sh` EXISTS on this machine** [Verified: `ls`]; global `CLAUDE.md` references `advisor()` |
+| 4 | 32 / 26 / 24 | "`--scope=global\|both` IS REMOVED: `~/.claude/` is GENERATED from repo files by `scripts/claude-bootstrap/install.sh`" | that directory was **deleted** this session; `~/.claude/` is now the developer's real persistent install, so scoping to it is meaningful again |
+| 7 (`inspect` only) | — / — / 29 | "THE LINTERS ARE ABSENT IN THIS CONTAINER" | shellcheck, hadolint, yamllint, shfmt, yamlfmt are all installed here |
+
+**LIVE — genuine `/stack` adaptation, KEEP (renumber after deletions):**
+
+- note 3 (30 / 23 / 22) — reports to `var/claude/<skill>/`, gitignored by the blanket `/var` rule
+- ≤5 concurrent subagents in two sequential batches, raw output written to disk BEFORE returning
+  (`forge` 34, `sleuth` 28, `inspect` 27) — matches the global cap rule and the known hang
+- "PROJECT RULES WIN on any conflict: `/stack/CLAUDE.md`" (`forge` 36, `sleuth` 31, `inspect` 32)
+- `forge` note 7 (line 37) — the WHY-corpus reader (`## Gotchas` + `templates/tips/`). **This is
+  better than anything in the global copy** — it is what the Chesterton's Fence gate feeds on.
+- `forge` note 8 (line 43) — "INFRASTRUCTURE IS NOT APPLICATION CODE; do not import
+  object-oriented or functional-purity critiques"
+- `inspect` note 5 (line 26) — `--vision` IS REMOVED, this project has no UI. **Permanent, correct,
+  do NOT re-import the `--vision` blocks from global.**
+
+### The finding that cuts the other way — DO NOT "FIX" THIS BACK
+
+`## Step 4b: Self-Reflection` exists in **global** `sleuth` and `inspect` and is **absent from both
+local copies** [Verified: `grep -Eic 'self-reflection|step 4b'` → 0 in all three local files]. No
+adaptation note explains the removal, but it matches a known, recorded failure mode: these skills
+**freeze at Step 4b**, not at synthesis.
+
+On this point the LOCAL copy is AHEAD of global, silently. A naive "re-base onto global" would
+reintroduce the hang. **This is a two-way merge, not a re-basing.**
+
+### The merge spec — 5 points, per file
+
+1. **Delete dead notes 1, 2, 4** (and `inspect`'s 7) and the behaviour each one justifies:
+   restore `AskUserQuestion`; restore `advisor()` as the PRIMARY certifier with the three
+   reviewer subagents as the documented fallback; restore `--scope=global|both`.
+2. **Re-import from global ONLY what note 4 suppressed** — the `--scope` argument block
+   (~8 lines each). Nothing else is imported wholesale.
+3. **Keep Step 4b OUT**, and add a one-line note recording WHY (the freeze), so a later pass
+   does not helpfully restore it.
+4. **Keep every live note**, renumbered contiguously.
+5. **Leave `--vision` out of `inspect`** permanently.
+
+Expected size: **~40–60 changed lines per file, not ~500.** Nothing from the global copy is lost
+except what was removed for a stated cause.
+
+### The other ten skills — de-contaminate in place
+
+`aggregate-findings`, `ask-human`, `converge`, `cross-check`, `expanding-context`, `gaps`,
+`handoff`, `pre-commit`, `retrospective`, `sweep`. Same treatment for the dead notes only; do not
+restructure them. [Verified 2026-08-18: **all 13** local skills mention the plain-text protocol and
+`AskUserQuestion`; nine also write to `var/claude/**`.]
+
+### Sub-questions still OPEN — ask the developer before executing
+
+- **(a)** Global `inspect` has a `### Roadmap` output section (this week / this sprint / this
+  quarter) that the local copy dropped with **no stated reason**. Re-import it, or leave it out?
+  *Recommended: re-import.*
+- **(b)** Should `forge`'s WHY-corpus reader (note 7) and "infra ≠ app code" (note 8) be pushed
+  **UP** into the global copies, so `pdfturbo` / `phorj` / `twes-in` benefit? *Recommended: log it
+  as follow-up, do not do it inside D1.*
+- **(c)** Execution shape: all three files at once with diffs shown before commit, or one file at a
+  time (`forge` first as the template, then the other two)? *Recommended: `forge` first as a
+  checkpoint, since the same pattern is then applied three times.*
+
+### After the merge
+
+The change touches `.claude/**` only, which is the **STANDARD** carve-out in `/stack/CLAUDE.md`
+§ "Certification ladder" — one reviewer, three lenses, one clean round. It does NOT require the
+MAXIMAL two-clean-round panel. **However**, the outstanding MAXIMAL debt from Phase A is
+independent and still owed (see § "Certification status").
 
 ## Resume checklist after a compact
 
