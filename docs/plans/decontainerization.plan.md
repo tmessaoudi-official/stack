@@ -1,32 +1,33 @@
 # De-containerization Plan — restore AskUserQuestion + advisor-aware ladder
 
-> **Status: PHASE A COMPLETE (P0 defused). Phases B–G partially done.** Written 2026-08-18 before a
-> context compact; execution resumed 2026-08-18 after it. Resume by reading this file top to bottom,
-> then § "Execution log" at the end for exactly what is done and what is left.
+> # ✅ CLOSED — 2026-08-19
 >
-> **Two of this plan's own findings turned out to be WRONG.** Both are recorded in the Decisions Log
-> below and are open questions, not settled decisions. Do not act on the original wording of the
-> "13 duplicate skills" decision or the Phase D path-denies for rent-watch without reading them.
+> **This program is finished. Do not resume it; read it as the record.** All six repos are
+> de-containerized, decontaminated against the global-is-reference ruling, committed and pushed,
+> and Phase G is applied. Verified at close-out: `dirty=0 ahead=0` in all six, **zero name
+> collisions** against the global 48 skills / 19 hooks / 0 agents, commit identity
+> `Takieddine MESSAOUDI <takieddine.messaoudi.official@gmail.com>` in all six.
+>
+> **One decision (D2) is deliberately deferred, not forgotten** — see the table below; it is
+> parked with its conflict intact rather than resolved by default. Everything else that remains
+> (the MAXIMAL certification rounds, per-repo Phase D/E) is **per-repo development work**, owned
+> by the developer, by ruling of 2026-08-19: *"just finish the claude code bundle correction,
+> nothing more — I will finish each repo development on its own."*
+>
+> **Read § "Decisions Log" for the rulings and § "Execution log" for what happened.** Five of this
+> plan's own premises were REFUTED mid-flight; each refutation is recorded in place rather than
+> edited away, and that is the most useful thing in this file.
 
 ---
 
-## ⏭️ NEXT SESSION STARTS HERE — four open decisions, to be taken one at a time
+## Outcome — the four decisions
 
-Agreed with the developer 2026-08-18, immediately before a context compaction: **Phase A is done
-and pushed; the next session walks these four decisions one by one.** Nothing else should start
-until they are settled — three of them exist because a premise in this very plan turned out to be
-false, so acting first and asking later is exactly the failure mode to avoid.
-
-| # | Decision | Why it is open | Options |
-|---|---|---|---|
-| **D1** ✅ | **DECIDED — option 3 (merge).** See § "D1 — DECIDED 2026-08-18" below; that section is executable as written. | Premise *"they are duplicates"* was FALSE. Local copies are independently rewritten, 42–57% smaller in words, and every one carries container-era adaptation notes. | **Merge `forge`/`sleuth`/`inspect`, de-contaminate the other ten in place.** Sub-questions (a) Roadmap re-import (b) push `forge` notes 7–8 up (c) all-at-once vs one-at-a-time — STILL OPEN, ask first. |
-| **D2** | Phase D permission tiers vs rent-watch's invariant | rent-watch `CLAUDE.md` rules `deny` stays **empty**, and its `drift-scan.sh` §S4b **mechanically asserts** it — specifically so a sibling port cannot reintroduce one. Phase D would trip that gate. | exempt rent-watch · change its ruling AND its scanner together · drop the path denies everywhere |
-| **D3** | Whether to proceed into Phases B/C prose | ~98 files across the 5 repos still cite `scripts/claude-bootstrap/`; the plain-text-question sections, the `❓`/`⏹` marker rules and the "advisor() does not exist" ladder claims are all still live. **All prose, none executable** — verified. | do it now, repo by repo · defer · do only the false claims (e.g. `/stack`'s 15/23 `disallowed-tools` sentence) |
-| **D4** | Vendor the PreCompact handoff into the 4 siblings | `/stack` got it back this session (42/42 green) after the plan's "the global hook covers it" premise was refuted. **pdfturbo, phorj, twes-in and rent-watch still have no working handoff** — their `settings.json` registrations were removed and nothing replaced them. | vendor into all 4 (same fix as `/stack`) · leave them on no handoff · pick per repo |
-
-**State going in:** all five repos `dirty:0 ahead:0`, everything pushed. Certification is **0 of 2
-clean rounds** — the one round that ran was on a moving tree and does not count, so a fresh panel
-against a frozen commit is owed regardless of which decisions are taken.
+| # | Decision | Outcome |
+|---|---|---|
+| **D1** ✅ | Merge vs delete the 13 "duplicate" skills | **RESOLVED, then SUPERSEDED.** Decided as option 3 (merge) on the strength of the refuted-duplicates finding; superseded hours later by the **global-is-reference ruling** (2026-08-18 19:17), under which a repo may not carry any artifact that exists in `~/.claude/` unless renamed and heavily repurposed. Executed as extract-then-delete with per-repo prefixes (`stack-` `rw-` `pdf-` `phg-` `twes-` `in-`). The § "D1 — DECIDED" spec below is kept as the record of the reasoning, **not as instructions** — do not execute it. |
+| **D2** ⏸️ | Phase D permission tiers vs rent-watch's invariant | **DEFERRED BY CHOICE, 2026-08-19 — still genuinely open.** rent-watch's `CLAUDE.md` rules `deny` stays **empty** and its `rw-repair/drift-scan.sh` § S4b **mechanically asserts** it, precisely so a sibling port cannot reintroduce one; Phase D would trip that gate. Nothing in this program prejudged it — `deny` is still `[]` in every repo's settings [Verified at close-out]. The three options stand unchanged: exempt rent-watch · change its ruling AND its scanner together · drop the path denies everywhere. **Note the enforcement that DID land is global-layer only** (Phase G's five tool denies in `~/.claude/settings.json`), chosen deliberately so S4b's repo-scope assertion stays untouched. |
+| **D3** ✅ | Proceed into the Phase B/C prose | **DONE, all six repos.** Question sections, `❓`/`⏹` marker rules, "advisor() does not exist" ladder claims and dead bootstrap pointers are gone from every `CLAUDE.md` and every `.claude/**`. Final sweep: 0 live `disallowed-tools: AskUserQuestion`, 0 marker rules, 0 no-advisor claims. Remaining `claude-bootstrap` mentions are dated retirement notes plus invoiceninja's stays-gone assertion — read individually, not swept. |
+| **D4** ❌ | Vendor the PreCompact handoff into the 4 siblings | **CANCELLED** by the global-is-reference ruling. Handoffs are the GLOBAL `~/.claude/hooks/precompact-handoff.sh`'s job, writing into the developer's memory pipeline; the copy briefly vendored into `/stack` was removed again the same day, and no repo carries one. |
 
 ---
 
@@ -371,21 +372,41 @@ Reviewer findings still OPEN (all disclosed Phase B/C scope, none executable):
 - ~98 files across the 5 repos still cite `scripts/claude-bootstrap/`; the skill/agent adaptation
   headers all still say `~/.claude/` "is generated by install.sh, so auditing it audits a copy".
 
-### Left to do
+### Left to do — NOTHING IN THIS PROGRAM (closed 2026-08-19)
 
-1. ~~Run `/tmp/apply-decontainerization-20260818.sh`~~ — **DONE 2026-08-18.** All five repos
-   committed and pushed; the script is spent and `/tmp` is not durable, do not look for it.
-2. Resolve **D1–D4** in § "NEXT SESSION STARTS HERE" at the top of this file — one at a time.
-   **D1 is DECIDED** (option 3, merge) — its executable spec is § "D1 — DECIDED 2026-08-18" near
-   the end of this file. **D2, D3 and D4 are still open.**
-3. Phase B/C prose: the five `CLAUDE.md` files still carry the plain-text-question section, the
-   `❓`/`⏹` marker rule, the ladder's "advisor() does not exist" claim, and now-stale
-   `scripts/claude-bootstrap/` references. **None of this is started.**
-4. Phase D permissions and Phase E `## Git autonomy` sections — not started.
+All four items that stood here are resolved; see § "Outcome — the four decisions" at the top.
+Retained below is only what is **deliberately** carried out of this program, so nobody re-opens
+the plan looking for it:
+
+| Carried out of scope | Owner | Why it is not here |
+|---|---|---|
+| **D2** — sibling permission tiers | open decision | Deferred by choice, conflict intact. `deny` is `[]` in every repo, unprejudged. |
+| **MAXIMAL certification rounds** — /stack + rent-watch at 0 of 2; the other four never had round 1 | developer, per repo | Per-repo development work by the 2026-08-19 ruling. A round must freeze a commit first. |
+| **Phase E beyond identity** — a normalised `## Git autonomy` section in every sibling | developer, per repo | Identity IS done and verified in all six; the prose normalisation is repo-local editing. |
+| `/stack`'s remote is spelled **`orgin`** | developer | Surfaced, never silently renamed: `git -C /stack remote rename orgin origin`. |
+
+Hand-off scripts from this program are **spent and deleted** (`/tmp` is not durable — do not look
+for them). The one that survives is `/tmp/apply-no-teams-enforcement-20260818.sh`, and it was
+**applied 2026-08-19**: `~/.claude/settings.json` `permissions.deny` went 123 → 128, adding exactly
+`SendMessage` `RemoteTrigger` `ScheduleWakeup` `CronCreate` `CronDelete`, nothing lost
+[Verified: jq set difference; everything outside `.permissions.deny` byte-identical]. Note the
+script's `jq unique` **sorts the whole array** as a side effect, so its diff looks enormous and is
+almost entirely reordering — check the set, not the diff. Rollback:
+`cp -a ~/.claude/settings.json.bak.1787117556 ~/.claude/settings.json`.
 
 ---
 
-## D1 — DECIDED 2026-08-18: option 3 (merge), spec below is EXECUTABLE AS WRITTEN
+## D1 — SUPERSEDED. Historical record only — DO NOT EXECUTE THIS SECTION
+
+> ⚠️ **This spec was overtaken hours after it was written**, by the global-is-reference ruling of
+> 2026-08-18 19:17: a repo may not carry any artifact that exists in `~/.claude/` unless renamed and
+> heavily repurposed. Under that ruling the 13 skills were **deleted**, not merged — their
+> repo-specific payload extracted into one `<prefix>-lenses` skill per repo. Its header used to read
+> *"spec below is EXECUTABLE AS WRITTEN"*, and it is not; the measurements and the graded adaptation
+> notes are kept because the REASONING is the useful part, and because "these are not duplicates"
+> was the refutation that changed the whole program's direction.
+
+### The spec as it stood on 2026-08-18 (superseded)
 
 > **Developer chose option 3** of the D1 option set: merge the three regressed skills
 > (`forge`, `sleuth`, `inspect`) rather than keep-as-is or delete. The other ten local skills
@@ -466,7 +487,7 @@ except what was removed for a stated cause.
 restructure them. [Verified 2026-08-18: **all 13** local skills mention the plain-text protocol and
 `AskUserQuestion`; nine also write to `var/claude/**`.]
 
-### Sub-questions still OPEN — ask the developer before executing
+### Sub-questions — MOOT (the section they belonged to was superseded)
 
 - **(a)** Global `inspect` has a `### Roadmap` output section (this week / this sprint / this
   quarter) that the local copy dropped with **no stated reason**. Re-import it, or leave it out?
@@ -485,7 +506,7 @@ The change touches `.claude/**` only, which is the **STANDARD** carve-out in `/s
 MAXIMAL two-clean-round panel. **However**, the outstanding MAXIMAL debt from Phase A is
 independent and still owed (see § "Certification status").
 
-## rent-watch slice — EXECUTED 2026-08-18 (commit `8f2e3e3`, unpushed)
+## rent-watch slice — EXECUTED 2026-08-18 (commit `8f2e3e3`; pushed since, along with everything else)
 
 First per-repo de-contamination slice, ruled 2026-08-18 (rent-watch first because the developer
 starts working there ASAP). 27 files, +898/−255. What it did:
@@ -522,11 +543,25 @@ then hand-patch stragglers by grep) → CLAUDE.md sections → dead bootstrap po
 README/.gitignore/env/hook comments → vendor handoff + test + settings proposal → full grep sweep +
 repo's own gates.
 
-## Resume checklist after a compact
+## Final checklist — closed 2026-08-19
 
-- [ ] Phase A — 4 sibling settings.json unwired, `scripts/claude-bootstrap/` removed everywhere
-- [ ] Phase B — question/marker sections gone in 5 CLAUDE.md; 56 frontmatters stripped; 10 /stack skills restored
-- [ ] Phase C — 5 ladder sections rewritten; global `advisor-completion-guard.sh` extended + tested
-- [ ] Phase D — deny/ask tiers proposed in 5 repos; apply scripts handed over
-- [ ] Phase E — git identity set in 5 repos; autonomy documented in all 5
-- [ ] Phase F — greps clean, panel clean, evidence table, 5 commits
+- [x] **Phase A** — sibling `settings.json` unwired, `scripts/claude-bootstrap/` removed in all
+      **six** repos (invoiceninja's was the last, and a LIVE P0 the plan had recorded as clean)
+- [x] **Phase B** — question/marker sections gone from all six `CLAUDE.md`; every
+      `disallowed-tools: AskUserQuestion` frontmatter stripped; `/stack`'s 10 domain skills restored
+- [x] **Phase C** — ladder sections rewritten against the live machine (`advisor()` IS available
+      here); the reviewer-subagent panel is the documented fallback, not the primary
+- [ ] **Phase D** — permission tiers: **DEFERRED, D2 open by choice.** `deny` stays `[]` in every
+      repo; the enforcement that landed is global-layer only, so rent-watch's S4b is untouched
+- [x] **Phase E** — commit identity verified `Takieddine MESSAOUDI` in all six (a CASE mismatch in
+      invoiceninja had been silently blocking its commit). Per-repo autonomy prose: carried out.
+- [x] **Phase F** — sweeps clean, gates green per repo (pdfturbo 206 files / 2370 tests;
+      rent-watch drift-scan P0=0 P1=0 P2=0; twes-in hooks 28/28; invoiceninja drift-scan clean),
+      commits landed, all six pushed
+- [x] **Phase G** — no-teams enforcement applied to `~/.claude/settings.json` (deny 123 → 128)
+- [x] **global-is-reference** — zero name collisions in all six against global's 48 skills /
+      19 hooks / 0 agents; survivors renamed with per-repo prefixes
+
+**The certification debt is NOT ticked and is not owed by this plan** — it moved to the developer
+with the rest of the per-repo work. Stating that here rather than leaving an unticked box that
+reads like an oversight.
