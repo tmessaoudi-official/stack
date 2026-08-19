@@ -81,7 +81,7 @@ when the condition is not met — never `null`. Fields that may be `null` are no
 
   "effort": { "level": "high" },
 
-  "agent": { "name": "global-stack-lead-dev" },
+  "agent": { "name": "stack-infra-reviewer" },
 
   "rate_limits": {
     "five_hour": { "used_percentage": 23.5, "resets_at": 1738425600 },

@@ -1,7 +1,7 @@
 # CLAUDE.md
 
-> **/stack infrastructure and development tasks** (Docker, Bash scripts, Makefile, services, env-update, env-scan, Dockerfiles, compose configs) **MUST be delegated to the `global-stack-lead-dev` agent** (subagent_type: `global-stack-lead-dev`).
-> **Non-/stack tasks** (general development, research, analysis, content creation, tooling outside this project) are handled directly in the main conversation using the global reasoning framework defined in `~/.claude/CLAUDE.md` — the developer's own persistent install, which this repo never writes (see § "The container-era bootstrap is GONE").
+> **ALL work in this repo is handled DIRECTLY in the main conversation** — /stack infrastructure (Docker, Bash scripts, Makefile, services, env-update, env-scan, Dockerfiles, compose configs) and everything else alike — using the global reasoning framework defined in `~/.claude/CLAUDE.md`, the developer's own persistent install, which this repo never writes (see § "The container-era bootstrap is GONE").
+> **There is no orchestrator agent.** `global-stack-lead-dev` was deleted 2026-08-19 at the developer's request: never route to it, and never recreate it. The three read-only **reviewer** agents in `.claude/agents/` are unaffected — they are the milestone panel, see § "Certification ladder". Subagents remain right for genuine fan-out (broad searches, independent parallel tasks); what is gone is routing ordinary work through a standing orchestrator.
 > **On any conflict between that framework and this file, THIS FILE WINS.**
 
 ---
@@ -51,6 +51,8 @@ Three consequences:
 - **Nothing mechanically stops a destructive command**, so the discipline carries the whole load: `docs/BLAST-RADIUS.md` § the `/stack` table, and § "When this protocol is mandatory" in `/stack-ask-human`. That file is kept IN THIS REPO deliberately — the global `~/.claude/BLAST-RADIUS.md` carries only `make hard-restart` and none of the `/stack`-specific radii, so a pointer at the global copy would silently lose `make soft-restart`, `docker volume rm`, the `RELOAD` flags, `env-update --apply` and `make save`. Machine-level protections stay in the developer's personal global settings, which this repo never touches.
 
 ## Certification ladder — governs every 3C/6C gate
+
+> **SUPERSEDED FOR PER-TASK GATES (developer instruction, 2026-08-19).** The MAXIMAL-by-default tier below no longer runs on every task. Current practice: **one `advisor()` call per 3C/6C gate — never a reviewer panel per task**; between gates the refuting comes from *executable evidence* (write the failing test FIRST, confirm it fails for the stated reason, then implement, and keep a sabotage/mutation check proving the suite would NOTICE the guarantee breaking — a green suite proves the code passes the tests, not that the tests would catch a regression); and the **full three-lens panel runs ONCE, at the milestone boundary, against a frozen commit**. Everything below is still current — it is the definition of what that milestone panel executes. What replaces the per-task panel for this repo's silent-failure surface is the `UNCERTIFIED-BY-EXECUTION` trigger, in `~/.claude/projects/-stack/memory/economize-tokens-panels-and-compaction.md` § "/stack adaptation"; **read that file before running any gate here.** The completion report must state plainly which parts were certified by execution and which were not.
 
 `advisor()` **is available on this machine** (verified 2026-08-18) and is the FIRST rung: call it
 per the global framework. The panel of record for gate rounds is the set of **fresh-context,
@@ -372,8 +374,9 @@ docs/BLAST-RADIUS.md                     # The /stack blast-radius table — kep
 
 .claude/settings.json                    # Project permissions + hooks — CLAUDE CANNOT WRITE THIS
 .claude/settings.local.json              # Local UI preferences (gitignored)
-.claude/agents/                          # Agent definitions (project-scoped)
-  global-stack-lead-dev.md               #   /stack infrastructure orchestrator
+.claude/agents/                          # Agent definitions (project-scoped) — REVIEWERS ONLY;
+                                         #   the global-stack-lead-dev orchestrator was deleted
+                                         #   2026-08-19, work is done in the main conversation
   stack-infra-reviewer.md                #   ladder lens 1: correctness + regression
   completeness-reviewer.md               #   ladder lens 2: completeness + blast radius
   reproducibility-reviewer.md            #   ladder lens 3: clean-clone + destructive posture
@@ -405,6 +408,6 @@ See `templates/tips/file-layout.md`.
 
 > **Core Operating Rules 6 & 7** (Completion Gate and TDD) are defined in the global `~/.claude/CLAUDE.md` and apply here without exception.
 
-> **Remember**: Delegate /stack infrastructure tasks to `global-stack-lead-dev`; handle non-/stack tasks directly with the global reasoning framework. Use `/lint` before committing shell changes — and in a container, lint manually, because the hooks are dead there. Check for trailing `;` in `COMPOSE_FILE`. Verify with `--dry-run` before applying changes. Tier 02 = install, tier 03 = setup — same startup script, different `MODE`.
+> **Remember**: Handle all work here directly with the global reasoning framework — there is no orchestrator agent to delegate to. Use `/lint` before committing shell changes — and in a container, lint manually, because the hooks are dead there. Check for trailing `;` in `COMPOSE_FILE`. Verify with `--dry-run` before applying changes. Tier 02 = install, tier 03 = setup — same startup script, different `MODE`.
 
 > **And on every single reply**: ask via **`AskUserQuestion`** (the plain-text protocol and the `❓`/`⏹` markers are RETIRED — see § "Questions"), and work on **`master`** only.

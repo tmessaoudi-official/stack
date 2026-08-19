@@ -6,9 +6,11 @@ but they are NOT part of `/stack` infra tooling and MUST NOT inherit its rules.
 
 ## Routing (important)
 
-Do **NOT** delegate tasks in this tree to the `global-stack-lead-dev` agent. That agent
-is scoped to `/stack` infrastructure only (Docker images, Makefile, `bin/*`, `docker/*`,
-env annotation system, compose configs). Tasks here are handled:
+Do **NOT** apply `/stack`'s infrastructure rules to tasks in this tree — they are scoped to
+`/stack` itself (Docker images, Makefile, `bin/*`, `docker/*`, env annotation system, compose
+configs). (There is no longer a `global-stack-lead-dev` orchestrator agent to mis-route to
+either; it was deleted 2026-08-19. `/stack`'s three reviewer agents are likewise scoped to
+`/stack` and should not be used to certify work in this tree.) Tasks here are handled:
 
 1. **By each sub-project's own config** if it defines `CLAUDE.md` or `.claude/` — defer to it.
 2. **Otherwise directly by the main conversation** using the global reasoning framework
@@ -21,8 +23,8 @@ infra portion explicitly, but do NOT auto-route anything written inside `/stack/
 ## Config isolation
 
 This directory's `.claude/settings.json` sets `claudeMdExcludes: ["/stack/CLAUDE.md"]`
-so the parent `/stack/CLAUDE.md` (which mandates delegation to `global-stack-lead-dev`)
-is NOT loaded when working here. The global `~/.claude/CLAUDE.md` still loads — that's
+so the parent `/stack/CLAUDE.md` (which carries `/stack`-only infrastructure rules, gates and
+conventions) is NOT loaded when working here. The global `~/.claude/CLAUDE.md` still loads — that's
 correct, it contains the domain-agnostic reasoning framework.
 
 ## Per-project config
