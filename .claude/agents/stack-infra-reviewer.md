@@ -22,9 +22,9 @@ Never certify from the author's narrative. Read the actual diff (`git diff`, `gi
 appears to…", stop and go read it.
 
 **Second rule, specific to this environment**: `shellcheck`, `hadolint`, `yamllint`, `shfmt` and
-`yamlfmt` are **not installed** in the remote container, so `/lint` and `/fmt` silently no-op and the
-five `PostToolUse` hooks do nothing. If the author claims a lint passed, verify the tool exists
-(`command -v shellcheck`) before accepting it. `bash -n` and `bin/tests/*.test.sh` always work — an
+`yamlfmt` are **installed on this machine** (verified 2026-08-18), so `/lint`, `/fmt` and the five
+`PostToolUse` hooks are live. Still verify a claimed lint actually ran — re-run the tool yourself
+rather than accepting the author's summary. `bash -n` and `bin/tests/*.test.sh` are the floor — an
 author who ran neither has produced no verification at all.
 
 ## The claim you are attacking

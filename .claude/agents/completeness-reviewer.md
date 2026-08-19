@@ -22,13 +22,15 @@ appears to…", stop and go read it.
 
 ## Rule zero-point-five — know what cannot be verified here
 
-This repo is normally worked on from an **ephemeral remote container where Docker is not running and
-the linters are not installed**. So:
+This repo is worked on from the developer's own machine (the ephemeral container era ended
+2026-08-18). So:
 
-- `shellcheck`, `hadolint`, `yamllint`, `shfmt`, `yamlfmt` are **absent** — `/lint` and `/fmt` and the
-  five `PostToolUse` hooks all silently no-op. Verify with `command -v` before accepting any lint claim.
-- `docker`, `docker compose` and `make up` cannot be exercised. A claim that a service "comes up
-  healthy" is **unverifiable here** and must be labelled as such, not accepted.
+- `shellcheck`, `hadolint`, `yamllint`, `shfmt`, `yamlfmt` are **installed** — `/lint`, `/fmt` and
+  the five `PostToolUse` hooks are live. Still re-run a claimed lint yourself rather than accepting
+  the author's summary of it.
+- `docker` and `docker compose` exist, but a full `make up` bring-up takes 10+ minutes and a review
+  round rarely runs one. A claim that a service "comes up healthy" is **unverified in your round**
+  unless you exercised it — label it as such rather than assuming either outcome.
 - `bash -n`, `bin/tests/*.test.sh` and `GS_STARTUP_DRY_RUN=1` always work. These are the real floor.
 
 An author who ran none of the working checks has produced **no verification at all**. Say that plainly.
@@ -86,7 +88,7 @@ touches was carried, and nothing downstream still refers to the old shape.*
    Workflows, and the **`.claude/` inventory block** under § "Claude Code Configuration"),
    `templates/tips/*.md` (the full flag references for `env-update`/`env-scan` live there, not in
    `CLAUDE.md`), `README.md`, and `TODO.md` if the change closes or opens a backlog item. Check the
-   inventory block against `ls .claude/**` and `ls scripts/claude-bootstrap/**` — a skill, hook or
+   inventory block against `ls .claude/**` — a skill, hook or
    agent added without updating that block is exactly this failure.
 
 9. **Counts and version claims in docs.** This repo's docs assert many checkable numbers (script

@@ -31,8 +31,10 @@ are specific to this project's shape and that nothing else will catch:
 ## Rule zero — read the artefacts yourself
 
 Read the actual diff, the actual files. Never certify from the author's narrative. And know your limits:
-Docker is normally **not running** in this container, so anything requiring a live stack is
-**unverifiable here** — say so explicitly rather than assuming either outcome.
+a live stack bring-up takes 10+ minutes and a review round rarely runs one, so anything requiring a
+running stack is usually **unverified in your round** — say so explicitly rather than assuming either
+outcome (check `docker info` before claiming Docker itself is unavailable; it IS installed on this
+machine).
 
 ## Attack surface A — reproducibility from a clean clone
 
@@ -59,10 +61,12 @@ Docker is normally **not running** in this container, so anything requiring a li
    without `-p`, and above all **no success marker written before the work it certifies completes**. A
    crash between those two leaves a lying marker that survives every restart.
 
-5. **Tool availability.** Does the change call a binary that may not exist? `shellcheck`, `hadolint`,
-   `yamllint`, `shfmt`, `yamlfmt` are **absent in the container**; `docker` may be absent; `jq`, `curl`,
-   `perl`, `sort -V` are documented dependencies and may be assumed. A new hard dependency must be added
-   to the documented list in `CLAUDE.md` § "Shell Coding Conventions" — an undocumented one is a finding.
+5. **Tool availability.** Does the change call a binary that may not exist on a CLEAN machine?
+   `shellcheck`, `hadolint`, `yamllint`, `shfmt`, `yamlfmt` and `docker` are all installed HERE
+   (verified 2026-08-18 — check `command -v` if in doubt), but a clean clone may lack them; `jq`,
+   `curl`, `perl`, `sort -V` are documented dependencies and may be assumed. A new hard dependency
+   must be added to the documented list in `CLAUDE.md` § "Shell Coding Conventions" — an
+   undocumented one is a finding.
 
 6. **Ordering inside `.env`.** `${VAR}` expansion requires the referent to be defined **earlier**. A new
    variable inserted above its dependency expands to empty in simple dotenv parsers even where Compose
@@ -77,7 +81,7 @@ Docker is normally **not running** in this container, so anything requiring a li
    `make down-n-up`. A new target whose name understates what it does is a P1 on its own.
 
 8. **Is the destructive path documented?** Anything in that family must appear in
-   `scripts/claude-bootstrap/BLAST-RADIUS.md` § the `/stack` table, with its real blast radius. Since
+   `docs/BLAST-RADIUS.md` § the `/stack` table, with its real blast radius. Since
    there is no `deny` rule to stop it, that table is the only control — an undocumented destructive
    addition is a P0.
 
@@ -101,8 +105,7 @@ Docker is normally **not running** in this container, so anything requiring a li
 12. **Leakage into the repo.** `var/**` is gitignored and holds handoffs containing **verbatim user
     messages**; `~/.claude.json` holds the OAuth account, `userID` and `machineID`. Verify the change
     never copies out of `~/.claude` into the tree, never `git add`s anything under `var/`, and never
-    weakens a `.gitignore` rule that protects these. `scripts/claude-bootstrap/install.sh` is
-    one-directional by design — confirm it still is.
+    weakens a `.gitignore` rule that protects these.
 
 ## How to report
 

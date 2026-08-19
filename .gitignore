@@ -61,22 +61,20 @@ Taskfile.yaml
 
 .claude/worktrees
 
-# /var already covers everything Claude writes at runtime: var/claude/{handoff,reports,sleuth,
-# inspections,gaps} from the PreCompact hook and the review skills. Nothing under it is ever
-# committed — the handoff notes in particular hold verbatim user messages.
+# /var already covers everything Claude writes at runtime: var/claude/{reports,sleuth,
+# inspections,gaps} from the review skills. Nothing under it is ever committed. (Session
+# handoffs go to the GLOBAL PreCompact hook's memory pipeline, not the repo.)
 /var
 /projects
 /tools
 
-# Backups left by scripts/claude-bootstrap/apply-pending-settings.sh — never commit one.
+# Backups left by settings.json hand-off scripts — never commit one. (The container-era
+# apply-pending-settings.sh route died with scripts/claude-bootstrap/, removed 2026-08-18.)
 .claude/settings.json.bak.*
-# NOT ignored, deliberately: scripts/claude-bootstrap/settings.json.pending. Claude cannot write
-# .claude/settings.json (classifier-blocked), so it commits the change there for the developer to
-# apply; the applier deletes the pending file, so the repo never carries two copies.
 #
 # Belt-and-braces: never commit a copy of ~/.claude or ~/.claude.json. Those hold the OAuth account,
-# userID and machineID. scripts/claude-bootstrap/install.sh is one-directional (repo -> ~/.claude)
-# precisely so this directory is never created; the rule is here anyway.
+# userID and machineID. ~/.claude/ is the developer's own install and this repo never writes it;
+# the rule is here anyway.
 /claude-bundle/
 
 /docker/logs/**/*.log

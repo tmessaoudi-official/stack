@@ -46,7 +46,7 @@ Developer ruling, 2026-08-06, verbatim: *"there should be no permissions denies!
 
 Three consequences:
 
-- **Never propose adding a `deny` or `ask` entry**, and never add one to `settings.json.pending`. If a command looks dangerous enough to gate, the gate is a question (`/stack-ask-human`) before running it — not a config rule that blocks it.
+- **Never propose adding a `deny` or `ask` entry** to this repo's settings, by any route. If a command looks dangerous enough to gate, the gate is a question (`/stack-ask-human`) before running it — not a config rule that blocks it.
 - **rent-watch's four `Read`/`Edit(./.env)` path denies are explicitly NOT adopted here.** Their own cross-repo audit lists them as a P2 to port to all four siblings; that recommendation is **rejected for `/stack`** on two independent grounds: this ruling, and the fact that `env-update`/`env-scan`/`env-diff` must read *and* write `.env` as their core function, so the deny would break the project's main workflow rather than guard it. `.claude/hooks/env-guard-on-write.sh` is the right mechanism — it warns on a `.env` edit and lets the turn continue.
 - **Nothing mechanically stops a destructive command**, so the discipline carries the whole load: `docs/BLAST-RADIUS.md` § the `/stack` table, and § "When this protocol is mandatory" in `/stack-ask-human`. That file is kept IN THIS REPO deliberately — the global `~/.claude/BLAST-RADIUS.md` carries only `make hard-restart` and none of the `/stack`-specific radii, so a pointer at the global copy would silently lose `make soft-restart`, `docker volume rm`, the `RELOAD` flags, `env-update --apply` and `make save`. Machine-level protections stay in the developer's personal global settings, which this repo never touches.
 
@@ -78,7 +78,7 @@ Availability chain: reviewer subagents → (if subagents are unavailable) three 
 
 Every plan or spec produced here is persisted at **`docs/plans/<topic>.plan.md`**, each carrying its own `## Decisions Log` (`- [YYYY-MM-DD HH:MM] AGREED: <one-sentence decision>`), appended in the same change as the ruling. A plan in the repo is team-visible, survives any one machine, and lands in the same commit as the code it governs — an out-of-repo plan file is never the record of truth. There is no plan-location sentinel to ask about, and no `~/.claude/run/` statusline pointer — neither exists here.
 
-Reports and handoffs go to `var/claude/**` (gitignored via the blanket `/var` rule). **Never** `~/.claude/projects/…` — that is wiped when the container is reclaimed. Anything that must outlive the container graduates into a `CLAUDE.md` § Gotchas entry or a `templates/tips/` reference, as a reviewed commit.
+Reports and review outputs go to `var/claude/**` (gitignored via the blanket `/var` rule). Session handoffs are the GLOBAL PreCompact hook's job — it writes to `~/.claude/projects/<slug>/memory/sessions/`, the developer's own memory pipeline, which SessionStart reads back. Anything that must outlive a session as a *ruling* graduates into a `CLAUDE.md` § Gotchas entry or a `templates/tips/` reference, as a reviewed commit.
 
 ## The container-era bootstrap is GONE (removed 2026-08-18)
 
@@ -297,7 +297,7 @@ make start-local-registry            # Start local TLS registry (port 5000)
 **Workflow + review skills — the GLOBAL install's, plus two repo-specific ones** (global-is-reference ruling, 2026-08-18: the 13 repo-local copies of global skills were deleted; the repo now carries only what has no global equivalent):
 - `/stack-ask-human` — the question protocol with this repo's extra rules (destructive-op gates, `.env` writes, `RELOAD` flags). See § "Questions"
 - `/stack-lenses` — **load this BEFORE running any global review skill here.** It carries the /stack review dimensions (token invariant, MODE tiers, env cascade, port rules), sleuth lens K (infrastructure divergence) and the repo conventions the deleted copies used to enforce
-- `/sweep`, `/sleuth`, `/inspect`, `/gaps`, `/forge`, `/cross-check`, `/converge`, `/pre-commit`, `/aggregate-findings`, `/handoff`, `/retrospective`, `/expanding-context` — all from `~/.claude/skills/` (the developer's global install, 47 skills). `/converge` still runs § "Certification ladder" with the three repo reviewer agents
+- `/sweep`, `/sleuth`, `/inspect`, `/gaps`, `/forge`, `/cross-check`, `/converge`, `/pre-commit`, `/aggregate-findings`, `/handoff`, `/retrospective`, `/expanding-context` — all from `~/.claude/skills/` (the developer's global install — `ls ~/.claude/skills/` is the tally; a count written here drifts). `/converge` still runs § "Certification ladder" with the three repo reviewer agents
 - `/new-service <name> [--parent <image>] [--runtime <name>] [--port <n>]` — scaffold a new service (Dockerfile, compose, startup script, printed `.env` + Makefile lines); args-first with interactive fallback
 
 **Automatic hooks** (PostToolUse on Edit/Write):
@@ -392,7 +392,8 @@ docs/BLAST-RADIUS.md                     # The /stack blast-radius table — kep
                                          #   other workflow/review skill comes from ~/.claude/skills/
                                          #   (global-is-reference ruling, 2026-08-18)
 
-var/claude/handoff/                      # PreCompact handoffs (gitignored via the blanket /var rule)
+var/claude/                              # Reports/review outputs (gitignored); handoffs go to the
+                                         #   GLOBAL PreCompact hook's memory pipeline, not the repo
 ```
 
 ## File Layout Quick Reference
