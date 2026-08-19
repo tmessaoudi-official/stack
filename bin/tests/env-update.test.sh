@@ -11554,6 +11554,284 @@ t "t111k: secondary summary line colors non-zero DRIFT count magenta under FORCE
 
 _flush_section
 
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 112 — HTTP failure diagnostics sink + per-page inject seam
+#
+# Regression cover for the Docker Hub anonymous-pagination 403: the http layer
+# used to discard the status code and delete the body on failure, so no caller
+# could tell a 403-offset-cap from a 404, a DNS failure or a timeout.
+#
+# Page numbers here are 3/5/7/9, not the real-world 11. The code has no
+# knowledge of page 11 — the cap is Docker Hub's (offset 1000 / page_size 100).
+# A short chain exercises the identical mechanism with a fraction of the
+# fixture bulk; the real numbers live in the error text and the docs.
+# ═══════════════════════════════════════════════════════════════════════════
+section "112 — http diag sink + per-page inject (dockerhub pagination 403)"
+
+_DIAG_DH_LIBS="
+source '/stack/bin/lib/env-update/config/defaults.sh'
+source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
+source '/stack/bin/lib/env-update/core/records.sh'
+source '/stack/bin/lib/env-update/core/semver.sh'
+source '/stack/bin/lib/env-update/core/channel.sh'
+source '/stack/bin/lib/env-update/core/tag_flags.sh'
+source '/stack/bin/lib/env-update/core/cache.sh'
+source '/stack/bin/lib/env-update/http/curl.sh'
+source '/stack/bin/lib/env-update/fetchers/dockerhub.sh'
+export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+"
+
+# t112a: page extraction helper — the shared basis of the fixture path and the
+# per-page inject gate. "page_size=" must NOT be mistaken for "page=".
+t "t112a: _gs_eu2_http_url_page extracts page=N and ignores page_size=" bash -c "
+    source '/stack/bin/lib/env-update/http/curl.sh'
+    got=\$(_gs_eu2_http_url_page 'https://x/y?ordering=last_updated&page=11&page_size=100')
+    [[ \"\$got\" == '11' ]] || { echo \"mid-query page=11 -> '\$got'\"; echo FAIL; exit 0; }
+    got=\$(_gs_eu2_http_url_page 'https://x/y?page=2&other=1')
+    [[ \"\$got\" == '2' ]] || { echo \"leading page=2 -> '\$got'\"; echo FAIL; exit 0; }
+    got=\$(_gs_eu2_http_url_page 'https://x/y?page_size=100&ordering=last_updated')
+    [[ -z \"\$got\" ]] || { echo \"page_size wrongly matched -> '\$got'\"; echo FAIL; exit 0; }
+    got=\$(_gs_eu2_http_url_page 'https://x/y')
+    [[ -z \"\$got\" ]] || { echo \"no query string -> '\$got'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t112b: the fixture-path refactor must not drift — all 123 fixtures resolve
+# through _gs_eu2_fixture_path, so page-1 (no suffix) and page-N must be exact.
+t "t112b: _gs_eu2_fixture_path page suffix unchanged after refactor" bash -c "
+    source '/stack/bin/lib/env-update/http/curl.sh'
+    p=\$(_gs_eu2_fixture_path 'https://registry.hub.docker.com/v2/repositories/library/mongo/tags?ordering=last_updated&page=2&page_size=100')
+    [[ \"\$p\" == 'registry.hub.docker.com_v2_repositories_library_mongo_tags_page_2' ]] \
+        || { echo \"page-2 path drifted: \$p\"; echo FAIL; exit 0; }
+    p=\$(_gs_eu2_fixture_path 'https://registry.hub.docker.com/v2/repositories/library/mongo/tags?page_size=100&ordering=last_updated')
+    [[ \"\$p\" == 'registry.hub.docker.com_v2_repositories_library_mongo_tags' ]] \
+        || { echo \"page-1 path drifted: \$p\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t112c: control — a complete multi-page walk. First multi-page dockerhub
+# coverage in the suite; 1.2.0 exists ONLY on page 3, so a short walk fails it.
+t "t112c: dockerhub walks a 3-page fixture chain to the page-3-only tag" bash -c "
+    ${_DIAG_DH_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t112c_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'dockerhub'
+    _gs_eu2_record_set \$idx identifier '_/pagecap-test'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_T112C'
+    _gs_eu2_fetch_dockerhub \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$val\" == '1.2.0' ]] || { echo \"expected 1.2.0 (page-3 only); got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t112d: THE BUG — mid-pagination 403. Decision stays ERROR (unchanged), but the
+# message must now name the HTTP status and the page it stopped on.
+t "t112d: 403 at page 3 -> ERROR message names HTTP status and page" bash -c "
+    ${_DIAG_DH_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t112d_cache
+    export _GS_EU2_HTTP_INJECT_STATUS=403
+    export _GS_EU2_HTTP_INJECT_STATUS_AT_PAGE=3
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'dockerhub'
+    _gs_eu2_record_set \$idx identifier '_/pagecap-test'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_T112D'
+    _gs_eu2_fetch_dockerhub \$idx
+    dec=\$(_gs_eu2_record_get \$idx decision)
+    msg=\$(_gs_eu2_record_get \$idx error_message)
+    [[ \"\$dec\" == 'ERROR' ]] || { echo \"expected ERROR; got: '\$dec'\"; echo FAIL; exit 0; }
+    case \"\$msg\" in *'library/pagecap-test'*) :;; *) echo \"namespace missing: \$msg\"; echo FAIL; exit 0;; esac
+    case \"\$msg\" in *'403'*)  :;; *) echo \"HTTP status missing: \$msg\"; echo FAIL; exit 0;; esac
+    case \"\$msg\" in *'page 3'*) :;; *) echo \"page number missing: \$msg\"; echo FAIL; exit 0;; esac
+    echo PASS
+"
+
+# t112e: the inject seam is per-page — a page number never reached must leave
+# the walk completely untouched (proves pages 1-2 in t112d were NOT injected).
+t "t112e: INJECT_STATUS_AT_PAGE on an unreached page leaves the walk intact" bash -c "
+    ${_DIAG_DH_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t112e_cache
+    export _GS_EU2_HTTP_INJECT_STATUS=403
+    export _GS_EU2_HTTP_INJECT_STATUS_AT_PAGE=99
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'dockerhub'
+    _gs_eu2_record_set \$idx identifier '_/pagecap-test'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_T112E'
+    _gs_eu2_fetch_dockerhub \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$val\" == '1.2.0' ]] || { echo \"walk disturbed; got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t112f: backward compatibility — INJECT_STATUS without AT_PAGE keeps its legacy
+# global behaviour (fires on page 1, which carries no page= param).
+t "t112f: INJECT_STATUS without AT_PAGE still fails page 1 (legacy)" bash -c "
+    ${_DIAG_DH_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t112f_cache
+    export _GS_EU2_HTTP_INJECT_STATUS=403
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'dockerhub'
+    _gs_eu2_record_set \$idx identifier '_/pagecap-test'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_T112F'
+    _gs_eu2_fetch_dockerhub \$idx
+    dec=\$(_gs_eu2_record_get \$idx decision)
+    msg=\$(_gs_eu2_record_get \$idx error_message)
+    [[ \"\$dec\" == 'ERROR' ]] || { echo \"expected ERROR; got: '\$dec'\"; echo FAIL; exit 0; }
+    case \"\$msg\" in *'403'*) :;; *) echo \"HTTP status missing: \$msg\"; echo FAIL; exit 0;; esac
+    case \"\$msg\" in *'page '*) echo \"page claimed on a page-1 failure: \$msg\"; echo FAIL; exit 0;; esac
+    echo PASS
+"
+
+# t112g: a failure with NO status (fixture not found == DNS/transport class)
+# must keep the exact legacy message — no invented status, no invented page.
+t "t112g: statusless failure keeps the legacy 'fetch failed for NS' message" bash -c "
+    ${_DIAG_DH_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t112g_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'dockerhub'
+    _gs_eu2_record_set \$idx identifier '_/absent-fixture-t112g'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_T112G'
+    _gs_eu2_fetch_dockerhub \$idx
+    msg=\$(_gs_eu2_record_get \$idx error_message)
+    [[ \"\$msg\" == 'fetch failed for library/absent-fixture-t112g' ]] \
+        || { echo \"legacy message drifted: '\$msg'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t112h: the sink on the REAL network path — a genuine curl 403 (fake curl on
+# PATH), not the inject shortcut. Status, body and URL must all survive.
+t "t112h: http_get_core records status+body+url into the diag sink on a real 403" bash -c "
+    source '/stack/bin/lib/env-update/http/curl.sh'
+    _fake_dir=\"\${TMP_DIR}/t112h_curl\"
+    mkdir -p \"\${_fake_dir}\"
+    cat > \"\${_fake_dir}/curl\" <<'FAKECURL'
+#!/bin/bash
+_out=''; _w=''
+for _a in \"\$@\"; do
+    [[ \"\${_w}\" == y ]] && { _out=\"\${_a}\"; _w=''; continue; }
+    [[ \"\${_a}\" == '-o' ]] && _w=y
+done
+[[ -n \"\${_out}\" ]] && printf '%s' '{\"message\":\"pagination offset too large for anonymous requests; sign in to page further\",\"errinfo\":{}}' > \"\${_out}\"
+printf '403'
+exit 0
+FAKECURL
+    chmod +x \"\${_fake_dir}/curl\"
+    printf '#!/bin/bash\nexit 0\n' > \"\${_fake_dir}/sleep\"; chmod +x \"\${_fake_dir}/sleep\"
+    _u='https://registry.hub.docker.com/v2/repositories/library/mongo/tags?ordering=last_updated&page=11&page_size=100'
+    sink=\$(_gs_eu2_http_diag_new)
+    rc=0
+    PATH=\"\${_fake_dir}:\${PATH}\" _gs_eu2_http_get_core \"\${_u}\" '' '' \"\${sink}\" >/dev/null 2>&1 || rc=\$?
+    [[ \"\${rc}\" -ne 0 ]] || { echo 'expected non-zero rc on 403'; echo FAIL; exit 0; }
+    st=\$(_gs_eu2_http_diag_status \"\${sink}\")
+    [[ \"\${st}\" == '403' ]] || { echo \"status not recorded: '\${st}'\"; echo FAIL; exit 0; }
+    bd=\$(_gs_eu2_http_diag_body \"\${sink}\")
+    case \"\${bd}\" in *'pagination offset too large'*) :;; *) echo \"body not recorded: '\${bd}'\"; echo FAIL; exit 0;; esac
+    ur=\$(_gs_eu2_http_diag_url \"\${sink}\")
+    [[ \"\${ur}\" == \"\${_u}\" ]] || { echo \"url not recorded: '\${ur}'\"; echo FAIL; exit 0; }
+    [[ \"\$(_gs_eu2_http_url_page \"\${ur}\")\" == '11' ]] || { echo 'page not derivable from recorded url'; echo FAIL; exit 0; }
+    _gs_eu2_http_diag_free \"\${sink}\"
+    [[ ! -e \"\${sink}\" ]] || { echo 'sink not freed'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t112i: the accessors run inside a library that uses 'set -eEuo pipefail'.
+# An empty sink must NOT abort the caller — this is the DNS/transport path.
+t "t112i: diag accessors are set -e safe on an empty sink" bash -c "
+    set -eEuo pipefail
+    source '/stack/bin/lib/env-update/http/curl.sh'
+    sink=\$(_gs_eu2_http_diag_new)
+    st=\$(_gs_eu2_http_diag_status \"\${sink}\")
+    bd=\$(_gs_eu2_http_diag_body \"\${sink}\")
+    ur=\$(_gs_eu2_http_diag_url \"\${sink}\")
+    [[ -z \"\${st}\${bd}\${ur}\" ]] || { echo \"expected all-empty; got '\${st}|\${bd}|\${ur}'\"; echo FAIL; exit 0; }
+    _gs_eu2_http_diag_free \"\${sink}\"
+    echo PASS
+"
+
+# t112j: THE RACE DETECTOR. Four namespaces cap at four DIFFERENT pages, run
+# concurrently at --jobs=8 through the real fan-out and the real curl path.
+# A shared or fixed-path sink shows up as one record reporting another's page.
+# Byte-identity between --jobs=1 and --jobs=8 would NOT catch that; distinct
+# per-record diagnostics do.
+t "t112j: --jobs=8 keeps each record's failure page distinct (sink race)" bash -c "
+    _fake_dir=\"\${TMP_DIR}/t112j_curl\"
+    mkdir -p \"\${_fake_dir}\"
+    cat > \"\${_fake_dir}/curl\" <<'FAKECURL'
+#!/bin/bash
+# Fake Docker Hub: each namespace serves pages up to its own cap, then 403s
+# exactly like the real anonymous offset limit.
+_out=''; _w=''
+for _a in \"\$@\"; do
+    [[ \"\${_w}\" == y ]] && { _out=\"\${_a}\"; _w=''; continue; }
+    [[ \"\${_a}\" == '-o' ]] && _w=y
+done
+_url=\"\${@: -1}\"
+case \"\${_url}\" in
+    */library/alpha/tags*)   _ns=alpha;   _cap=2 ;;
+    */library/bravo/tags*)   _ns=bravo;   _cap=4 ;;
+    */library/charlie/tags*) _ns=charlie; _cap=6 ;;
+    */library/delta/tags*)   _ns=delta;   _cap=8 ;;
+    *) [[ -n \"\${_out}\" ]] && printf '%s' '{\"message\":\"not found\"}' > \"\${_out}\"; printf '404'; exit 0 ;;
+esac
+_page=1
+[[ \"\${_url}\" =~ (^|[\&?])page=([0-9]+) ]] && _page=\"\${BASH_REMATCH[2]}\"
+if [[ \"\${_page}\" -gt \"\${_cap}\" ]]; then
+    [[ -n \"\${_out}\" ]] && printf '%s' '{\"message\":\"pagination offset too large for anonymous requests; sign in to page further\",\"errinfo\":{}}' > \"\${_out}\"
+    printf '403'; exit 0
+fi
+[[ -n \"\${_out}\" ]] && printf '{\"count\":99,\"next\":\"https://registry.hub.docker.com/v2/repositories/library/%s/tags?ordering=last_updated&page=%d&page_size=100\",\"results\":[{\"name\":\"1.%d.0\"}]}' \"\${_ns}\" \"\$(( _page + 1 ))\" \"\${_page}\" > \"\${_out}\"
+printf '200'; exit 0
+FAKECURL
+    chmod +x \"\${_fake_dir}/curl\"
+    printf '#!/bin/bash\nexit 0\n' > \"\${_fake_dir}/sleep\"; chmod +x \"\${_fake_dir}/sleep\"
+    f=\${TMP_DIR}/t112j.env
+    cat > \"\$f\" <<'ENVEOF'
+# @todo env-update dockerhub:_/alpha 1.0.0
+GLOBAL_STACK_T112J_ALPHA=1.0.0
+# @todo env-update dockerhub:_/bravo 1.0.0
+GLOBAL_STACK_T112J_BRAVO=1.0.0
+# @todo env-update dockerhub:_/charlie 1.0.0
+GLOBAL_STACK_T112J_CHARLIE=1.0.0
+# @todo env-update dockerhub:_/delta 1.0.0
+GLOBAL_STACK_T112J_DELTA=1.0.0
+ENVEOF
+    out=\$(PATH=\"\${_fake_dir}:\${PATH}\" bash '${ENV_UPDATE_V2}' --check --dry-run --no-cache --jobs=8 --env-file=\"\$f\" 2>/dev/null)
+    for pair in 'ALPHA:3' 'BRAVO:5' 'CHARLIE:7' 'DELTA:9'; do
+        var=\${pair%%:*}; want=\${pair##*:}
+        line=\$(echo \"\$out\" | grep -F \"GLOBAL_STACK_T112J_\${var}\" || true)
+        [[ -n \"\$line\" ]] || { echo \"no output line for \${var}\"; echo \"\$out\"; echo FAIL; exit 0; }
+        case \"\$line\" in *\"page \${want}\"*) :;; *) echo \"\${var} expected 'page \${want}'; got: \$line\"; echo \"\$out\"; echo FAIL; exit 0;; esac
+        case \"\$line\" in *403*) :;; *) echo \"\${var} missing HTTP 403: \$line\"; echo FAIL; exit 0;; esac
+    done
+    echo PASS
+"
+
+# t112k: the sink must degrade, never escalate. If mktemp fails the run must NOT
+# abort under 'set -eEuo pipefail' — it must fall back to the pre-change message.
+t "t112k: a failing mktemp degrades to the legacy message, never aborts" bash -c "
+    ${_DIAG_DH_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t112k_cache
+    export _GS_EU2_HTTP_INJECT_STATUS=403
+    export _GS_EU2_HTTP_INJECT_STATUS_AT_PAGE=3
+    _fake_dir=\"\${TMP_DIR}/t112k_bin\"
+    mkdir -p \"\${_fake_dir}\"
+    printf '#!/bin/bash\nexit 1\n' > \"\${_fake_dir}/mktemp\"; chmod +x \"\${_fake_dir}/mktemp\"
+    PATH=\"\${_fake_dir}:\${PATH}\"
+    set -eEuo pipefail
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'dockerhub'
+    _gs_eu2_record_set \$idx identifier '_/pagecap-test'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_T112K'
+    _gs_eu2_fetch_dockerhub \$idx
+    dec=\$(_gs_eu2_record_get \$idx decision)
+    msg=\$(_gs_eu2_record_get \$idx error_message)
+    [[ \"\$dec\" == 'ERROR' ]] || { echo \"expected ERROR; got: '\$dec'\"; echo FAIL; exit 0; }
+    [[ \"\$msg\" == 'fetch failed for library/pagecap-test' ]] \
+        || { echo \"expected the legacy fallback message; got: '\$msg'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+_flush_section
+
 TOTAL=$(( PASS + FAIL ))
 BAR="━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 

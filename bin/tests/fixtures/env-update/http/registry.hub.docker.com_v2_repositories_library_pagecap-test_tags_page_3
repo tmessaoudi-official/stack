@@ -1,0 +1,8 @@
+{
+  "count": 5,
+  "next": null,
+  "previous": "https://registry.hub.docker.com/v2/repositories/library/pagecap-test/tags?ordering=last_updated&page=2&page_size=100",
+  "results": [
+    {"name": "1.2.0", "last_updated": "2026-01-06T00:00:00.000000Z"}
+  ]
+}

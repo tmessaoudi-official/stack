@@ -1435,8 +1435,51 @@ is derived from the URL using the same sanitization as the cache key:
 2. Strip leading `https___` protocol prefix
 3. Replace all non-alphanumeric characters (except `.`, `-`, `_`) with `_`
 4. If the original URL had `page=N` in the query string, append `_page_N` to the filename
+   (matched on `^page=` or `&page=`, so `page_size=100` is never mistaken for a page number)
 
 This is the single test seam that makes all 12 fetchers deterministically testable.
+
+### Failure injection (`_GS_EU2_HTTP_INJECT_STATUS`, `_GS_EU2_HTTP_INJECT_STATUS_AT_PAGE`)
+
+`_GS_EU2_HTTP_INJECT_STATUS` forces a failure: any 3-digit status code makes the GET return
+1, and the special value `malformed-json` returns 0 with a truncated body (parse-failure
+testing). On its own it applies to **every** request.
+
+`_GS_EU2_HTTP_INJECT_STATUS_AT_PAGE=N` narrows it to the request whose URL carries `page=N`,
+leaving pages `1..N-1` to resolve from fixtures normally. That is what makes a *mid*-walk
+abort expressible — the global form fails page 1 and never paginates at all. Docker Hub's
+anonymous offset cap (below) is the failure class this exists to reproduce offline.
+
+```bash
+# pages 1-2 come from fixtures, page 3 is rejected with 403
+_GS_EU2_HTTP_INJECT_STATUS=403 _GS_EU2_HTTP_INJECT_STATUS_AT_PAGE=3 …
+```
+
+### HTTP failure diagnostics (`_gs_eu2_http_diag_*`)
+
+On failure the HTTP layer records the status code, the request URL and the response body
+into a **caller-owned sink**, so a caller can tell a `403` offset-cap from a `404` from a
+DNS failure. Without it every failure collapses into one opaque "fetch failed".
+
+```bash
+sink="$(_gs_eu2_http_diag_new)"                 # one mktemp -d, owned by this frame
+_gs_eu2_http_get "${url}" "${sink}" || {
+  status="$(_gs_eu2_http_diag_status "${sink}")"  # "403", or empty for transport failures
+  body="$(_gs_eu2_http_diag_body   "${sink}")"    # failure body (success bodies go to stdout)
+  url_failed="$(_gs_eu2_http_diag_url "${sink}")" # which request failed — the page, for a walk
+}
+_gs_eu2_http_diag_free "${sink}"
+```
+
+The sink is a directory, not a variable, and it is created by the frame that *reads* it —
+never by the HTTP layer. Every GET runs inside a command substitution, and under `--jobs>1`
+the fetcher additionally runs in a background subshell, so anything the HTTP layer sets
+propagates **downward only**; a global would be lost and a fixed-path temp file would be a
+race between workers. One `mktemp -d` per call site is unique by construction at any
+`--jobs` value. Passing no sink costs nothing — it is opt-in per caller.
+
+`_gs_eu2_http_get`, `_gs_eu2_http_get_auth` and `_gs_eu2_http_get_core` all accept the sink
+as an optional trailing argument.
 
 ### Write-confirmation gate
 
@@ -1677,7 +1720,9 @@ These do not abort the tool — they set `decision=ERROR` and move to the next r
 
 | Error message | Cause | Fix |
 |--------------|-------|-----|
-| `fetch failed for TYPE:IDENTIFIER` | HTTP error (4xx/5xx) or curl failure. | Check network, rate limits, auth token. |
+| `fetch failed for TYPE:IDENTIFIER` | Transport-level failure (DNS, connection refused) — no HTTP status was ever received. | Check network connectivity and the identifier. |
+| `fetch failed for TYPE:IDENTIFIER (HTTP NNN)` | The server answered with status `NNN` (4xx/5xx). | Read `NNN`: 404 = wrong identifier, 429 = rate limit, 5xx = upstream. |
+| `fetch failed for NS (HTTP 403, pagination stopped at page N: Docker Hub caps anonymous paging at offset 1000)` | A `dockerhub:` image with more than 1000 tags. Docker Hub rejects anonymous callers past offset 1000 — page 11 at `page_size=100`. Currently affects `library/mongo`, `library/postgres`, `library/redis`. | No workaround yet: `page_size` is server-capped at 100. Tracked for a switch to the Registry v2 API (no offset cap). |
 | `fetch failed for github:REPO (set GITHUB_TOKEN...)` | GitHub API rate limit without token (HTTP 403/429). | Set `GITHUB_TOKEN` or `GLOBAL_STACK_GITHUB_TOKEN` in the environment. |
 | `no tags or releases found for github:REPO` | GitHub API returned empty releases and empty tags. | Check that the repo exists and has releases/tags. |
 | `no tags returned for TYPE:IDENTIFIER` | API returned HTTP 200 but empty tag list. | Verify the identifier is correct. |

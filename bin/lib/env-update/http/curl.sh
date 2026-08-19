@@ -1,11 +1,33 @@
 #!/bin/bash
 # curl.sh — thin HTTP GET wrapper with fixture injection and session-level memo.
 #
-# Exports:   _gs_eu2_fixture_path  _gs_eu2_http_get_core
+# Exports:   _gs_eu2_fixture_path  _gs_eu2_http_url_page  _gs_eu2_http_get_core
 #            _gs_eu2_http_get  _gs_eu2_http_get_auth
+#            _gs_eu2_http_diag_new  _gs_eu2_http_diag_status  _gs_eu2_http_diag_body
+#            _gs_eu2_http_diag_url  _gs_eu2_http_diag_free
 # Sources:   none
 # Deps:      curl, bash 4.3+ (associative array)
 # Env:       _GS_EU2_HTTP_FIXTURE_DIR (test seam — if set, all GETs read local files)
+#            _GS_EU2_HTTP_INJECT_STATUS (test seam — force a status / malformed body)
+#            _GS_EU2_HTTP_INJECT_STATUS_AT_PAGE (test seam — restrict the above to
+#              requests whose URL carries "page=N", so pages 1..N-1 still resolve
+#              normally. Needed to simulate a mid-pagination abort such as Docker
+#              Hub's anonymous offset cap; the global form fails page 1 instead.)
+#
+# FAILURE DIAGNOSTICS SINK (_gs_eu2_http_diag_*)
+#   Every GET here is invoked from a command substitution, and under --jobs>1 the
+#   whole fetcher additionally runs in a background subshell. Globals therefore
+#   only propagate DOWNWARD — a variable set by the HTTP layer is lost the moment
+#   its subshell exits, and a fixed-path temp file would be a race across workers.
+#   So the diagnostics channel is a caller-owned sink: the frame that wants the
+#   status calls _gs_eu2_http_diag_new (one mktemp -d, unique per call by
+#   construction), passes the path down as an argument, and reads the files back
+#   after the substitution returns. No shared global, no fixed path, no race at
+#   any --jobs value.
+#
+#   Sink layout:  <sink>/status  <sink>/url  <sink>/body
+#   status/url are written on every terminal path; body only on failure (a
+#   success body is already the function's stdout). Passing no sink costs nothing.
 #
 # FIXTURE INJECTION (test seam)
 #   If _GS_EU2_HTTP_FIXTURE_DIR is set, all requests are served from files in
@@ -60,13 +82,144 @@ _gs_eu2_fixture_path() {
   local _noquery="${_url%%\?*}"                       # strip query string
   local _safe="${_noquery//[^a-zA-Z0-9._-]/_}"
   _safe="${_safe#https___}"                           # strip leading protocol
-  local _qs="${_url#*\?}"
-  if [[ "${_qs}" != "${_url}" ]]; then
-    local _page
-    _page="$(printf '%s' "${_qs}" | grep -oE '(^|[&])page=[0-9]+' | grep -oE 'page=[0-9]+' | head -1 || true)"
-    [[ -n "${_page}" ]] && _safe="${_safe}_${_page/=/_}"
-  fi
+  local _page
+  _page="$(_gs_eu2_http_url_page "${_url}")"
+  [[ -n "${_page}" ]] && _safe="${_safe}_page_${_page}"
   printf '%s' "${_safe}"
+}
+
+# _gs_eu2_http_url_page — extract the "page=N" query parameter from a URL.
+#
+# Args:    $1 url — fully qualified URL
+# Prints:  the page number (e.g. "11"), or nothing when the URL carries no
+#          page= parameter (page 1 of a Docker Hub walk carries none)
+# Returns: 0 always — callers use it in a command substitution under
+#          'set -eEuo pipefail', so a "no page" answer must not be an error.
+#
+# Only the query string is inspected, and the match is anchored on "^" or "&"
+# so that "page_size=100" is never mistaken for "page=100". Single source of
+# truth for both the fixture path suffix and the per-page inject seam.
+_gs_eu2_http_url_page() {
+  local _url="${1}"
+  local _qs="${_url#*\?}"
+  [[ "${_qs}" == "${_url}" ]] && return 0 # no query string at all
+  if [[ "${_qs}" =~ (^|[\&])page=([0-9]+) ]]; then
+    printf '%s' "${BASH_REMATCH[2]}"
+  fi
+  return 0
+}
+
+# ─── failure diagnostics sink ──────────────────────────────────────────────
+# See the FAILURE DIAGNOSTICS SINK block in the file header for why this is a
+# caller-owned directory rather than a global variable or a fixed-path file.
+
+# _gs_eu2_http_diag_new — create a fresh, private diagnostics sink.
+#
+# Args:    none
+# Prints:  the sink directory path — caller owns it and must free it
+# Returns: 0 on success; non-zero if mktemp fails (propagated deliberately:
+#          a sink that could not be created is a real error, not a no-op)
+_gs_eu2_http_diag_new() {
+  mktemp -d -t gs-eu2-httpdiag.XXXXXXXXXX
+}
+
+# _gs_eu2_http_diag_status — HTTP status recorded by the last GET on this sink.
+#
+# Args:    $1 sink — path returned by _gs_eu2_http_diag_new
+# Prints:  the status code, or nothing when none was recorded (transport-level
+#          failures such as DNS never produce one)
+# Returns: 0 always — see _gs_eu2_http_url_page for why.
+_gs_eu2_http_diag_status() {
+  [[ -f "${1}/status" ]] && cat "${1}/status"
+  return 0
+}
+
+# _gs_eu2_http_diag_body — response body recorded by the last FAILED GET.
+#
+# Args:    $1 sink — path returned by _gs_eu2_http_diag_new
+# Prints:  the body, or nothing (successful GETs return their body on stdout
+#          instead, so the sink deliberately holds no copy)
+# Returns: 0 always.
+_gs_eu2_http_diag_body() {
+  [[ -f "${1}/body" ]] && cat "${1}/body"
+  return 0
+}
+
+# _gs_eu2_http_diag_url — URL of the last GET recorded on this sink.
+#
+# Args:    $1 sink — path returned by _gs_eu2_http_diag_new
+# Prints:  the URL, or nothing when none was recorded
+# Returns: 0 always. Lets a caller recover WHICH request failed — for a
+#          paginated walk that is the only way to know the page number, since
+#          the loop variable itself died with the command substitution.
+_gs_eu2_http_diag_url() {
+  [[ -f "${1}/url" ]] && cat "${1}/url"
+  return 0
+}
+
+# _gs_eu2_http_diag_free — remove a sink created by _gs_eu2_http_diag_new.
+#
+# Args:    $1 sink — path returned by _gs_eu2_http_diag_new
+# Returns: 0 always
+#
+# Removes the three known children by name, then rmdir's the directory.
+# Deliberately NOT "rm -rf ${1}": this repo has no permission deny list, so a
+# recursive delete driven by a variable is a blast radius with no backstop.
+#
+# The "|| true" is load-bearing, not error suppression: the library runs under
+# 'set -eEuo pipefail', so an rmdir that failed (only possible if something put
+# an unexpected file in the sink) would abort the whole run. Cleaning up a
+# diagnostic must never be able to fail the run it was diagnosing. stderr is
+# deliberately NOT silenced — if that ever happens it should be visible.
+_gs_eu2_http_diag_free() {
+  local _sink="${1:-}"
+  [[ -z "${_sink}" || ! -d "${_sink}" ]] && return 0
+  rm -f "${_sink}/status" "${_sink}/url" "${_sink}/body"
+  rmdir "${_sink}" || true
+  return 0
+}
+
+# _gs_eu2_http_diag_record — write one request outcome into a sink.
+#
+# Args:    $1 sink      — sink path (empty string = no-op, the common case)
+#          $2 url       — the request URL
+#          $3 status    — HTTP status, or empty when the request never got one
+#          $4 body_file — optional file holding the failure body; omitted or
+#                         absent means "no body" and truncates any stale one
+# Returns: 0 always
+#
+# Always writes all three files so the sink reflects the LAST call only — a
+# stale status from an earlier page must never be read as this page's answer.
+_gs_eu2_http_diag_record() {
+  local _sink="${1:-}" _url="${2:-}" _status="${3:-}" _body_file="${4:-}"
+  [[ -z "${_sink}" || ! -d "${_sink}" ]] && return 0
+  printf '%s' "${_url}" >"${_sink}/url"
+  printf '%s' "${_status}" >"${_sink}/status"
+  if [[ -n "${_body_file}" && -f "${_body_file}" ]]; then
+    cat "${_body_file}" >"${_sink}/body"
+  else
+    : >"${_sink}/body"
+  fi
+  return 0
+}
+
+# _gs_eu2_http_inject_applies — should the INJECT_STATUS test seam fire for this URL?
+#
+# Args:    $1 url — the URL about to be fetched
+# Returns: 0 (fire) / 1 (do not fire)
+#
+# Unset _GS_EU2_HTTP_INJECT_STATUS_AT_PAGE keeps the original global behaviour:
+# the seam fires for every request. Set, it fires only for the request whose URL
+# carries that page number — which is what makes "pages 1..N-1 succeed, page N
+# is rejected" expressible, and hence what makes a mid-pagination abort testable.
+_gs_eu2_http_inject_applies() {
+  local _url="${1}"
+  [[ -n "${_GS_EU2_HTTP_INJECT_STATUS:-}" ]] || return 1
+  local _at="${_GS_EU2_HTTP_INJECT_STATUS_AT_PAGE:-}"
+  [[ -z "${_at}" ]] && return 0
+  local _page
+  _page="$(_gs_eu2_http_url_page "${_url}")"
+  [[ "${_page}" == "${_at}" ]]
 }
 
 # _gs_eu2_is_transient_failure — true when a request should be retried.
@@ -93,9 +246,14 @@ _gs_eu2_is_transient_failure() {
 #          $3 scheme — auth header scheme: "Bearer" (default, GitHub/GHCR) or
 #                      "token" (Gitea/Forgejo PATs, e.g. Codeberg). Ignored when
 #                      token is empty.
+#          $4 sink   — optional diagnostics sink from _gs_eu2_http_diag_new.
+#                      When given, the status, URL and (on failure) the response
+#                      body are recorded there so the caller can tell a 403
+#                      offset-cap from a 404 from a DNS failure.
 # Prints:  response body on success
 # Returns: 0 on success; 1 on failure (definitive 4xx, repeated transient failure)
 # Side fx: stores body in _GS_EU2_HTTP_MEMO keyed on "${url}:${auth_flag}"
+#          writes <sink>/status, <sink>/url, <sink>/body when a sink is given
 #
 # Callers must handle fixture-seam and memo fast-paths before calling this.
 # Retry strategy: inner curl --retry 3 for TCP/DNS errors; outer 3-attempt loop
@@ -104,7 +262,7 @@ _gs_eu2_is_transient_failure() {
 # Note: with --max-time 15, a sustained upstream timeout will exhaust all 3
 # attempts at ~15s each; the retry is for transient single blips, not outages.
 _gs_eu2_http_get_core() {
-  local _url="${1}" _token="${2:-}" _scheme="${3:-Bearer}"
+  local _url="${1}" _token="${2:-}" _scheme="${3:-Bearer}" _sink="${4:-}"
   local _body_tmp _curl_stderr_file
   _body_tmp="$(mktemp)"
   _curl_stderr_file="$(mktemp)"
@@ -156,6 +314,7 @@ _gs_eu2_http_get_core() {
       printf 'env-update: transient upstream error HTTP %s from %s — try again later\n' \
         "${_http_status}" "${_url}" >&2
     fi
+    _gs_eu2_http_diag_record "${_sink}" "${_url}" "${_http_status:-}" "${_body_tmp}"
     rm -f "${_body_tmp}" "${_curl_stderr_file}"
     return 1
   fi
@@ -165,12 +324,17 @@ _gs_eu2_http_get_core() {
     local _curl_detail
     _curl_detail="$(head -3 "${_curl_stderr_file}" 2>/dev/null || true)"
     [[ -n "${_curl_detail}" ]] && printf 'env-update: curl failed: %s\n' "${_curl_detail}" >&2
+    # Record BEFORE the body is removed. This is the exact line that used to
+    # throw the status and the body away, leaving every caller with an opaque
+    # failure it could not attribute (403 offset-cap vs 404 vs DNS vs timeout).
+    _gs_eu2_http_diag_record "${_sink}" "${_url}" "${_http_status:-}" "${_body_tmp}"
     rm -f "${_body_tmp}" "${_curl_stderr_file}"
     return 1
   fi
 
   local _core_body
   _core_body="$(cat "${_body_tmp}")"
+  _gs_eu2_http_diag_record "${_sink}" "${_url}" "${_http_status:-}"
   rm -f "${_body_tmp}" "${_curl_stderr_file}"
   # Store in memo for this session (process lifetime only — not persisted to TTL cache).
   # Key includes auth flag to prevent unauthenticated responses being served to auth callers.
@@ -182,22 +346,32 @@ _gs_eu2_http_get_core() {
 
 # _gs_eu2_http_get — unauthenticated HTTP GET with fixture injection and memo.
 #
-# Args:    $1 url — URL to fetch
+# Args:    $1 url  — URL to fetch
+#          $2 sink — optional diagnostics sink from _gs_eu2_http_diag_new
 # Prints:  response body
 # Returns: 0 on success; 1 on failure
 # Side fx: reads _GS_EU2_HTTP_MEMO; may write to it via _gs_eu2_http_get_core
+#          writes <sink>/status, <sink>/url, <sink>/body when a sink is given
+#
+# The sink is populated on the fixture, memo and inject fast-paths too, not only
+# by _gs_eu2_http_get_core — the contract is "the sink reflects the LAST call",
+# and three of the four terminal paths here never reach the core function.
 _gs_eu2_http_get() {
-  local _url="${1}"
+  local _url="${1}" _sink="${2:-}"
 
   # HTTP_INJECT_STATUS test seam: simulate HTTP error codes or malformed responses.
   # Values: 429, 503, or any 3-digit status code → return 1 with error message.
   #         "malformed-json" → return 0 with incomplete JSON body (parse-failure testing).
-  if [[ -n "${_GS_EU2_HTTP_INJECT_STATUS:-}" ]]; then
+  # Scope: every request, unless _GS_EU2_HTTP_INJECT_STATUS_AT_PAGE narrows it to
+  # one page — see _gs_eu2_http_inject_applies.
+  if _gs_eu2_http_inject_applies "${_url}"; then
     if [[ "${_GS_EU2_HTTP_INJECT_STATUS}" == "malformed-json" ]]; then
+      _gs_eu2_http_diag_record "${_sink}" "${_url}" "200"
       printf '{"not": "valid json"'
       return 0
     else
       printf 'env-update: injected HTTP error %s for URL: %s\n' "${_GS_EU2_HTTP_INJECT_STATUS}" "${_url}" >&2
+      _gs_eu2_http_diag_record "${_sink}" "${_url}" "${_GS_EU2_HTTP_INJECT_STATUS}"
       return 1
     fi
   fi
@@ -207,20 +381,26 @@ _gs_eu2_http_get() {
     _safe="$(_gs_eu2_fixture_path "${_url}")"
     local _f="${_GS_EU2_HTTP_FIXTURE_DIR}/${_safe}"
     if [[ -f "${_f}" ]]; then
+      _gs_eu2_http_diag_record "${_sink}" "${_url}" "200"
       cat "${_f}"
       return 0
     fi
     printf 'env-update: HTTP fixture not found: %s\n' "${_f}" >&2
+    # No status: a missing fixture stands in for a transport-level failure,
+    # which genuinely produces no HTTP status. Recording a fake one would make
+    # the seam lie about the very distinction this sink exists to preserve.
+    _gs_eu2_http_diag_record "${_sink}" "${_url}" ""
     return 1
   fi
 
   # In-session URL memo: return cached body if this URL was already fetched without auth.
   if [[ -n "${_GS_EU2_HTTP_MEMO[${_url}:0]+x}" ]]; then
+    _gs_eu2_http_diag_record "${_sink}" "${_url}" "200"
     printf '%s' "${_GS_EU2_HTTP_MEMO[${_url}:0]}"
     return 0
   fi
 
-  _gs_eu2_http_get_core "${_url}"
+  _gs_eu2_http_get_core "${_url}" "" "" "${_sink}"
 }
 
 # _gs_eu2_http_get_auth — authenticated HTTP GET.
@@ -230,28 +410,32 @@ _gs_eu2_http_get() {
 #          $3 scheme — auth header scheme: "Bearer" (default, GitHub/GHCR) or
 #                      "token" (Gitea/Forgejo PATs, e.g. Codeberg). Forgejo accepts
 #                      both, but the canonical/Gitea-compatible form is "token".
+#          $4 sink   — optional diagnostics sink from _gs_eu2_http_diag_new
 # Prints:  response body
 # Returns: 0 on success; 1 on failure
 # Side fx: reads _GS_EU2_HTTP_MEMO[url:1]; may write to it via _gs_eu2_http_get_core
+#          writes <sink>/status, <sink>/url, <sink>/body when a sink is given
 #
 # Fixture injection: path derived from URL only — token is NOT part of the fixture path.
 # This means authenticated and unauthenticated test fixtures share the same file.
 _gs_eu2_http_get_auth() {
-  local _url="${1}" _token="${2:-}" _scheme="${3:-Bearer}"
+  local _url="${1}" _token="${2:-}" _scheme="${3:-Bearer}" _sink="${4:-}"
 
   # Empty token: reuse plain GET (handles fixture path identically, including inject seam)
   if [[ -z "${_token}" ]]; then
-    _gs_eu2_http_get "${_url}"
+    _gs_eu2_http_get "${_url}" "${_sink}"
     return
   fi
 
   # HTTP_INJECT_STATUS also applies to authenticated calls
-  if [[ -n "${_GS_EU2_HTTP_INJECT_STATUS:-}" ]]; then
+  if _gs_eu2_http_inject_applies "${_url}"; then
     if [[ "${_GS_EU2_HTTP_INJECT_STATUS}" == "malformed-json" ]]; then
+      _gs_eu2_http_diag_record "${_sink}" "${_url}" "200"
       printf '{"not": "valid json"'
       return 0
     else
       printf 'env-update: injected HTTP error %s for URL: %s\n' "${_GS_EU2_HTTP_INJECT_STATUS}" "${_url}" >&2
+      _gs_eu2_http_diag_record "${_sink}" "${_url}" "${_GS_EU2_HTTP_INJECT_STATUS}"
       return 1
     fi
   fi
@@ -262,18 +446,21 @@ _gs_eu2_http_get_auth() {
     _safe="$(_gs_eu2_fixture_path "${_url}")"
     local _f="${_GS_EU2_HTTP_FIXTURE_DIR}/${_safe}"
     if [[ -f "${_f}" ]]; then
+      _gs_eu2_http_diag_record "${_sink}" "${_url}" "200"
       cat "${_f}"
       return 0
     fi
     printf 'env-update: HTTP fixture not found: %s\n' "${_f}" >&2
+    _gs_eu2_http_diag_record "${_sink}" "${_url}" ""
     return 1
   fi
 
   # In-session URL memo: return cached body if this URL was already fetched with auth.
   if [[ -n "${_GS_EU2_HTTP_MEMO[${_url}:1]+x}" ]]; then
+    _gs_eu2_http_diag_record "${_sink}" "${_url}" "200"
     printf '%s' "${_GS_EU2_HTTP_MEMO[${_url}:1]}"
     return 0
   fi
 
-  _gs_eu2_http_get_core "${_url}" "${_token}" "${_scheme}"
+  _gs_eu2_http_get_core "${_url}" "${_token}" "${_scheme}" "${_sink}"
 }

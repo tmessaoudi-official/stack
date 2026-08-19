@@ -45,19 +45,26 @@ _gs_eu2_dh_namespace() {
 
 # _gs_eu2_dh_fetch_tags — fetch all tags for a Docker Hub namespace/image.
 #
-# Args:    $1 ns — "namespace/image" string (already normalised by _gs_eu2_dh_namespace)
+# Args:    $1 ns   — "namespace/image" string (already normalised by _gs_eu2_dh_namespace)
+#          $2 sink — optional diagnostics sink from _gs_eu2_http_diag_new. This
+#                    function runs inside a command substitution, so the URL and
+#                    status of the failing page cannot be returned to the caller
+#                    any other way — they die with the subshell.
 # Prints:  newline-separated tag names
 # Returns: 0 on success; non-zero on HTTP failure
-# Side fx: may read/write cache (via _gs_eu2_http_get)
+# Side fx: may read/write cache (via _gs_eu2_http_get); writes to the sink
 #
 # C1: follows the "next" pagination link until null, accumulating all tag pages.
+# Docker Hub rejects anonymous callers past offset 1000 (page 11 at page_size=100)
+# with HTTP 403, which lands here as an ordinary fetch failure — the sink is what
+# lets the caller report that specifically instead of a generic error.
 _gs_eu2_dh_fetch_tags() {
-  local _ns="${1}"
+  local _ns="${1}" _sink="${2:-}"
   local _url="https://registry.hub.docker.com/v2/repositories/${_ns}/tags?page_size=100&ordering=last_updated"
   local _all_tags="" _resp _page_tags _next_url
 
   while [[ -n "${_url}" ]]; do
-    if ! _resp="$(_gs_eu2_http_get "${_url}")"; then
+    if ! _resp="$(_gs_eu2_http_get "${_url}" "${_sink}")"; then
       return 1
     fi
     if ! _page_tags="$(printf '%s\n' "${_resp}" | jq -r '.results[].name' 2>/dev/null)"; then
@@ -122,13 +129,49 @@ _gs_eu2_fetch_dockerhub() {
   # Cache read
   _gs_eu2_cache_try_load "${_idx}" "${_cache_key}" "${_major_hint:-}" "${_major_hint_min:-}" && return 0
 
-  # Fetch tags
-  local _raw_tags
-  if ! _raw_tags="$(_gs_eu2_dh_fetch_tags "${_ns}" 2>/dev/null)"; then
+  # Fetch tags.
+  #
+  # The sink is created HERE, in the frame that reads it back: _gs_eu2_dh_fetch_tags
+  # runs in a command substitution and (under --jobs>1) inside a worker subshell,
+  # so nothing it sets can propagate upward. One mktemp -d per record makes the
+  # path unique by construction — no shared global, no collision between workers.
+  #
+  # The 2>/dev/null is pre-existing and stays: for a 403 curl --silent writes
+  # nothing to stderr, so it suppresses nothing here, and removing it would
+  # interleave worker stderr with the parent's progress line during fan-out
+  # (core/parallel.sh:50,56 — the parent owns stderr during fan-out).
+  # "|| _dh_diag=''" is a deliberate degradation, not error suppression: under
+  # 'set -eEuo pipefail' a failing mktemp (full /tmp, unset TMPDIR in a stripped
+  # worker env) would otherwise abort the whole check run. A diagnostics feature
+  # must never be able to fail the operation it exists to explain. An empty sink
+  # is a no-op for every _gs_eu2_http_diag_* function, so the message ladder
+  # below simply falls through to the original wording — exactly the pre-change
+  # behaviour, which is the correct thing to degrade to.
+  local _dh_diag _raw_tags _dh_rc=0
+  _dh_diag="$(_gs_eu2_http_diag_new)" || _dh_diag=""
+  _raw_tags="$(_gs_eu2_dh_fetch_tags "${_ns}" "${_dh_diag}" 2>/dev/null)" || _dh_rc=$?
+  if [[ "${_dh_rc}" -ne 0 ]]; then
+    local _dh_status _dh_page _dh_msg
+    _dh_status="$(_gs_eu2_http_diag_status "${_dh_diag}")"
+    _dh_page="$(_gs_eu2_http_url_page "$(_gs_eu2_http_diag_url "${_dh_diag}")")"
+    _gs_eu2_http_diag_free "${_dh_diag}"
+
+    # Message ladder, most specific first. The statusless branch keeps the
+    # original wording verbatim: a transport failure (DNS, connection refused)
+    # really does yield no status, and inventing one would be a regression.
+    if [[ "${_dh_status}" == "403" && -n "${_dh_page}" && "${_dh_page}" -gt 1 ]]; then
+      _dh_msg="fetch failed for ${_ns} (HTTP 403, pagination stopped at page ${_dh_page}: Docker Hub caps anonymous paging at offset 1000)"
+    elif [[ -n "${_dh_status}" ]]; then
+      _dh_msg="fetch failed for ${_ns} (HTTP ${_dh_status})"
+    else
+      _dh_msg="fetch failed for ${_ns}"
+    fi
+
     _gs_eu2_record_set "${_idx}" decision "ERROR"
-    _gs_eu2_record_set "${_idx}" error_message "fetch failed for ${_ns}"
+    _gs_eu2_record_set "${_idx}" error_message "${_dh_msg}"
     return 0
   fi
+  _gs_eu2_http_diag_free "${_dh_diag}"
 
   if [[ -z "${_raw_tags}" ]]; then
     _gs_eu2_record_set "${_idx}" decision "ERROR"
