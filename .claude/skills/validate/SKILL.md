@@ -35,9 +35,10 @@ Validate the Docker Compose configuration and environment consistency.
 
 ## Step 0 — tool preflight (run FIRST, and report it)
 
-Never claim a check that did not run. In the remote container `docker`, `hadolint`, `yamllint`, `shfmt`
-and `yamlfmt` are all **absent**, so most of this skill degrades to a read. Record which tools exist and
-carry that into the output:
+Never claim a check that did not run. `docker`, `hadolint`, `yamllint`, `shfmt` and `yamlfmt` are all
+**installed on this machine** (verified 2026-08-18), so every step below is expected to actually run —
+a SKIP here is a signal that something is wrong, not the normal case. Preflight anyway and record what
+exists, because Docker in particular may simply not be *running*:
 
 ```bash
 command -v docker yamllint hadolint shellcheck 2>/dev/null; docker compose version 2>/dev/null | head -1
@@ -80,7 +81,7 @@ change (`CLAUDE.md` → global Rule 6/7: infra TDD means `bash -n` / `docker com
 Ran      : <the exact commands that executed>
 Result   : <N passed, M failed, K skipped>
 Skipped  : <each skipped check + the missing tool>
-Unverified here: <e.g. "stack health — Docker not running in this container">
+Unverified here: <e.g. "stack health — the Docker daemon is not running">
 ```
 
 That last line is not optional. An infra change certified without it is claiming coverage it does not
