@@ -50,9 +50,41 @@ Three consequences:
 - **rent-watch's four `Read`/`Edit(./.env)` path denies are explicitly NOT adopted here.** Their own cross-repo audit lists them as a P2 to port to all four siblings; that recommendation is **rejected for `/stack`** on two independent grounds: this ruling, and the fact that `env-update`/`env-scan`/`env-diff` must read *and* write `.env` as their core function, so the deny would break the project's main workflow rather than guard it. `.claude/hooks/env-guard-on-write.sh` is the right mechanism — it warns on a `.env` edit and lets the turn continue.
 - **Nothing mechanically stops a destructive command**, so the discipline carries the whole load: `docs/BLAST-RADIUS.md` § the `/stack` table, and § "When this protocol is mandatory" in `/stack-ask-human`. That file is kept IN THIS REPO deliberately — the global `~/.claude/BLAST-RADIUS.md` carries only `make hard-restart` and none of the `/stack`-specific radii, so a pointer at the global copy would silently lose `make soft-restart`, `docker volume rm`, the `RELOAD` flags, `env-update --apply` and `make save`. Machine-level protections stay in the developer's personal global settings, which this repo never touches.
 
-## Certification ladder — governs every 3C/6C gate
+## Certification — per-task gates, and the ONE milestone panel
 
-> **SUPERSEDED FOR PER-TASK GATES (developer instruction, 2026-08-19).** The MAXIMAL-by-default tier below no longer runs on every task. Current practice: **one `advisor()` call per 3C/6C gate — never a reviewer panel per task**; between gates the refuting comes from *executable evidence* (write the failing test FIRST, confirm it fails for the stated reason, then implement, and keep a sabotage/mutation check proving the suite would NOTICE the guarantee breaking — a green suite proves the code passes the tests, not that the tests would catch a regression); and the **full three-lens panel runs ONCE, at the milestone boundary, against a frozen commit**. Everything below is still current — it is the definition of what that milestone panel executes. What replaces the per-task panel for this repo's silent-failure surface is the `UNCERTIFIED-BY-EXECUTION` trigger, in `~/.claude/projects/-stack/memory/economize-tokens-panels-and-compaction.md` § "/stack adaptation"; **read that file before running any gate here.** The completion report must state plainly which parts were certified by execution and which were not.
+> The **workflow half** of this protocol is global, in `~/.claude/CLAUDE.md` (Phases 3C/6C): one
+> `advisor()` per gate and never a panel per task; the full three-lens panel ONCE at the milestone
+> boundary against a frozen commit; failing test FIRST, confirmed red for the stated reason;
+> a sabotage/mutation check proving the suite would NOTICE the guarantee breaking; and a completion
+> report stating plainly what was certified by execution and what was not.
+>
+> **What follows is the `/stack` delta only** — the evidence surfaces, the sabotage shapes, and the
+> panel definition. It is deliberately self-contained: this section used to point at a file under
+> `~/.claude/projects/`, which is untracked and bundle-excluded, so a clean clone declared its own
+> ladder superseded and named a successor that was not there (panel finding D2, 2026-08-21).
+
+**Per-task gates are `advisor()` plus executable evidence — not a panel.** A green suite proves the
+code passes the tests, not that the tests would catch a regression; the sabotage check is what
+closes that gap, and it is not optional on this repo.
+
+### Evidence surfaces — what "certified by execution" can mean here
+
+| Surface | Executable evidence available |
+|---|---|
+| `bin/**`, `docker/config/dist/bin/**` | **STRONG** — `bin/tests/env-update.test.sh`, `env-scan.test.sh`, `startup-prologue.test.sh`, `bash -n`, `shellcheck`, `GS_STARTUP_DRY_RUN=1` |
+| `docker/**` compose + Dockerfiles, `.env`, `Makefile` | **SYNTAX-ONLY** — `docker compose --env-file .env.local config -q` proves it *parses*; `make check-image-versions` catches `.env`↔`ARG` drift. Only a 10+ minute `make up` proves it comes up healthy |
+| docs, `CLAUDE.md`, `templates/tips/`, `.claude/**` | **N/A** — no runtime guarantee to break |
+
+**`UNCERTIFIED-BY-EXECUTION` trigger.** When a change touches a SYNTAX-ONLY surface and no bring-up
+was run, the completion report must say so **in those words**, naming the specific guarantee left
+unproven. "Tests pass" is not a claim about a container coming up healthy. Do not let a green
+`config -q` stand in for a health check.
+
+**Sabotage shapes that matter here** — a mutation the suite must notice: point a success-token
+write at a literal different from `GLOBAL_STACK_ERROR_TOKEN`; strip the trailing `:` from a port
+var; skew a Dockerfile `ARG` from its `.env` value. Each is a *silent* failure in production — a
+container that works while reporting unhealthy for 24h, a port that silently concatenates, a stale
+image behind a correct-looking `.env`.
 
 `advisor()` **is available on this machine** (verified 2026-08-18) and is the FIRST rung: call it
 per the global framework. The panel of record for gate rounds is the set of **fresh-context,
@@ -66,13 +98,17 @@ read-only, adversarial reviewer subagents** in `.claude/agents/`. Three lenses, 
 
 Each reviewer **reads the actual diff, code and tests itself** — never certify from the author's narrative — and is chartered to REFUTE, not approve. `/converge` runs the panel mechanically.
 
-**Tier: MAXIMAL by default** — all three lenses, **two consecutive fully-clean rounds**, any finding resets the counter, cap 5 rounds → then ask via `AskUserQuestion` (never silently proceed). Rationale: this stack's characteristic failure is *silent* — a token mismatch yields a container that works while reporting unhealthy for 24h, a drifted `ARG` yields a stale image while `.env` looks right, and a startup-script edit lands on every tier-03 consumer at once. None of those is caught by a passing test suite, and none is confined to one service.
+**At the milestone boundary: all three lenses, two consecutive fully-clean rounds**, any finding resets the counter, cap 5 rounds → then ask via `AskUserQuestion` (never silently proceed). Rationale: this stack's characteristic failure is *silent* — a token mismatch yields a container that works while reporting unhealthy for 24h, a drifted `ARG` yields a stale image while `.env` looks right, and a startup-script edit lands on every tier-03 consumer at once. None of those is caught by a passing test suite, and none is confined to one service. **This is a milestone tier, not a per-task one** — per-task work is gated by `advisor()` plus the executable evidence above.
 
-**The one carve-out is mechanical, not a judgement call:** if `git diff --name-only` touches no operational surface, STANDARD is enough — one reviewer, three lenses in a single pass, one clean round. Docs, `CLAUDE.md`, `templates/tips/`, `docs/` and `.claude/**` edits qualify. Anything under `docker/`, `bin/`, `Makefile`, `.env` or `docker-compose.yaml` does not.
+**Freeze before the round.** A round run on a moving tree cannot count toward the two-clean requirement: commit first, review the commit. If a milestone spans several commits plus a pending change, land everything, freeze, then run ONE round covering all of it — two panels for one milestone is exactly the waste this protocol exists to avoid.
 
-**A tier-02/tier-03 startup script or a `.env` cascade change always gets MAXIMAL**, against a **frozen commit** — freeze first, because a round run on a moving tree cannot count toward the two-clean requirement.
+**Scale the round to the surface.** If `git diff --name-only` touches no operational surface, one reviewer covering three lenses in a single pass is enough. Docs, `CLAUDE.md`, `templates/tips/`, `docs/` and `.claude/**` edits qualify. Anything under `docker/`, `bin/`, `Makefile`, `.env` or `docker-compose.yaml` gets the full three.
 
-Availability chain: reviewer subagents → (if subagents are unavailable) three distinct-lens self-passes **with mandatory disclosure that certification was self-graded**. Never silently skip a gate.
+**Spawn reviewers UNNAMED.** Passing `name:` to the `Agent` tool makes a teammate whose only return path is `SendMessage`, which is in the global `deny` list — the agents run, go idle, and their reports are never delivered, while `TaskOutput` cannot resolve them either. The failure is silent and looks exactly like "subagents are unavailable" [Verified 2026-08-21: an unnamed probe returned normally in the same session in which three named lenses vanished]. An unnamed `Agent` call returns through the ordinary completion notification.
+
+Availability chain: reviewer subagents → (if subagents are genuinely unavailable) three distinct-lens self-passes **with mandatory disclosure that certification was self-graded**. Never silently skip a gate. Before concluding subagents are unavailable, spawn one unnamed probe — the `name:` trap above is indistinguishable from unavailability without it.
+
+**A lens is a filter, and every filter has a blind spot.** In the 2026-08-21 round all three reviewers read the dockerhub pagination change, found two real message defects, and **none asked "does the tool now work?"** — the fetch still failed outright for three pins, and the developer found it by running it. The panel does not replace running the thing.
 
 **What the panel cannot verify, it must say so:** "the stack comes up healthy" needs Docker and a 10+ minute bring-up, which a review round rarely runs. A CLEAN verdict that hides an unverifiable dimension is a false certification.
 
@@ -332,6 +368,12 @@ make start-local-registry            # Start local TLS registry (port 5000)
 - **BuildKit cache can go stale** — if builds fail with mysterious layer errors, `docker buildx prune` is the escape hatch
 - **`jq '… | unique'` on a settings array SORTS it — read the SET, never the diff.** A hand-off script that adds entries with `.permissions.deny = ((.permissions.deny // []) + $add | unique)` rewrites every pre-existing entry in alphabetical order as a side effect. Applying five denies to a 123-entry list produced a ~250-line diff that looked like a rewrite and was almost entirely reordering [observed 2026-08-19, Phase G]. Two consequences: a reviewer reading that diff cannot tell an addition from a reshuffle, and `unique` also silently **collapses duplicates**, which is a content change nobody asked for. Verify with a set difference, not `diff`: `jq -n --slurpfile b old.json --slurpfile s new.json '{added: ($s[0].permissions.deny - $b[0].permissions.deny), lost: ($b[0].permissions.deny - $s[0].permissions.deny)}'` — `lost` must be `[]`. Use `+ $add | unique` only when the sort is wanted; otherwise append and de-duplicate without reordering.
 - **`projects/CLAUDE.md` needs `git add -f` — the `.gitignore` negation for it is inert.** `.gitignore:68` excludes the whole `/projects` directory, and git cannot re-include a file whose *parent directory* is excluded, so the `!/projects/.claude/`, `!/projects/CLAUDE.md` and `!/projects/.gitkeep` negations on lines 125–127 have no effect. The files are still *tracked* (they were added before the exclusion), so they show up in `git status` and `git grep` and can be committed normally — but a plain `git add projects/CLAUDE.md` is refused with *"The following paths are ignored… projects"*. Use `git add -f`. This is safe **only because the path is already tracked** — confirm with `git ls-files <path>` before reaching for `-f`, since on an untracked path `-f` would pull genuinely-ignored machine-local content into the repo. Note `git check-ignore -v projects/CLAUDE.md` exits 1 ("not ignored") for exactly the same reason it is tracked, so it does **not** predict whether `git add` will succeed — the two disagree, and `git add` is the one that decides [observed 2026-08-19].
+- **`git diff` is UNUSABLE for grep-based verification here — it silently returns nothing.** `diff.external = difft --color always --display side-by-side-show-both` is set, so every `git diff` emits side-by-side ANSI with **no `+`/`-`/`@@` prefixes**, and it aborts partway (`fatal: external diff died`). A `git diff <range> | grep '^+'` therefore yields **zero hits and reads as "clean"** — it invalidated two verification passes in a row before being caught [observed 2026-08-21]. Always use `git --no-pager -c core.pager=cat diff --no-ext-diff` for any programmatic diff inspection. Sanity check: `curl.sh` over `bd7b1a9..d63f437` yields 203 `+` lines and 10 `@@` hunks; if a diff-grep returns 0, suspect the driver before believing the result.
+- **Use `git grep`, not `grep -rn`, for completeness sweeps.** A wide `grep -rn "<string>" /stack` silently omitted `projects/CLAUDE.md:11`, which `git grep` found in the same tree; `/stack/projects` is a real directory, not a symlink, so it is not a traversal artefact — most likely rtk output filtering. Any "we removed every reference" claim built on a single `grep -rn` is unsound. Also note a wide `grep -rn` over `~/.claude` returns megabytes because it hits session `.jsonl` transcripts — exclude `/(logs|history|shell-snapshots|todos|var|plugins|teams)/` and `*.jsonl`.
+- **Spawn reviewer subagents UNNAMED** — passing `name:` routes their return through `SendMessage`, which is globally denied, so they run and their reports vanish. See § "Certification".
+- **A self-referential idempotence guard is not one.** If a script's replacement text contains the very string its "already clean" check greps for, that branch can never fire after a successful run — the re-run falls through to the abort path. The `global-stack-lead-dev` handover script did exactly this: its own tombstone text contained the name [observed 2026-08-21]. Validate JSON *before* overwriting, not after.
+- **Never edit a test file while a background run is executing it** — bash reads scripts incrementally, so the result is untrustworthy whichever way it lands. Kill the run and start again.
+- **`bin/tests/*.test.sh --section=` takes a COMMA-separated list** (`IFS=','`). `--section='112 113'` is a single unmatched token. It used to print `ALL PASSED ✓ 0 / 0` and exit **0** — a typo produced a green run in which nothing executed; it now exits 1 with `NO TESTS RAN`. Do not read the suite's tally from `✓` marks or by summing the per-section `└─` lines: the breakdown repeats section lines and both over-count (786 → 902 → 923 for one run). The `ALL PASSED ✓ N / N` line is the only authoritative tally.
 - **Bash-written files bypass all PostToolUse hooks** — linting (shellcheck, hadolint, yamllint), formatting (shfmt), and backup only fire on `Edit`/`Write` tool calls. Files written via `cat >`, heredocs, `sed -i`, or other Bash redirects are invisible to hooks. Always use the `Write` or `Edit` tool when hook coverage matters.
 - **`core.fileMode=false` in `/stack/`** — git ignores all file permission changes; `chmod` edits take effect on disk but are never staged or committed. For permission fixes, note the change explicitly in the commit message of whatever else touches the file; do not expect `git diff` or `git status` to show the mode delta.
 - **Auto-commit in /stack sessions** — see § "Git autonomy" above, which is authoritative: `git add`/`commit`/`push` to `master` are autonomous, pushes use plain `git push` (never `-u`), and the commit identity is fixed. Kept as a pointer rather than a restatement so the two cannot drift.

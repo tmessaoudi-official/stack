@@ -174,6 +174,12 @@ _gs_eu2_fetch_dockerhub() {
   # is a no-op for every _gs_eu2_http_diag_* function, so the message ladder
   # below simply falls through to the original wording — exactly the pre-change
   # behaviour, which is the correct thing to degrade to.
+  #
+  # Note the sink is no longer only a message concern: _gs_eu2_dh_fetch_tags
+  # reads it to recognise the anonymous page cap, so an empty sink also loses the
+  # cap-is-a-boundary behaviour and a >1000-tag image goes back to ERROR. That is
+  # still the correct degradation — the floor is exactly the pre-fix behaviour,
+  # never something worse — but it is a bigger floor than "the old wording".
   local _dh_diag _raw_tags _dh_rc=0
   _dh_diag="$(_gs_eu2_http_diag_new)" || _dh_diag=""
   _raw_tags="$(_gs_eu2_dh_fetch_tags "${_ns}" "${_dh_diag}" 2>/dev/null)" || _dh_rc=$?
