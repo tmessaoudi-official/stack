@@ -39,7 +39,7 @@ fetcher types, classifies each update decision, and can apply AUTO decisions bac
 
 | Type | Identifier Format | Major Hint | Tag Flags | Auth Required | Notes |
 |------|-------------------|:---:|:---:|---|---|
-| `dockerhub` | `_/image` or `org/image` | Yes | Yes | No | `_/` = Docker Library; paginates all tags |
+| `dockerhub` | `_/image` or `org/image` | Yes | Yes | No | `_/` = Docker Library; paginates tags, stopping at Docker Hub's anonymous offset-1000 cap |
 | `github` | `owner/repo` | Yes | Yes | GITHUB_TOKEN (optional but recommended) | 3-strategy: releases → tags → git ls-remote |
 | `npm` | `package-name` or `@scope/name` | Yes | Yes | No | CLI fast path via `npm view` when available |
 | `pecl` | `extension-name` | No | No | GITHUB_TOKEN (optional, for git: flag) | PECL REST XML API; add `(git:owner/repo)` flag for HEAD SHA tracking from GitHub |
@@ -838,7 +838,13 @@ the special alias `_/` for Docker Official Library images.
 
 **API endpoint:** `https://registry.hub.docker.com/v2/repositories/{namespace}/tags?page_size=100&ordering=last_updated`
 
-**Pagination:** Follows the `next` field in each page response until `null`. Accumulates all tags from all pages (C1 rule). There is no page limit — it fetches everything.
+**Pagination:** Follows the `next` field in each page response until `null`, accumulating tags from every page (C1 rule).
+
+There is one boundary, imposed upstream: **Docker Hub refuses anonymous callers past offset 1000** — page 11 at `page_size=100` — with HTTP 403. Images with more than 1000 tags (`library/mongo`, `library/postgres`, `library/redis`) hit it every time.
+
+That 403 **ends the walk successfully rather than failing it.** The query orders by `ordering=last_updated`, so the ~1000 tags already collected are the most recently updated ones and the newest version is necessarily among them. Discarding them would be the bug — and was: until this was fixed, those three images were permanently `ERROR`.
+
+The gate is deliberately narrow. A 403 *below* page 11 is not the cap (pages 2–10 are offsets 100–900) — it means a rate limit, a repo turned private, or an auth problem, and it still fails the fetch. Otherwise a real mid-walk error would silently truncate the tag list. `_GS_EU2_DH_ANON_PAGE_CAP` overrides the page-11 threshold for tests only.
 
 **What field is used:** `.results[].name` — the tag name string.
 
@@ -1722,7 +1728,8 @@ These do not abort the tool — they set `decision=ERROR` and move to the next r
 |--------------|-------|-----|
 | `fetch failed for TYPE:IDENTIFIER` | Transport-level failure (DNS, connection refused) — no HTTP status was ever received. | Check network connectivity and the identifier. |
 | `fetch failed for TYPE:IDENTIFIER (HTTP NNN)` | The server answered with status `NNN` (4xx/5xx). | Read `NNN`: 404 = wrong identifier, 429 = rate limit, 5xx = upstream. |
-| `fetch failed for NS (HTTP 403, pagination stopped at page N: Docker Hub caps anonymous paging at offset 1000)` | A `dockerhub:` image with more than 1000 tags. Docker Hub rejects anonymous callers past offset 1000 — page 11 at `page_size=100`. Currently affects `library/mongo`, `library/postgres`, `library/redis`. | No workaround yet: `page_size` is server-capped at 100. Tracked for a switch to the Registry v2 API (no offset cap). |
+| `fetch failed for NS (HTTP NNN at page N)` | A paginated walk failed on page `N` (`N > 1`), so page 1 succeeded and the failure is specific to a later page. **This is not the Docker Hub offset cap** — reaching that cap is no longer an error (see § dockerhub Pagination). Below page 11 a 403 means a rate limit, a repo turned private, or an auth problem. | Read `NNN` as above. A 403 here is worth checking against the image's visibility. |
+| `fetch failed for NS (malformed JSON response)` | The HTTP request succeeded but the body did not parse. Reported distinctly because the last HTTP status was a *success* — describing it as `(HTTP 200)` named a cause that did not exist. | Usually an upstream hiccup; retry. If it persists, capture the body with `_GS_EU2_HTTP_FIXTURE_DIR`. |
 | `fetch failed for github:REPO (set GITHUB_TOKEN...)` | GitHub API rate limit without token (HTTP 403/429). | Set `GITHUB_TOKEN` or `GLOBAL_STACK_GITHUB_TOKEN` in the environment. |
 | `no tags or releases found for github:REPO` | GitHub API returned empty releases and empty tags. | Check that the repo exists and has releases/tags. |
 | `no tags returned for TYPE:IDENTIFIER` | API returned HTTP 200 but empty tag list. | Verify the identifier is correct. |

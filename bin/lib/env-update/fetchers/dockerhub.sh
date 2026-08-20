@@ -50,25 +50,52 @@ _gs_eu2_dh_namespace() {
 #                    function runs inside a command substitution, so the URL and
 #                    status of the failing page cannot be returned to the caller
 #                    any other way — they die with the subshell.
+# Reads:   _GS_EU2_DH_ANON_PAGE_CAP (test seam — first page Docker Hub refuses to
+#          serve anonymously; defaults to 11, i.e. offset 1000 at page_size=100)
 # Prints:  newline-separated tag names
-# Returns: 0 on success; non-zero on HTTP failure
+# Returns: 0 on success (including a walk ended early by the anonymous page cap);
+#          1 on HTTP failure; 2 on a JSON parse failure. The two failure codes are
+#          distinct because the caller reads the sink for an HTTP status, and on a
+#          parse failure that status belongs to a request that SUCCEEDED.
 # Side fx: may read/write cache (via _gs_eu2_http_get); writes to the sink
 #
 # C1: follows the "next" pagination link until null, accumulating all tag pages.
-# Docker Hub rejects anonymous callers past offset 1000 (page 11 at page_size=100)
-# with HTTP 403, which lands here as an ordinary fetch failure — the sink is what
-# lets the caller report that specifically instead of a generic error.
 _gs_eu2_dh_fetch_tags() {
   local _ns="${1}" _sink="${2:-}"
   local _url="https://registry.hub.docker.com/v2/repositories/${_ns}/tags?page_size=100&ordering=last_updated"
-  local _all_tags="" _resp _page_tags _next_url
+  local _all_tags="" _resp _page_tags _next_url _fail_st _fail_pg
 
   while [[ -n "${_url}" ]]; do
     if ! _resp="$(_gs_eu2_http_get "${_url}" "${_sink}")"; then
+      # Docker Hub refuses anonymous callers past offset 1000 with HTTP 403 —
+      # page 11 at page_size=100. That is an upstream BOUNDARY, not a fetch
+      # failure: this URL orders by last_updated, so the pages already collected
+      # are the most recently updated tags and the newest version is necessarily
+      # among them. End the walk successfully with what we have instead of
+      # discarding 1000 good tags, which is what made library/mongo,
+      # library/postgres and library/redis permanently ERROR.
+      #
+      # The gate is deliberately narrow. Below the cap a 403 means something
+      # else entirely (rate limit, repo turned private, auth), and pages 2-10 are
+      # offsets 100-900 — arithmetically not the cap. Those must still fail, or
+      # the walk would silently truncate on a real error.
+      _fail_st=""
+      _fail_pg=""
+      if [[ -n "${_sink}" ]]; then
+        _fail_st="$(_gs_eu2_http_diag_status "${_sink}")" || _fail_st=""
+        _fail_pg="$(_gs_eu2_http_url_page "$(_gs_eu2_http_diag_url "${_sink}")")" || _fail_pg=""
+      fi
+      if [[ -n "${_all_tags}" && "${_fail_st}" == "403" && -n "${_fail_pg}" ]] \
+        && [[ "${_fail_pg}" -ge "${_GS_EU2_DH_ANON_PAGE_CAP:-11}" ]]; then
+        break
+      fi
       return 1
     fi
     if ! _page_tags="$(printf '%s\n' "${_resp}" | jq -r '.results[].name' 2>/dev/null)"; then
-      return 1
+      # rc 2, not 1: the HTTP request SUCCEEDED, so the sink holds its status
+      # (200). Collapsing a parse failure into rc 1 made the caller read that 200
+      # as the failure cause and report "(HTTP 200)" for a malformed body.
+      return 2
     fi
     _all_tags="${_all_tags}${_page_tags}"$'\n'
     _next_url="$(printf '%s\n' "${_resp}" | jq -r '.next // empty' 2>/dev/null)"
@@ -159,8 +186,20 @@ _gs_eu2_fetch_dockerhub() {
     # Message ladder, most specific first. The statusless branch keeps the
     # original wording verbatim: a transport failure (DNS, connection refused)
     # really does yield no status, and inventing one would be a regression.
-    if [[ "${_dh_status}" == "403" && -n "${_dh_page}" && "${_dh_page}" -gt 1 ]]; then
-      _dh_msg="fetch failed for ${_ns} (HTTP 403, pagination stopped at page ${_dh_page}: Docker Hub caps anonymous paging at offset 1000)"
+    #
+    # rc 2 is checked FIRST and never consults _dh_status: on a parse failure the
+    # last HTTP call succeeded, so the sink holds 200. Reporting that turned a
+    # correct generic message into a confidently wrong one.
+    #
+    # There is deliberately no offset-cap branch any more. Reaching the cap is no
+    # longer an error — _gs_eu2_dh_fetch_tags ends the walk successfully — so a
+    # 403 that still arrives here is NOT the cap and must not be described as it.
+    # The page number is kept because it is useful diagnostics; the causal claim
+    # is dropped because it was false for pages 2-10.
+    if [[ "${_dh_rc}" -eq 2 ]]; then
+      _dh_msg="fetch failed for ${_ns} (malformed JSON response)"
+    elif [[ -n "${_dh_status}" && -n "${_dh_page}" && "${_dh_page}" -gt 1 ]]; then
+      _dh_msg="fetch failed for ${_ns} (HTTP ${_dh_status} at page ${_dh_page})"
     elif [[ -n "${_dh_status}" ]]; then
       _dh_msg="fetch failed for ${_ns} (HTTP ${_dh_status})"
     else

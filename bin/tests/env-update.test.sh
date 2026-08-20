@@ -11568,23 +11568,29 @@ _flush_section
 # ═══════════════════════════════════════════════════════════════════════════
 section "112 — http diag sink + per-page inject (dockerhub pagination 403)"
 
+# Resolved from SCRIPT_DIR, not hardcoded to /stack: a test that sources an
+# absolute '/stack/...' path certifies the tree at /stack rather than the tree it
+# lives in, so a clone's suite silently passes against /stack's library. Proven:
+# breaking a clone's curl.sh left 10 of 11 tests in this section green.
+_GS_EU2_LIB="${SCRIPT_DIR}/../lib/env-update"
+
 _DIAG_DH_LIBS="
-source '/stack/bin/lib/env-update/config/defaults.sh'
-source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update/core/records.sh'
-source '/stack/bin/lib/env-update/core/semver.sh'
-source '/stack/bin/lib/env-update/core/channel.sh'
-source '/stack/bin/lib/env-update/core/tag_flags.sh'
-source '/stack/bin/lib/env-update/core/cache.sh'
-source '/stack/bin/lib/env-update/http/curl.sh'
-source '/stack/bin/lib/env-update/fetchers/dockerhub.sh'
+source '${_GS_EU2_LIB}/config/defaults.sh'
+source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+source '${_GS_EU2_LIB}/core/records.sh'
+source '${_GS_EU2_LIB}/core/semver.sh'
+source '${_GS_EU2_LIB}/core/channel.sh'
+source '${_GS_EU2_LIB}/core/tag_flags.sh'
+source '${_GS_EU2_LIB}/core/cache.sh'
+source '${_GS_EU2_LIB}/http/curl.sh'
+source '${_GS_EU2_LIB}/fetchers/dockerhub.sh'
 export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
 "
 
 # t112a: page extraction helper — the shared basis of the fixture path and the
 # per-page inject gate. "page_size=" must NOT be mistaken for "page=".
 t "t112a: _gs_eu2_http_url_page extracts page=N and ignores page_size=" bash -c "
-    source '/stack/bin/lib/env-update/http/curl.sh'
+    source '${_GS_EU2_LIB}/http/curl.sh'
     got=\$(_gs_eu2_http_url_page 'https://x/y?ordering=last_updated&page=11&page_size=100')
     [[ \"\$got\" == '11' ]] || { echo \"mid-query page=11 -> '\$got'\"; echo FAIL; exit 0; }
     got=\$(_gs_eu2_http_url_page 'https://x/y?page=2&other=1')
@@ -11599,7 +11605,7 @@ t "t112a: _gs_eu2_http_url_page extracts page=N and ignores page_size=" bash -c 
 # t112b: the fixture-path refactor must not drift — all 123 fixtures resolve
 # through _gs_eu2_fixture_path, so page-1 (no suffix) and page-N must be exact.
 t "t112b: _gs_eu2_fixture_path page suffix unchanged after refactor" bash -c "
-    source '/stack/bin/lib/env-update/http/curl.sh'
+    source '${_GS_EU2_LIB}/http/curl.sh'
     p=\$(_gs_eu2_fixture_path 'https://registry.hub.docker.com/v2/repositories/library/mongo/tags?ordering=last_updated&page=2&page_size=100')
     [[ \"\$p\" == 'registry.hub.docker.com_v2_repositories_library_mongo_tags_page_2' ]] \
         || { echo \"page-2 path drifted: \$p\"; echo FAIL; exit 0; }
@@ -11700,7 +11706,7 @@ t "t112g: statusless failure keeps the legacy 'fetch failed for NS' message" bas
 # t112h: the sink on the REAL network path — a genuine curl 403 (fake curl on
 # PATH), not the inject shortcut. Status, body and URL must all survive.
 t "t112h: http_get_core records status+body+url into the diag sink on a real 403" bash -c "
-    source '/stack/bin/lib/env-update/http/curl.sh'
+    source '${_GS_EU2_LIB}/http/curl.sh'
     _fake_dir=\"\${TMP_DIR}/t112h_curl\"
     mkdir -p \"\${_fake_dir}\"
     cat > \"\${_fake_dir}/curl\" <<'FAKECURL'
@@ -11737,7 +11743,7 @@ FAKECURL
 # An empty sink must NOT abort the caller — this is the DNS/transport path.
 t "t112i: diag accessors are set -e safe on an empty sink" bash -c "
     set -eEuo pipefail
-    source '/stack/bin/lib/env-update/http/curl.sh'
+    source '${_GS_EU2_LIB}/http/curl.sh'
     sink=\$(_gs_eu2_http_diag_new)
     st=\$(_gs_eu2_http_diag_status \"\${sink}\")
     bd=\$(_gs_eu2_http_diag_body \"\${sink}\")
@@ -11830,6 +11836,88 @@ t "t112k: a failing mktemp degrades to the legacy message, never aborts" bash -c
     echo PASS
 "
 
+# ─── 113 ──────────────────────────────────────────────────────────────────
+section "113 — dockerhub anonymous page cap is a boundary, not a failure"
+
+# t113a: THE BUG. Docker Hub rejects anonymous callers past offset 1000. The walk
+# used to 'return 1' on that 403, discarding every tag it had already collected,
+# so library/mongo, library/postgres and library/redis were permanently ERROR.
+# The URL orders by last_updated, so the pages already fetched hold the most
+# recently updated tags — the newest version is necessarily among them. Reaching
+# the cap must therefore END the walk successfully, not fail it.
+# _GS_EU2_DH_ANON_PAGE_CAP is the test seam: real cap is page 11 (offset 1000 at
+# page_size=100); here it is 3 so the 3-page fixture chain can exercise it.
+t "t113a: reaching the anonymous page cap keeps the tags already fetched" bash -c "
+    ${_DIAG_DH_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t113a_cache
+    export _GS_EU2_HTTP_INJECT_STATUS=403
+    export _GS_EU2_HTTP_INJECT_STATUS_AT_PAGE=3
+    export _GS_EU2_DH_ANON_PAGE_CAP=3
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'dockerhub'
+    _gs_eu2_record_set \$idx identifier '_/pagecap-test'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_T113A'
+    _gs_eu2_fetch_dockerhub \$idx
+    dec=\$(_gs_eu2_record_get \$idx decision)
+    [[ \"\$dec\" != 'ERROR' ]] \
+        || { echo \"still ERROR: \$(_gs_eu2_record_get \$idx error_message)\"; echo FAIL; exit 0; }
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$val\" == '1.1.1' ]] \
+        || { echo \"expected 1.1.1 (best of pages 1-2); got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t113b: a 403 BELOW the cap is not the cap. Pages 2-10 are offsets 100-900, so a
+# 403 there is a rate limit, a private repo or an auth problem — never the
+# offset-1000 cap. It must stay an ERROR and must not assert the wrong cause.
+t "t113b: a 403 below the cap stays ERROR and does not claim the offset cap" bash -c "
+    ${_DIAG_DH_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t113b_cache
+    export _GS_EU2_HTTP_INJECT_STATUS=403
+    export _GS_EU2_HTTP_INJECT_STATUS_AT_PAGE=2
+    export _GS_EU2_DH_ANON_PAGE_CAP=11
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'dockerhub'
+    _gs_eu2_record_set \$idx identifier '_/pagecap-test'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_T113B'
+    _gs_eu2_fetch_dockerhub \$idx
+    dec=\$(_gs_eu2_record_get \$idx decision)
+    [[ \"\$dec\" == 'ERROR' ]] || { echo \"expected ERROR below the cap; got: '\$dec'\"; echo FAIL; exit 0; }
+    msg=\$(_gs_eu2_record_get \$idx error_message)
+    case \"\$msg\" in
+        *'caps anonymous paging'*) echo \"falsely blamed the offset cap at page 2: \$msg\"; echo FAIL; exit 0;;
+    esac
+    case \"\$msg\" in
+        *'HTTP 403'*) :;;
+        *) echo \"expected the 403 to be named; got: \$msg\"; echo FAIL; exit 0;;
+    esac
+    echo PASS
+"
+
+# t113c: a jq parse failure must not be reported as an HTTP status. The sink holds
+# the status of the last HTTP call, which SUCCEEDED (200) — reading it as the
+# failure cause turned a correct generic message into a confidently wrong one.
+# t107c cannot catch this: it greps for 'ERROR|error|parse', which the wrong
+# message satisfies.
+t "t113c: a malformed-JSON body is never reported as '(HTTP 200)'" bash -c "
+    ${_DIAG_DH_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t113c_cache
+    export _GS_EU2_HTTP_INJECT_STATUS=malformed-json
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'dockerhub'
+    _gs_eu2_record_set \$idx identifier '_/pagecap-test'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_T113C'
+    _gs_eu2_fetch_dockerhub \$idx
+    dec=\$(_gs_eu2_record_get \$idx decision)
+    [[ \"\$dec\" == 'ERROR' ]] || { echo \"expected ERROR on a parse failure; got: '\$dec'\"; echo FAIL; exit 0; }
+    msg=\$(_gs_eu2_record_get \$idx error_message)
+    case \"\$msg\" in
+        *'HTTP 200'*) echo \"parse failure reported as a successful status: \$msg\"; echo FAIL; exit 0;;
+        *'HTTP '*)    echo \"parse failure reported as an HTTP status at all: \$msg\"; echo FAIL; exit 0;;
+    esac
+    echo PASS
+"
+
 _flush_section
 
 TOTAL=$(( PASS + FAIL ))
@@ -11838,6 +11926,18 @@ BAR="━━━━━━━━━━━━━━━━━━━━━━━━━
 echo ""
 printf "${C_BOLD}%s${C_RESET}\n" "${BAR}"
 echo ""
+
+# A filter that matches nothing used to print "ALL PASSED ✓ 0 / 0" and exit 0 —
+# a typo'd or wrongly-separated --section produced a green run in which no test
+# had executed. The separator is a COMMA (IFS=','), so --section='112 113' is a
+# single token matching no section. Zero tests is never a pass.
+if [[ -n "${SECTION_FILTER}" && "${TOTAL}" -eq 0 ]]; then
+    printf "  ${C_BOLD}${C_RED}NO TESTS RAN${C_RESET}   --section=%s matched no section (the separator is ',')\n" "${SECTION_FILTER}"
+    echo ""
+    printf "${C_BOLD}%s${C_RESET}\n" "${BAR}"
+    echo ""
+    exit 1
+fi
 
 if [[ "${FAIL}" -eq 0 ]]; then
     printf "  ${C_BOLD}${C_GREEN}ALL PASSED${C_RESET}   ${C_GREEN}✓ %d / %d${C_RESET}\n" "${PASS}" "${TOTAL}"
