@@ -57,7 +57,7 @@ Every repo shares the same wiring — `SessionStart → install.sh`, `PreCompact
 | credential copy-out block absent | ✅ | ✅ | ✅ | ✅ | ✅ |
 | THINKING.md "edit the REPO copy" rule | ✅ (r2) | ❌ | ❌ | ✅ | ✅ |
 | `## Memory System Toggles — NOT APPLICABLE` | ✅ (r2) | ❌ | ❌ | ✅ | ✅ |
-| 3-lens reviewer panel | ✅ **3** (+lead-dev) | ✅ 3 | ✅ 3 (r2) | ✅ 3 | ✅ 3 |
+| 3-lens reviewer panel | ✅ **3** | ✅ 3 | ✅ 3 (r2) | ✅ 3 | ✅ 3 |
 | `permissions.deny` | ❌ **by ruling** | ❌ | ❌ | ❌ | ✅ `.env` only |
 | write-time `PostToolUse` hooks | ✅ **5** | ✅ 2 | ❌ 0 | ❌ 0 | ✅ 3 |
 | `/cross-check` | ✅ **(invented here)** | ❌ | ✅ | ✅ | ✅ |
@@ -73,13 +73,24 @@ Skill count: 23 = 10 `/stack` domain skills + the 13-skill core shared with all 
 
 Both sibling copies get one thing wrong about `stack`; fix these when unifying them:
 
-1. **"stack has no `test-precompact-handoff.sh`" is a false negative.** It was measured by path
-   (`scripts/claude-bootstrap/hooks/test-precompact-handoff.sh`). `/stack` deliberately puts it at
-   **`bin/tests/precompact-handoff.test.sh`**, using the project's existing harness (`ok`/`ko`, section
-   banners, a `--section` filter) rather than a bespoke script beside the hook. It is the **largest**
-   such suite of the five — 42 assertions vs 34/35. Measure by capability, not by path.
-2. **"stack's panel is 2 agents, 1 of which is a lead-dev"** was true at the time and is now stale:
-   `/stack` has three real lenses plus the `global-stack-lead-dev` orchestrator (4 agent files).
+> ⚠️ **Items 1 and 2 were themselves overtaken by events — corrected in place 2026-08-21.** This is
+> an *imperative* section: it tells a future session what to write into `phorj` and `rent-watch`.
+> Two of its three entries had gone stale and would have propagated facts that are no longer true —
+> including the name of an agent that no longer exists. Verify against the live tree before acting
+> on any row here.
+
+1. ~~**"stack has no `test-precompact-handoff.sh`" is a false negative.**~~ **No longer applicable.**
+   The original point was that `/stack` had the suite at `bin/tests/precompact-handoff.test.sh`
+   rather than beside the hook. Both the repo's PreCompact hook and that 42-assertion suite were
+   **removed 2026-08-18** (`52f579f`) under the global-is-reference ruling: handoffs are the GLOBAL
+   `~/.claude/hooks/precompact-handoff.sh`'s job and the repo carries no copy. The siblings' "no
+   such file" is now simply correct for `/stack`, for a different reason. The general lesson still
+   holds: **measure by capability, not by path.**
+2. **"stack's panel is 2 agents, 1 of which is a lead-dev"** was true when written and is now wrong
+   in the opposite direction. `/stack` has exactly **three** agents, all read-only reviewer lenses
+   (`stack-infra-reviewer`, `completeness-reviewer`, `reproducibility-reviewer`). The
+   `global-stack-lead-dev` orchestrator was **deleted 2026-08-19** and must not be recreated or
+   ported anywhere — all `/stack` work is done directly in the main conversation.
 3. **phorj's plan orders `stack` 1st and calls it the ancestor.** That uses `stack`'s `.claude/` date
    (April, genuinely oldest) rather than its bundle date (Aug 6, second-newest). Ordering by the wrong
    column is what let it conclude "phorj is a week stale".
