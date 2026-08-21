@@ -51,6 +51,21 @@ Two changes ruled together on 2026-08-19: adapt the developer's standing session
   two P1 message defects plus the clone-safety of the new tests — then the correctness-of-content
   items (B1 cross-repo plan, D1 exec bit, C4 false memory). Cosmetic and orphan-placeholder items
   (C3) come last.
+- [2026-08-21 17:00] AGREED — **DIRECTIVE, STILL IN FORCE: no reviewer panels until the developer
+  explicitly asks for one.** Verbatim: *"No panels! not yet! ... wait for my explicit instruction
+  about panels! use advisor for now!"* A round 2 over `d63f437..d7e3e6b` is *owed* but must **NOT**
+  be started on a future session's own initiative — it has already been started and stopped twice
+  against this instruction. Until the developer says otherwise, `advisor()` is the gate at 3C and
+  6C, and executable evidence (failing test first, confirmed red for the stated reason, plus a
+  sabotage check) does the refuting. **If you are reading this after a `/compact` or in a new
+  session: do not spawn the panel.**
+- [2026-08-21 17:00] AGREED (design ruling): for the Docker Hub anonymous page cap, **document the
+  limit, do not redesign the fetch.** A filtered `?name=<major>.` re-query was considered and
+  rejected: it needs a major hint that `_/redis` does not have, `name=` is a substring match that
+  would need anchoring, and all three currently-affected images were validated correct against
+  complete tag lists. The residual — a cap-hit is now *silent*, where it used to be a loud ERROR —
+  is recorded as an open item for the developer, not built. Surfacing it would need a new record
+  field carried through the reporting path.
 - [2026-08-21 15:30] AGREED (implementation ruling, not asked): the panel's **C5 finding was
   refuted, not fixed.** Two lenses independently reported `CLAUDE.md`'s "786 tests" as stale; the
   harness's own `TOTAL=$(( PASS + FAIL ))` proved 786 correct at the time. The 902 and 923 figures

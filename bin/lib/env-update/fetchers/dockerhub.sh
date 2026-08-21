@@ -79,6 +79,18 @@ _gs_eu2_dh_fetch_tags() {
       # else entirely (rate limit, repo turned private, auth), and pages 2-10 are
       # offsets 100-900 — arithmetically not the cap. Those must still fail, or
       # the walk would silently truncate on a real error.
+      #
+      # last_updated is PUSH order, not version order, so "the newest version is
+      # in the first 1000" is an assumption, not a tautology. It was validated
+      # 2026-08-21 against COMPLETE tag lists (fetched via the ?name= filter,
+      # which reaches past the cap) for every image that actually reaches the cap
+      # — mongo 3607 tags, postgres 1421, redis 1176 — and all three proposals
+      # were correct. It holds because the newest branch is itself rebuilt in
+      # every wave, so its tags keep re-surfacing near the top. It would break
+      # only if upstream pushed 1000+ other tags after the newest release.
+      # See templates/tips/env-update.md § "Why keeping a truncated list is safe"
+      # for the numbers, the verification runbook, and the known residual: a
+      # cap-hit is now silent.
       _fail_st=""
       _fail_pg=""
       if [[ -n "${_sink}" ]]; then

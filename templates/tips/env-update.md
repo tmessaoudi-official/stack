@@ -846,6 +846,35 @@ That 403 **ends the walk successfully rather than failing it.** The query orders
 
 The gate is deliberately narrow. A 403 *below* page 11 is not the cap (pages 2–10 are offsets 100–900) — it means a rate limit, a repo turned private, or an auth problem, and it still fails the fetch. Otherwise a real mid-walk error would silently truncate the tag list. `_GS_EU2_DH_ANON_PAGE_CAP` overrides the page-11 threshold for tests only.
 
+#### Why keeping a truncated list is safe — and the one way it could stop being
+
+Measured 2026-08-21, the three images that actually reach the cap:
+
+| Image | Tags | Pages | Reachable anonymously | Unreachable |
+|---|---:|---:|---:|---:|
+| `library/mongo` | 3607 | 37 | 1000 | **2607 (72%)** |
+| `library/postgres` | 1421 | 15 | 1000 | 421 |
+| `library/redis` | 1176 | 12 | 1000 | 176 |
+
+**The assumption:** `ordering=last_updated` is push order, *not* version order — so this is not self-evidently safe. It holds because the newest supported branch is itself rebuilt in every wave, so its tags keep re-surfacing near the top. On `library/postgres` the `18.x` tags sit on pages **1–3** even though a whole stack of `14.x`/`15.x` rebuild pushes is more recent, and page 1's timestamps span five weeks — pushes are **incremental, not one 1400-tag batch**.
+
+**How it would break:** upstream pushing more than 1000 *other* tags after the newest version's last push — a single mass re-tag of every supported branch at once. Then the newest version falls past offset 1000 and the tool proposes a **stale** version silently, which is worse than the old loud ERROR.
+
+**All three current answers were validated against complete tag lists** (2026-08-21): `18.6-alpine3.24`, `7.0.40-jammy`, `8.10.1-alpine3.23`. The affected population is self-identifying — only images whose walk reaches page 11 — so this is the whole set, not a sample.
+
+**Verification runbook.** The `name=` query parameter narrows the result set enough to reach past the cap (`name=8.` takes `library/mongo` from 3607 to 624 tags, 7 pages):
+
+```bash
+curl -s 'https://registry.hub.docker.com/v2/repositories/library/postgres/tags?page_size=100&ordering=last_updated&name=18.' \
+  | jq -r '.results[].name | select(test("alpine"))' | sort -Vr | head -5
+```
+
+> ⚠️ **`name=` is a SUBSTRING match, not a prefix match.** `name=10.` on `library/redis` returns eight hits that are all `8.10.x` tags; `name=7.` on mongo would match `17.` and `8.7.` too. Always anchor afterwards — `select(test("^18\\."))` — or you will read a false major. Redis's genuine majors are 6, 7 and 8.
+
+A filtered re-query was considered as an automatic fix and **rejected**: it needs a major hint, and `_/redis` — one of the three affected images — has none, so it would cover two of three current cases and no future hint-less ones, while adding merge, cache-key and substring-anchoring complexity.
+
+**Known residual:** a cap-hit is now *silent*. Today's three images are validated, but a future image crossing 1000 tags would truncate with no signal, because the ERROR that used to announce it is gone. Surfacing it would need a new record field carried through the reporting path (the `core/drift.sh` sub-line pattern) — deliberately not built.
+
 **What field is used:** `.results[].name` — the tag name string.
 
 **Major hint:** Yes. After the tag pipeline, filters with `grep -E "^${major_hint}([.^-]|$)"` then falls back to awk for exact first-segment matching.
