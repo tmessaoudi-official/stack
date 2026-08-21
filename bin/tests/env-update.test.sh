@@ -11922,6 +11922,34 @@ t "t113c: a malformed-JSON body is never reported as '(HTTP 200)'" bash -c "
     echo PASS
 "
 
+# ─── 114 ──────────────────────────────────────────────────────────────────
+section "114 — default --env-file resolves from the script, not from /stack"
+
+# t114a: the default env_file was hardcoded to "/stack/.env", so a checkout at any
+# other path silently read /stack's .env instead of its own — the same defect class
+# as absolute `source` paths in this suite, but in production code.
+#
+# This test must run from a DIFFERENT root or it proves nothing: at /stack the old
+# and new resolutions are identical. So it builds a synthetic tree in TMP_DIR with
+# its own .env carrying a variable name that does NOT exist in /stack/.env. If the
+# default still pointed at /stack, that variable could never appear in the output.
+t "t114a: a checkout outside /stack reads its OWN .env by default" bash -c "
+    root=\${TMP_DIR}/t114_root
+    mkdir -p \"\$root\"
+    cp -a '${REPO_ROOT}/bin' \"\$root/bin\"
+    printf '# @todo env-update dockerhub:_/nginx 1.29.2-alpine3.22\nGLOBAL_STACK_T114A_ONLY_HERE=1.29.2-alpine3.22\n' > \"\$root/.env\"
+    grep -q 'GLOBAL_STACK_T114A_ONLY_HERE' '${REPO_ROOT}/.env' \
+        && { echo 'precondition failed: the marker var exists in the real .env'; echo FAIL; exit 0; }
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\"\${TMP_DIR}/t114a_cache\"
+    out=\$(bash \"\$root/bin/env-update.sh\" --check --dry-run --no-fail --filter=T114A 2>&1)
+    case \"\$out\" in
+        *GLOBAL_STACK_T114A_ONLY_HERE*) :;;
+        *) echo \"read the wrong .env — marker var absent from output:\"; echo \"\$out\" | head -5; echo FAIL; exit 0;;
+    esac
+    echo PASS
+"
+
 _flush_section
 
 TOTAL=$(( PASS + FAIL ))

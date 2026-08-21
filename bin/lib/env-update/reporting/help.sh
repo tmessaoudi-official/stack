@@ -30,7 +30,9 @@ Options:
                           SECTION: syntax | flags | annotations | fetchers | decisions |
                           matrix | scenarios | env-scan. Without SECTION, all sections
                           are printed.
-  --env-file=<path>       Source .env file (default: /stack/.env)
+  --env-file=<path>       Source .env file (default: the .env at the repo root
+                          this script lives in — /stack/.env for the standard
+                          checkout, the clone's own .env elsewhere)
   --filter=<regex>        Only parse records whose env_var matches regex (case-insensitive ERE).
                           Special syntax: --filter=type:X matches by fetcher type (exact
                           match, not regex; e.g. --filter=type:github, --filter=type:dockerhub).

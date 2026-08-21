@@ -145,7 +145,17 @@ _gs_eu2_parse_args() {
     shift
   done
 
-  [[ -z "${_GS_EU2_CFG[env_file]+set}" ]]  && _GS_EU2_CFG[env_file]="/stack/.env"
+  # The default env file resolves from THIS library's own location, never from a
+  # hardcoded "/stack/.env". A checkout at any other path — a clone, a CI
+  # workspace, a review worktree — would otherwise silently read /stack's .env
+  # instead of its own, reporting on the wrong tree while looking healthy. At the
+  # documented /stack layout both forms resolve identically, so nothing changes
+  # there. args.sh lives at <root>/bin/lib/env-update/core/, hence four levels up.
+  if [[ -z "${_GS_EU2_CFG[env_file]+set}" ]]; then
+    local _gs_eu2_root
+    _gs_eu2_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
+    _GS_EU2_CFG[env_file]="${_gs_eu2_root}/.env"
+  fi
   [[ -z "${_GS_EU2_CFG[filter]+set}" ]]    && _GS_EU2_CFG[filter]=""
   [[ -z "${_GS_EU2_CFG[exclude]+set}" ]]   && _GS_EU2_CFG[exclude]=""
   [[ -z "${_GS_EU2_CFG[dump]+set}" ]]      && _GS_EU2_CFG[dump]="false"
