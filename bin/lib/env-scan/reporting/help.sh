@@ -79,7 +79,7 @@ Options:
   --orphan-quiet=<bool>                      Suppress ALL orphaned-var warnings; vars are still kept in .env.local (default: false)
 
 Examples:
-  ./env-scan.sh --debug=true --dir=/stack/.env --show-added-entries=false
+  ./env-scan.sh --debug=true --show-added-entries=false   # --dir defaults to the repo root
   ./env-scan.sh --source-files="file1.env file2.env" --destination-files="dest1.env dest2.env"
   ./env-scan.sh --scan-path=/config --sync-values=true
   bin/env-scan.sh --orphan-ignore-pattern='GLOBAL_STACK_LOCAL_'   # silence machine-local vars
