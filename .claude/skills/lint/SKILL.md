@@ -15,7 +15,7 @@ Find and validate all shell scripts and Dockerfiles in this project for quality 
 
 ## Dockerfiles
 1. Find all Dockerfiles: `find docker/images -name "Dockerfile" -type f`
-2. Run `hadolint` on each (if available)
+2. Run `hadolint` on each
 3. Report results grouped by file
 
 ## YAML Files
@@ -27,5 +27,15 @@ Find and validate all shell scripts and Dockerfiles in this project for quality 
 - Summary table: file → pass/fail → issue count
 - List all warnings and errors with file:line references
 - If everything passes, report "All clean"
+
+**A missing tool is never a pass.** Check each linter with `command -v` first, and if one is
+absent, say so explicitly — *"hadolint NOT INSTALLED — Dockerfiles were not linted"* — and never
+fold that into "All clean". "All clean" must mean every linter ran, not that every linter that
+happened to exist ran. `yamllint` in particular resolves to `/stack/tools/pyenv/shims/yamllint`,
+inside the tools volume that `make soft-restart` wipes, so it can genuinely disappear between
+runs. Report the tool inventory alongside the results:
+
+    shellcheck ✓  hadolint ✓  yamllint ✓   ← all four ran
+    shellcheck ✓  hadolint ✗  yamllint ✓   ← Dockerfiles UNCHECKED, say so in the summary
 
 If arguments are provided, only lint files matching: $ARGUMENTS

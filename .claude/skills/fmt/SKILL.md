@@ -17,6 +17,11 @@ Format shell scripts and YAML files using shfmt and yamlfmt.
 - If `--check` is given, run in check-only mode (no modifications):
   - `shfmt -d -i 2 -ci -bn` for shell scripts (shows diff)
   - `yamlfmt -dry` for YAML files
+
+**A missing tool is never "nothing to format".** Check `command -v shfmt` and `command -v yamlfmt`
+first; if one is absent, state it plainly rather than reporting a clean run. Note also that `shfmt`
+cannot parse `bin/lib/env-update/http/curl.sh` (a known limitation) — that file is skipped by the
+tool itself, so its formatting is unverified and should be reported as such, not as passing.
 - If `--sh` is given, only format shell scripts
 - If `--yaml` is given, only format YAML files
 
