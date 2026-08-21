@@ -52,9 +52,10 @@ Three consequences:
 
 ## Certification — per-task gates, and the ONE milestone panel
 
-> The **workflow half** of this protocol is global, in `~/.claude/CLAUDE.md` (Phases 3C/6C): one
-> `advisor()` per gate and never a panel per task; the full three-lens panel ONCE at the milestone
-> boundary against a frozen commit; failing test FIRST, confirmed red for the stated reason;
+> The **workflow half** of this protocol is global, in `~/.claude/CLAUDE.md` (Phases 3C/6C): the
+> certification tier is the developer's choice, **asked at every gate** (`advisor()` only / panel
+> only / both); the full three-lens panel ONCE at the milestone boundary against a frozen commit;
+> failing test FIRST, confirmed red for the stated reason;
 > a sabotage/mutation check proving the suite would NOTICE the guarantee breaking; and a completion
 > report stating plainly what was certified by execution and what was not.
 >
@@ -63,9 +64,18 @@ Three consequences:
 > `~/.claude/projects/`, which is untracked and bundle-excluded, so a clean clone declared its own
 > ladder superseded and named a successor that was not there (panel finding D2, 2026-08-21).
 
-**Per-task gates are `advisor()` plus executable evidence — not a panel.** A green suite proves the
-code passes the tests, not that the tests would catch a regression; the sabotage check is what
-closes that gap, and it is not optional on this repo.
+**The tier is the developer's choice, asked at EVERY certification moment** — every 3C gate, every
+6C gate and the milestone boundary — via `AskUserQuestion`: `advisor()` only / reviewer panel only
+/ both, recommendation first and a visible challenge-the-premise escape (developer ruling,
+2026-08-21). A previous answer is **never** carried forward to the next gate. **Choosing the panel
+IS the instruction to spawn one** — that is how the standing *"no panels until I ask"* hold is
+satisfied, and a panel that was not chosen in an answer to that question is never spawned.
+Autonomous mode suppresses the question and runs `advisor()` only. Full rule:
+`~/.claude/CLAUDE.md` § "Per-task gate vs milestone panel".
+
+**Whatever tier is chosen, executable evidence still does the refuting between gates.** A green
+suite proves the code passes the tests, not that the tests would catch a regression; the sabotage
+check is what closes that gap, and it is not optional on this repo.
 
 ### Evidence surfaces — what "certified by execution" can mean here
 
@@ -98,7 +108,7 @@ read-only, adversarial reviewer subagents** in `.claude/agents/`. Three lenses, 
 
 Each reviewer **reads the actual diff, code and tests itself** — never certify from the author's narrative — and is chartered to REFUTE, not approve. `/converge` runs the panel mechanically.
 
-**At the milestone boundary: all three lenses, two consecutive fully-clean rounds**, any finding resets the counter, cap 5 rounds → then ask via `AskUserQuestion` (never silently proceed). Rationale: this stack's characteristic failure is *silent* — a token mismatch yields a container that works while reporting unhealthy for 24h, a drifted `ARG` yields a stale image while `.env` looks right, and a startup-script edit lands on every tier-03 consumer at once. None of those is caught by a passing test suite, and none is confined to one service. **This is a milestone tier, not a per-task one** — per-task work is gated by `advisor()` plus the executable evidence above.
+**At the milestone boundary: all three lenses, two consecutive fully-clean rounds**, any finding resets the counter, cap 5 rounds → then ask via `AskUserQuestion` (never silently proceed). Rationale: this stack's characteristic failure is *silent* — a token mismatch yields a container that works while reporting unhealthy for 24h, a drifted `ARG` yields a stale image while `.env` looks right, and a startup-script edit lands on every tier-03 consumer at once. None of those is caught by a passing test suite, and none is confined to one service. **This is the tier to RECOMMEND at a milestone boundary**; for an ordinary per-task gate the recommendation is `advisor()` plus the executable evidence above. Either way the developer picks — this section says what to recommend in the question, not what to run without asking.
 
 **Freeze before the round.** A round run on a moving tree cannot count toward the two-clean requirement: commit first, review the commit. If a milestone spans several commits plus a pending change, land everything, freeze, then run ONE round covering all of it — two panels for one milestone is exactly the waste this protocol exists to avoid.
 

@@ -58,7 +58,10 @@ Two changes ruled together on 2026-08-19: adapt the developer's standing session
   against this instruction. Until the developer says otherwise, `advisor()` is the gate at 3C and
   6C, and executable evidence (failing test first, confirmed red for the stated reason, plus a
   sabotage check) does the refuting. **If you are reading this after a `/compact` or in a new
-  session: do not spawn the panel.**
+  session: do not spawn the panel.** — **SUPERSEDED 2026-08-21 18:00 by the choice-gate ruling
+  below**, which turns "explicit instruction" into a question asked at every gate. The prohibition
+  survives in its stronger form: never spawn a panel that was not chosen in an answer to that
+  question.
 - [2026-08-21 17:00] AGREED (design ruling): for the Docker Hub anonymous page cap, **document the
   limit, do not redesign the fetch.** A filtered `?name=<major>.` re-query was considered and
   rejected: it needs a major hint that `_/redis` does not have, `name=` is a substring match that
@@ -72,6 +75,27 @@ Two changes ruled together on 2026-08-19: adapt the developer's standing session
   came from summing per-section tallies and counting `✓` marks, both of which over-count because
   the breakdown repeats section lines. **Two fresh-context reviewers can be confidently wrong in
   the same direction** — the tie-break came from reading the harness, not from either verdict.
+
+- [2026-08-21 18:00] AGREED: **the certification tier is a QUESTION, asked at every certification
+  moment.** Before certification runs at any 3C gate, any 6C gate, or the milestone boundary, ask
+  via `AskUserQuestion` which tier to run — `advisor()` only / reviewer panel only / both — with a
+  recommendation and a visible challenge-the-premise escape. Two sub-rulings, both the developer's
+  own choice from the offered options:
+  - **Frequency: every certification moment**, with **no carry-forward** of a previous answer. The
+    literal reading of the instruction, and the only shape that lets the developer pick `advisor()`
+    at 3C and `both` at 6C. Rejected: once-per-task, once-per-session, milestone-only.
+  - **Autonomous mode suppresses the question and defaults to `advisor()` only** — a question
+    mid-autonomous-run defeats the sentinel's purpose. The 5-round escalation keeps its own
+    always-ask carve-out. Rejected: default-to-both (the token waste the economize ruling exists to
+    prevent), and always-ask (which would gut autonomous mode).
+  This **reconciles the 2026-08-21 17:00 no-panels hold**: choosing the panel in that question *is*
+  the explicit instruction the hold was waiting for. The hold's prohibition is not lifted, it is
+  generalised — a panel is spawned only when it was chosen in an answer, never on a session's own
+  initiative.
+  Landed in **both** halves of the split protocol: `~/.claude/CLAUDE.md` § "Per-task gate vs
+  milestone panel" (via `/tmp/apply-certification-choice-gate-20260821.sh`, since that file is
+  classifier-blocked) and `/stack/CLAUDE.md` § "Certification". Editing only the global half would
+  have been inert here — `/stack/CLAUDE.md` wins on conflict and said the opposite.
 
 ## Formal Plan
 
