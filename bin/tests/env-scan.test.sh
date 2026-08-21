@@ -6,6 +6,13 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_SCAN="${SCRIPT_DIR}/../env-scan.sh"
+
+# Resolved from SCRIPT_DIR, never hardcoded to /stack: a test that sources an
+# absolute '/stack/...' path certifies the tree at /stack rather than the tree it
+# lives in, so a clone's suite silently passes against /stack's library. Measured
+# in env-update.test.sh: with absolute sources, 27 of 28 tests stayed green against
+# a deliberately broken library; resolved from SCRIPT_DIR, 12 of them caught it.
+_GS_ES_LIB="${SCRIPT_DIR}/../lib/env-scan"
 TMP_DIR="$(mktemp -d)"
 export TMP_DIR
 trap 'rm -rf "${TMP_DIR}"' EXIT
@@ -1037,7 +1044,7 @@ section "18. propagate: _gs_es_propagate_to_dockerfiles unit tests"
 # Tests call _gs_es_propagate_to_dockerfiles directly (no env-scan.sh).
 # Each test builds a self-contained temp dir and cleans up on exit.
 
-_PROP_LIB="/stack/bin/lib/env-scan/propagate.sh"
+_PROP_LIB="${_GS_ES_LIB}/propagate.sh"
 
 t "basic rewrite: ARG VAR=old → ARG VAR=new when .env has new value" bash -c "
     D=\$(mktemp -d); trap 'rm -rf \"\$D\"' EXIT
@@ -2222,7 +2229,7 @@ t "t22b: removing dead tmp_file — merge output unchanged (no regression)" bash
 t "t22c: --no-fail + Phase 6 propagation error → [NO-FAIL] per-suppression notice" bash -c "
     # Directly test main.sh Phase 6 suppression by sourcing the library files and
     # overriding _gs_es_propagate_to_dockerfiles to return 1.
-    source '/stack/bin/lib/env-scan/config/defaults.sh'
+    source '${_GS_ES_LIB}/config/defaults.sh'
     _gs_es_propagate_to_dockerfiles() { return 1; }
     declare -A _GS_ES_CFG
     _GS_ES_CFG[source_files]='/dev/null'
@@ -2775,6 +2782,18 @@ BAR="━━━━━━━━━━━━━━━━━━━━━━━━━
 echo ""
 printf "${C_BOLD}%s${C_RESET}\n" "${BAR}"
 echo ""
+
+# A filter that matches nothing used to print "ALL PASSED ✓ 0 / 0" and exit 0 —
+# a typo'd or wrongly-separated --section produced a green run in which no test
+# had executed. The separator is a COMMA (IFS=','), so --section='1 2' is a
+# single token matching no section. Zero tests is never a pass.
+if [[ -n "${SECTION_FILTER}" && "${TOTAL}" -eq 0 ]]; then
+    printf "  ${C_BOLD}${C_RED}NO TESTS RAN${C_RESET}   --section=%s matched no section (the separator is ',')\n" "${SECTION_FILTER}"
+    echo ""
+    printf "${C_BOLD}%s${C_RESET}\n" "${BAR}"
+    echo ""
+    exit 1
+fi
 
 if [[ "${FAIL}" -eq 0 ]]; then
     printf "  ${C_BOLD}${C_GREEN}ALL PASSED${C_RESET}   ${C_GREEN}✓ %d / %d${C_RESET}\n" "${PASS}" "${TOTAL}"

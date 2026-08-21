@@ -7,6 +7,16 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_UPDATE_V2="${SCRIPT_DIR}/../env-update.sh"
 FIXTURES="${SCRIPT_DIR}/fixtures/env-update"
+
+# Everything below resolves from SCRIPT_DIR. A test that sources an absolute
+# '/stack/...' path certifies the tree at /stack rather than the tree it lives in,
+# so a clone's suite silently passes against /stack's library. Proven: breaking a
+# clone's curl.sh left 10 of 11 tests in section 112 green, because they sourced
+# /stack's copy. These are expanded by THIS shell when each test's command string
+# is built, so the absolute path is baked in once, here.
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+_GS_EU2_LIB="${SCRIPT_DIR}/../lib/env-update"
+_GS_ES_LIB="${SCRIPT_DIR}/../lib/env-scan"
 TMP_DIR="$(mktemp -d)"
 export TMP_DIR
 trap 'rm -rf "${TMP_DIR}"' EXIT
@@ -646,7 +656,7 @@ section "11 — cache layer"
 
 t "t11a: cache write then read returns same value" bash -c "
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/cache11a
-    source '/stack/bin/lib/env-update/core/cache.sh'
+    source '${_GS_EU2_LIB}/core/cache.sh'
     _gs_eu2_cache_write 'dockerhub:_/postgres:18' '18.4-alpine3.23'
     val=\$(_gs_eu2_cache_read 'dockerhub:_/postgres:18')
     [[ \"\$val\" == '18.4-alpine3.23' ]] || { echo \"got: \$val\"; echo FAIL; exit 0; }
@@ -655,7 +665,7 @@ t "t11a: cache write then read returns same value" bash -c "
 
 t "t11b: cache miss returns non-zero" bash -c "
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/cache11b
-    source '/stack/bin/lib/env-update/core/cache.sh'
+    source '${_GS_EU2_LIB}/core/cache.sh'
     _gs_eu2_cache_read 'dockerhub:_/postgres:18' >/dev/null 2>&1 && { echo FAIL; exit 0; }
     echo PASS
 "
@@ -663,7 +673,7 @@ t "t11b: cache miss returns non-zero" bash -c "
 t "t11c: cache expired returns non-zero" bash -c "
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/cache11c
     export _GS_EU2_CACHE_TTL=0
-    source '/stack/bin/lib/env-update/core/cache.sh'
+    source '${_GS_EU2_LIB}/core/cache.sh'
     _gs_eu2_cache_write 'key:v1' 'somevalue'
     # TTL=0: any age is expired
     sleep 1
@@ -673,7 +683,7 @@ t "t11c: cache expired returns non-zero" bash -c "
 
 t "t11d: cache_key sanitizes colons and slashes" bash -c "
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/cache11d
-    source '/stack/bin/lib/env-update/core/cache.sh'
+    source '${_GS_EU2_LIB}/core/cache.sh'
     f=\$(_gs_eu2_cache_key_to_file 'dockerhub:_/postgres:18:stable')
     [[ \"\$f\" == *'dockerhub__'* ]] || { echo \"colon not replaced: \$f\"; echo FAIL; exit 0; }
     [[ \"\$f\" != *':'* ]] || { echo \"raw colon in path: \$f\"; echo FAIL; exit 0; }
@@ -682,7 +692,7 @@ t "t11d: cache_key sanitizes colons and slashes" bash -c "
 
 t "t11d2: different fetch_extract values → different cache filenames" bash -c "
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/cache11d2
-    source '/stack/bin/lib/env-update/core/cache.sh'
+    source '${_GS_EU2_LIB}/core/cache.sh'
     f1=\$(_gs_eu2_cache_key_to_file 'url:https://example.com:v([0-9.]+)::stable')
     f2=\$(_gs_eu2_cache_key_to_file 'url:https://example.com:Version:([0-9.]+)::stable')
     [[ \"\$f1\" != \"\$f2\" ]] || { echo \"collision: different extract patterns mapped to same file: \$f1\"; echo FAIL; exit 0; }
@@ -701,7 +711,7 @@ t "t11e: --no-cache prints [NO-CACHE MODE] banner" bash -c "
 
 t "t11f: pecl2:stable and pecl2:unstable use distinct cache keys (no cross-contamination)" bash -c "
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/cache11f
-    source '/stack/bin/lib/env-update/core/cache.sh'
+    source '${_GS_EU2_LIB}/core/cache.sh'
     # Write a value under the stable key
     _gs_eu2_cache_write 'pecl2:stable:apcu' '6.3.0-STABLE'
     # The unstable key must NOT return the stable-key value
@@ -719,16 +729,16 @@ t "t11f: pecl2:stable and pecl2:unstable use distinct cache keys (no cross-conta
 section "12 — channel selection"
 
 _ch_src() {
-  source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-  source '/stack/bin/lib/env-update/core/semver.sh'
-  source '/stack/bin/lib/env-update/core/channel.sh'
+  source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+  source '${_GS_EU2_LIB}/core/semver.sh'
+  source '${_GS_EU2_LIB}/core/channel.sh'
 }
 
 t "t12a: stable channel picks highest stable, ignores rc" bash -c "
     $(_ch_src 2>/dev/null; echo 'true') || true
-    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-    source '/stack/bin/lib/env-update/core/semver.sh'
-    source '/stack/bin/lib/env-update/core/channel.sh'
+    source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+    source '${_GS_EU2_LIB}/core/semver.sh'
+    source '${_GS_EU2_LIB}/core/channel.sh'
     versions=\$'18.3\n18.4-rc1\n18.4\n18.5-beta1'
     result=\$(_gs_eu2_channel_select_best \"\$versions\" 'stable')
     [[ \"\$result\" == '18.4' ]] || { echo \"got: \$result\"; echo FAIL; exit 0; }
@@ -736,9 +746,9 @@ t "t12a: stable channel picks highest stable, ignores rc" bash -c "
 "
 
 t "t12b: rc channel picks highest rc tag" bash -c "
-    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-    source '/stack/bin/lib/env-update/core/semver.sh'
-    source '/stack/bin/lib/env-update/core/channel.sh'
+    source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+    source '${_GS_EU2_LIB}/core/semver.sh'
+    source '${_GS_EU2_LIB}/core/channel.sh'
     versions=\$'18.3\n18.4-rc1\n18.4-rc2\n18.5-beta1'
     result=\$(_gs_eu2_channel_select_best \"\$versions\" 'rc')
     [[ \"\$result\" == '18.4-rc2' ]] || { echo \"got: \$result\"; echo FAIL; exit 0; }
@@ -746,9 +756,9 @@ t "t12b: rc channel picks highest rc tag" bash -c "
 "
 
 t "t12c: empty channel defaults to stable" bash -c "
-    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-    source '/stack/bin/lib/env-update/core/semver.sh'
-    source '/stack/bin/lib/env-update/core/channel.sh'
+    source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+    source '${_GS_EU2_LIB}/core/semver.sh'
+    source '${_GS_EU2_LIB}/core/channel.sh'
     versions=\$'18.3\n18.4-rc1\n18.4'
     result=\$(_gs_eu2_channel_select_best \"\$versions\" '')
     [[ \"\$result\" == '18.4' ]] || { echo \"got: \$result\"; echo FAIL; exit 0; }
@@ -756,9 +766,9 @@ t "t12c: empty channel defaults to stable" bash -c "
 "
 
 t "t12d: unstable channel picks highest pre-release" bash -c "
-    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-    source '/stack/bin/lib/env-update/core/semver.sh'
-    source '/stack/bin/lib/env-update/core/channel.sh'
+    source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+    source '${_GS_EU2_LIB}/core/semver.sh'
+    source '${_GS_EU2_LIB}/core/channel.sh'
     versions=\$'18.3\n18.4\n18.5-rc1\n18.5-beta2'
     result=\$(_gs_eu2_channel_select_best \"\$versions\" 'unstable')
     # highest pre-release by sort -V
@@ -767,8 +777,8 @@ t "t12d: unstable channel picks highest pre-release" bash -c "
 "
 
 t "t12e: is_prerelease detects rc, beta, alpha" bash -c "
-    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-    source '/stack/bin/lib/env-update/core/semver.sh'
+    source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+    source '${_GS_EU2_LIB}/core/semver.sh'
     _gs_eu2_is_prerelease '1.0.0-rc1'   || { echo 'rc1 not detected'; echo FAIL; exit 0; }
     _gs_eu2_is_prerelease '2.3.0beta2'  || { echo 'beta not detected'; echo FAIL; exit 0; }
     _gs_eu2_is_prerelease '1.0.0alpha'  || { echo 'alpha not detected'; echo FAIL; exit 0; }
@@ -777,8 +787,8 @@ t "t12e: is_prerelease detects rc, beta, alpha" bash -c "
 "
 
 t "t12e2: pre/next word-boundary — no false positives on tag substrings" bash -c "
-    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-    source '/stack/bin/lib/env-update/core/semver.sh'
+    source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+    source '${_GS_EU2_LIB}/core/semver.sh'
     # False positives that were fixed (substring matches in stable tags)
     _gs_eu2_is_prerelease 'nextcloud-1.0'  && { echo 'nextcloud-1.0 wrongly flagged as prerelease'; echo FAIL; exit 0; }
     _gs_eu2_is_prerelease 'prepared-1.0'   && { echo 'prepared-1.0 wrongly flagged as prerelease'; echo FAIL; exit 0; }
@@ -794,9 +804,9 @@ t "t12e2: pre/next word-boundary — no false positives on tag substrings" bash 
 "
 
 t "t12f: v-prefixed tags accepted by channel filter (B2)" bash -c "
-    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-    source '/stack/bin/lib/env-update/core/semver.sh'
-    source '/stack/bin/lib/env-update/core/channel.sh'
+    source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+    source '${_GS_EU2_LIB}/core/semver.sh'
+    source '${_GS_EU2_LIB}/core/channel.sh'
     versions=\$'v0.29.0\nv0.28.0\nv0.27.0'
     result=\$(_gs_eu2_channel_select_best \"\$versions\" '')
     [[ -n \"\$result\" ]] || { echo 'all v-prefixed tags were dropped'; echo FAIL; exit 0; }
@@ -805,9 +815,9 @@ t "t12f: v-prefixed tags accepted by channel filter (B2)" bash -c "
 "
 
 t "t12g: nightly channel with only stable versions returns best stable (stable-promotion fallback)" bash -c "
-    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-    source '/stack/bin/lib/env-update/core/semver.sh'
-    source '/stack/bin/lib/env-update/core/channel.sh'
+    source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+    source '${_GS_EU2_LIB}/core/semver.sh'
+    source '${_GS_EU2_LIB}/core/channel.sh'
     # No nightly tags, no prerelease tags — nightly now promotes to stable (consistent with channel:rc)
     versions=\$'v26.0.0\nv26.1.0\nv25.9.0'
     result=\$(_gs_eu2_channel_select_best \"\$versions\" 'nightly')
@@ -816,9 +826,9 @@ t "t12g: nightly channel with only stable versions returns best stable (stable-p
 "
 
 t "t12h: nightly channel with nightly-tagged versions returns latest nightly" bash -c "
-    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-    source '/stack/bin/lib/env-update/core/semver.sh'
-    source '/stack/bin/lib/env-update/core/channel.sh'
+    source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+    source '${_GS_EU2_LIB}/core/semver.sh'
+    source '${_GS_EU2_LIB}/core/channel.sh'
     versions=\$'v26.0.0-nightly20260101abc\nv26.0.0-nightly20260314xyz\nv26.0.0-nightly20260201def'
     result=\$(_gs_eu2_channel_select_best \"\$versions\" 'nightly')
     [[ \"\$result\" == 'v26.0.0-nightly20260314xyz' ]] || { echo \"got: \$result\"; echo FAIL; exit 0; }
@@ -826,9 +836,9 @@ t "t12h: nightly channel with nightly-tagged versions returns latest nightly" ba
 "
 
 t "t12i: nightly channel with mixed stable+nightly promotes to stable when stable is newer" bash -c "
-    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-    source '/stack/bin/lib/env-update/core/semver.sh'
-    source '/stack/bin/lib/env-update/core/channel.sh'
+    source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+    source '${_GS_EU2_LIB}/core/semver.sh'
+    source '${_GS_EU2_LIB}/core/channel.sh'
     # v26.1.0 stable > v26.0.0-nightly* → stable-promotion returns v26.1.0 (consistent with unstable channel)
     versions=\$'v26.1.0\nv26.0.0-nightly20260101abc\nv26.0.0-nightly20260314xyz'
     result=\$(_gs_eu2_channel_select_best \"\$versions\" 'nightly')
@@ -837,9 +847,9 @@ t "t12i: nightly channel with mixed stable+nightly promotes to stable when stabl
 "
 
 t "t12j: filter_versions_by_channel with nightly channel now filters (no longer all-pass)" bash -c "
-    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-    source '/stack/bin/lib/env-update/core/semver.sh'
-    source '/stack/bin/lib/env-update/core/channel.sh'
+    source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+    source '${_GS_EU2_LIB}/core/semver.sh'
+    source '${_GS_EU2_LIB}/core/channel.sh'
     versions=\$'v26.0.0\nv26.1.0\nv25.9.0'
     result=\$(_gs_eu2_filter_versions_by_channel \"\$versions\" 'nightly')
     [[ -z \"\$result\" ]] || { echo \"expected empty (no nightly tags), got: \$result\"; echo FAIL; exit 0; }
@@ -848,9 +858,9 @@ t "t12j: filter_versions_by_channel with nightly channel now filters (no longer 
 
 # t12k: mixed v-prefix sort — v0.3.0 must not outrank 1.0.0-alpha (aleph.js regression)
 t "t12k: unstable channel — mixed v-prefix pool picks highest semantic version" bash -c "
-    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-    source '/stack/bin/lib/env-update/core/semver.sh'
-    source '/stack/bin/lib/env-update/core/channel.sh'
+    source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+    source '${_GS_EU2_LIB}/core/semver.sh'
+    source '${_GS_EU2_LIB}/core/channel.sh'
     # Simulates aleph.js GitHub release pool: 1.0.0-alpha.* releases + v0.3.0-beta.* tags
     # sort -V without v-strip puts v0.3.0-beta.19 AFTER 1.0.0-alpha.47 (bug); fix must return alpha.47
     versions=\$'1.0.0-alpha.47\n1.0.0-alpha.42\nv0.3.0-beta.19\nv0.3.0-beta.18'
@@ -861,9 +871,9 @@ t "t12k: unstable channel — mixed v-prefix pool picks highest semantic version
 
 # t12l: mixed v-prefix pool in stable channel also sorts correctly
 t "t12l: stable channel — mixed v-prefix pool picks highest stable" bash -c "
-    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-    source '/stack/bin/lib/env-update/core/semver.sh'
-    source '/stack/bin/lib/env-update/core/channel.sh'
+    source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+    source '${_GS_EU2_LIB}/core/semver.sh'
+    source '${_GS_EU2_LIB}/core/channel.sh'
     versions=\$'1.0.0\nv0.9.0\nv1.1.0\n0.8.0'
     result=\$(_gs_eu2_channel_select_best \"\$versions\" '')
     [[ \"\$result\" == 'v1.1.0' ]] || { echo \"expected v1.1.0, got: \$result\"; echo FAIL; exit 0; }
@@ -875,7 +885,7 @@ t "t12l: stable channel — mixed v-prefix pool picks highest stable" bash -c "
 # ═══════════════════════════════════════════════════════════════════════════
 section "13 — tag flags"
 
-_TF_SRC="source '/stack/bin/lib/env-update/core/tag_flags.sh'"
+_TF_SRC="source '${_GS_EU2_LIB}/core/tag_flags.sh'"
 
 t "t13a: tag-filter keeps only matching" bash -c "
     ${_TF_SRC}
@@ -935,7 +945,7 @@ section "14 — HTTP seam"
 
 t "t14a: fixture hit returns file contents" bash -c "
     export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
-    source '/stack/bin/lib/env-update/http/curl.sh'
+    source '${_GS_EU2_LIB}/http/curl.sh'
     # URL → strip query → sanitize → test.example_fixture-test
     out=\$(_gs_eu2_http_get 'https://test.example/fixture-test?foo=bar' 2>&1)
     echo \"\$out\" | grep -qF '1.2.3' || { echo \"fixture content missing: \$out\"; echo FAIL; exit 0; }
@@ -944,7 +954,7 @@ t "t14a: fixture hit returns file contents" bash -c "
 
 t "t14b: fixture miss returns non-zero with message" bash -c "
     export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
-    source '/stack/bin/lib/env-update/http/curl.sh'
+    source '${_GS_EU2_LIB}/http/curl.sh'
     err=\$(_gs_eu2_http_get 'https://example.com/nonexistent' 2>&1 >/dev/null)
     [[ \$? -ne 0 ]] || err_code=0
     _gs_eu2_http_get 'https://example.com/nonexistent' >/dev/null 2>&1 && { echo FAIL; exit 0; }
@@ -957,15 +967,15 @@ t "t14b: fixture miss returns non-zero with message" bash -c "
 section "15 — dockerhub fetcher"
 
 _DH_LIBS="
-source '/stack/bin/lib/env-update/config/defaults.sh'
-source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update/core/records.sh'
-source '/stack/bin/lib/env-update/core/semver.sh'
-source '/stack/bin/lib/env-update/core/channel.sh'
-source '/stack/bin/lib/env-update/core/tag_flags.sh'
-source '/stack/bin/lib/env-update/core/cache.sh'
-source '/stack/bin/lib/env-update/http/curl.sh'
-source '/stack/bin/lib/env-update/fetchers/dockerhub.sh'
+source '${_GS_EU2_LIB}/config/defaults.sh'
+source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+source '${_GS_EU2_LIB}/core/records.sh'
+source '${_GS_EU2_LIB}/core/semver.sh'
+source '${_GS_EU2_LIB}/core/channel.sh'
+source '${_GS_EU2_LIB}/core/tag_flags.sh'
+source '${_GS_EU2_LIB}/core/cache.sh'
+source '${_GS_EU2_LIB}/http/curl.sh'
+source '${_GS_EU2_LIB}/fetchers/dockerhub.sh'
 export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
 export _GS_EU2_CACHE_DIR=\${TMP_DIR}/dh_cache
 "
@@ -1078,9 +1088,9 @@ t "t15g: version-prefix re-prepended after tag-strip-prefix (B3)" bash -c "
 section "16 — decision classifier"
 
 _DC_LIBS="
-source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update/core/semver.sh'
-source '/stack/bin/lib/env-update/core/decide.sh'
+source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+source '${_GS_EU2_LIB}/core/semver.sh'
+source '${_GS_EU2_LIB}/core/decide.sh'
 "
 
 t "t16a: same version → SKIP (up-to-date)" bash -c "
@@ -1243,15 +1253,15 @@ t "t17d: SKIP up-to-date includes reason in output (B4)" bash -c "
 section "18 — pagination and error handling"
 
 _DH_LIBS18="
-source '/stack/bin/lib/env-update/config/defaults.sh'
-source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update/core/records.sh'
-source '/stack/bin/lib/env-update/core/semver.sh'
-source '/stack/bin/lib/env-update/core/channel.sh'
-source '/stack/bin/lib/env-update/core/tag_flags.sh'
-source '/stack/bin/lib/env-update/core/cache.sh'
-source '/stack/bin/lib/env-update/http/curl.sh'
-source '/stack/bin/lib/env-update/fetchers/dockerhub.sh'
+source '${_GS_EU2_LIB}/config/defaults.sh'
+source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+source '${_GS_EU2_LIB}/core/records.sh'
+source '${_GS_EU2_LIB}/core/semver.sh'
+source '${_GS_EU2_LIB}/core/channel.sh'
+source '${_GS_EU2_LIB}/core/tag_flags.sh'
+source '${_GS_EU2_LIB}/core/cache.sh'
+source '${_GS_EU2_LIB}/http/curl.sh'
+source '${_GS_EU2_LIB}/fetchers/dockerhub.sh'
 export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
 export _GS_EU2_CACHE_DIR=\${TMP_DIR}/dh18_cache
 "
@@ -1343,23 +1353,23 @@ t "t18g: github:php/php-src:8.2 parses to identifier=php/php-src major_hint=8.2"
 section "19 — non-numeric fallback, unversioned, --apply"
 
 _DH_LIBS19="
-source '/stack/bin/lib/env-update/config/defaults.sh'
-source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update/core/records.sh'
-source '/stack/bin/lib/env-update/core/semver.sh'
-source '/stack/bin/lib/env-update/core/channel.sh'
-source '/stack/bin/lib/env-update/core/tag_flags.sh'
-source '/stack/bin/lib/env-update/core/cache.sh'
-source '/stack/bin/lib/env-update/http/curl.sh'
-source '/stack/bin/lib/env-update/fetchers/dockerhub.sh'
+source '${_GS_EU2_LIB}/config/defaults.sh'
+source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+source '${_GS_EU2_LIB}/core/records.sh'
+source '${_GS_EU2_LIB}/core/semver.sh'
+source '${_GS_EU2_LIB}/core/channel.sh'
+source '${_GS_EU2_LIB}/core/tag_flags.sh'
+source '${_GS_EU2_LIB}/core/cache.sh'
+source '${_GS_EU2_LIB}/http/curl.sh'
+source '${_GS_EU2_LIB}/fetchers/dockerhub.sh'
 export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
 export _GS_EU2_CACHE_DIR=\${TMP_DIR}/dh19_cache
 "
 
 t "t19a: channel_select_best falls back to sort-V for codename tags (C1)" bash -c "
-    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-    source '/stack/bin/lib/env-update/core/semver.sh'
-    source '/stack/bin/lib/env-update/core/channel.sh'
+    source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+    source '${_GS_EU2_LIB}/core/semver.sh'
+    source '${_GS_EU2_LIB}/core/channel.sh'
     versions=\$'resolute-20260413\nresolute-20260108\nplucky-20260201\nlatest'
     result=\$(_gs_eu2_channel_select_best \"\$versions\" '')
     [[ \"\$result\" == 'resolute-20260413' ]] || { echo \"got: '\$result'\"; echo FAIL; exit 0; }
@@ -1367,9 +1377,9 @@ t "t19a: channel_select_best falls back to sort-V for codename tags (C1)" bash -
 "
 
 t "t19b: channel_select_best returns empty when only unversioned sentinels present" bash -c "
-    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-    source '/stack/bin/lib/env-update/core/semver.sh'
-    source '/stack/bin/lib/env-update/core/channel.sh'
+    source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+    source '${_GS_EU2_LIB}/core/semver.sh'
+    source '${_GS_EU2_LIB}/core/channel.sh'
     versions=\$'latest\nedge'
     result=\$(_gs_eu2_channel_select_best \"\$versions\" '')
     [[ -z \"\$result\" ]] || { echo \"expected empty, got: '\$result'\"; echo FAIL; exit 0; }
@@ -1421,9 +1431,9 @@ t "t19e: moby/buildkit tag-filter excludes -ubuntu suffix (C2)" bash -c "
 "
 
 t "t19f: _gs_eu2_apply_updates dry-run shows DRY-RUN without modifying file" bash -c "
-    source '/stack/bin/lib/env-update/config/defaults.sh'
-    source '/stack/bin/lib/env-update/core/records.sh'
-    source '/stack/bin/lib/env-update/core/apply.sh'
+    source '${_GS_EU2_LIB}/config/defaults.sh'
+    source '${_GS_EU2_LIB}/core/records.sh'
+    source '${_GS_EU2_LIB}/core/apply.sh'
     f=\${TMP_DIR}/t19f.env
     printf 'GLOBAL_STACK_FOO_VERSION=1.0.0\n' > \"\$f\"
     _gs_eu2_record_new; idx=\$_GS_EU2_LAST_IDX
@@ -1438,9 +1448,9 @@ t "t19f: _gs_eu2_apply_updates dry-run shows DRY-RUN without modifying file" bas
 "
 
 t "t19g: _gs_eu2_apply_updates rewrites AUTO var and preserves other lines" bash -c "
-    source '/stack/bin/lib/env-update/config/defaults.sh'
-    source '/stack/bin/lib/env-update/core/records.sh'
-    source '/stack/bin/lib/env-update/core/apply.sh'
+    source '${_GS_EU2_LIB}/config/defaults.sh'
+    source '${_GS_EU2_LIB}/core/records.sh'
+    source '${_GS_EU2_LIB}/core/apply.sh'
     f=\${TMP_DIR}/t19g.env
     printf '# comment\nGLOBAL_STACK_FOO_VERSION=1.0.0\nGLOBAL_STACK_BAR=unchanged\n' > \"\$f\"
     _gs_eu2_record_new; idx=\$_GS_EU2_LAST_IDX
@@ -1456,9 +1466,9 @@ t "t19g: _gs_eu2_apply_updates rewrites AUTO var and preserves other lines" bash
 "
 
 t "t19h: _gs_eu2_apply_updates also rewrites the @todo annotation comment version" bash -c "
-    source '/stack/bin/lib/env-update/config/defaults.sh'
-    source '/stack/bin/lib/env-update/core/records.sh'
-    source '/stack/bin/lib/env-update/core/apply.sh'
+    source '${_GS_EU2_LIB}/config/defaults.sh'
+    source '${_GS_EU2_LIB}/core/records.sh'
+    source '${_GS_EU2_LIB}/core/apply.sh'
     f=\${TMP_DIR}/t19h.env
     ann='# @todo env-update github:ruby/ruby:3 3 3.4.9'
     printf '%s\nGLOBAL_STACK_RUBY_VERSION=3.4.9\n' \"\$ann\" > \"\$f\"
@@ -1476,9 +1486,9 @@ t "t19h: _gs_eu2_apply_updates also rewrites the @todo annotation comment versio
 "
 
 t "t19i: annotation update preserves trailing urls: extras and does not corrupt them" bash -c "
-    source '/stack/bin/lib/env-update/config/defaults.sh'
-    source '/stack/bin/lib/env-update/core/records.sh'
-    source '/stack/bin/lib/env-update/core/apply.sh'
+    source '${_GS_EU2_LIB}/config/defaults.sh'
+    source '${_GS_EU2_LIB}/core/records.sh'
+    source '${_GS_EU2_LIB}/core/apply.sh'
     f=\${TMP_DIR}/t19i.env
     ann='# @todo env-update (tag-strip-prefix:v) github:ruby/ruby:4 4.0.1 urls: https://www.ruby-lang.org/en/'
     printf '%s\nGLOBAL_STACK_RUBY4_VERSION=4.0.1\n' \"\$ann\" > \"\$f\"
@@ -1496,9 +1506,9 @@ t "t19i: annotation update preserves trailing urls: extras and does not corrupt 
 "
 
 t "t19j: sha: keyword extracted from annotation into annotation_sha record field" bash -c "
-    source '/stack/bin/lib/env-update/config/defaults.sh'
-    source '/stack/bin/lib/env-update/core/records.sh'
-    source '/stack/bin/lib/env-update/core/parse.sh'
+    source '${_GS_EU2_LIB}/config/defaults.sh'
+    source '${_GS_EU2_LIB}/core/records.sh'
+    source '${_GS_EU2_LIB}/core/parse.sh'
     f=\${TMP_DIR}/t19j.env
     sha='aabbccdd1122334455667788990011aabbccdd11'
     printf '# @todo env-update pecl-git:https://github.com/example/php-ext 1.2.3 sha:%s\nGLOBAL_STACK_EXT_VERSION=1.2.3\n' \"\$sha\" > \"\$f\"
@@ -1509,9 +1519,9 @@ t "t19j: sha: keyword extracted from annotation into annotation_sha record field
 "
 
 t "t19k: (use-sha) flag sets use_sha=true on record" bash -c "
-    source '/stack/bin/lib/env-update/config/defaults.sh'
-    source '/stack/bin/lib/env-update/core/records.sh'
-    source '/stack/bin/lib/env-update/core/parse.sh'
+    source '${_GS_EU2_LIB}/config/defaults.sh'
+    source '${_GS_EU2_LIB}/core/records.sh'
+    source '${_GS_EU2_LIB}/core/parse.sh'
     f=\${TMP_DIR}/t19k.env
     sha='aabbccdd1122334455667788990011aabbccdd11'
     printf '# @todo env-update (use-sha) pecl-git:https://github.com/example/php-ext sha:%s\nGLOBAL_STACK_EXT_VERSION=%s\n' \"\$sha\" \"\$sha\" > \"\$f\"
@@ -1522,9 +1532,9 @@ t "t19k: (use-sha) flag sets use_sha=true on record" bash -c "
 "
 
 t "t19l: apply with cur_sha/new_sha updates sha:OLD to sha:NEW in annotation while keeping version" bash -c "
-    source '/stack/bin/lib/env-update/config/defaults.sh'
-    source '/stack/bin/lib/env-update/core/records.sh'
-    source '/stack/bin/lib/env-update/core/apply.sh'
+    source '${_GS_EU2_LIB}/config/defaults.sh'
+    source '${_GS_EU2_LIB}/core/records.sh'
+    source '${_GS_EU2_LIB}/core/apply.sh'
     f=\${TMP_DIR}/t19l.env
     old_sha='aaaa0000bbbb1111cccc2222dddd3333eeee4444'
     new_sha='1111aaaa2222bbbb3333cccc4444dddd5555eeee'
@@ -1555,9 +1565,9 @@ t "t19l: apply with cur_sha/new_sha updates sha:OLD to sha:NEW in annotation whi
 "
 
 t "t19m: apply with use_sha=true writes new_sha to VAR= instead of new version" bash -c "
-    source '/stack/bin/lib/env-update/config/defaults.sh'
-    source '/stack/bin/lib/env-update/core/records.sh'
-    source '/stack/bin/lib/env-update/core/apply.sh'
+    source '${_GS_EU2_LIB}/config/defaults.sh'
+    source '${_GS_EU2_LIB}/core/records.sh'
+    source '${_GS_EU2_LIB}/core/apply.sh'
     f=\${TMP_DIR}/t19m.env
     old_sha='aaaa0000bbbb1111cccc2222dddd3333eeee4444'
     new_sha='1111aaaa2222bbbb3333cccc4444dddd5555eeee'
@@ -1586,13 +1596,13 @@ t "t19m: apply with use_sha=true writes new_sha to VAR= instead of new version" 
 section "20 — codename delta + floating-reference SKIP"
 
 _SD_LIBS="
-source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update/core/semver.sh'
+source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+source '${_GS_EU2_LIB}/core/semver.sh'
 "
 _DC_LIBS20="
-source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update/core/semver.sh'
-source '/stack/bin/lib/env-update/core/decide.sh'
+source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+source '${_GS_EU2_LIB}/core/semver.sh'
+source '${_GS_EU2_LIB}/core/decide.sh'
 "
 
 t "t20a: semver_delta — same codename prefix → patch" bash -c "
@@ -1640,7 +1650,7 @@ t "t20e: classify — unversioned current (nightly) + concrete proposed → RESO
 section "21 — hoist_all_flags"
 
 _HOIST_LIBS="
-source '/stack/bin/lib/env-update/core/parse.sh'
+source '${_GS_EU2_LIB}/core/parse.sh'
 "
 
 t "t21a: single recognized flag extracted, rest cleaned" bash -c "
@@ -1771,7 +1781,7 @@ t "t22e: suffix mid-tag not matched" bash "${_TS_SCRIPT}" '-oraclelinux9' '9.0-o
 section "23 — alt_version record field"
 
 t "t23a: alt_version set and read back via record accessor" bash -c "
-    source '/stack/bin/lib/env-update/core/records.sh'
+    source '${_GS_EU2_LIB}/core/records.sh'
     _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
     _gs_eu2_record_set \$idx alt_version 'v2.0.0 (latest stable)'
     val=\$(_gs_eu2_record_get \$idx alt_version)
@@ -1788,7 +1798,7 @@ t "t23b: alt_version appears in --dump output" bash -c "
 "
 
 t "t23c: alt_version defaults to empty string when not set" bash -c "
-    source '/stack/bin/lib/env-update/core/records.sh'
+    source '${_GS_EU2_LIB}/core/records.sh'
     _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
     val=\$(_gs_eu2_record_get \$idx alt_version)
     [[ -z \"\$val\" ]] || { echo \"expected empty, got: '\$val'\"; echo FAIL; exit 0; }
@@ -1801,14 +1811,14 @@ t "t23c: alt_version defaults to empty string when not set" bash -c "
 section "24 — http_get_auth"
 
 t "t24a: auth function exists and accepts (url, token) signature" bash -c "
-    source '/stack/bin/lib/env-update/http/curl.sh'
+    source '${_GS_EU2_LIB}/http/curl.sh'
     declare -f _gs_eu2_http_get_auth >/dev/null 2>&1 || { echo 'function not found'; echo FAIL; exit 0; }
     echo PASS
 "
 
 t "t24b: empty token delegates to plain http_get (fixture path identical)" bash -c "
     export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
-    source '/stack/bin/lib/env-update/http/curl.sh'
+    source '${_GS_EU2_LIB}/http/curl.sh'
     # Same fixture as t14a — empty token must hit same file
     out=\$(_gs_eu2_http_get_auth 'https://test.example/fixture-test?foo=bar' '' 2>&1)
     echo \"\$out\" | grep -qF '1.2.3' || { echo \"fixture content missing: \$out\"; echo FAIL; exit 0; }
@@ -1817,7 +1827,7 @@ t "t24b: empty token delegates to plain http_get (fixture path identical)" bash 
 
 t "t24c: fixture injection works identically with non-empty token (no auth header sent to fixture)" bash -c "
     export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
-    source '/stack/bin/lib/env-update/http/curl.sh'
+    source '${_GS_EU2_LIB}/http/curl.sh'
     # Fixture path is determined by URL only — token should not affect fixture lookup
     out=\$(_gs_eu2_http_get_auth 'https://test.example/fixture-test?foo=bar' 'my-secret-token' 2>&1)
     echo \"\$out\" | grep -qF '1.2.3' || { echo \"fixture content missing with token: \$out\"; echo FAIL; exit 0; }
@@ -1826,7 +1836,7 @@ t "t24c: fixture injection works identically with non-empty token (no auth heade
 
 t "t24d: missing fixture returns non-zero with auth token (same as without token)" bash -c "
     export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
-    source '/stack/bin/lib/env-update/http/curl.sh'
+    source '${_GS_EU2_LIB}/http/curl.sh'
     _gs_eu2_http_get_auth 'https://example.com/no-such-fixture' 'tok' >/dev/null 2>&1 \
         && { echo 'expected non-zero exit'; echo FAIL; exit 0; }
     echo PASS
@@ -1838,15 +1848,15 @@ t "t24d: missing fixture returns non-zero with auth token (same as without token
 section "25 — dockerhub HOLD from pipeline not fetcher"
 
 _DH_LIBS25="
-source '/stack/bin/lib/env-update/config/defaults.sh'
-source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update/core/records.sh'
-source '/stack/bin/lib/env-update/core/semver.sh'
-source '/stack/bin/lib/env-update/core/channel.sh'
-source '/stack/bin/lib/env-update/core/tag_flags.sh'
-source '/stack/bin/lib/env-update/core/cache.sh'
-source '/stack/bin/lib/env-update/http/curl.sh'
-source '/stack/bin/lib/env-update/fetchers/dockerhub.sh'
+source '${_GS_EU2_LIB}/config/defaults.sh'
+source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+source '${_GS_EU2_LIB}/core/records.sh'
+source '${_GS_EU2_LIB}/core/semver.sh'
+source '${_GS_EU2_LIB}/core/channel.sh'
+source '${_GS_EU2_LIB}/core/tag_flags.sh'
+source '${_GS_EU2_LIB}/core/cache.sh'
+source '${_GS_EU2_LIB}/http/curl.sh'
+source '${_GS_EU2_LIB}/fetchers/dockerhub.sh'
 export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
 export _GS_EU2_CACHE_DIR=\${TMP_DIR}/dh25_cache
 "
@@ -1891,9 +1901,9 @@ t "t25b: cache hit path also leaves decision empty (not AUTO)" bash -c "
 "
 
 t "t25c: pipeline (classify_decision) produces HOLD when major constraint would escape pin" bash -c "
-    source '/stack/bin/lib/env-update/core/records.sh'
-    source '/stack/bin/lib/env-update/core/semver.sh'
-    source '/stack/bin/lib/env-update/core/decide.sh'
+    source '${_GS_EU2_LIB}/core/records.sh'
+    source '${_GS_EU2_LIB}/core/semver.sh'
+    source '${_GS_EU2_LIB}/core/decide.sh'
     # major_hint=17 but proposed=18.4 → HOLD
     result=\$(_gs_eu2_classify_decision '17.5' '18.4' '' '17')
     [[ \"\$result\" == 'HOLD' ]] || { echo \"expected HOLD, got: \$result\"; echo FAIL; exit 0; }
@@ -1901,10 +1911,10 @@ t "t25c: pipeline (classify_decision) produces HOLD when major constraint would 
 "
 
 t "t25d: full pipeline HOLD for major-pin escape (end-to-end, no fetcher HOLD involved)" bash -c "
-    source '/stack/bin/lib/env-update/config/defaults.sh'
-    source '/stack/bin/lib/env-update/core/records.sh'
-    source '/stack/bin/lib/env-update/core/semver.sh'
-    source '/stack/bin/lib/env-update/core/decide.sh'
+    source '${_GS_EU2_LIB}/config/defaults.sh'
+    source '${_GS_EU2_LIB}/core/records.sh'
+    source '${_GS_EU2_LIB}/core/semver.sh'
+    source '${_GS_EU2_LIB}/core/decide.sh'
     # Simulate what main.sh does: fetcher sets proposed only, then classify runs
     _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
     _gs_eu2_record_set \$idx current_version '17.5'
@@ -1929,15 +1939,15 @@ t "t25d: full pipeline HOLD for major-pin escape (end-to-end, no fetcher HOLD in
 section "26 — codeberg fetcher"
 
 _CB_LIBS="
-source '/stack/bin/lib/env-update/config/defaults.sh'
-source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update/core/records.sh'
-source '/stack/bin/lib/env-update/core/semver.sh'
-source '/stack/bin/lib/env-update/core/channel.sh'
-source '/stack/bin/lib/env-update/core/tag_flags.sh'
-source '/stack/bin/lib/env-update/core/cache.sh'
-source '/stack/bin/lib/env-update/http/curl.sh'
-source '/stack/bin/lib/env-update/fetchers/codeberg.sh'
+source '${_GS_EU2_LIB}/config/defaults.sh'
+source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+source '${_GS_EU2_LIB}/core/records.sh'
+source '${_GS_EU2_LIB}/core/semver.sh'
+source '${_GS_EU2_LIB}/core/channel.sh'
+source '${_GS_EU2_LIB}/core/tag_flags.sh'
+source '${_GS_EU2_LIB}/core/cache.sh'
+source '${_GS_EU2_LIB}/http/curl.sh'
+source '${_GS_EU2_LIB}/fetchers/codeberg.sh'
 export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
 export _GS_EU2_CACHE_DIR=\${TMP_DIR}/cb_cache
 "
@@ -2035,15 +2045,15 @@ t "t26f: fetcher leaves decision empty on success path" bash -c "
 section "27 — quay fetcher"
 
 _QY_LIBS="
-source '/stack/bin/lib/env-update/config/defaults.sh'
-source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update/core/records.sh'
-source '/stack/bin/lib/env-update/core/semver.sh'
-source '/stack/bin/lib/env-update/core/channel.sh'
-source '/stack/bin/lib/env-update/core/tag_flags.sh'
-source '/stack/bin/lib/env-update/core/cache.sh'
-source '/stack/bin/lib/env-update/http/curl.sh'
-source '/stack/bin/lib/env-update/fetchers/quay.sh'
+source '${_GS_EU2_LIB}/config/defaults.sh'
+source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+source '${_GS_EU2_LIB}/core/records.sh'
+source '${_GS_EU2_LIB}/core/semver.sh'
+source '${_GS_EU2_LIB}/core/channel.sh'
+source '${_GS_EU2_LIB}/core/tag_flags.sh'
+source '${_GS_EU2_LIB}/core/cache.sh'
+source '${_GS_EU2_LIB}/http/curl.sh'
+source '${_GS_EU2_LIB}/fetchers/quay.sh'
 export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
 export _GS_EU2_CACHE_DIR=\${TMP_DIR}/qy_cache
 "
@@ -2141,15 +2151,15 @@ t "t27f: fetcher leaves decision empty on success path" bash -c "
 section "28 — npm fetcher"
 
 _NPM_LIBS="
-source '/stack/bin/lib/env-update/config/defaults.sh'
-source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update/core/records.sh'
-source '/stack/bin/lib/env-update/core/semver.sh'
-source '/stack/bin/lib/env-update/core/channel.sh'
-source '/stack/bin/lib/env-update/core/tag_flags.sh'
-source '/stack/bin/lib/env-update/core/cache.sh'
-source '/stack/bin/lib/env-update/http/curl.sh'
-source '/stack/bin/lib/env-update/fetchers/npm.sh'
+source '${_GS_EU2_LIB}/config/defaults.sh'
+source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+source '${_GS_EU2_LIB}/core/records.sh'
+source '${_GS_EU2_LIB}/core/semver.sh'
+source '${_GS_EU2_LIB}/core/channel.sh'
+source '${_GS_EU2_LIB}/core/tag_flags.sh'
+source '${_GS_EU2_LIB}/core/cache.sh'
+source '${_GS_EU2_LIB}/http/curl.sh'
+source '${_GS_EU2_LIB}/fetchers/npm.sh'
 export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
 export _GS_EU2_CACHE_DIR=\${TMP_DIR}/npm_cache
 "
@@ -2242,15 +2252,15 @@ t "t28f: fetcher leaves decision empty on success path" bash -c "
 section "29 — pypi fetcher"
 
 _PYPI_LIBS="
-source '/stack/bin/lib/env-update/config/defaults.sh'
-source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update/core/records.sh'
-source '/stack/bin/lib/env-update/core/semver.sh'
-source '/stack/bin/lib/env-update/core/channel.sh'
-source '/stack/bin/lib/env-update/core/tag_flags.sh'
-source '/stack/bin/lib/env-update/core/cache.sh'
-source '/stack/bin/lib/env-update/http/curl.sh'
-source '/stack/bin/lib/env-update/fetchers/pypi.sh'
+source '${_GS_EU2_LIB}/config/defaults.sh'
+source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+source '${_GS_EU2_LIB}/core/records.sh'
+source '${_GS_EU2_LIB}/core/semver.sh'
+source '${_GS_EU2_LIB}/core/channel.sh'
+source '${_GS_EU2_LIB}/core/tag_flags.sh'
+source '${_GS_EU2_LIB}/core/cache.sh'
+source '${_GS_EU2_LIB}/http/curl.sh'
+source '${_GS_EU2_LIB}/fetchers/pypi.sh'
 export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
 export _GS_EU2_CACHE_DIR=\${TMP_DIR}/pypi_cache
 "
@@ -2331,15 +2341,15 @@ t "t29e: fetcher leaves decision empty on success path" bash -c "
 section "30 — rubygems fetcher"
 
 _RG_LIBS="
-source '/stack/bin/lib/env-update/config/defaults.sh'
-source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update/core/records.sh'
-source '/stack/bin/lib/env-update/core/semver.sh'
-source '/stack/bin/lib/env-update/core/channel.sh'
-source '/stack/bin/lib/env-update/core/tag_flags.sh'
-source '/stack/bin/lib/env-update/core/cache.sh'
-source '/stack/bin/lib/env-update/http/curl.sh'
-source '/stack/bin/lib/env-update/fetchers/rubygems.sh'
+source '${_GS_EU2_LIB}/config/defaults.sh'
+source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+source '${_GS_EU2_LIB}/core/records.sh'
+source '${_GS_EU2_LIB}/core/semver.sh'
+source '${_GS_EU2_LIB}/core/channel.sh'
+source '${_GS_EU2_LIB}/core/tag_flags.sh'
+source '${_GS_EU2_LIB}/core/cache.sh'
+source '${_GS_EU2_LIB}/http/curl.sh'
+source '${_GS_EU2_LIB}/fetchers/rubygems.sh'
 export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
 export _GS_EU2_CACHE_DIR=\${TMP_DIR}/rg_cache
 "
@@ -2420,15 +2430,15 @@ t "t30e: fetcher leaves decision empty on success path" bash -c "
 section "31 — github fetcher"
 
 _GH_LIBS="
-source '/stack/bin/lib/env-update/config/defaults.sh'
-source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update/core/records.sh'
-source '/stack/bin/lib/env-update/core/semver.sh'
-source '/stack/bin/lib/env-update/core/channel.sh'
-source '/stack/bin/lib/env-update/core/tag_flags.sh'
-source '/stack/bin/lib/env-update/core/cache.sh'
-source '/stack/bin/lib/env-update/http/curl.sh'
-source '/stack/bin/lib/env-update/fetchers/github.sh'
+source '${_GS_EU2_LIB}/config/defaults.sh'
+source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+source '${_GS_EU2_LIB}/core/records.sh'
+source '${_GS_EU2_LIB}/core/semver.sh'
+source '${_GS_EU2_LIB}/core/channel.sh'
+source '${_GS_EU2_LIB}/core/tag_flags.sh'
+source '${_GS_EU2_LIB}/core/cache.sh'
+source '${_GS_EU2_LIB}/http/curl.sh'
+source '${_GS_EU2_LIB}/fetchers/github.sh'
 export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
 export _GS_EU2_CACHE_DIR=\${TMP_DIR}/gh_cache
 "
@@ -2762,15 +2772,15 @@ t "t31p: GIT_ASKPASS tmpfile cleaned up after ls-remote returns (trap RETURN)" b
 section "32 — sdkman fetcher"
 
 _SDK_LIBS="
-source '/stack/bin/lib/env-update/config/defaults.sh'
-source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update/core/records.sh'
-source '/stack/bin/lib/env-update/core/semver.sh'
-source '/stack/bin/lib/env-update/core/channel.sh'
-source '/stack/bin/lib/env-update/core/tag_flags.sh'
-source '/stack/bin/lib/env-update/core/cache.sh'
-source '/stack/bin/lib/env-update/http/curl.sh'
-source '/stack/bin/lib/env-update/fetchers/sdkman.sh'
+source '${_GS_EU2_LIB}/config/defaults.sh'
+source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+source '${_GS_EU2_LIB}/core/records.sh'
+source '${_GS_EU2_LIB}/core/semver.sh'
+source '${_GS_EU2_LIB}/core/channel.sh'
+source '${_GS_EU2_LIB}/core/tag_flags.sh'
+source '${_GS_EU2_LIB}/core/cache.sh'
+source '${_GS_EU2_LIB}/http/curl.sh'
+source '${_GS_EU2_LIB}/fetchers/sdkman.sh'
 export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
 export _GS_EU2_CACHE_DIR=\${TMP_DIR}/sdk_cache
 "
@@ -2926,15 +2936,15 @@ t "t32h: sdkman Java EA release (ea distribution suffix) filtered out in stable 
 section "33 — sdkmanager fetcher"
 
 _SDKMGR_LIBS="
-source '/stack/bin/lib/env-update/config/defaults.sh'
-source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update/core/records.sh'
-source '/stack/bin/lib/env-update/core/semver.sh'
-source '/stack/bin/lib/env-update/core/channel.sh'
-source '/stack/bin/lib/env-update/core/tag_flags.sh'
-source '/stack/bin/lib/env-update/core/cache.sh'
-source '/stack/bin/lib/env-update/http/curl.sh'
-source '/stack/bin/lib/env-update/fetchers/sdkmanager.sh'
+source '${_GS_EU2_LIB}/config/defaults.sh'
+source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+source '${_GS_EU2_LIB}/core/records.sh'
+source '${_GS_EU2_LIB}/core/semver.sh'
+source '${_GS_EU2_LIB}/core/channel.sh'
+source '${_GS_EU2_LIB}/core/tag_flags.sh'
+source '${_GS_EU2_LIB}/core/cache.sh'
+source '${_GS_EU2_LIB}/http/curl.sh'
+source '${_GS_EU2_LIB}/fetchers/sdkmanager.sh'
 export _GS_EU2_SDKMANAGER_CMD_FIXTURE='${FIXTURES}/sdkmanager-list.txt'
 export _GS_EU2_CACHE_DIR=\${TMP_DIR}/sdkmgr_cache
 "
@@ -3051,7 +3061,7 @@ t "t33g: cache hit skips cmd fixture (proposed_version from cache)" bash -c "
 # is owned by decide.sh via the annotation-set manual field.
 t "t33h: sdkmanager without (manual) annotation produces AUTO (not MANUAL) via full pipeline" bash -c "
     ${_SDKMGR_LIBS}
-    source '/stack/bin/lib/env-update/core/decide.sh'
+    source '${_GS_EU2_LIB}/core/decide.sh'
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/sdkmgr_h_cache
     _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
     _gs_eu2_record_set \$idx type            'sdkmanager'
@@ -3078,13 +3088,13 @@ t "t33h: sdkmanager without (manual) annotation produces AUTO (not MANUAL) via f
 section "34 — pecl helper functions"
 
 _PECL_LIBS="
-source '/stack/bin/lib/env-update/config/defaults.sh'
-source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update/core/records.sh'
-source '/stack/bin/lib/env-update/core/semver.sh'
-source '/stack/bin/lib/env-update/core/cache.sh'
-source '/stack/bin/lib/env-update/http/curl.sh'
-source '/stack/bin/lib/env-update/fetchers/pecl.sh'
+source '${_GS_EU2_LIB}/config/defaults.sh'
+source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+source '${_GS_EU2_LIB}/core/records.sh'
+source '${_GS_EU2_LIB}/core/semver.sh'
+source '${_GS_EU2_LIB}/core/cache.sh'
+source '${_GS_EU2_LIB}/http/curl.sh'
+source '${_GS_EU2_LIB}/fetchers/pecl.sh'
 export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
 export _GS_EU2_CACHE_DIR=\${TMP_DIR}/pecl_cache
 "
@@ -3135,8 +3145,8 @@ t "t34e: HTTP error for allreleases returns empty string, no crash" bash -c "
 section "36 — semver_delta date-sha format"
 
 _SV_LIBS="
-source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update/core/semver.sh'
+source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+source '${_GS_EU2_LIB}/core/semver.sh'
 "
 
 t "t36a: YYYYMMDD-sha8 → YYYYMMDD-sha8 (newer date) classifies as patch" bash -c "
@@ -3154,18 +3164,18 @@ t "t36b: SHA-only current → YYYYMMDD-sha8 proposed classifies as patch" bash -
 "
 
 t "t36c: same date-sha → SKIP (classify_decision integration)" bash -c "
-    source '/stack/bin/lib/env-update/config/defaults.sh'
+    source '${_GS_EU2_LIB}/config/defaults.sh'
     ${_SV_LIBS}
-    source '/stack/bin/lib/env-update/core/decide.sh'
+    source '${_GS_EU2_LIB}/core/decide.sh'
     result=\$(_gs_eu2_classify_decision '20260315-abc1234d' '20260315-abc1234d' '' '')
     [[ \"\$result\" == 'SKIP' ]] || { echo \"expected SKIP for same date-sha, got: '\$result'\"; echo FAIL; exit 0; }
     echo PASS
 "
 
 t "t36d: newer date-sha → AUTO (classify_decision integration)" bash -c "
-    source '/stack/bin/lib/env-update/config/defaults.sh'
+    source '${_GS_EU2_LIB}/config/defaults.sh'
     ${_SV_LIBS}
-    source '/stack/bin/lib/env-update/core/decide.sh'
+    source '${_GS_EU2_LIB}/core/decide.sh'
     result=\$(_gs_eu2_classify_decision '20260315-abc1234d' '20260316-def5678e' '' '')
     [[ \"\$result\" == 'AUTO' ]] || { echo \"expected AUTO for newer date-sha, got: '\$result'\"; echo FAIL; exit 0; }
     echo PASS
@@ -3177,17 +3187,17 @@ t "t36d: newer date-sha → AUTO (classify_decision integration)" bash -c "
 section "37 — url fetcher"
 
 _URL_LIBS="
-source '/stack/bin/lib/env-update/config/defaults.sh'
-source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update/core/records.sh'
-source '/stack/bin/lib/env-update/core/semver.sh'
-source '/stack/bin/lib/env-update/core/channel.sh'
-source '/stack/bin/lib/env-update/core/tag_flags.sh'
-source '/stack/bin/lib/env-update/core/cache.sh'
-source '/stack/bin/lib/env-update/core/ubuntu.sh'
-source '/stack/bin/lib/env-update/http/curl.sh'
-source '/stack/bin/lib/env-update/fetchers/github.sh'
-source '/stack/bin/lib/env-update/fetchers/url.sh'
+source '${_GS_EU2_LIB}/config/defaults.sh'
+source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+source '${_GS_EU2_LIB}/core/records.sh'
+source '${_GS_EU2_LIB}/core/semver.sh'
+source '${_GS_EU2_LIB}/core/channel.sh'
+source '${_GS_EU2_LIB}/core/tag_flags.sh'
+source '${_GS_EU2_LIB}/core/cache.sh'
+source '${_GS_EU2_LIB}/core/ubuntu.sh'
+source '${_GS_EU2_LIB}/http/curl.sh'
+source '${_GS_EU2_LIB}/fetchers/github.sh'
+source '${_GS_EU2_LIB}/fetchers/url.sh'
 export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
 export _GS_EU2_CACHE_DIR=\"\${TMP_DIR}/url_cache\"
 "
@@ -3461,7 +3471,7 @@ t "t38a: url type parsed and fetched — fetch-extract entry produces proposed_v
 "
 
 t "t38b: url type not-implemented SKIP count is 0 — all url entries dispatch" bash -c "
-    out=\$(export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'; export _GS_EU2_CACHE_DIR=\"\${TMP_DIR}/t38b_cache\"; bash '${ENV_UPDATE_V2}' --check --dry-run --env-file='/stack/.env' --filter='ANDROID_SDK_URL|HTTPD_APR_UTIL|HTTPD_APR_VERSION|HTTPD_VERSION|PODMAN_CHANNEL|NGINX_AUTOMAKE|ZEPHIR|NODEEDGE' 2>/dev/null || true)
+    out=\$(export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'; export _GS_EU2_CACHE_DIR=\"\${TMP_DIR}/t38b_cache\"; bash '${ENV_UPDATE_V2}' --check --dry-run --env-file='${REPO_ROOT}/.env' --filter='ANDROID_SDK_URL|HTTPD_APR_UTIL|HTTPD_APR_VERSION|HTTPD_VERSION|PODMAN_CHANNEL|NGINX_AUTOMAKE|ZEPHIR|NODEEDGE' 2>/dev/null || true)
     echo \"\$out\" | grep -qE 'not yet implemented' && { echo \"some url entries still hit not-implemented SKIP\"; echo FAIL; exit 0; }
     echo PASS
 "
@@ -3563,51 +3573,51 @@ t "t39g: HOLD unpinned major bump reason includes both majors" bash -c "
 section "40 — prefer-specific flag (floating tag demotion)"
 
 _DH_LIBS40="
-source '/stack/bin/lib/env-update/config/defaults.sh'
-source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update/core/records.sh'
-source '/stack/bin/lib/env-update/core/semver.sh'
-source '/stack/bin/lib/env-update/core/channel.sh'
-source '/stack/bin/lib/env-update/core/tag_flags.sh'
-source '/stack/bin/lib/env-update/core/cache.sh'
-source '/stack/bin/lib/env-update/http/curl.sh'
-source '/stack/bin/lib/env-update/fetchers/dockerhub.sh'
+source '${_GS_EU2_LIB}/config/defaults.sh'
+source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+source '${_GS_EU2_LIB}/core/records.sh'
+source '${_GS_EU2_LIB}/core/semver.sh'
+source '${_GS_EU2_LIB}/core/channel.sh'
+source '${_GS_EU2_LIB}/core/tag_flags.sh'
+source '${_GS_EU2_LIB}/core/cache.sh'
+source '${_GS_EU2_LIB}/http/curl.sh'
+source '${_GS_EU2_LIB}/fetchers/dockerhub.sh'
 export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
 export _GS_EU2_CACHE_DIR=\${TMP_DIR}/dh40_cache
 "
 
 t "t40a: is_floating_tag detects X.Y tag as floating" bash -c "
-    source '/stack/bin/lib/env-update/core/tag_flags.sh'
+    source '${_GS_EU2_LIB}/core/tag_flags.sh'
     _gs_eu2_is_floating_tag '9.1-alpine3.23' && echo PASS || { echo 'FAIL: X.Y-suffix should be floating'; exit 0; }
 "
 
 t "t40b: is_floating_tag detects X tag as floating" bash -c "
-    source '/stack/bin/lib/env-update/core/tag_flags.sh'
+    source '${_GS_EU2_LIB}/core/tag_flags.sh'
     _gs_eu2_is_floating_tag '9-alpine3.23' && echo PASS || { echo 'FAIL: X-suffix should be floating'; exit 0; }
 "
 
 t "t40c: is_floating_tag accepts X.Y.Z tag as specific" bash -c "
-    source '/stack/bin/lib/env-update/core/tag_flags.sh'
+    source '${_GS_EU2_LIB}/core/tag_flags.sh'
     _gs_eu2_is_floating_tag '9.0.4-alpine3.23' && { echo 'FAIL: X.Y.Z-suffix should NOT be floating'; exit 0; } || echo PASS
 "
 
 t "t40d: is_floating_tag accepts X.Y.Z-prerelease tag as specific" bash -c "
-    source '/stack/bin/lib/env-update/core/tag_flags.sh'
+    source '${_GS_EU2_LIB}/core/tag_flags.sh'
     _gs_eu2_is_floating_tag '9.1.0-rc2-alpine3.23' && { echo 'FAIL: X.Y.Z-rc should NOT be floating'; exit 0; } || echo PASS
 "
 
 t "t40e: is_floating_tag accepts bare X.Y.Z (no suffix)" bash -c "
-    source '/stack/bin/lib/env-update/core/tag_flags.sh'
+    source '${_GS_EU2_LIB}/core/tag_flags.sh'
     _gs_eu2_is_floating_tag '9.0.4' && { echo 'FAIL: bare X.Y.Z should NOT be floating'; exit 0; } || echo PASS
 "
 
 t "t40f: is_floating_tag rejects bare X.Y (no suffix)" bash -c "
-    source '/stack/bin/lib/env-update/core/tag_flags.sh'
+    source '${_GS_EU2_LIB}/core/tag_flags.sh'
     _gs_eu2_is_floating_tag '9.1' && echo PASS || { echo 'FAIL: bare X.Y should be floating'; exit 0; }
 "
 
 t "t40g: prefer-specific flag record field is recognized" bash -c "
-    source '/stack/bin/lib/env-update/core/records.sh'
+    source '${_GS_EU2_LIB}/core/records.sh'
     _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
     _gs_eu2_record_set \$idx prefer_specific 'true'
     val=\$(_gs_eu2_record_get \$idx prefer_specific)
@@ -3666,8 +3676,8 @@ t "t40j: prefer-specific skips all-floating set → SKIP with error" bash -c "
 "
 
 t "t40k: parse.sh recognises (prefer-specific) as a known flag" bash -c "
-    source '/stack/bin/lib/env-update/core/records.sh'
-    source '/stack/bin/lib/env-update/core/parse.sh'
+    source '${_GS_EU2_LIB}/core/records.sh'
+    source '${_GS_EU2_LIB}/core/parse.sh'
     f=\$(mktemp)
     printf '# @todo env-update (prefer-specific) dockerhub:valkey/valkey 9.0.3-alpine3.23\nGLOBAL_STACK_VALKEY_VERSION=9.0.3-alpine3.23\n' > \"\$f\"
     _gs_eu2_parse_env_file \"\$f\"
@@ -3678,21 +3688,21 @@ t "t40k: parse.sh recognises (prefer-specific) as a known flag" bash -c "
 "
 
 t "t40l: cache key is segregated by prefer-specific flag (flag-on vs flag-off use different keys)" bash -c "
-    export _GS_EU2_HTTP_FIXTURE_DIR='/stack/bin/tests/fixtures/env-update/http'
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
     export _GS_EU2_CACHE_DIR=\$(mktemp -d)
     # Run WITHOUT prefer-specific — writes one cache file
     bash -c \"
       export _GS_EU2_HTTP_FIXTURE_DIR='\$_GS_EU2_HTTP_FIXTURE_DIR'
       export _GS_EU2_CACHE_DIR='\$_GS_EU2_CACHE_DIR'
       declare -A _GS_EU2_CFG=([no_cache]=false [channel]=stable [cache_ttl]=3600)
-      source '/stack/bin/lib/env-update/core/records.sh'
-      source '/stack/bin/lib/env-update/core/semver.sh'
-      source '/stack/bin/lib/env-update/core/channel.sh'
-      source '/stack/bin/lib/env-update/core/tag_flags.sh'
-      source '/stack/bin/lib/env-update/core/cache.sh'
-      source '/stack/bin/lib/env-update/http/curl.sh'
-      source '/stack/bin/lib/env-update/fetchers/dockerhub.sh'
-      source '/stack/bin/lib/env-update/core/parse.sh'
+      source '${_GS_EU2_LIB}/core/records.sh'
+      source '${_GS_EU2_LIB}/core/semver.sh'
+      source '${_GS_EU2_LIB}/core/channel.sh'
+      source '${_GS_EU2_LIB}/core/tag_flags.sh'
+      source '${_GS_EU2_LIB}/core/cache.sh'
+      source '${_GS_EU2_LIB}/http/curl.sh'
+      source '${_GS_EU2_LIB}/fetchers/dockerhub.sh'
+      source '${_GS_EU2_LIB}/core/parse.sh'
       f=\\\$(mktemp)
       printf '# @todo env-update (tag-filter:alpine) dockerhub:valkey/valkey 9.0.3-alpine3.23\nGLOBAL_STACK_VALKEY_VERSION=9.0.3-alpine3.23\n' > \\\"\\\$f\\\"
       _gs_eu2_parse_env_file \\\"\\\$f\\\"
@@ -3704,14 +3714,14 @@ t "t40l: cache key is segregated by prefer-specific flag (flag-on vs flag-off us
       export _GS_EU2_HTTP_FIXTURE_DIR='\$_GS_EU2_HTTP_FIXTURE_DIR'
       export _GS_EU2_CACHE_DIR='\$_GS_EU2_CACHE_DIR'
       declare -A _GS_EU2_CFG=([no_cache]=false [channel]=stable [cache_ttl]=3600)
-      source '/stack/bin/lib/env-update/core/records.sh'
-      source '/stack/bin/lib/env-update/core/semver.sh'
-      source '/stack/bin/lib/env-update/core/channel.sh'
-      source '/stack/bin/lib/env-update/core/tag_flags.sh'
-      source '/stack/bin/lib/env-update/core/cache.sh'
-      source '/stack/bin/lib/env-update/http/curl.sh'
-      source '/stack/bin/lib/env-update/fetchers/dockerhub.sh'
-      source '/stack/bin/lib/env-update/core/parse.sh'
+      source '${_GS_EU2_LIB}/core/records.sh'
+      source '${_GS_EU2_LIB}/core/semver.sh'
+      source '${_GS_EU2_LIB}/core/channel.sh'
+      source '${_GS_EU2_LIB}/core/tag_flags.sh'
+      source '${_GS_EU2_LIB}/core/cache.sh'
+      source '${_GS_EU2_LIB}/http/curl.sh'
+      source '${_GS_EU2_LIB}/fetchers/dockerhub.sh'
+      source '${_GS_EU2_LIB}/core/parse.sh'
       f=\\\$(mktemp)
       printf '# @todo env-update (tag-filter:alpine) (prefer-specific) dockerhub:valkey/valkey 9.0.3-alpine3.23\nGLOBAL_STACK_VALKEY_VERSION=9.0.3-alpine3.23\n' > \\\"\\\$f\\\"
       _gs_eu2_parse_env_file \\\"\\\$f\\\"
@@ -3731,8 +3741,8 @@ t "t40l: cache key is segregated by prefer-specific flag (flag-on vs flag-off us
 section "41 — semver_delta tags/ prefix"
 
 _SV_LIBS41="
-source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update/core/semver.sh'
+source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+source '${_GS_EU2_LIB}/core/semver.sh'
 "
 
 t "t41a: tags/X.Y.Z patch bump → patch (not falsely major)" bash -c "
@@ -3762,9 +3772,9 @@ t "t41c: tags/X.Y.Z minor bump → minor" bash -c "
 section "42 — prerelease guard in decide.sh"
 
 _CD_LIBS42="
-source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update/core/semver.sh'
-source '/stack/bin/lib/env-update/core/decide.sh'
+source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+source '${_GS_EU2_LIB}/core/semver.sh'
+source '${_GS_EU2_LIB}/core/decide.sh'
 "
 
 t "t42a: stable current + no-dash RC proposed → SKIP (not AUTO)" bash -c "
@@ -3831,15 +3841,15 @@ t "t44b: (check-tags) position-agnostic — after type:identifier" bash -c "
 "
 
 _GH_LIBS44="
-source '/stack/bin/lib/env-update/config/defaults.sh'
-source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update/core/records.sh'
-source '/stack/bin/lib/env-update/core/semver.sh'
-source '/stack/bin/lib/env-update/core/channel.sh'
-source '/stack/bin/lib/env-update/core/tag_flags.sh'
-source '/stack/bin/lib/env-update/core/cache.sh'
-source '/stack/bin/lib/env-update/http/curl.sh'
-source '/stack/bin/lib/env-update/fetchers/github.sh'
+source '${_GS_EU2_LIB}/config/defaults.sh'
+source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+source '${_GS_EU2_LIB}/core/records.sh'
+source '${_GS_EU2_LIB}/core/semver.sh'
+source '${_GS_EU2_LIB}/core/channel.sh'
+source '${_GS_EU2_LIB}/core/tag_flags.sh'
+source '${_GS_EU2_LIB}/core/cache.sh'
+source '${_GS_EU2_LIB}/http/curl.sh'
+source '${_GS_EU2_LIB}/fetchers/github.sh'
 export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
 "
 
@@ -3924,9 +3934,9 @@ t "t44f: version-gap fix uses cache key with :tags suffix in check-tags mode" ba
 section "45 — --with-tags CLI flag"
 
 t "t45a: --with-tags CLI flag sets CFG[with_tags]=true" bash -c "
-    source '/stack/bin/lib/env-update/config/defaults.sh'
-    source '/stack/bin/lib/env-update/reporting/help.sh'
-    source '/stack/bin/lib/env-update/core/args.sh'
+    source '${_GS_EU2_LIB}/config/defaults.sh'
+    source '${_GS_EU2_LIB}/reporting/help.sh'
+    source '${_GS_EU2_LIB}/core/args.sh'
     _gs_eu2_parse_args --with-tags
     [[ \"\${_GS_EU2_CFG[with_tags]}\" == 'true' ]] \
         || { echo \"expected with_tags=true, got: '\${_GS_EU2_CFG[with_tags]}'\"; echo FAIL; exit 0; }
@@ -3934,9 +3944,9 @@ t "t45a: --with-tags CLI flag sets CFG[with_tags]=true" bash -c "
 "
 
 t "t45b: --with-tags default is false when not passed" bash -c "
-    source '/stack/bin/lib/env-update/config/defaults.sh'
-    source '/stack/bin/lib/env-update/reporting/help.sh'
-    source '/stack/bin/lib/env-update/core/args.sh'
+    source '${_GS_EU2_LIB}/config/defaults.sh'
+    source '${_GS_EU2_LIB}/reporting/help.sh'
+    source '${_GS_EU2_LIB}/core/args.sh'
     _gs_eu2_parse_args
     [[ \"\${_GS_EU2_CFG[with_tags]}\" == 'false' ]] \
         || { echo \"expected with_tags=false, got: '\${_GS_EU2_CFG[with_tags]}'\"; echo FAIL; exit 0; }
@@ -3958,9 +3968,9 @@ t "t45c: --with-tags prints [WITH-TAGS MODE] banner" bash -c "
 section "46 — same-version SKIP beats manual/override + display"
 
 _DC46_LIBS="
-source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update/core/semver.sh'
-source '/stack/bin/lib/env-update/core/decide.sh'
+source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+source '${_GS_EU2_LIB}/core/semver.sh'
+source '${_GS_EU2_LIB}/core/decide.sh'
 "
 
 t "t46a: classify — same version + override=true → SKIP (not MANUAL)" bash -c "
@@ -3998,15 +4008,15 @@ t "t46d: display — (override) at same version shows '(up to date — override)
 "
 
 t "t46e: sdkmanager fetcher does NOT set manual field — decide.sh classifies via versions" bash -c "
-    source '/stack/bin/lib/env-update/config/defaults.sh'
-    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-    source '/stack/bin/lib/env-update/core/records.sh'
-    source '/stack/bin/lib/env-update/core/semver.sh'
-    source '/stack/bin/lib/env-update/core/channel.sh'
-    source '/stack/bin/lib/env-update/core/tag_flags.sh'
-    source '/stack/bin/lib/env-update/core/cache.sh'
-    source '/stack/bin/lib/env-update/http/curl.sh'
-    source '/stack/bin/lib/env-update/fetchers/sdkmanager.sh'
+    source '${_GS_EU2_LIB}/config/defaults.sh'
+    source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+    source '${_GS_EU2_LIB}/core/records.sh'
+    source '${_GS_EU2_LIB}/core/semver.sh'
+    source '${_GS_EU2_LIB}/core/channel.sh'
+    source '${_GS_EU2_LIB}/core/tag_flags.sh'
+    source '${_GS_EU2_LIB}/core/cache.sh'
+    source '${_GS_EU2_LIB}/http/curl.sh'
+    source '${_GS_EU2_LIB}/fetchers/sdkmanager.sh'
     export _GS_EU2_SDKMANAGER_CMD_FIXTURE='${FIXTURES}/sdkmanager-list.txt'
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t46e_cache
     _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
@@ -4110,14 +4120,14 @@ t "t47pc: type:pecl unknown extension — ERROR decision not SKIP fallback" bash
 section "48 — pecl fetcher with (git:owner/repo) flag"
 
 _PECL_GIT_FLAG_LIBS="
-source '/stack/bin/lib/env-update/config/defaults.sh'
-source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update/core/records.sh'
-source '/stack/bin/lib/env-update/core/semver.sh'
-source '/stack/bin/lib/env-update/core/cache.sh'
-source '/stack/bin/lib/env-update/http/curl.sh'
-source '/stack/bin/lib/env-update/fetchers/github.sh'
-source '/stack/bin/lib/env-update/fetchers/pecl.sh'
+source '${_GS_EU2_LIB}/config/defaults.sh'
+source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+source '${_GS_EU2_LIB}/core/records.sh'
+source '${_GS_EU2_LIB}/core/semver.sh'
+source '${_GS_EU2_LIB}/core/cache.sh'
+source '${_GS_EU2_LIB}/http/curl.sh'
+source '${_GS_EU2_LIB}/fetchers/github.sh'
+source '${_GS_EU2_LIB}/fetchers/pecl.sh'
 export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
 export _GS_EU2_CACHE_DIR=\${TMP_DIR}/pecl49_cache
 "
@@ -4195,8 +4205,8 @@ t "t49d: git flag missing (plain pecl) — no SHA fetched, proposed_sha empty" b
 "
 
 t "t49e: parse — (git:owner/repo) flag recognized and stored in git_repo field" bash -c "
-    source '/stack/bin/lib/env-update/core/records.sh'
-    source '/stack/bin/lib/env-update/core/parse.sh'
+    source '${_GS_EU2_LIB}/core/records.sh'
+    source '${_GS_EU2_LIB}/core/parse.sh'
     f=\$(mktemp)
     printf '# @todo env-update pecl:zmq (git:zeromq/php-zmq) 1.1.3\nGLOBAL_STACK_ZMQ=\n' > \"\$f\"
     _gs_eu2_parse_env_file \"\$f\"
@@ -4211,8 +4221,8 @@ t "t49e: parse — (git:owner/repo) flag recognized and stored in git_repo field
 "
 
 t "t49f: parse — (git:) without slash exits non-zero (invalid format)" bash -c "
-    source '/stack/bin/lib/env-update/core/records.sh'
-    source '/stack/bin/lib/env-update/core/parse.sh'
+    source '${_GS_EU2_LIB}/core/records.sh'
+    source '${_GS_EU2_LIB}/core/parse.sh'
     f=\$(mktemp)
     printf '# @todo env-update pecl:zmq (git:noslash) 1.1.3\nGLOBAL_STACK_ZMQ=\n' > \"\$f\"
     err=\$(_gs_eu2_parse_env_file \"\$f\" 2>&1 || true)
@@ -4238,14 +4248,14 @@ t "t49g: regression — git-primary PHP extensions use github: fetcher; zeromq/p
 section "50 — semver_delta pure-date stamps (YYYYMMDD/YYYYMM)"
 
 _SV_LIBS50="
-source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update/core/semver.sh'
+source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+source '${_GS_EU2_LIB}/core/semver.sh'
 "
 
 _CD_LIBS50="
-source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update/core/semver.sh'
-source '/stack/bin/lib/env-update/core/decide.sh'
+source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+source '${_GS_EU2_LIB}/core/semver.sh'
+source '${_GS_EU2_LIB}/core/decide.sh'
 "
 
 t "t50a: v20260311 → v20260512 (YYYYMMDD with v-prefix) → patch" bash -c "
@@ -4277,7 +4287,7 @@ t "t50d: 1.0.0 → 2.0.0 (normal semver major) still → major (regression guard
 "
 
 t "t50e: v20260311 → v20260512 via classify_decision → AUTO (not HOLD)" bash -c "
-    source '/stack/bin/lib/env-update/config/defaults.sh'
+    source '${_GS_EU2_LIB}/config/defaults.sh'
     ${_CD_LIBS50}
     result=\$(_gs_eu2_classify_decision 'v20260311' 'v20260512' '' '')
     [[ \"\$result\" == 'AUTO' ]] || { echo \"expected AUTO for YYYYMMDD date bump, got: '\$result'\"; echo FAIL; exit 0; }
@@ -4291,11 +4301,11 @@ t "t50e: v20260311 → v20260512 via classify_decision → AUTO (not HOLD)" bash
 section "51 — SHA decision path"
 
 _SHA_CORE_LIBS="
-source '/stack/bin/lib/env-update/config/defaults.sh'
-source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update/core/semver.sh'
-source '/stack/bin/lib/env-update/core/records.sh'
-source '/stack/bin/lib/env-update/core/decide.sh'
+source '${_GS_EU2_LIB}/config/defaults.sh'
+source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+source '${_GS_EU2_LIB}/core/semver.sh'
+source '${_GS_EU2_LIB}/core/records.sh'
+source '${_GS_EU2_LIB}/core/decide.sh'
 "
 
 t "t51a: classify_sha_decision — same SHA returns SKIP" bash -c "
@@ -4330,9 +4340,9 @@ t "t51d: classify_sha_decision — empty annotation_sha with non-empty proposed 
 "
 
 t "t51e: parse sha:HASH (YYYY-MM-DD) — extracts both annotation_sha and annotation_sha_date" bash -c "
-    source '/stack/bin/lib/env-update/config/defaults.sh'
-    source '/stack/bin/lib/env-update/core/records.sh'
-    source '/stack/bin/lib/env-update/core/parse.sh'
+    source '${_GS_EU2_LIB}/config/defaults.sh'
+    source '${_GS_EU2_LIB}/core/records.sh'
+    source '${_GS_EU2_LIB}/core/parse.sh'
     f=\${TMP_DIR}/t51e.env
     sha='aabbccdd1122334455667788990011aabbccdd11'
     date='2026-05-12'
@@ -4346,9 +4356,9 @@ t "t51e: parse sha:HASH (YYYY-MM-DD) — extracts both annotation_sha and annota
 "
 
 t "t51f: parse sha:HASH without date — annotation_sha_date empty, version token extracted correctly" bash -c "
-    source '/stack/bin/lib/env-update/config/defaults.sh'
-    source '/stack/bin/lib/env-update/core/records.sh'
-    source '/stack/bin/lib/env-update/core/parse.sh'
+    source '${_GS_EU2_LIB}/config/defaults.sh'
+    source '${_GS_EU2_LIB}/core/records.sh'
+    source '${_GS_EU2_LIB}/core/parse.sh'
     f=\${TMP_DIR}/t51f.env
     sha='aabbccdd1122334455667788990011aabbccdd11'
     printf '# @todo env-update pecl-git:owner/repo 1.2.3 sha:%s\nGLOBAL_STACK_EXT_VERSION=1.2.3\n' \"\$sha\" > \"\$f\"
@@ -4363,9 +4373,9 @@ t "t51f: parse sha:HASH without date — annotation_sha_date empty, version toke
 "
 
 t "t51g: parse sha:HASH (YYYY-MM-DD) — hint after date paren still extracted separately" bash -c "
-    source '/stack/bin/lib/env-update/config/defaults.sh'
-    source '/stack/bin/lib/env-update/core/records.sh'
-    source '/stack/bin/lib/env-update/core/parse.sh'
+    source '${_GS_EU2_LIB}/config/defaults.sh'
+    source '${_GS_EU2_LIB}/core/records.sh'
+    source '${_GS_EU2_LIB}/core/parse.sh'
     f=\${TMP_DIR}/t51g.env
     sha='aabbccdd1122334455667788990011aabbccdd11'
     printf '# @todo env-update pecl-git:owner/repo 1.2.3 sha:%s (2026-05-12) (hint text here)\nGLOBAL_STACK_EXT_VERSION=1.2.3\n' \"\$sha\" > \"\$f\"
@@ -4380,9 +4390,9 @@ t "t51g: parse sha:HASH (YYYY-MM-DD) — hint after date paren still extracted s
 "
 
 t "t51h: apply SHA-only update rewrites sha: in annotation but leaves VAR= untouched" bash -c "
-    source '/stack/bin/lib/env-update/config/defaults.sh'
-    source '/stack/bin/lib/env-update/core/records.sh'
-    source '/stack/bin/lib/env-update/core/apply.sh'
+    source '${_GS_EU2_LIB}/config/defaults.sh'
+    source '${_GS_EU2_LIB}/core/records.sh'
+    source '${_GS_EU2_LIB}/core/apply.sh'
     f=\${TMP_DIR}/t51h.env
     old_sha='aaaa0000bbbb1111cccc2222dddd3333eeee4444'
     new_sha='1111aaaa2222bbbb3333cccc4444dddd5555eeee'
@@ -4406,9 +4416,9 @@ t "t51h: apply SHA-only update rewrites sha: in annotation but leaves VAR= untou
 "
 
 t "t51i: apply SHA-only update — old annotation with date replaced by bare sha only" bash -c "
-    source '/stack/bin/lib/env-update/config/defaults.sh'
-    source '/stack/bin/lib/env-update/core/records.sh'
-    source '/stack/bin/lib/env-update/core/apply.sh'
+    source '${_GS_EU2_LIB}/config/defaults.sh'
+    source '${_GS_EU2_LIB}/core/records.sh'
+    source '${_GS_EU2_LIB}/core/apply.sh'
     f=\${TMP_DIR}/t51i.env
     old_sha='aaaa0000bbbb1111cccc2222dddd3333eeee4444'
     old_date='2026-04-01'
@@ -4435,9 +4445,9 @@ t "t51i: apply SHA-only update — old annotation with date replaced by bare sha
 "
 
 t "t51j: (pecl-ref:ext) no longer sets pecl_ref field — treated as hint (passthrough)" bash -c "
-    source '/stack/bin/lib/env-update/config/defaults.sh'
-    source '/stack/bin/lib/env-update/core/records.sh'
-    source '/stack/bin/lib/env-update/core/parse.sh'
+    source '${_GS_EU2_LIB}/config/defaults.sh'
+    source '${_GS_EU2_LIB}/core/records.sh'
+    source '${_GS_EU2_LIB}/core/parse.sh'
     f=\${TMP_DIR}/t51j.env
     printf '# @todo env-update pecl-git:owner/repo 1.0.0 (pecl-ref:ext)\nGLOBAL_STACK_EXT_VERSION=1.0.0\n' > \"\$f\"
     _gs_eu2_parse_env_file \"\$f\"
@@ -4451,9 +4461,9 @@ t "t51j: (pecl-ref:ext) no longer sets pecl_ref field — treated as hint (passt
 "
 
 t "t51k: AUTO version update also rewrites sha: in annotation — new sha is bare (no date)" bash -c "
-    source '/stack/bin/lib/env-update/config/defaults.sh'
-    source '/stack/bin/lib/env-update/core/records.sh'
-    source '/stack/bin/lib/env-update/core/apply.sh'
+    source '${_GS_EU2_LIB}/config/defaults.sh'
+    source '${_GS_EU2_LIB}/core/records.sh'
+    source '${_GS_EU2_LIB}/core/apply.sh'
     f=\${TMP_DIR}/t51k.env
     old_sha='aaaa0000bbbb1111cccc2222dddd3333eeee4444'
     old_date='2026-04-01'
@@ -4485,10 +4495,10 @@ t "t51k: AUTO version update also rewrites sha: in annotation — new sha is bar
 section "52 — --unstable flag"
 
 _DC_LIBS52="
-source '/stack/bin/lib/env-update/config/defaults.sh'
-source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update/core/semver.sh'
-source '/stack/bin/lib/env-update/core/decide.sh'
+source '${_GS_EU2_LIB}/config/defaults.sh'
+source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+source '${_GS_EU2_LIB}/core/semver.sh'
+source '${_GS_EU2_LIB}/core/decide.sh'
 "
 
 # t52a: --unstable is accepted as a valid flag (no exit 1 for unknown option)
@@ -4784,9 +4794,9 @@ section "54 — unstable promotion guard"
 # Direct unit-test of _gs_eu2_channel_select_best with channel=unstable
 
 t "t54a: unstable: stable newer than prerelease → returns stable (promotion guard)" bash -c "
-    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-    source '/stack/bin/lib/env-update/core/semver.sh'
-    source '/stack/bin/lib/env-update/core/channel.sh'
+    source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+    source '${_GS_EU2_LIB}/core/semver.sh'
+    source '${_GS_EU2_LIB}/core/channel.sh'
     # stable=3.1.1 is newer than hp=3.0.0-rc.4 — should promote to stable
     versions=\$'3.0.0-rc.4\n3.1.1'
     result=\$(_gs_eu2_channel_select_best \"\$versions\" 'unstable')
@@ -4795,9 +4805,9 @@ t "t54a: unstable: stable newer than prerelease → returns stable (promotion gu
 "
 
 t "t54b: unstable: prerelease genuinely newer than stable → returns prerelease" bash -c "
-    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-    source '/stack/bin/lib/env-update/core/semver.sh'
-    source '/stack/bin/lib/env-update/core/channel.sh'
+    source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+    source '${_GS_EU2_LIB}/core/semver.sh'
+    source '${_GS_EU2_LIB}/core/channel.sh'
     # hp=1.8.0-rc1 is newer base than hs=1.7.1 — prerelease wins
     versions=\$'1.7.1\n1.8.0-rc1'
     result=\$(_gs_eu2_channel_select_best \"\$versions\" 'unstable')
@@ -4806,9 +4816,9 @@ t "t54b: unstable: prerelease genuinely newer than stable → returns prerelease
 "
 
 t "t54c: unstable: no stable exists → returns highest prerelease" bash -c "
-    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-    source '/stack/bin/lib/env-update/core/semver.sh'
-    source '/stack/bin/lib/env-update/core/channel.sh'
+    source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+    source '${_GS_EU2_LIB}/core/semver.sh'
+    source '${_GS_EU2_LIB}/core/channel.sh'
     # No stable candidate — should return the highest prerelease
     versions=\$'0.1.0-alpha1\n0.2.0-rc1'
     result=\$(_gs_eu2_channel_select_best \"\$versions\" 'unstable')
@@ -4817,9 +4827,9 @@ t "t54c: unstable: no stable exists → returns highest prerelease" bash -c "
 "
 
 t "t54d: unstable: same-base prerelease vs stable → stable newer (1.0.0-rc1 vs 1.0.0)" bash -c "
-    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-    source '/stack/bin/lib/env-update/core/semver.sh'
-    source '/stack/bin/lib/env-update/core/channel.sh'
+    source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+    source '${_GS_EU2_LIB}/core/semver.sh'
+    source '${_GS_EU2_LIB}/core/channel.sh'
     # 1.0.0-rc1 shipped as 1.0.0 → stable is newer, should promote
     versions=\$'1.0.0-rc1\n1.0.0'
     result=\$(_gs_eu2_channel_select_best \"\$versions\" 'unstable')
@@ -4828,9 +4838,9 @@ t "t54d: unstable: same-base prerelease vs stable → stable newer (1.0.0-rc1 vs
 "
 
 t "t54e: unstable: prerelease of higher base wins (0.35.0-rc1 vs stable 0.34.0)" bash -c "
-    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-    source '/stack/bin/lib/env-update/core/semver.sh'
-    source '/stack/bin/lib/env-update/core/channel.sh'
+    source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+    source '${_GS_EU2_LIB}/core/semver.sh'
+    source '${_GS_EU2_LIB}/core/channel.sh'
     # 0.35.0-rc1 has higher base than stable 0.34.0 — prerelease wins
     versions=\$'0.34.0\n0.35.0-rc1'
     result=\$(_gs_eu2_channel_select_best \"\$versions\" 'unstable')
@@ -5078,9 +5088,9 @@ t "t56r: --force-auto + --force-hold mutually exclusive → exit 1" bash -c "
 section "57 — RC→stable promotion guard"
 
 _CD_LIBS57="
-source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update/core/semver.sh'
-source '/stack/bin/lib/env-update/core/decide.sh'
+source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+source '${_GS_EU2_LIB}/core/semver.sh'
+source '${_GS_EU2_LIB}/core/decide.sh'
 "
 
 t "t57a: rc2→stable same base → AUTO (not SKIP)" bash -c "
@@ -5126,8 +5136,8 @@ t "t57e: alpine-tagged→bare same numeric base → SKIP (platform suffix, not p
 section "58 — (watch-major) flag"
 
 _CD_LIBS58="
-source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update/core/semver.sh'
+source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+source '${_GS_EU2_LIB}/core/semver.sh'
 "
 
 # t58a: _gs_eu2_version_prefix depth 1 — strips build metadata and returns major
@@ -5273,15 +5283,15 @@ t "t58l: watch-major coexists with manual flag — decision is MANUAL, WATCH may
 # t58m: SDKMAN Java (watch-major) fires — current on major 11, fixture has 25.x
 # java fixture (/versions/all) contains 11.x through 25.x; pinned to :11 → WATCH fires 11 → 25.
 _SDK_LIBS58M="
-source '/stack/bin/lib/env-update/config/defaults.sh'
-source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update/core/records.sh'
-source '/stack/bin/lib/env-update/core/semver.sh'
-source '/stack/bin/lib/env-update/core/channel.sh'
-source '/stack/bin/lib/env-update/core/tag_flags.sh'
-source '/stack/bin/lib/env-update/core/cache.sh'
-source '/stack/bin/lib/env-update/http/curl.sh'
-source '/stack/bin/lib/env-update/fetchers/sdkman.sh'
+source '${_GS_EU2_LIB}/config/defaults.sh'
+source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+source '${_GS_EU2_LIB}/core/records.sh'
+source '${_GS_EU2_LIB}/core/semver.sh'
+source '${_GS_EU2_LIB}/core/channel.sh'
+source '${_GS_EU2_LIB}/core/tag_flags.sh'
+source '${_GS_EU2_LIB}/core/cache.sh'
+source '${_GS_EU2_LIB}/http/curl.sh'
+source '${_GS_EU2_LIB}/fetchers/sdkman.sh'
 export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
 export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t58m_cache
 "
@@ -5334,15 +5344,15 @@ t "t58n: sdkman java (watch-major) silent when already on latest major (25)" bas
 
 # t58o: SDKMAN non-Java (watch-major) fires — gradle pinned to major 4, fixture has 9.x
 _SDK_LIBS58O="
-source '/stack/bin/lib/env-update/config/defaults.sh'
-source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update/core/records.sh'
-source '/stack/bin/lib/env-update/core/semver.sh'
-source '/stack/bin/lib/env-update/core/channel.sh'
-source '/stack/bin/lib/env-update/core/tag_flags.sh'
-source '/stack/bin/lib/env-update/core/cache.sh'
-source '/stack/bin/lib/env-update/http/curl.sh'
-source '/stack/bin/lib/env-update/fetchers/sdkman.sh'
+source '${_GS_EU2_LIB}/config/defaults.sh'
+source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+source '${_GS_EU2_LIB}/core/records.sh'
+source '${_GS_EU2_LIB}/core/semver.sh'
+source '${_GS_EU2_LIB}/core/channel.sh'
+source '${_GS_EU2_LIB}/core/tag_flags.sh'
+source '${_GS_EU2_LIB}/core/cache.sh'
+source '${_GS_EU2_LIB}/http/curl.sh'
+source '${_GS_EU2_LIB}/fetchers/sdkman.sh'
 export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
 export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t58o_cache
 "
@@ -5373,15 +5383,15 @@ t "t58o: sdkman gradle (watch-major) fires when fixture has higher major (4→9)
 section "59 — github (watch-major) flag"
 
 _GH_LIBS59="
-source '/stack/bin/lib/env-update/config/defaults.sh'
-source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update/core/records.sh'
-source '/stack/bin/lib/env-update/core/semver.sh'
-source '/stack/bin/lib/env-update/core/channel.sh'
-source '/stack/bin/lib/env-update/core/tag_flags.sh'
-source '/stack/bin/lib/env-update/core/cache.sh'
-source '/stack/bin/lib/env-update/http/curl.sh'
-source '/stack/bin/lib/env-update/fetchers/github.sh'
+source '${_GS_EU2_LIB}/config/defaults.sh'
+source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+source '${_GS_EU2_LIB}/core/records.sh'
+source '${_GS_EU2_LIB}/core/semver.sh'
+source '${_GS_EU2_LIB}/core/channel.sh'
+source '${_GS_EU2_LIB}/core/tag_flags.sh'
+source '${_GS_EU2_LIB}/core/cache.sh'
+source '${_GS_EU2_LIB}/http/curl.sh'
+source '${_GS_EU2_LIB}/fetchers/github.sh'
 export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
 "
 
@@ -5542,15 +5552,15 @@ t "t59h: github watch-major — fetcher populates latest_unconstrained (unit che
 section "28b — npm (watch-major) flag"
 
 _NPM_LIBS_WM="
-source '/stack/bin/lib/env-update/config/defaults.sh'
-source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update/core/records.sh'
-source '/stack/bin/lib/env-update/core/semver.sh'
-source '/stack/bin/lib/env-update/core/channel.sh'
-source '/stack/bin/lib/env-update/core/tag_flags.sh'
-source '/stack/bin/lib/env-update/core/cache.sh'
-source '/stack/bin/lib/env-update/http/curl.sh'
-source '/stack/bin/lib/env-update/fetchers/npm.sh'
+source '${_GS_EU2_LIB}/config/defaults.sh'
+source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+source '${_GS_EU2_LIB}/core/records.sh'
+source '${_GS_EU2_LIB}/core/semver.sh'
+source '${_GS_EU2_LIB}/core/channel.sh'
+source '${_GS_EU2_LIB}/core/tag_flags.sh'
+source '${_GS_EU2_LIB}/core/cache.sh'
+source '${_GS_EU2_LIB}/http/curl.sh'
+source '${_GS_EU2_LIB}/fetchers/npm.sh'
 export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
 "
 
@@ -5712,14 +5722,14 @@ t "t60e: --dump --format=text produces human-readable text (not JSON)" bash -c "
 # JSON key appears. Without the Finding 4.4 fix (missing from record_fields), the key
 # would be absent from the output even when the value was set.
 t "t60f: --dump --format=json serializes stable_proposed field (record_fields coverage)" bash -c "
-    source '/stack/bin/lib/env-update/config/defaults.sh'
-    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-    source '/stack/bin/lib/env-update/core/records.sh'
-    source '/stack/bin/lib/env-update/core/semver.sh'
-    source '/stack/bin/lib/env-update/core/channel.sh'
-    source '/stack/bin/lib/env-update/core/tag_flags.sh'
-    source '/stack/bin/lib/env-update/core/cache.sh'
-    source '/stack/bin/lib/env-update/reporting/dump.sh'
+    source '${_GS_EU2_LIB}/config/defaults.sh'
+    source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+    source '${_GS_EU2_LIB}/core/records.sh'
+    source '${_GS_EU2_LIB}/core/semver.sh'
+    source '${_GS_EU2_LIB}/core/channel.sh'
+    source '${_GS_EU2_LIB}/core/tag_flags.sh'
+    source '${_GS_EU2_LIB}/core/cache.sh'
+    source '${_GS_EU2_LIB}/reporting/dump.sh'
     _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
     _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_T60F_VERSION'
     _gs_eu2_record_set \$idx type            'github'
@@ -5753,14 +5763,14 @@ t "t60g: --dump --format=json stdout is clean JSON even with --no-cache and --fi
 # parse.sh via (tag-channel-prefix:STR) but was missing from _gs_eu2_record_fields(),
 # causing dump.sh to silently drop it. This test catches that regression.
 t "t60h: --dump --format=json serializes tag_channel_prefix field (record_fields coverage)" bash -c "
-    source '/stack/bin/lib/env-update/config/defaults.sh'
-    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-    source '/stack/bin/lib/env-update/core/records.sh'
-    source '/stack/bin/lib/env-update/core/semver.sh'
-    source '/stack/bin/lib/env-update/core/channel.sh'
-    source '/stack/bin/lib/env-update/core/tag_flags.sh'
-    source '/stack/bin/lib/env-update/core/cache.sh'
-    source '/stack/bin/lib/env-update/reporting/dump.sh'
+    source '${_GS_EU2_LIB}/config/defaults.sh'
+    source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+    source '${_GS_EU2_LIB}/core/records.sh'
+    source '${_GS_EU2_LIB}/core/semver.sh'
+    source '${_GS_EU2_LIB}/core/channel.sh'
+    source '${_GS_EU2_LIB}/core/tag_flags.sh'
+    source '${_GS_EU2_LIB}/core/cache.sh'
+    source '${_GS_EU2_LIB}/reporting/dump.sh'
     _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
     _gs_eu2_record_set \$idx env_var          'GLOBAL_STACK_T60H_VERSION'
     _gs_eu2_record_set \$idx type             'github'
@@ -5780,28 +5790,28 @@ t "t60h: --dump --format=json serializes tag_channel_prefix field (record_fields
 section "58b — pypi + rubygems (watch-major)"
 
 _PYPI_LIBS_WM="
-source '/stack/bin/lib/env-update/config/defaults.sh'
-source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update/core/records.sh'
-source '/stack/bin/lib/env-update/core/semver.sh'
-source '/stack/bin/lib/env-update/core/channel.sh'
-source '/stack/bin/lib/env-update/core/tag_flags.sh'
-source '/stack/bin/lib/env-update/core/cache.sh'
-source '/stack/bin/lib/env-update/http/curl.sh'
-source '/stack/bin/lib/env-update/fetchers/pypi.sh'
+source '${_GS_EU2_LIB}/config/defaults.sh'
+source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+source '${_GS_EU2_LIB}/core/records.sh'
+source '${_GS_EU2_LIB}/core/semver.sh'
+source '${_GS_EU2_LIB}/core/channel.sh'
+source '${_GS_EU2_LIB}/core/tag_flags.sh'
+source '${_GS_EU2_LIB}/core/cache.sh'
+source '${_GS_EU2_LIB}/http/curl.sh'
+source '${_GS_EU2_LIB}/fetchers/pypi.sh'
 export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
 "
 
 _RUBY_LIBS_WM="
-source '/stack/bin/lib/env-update/config/defaults.sh'
-source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update/core/records.sh'
-source '/stack/bin/lib/env-update/core/semver.sh'
-source '/stack/bin/lib/env-update/core/channel.sh'
-source '/stack/bin/lib/env-update/core/tag_flags.sh'
-source '/stack/bin/lib/env-update/core/cache.sh'
-source '/stack/bin/lib/env-update/http/curl.sh'
-source '/stack/bin/lib/env-update/fetchers/rubygems.sh'
+source '${_GS_EU2_LIB}/config/defaults.sh'
+source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+source '${_GS_EU2_LIB}/core/records.sh'
+source '${_GS_EU2_LIB}/core/semver.sh'
+source '${_GS_EU2_LIB}/core/channel.sh'
+source '${_GS_EU2_LIB}/core/tag_flags.sh'
+source '${_GS_EU2_LIB}/core/cache.sh'
+source '${_GS_EU2_LIB}/http/curl.sh'
+source '${_GS_EU2_LIB}/fetchers/rubygems.sh'
 export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
 "
 
@@ -5999,9 +6009,9 @@ section "52b — --unstable=info vs --unstable=full distinction"
 # t52b-a: --unstable=info with a var that has a prerelease available — decision stays AUTO/SKIP
 #         (not promoted to prerelease); stable proposed is chosen, not prerelease.
 t "t52b-a: --unstable=info keeps stable decision, does not promote to prerelease" bash -c "
-    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-    source '/stack/bin/lib/env-update/core/semver.sh'
-    source '/stack/bin/lib/env-update/core/decide.sh'
+    source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+    source '${_GS_EU2_LIB}/core/semver.sh'
+    source '${_GS_EU2_LIB}/core/decide.sh'
     # unstable=info mode → classify_decision uses 'info' → stable→prerelease stays SKIP
     result=\$(_gs_eu2_classify_decision '1.2.3' '1.3.0-rc1' '' '' 'info')
     [[ \"\$result\" == 'SKIP' ]] || { echo \"expected SKIP for unstable=info, got: '\$result'\"; echo FAIL; exit 0; }
@@ -6010,9 +6020,9 @@ t "t52b-a: --unstable=info keeps stable decision, does not promote to prerelease
 
 # t52b-b: --unstable=full with same var — decision becomes AUTO (prerelease guard bypassed)
 t "t52b-b: --unstable=full promotes stable→prerelease to AUTO (guard bypassed)" bash -c "
-    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-    source '/stack/bin/lib/env-update/core/semver.sh'
-    source '/stack/bin/lib/env-update/core/decide.sh'
+    source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+    source '${_GS_EU2_LIB}/core/semver.sh'
+    source '${_GS_EU2_LIB}/core/decide.sh'
     result=\$(_gs_eu2_classify_decision '1.2.3' '1.3.0-rc1' '' '' 'full')
     [[ \"\$result\" == 'AUTO' ]] || { echo \"expected AUTO for unstable=full, got: '\$result'\"; echo FAIL; exit 0; }
     echo PASS
@@ -6024,15 +6034,15 @@ t "t52b-b: --unstable=full promotes stable→prerelease to AUTO (guard bypassed)
 section "62 — tag-channel-prefix flag"
 
 _TCP_LIBS="
-source '/stack/bin/lib/env-update/config/defaults.sh'
-source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update/core/records.sh'
-source '/stack/bin/lib/env-update/core/semver.sh'
-source '/stack/bin/lib/env-update/core/channel.sh'
-source '/stack/bin/lib/env-update/core/tag_flags.sh'
-source '/stack/bin/lib/env-update/core/cache.sh'
-source '/stack/bin/lib/env-update/http/curl.sh'
-source '/stack/bin/lib/env-update/fetchers/github.sh'
+source '${_GS_EU2_LIB}/config/defaults.sh'
+source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+source '${_GS_EU2_LIB}/core/records.sh'
+source '${_GS_EU2_LIB}/core/semver.sh'
+source '${_GS_EU2_LIB}/core/channel.sh'
+source '${_GS_EU2_LIB}/core/tag_flags.sh'
+source '${_GS_EU2_LIB}/core/cache.sh'
+source '${_GS_EU2_LIB}/http/curl.sh'
+source '${_GS_EU2_LIB}/fetchers/github.sh'
 export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
 export _GS_EU2_CACHE_DIR=\${TMP_DIR}/tcp_cache
 "
@@ -6096,8 +6106,8 @@ t "t53c: stable-only fixture — proposed has no prefix (no spurious re-prepend)
 # Also test that without tcp the raw dev- prefix would make the comparison nonsensical —
 # verify the stripped form gives the expected order.
 t "t53d: semver_compare strips tcp before ordering (dev- prefix aware)" bash -c "
-    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-    source '/stack/bin/lib/env-update/core/semver.sh'
+    source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+    source '${_GS_EU2_LIB}/core/semver.sh'
     # With tcp=dev-: strips to 0.40.1-rc.223 vs 0.40.0
     # 0.40.1-rc.223 numerically > 0.40.0 → newer (pre-release of a higher patch)
     result=\$(_gs_eu2_semver_compare 'dev-0.40.1-rc.223' 'v0.40.0' 'dev-')
@@ -6110,8 +6120,8 @@ t "t53d: semver_compare strips tcp before ordering (dev- prefix aware)" bash -c 
 
 # t53e: semver_compare backward-compatible — no third param = behaves identically to before.
 t "t53e: semver_compare backward-compatible — no third param, v-prefix only" bash -c "
-    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-    source '/stack/bin/lib/env-update/core/semver.sh'
+    source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+    source '${_GS_EU2_LIB}/core/semver.sh'
     result=\$(_gs_eu2_semver_compare 'v1.2.3' 'v1.3.0')
     [[ \"\$result\" == 'older' ]] || { echo \"expected older, got: '\$result'\"; echo FAIL; exit 0; }
     result2=\$(_gs_eu2_semver_compare 'v2.0.0' 'v1.9.9')
@@ -6121,10 +6131,10 @@ t "t53e: semver_compare backward-compatible — no third param, v-prefix only" b
 
 # t53f: parse.sh recognises tag-channel-prefix and dispatches to record field.
 t "t53f: parse.sh stores tag_channel_prefix in record" bash -c "
-    source '/stack/bin/lib/env-update/config/defaults.sh'
-    source '/stack/bin/lib/env-update/core/records.sh'
-    source '/stack/bin/lib/env-update/core/semver.sh'
-    source '/stack/bin/lib/env-update/core/parse.sh'
+    source '${_GS_EU2_LIB}/config/defaults.sh'
+    source '${_GS_EU2_LIB}/core/records.sh'
+    source '${_GS_EU2_LIB}/core/semver.sh'
+    source '${_GS_EU2_LIB}/core/parse.sh'
     tmp_env=\$(mktemp)
     printf '# @todo env-update (tag-channel-prefix:dev-) github:rtk-ai/rtk v0.39.0\nGLOBAL_STACK_RTK_VERSION=v0.39.0\n' > \"\$tmp_env\"
     _gs_eu2_parse_env_file \"\$tmp_env\"
@@ -6155,7 +6165,7 @@ t "t53g: full pipeline --check — stable current proposes v0.40.0 (AUTO)" bash 
 t "t53h: downgrade guard fires when current rc version > proposed stable (stripped comparison)" bash -c "
     ${_TCP_LIBS}
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/tcp_h_cache
-    source '/stack/bin/lib/env-update/core/decide.sh'
+    source '${_GS_EU2_LIB}/core/decide.sh'
     # Simulate: current=dev-0.40.1-rc.223, proposed=v0.40.0
     # Pre-strip tcp from both: cur=0.40.1-rc.223, prop=0.40.0
     # sort -V: 0.40.0 < 0.40.1-rc.223 → proposed is older → SKIP
@@ -6166,10 +6176,10 @@ t "t53h: downgrade guard fires when current rc version > proposed stable (stripp
 
 # t53i: unknown flag variant — tag-channel-prefix without value must error.
 t "t53i: tag-channel-prefix without value is rejected by parse.sh" bash -c "
-    source '/stack/bin/lib/env-update/config/defaults.sh'
-    source '/stack/bin/lib/env-update/core/records.sh'
-    source '/stack/bin/lib/env-update/core/semver.sh'
-    source '/stack/bin/lib/env-update/core/parse.sh'
+    source '${_GS_EU2_LIB}/config/defaults.sh'
+    source '${_GS_EU2_LIB}/core/records.sh'
+    source '${_GS_EU2_LIB}/core/semver.sh'
+    source '${_GS_EU2_LIB}/core/parse.sh'
     tmp_env=\$(mktemp)
     printf '# @todo env-update (tag-channel-prefix) github:rtk-ai/rtk v0.39.0\nGLOBAL_STACK_RTK_VERSION=v0.39.0\n' > \"\$tmp_env\"
     err=\$(_gs_eu2_parse_env_file \"\$tmp_env\" 2>&1) && rc=0 || rc=\$?
@@ -6184,7 +6194,7 @@ t "t53i: tag-channel-prefix without value is rejected by parse.sh" bash -c "
 t "t53j: cache key differs with and without tag-channel-prefix (no cache poisoning)" bash -c "
     ${_TCP_LIBS}
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/tcp_j_cache
-    source '/stack/bin/lib/env-update/core/cache.sh'
+    source '${_GS_EU2_LIB}/core/cache.sh'
 
     # Run with tcp set
     _gs_eu2_record_new; idx1=\${_GS_EU2_LAST_IDX}
@@ -6223,14 +6233,14 @@ t "t53j: cache key differs with and without tag-channel-prefix (no cache poisoni
 section "61 — pecl channel:unstable support"
 
 _PECL_CH_LIBS="
-source '/stack/bin/lib/env-update/config/defaults.sh'
-source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update/core/records.sh'
-source '/stack/bin/lib/env-update/core/semver.sh'
-source '/stack/bin/lib/env-update/core/cache.sh'
-source '/stack/bin/lib/env-update/http/curl.sh'
-source '/stack/bin/lib/env-update/fetchers/github.sh'
-source '/stack/bin/lib/env-update/fetchers/pecl.sh'
+source '${_GS_EU2_LIB}/config/defaults.sh'
+source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+source '${_GS_EU2_LIB}/core/records.sh'
+source '${_GS_EU2_LIB}/core/semver.sh'
+source '${_GS_EU2_LIB}/core/cache.sh'
+source '${_GS_EU2_LIB}/http/curl.sh'
+source '${_GS_EU2_LIB}/fetchers/github.sh'
+source '${_GS_EU2_LIB}/fetchers/pecl.sh'
 export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
 export _GS_EU2_CACHE_DIR=\${TMP_DIR}/pecl_ch_cache
 "
@@ -6363,10 +6373,10 @@ t "t61g: cache keys differ between channel:stable and channel:unstable (no poiso
 
 # t61h: parse.sh recognises channel:unstable and stores it in the record
 t "t61h: parse.sh stores channel=unstable in record field" bash -c "
-    source '/stack/bin/lib/env-update/config/defaults.sh'
-    source '/stack/bin/lib/env-update/core/records.sh'
-    source '/stack/bin/lib/env-update/core/semver.sh'
-    source '/stack/bin/lib/env-update/core/parse.sh'
+    source '${_GS_EU2_LIB}/config/defaults.sh'
+    source '${_GS_EU2_LIB}/core/records.sh'
+    source '${_GS_EU2_LIB}/core/semver.sh'
+    source '${_GS_EU2_LIB}/core/parse.sh'
     tmp_env=\$(mktemp)
     printf '# @todo env-update (channel:unstable) pecl:zmq 1.1.3\nGLOBAL_STACK_ZMQ=\n' > \"\$tmp_env\"
     _gs_eu2_parse_env_file \"\$tmp_env\"
@@ -6444,18 +6454,18 @@ t "t61k: secondary-pass channel=unstable injection reaches PECL and returns beta
 section "63 — (lock:REASON) flag"
 
 _LOCK_PARSE_LIBS="
-source '/stack/bin/lib/env-update/config/defaults.sh'
-source '/stack/bin/lib/env-update/core/records.sh'
-source '/stack/bin/lib/env-update/core/semver.sh'
-source '/stack/bin/lib/env-update/core/parse.sh'
+source '${_GS_EU2_LIB}/config/defaults.sh'
+source '${_GS_EU2_LIB}/core/records.sh'
+source '${_GS_EU2_LIB}/core/semver.sh'
+source '${_GS_EU2_LIB}/core/parse.sh'
 "
 
 _LOCK_DECIDE_LIBS="
-source '/stack/bin/lib/env-update/config/defaults.sh'
-source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update/core/semver.sh'
-source '/stack/bin/lib/env-update/core/records.sh'
-source '/stack/bin/lib/env-update/core/decide.sh'
+source '${_GS_EU2_LIB}/config/defaults.sh'
+source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+source '${_GS_EU2_LIB}/core/semver.sh'
+source '${_GS_EU2_LIB}/core/records.sh'
+source '${_GS_EU2_LIB}/core/decide.sh'
 "
 
 # ── A: Basic behaviour ────────────────────────────────────────────────────
@@ -6759,10 +6769,10 @@ t "t63f3: full pipeline with lock-flag.env fixture — LOCK in output" bash -c "
 section "64 — --exclude=REGEX flag"
 
 _EXCL_PARSE_LIBS="
-source '/stack/bin/lib/env-update/config/defaults.sh'
-source '/stack/bin/lib/env-update/core/records.sh'
-source '/stack/bin/lib/env-update/core/semver.sh'
-source '/stack/bin/lib/env-update/core/parse.sh'
+source '${_GS_EU2_LIB}/config/defaults.sh'
+source '${_GS_EU2_LIB}/core/records.sh'
+source '${_GS_EU2_LIB}/core/semver.sh'
+source '${_GS_EU2_LIB}/core/parse.sh'
 "
 
 # t64a1: --exclude skips matching vars; unmatched vars still parsed
@@ -6849,15 +6859,15 @@ t "t64a7: excluded record pending state is reset (no contamination of next recor
 section "67 — Drift detection — [DRIFT] sub-line"
 
 _DRIFT_LIBS="
-source '/stack/bin/lib/env-update/config/defaults.sh'
-source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update/core/records.sh'
-source '/stack/bin/lib/env-update/core/semver.sh'
-source '/stack/bin/lib/env-update/core/channel.sh'
-source '/stack/bin/lib/env-update/core/tag_flags.sh'
-source '/stack/bin/lib/env-update/core/cache.sh'
-source '/stack/bin/lib/env-update/http/curl.sh'
-source '/stack/bin/lib/env-update/fetchers/npm.sh'
+source '${_GS_EU2_LIB}/config/defaults.sh'
+source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+source '${_GS_EU2_LIB}/core/records.sh'
+source '${_GS_EU2_LIB}/core/semver.sh'
+source '${_GS_EU2_LIB}/core/channel.sh'
+source '${_GS_EU2_LIB}/core/tag_flags.sh'
+source '${_GS_EU2_LIB}/core/cache.sh'
+source '${_GS_EU2_LIB}/http/curl.sh'
+source '${_GS_EU2_LIB}/fetchers/npm.sh'
 export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
 "
 
@@ -6937,15 +6947,15 @@ t "t67f: --no-drift flag is accepted without error" bash -c "
 section "65 — Bug D: npm major_hint fast-path bypass"
 
 _NPM_D_LIBS="
-source '/stack/bin/lib/env-update/config/defaults.sh'
-source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update/core/records.sh'
-source '/stack/bin/lib/env-update/core/semver.sh'
-source '/stack/bin/lib/env-update/core/channel.sh'
-source '/stack/bin/lib/env-update/core/tag_flags.sh'
-source '/stack/bin/lib/env-update/core/cache.sh'
-source '/stack/bin/lib/env-update/http/curl.sh'
-source '/stack/bin/lib/env-update/fetchers/npm.sh'
+source '${_GS_EU2_LIB}/config/defaults.sh'
+source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+source '${_GS_EU2_LIB}/core/records.sh'
+source '${_GS_EU2_LIB}/core/semver.sh'
+source '${_GS_EU2_LIB}/core/channel.sh'
+source '${_GS_EU2_LIB}/core/tag_flags.sh'
+source '${_GS_EU2_LIB}/core/cache.sh'
+source '${_GS_EU2_LIB}/http/curl.sh'
+source '${_GS_EU2_LIB}/fetchers/npm.sh'
 export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
 "
 
@@ -7020,9 +7030,9 @@ t "t65d: npm without major_hint returns dist-tags.latest (25.8.0) via full list 
 section "66 — Bug E: use-sha date bleed in VAR="
 
 _APPLY_E_LIBS="
-source '/stack/bin/lib/env-update/config/defaults.sh'
-source '/stack/bin/lib/env-update/core/records.sh'
-source '/stack/bin/lib/env-update/core/apply.sh'
+source '${_GS_EU2_LIB}/config/defaults.sh'
+source '${_GS_EU2_LIB}/core/records.sh'
+source '${_GS_EU2_LIB}/core/apply.sh'
 "
 
 # t66a: use_sha=true — VAR= receives bare SHA, annotation sha: receives SHA with date
@@ -7169,15 +7179,15 @@ t "t69c: no major_hint + up-to-date → no [PIN-MISS] sub-line" bash -c "
 
 # t69d: major_hint=23 latest_unconstrained field set in record (unit-level check via fetcher)
 t "t69d: npm fetcher sets latest_unconstrained when major_hint=23 yields no results" bash -c "
-    source '/stack/bin/lib/env-update/config/defaults.sh'
-    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-    source '/stack/bin/lib/env-update/core/records.sh'
-    source '/stack/bin/lib/env-update/core/semver.sh'
-    source '/stack/bin/lib/env-update/core/channel.sh'
-    source '/stack/bin/lib/env-update/core/tag_flags.sh'
-    source '/stack/bin/lib/env-update/core/cache.sh'
-    source '/stack/bin/lib/env-update/http/curl.sh'
-    source '/stack/bin/lib/env-update/fetchers/npm.sh'
+    source '${_GS_EU2_LIB}/config/defaults.sh'
+    source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+    source '${_GS_EU2_LIB}/core/records.sh'
+    source '${_GS_EU2_LIB}/core/semver.sh'
+    source '${_GS_EU2_LIB}/core/channel.sh'
+    source '${_GS_EU2_LIB}/core/tag_flags.sh'
+    source '${_GS_EU2_LIB}/core/cache.sh'
+    source '${_GS_EU2_LIB}/http/curl.sh'
+    source '${_GS_EU2_LIB}/fetchers/npm.sh'
     export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t69d_cache
     _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
@@ -7205,7 +7215,7 @@ section "68 — HTTP memo: URL-level in-session dedup"
 # way to test the memo read path without making real network calls.
 
 _MEMO_LIBS="
-source '/stack/bin/lib/env-update/http/curl.sh'
+source '${_GS_EU2_LIB}/http/curl.sh'
 "
 
 # t68a: pre-seeded memo entry is returned by _gs_eu2_http_get (no fixture dir, no network)
@@ -8281,9 +8291,9 @@ t "t81p: --reference=flags — _GS_EU2_TALLY_FORCE documented in flags section" 
 section "82 — decide.sh: v-prefix + major_hint regression"
 
 _DC_LIBS82="
-source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update/core/semver.sh'
-source '/stack/bin/lib/env-update/core/decide.sh'
+source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+source '${_GS_EU2_LIB}/core/semver.sh'
+source '${_GS_EU2_LIB}/core/decide.sh'
 "
 
 # t82a: v-prefixed proposed within same major → should be AUTO not HOLD
@@ -9732,10 +9742,10 @@ section "95 — awk end-anchor, replace format, force-auto guard"
 # → current code rewrites " 2" at major-hint position (gives "... repo 3 2")
 # → correct behavior: rewrite the LAST " 2" (version token: gives "... repo 2 3")
 t "t95a: awk annotation rewrite targets LAST version token (not major-hint when equal to curval)" bash -c "
-    source '/stack/bin/lib/env-update/config/defaults.sh'
-    source '/stack/bin/lib/env-update/core/records.sh'
-    source '/stack/bin/lib/env-update/core/git.sh' 2>/dev/null || true
-    source '/stack/bin/lib/env-update/core/apply.sh'
+    source '${_GS_EU2_LIB}/config/defaults.sh'
+    source '${_GS_EU2_LIB}/core/records.sh'
+    source '${_GS_EU2_LIB}/core/git.sh' 2>/dev/null || true
+    source '${_GS_EU2_LIB}/core/apply.sh'
     f=\"\${TMP_DIR}/t95a.env\"
     # annotation: major_hint=2 and current version=2 are identical — index() finds major hint first
     printf '# @todo env-update github:owner/repo 2 2\nGLOBAL_STACK_T95A=2\n' > \"\$f\"
@@ -9755,9 +9765,9 @@ t "t95a: awk annotation rewrite targets LAST version token (not major-hint when 
 # has replace_targets — this is the only way to reach the dry-run replace sub-line in apply.sh
 # (the CLI gate blocks --apply --dry-run as mutually exclusive).
 t "t95b: apply.sh dry-run internal path replace sub-line uses '↳ (replace)' format" bash -c "
-    source '/stack/bin/lib/env-update/config/defaults.sh'
-    source '/stack/bin/lib/env-update/core/records.sh'
-    source '/stack/bin/lib/env-update/core/apply.sh'
+    source '${_GS_EU2_LIB}/config/defaults.sh'
+    source '${_GS_EU2_LIB}/core/records.sh'
+    source '${_GS_EU2_LIB}/core/apply.sh'
     f=\${TMP_DIR}/t95b.env
     printf '# @todo env-update (replace:GLOBAL_STACK_T95B_ALIAS=node{major}) github:testowner/testrepo 2.4.0\nGLOBAL_STACK_T95B=2.4.0\nGLOBAL_STACK_T95B_ALIAS=node2\n' > \"\$f\"
     _gs_eu2_record_new; idx=\$_GS_EU2_LAST_IDX
@@ -9844,10 +9854,10 @@ t "t96b: AUTO + update_pending=true (different major) → (replace) sub-line is 
 # Bug: '\${_proposed//null/}' strips 'null' as substring — 'null-rc1' becomes '-rc1'.
 # Fix: '[[ \${_proposed} == null ]] && _proposed=""' (exact match only).
 t "t96c: url fetch-json: literal 'null' → empty proposed (exact-match discard)" bash -c "
-    source '/stack/bin/lib/env-update/config/defaults.sh'
-    source '/stack/bin/lib/env-update/core/records.sh'
-    source '/stack/bin/lib/env-update/http/curl.sh'
-    source '/stack/bin/lib/env-update/fetchers/url.sh'
+    source '${_GS_EU2_LIB}/config/defaults.sh'
+    source '${_GS_EU2_LIB}/core/records.sh'
+    source '${_GS_EU2_LIB}/http/curl.sh'
+    source '${_GS_EU2_LIB}/fetchers/url.sh'
     export _GS_EU2_HTTP_FIXTURE_DIR=\${TMP_DIR}/t96c_fixtures
     mkdir -p \"\${_GS_EU2_HTTP_FIXTURE_DIR}\"
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t96c_cache
@@ -9866,10 +9876,10 @@ t "t96c: url fetch-json: literal 'null' → empty proposed (exact-match discard)
 "
 
 t "t96d: url fetch-json: 'null-rc1' must NOT be stripped (substring safety)" bash -c "
-    source '/stack/bin/lib/env-update/config/defaults.sh'
-    source '/stack/bin/lib/env-update/core/records.sh'
-    source '/stack/bin/lib/env-update/http/curl.sh'
-    source '/stack/bin/lib/env-update/fetchers/url.sh'
+    source '${_GS_EU2_LIB}/config/defaults.sh'
+    source '${_GS_EU2_LIB}/core/records.sh'
+    source '${_GS_EU2_LIB}/http/curl.sh'
+    source '${_GS_EU2_LIB}/fetchers/url.sh'
     export _GS_EU2_HTTP_FIXTURE_DIR=\${TMP_DIR}/t96d_fixtures
     mkdir -p \"\${_GS_EU2_HTTP_FIXTURE_DIR}\"
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t96d_cache
@@ -9891,9 +9901,9 @@ t "t96d: url fetch-json: 'null-rc1' must NOT be stripped (substring safety)" bas
 # Current: line 112 prints ' [propagate] %s: %s: ...' without distinguishing dry-run.
 # Fix: when dry_run=true, prefix the per-var line with '[DRY-RUN]'.
 t "t96e: env-scan propagate dry-run per-var output contains [DRY-RUN] prefix" bash -c "
-    source '/stack/bin/lib/env-scan/core/backup.sh' 2>/dev/null || true
-    source '/stack/bin/lib/env-scan/core/git.sh' 2>/dev/null || true
-    source '/stack/bin/lib/env-scan/propagate.sh'
+    source '${_GS_ES_LIB}/core/backup.sh' 2>/dev/null || true
+    source '${_GS_ES_LIB}/core/git.sh' 2>/dev/null || true
+    source '${_GS_ES_LIB}/propagate.sh'
     # Minimal _GS_ES_CFG setup
     declare -A _GS_ES_CFG=([backup]='false' [backup_suffix]='.bak' [_backup_ts]='' [dir]='' [quiet]='false')
     # Create a minimal env file with one var
@@ -9924,8 +9934,8 @@ section "97 — HTTP memo auth key collision + Quay pagination"
 # the unauthenticated response — wrong: it should use the authenticated response.
 # Fix: key the memo by "${_url}:${auth}" (auth=1 when token present, 0 when not).
 t "t97a: HTTP memo does not bleed unauthenticated response to authenticated caller" bash -c "
-    source '/stack/bin/lib/env-update/config/defaults.sh'
-    source '/stack/bin/lib/env-update/http/curl.sh'
+    source '${_GS_EU2_LIB}/config/defaults.sh'
+    source '${_GS_EU2_LIB}/http/curl.sh'
     # Simulate: prime the memo with an unauthenticated response for a URL
     _GS_EU2_HTTP_MEMO=()
     url='https://api.github.com/repos/test/test/releases'
@@ -9941,8 +9951,8 @@ t "t97a: HTTP memo does not bleed unauthenticated response to authenticated call
 "
 
 t "t97b: HTTP memo auth key: authenticated and unauthenticated entries are independent" bash -c "
-    source '/stack/bin/lib/env-update/config/defaults.sh'
-    source '/stack/bin/lib/env-update/http/curl.sh'
+    source '${_GS_EU2_LIB}/config/defaults.sh'
+    source '${_GS_EU2_LIB}/http/curl.sh'
     _GS_EU2_HTTP_MEMO=()
     url='https://api.github.com/repos/test/test/releases'
     # Store authenticated response under the auth key (post-fix: url:1)
@@ -9965,14 +9975,14 @@ t "t97b: HTTP memo auth key: authenticated and unauthenticated entries are indep
 # Fix: loop while has_additional=true, incrementing page= param.
 # Test: create two page fixtures; page 1 has has_additional=true; assert both pages' tags appear.
 t "t97c: Quay fetcher follows has_additional pagination" bash -c "
-    source '/stack/bin/lib/env-update/config/defaults.sh'
-    source '/stack/bin/lib/env-update/core/records.sh'
-    source '/stack/bin/lib/env-update/core/semver.sh'
-    source '/stack/bin/lib/env-update/core/channel.sh'
-    source '/stack/bin/lib/env-update/core/tag_flags.sh'
-    source '/stack/bin/lib/env-update/core/cache.sh'
-    source '/stack/bin/lib/env-update/http/curl.sh'
-    source '/stack/bin/lib/env-update/fetchers/quay.sh'
+    source '${_GS_EU2_LIB}/config/defaults.sh'
+    source '${_GS_EU2_LIB}/core/records.sh'
+    source '${_GS_EU2_LIB}/core/semver.sh'
+    source '${_GS_EU2_LIB}/core/channel.sh'
+    source '${_GS_EU2_LIB}/core/tag_flags.sh'
+    source '${_GS_EU2_LIB}/core/cache.sh'
+    source '${_GS_EU2_LIB}/http/curl.sh'
+    source '${_GS_EU2_LIB}/fetchers/quay.sh'
     export _GS_EU2_HTTP_FIXTURE_DIR=\${TMP_DIR}/t97c_fixtures
     mkdir -p \"\${_GS_EU2_HTTP_FIXTURE_DIR}\"
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t97c_cache
@@ -10005,9 +10015,9 @@ _flush_section
 section "98 — RESOLVED decision: float-to-concrete, --apply-resolve"
 
 _DC_LIBS98="
-source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update/core/semver.sh'
-source '/stack/bin/lib/env-update/core/decide.sh'
+source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+source '${_GS_EU2_LIB}/core/semver.sh'
+source '${_GS_EU2_LIB}/core/decide.sh'
 "
 
 # --- 1. Core classify_decision unit tests (unversioned set extension + RESOLVED) ---
@@ -10261,10 +10271,10 @@ _flush_section
 section "101 — decide.sh nightly SHA sort-V normalization"
 
 _NODEEDGE_DECIDE_LIBS="
-source '/stack/bin/lib/env-update/config/defaults.sh'
-source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update/core/semver.sh'
-source '/stack/bin/lib/env-update/core/decide.sh'
+source '${_GS_EU2_LIB}/config/defaults.sh'
+source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+source '${_GS_EU2_LIB}/core/semver.sh'
+source '${_GS_EU2_LIB}/core/decide.sh'
 "
 
 # t101a: May-24 long-SHA nightly current → May-25 short-SHA nightly proposed → AUTO (not SKIP)
@@ -10421,15 +10431,15 @@ _flush_section
 section "103 — ghcr fetcher"
 
 _GHCR_LIBS="
-source '/stack/bin/lib/env-update/config/defaults.sh'
-source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-source '/stack/bin/lib/env-update/core/records.sh'
-source '/stack/bin/lib/env-update/core/semver.sh'
-source '/stack/bin/lib/env-update/core/channel.sh'
-source '/stack/bin/lib/env-update/core/tag_flags.sh'
-source '/stack/bin/lib/env-update/core/cache.sh'
-source '/stack/bin/lib/env-update/http/curl.sh'
-source '/stack/bin/lib/env-update/fetchers/ghcr.sh'
+source '${_GS_EU2_LIB}/config/defaults.sh'
+source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+source '${_GS_EU2_LIB}/core/records.sh'
+source '${_GS_EU2_LIB}/core/semver.sh'
+source '${_GS_EU2_LIB}/core/channel.sh'
+source '${_GS_EU2_LIB}/core/tag_flags.sh'
+source '${_GS_EU2_LIB}/core/cache.sh'
+source '${_GS_EU2_LIB}/http/curl.sh'
+source '${_GS_EU2_LIB}/fetchers/ghcr.sh'
 export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
 export _GS_EU2_CACHE_DIR=\${TMP_DIR}/ghcr_cache
 "
@@ -10660,31 +10670,31 @@ t "t103k: cache hit path returns same proposed_version without a second fetch" b
 
 # t103l: dispatch wiring — ghcr type dispatches correctly via _gs_eu2_dispatch_fetcher
 t "t103l: dispatch wiring — ghcr: type is handled by _gs_eu2_dispatch_fetcher" bash -c "
-    source '/stack/bin/lib/env-update/config/defaults.sh'
-    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-    source '/stack/bin/lib/env-update/core/records.sh'
-    source '/stack/bin/lib/env-update/core/semver.sh'
-    source '/stack/bin/lib/env-update/core/channel.sh'
-    source '/stack/bin/lib/env-update/core/tag_flags.sh'
-    source '/stack/bin/lib/env-update/core/cache.sh'
-    source '/stack/bin/lib/env-update/core/decide.sh'
-    source '/stack/bin/lib/env-update/http/curl.sh'
-    source '/stack/bin/lib/env-update/fetchers/github.sh'
-    source '/stack/bin/lib/env-update/fetchers/codeberg.sh'
-    source '/stack/bin/lib/env-update/fetchers/dockerhub.sh'
-    source '/stack/bin/lib/env-update/fetchers/quay.sh'
-    source '/stack/bin/lib/env-update/fetchers/npm.sh'
-    source '/stack/bin/lib/env-update/fetchers/pypi.sh'
-    source '/stack/bin/lib/env-update/fetchers/rubygems.sh'
-    source '/stack/bin/lib/env-update/fetchers/sdkman.sh'
-    source '/stack/bin/lib/env-update/fetchers/sdkmanager.sh'
-    source '/stack/bin/lib/env-update/fetchers/pecl.sh'
-    source '/stack/bin/lib/env-update/fetchers/url.sh'
-    source '/stack/bin/lib/env-update/fetchers/ghcr.sh'
+    source '${_GS_EU2_LIB}/config/defaults.sh'
+    source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+    source '${_GS_EU2_LIB}/core/records.sh'
+    source '${_GS_EU2_LIB}/core/semver.sh'
+    source '${_GS_EU2_LIB}/core/channel.sh'
+    source '${_GS_EU2_LIB}/core/tag_flags.sh'
+    source '${_GS_EU2_LIB}/core/cache.sh'
+    source '${_GS_EU2_LIB}/core/decide.sh'
+    source '${_GS_EU2_LIB}/http/curl.sh'
+    source '${_GS_EU2_LIB}/fetchers/github.sh'
+    source '${_GS_EU2_LIB}/fetchers/codeberg.sh'
+    source '${_GS_EU2_LIB}/fetchers/dockerhub.sh'
+    source '${_GS_EU2_LIB}/fetchers/quay.sh'
+    source '${_GS_EU2_LIB}/fetchers/npm.sh'
+    source '${_GS_EU2_LIB}/fetchers/pypi.sh'
+    source '${_GS_EU2_LIB}/fetchers/rubygems.sh'
+    source '${_GS_EU2_LIB}/fetchers/sdkman.sh'
+    source '${_GS_EU2_LIB}/fetchers/sdkmanager.sh'
+    source '${_GS_EU2_LIB}/fetchers/pecl.sh'
+    source '${_GS_EU2_LIB}/fetchers/url.sh'
+    source '${_GS_EU2_LIB}/fetchers/ghcr.sh'
     export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/ghcr_l_cache
     # Load main.sh which defines _gs_eu2_dispatch_fetcher
-    source '/stack/bin/lib/env-update/main.sh'
+    source '${_GS_EU2_LIB}/main.sh'
     _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
     _gs_eu2_record_set \$idx type       'ghcr'
     _gs_eu2_record_set \$idx identifier 'testowner/ghcr-repo'
@@ -10717,11 +10727,11 @@ _flush_section
 section "104 — apply.sh error paths"
 
 _APPLY_LIBS="
-    source '/stack/bin/lib/env-update/config/defaults.sh'
-    source '/stack/bin/lib/env-update/core/records.sh'
-    source '/stack/bin/lib/env-update/core/git.sh'
-    source '/stack/bin/lib/env-update/core/semver.sh'
-    source '/stack/bin/lib/env-update/core/apply.sh'
+    source '${_GS_EU2_LIB}/config/defaults.sh'
+    source '${_GS_EU2_LIB}/core/records.sh'
+    source '${_GS_EU2_LIB}/core/git.sh'
+    source '${_GS_EU2_LIB}/core/semver.sh'
+    source '${_GS_EU2_LIB}/core/apply.sh'
 "
 
 # t104a: Rule 8 dirty-tracked file + no_fail=false → apply returns non-zero.
@@ -11085,7 +11095,7 @@ section "109 — network hardening: timeout/5xx retry + honest errors + CODEBERG
 
 # t109a: curl exit 28 / HTTP 000 (timeout) on attempt 1, 200 on attempt 2 → success after retry
 t "t109a: http_get_core retries curl-timeout (exit 28/000) and recovers" bash -c "
-    source '/stack/bin/lib/env-update/http/curl.sh'
+    source '${_GS_EU2_LIB}/http/curl.sh'
     _fake_dir=\"\${TMP_DIR}/t109a_curl\"
     mkdir -p \"\${_fake_dir}\"
     printf '0' > \"\${_fake_dir}/.call_count\"
@@ -11123,7 +11133,7 @@ FAKECURL
 
 # t109b: persistent curl-timeout → ERROR with honest 'upstream timeout' message
 t "t109b: persistent curl-timeout fails with 'upstream timeout' message" bash -c "
-    source '/stack/bin/lib/env-update/http/curl.sh'
+    source '${_GS_EU2_LIB}/http/curl.sh'
     _fake_dir=\"\${TMP_DIR}/t109b_curl\"
     mkdir -p \"\${_fake_dir}\"
     printf '0' > \"\${_fake_dir}/.call_count\"
@@ -11152,7 +11162,7 @@ FAKECURL
 
 # t109c: HTTP 504 then 200 → success after retry (transient 5xx covered)
 t "t109c: http_get_core retries HTTP 504 and recovers" bash -c "
-    source '/stack/bin/lib/env-update/http/curl.sh'
+    source '${_GS_EU2_LIB}/http/curl.sh'
     _fake_dir=\"\${TMP_DIR}/t109c_curl\"
     mkdir -p \"\${_fake_dir}\"
     printf '0' > \"\${_fake_dir}/.call_count\"
@@ -11187,7 +11197,7 @@ FAKECURL
 
 # t109d: persistent 503 → ERROR with 'transient upstream error' message
 t "t109d: persistent 503 fails with 'transient upstream error' message" bash -c "
-    source '/stack/bin/lib/env-update/http/curl.sh'
+    source '${_GS_EU2_LIB}/http/curl.sh'
     _fake_dir=\"\${TMP_DIR}/t109d_curl\"
     mkdir -p \"\${_fake_dir}\"
     printf '0' > \"\${_fake_dir}/.call_count\"
@@ -11217,7 +11227,7 @@ FAKECURL
 
 # t109e: 404 fast-fails — exactly one curl call, no retry
 t "t109e: 404 fast-fails with no retry" bash -c "
-    source '/stack/bin/lib/env-update/http/curl.sh'
+    source '${_GS_EU2_LIB}/http/curl.sh'
     _fake_dir=\"\${TMP_DIR}/t109e_curl\"
     mkdir -p \"\${_fake_dir}\"
     printf '0' > \"\${_fake_dir}/.call_count\"
@@ -11246,7 +11256,7 @@ FAKECURL
 
 # t109f: CODEBERG_TOKEN sent with 'Authorization: token <TOKEN>' (Gitea/Forgejo scheme, NOT Bearer)
 t "t109f: CODEBERG_TOKEN sent as 'Authorization: token' (not Bearer)" bash -c "
-    source '/stack/bin/lib/env-update/http/curl.sh'
+    source '${_GS_EU2_LIB}/http/curl.sh'
     _fake_dir=\"\${TMP_DIR}/t109f_curl\"
     mkdir -p \"\${_fake_dir}\"
     # Fake curl dumps its header args to \$(dirname \\\$0)/.headers (resolved at runtime).
@@ -11274,7 +11284,7 @@ FAKECURL
 
 # t109g: empty token → unauthenticated (no Authorization header sent)
 t "t109g: empty CODEBERG_TOKEN sends no Authorization header" bash -c "
-    source '/stack/bin/lib/env-update/http/curl.sh'
+    source '${_GS_EU2_LIB}/http/curl.sh'
     _fake_dir=\"\${TMP_DIR}/t109g_curl\"
     mkdir -p \"\${_fake_dir}\"
     cat > \"\${_fake_dir}/curl\" <<'FAKECURL'
@@ -11299,15 +11309,15 @@ FAKECURL
 
 # t109h: codeberg fetcher honest error_message on tags-fallback failure (unreachable/timeout)
 t "t109h: codeberg tags-fallback failure sets honest 'unreachable or timed out' error" bash -c "
-    source '/stack/bin/lib/env-update/config/defaults.sh'
-    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-    source '/stack/bin/lib/env-update/core/records.sh'
-    source '/stack/bin/lib/env-update/core/semver.sh'
-    source '/stack/bin/lib/env-update/core/channel.sh'
-    source '/stack/bin/lib/env-update/core/tag_flags.sh'
-    source '/stack/bin/lib/env-update/core/cache.sh'
-    source '/stack/bin/lib/env-update/http/curl.sh'
-    source '/stack/bin/lib/env-update/fetchers/codeberg.sh'
+    source '${_GS_EU2_LIB}/config/defaults.sh'
+    source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+    source '${_GS_EU2_LIB}/core/records.sh'
+    source '${_GS_EU2_LIB}/core/semver.sh'
+    source '${_GS_EU2_LIB}/core/channel.sh'
+    source '${_GS_EU2_LIB}/core/tag_flags.sh'
+    source '${_GS_EU2_LIB}/core/cache.sh'
+    source '${_GS_EU2_LIB}/http/curl.sh'
+    source '${_GS_EU2_LIB}/fetchers/codeberg.sh'
     _fake_dir=\"\${TMP_DIR}/t109h_curl\"
     mkdir -p \"\${_fake_dir}\"
     cat > \"\${_fake_dir}/curl\" <<'FAKECURL'
@@ -11362,7 +11372,7 @@ t "t110a: parse github use-sha annotation → use_sha + version_prefix + identif
 
 # t110b: apply_single with use_sha + version_prefix → VAR= gets the FULL ref; annotation sha: stays BARE
 t "t110b: apply_single use_sha+prefix writes full ref to VAR, bare sha: to annotation" bash -c "
-    source '/stack/bin/lib/env-update/core/apply.sh'
+    source '${_GS_EU2_LIB}/core/apply.sh'
     f=\${TMP_DIR}/t110b.env
     ann='# @todo env-update (use-sha) (version-prefix:github.com/php/php-src@) github:php/php-src next sha:0000000000000000000000000000000000000000'
     printf '%s\n%s\n' \"\$ann\" 'GLOBAL_STACK_T110B=github.com/php/php-src@0000000000000000000000000000000000000000' > \"\$f\"
@@ -11379,7 +11389,7 @@ t "t110b: apply_single use_sha+prefix writes full ref to VAR, bare sha: to annot
 
 # t110c: BACKWARD-COMPAT — empty version_prefix → VAR= gets the BARE sha (existing PECL use-sha behaviour)
 t "t110c: apply_single use_sha + empty prefix → VAR= is bare sha (PECL regression guard)" bash -c "
-    source '/stack/bin/lib/env-update/core/apply.sh'
+    source '${_GS_EU2_LIB}/core/apply.sh'
     f=\${TMP_DIR}/t110c.env
     ann='# @todo env-update (use-sha) pecl:raphf (git:m6w6/ext-raphf) 2.0.2 sha:0000000000000000000000000000000000000000'
     printf '%s\n%s\n' \"\$ann\" 'GLOBAL_STACK_T110C=0000000000000000000000000000000000000000' > \"\$f\"
@@ -11393,15 +11403,15 @@ t "t110c: apply_single use_sha + empty prefix → VAR= is bare sha (PECL regress
 
 # t110d: fetcher — (use-sha) github: sets proposed_sha from HEAD and SUPPRESSES version to current
 t "t110d: fetch_github use-sha sets proposed_sha + pins proposed_version to current" bash -c "
-    source '/stack/bin/lib/env-update/config/defaults.sh'
-    source '/stack/bin/lib/env-update/config/prerelease_markers.sh'
-    source '/stack/bin/lib/env-update/core/records.sh'
-    source '/stack/bin/lib/env-update/core/semver.sh'
-    source '/stack/bin/lib/env-update/core/channel.sh'
-    source '/stack/bin/lib/env-update/core/tag_flags.sh'
-    source '/stack/bin/lib/env-update/core/cache.sh'
-    source '/stack/bin/lib/env-update/http/curl.sh'
-    source '/stack/bin/lib/env-update/fetchers/github.sh'
+    source '${_GS_EU2_LIB}/config/defaults.sh'
+    source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+    source '${_GS_EU2_LIB}/core/records.sh'
+    source '${_GS_EU2_LIB}/core/semver.sh'
+    source '${_GS_EU2_LIB}/core/channel.sh'
+    source '${_GS_EU2_LIB}/core/tag_flags.sh'
+    source '${_GS_EU2_LIB}/core/cache.sh'
+    source '${_GS_EU2_LIB}/http/curl.sh'
+    source '${_GS_EU2_LIB}/fetchers/github.sh'
     _fake=\"\${TMP_DIR}/t110d_curl\"; mkdir -p \"\$_fake\"
     cat > \"\${_fake}/curl\" <<'FC'
 #!/bin/bash
@@ -11567,12 +11577,6 @@ _flush_section
 # fixture bulk; the real numbers live in the error text and the docs.
 # ═══════════════════════════════════════════════════════════════════════════
 section "112 — http diag sink + per-page inject (dockerhub pagination 403)"
-
-# Resolved from SCRIPT_DIR, not hardcoded to /stack: a test that sources an
-# absolute '/stack/...' path certifies the tree at /stack rather than the tree it
-# lives in, so a clone's suite silently passes against /stack's library. Proven:
-# breaking a clone's curl.sh left 10 of 11 tests in this section green.
-_GS_EU2_LIB="${SCRIPT_DIR}/../lib/env-update"
 
 _DIAG_DH_LIBS="
 source '${_GS_EU2_LIB}/config/defaults.sh'
