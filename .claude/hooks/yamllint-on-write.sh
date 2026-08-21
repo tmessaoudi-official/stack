@@ -20,7 +20,15 @@ FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty' 2>/dev/null) 
 [[ "$FILE_PATH" == *.yaml || "$FILE_PATH" == *.yml ]] || exit 0
 [[ -f "$FILE_PATH" ]] || exit 0
 
-command -v yamllint &>/dev/null || exit 0
+# A missing linter is a DEGRADATION, not a no-op: every subsequent YAML write
+# looks linted and is not. It must leave a trace, exactly as the jq branch above
+# does. This is not theoretical here — yamllint resolves to
+# /stack/tools/pyenv/shims/yamllint, inside the tools volume that
+# `make soft-restart` wipes and restores from a possibly-stale var/tools.
+if ! command -v yamllint &>/dev/null; then
+  log_obs WARN yamllint-on-write "-stack | yamllint not found, YAML linting SKIPPED for $FILE_PATH" || true
+  exit 0
+fi
 
 LINT_OUTPUT=$(yamllint -f parsable -d relaxed "$FILE_PATH" 2>&1) || true
 

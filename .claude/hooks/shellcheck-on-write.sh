@@ -23,7 +23,12 @@ FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty' 2>/dev/null) 
 # Only act if file exists (might have been a failed write)
 [[ -f "$FILE_PATH" ]] || exit 0
 
-command -v shellcheck &>/dev/null || exit 0
+# A missing linter is a DEGRADATION, not a no-op: every subsequent .sh write
+# looks linted and is not. Leave a trace, as the jq branch above does.
+if ! command -v shellcheck &>/dev/null; then
+  log_obs WARN shellcheck-on-write "-stack | shellcheck not found, lint SKIPPED for $FILE_PATH" || true
+  exit 0
+fi
 
 # Run shellcheck — capture output, don't fail the hook on lint errors
 LINT_OUTPUT=$(shellcheck -x -S warning -f gcc "$FILE_PATH" 2>&1) || true

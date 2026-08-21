@@ -20,7 +20,12 @@ FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty' 2>/dev/null) 
 [[ "$FILE_PATH" == *.sh ]] || exit 0
 [[ -f "$FILE_PATH" ]] || exit 0
 
-command -v shfmt &>/dev/null || exit 0
+# A missing formatter is a DEGRADATION, not a no-op: every subsequent .sh write
+# looks format-checked and is not. Leave a trace, as the jq branch above does.
+if ! command -v shfmt &>/dev/null; then
+  log_obs WARN shfmt-on-write "-stack | shfmt not found, format check SKIPPED for $FILE_PATH" || true
+  exit 0
+fi
 
 # shfmt -d = diff mode (show what would change, exit 1 if unformatted)
 DIFF_OUTPUT=$(shfmt -d -i 2 -ci -bn "$FILE_PATH" 2>&1) || true

@@ -20,7 +20,12 @@ FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty' 2>/dev/null) 
 [[ "$(basename "$FILE_PATH")" == Dockerfile* ]] || exit 0
 [[ -f "$FILE_PATH" ]] || exit 0
 
-command -v hadolint &>/dev/null || exit 0
+# A missing linter is a DEGRADATION, not a no-op: every subsequent Dockerfile
+# write looks linted and is not. Leave a trace, as the jq branch above does.
+if ! command -v hadolint &>/dev/null; then
+  log_obs WARN hadolint-on-write "-stack | hadolint not found, lint SKIPPED for $FILE_PATH" || true
+  exit 0
+fi
 
 LINT_OUTPUT=$(hadolint "$FILE_PATH" 2>&1) || true
 
