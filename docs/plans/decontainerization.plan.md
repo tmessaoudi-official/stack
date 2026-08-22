@@ -44,6 +44,10 @@ reviewer-lens ladder as the certification path whenever `advisor()` is unavailab
 
 ## Decisions Log
 
+- [2026-08-22] AGREED: the misspelled remote **`orgin` is renamed to `origin`** — chosen by the
+  developer from an `AskUserQuestion` option set, which is the "let the developer decide" this
+  plan's carry-over was waiting for. Executed the same day; `master` now tracks `origin/master`.
+  No tracked file referenced the old spelling except this plan (`git grep -l orgin`).
 - [2026-08-18 10:40] AGREED: Environment is **this machine only** — the cloud container is dead. Hard revert of every container-era accommodation.
 - [2026-08-18 10:40] AGREED: The 13 generic skills deleted from `/stack/.claude/skills/` stay deleted — they exist in the global `~/.claude/skills/` bundle and were duplicates.
 - [2026-08-18 10:40] AGREED: Drop the `❓ QUESTION` / `⏹ NO QUESTION` end-of-reply marker entirely. Its rationale (plain-text questions being indistinguishable from pauses) dies with the plain-text protocol.
@@ -264,8 +268,10 @@ Hand over exactly one line: `! bash /tmp/apply-decontainerization-<YYYYMMDD>.sh`
 Two carry-overs this script must not drop:
 
 - The planning commit `a243989` is **unpushed** (`master` ahead 1) and rides along in step 2.
-- `/stack`'s remote is misspelled **`orgin`**, not `origin`. Do **not** silently rename it inside
-  the script — surface it in the summary and let the developer decide.
+- `/stack`'s remote was misspelled **`orgin`**, not `origin`. Do **not** silently rename it inside
+  the script — surface it in the summary and let the developer decide. **RESOLVED 2026-08-22**: the
+  developer chose the rename from an `AskUserQuestion` option set; `git remote rename orgin origin`
+  was run, and `master` now tracks `origin/master`.
 
 Note for Phase D: the ruling is that `git push` *is* authorised in these repos, so if the denial
 turns out to come from a `deny`/`ask` rule the developer controls, the honest fix is a settings
@@ -383,7 +389,7 @@ the plan looking for it:
 | **D2** — sibling permission tiers | open decision | Deferred by choice, conflict intact. `deny` is `[]` in every repo, unprejudged. |
 | **MAXIMAL certification rounds** — /stack + rent-watch at 0 of 2; the other four never had round 1 | developer, per repo | Per-repo development work by the 2026-08-19 ruling. A round must freeze a commit first. |
 | **Phase E beyond identity** — a normalised `## Git autonomy` section in every sibling | developer, per repo | Identity IS done and verified in all six; the prose normalisation is repo-local editing. |
-| `/stack`'s remote is spelled **`orgin`** | developer | Surfaced, never silently renamed: `git -C /stack remote rename orgin origin`. |
+| ~~`/stack`'s remote is spelled **`orgin`**~~ | developer | **DONE 2026-08-22** — surfaced, never silently renamed; the developer chose it, then `git remote rename orgin origin` ran. |
 
 Hand-off scripts from this program are **spent and deleted** (`/tmp` is not durable — do not look
 for them). The one that survives is `/tmp/apply-no-teams-enforcement-20260818.sh`, and it was

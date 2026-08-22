@@ -129,9 +129,12 @@ The actionable half when running this exercise on the siblings.
 
 ## Open — needs a ruling
 
-1. **`SubagentStop` reminder hook** (`/stack` only). Fires for one named agent, so not portable as-is.
+1. ~~**`SubagentStop` reminder hook** (`/stack` only). Fires for one named agent, so not portable as-is.
    rent-watch recommends skipping it since its reviewers already end with an explicit `PANEL VERDICT`
-   line. `/stack` keeps it; low priority either way.
+   line. `/stack` keeps it; low priority either way.~~ **MOOT 2026-08-22** — the named agent was
+   `global-stack-lead-dev`, deleted 2026-08-19, and the hook went with it: `.claude/settings.json`
+   now registers `PostToolUse` only [Verified: `grep -oE '"(PostToolUse|PreToolUse|SubagentStop|Stop|PreCompact|SessionStart)"'` returns `"PostToolUse"` alone].
+   Nothing to port and nothing to rule on.
 2. **Whether the siblings adopt `claude-setup/<bundle>.tar.gz`.** `/stack` commits the 517 KB scrubbed
    bundle as the provenance record for its three framework docs. Verified safe (all credential values are
    placeholders; only `*_SSL_VERIFY` is non-placeholder). Con: a binary in git that embeds internal MCP
