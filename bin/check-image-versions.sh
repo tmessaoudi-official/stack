@@ -26,8 +26,15 @@
 
 set -eEuo pipefail
 
-_GS_CIV_ENV_FILE="${_GS_CIV_ENV_FILE:-.env}"
-_GS_CIV_IMAGES_DIR="${_GS_CIV_IMAGES_DIR:-docker/images}"
+# Defaults resolve from THIS script's location, never from $PWD. A relative
+# default made the scan vacuous from any other cwd — nothing compared, nothing
+# printed, exit 0, which is the exact signature of a clean run. Same defect as
+# the hardcoded --env-file fixed in 661cef3.
+_GS_CIV_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_GS_CIV_REPO_ROOT="$(cd "${_GS_CIV_SCRIPT_DIR}/.." && pwd)"
+
+_GS_CIV_ENV_FILE="${_GS_CIV_ENV_FILE:-${_GS_CIV_REPO_ROOT}/.env}"
+_GS_CIV_IMAGES_DIR="${_GS_CIV_IMAGES_DIR:-${_GS_CIV_REPO_ROOT}/docker/images}"
 
 # NO_COLOR (no-color.org); color only when stderr is a terminal.
 if [[ -t 2 && -z "${NO_COLOR:-}" ]]; then
@@ -49,7 +56,19 @@ _gs_civ_drift=0
 _gs_civ_checked=0
 
 shopt -s nullglob
-for _df in "${_GS_CIV_IMAGES_DIR}"/*/Dockerfile; do
+_GS_CIV_DOCKERFILES=("${_GS_CIV_IMAGES_DIR}"/*/Dockerfile)
+
+# Zero Dockerfiles is NOT "clean" — the scan never ran (dir missing, renamed, or
+# an override pointing at the wrong tree). Zero *drift* stays silent (that is the
+# preflight contract); zero *comparisons possible* must be loud, or a check that
+# examined nothing is indistinguishable from a check that passed.
+if [[ "${#_GS_CIV_DOCKERFILES[@]}" -eq 0 ]]; then
+  printf '%sWARN%s: no image Dockerfile found under %s — the .env<->Dockerfile version check did NOT run.\n' \
+    "${_GS_CIV_YELLOW}" "${_GS_CIV_RESET}" "${_GS_CIV_IMAGES_DIR}" >&2
+  exit 0
+fi
+
+for _df in "${_GS_CIV_DOCKERFILES[@]}"; do
   # Only image services that build FROM an upstream GLOBAL_STACK_IMAGE_*_VERSION tag.
   _from="$(grep -m1 -E '^FROM .*\$\{GLOBAL_STACK_IMAGE_[A-Za-z0-9_]+_VERSION' "${_df}" 2>/dev/null || true)"
   [[ -z "${_from}" ]] && continue

@@ -97,6 +97,45 @@ out="$(_GS_CIV_ENV_FILE="${REPO_ROOT}/.env" _GS_CIV_IMAGES_DIR="${REPO_ROOT}/doc
 rc=$?
 [[ $rc -eq 0 ]] && ok "real repo: exit 0" || ko "real repo: exit $rc"
 
+# ── Case 6: defaults resolve from the script, not from $PWD ─────────────────
+# A relative default ('docker/images') makes the scan VACUOUS from any other
+# cwd: nothing is compared, nothing is printed, exit 0 — the same signature as
+# a clean run. Same defect as the hardcoded --env-file fixed in 661cef3.
+# Sabotage every upstream pin in a COPY of .env, then run from / with only the
+# env-file overridden: the images dir must still be found.
+SAB_ENV="$(mktemp)"
+sed -E 's/^(GLOBAL_STACK_IMAGE_[A-Z0-9_]+_VERSION=.*)$/\1-sabotage/' "${REPO_ROOT}/.env" >"${SAB_ENV}"
+# Guard the guard: a drifted sed pattern would make this test rot silently.
+sab_lines="$(diff "${REPO_ROOT}/.env" "${SAB_ENV}" | grep -c '^>' || true)"
+[[ "${sab_lines}" -ge 1 ]] && ok "cwd-independent: sabotage changed ${sab_lines} pin(s)" \
+  || ko "cwd-independent: sabotage changed NO lines — pattern is stale, test would be vacuous"
+out="$(cd / && _GS_CIV_ENV_FILE="${SAB_ENV}" bash "${SUT}" 2>&1)"
+rc=$?
+[[ $rc -eq 0 ]] && ok "cwd-independent: exit 0" || ko "cwd-independent: exit $rc"
+grep -q 'sabotage' <<<"$out" && ok "cwd-independent: scanned the repo tree from a foreign cwd" \
+  || ko "cwd-independent: VACUOUS from / — no service compared: '${out}'"
+rm -f "${SAB_ENV}"
+
+# ── Case 7: images dir holds no Dockerfile → the check DID NOT RUN ──────────
+# Distinct from 'clean': zero comparisons because the tree is missing/renamed
+# must be loud, while zero drift stays silent (cases 1/3/4).
+ROOT="$(make_fixture)"
+printf 'GLOBAL_STACK_IMAGE_FOO_VERSION=1.2.3\n' >"${ROOT}/.env"
+out="$(_GS_CIV_ENV_FILE="${ROOT}/.env" _GS_CIV_IMAGES_DIR="${ROOT}/docker/images" bash "${SUT}" 2>&1)"
+rc=$?
+[[ $rc -eq 0 ]] && ok "no-dockerfiles: exit 0" || ko "no-dockerfiles: exit $rc"
+grep -q 'WARN' <<<"$out" && grep -q "${ROOT}/docker/images" <<<"$out" \
+  && ok "no-dockerfiles: WARN names the resolved dir" \
+  || ko "no-dockerfiles: silent — indistinguishable from clean: '${out}'"
+rm -rf "${ROOT}"
+
+# ── Case 8: missing images dir entirely → same loud signal ──────────────────
+out="$(_GS_CIV_ENV_FILE="${REPO_ROOT}/.env" _GS_CIV_IMAGES_DIR="/nonexistent-$$" bash "${SUT}" 2>&1)"
+rc=$?
+[[ $rc -eq 0 ]] && ok "missing-dir: exit 0" || ko "missing-dir: exit $rc"
+grep -q 'WARN' <<<"$out" && ok "missing-dir: WARN emitted" \
+  || ko "missing-dir: silent — indistinguishable from clean: '${out}'"
+
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
 if [[ "${FAIL}" -eq 0 ]]; then
   printf '  %bALL PASSED%b   ✓ %d / %d\n' "${C_GREEN}" "${C_RESET}" "${PASS}" "$((PASS + FAIL))"
