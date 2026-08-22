@@ -197,9 +197,29 @@ if [[ -d "${GLOBAL_STACK_HURLPATH}/bin" ]]; then
 fi
 
 export PATH
+
+# >>> gs-quiet
+# This file is read by EVERY shell that sources /etc/profile, non-interactive
+# ones included (scripts, `bash -c`, agent/tool harnesses, and
+# bin/open-all-envs.sh which sources it directly). The SDKMAN installer, `sdk
+# use`, the per-package `**** Using ...` echoes, `nvm use` and `phpbrew switch`
+# each print a banner — together ~90 lines on every single shell start, which is
+# noise when nobody is watching and a real cost inside a tool harness.
+#
+# _gs_quiet keeps the side effects and drops only the chatter: it runs its
+# argument as a plain command in THIS shell, so PATH edits and exports made by
+# those shell functions still apply. Interactive shells are untouched — a human
+# logging in still gets the full version report.
+if [[ $- == *i* ]]; then
+	_gs_quiet() { "$@"; }
+else
+	_gs_quiet() { "$@" > /dev/null 2>&1; }
+fi
+# <<< gs-quiet
+
 if [[ -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN}"/sdkman.installer.sh ]]; then
 	chmod a+x "${GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN}"/sdkman.installer.sh
-	"${GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN}"/sdkman.installer.sh
+	_gs_quiet "${GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN}"/sdkman.installer.sh
 fi
 if [[ -f "${SDKMAN_DIR}/bin/sdkman-init.sh" ]]; then
 	chmod a+x "${SDKMAN_DIR}/bin/sdkman-init.sh"
@@ -212,10 +232,10 @@ if [[ "" != "$(command -v sdk)" ]]; then
 
 	source "${HOME}/.sdkman/etc/config"
 
-	sdk use java ${GLOBAL_STACK_JAVA26_VERSION}
+	_gs_quiet sdk use java ${GLOBAL_STACK_JAVA26_VERSION}
 
 	source "${GLOBAL_STACK_DOCKER_ROOT_PATH}"/docker/config/dist/bin/base-bin/global-stack-base-setup-packages.sh
-	global_stack_base_setup_packages \
+	_gs_quiet global_stack_base_setup_packages \
 		--prefix='GLOBAL_STACK_JAVA' \
 		--command='echo -e "**** Using ${PACKAGE_NAME} ${PACKAGE_VERSION}"' \
 		--command='sdk use ${PACKAGE_NAME} "${PACKAGE_VERSION}"'
@@ -237,10 +257,10 @@ if [[ "" != "$(command -v rbenv)" ]]; then
 	eval "$(rbenv init - ${GLOBAL_STACK_SHELL})"
 fi
 if [[ "" != "$(command -v nvm)" ]]; then
-	nvm use "${NVM_VERSION}"
+	_gs_quiet nvm use "${NVM_VERSION}"
 fi
 if [[ "" != "$(command -v phpbrew)" ]]; then
-	phpbrew switch ${PHPBREW_PHP}
+	_gs_quiet phpbrew switch ${PHPBREW_PHP}
 
 	LD_LIBRARY_PATH="$(php-config --lib-dir):${LD_LIBRARY_PATH}"
 	export LD_LIBRARY_PATH
