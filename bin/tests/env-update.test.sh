@@ -2020,8 +2020,34 @@ t "t26e: empty releases falls back to tags endpoint" bash -c "
     _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_TAGSONLY_VERSION'
     _gs_eu2_fetch_codeberg \$idx
     val=\$(_gs_eu2_record_get \$idx proposed_version)
-    # releases fixture is empty array; tags fixture has 1.5.0
+    # releases fixture is an empty array; tags fixture has 1.5.0
     [[ \"\$val\" == '1.5.0' ]] || { echo \"got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t26g: releases TRANSPORT failure (endpoint absent) also falls back to tags.
+# Distinct branch from t26e: there the releases call SUCCEEDS and returns [];
+# here it fails outright. Both must reach the tags endpoint, and neither is the
+# both-endpoints-fail case (t26d) that legitimately ERRORs.
+#
+# This branch had no test of its own until the codeberg releases fixtures were
+# renamed to carry the _page_1 suffix the URL derivation actually produces
+# (\`releases?limit=50&page=1\`). Before that rename every codeberg fixture test
+# reached this path by accident, so it was covered everywhere and asserted
+# nowhere; afterwards it would have had zero coverage.
+t "t26g: releases endpoint absent (transport failure) falls back to tags, no ERROR" bash -c "
+    ${_CB_LIBS}
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/cb_g_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'codeberg'
+    _gs_eu2_record_set \$idx identifier 'testorg/no-releases-endpoint'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_NORELEASES_VERSION'
+    _gs_eu2_fetch_codeberg \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    decision=\$(_gs_eu2_record_get \$idx decision)
+    [[ \"\$val\" == '2.4.0' ]] || { echo \"expected 2.4.0 from the tags endpoint, got: '\$val'\"; echo FAIL; exit 0; }
+    [[ -z \"\$decision\" ]] || { echo \"a working tags fallback must not set a decision, got: '\$decision'\"; echo FAIL; exit 0; }
     echo PASS
 "
 
