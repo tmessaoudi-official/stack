@@ -274,10 +274,14 @@ _gs_eu2_fetch_github() {
   fi
 
   # ── Strategy 2: Tags API ──────────────────────────────────────────────────
-  # Triggered when releases returned nothing, or all-prerelease for stable.
+  # Triggered when releases returned nothing, all-prerelease for stable, or
+  # no-prerelease-at-all for a non-stable channel (see the third arm below).
   # Also triggered unconditionally in merge mode (check-tags / --with-tags):
   # in merge mode the tags pool is combined with releases rather than replacing it.
   local _s2_trigger="false"
+  # Merge rather than replace for this trigger — set by the non-stable arm, which
+  # (unlike the other two) fires while the releases pool still holds valid candidates.
+  local _s2_merge="false"
   if [[ -z "$(printf '%s\n' "${_raw_tags}" | grep -v '^$' || true)" ]]; then
     _s2_trigger="true"
   elif [[ -z "${_channel}" || "${_channel}" == "stable" ]]; then
@@ -292,11 +296,36 @@ _gs_eu2_fetch_github() {
       fi
     done <<< "${_raw_tags}"
     [[ "${_has_stable}" == "false" ]] && _s2_trigger="true"
+  else
+    # Non-stable channel (unstable/rc/beta/alpha/dev) whose releases pool contains
+    # NO pre-release at all: the channel the annotation asked for is unrepresented
+    # in the pool we have. Many upstreams publish alphas/betas/RCs as bare git tags
+    # and never cut a GitHub Release for them — php/php-src is the canonical case
+    # (php-8.6.0beta1 and php-8.5.10RC1 exist only in the Tags API). Without this
+    # arm the fetcher silently answered a prerelease question from a stable-only
+    # pool: no RC proposal, and no (watch-major) [WATCH] on a next generation that
+    # so far exists only as a prerelease — which the watch-major reference
+    # explicitly promises for (channel:unstable).
+    # Merge, don't replace: the stable releases stay valid candidates here, and
+    # tags pagination is capped at 10 pages so it is not a superset of releases.
+    local _has_pre="false"
+    local _v
+    while IFS= read -r _v; do
+      [[ -z "${_v}" ]] && continue
+      if _gs_eu2_is_prerelease "${_v}"; then
+        _has_pre="true"
+        break
+      fi
+    done <<< "${_raw_tags}"
+    if [[ "${_has_pre}" == "false" ]]; then
+      _s2_trigger="true"
+      _s2_merge="true"
+    fi
   fi
   if [[ "${_s2_trigger}" == "true" || "${_merge_mode}" == "true" ]]; then
     local _tags_out
     _tags_out="$(_gs_eu2_github_fetch_tags_paginated "${_identifier}" "${_tok}" 10 2>/dev/null)"
-    if [[ "${_merge_mode}" == "true" ]]; then
+    if [[ "${_merge_mode}" == "true" || "${_s2_merge}" == "true" ]]; then
       # Merge mode: combine releases + tags into one candidate pool
       _raw_tags="${_raw_tags}"$'\n'"${_tags_out}"
     else

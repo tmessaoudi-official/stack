@@ -11950,6 +11950,84 @@ t "t114a: a checkout outside /stack reads its OWN .env by default" bash -c "
     echo PASS
 "
 
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 115 — github: a non-stable channel must reach the Tags API
+# ═══════════════════════════════════════════════════════════════════════════
+section "115 — github non-stable channel reaches the Tags API"
+
+# The github fetcher uses Releases as its primary pool and only falls back to
+# Tags when Releases came back empty, or when every Releases entry is a
+# pre-release AND the channel is stable/unset. That second arm was scoped to
+# stable only — so a record carrying (channel:unstable) whose Releases pool is
+# entirely STABLE never queried the Tags API at all. Upstreams that publish
+# alphas/betas/RCs as bare git tags (php/php-src is the canonical case) were
+# therefore invisible: no RC proposal, and no [WATCH] on a next-generation
+# prerelease, contradicting the documented watch-major promise that with
+# (channel:unstable) "a new major that currently exists only as a prerelease
+# fires WATCH".
+#
+# Fixtures mirror php/php-src as observed 2026-08-23:
+#   releases → php-8.5.9 / 8.5.8 / 8.4.24 / 8.3.33   (all stable)
+#   tags     → php-8.6.0beta1 / 8.6.0alpha3 / 8.5.10RC1 / … (prereleases here only)
+
+# t115a: (channel:unstable) + (watch-major:2) → WATCH fires on the 8.6 prerelease
+t "t115a: github (channel:unstable) sees prerelease-only next major — [WATCH] fires" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t115a_cache
+    f=\${TMP_DIR}/t115a.env
+    printf '# @todo env-update (channel:unstable) (watch-major:2) (tag-strip-prefix:php-) github:testorg/php-like:8.5 8.5.9\nGLOBAL_STACK_T115A=8.5.9\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --no-fail --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[WATCH]' || { echo \"expected [WATCH] sub-line, got:\"; echo \"\$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '8.6.0beta1' || { echo \"expected 8.6.0beta1 in WATCH line, got:\"; echo \"\$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t115b: the same record proposes the tags-only RC — (channel:unstable) honoured
+t "t115b: github (channel:unstable) proposes the tags-only RC (8.5.10RC1)" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t115b_cache
+    f=\${TMP_DIR}/t115b.env
+    printf '# @todo env-update (channel:unstable) (tag-strip-prefix:php-) github:testorg/php-like:8.5 8.5.9\nGLOBAL_STACK_T115B=8.5.9\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --no-fail --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '8.5.10RC1' || { echo \"expected 8.5.10RC1 proposal, got:\"; echo \"\$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t115c: REGRESSION — the stable channel must NOT start seeing prereleases.
+# Same repo, no (channel:) flag: the Releases pool has stable entries, so the
+# Tags API stays unqueried and neither the RC nor the 8.6 prerelease appears.
+t "t115c: github stable channel unchanged — no RC proposal, no [WATCH]" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t115c_cache
+    f=\${TMP_DIR}/t115c.env
+    printf '# @todo env-update (watch-major:2) (tag-strip-prefix:php-) github:testorg/php-like:8.5 8.5.9\nGLOBAL_STACK_T115C=8.5.9\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --no-fail --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF 'RC1' && { echo \"stable channel leaked a prerelease:\"; echo \"\$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '[WATCH]' && { echo \"stable channel fired WATCH on a prerelease-only major:\"; echo \"\$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t115d: the non-stable arm must MERGE, not replace. Tags pagination stops at 10
+# pages, so on a tag-heavy repo the Tags API is not a superset of Releases — a
+# replace would drop the pinned major entirely. Fixture makes that visible: the
+# php-like-partial tags page carries ONLY the 8.6 prereleases, while 8.5.9 exists
+# solely in Releases. Merge keeps the pin resolvable AND fires WATCH; replace
+# loses 8.5.9 and cannot report the pinned line as up to date.
+# _GS_EU2_GIT_LS_REMOTE_FIXTURE (empty) keeps the strategy-3 fallback off the network.
+t "t115d: non-stable arm merges releases+tags — pinned major survives, WATCH still fires" bash -c "
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t115d_cache
+    : > \${TMP_DIR}/t115d_lsr.txt
+    export _GS_EU2_GIT_LS_REMOTE_FIXTURE=\${TMP_DIR}/t115d_lsr.txt
+    f=\${TMP_DIR}/t115d.env
+    printf '# @todo env-update (channel:unstable) (watch-major:2) (tag-strip-prefix:php-) github:testorg/php-like-partial:8.5 8.5.9\nGLOBAL_STACK_T115D=8.5.9\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --no-fail --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qF '[WATCH]' || { echo \"expected [WATCH] sub-line, got:\"; echo \"\$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '[ERROR' && { echo \"pinned major lost — pool no longer resolves 8.5.x:\"; echo \"\$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '(up to date)' || { echo \"expected the 8.5 pin to resolve as up to date, got:\"; echo \"\$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
 _flush_section
 
 TOTAL=$(( PASS + FAIL ))
