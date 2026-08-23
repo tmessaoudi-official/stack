@@ -1335,6 +1335,15 @@ PKG_REPO_PATH=stable/xUbuntu_24.04
 
 **Strategy:** Fetches releases (up to 50). If the releases array is empty or the request fails, falls back to the tags endpoint. Filters out drafts from releases. Pre-releases (based on the `prerelease` field in the JSON) are included in the raw list — channel selection handles filtering.
 
+**Channel-representation fallthrough:** The tags endpoint is *also* consulted when a non-empty releases pool cannot answer the channel the annotation asked for — the same two arms as [§ 7.2 github](#72-github):
+
+| Situation | Action |
+|---|---|
+| Channel is stable (empty or `stable`) and **every** release is a pre-release | **Replace** the pool with the tags endpoint — nothing in it is selectable otherwise |
+| Channel is non-stable (`unstable`, `rc`, `beta`, `alpha`, `dev`) and **no** release is a pre-release | **Merge** the tags endpoint in — the stable releases stay valid candidates, and the tags endpoint caps at `limit=50`, so a replace could drop a pinned major |
+
+Both are best-effort: a failing or empty tags call keeps the releases pool rather than turning a working answer into an `ERROR`. (Codeberg's list endpoints return 504 under load — the honest-`ERROR` path still applies when the releases call itself fails, because there is then no pool to fall back on.) Classification is by version *string*, not the JSON `prerelease` field — only `tag_name` survives into the pool.
+
 **Major hint:** Yes.
 
 **Tag flags:** Full pipeline applies.

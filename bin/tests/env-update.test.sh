@@ -12054,6 +12054,190 @@ t "t115d: non-stable arm merges releases+tags — pinned major survives, WATCH s
     echo PASS
 "
 
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 116 — codeberg: the releases pool must represent the channel asked for
+# ═══════════════════════════════════════════════════════════════════════════
+section "116 — codeberg channel-representation fallthrough"
+
+# Same class as section 115, in the other dual-source fetcher. Codeberg reached
+# the tags endpoint only when the releases call failed or returned [] — it had
+# NEITHER of github's channel arms. Two symmetric holes:
+#
+#   stable channel  + releases are all pre-release → nothing to select, SKIP
+#   non-stable chan + releases carry no pre-release → the channel is unanswerable
+#
+# Both are resolved by consulting the tags endpoint. The non-stable arm MERGES
+# (the stable releases stay valid candidates and the tags endpoint caps at
+# limit=50); the stable arm REPLACES, matching github, because a pool with no
+# stable entry has nothing worth keeping.
+
+_CB_LIBS116="
+source '${_GS_EU2_LIB}/config/defaults.sh'
+source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+source '${_GS_EU2_LIB}/core/records.sh'
+source '${_GS_EU2_LIB}/core/semver.sh'
+source '${_GS_EU2_LIB}/core/channel.sh'
+source '${_GS_EU2_LIB}/core/tag_flags.sh'
+source '${_GS_EU2_LIB}/core/cache.sh'
+source '${_GS_EU2_LIB}/http/curl.sh'
+source '${_GS_EU2_LIB}/fetchers/codeberg.sh'
+export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
+"
+
+# t116a: non-stable channel reaches the tags-only RC.
+# cb-nonstable: releases = v3.2.0/v3.1.0/v2.9.0 (all stable);
+#               tags     = those + v3.3.0-rc1 + v4.0.0-beta1.
+t "t116a: codeberg (channel:unstable) proposes the tags-only RC (v3.3.0-rc1)" bash -c "
+    ${_CB_LIBS116}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t116a_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'codeberg'
+    _gs_eu2_record_set \$idx identifier      'testorg/cb-nonstable'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_T116A'
+    _gs_eu2_record_set \$idx current_version 'v3.2.0'
+    _gs_eu2_record_set \$idx channel         'unstable'
+    _gs_eu2_record_set \$idx major_hint      '3'
+    _gs_eu2_fetch_codeberg \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$val\" == 'v3.3.0-rc1' ]] || { echo \"expected v3.3.0-rc1 from the tags endpoint, got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t116b: (watch-major) sees the next generation that exists only as a prerelease
+t "t116b: codeberg (channel:unstable) + watch-major — latest_unconstrained is v4.0.0-beta1" bash -c "
+    ${_CB_LIBS116}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t116b_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type              'codeberg'
+    _gs_eu2_record_set \$idx identifier        'testorg/cb-nonstable'
+    _gs_eu2_record_set \$idx env_var           'GLOBAL_STACK_T116B'
+    _gs_eu2_record_set \$idx current_version   'v3.2.0'
+    _gs_eu2_record_set \$idx channel           'unstable'
+    _gs_eu2_record_set \$idx major_hint        '3'
+    _gs_eu2_record_set \$idx watch_major_depth '1'
+    _gs_eu2_fetch_codeberg \$idx
+    unconstrained=\$(_gs_eu2_record_get \$idx latest_unconstrained)
+    [[ -n \"\$unconstrained\" ]] || { echo 'latest_unconstrained empty — WATCH cannot fire'; echo FAIL; exit 0; }
+    pfx=\$(_gs_eu2_version_prefix \"\$unconstrained\" '1')
+    [[ \"\$pfx\" == '4' ]] || { echo \"expected unconstrained major 4, got '\$pfx' (full: '\$unconstrained')\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t116c: stable channel + an all-prerelease releases pool falls through to tags.
+# cb-prerelease-only: releases = v1.4.0-rc1/v1.3.0-beta1; tags carry stable v1.3.0.
+# Before the fallthrough this produced no proposal at all (SKIP, "channel
+# selection returned nothing") — github has had this arm since it was written.
+t "t116c: codeberg stable channel + all-prerelease releases falls through to tags" bash -c "
+    ${_CB_LIBS116}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t116c_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'codeberg'
+    _gs_eu2_record_set \$idx identifier      'testorg/cb-prerelease-only'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_T116C'
+    _gs_eu2_record_set \$idx current_version 'v1.2.0'
+    _gs_eu2_fetch_codeberg \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$val\" == 'v1.3.0' ]] || { echo \"expected the stable v1.3.0 from the tags endpoint, got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t116d: REGRESSION — a stable channel with stable releases must NOT consult tags.
+# cb-stable-guard's tags carry a HIGHER stable (v5.9.0) and a v6.0.0-rc1 that the
+# releases pool does not. Identical-content fixtures could not tell 'tags were not
+# fetched' from 'tags were fetched and changed nothing' — this pair can.
+t "t116d: codeberg stable channel with stable releases never consults tags" bash -c "
+    ${_CB_LIBS116}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t116d_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type              'codeberg'
+    _gs_eu2_record_set \$idx identifier        'testorg/cb-stable-guard'
+    _gs_eu2_record_set \$idx env_var           'GLOBAL_STACK_T116D'
+    _gs_eu2_record_set \$idx current_version   'v5.0.0'
+    _gs_eu2_record_set \$idx major_hint        '5'
+    _gs_eu2_record_set \$idx watch_major_depth '1'
+    _gs_eu2_fetch_codeberg \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    unconstrained=\$(_gs_eu2_record_get \$idx latest_unconstrained)
+    [[ \"\$val\" == 'v5.1.0' ]] || { echo \"tags leaked into the stable pool — expected v5.1.0, got: '\$val'\"; echo FAIL; exit 0; }
+    case \"\$unconstrained\" in
+      v6*) echo \"tags leaked into latest_unconstrained: '\$unconstrained'\"; echo FAIL; exit 0;;
+    esac
+    echo PASS
+"
+
+# t116e: the non-stable arm MERGES, it does not replace.
+# cb-partial-tags: releases = v7.2.0/v7.1.0 (the pinned major lives ONLY here);
+#                  tags     = v8.0.0-beta1/v8.0.0-alpha1 only.
+# Merge keeps the 7.x pin resolvable while still seeing the 8.x generation;
+# a replace would leave nothing matching major_hint=7.
+t "t116e: codeberg non-stable arm merges — pinned major survives, next generation seen" bash -c "
+    ${_CB_LIBS116}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t116e_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type              'codeberg'
+    _gs_eu2_record_set \$idx identifier        'testorg/cb-partial-tags'
+    _gs_eu2_record_set \$idx env_var           'GLOBAL_STACK_T116E'
+    _gs_eu2_record_set \$idx current_version   'v7.1.0'
+    _gs_eu2_record_set \$idx channel           'unstable'
+    _gs_eu2_record_set \$idx major_hint        '7'
+    _gs_eu2_record_set \$idx watch_major_depth '1'
+    _gs_eu2_fetch_codeberg \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    decision=\$(_gs_eu2_record_get \$idx decision)
+    unconstrained=\$(_gs_eu2_record_get \$idx latest_unconstrained)
+    [[ \"\$val\" == 'v7.2.0' ]] || { echo \"pinned major lost — expected v7.2.0, got: '\$val' (decision '\$decision')\"; echo FAIL; exit 0; }
+    pfx=\$(_gs_eu2_version_prefix \"\$unconstrained\" '1')
+    [[ \"\$pfx\" == '8' ]] || { echo \"expected unconstrained major 8, got '\$pfx' (full: '\$unconstrained')\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t116f: a failing tags call must never downgrade a working releases answer.
+# The releases pool already answers; codeberg's list endpoints 504 under load, so
+# the fallthrough is best-effort. _GS_EU2_HTTP_INJECT_STATUS forces every call to
+# fail — including the releases one — so this asserts the honest-ERROR contract
+# still holds and no partial/garbage proposal is emitted.
+t "t116f: injected HTTP failure yields an honest ERROR, never a bogus proposal" bash -c "
+    ${_CB_LIBS116}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t116f_cache
+    export _GS_EU2_HTTP_INJECT_STATUS=504
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'codeberg'
+    _gs_eu2_record_set \$idx identifier      'testorg/cb-nonstable'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_T116F'
+    _gs_eu2_record_set \$idx current_version 'v3.2.0'
+    _gs_eu2_record_set \$idx channel         'unstable'
+    _gs_eu2_fetch_codeberg \$idx 2>/dev/null
+    decision=\$(_gs_eu2_record_get \$idx decision)
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$decision\" == 'ERROR' ]] || { echo \"expected ERROR on total failure, got: '\$decision'\"; echo FAIL; exit 0; }
+    [[ -z \"\$val\" ]] || { echo \"emitted a proposal despite total failure: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t116g: the fallthrough is BEST-EFFORT — a failing tags call keeps the releases pool.
+# Distinct from t116f, where the releases call fails too and ERROR is correct: here
+# the releases pool already answers, and cb-no-tags has NO tags fixture, so the arm
+# fires and its tags call fails (a missing fixture stands in for a transport failure,
+# same mechanism as t26g). Degrading to the pool we have is the contract; propagating
+# that failure would turn a working answer into an ERROR, which is why Codeberg's
+# 504-prone list endpoints must not be allowed to break a record that already resolved.
+t "t116g: a failing tags call degrades to the releases pool, never to an ERROR" bash -c "
+    ${_CB_LIBS116}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t116g_cache
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'codeberg'
+    _gs_eu2_record_set \$idx identifier      'testorg/cb-no-tags'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_T116G'
+    _gs_eu2_record_set \$idx current_version 'v9.2.0'
+    _gs_eu2_record_set \$idx channel         'unstable'
+    _gs_eu2_fetch_codeberg \$idx 2>/dev/null
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    decision=\$(_gs_eu2_record_get \$idx decision)
+    [[ \"\$val\" == 'v9.3.0' ]] || { echo \"expected the releases pool to still answer with v9.3.0, got: '\$val'\"; echo FAIL; exit 0; }
+    [[ -z \"\$decision\" ]] || { echo \"a failed tags call must not set a decision, got: '\$decision'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
 _flush_section
 
 TOTAL=$(( PASS + FAIL ))

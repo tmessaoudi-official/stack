@@ -11,7 +11,10 @@
 # Output: writes proposed_version + decision + error_message back into record
 #
 # API: https://codeberg.org/api/v1/repos/{owner}/{repo}/releases?limit=50&page=1
-# Fallback to tags endpoint when releases array is empty.
+# Falls back to the tags endpoint when the releases array is empty or the request
+# fails, and additionally consults it when the releases pool cannot represent the
+# requested channel (all pre-release on stable / no pre-release on a non-stable
+# channel) — see the channel-representation fallthrough in _gs_eu2_fetch_codeberg.
 
 [[ -n "${_GS_EU2_CODEBERG_SH_LOADED:-}" ]] && return 0
 readonly _GS_EU2_CODEBERG_SH_LOADED=1
@@ -114,6 +117,61 @@ _gs_eu2_fetch_codeberg() {
   if [[ "${_releases_ok}" == "true" && "${_releases_empty}" == "false" ]]; then
     # Non-empty releases: extract tag_name from non-draft entries (prerelease included)
     _raw_tags="$(jq -r '.[] | select(.draft == false) | .tag_name' "${_releases_tmp}" 2>/dev/null || true)"
+
+    # ── Channel-representation fallthrough (mirrors github.sh Strategy 2) ─────
+    # A non-empty releases pool can still fail to represent the channel the
+    # annotation asked for, in two symmetric ways. Either way the tags endpoint
+    # is the only other place the answer can live, so consult it:
+    #
+    #   stable channel  + every release is a pre-release → nothing selectable
+    #   non-stable chan + no release is a pre-release    → channel unanswerable
+    #
+    # Only the release NAME survives into the pool (jq takes .tag_name), so the
+    # JSON "prerelease" field is not available here — classification is by string,
+    # exactly as channel selection does it downstream.
+    local _cb_want_tags="false" _cb_merge="false" _v
+    if [[ -z "${_channel}" || "${_channel}" == "stable" ]]; then
+      local _has_stable="false"
+      while IFS= read -r _v; do
+        [[ -z "${_v}" ]] && continue
+        if ! _gs_eu2_is_prerelease "${_v}"; then
+          _has_stable="true"
+          break
+        fi
+      done <<< "${_raw_tags}"
+      [[ "${_has_stable}" == "false" ]] && _cb_want_tags="true"
+    else
+      local _has_pre="false"
+      while IFS= read -r _v; do
+        [[ -z "${_v}" ]] && continue
+        if _gs_eu2_is_prerelease "${_v}"; then
+          _has_pre="true"
+          break
+        fi
+      done <<< "${_raw_tags}"
+      if [[ "${_has_pre}" == "false" ]]; then
+        _cb_want_tags="true"
+        # Merge, don't replace: the stable releases stay valid candidates for a
+        # non-stable comparison, and the tags endpoint caps at limit=50 — on a
+        # tag-heavy repo a replace would drop the pinned major entirely.
+        _cb_merge="true"
+      fi
+    fi
+    if [[ "${_cb_want_tags}" == "true" ]]; then
+      # Best-effort: a failing or empty tags call keeps the releases pool we
+      # already have. Codeberg's list endpoints 504 under load, and turning a
+      # working answer into an ERROR would be a strict regression — unlike the
+      # empty/failed-releases branch below, where there is no pool to fall back on.
+      local _cb_tags_out=""
+      if _cb_tags_out="$(_gs_eu2_cb_fetch_tags "${_identifier}" 2>/dev/null)" \
+        && [[ -n "${_cb_tags_out}" ]]; then
+        if [[ "${_cb_merge}" == "true" ]]; then
+          _raw_tags="${_raw_tags}"$'\n'"${_cb_tags_out}"
+        else
+          _raw_tags="${_cb_tags_out}"
+        fi
+      fi
+    fi
   else
     # Releases failed or empty → fall back to tags endpoint
     if ! _raw_tags="$(_gs_eu2_cb_fetch_tags "${_identifier}")"; then
