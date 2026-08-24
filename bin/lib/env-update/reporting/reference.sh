@@ -425,7 +425,11 @@ PER-FETCHER DEEP-DIVE
                base version checked, not just prefix match).
     Examples:  sdkman:java, sdkman:gradle, sdkman:maven, sdkman:kotlin
     Quirks:    Java identifiers include distribution suffix (e.g. 21.0.3-tem, 17.0.11-zulu).
-               Use exact CANDIDATE:DISTRIBUTION format for distribution-pinned checks.
+               The distribution is inferred from the CURRENT pinned value and enforced:
+               if it has no candidate upstream the record SKIPs naming the missing dist
+               rather than proposing another vendor. Tag flags do not apply to sdkman.
+               SDKMAN advertises some dists with build metadata (17.0.20+1.1-zulu) but
+               its broker serves only the base form, so proposals are normalised to it.
 
   sdkmanager:PACKAGE
     API:       Parses sdkmanager --list output from Android SDK container.

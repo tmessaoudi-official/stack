@@ -1195,9 +1195,29 @@ GLOBAL_STACK_BUNDLER_VERSION=2.6.3
 - Selection preference: preferred distribution > `-tem` (Temurin) > others.
 - Pre-releases in the base version (`rc`, `beta`, `alpha`, `ea`) are excluded in stable mode.
 
+**Build metadata is stripped from the proposal.** SDKMAN advertises several distributions with
+a `+build` segment — `17.0.20+1.1-zulu`, `26.0.2+1.1-librca`, `26.0.2+1.1-open` — but its download
+broker serves only the base form. `/2/broker/download/java/26.0.2-zulu/linuxx64` returns `302`;
+`26.0.2+1.1-zulu` returns `404`. The fetcher therefore matches the advertised `+build` identifier
+(so the distribution is not lost) and then normalises it back to `X.Y.Z-dist` before proposing it,
+because that is the form `sdk install` can actually fetch. The `.fx-` (JavaFX) and `.crac-` variants
+are deliberately **not** matched: they are different artefacts, and `.fx` outsorts `+1.1` under
+`sort -V`, so admitting them would let the JavaFX build win a plain-JDK pin.
+
+**A preferred-distribution miss is a SKIP, never a vendor swap.** When the pin names a distribution
+(`…-zulu`) and that distribution has no candidate upstream for the pinned major, the fetcher does
+**not** fall through to another vendor. It sets `error_message` to
+`preferred dist 'zulu' not found upstream for java:17 (best other: 17.0.21-tem) — vendor swap needs a human`
+and proposes nothing, so the record reports SKIP. Without this gate a vanished distribution surfaces
+as a routine `[AUTO]` version bump that `--apply` writes to `.env` unattended — changing the JDK
+vendor is a decision, not an update. Pins with no distribution suffix are unaffected.
+
 **Major hint:** Yes.
 
-**No tag flags** — the version list is extracted via regex from the raw text response, not as structured tags.
+**No tag flags** — the version list is extracted via regex from the raw text response, not as
+structured tags. Note this means `(tag-filter:…)` and the rest of the tag pipeline are **parsed and
+silently ignored** on `sdkman` records; there is no annotation flag that can pin a Java distribution.
+The distribution is inferred from the current pinned value and enforced by the gate above.
 
 **Channel support:** Nominal — `_gs_eu2_channel_select_best` is called on the extracted version list, but the SDKMAN API does not expose a pre-release channel. All versions (stable, rc, beta, alpha, ea) are returned by the same endpoint. Stable mode excludes pre-releases in the numeric base (`rc`, `beta`, `alpha`, `ea`). There is no "beta-only" mode and no way to request exclusively pre-release candidates. Setting `channel:unstable` will include these versions but cannot isolate them.
 

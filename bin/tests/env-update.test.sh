@@ -2956,6 +2956,100 @@ t "t32h: sdkman Java EA release (ea distribution suffix) filtered out in stable 
     echo PASS
 "
 
+# SDKMAN moved Zulu (and Liberica/Java.net/MS/SapMachine) identifiers to carry
+# +build metadata: "17.0.20+1.1-zulu".  The extraction regex admitted no '+', so
+# grep -oE restarted mid-token and yielded "1.1-zulu", which the major filter then
+# dropped — every zulu candidate vanished before selection, the preferred-dist tier
+# was always empty, and selection fell through to -tem (17/26) or -sem (21).
+# The broker only serves the BASE form (17.0.20-zulu → 302; 17.0.20+1.1-zulu → 404),
+# so the proposal must be normalised back to base-dist form, not left as advertised.
+t "t32i: sdkman Java +build identifiers — zulu preserved and normalised to base form" bash -c "
+    ${_SDK_LIBS}
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'sdkman'
+    _gs_eu2_record_set \$idx identifier      'java'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_JAVA17_VERSION'
+    _gs_eu2_record_set \$idx current_version '17.0.20-zulu'
+    _gs_eu2_record_set \$idx major_hint      '17'
+    _gs_eu2_fetch_sdkman \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$val\" == '17.0.20-zulu' ]] \
+        || { echo \"expected '17.0.20-zulu' (base form), got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t32j: sdkman Java +build — 21 keeps zulu (regression: fell through to -sem)" bash -c "
+    ${_SDK_LIBS}
+    export _GS_EU2_CACHE_DIR=\"\${TMP_DIR}/t32j_cache\"
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'sdkman'
+    _gs_eu2_record_set \$idx identifier      'java'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_JAVA21_VERSION'
+    _gs_eu2_record_set \$idx current_version '21.0.12-zulu'
+    _gs_eu2_record_set \$idx major_hint      '21'
+    _gs_eu2_fetch_sdkman \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$val\" == '21.0.12-zulu' ]] \
+        || { echo \"expected '21.0.12-zulu', got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# The fx (JavaFX) and crac (Coordinated Restore at Checkpoint) variants carry the
+# same -zulu dist suffix but are DIFFERENT artefacts.  They are excluded today only
+# by accident of the old regex; widening it carelessly lets them in, and ".fx" sorts
+# above "+1.1" under sort -V, so the JavaFX build would WIN.  Keep them out.
+t "t32k: sdkman Java — .fx / .crac zulu variants are never selected" bash -c "
+    ${_SDK_LIBS}
+    export _GS_EU2_CACHE_DIR=\"\${TMP_DIR}/t32k_cache\"
+    for mj in 17 21 25; do
+      _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+      _gs_eu2_record_set \$idx type            'sdkman'
+      _gs_eu2_record_set \$idx identifier      'java'
+      _gs_eu2_record_set \$idx env_var         \"GLOBAL_STACK_JAVA\${mj}_VERSION\"
+      _gs_eu2_record_set \$idx current_version \"\${mj}.0.1-zulu\"
+      _gs_eu2_record_set \$idx major_hint      \"\$mj\"
+      _gs_eu2_fetch_sdkman \$idx
+      val=\$(_gs_eu2_record_get \$idx proposed_version)
+      case \"\$val\" in
+        *.fx-*|*.crac-*|*fx+*|*crac+*)
+          echo \"fx/crac variant selected for major \$mj: '\$val'\"; echo FAIL; exit 0 ;;
+      esac
+      [[ \"\$val\" == *-zulu ]] \
+          || { echo \"major \$mj lost zulu preference: '\$val'\"; echo FAIL; exit 0; }
+    done
+    echo PASS
+"
+
+# Preferred-dist miss must be LOUD.  When the pinned distribution genuinely has no
+# candidate upstream, the fetcher used to silently propose a DIFFERENT vendor as a
+# routine AUTO update (17.0.20-zulu → 17.0.21-tem), which --apply would write to .env
+# with no gate at all.  A vendor swap is never a version bump: SKIP with a reason.
+t "t32l: sdkman Java — preferred dist absent upstream SKIPs loudly, never swaps vendor" bash -c "
+    ${_SDK_LIBS}
+    nz_dir=\"\${TMP_DIR}/t32l_fixtures/http\"
+    mkdir -p \"\$nz_dir\"
+    printf '%s' '17.0.20-amzn,17.0.20-tem,17.0.21-tem' \
+        > \"\${nz_dir}/api.sdkman.io_2_candidates_java_linux_versions_all\"
+    export _GS_EU2_HTTP_FIXTURE_DIR=\"\$nz_dir\"
+    export _GS_EU2_CACHE_DIR=\"\${TMP_DIR}/t32l_cache\"
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'sdkman'
+    _gs_eu2_record_set \$idx identifier      'java'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_JAVA17_VERSION'
+    _gs_eu2_record_set \$idx current_version '17.0.20-zulu'
+    _gs_eu2_record_set \$idx major_hint      '17'
+    _gs_eu2_fetch_sdkman \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    err=\$(_gs_eu2_record_get \$idx error_message)
+    [[ -z \"\$val\" ]] \
+        || { echo \"cross-dist proposal leaked: '\$val' (expected none)\"; echo FAIL; exit 0; }
+    case \"\$err\" in
+      *zulu*) : ;;
+      *) echo \"error_message must name the missing dist, got: '\$err'\"; echo FAIL; exit 0 ;;
+    esac
+    echo PASS
+"
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Section 33 — sdkmanager fetcher
 # ═══════════════════════════════════════════════════════════════════════════

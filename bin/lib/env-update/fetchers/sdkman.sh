@@ -2,7 +2,7 @@
 # sdkman.sh — SDKMAN! version fetcher using the record-index contract.
 #
 # Exports:   _gs_eu2_sdkman_extract_versions  _gs_eu2_sdkman_extract_java_versions
-#            _gs_eu2_sdkman_select_java  _gs_eu2_fetch_sdkman
+#            _gs_eu2_sdkman_strip_build  _gs_eu2_sdkman_select_java  _gs_eu2_fetch_sdkman
 # Sources:   core/records.sh  core/semver.sh  core/channel.sh
 #            core/cache.sh  http/curl.sh
 # Deps:      curl, grep, sort, awk
@@ -19,10 +19,16 @@
 #   2. SDKMAN REST API  — GET /2/candidates/{c}/linux/versions/all
 #      Comma-separated list; used when /versions/list returns nothing or HTTP fails.
 #      Java ALWAYS uses this endpoint (the /list endpoint rejects Java with 400).
+#      The 400 is specific to the generic "linux" platform used above; "linuxx64" answers
+#      /list with 200.  Switching platform is NOT a fix for anything here — both platforms
+#      advertise the same +build identifiers, which the broker does not serve (see
+#      _gs_eu2_sdkman_strip_build).
 #
 # Java special case: versions carry distribution suffixes (e.g. 11.0.31-zulu, 11.0.31-tem).
 # The fetcher extracts preferred_dist from current_version suffix and biases selection toward
-# the same distribution.  Preference order: preferred_dist > -tem > others.
+# the same distribution.  Preference order: preferred_dist > -tem > others.  When the pin names
+# a distribution that has NO candidate upstream, the record SKIPs with a reason rather than
+# proposing a different vendor — see the preferred-distribution gate in _gs_eu2_fetch_sdkman.
 # Distribution suffixes are NOT pre-release markers; only rc/beta/alpha/ea in the base part are.
 #
 # SDKMAN CLI is NOT used in v2 (CLI-first was v1 strategy; v2 prefers deterministic HTTP).
@@ -85,9 +91,17 @@ _gs_eu2_sdkman_extract_versions() {
 _gs_eu2_sdkman_extract_java_versions() {
   local _raw="${1}" _major="${2:-}" _preferred="${3:-}"
   # Normalise: replace commas with newlines so we get one entry per line
+  #
+  # The (\+[0-9.]+)? group admits SDKMAN's build metadata ("17.0.20+1.1-zulu").
+  # Without it grep -oE cannot match from the start of such a token, restarts after
+  # the '+', and yields "1.1-zulu" — which the major filter below then drops, making
+  # every +build distribution (zulu, librca, open, ms, sapmchn) silently invisible.
+  # The group is deliberately NUMERIC-ONLY: it must not admit ".fx-zulu" or
+  # ".crac-zulu", which are different artefacts that would otherwise outsort the
+  # plain build under sort -V (".fx" > "+1.1").
   local _lines
   _lines="$(printf '%s' "${_raw}" | tr ',' '\n' \
-    | grep -oE '[0-9]+\.[0-9]+[.0-9]*-[a-zA-Z]+([0-9]+)?' \
+    | grep -oE '[0-9]+\.[0-9]+[.0-9]*(\+[0-9.]+)?-[a-zA-Z]+([0-9]+)?' \
     | grep -v '^[[:space:]]*$' \
     | sort -t- -k1,1V \
     | uniq \
@@ -97,6 +111,24 @@ _gs_eu2_sdkman_extract_java_versions() {
       | grep -E "^${_major}([.^-]|\$)" 2>/dev/null || true)"
   fi
   printf '%s' "${_lines}"
+}
+
+# _gs_eu2_sdkman_strip_build — drop SDKMAN build metadata from an identifier.
+#
+# Reads:   stdin — one version identifier
+# Prints:  the identifier with any "+BUILD" segment removed
+# Returns: 0 always
+#
+# SDKMAN ADVERTISES build metadata ("26.0.2+1.1-zulu") but its download broker only
+# serves the base form: /broker/download/java/26.0.2-zulu/linuxx64 → 302, while
+# 26.0.2+1.1-zulu → 404 [verified against api.sdkman.io, all of zulu/librca/open/
+# sapmchn/tem].  `sdk install` therefore needs the base form, so the advertised
+# build segment is stripped before the version is proposed — proposing the listed
+# form verbatim would write an identifier that no container can install.
+# It is also what keeps sort -V honest: '+' sorts before '-', so an unstripped
+# build form compares as OLDER than the base form and trips the downgrade guard.
+_gs_eu2_sdkman_strip_build() {
+  sed -E 's/\+[0-9.]+(-[a-zA-Z]+[0-9]*)$/\1/'
 }
 
 # _gs_eu2_sdkman_select_java — select best Java version with distribution preference.
@@ -137,15 +169,15 @@ _gs_eu2_sdkman_select_java() {
   done <<< "${_versions}"
 
   if [[ -n "${_preferred_list}" ]]; then
-    printf '%s' "${_preferred_list}" | sort -t- -k1,1V | tail -1
+    printf '%s' "${_preferred_list}" | sort -t- -k1,1V | tail -1 | _gs_eu2_sdkman_strip_build
     return
   fi
   if [[ -n "${_tem_list}" ]]; then
-    printf '%s' "${_tem_list}" | sort -t- -k1,1V | tail -1
+    printf '%s' "${_tem_list}" | sort -t- -k1,1V | tail -1 | _gs_eu2_sdkman_strip_build
     return
   fi
   if [[ -n "${_other_list}" ]]; then
-    printf '%s' "${_other_list}" | sort -t- -k1,1V | tail -1
+    printf '%s' "${_other_list}" | sort -t- -k1,1V | tail -1 | _gs_eu2_sdkman_strip_build
     return
   fi
 }
@@ -254,6 +286,18 @@ _gs_eu2_fetch_sdkman() {
     fi
 
     _proposed="$(_gs_eu2_sdkman_select_java "${_java_versions}" "${_preferred_dist}")"
+
+    # Preferred-distribution gate. A vendor swap is NOT a version bump: without this,
+    # a pin whose distribution has no candidate upstream silently falls through to the
+    # -tem tier (then to any other vendor) and is reported as a routine AUTO update —
+    # e.g. "17.0.20-zulu → 17.0.21-tem", which --apply writes to .env with no gate.
+    # When the pin names a distribution, only that distribution may be proposed;
+    # anything else is a SKIP naming the missing dist so the human decides.
+    if [[ -n "${_preferred_dist}" && -n "${_proposed}" && "${_proposed}" != *"-${_preferred_dist}" ]]; then
+      _gs_eu2_record_set "${_idx}" error_message \
+        "preferred dist '${_preferred_dist}' not found upstream for ${_identifier}:${_major_hint:-any} (best other: ${_proposed}) — vendor swap needs a human"
+      return 0
+    fi
   else
     # Non-Java: plain version extraction + major-pin + channel selection
     local _versions
