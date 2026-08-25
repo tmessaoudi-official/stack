@@ -193,6 +193,29 @@ flags. Flags are **position-agnostic** — they can appear anywhere in the annot
 | Flag | Record field | Description |
 |------|-------------|---|
 | `(channel:VALUE)` | `channel` | Select versions from a specific release channel. Values: `stable` (default), `unstable` (any pre-release), `rc`, `beta`, `alpha`, `nightly`, or any comma-separated combination like `rc,beta`. |
+| `(stale-after:Nd)` | `stale_after` | **Freshness contract.** Declares that this source's newest version should never be more than N whole days old, and raises `ERROR` when it is. Opt-in, and only meaningful for a version scheme that carries its own date (`…nightly20260825abc123`) — a stable pin sitting still for months is normal, not stale. See "Freshness contract" below. |
+
+**Freshness contract — `(stale-after:Nd)`:**
+
+The downgrade guard only fires when a proposal sorts *below* the current version. That catches an
+upstream source which falls **behind**, and is blind to one which freezes **at** the current value:
+`proposed == current` classifies as "already latest" and reads as up to date forever. `(stale-after:Nd)`
+closes that gap by judging the date the version string itself carries.
+
+- **The date comes from the version, not from the network** — the anchored `YYYYMMDD` + hex-run shape
+  `decide.sh` already parses to sort nightlies. No extra request, no response header, no stored state.
+- **It runs regardless of decision** (`AUTO`, `SKIP`, downgrade-`SKIP`, `LOCK`), because the frozen-at-current
+  case *is* a `SKIP`. The one exemption is an empty `proposed_version`: that record's fetch failed and
+  already carries its own error, and reporting a freeze on top would send you to the wrong end of the wire.
+- **`--force-auto` cannot override it.** The gate sits after the force-auto upgrade, so a frozen source
+  can never be laundered into an applied update.
+- **A declared contract that cannot be evaluated is an ERROR, not a silent skip** — if the proposed version
+  carries no parseable date, either the upstream version scheme changed or the flag is on the wrong record.
+  Both are worth knowing; neither should be swallowed.
+- **The bias is always away from false alarms.** A future-dated version is fresh, and the threshold is
+  inclusive (exactly N days old is still fresh). A malformed threshold — including `0d` — is refused at
+  parse time rather than treated as "disabled".
+- **Testing**: `_GS_EU2_NOW_EPOCH` overrides the clock, so a fixture's dates cannot age a test into failure.
 
 **Channel behavior details:**
 - `stable` (empty or explicit): picks the highest non-prerelease version. Never falls back to pre-releases.
@@ -1319,10 +1342,12 @@ Two sub-modes:
   >   (`url.sh`: `[[ -n "${_urls}" && "${_channel}" != "nightly" ]]`), so if `fetch-json` is
   >   ever removed the `urls:` GitHub field would otherwise start returning *stable* tags.
   >   It also supplies the channel word in report messages. It is not dead decoration.
-  > - **A frozen source that falls behind is caught; one that freezes at the current value
-  >   is not.** The downgrade guard (`decide.sh` step 5) only fires when the proposal sorts
-  >   *below* current, so a source pinned at exactly the current version reads as "up to
-  >   date" indefinitely. There is no staleness check today.
+  > - **A frozen source that falls behind is caught by the downgrade guard; one that freezes
+  >   at the current value is caught by `(stale-after:Nd)`.** The downgrade guard
+  >   (`decide.sh` step 5) only fires when the proposal sorts *below* current, so a source
+  >   pinned at exactly the current version would otherwise read as "up to date"
+  >   indefinitely. This record carries `(stale-after:14d)` for that reason — see the flag
+  >   reference below.
 
 - **Apache/SVN/GNU detection** — triggered when the URL contains `svn.apache.org/repos/asf/`,
   `/pub/gnu/`, or `apache.org.*tags/`. Fetches the HTML directory listing, extracts `href`

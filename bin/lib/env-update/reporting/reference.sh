@@ -272,6 +272,11 @@ ANNOTATION FLAGS (parenthesised, space-separated, after the @todo keyword)
     (note:TEXT)       Attach a human-readable note sub-line. Suppressed by --no-notes.
     (channel:NAME)    Override fetch channel: stable, rc, beta, alpha, nightly, unstable.
                       --stable=full and --unstable=full may override this.
+    (stale-after:Nd)  Freshness contract: ERROR when the newest version this source
+                      offers is more than N whole days old. Opt-in, and only for
+                      version schemes carrying their own date (…nightly20260825ab).
+                      Catches an upstream frozen AT the current value, which the
+                      downgrade guard cannot see. Immune to --force-auto.
 
   GitHub-specific:
     (check-tags)      Merge tags API response with releases API (catches tag-only releases).

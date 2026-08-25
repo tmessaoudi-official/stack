@@ -12360,6 +12360,176 @@ t "t116g: a failing tags call degrades to the releases pool, never to an ERROR" 
 
 _flush_section
 
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 117 — (stale-after:Nd) freshness contract
+# ═══════════════════════════════════════════════════════════════════════════
+section "117 — stale-after freshness contract"
+
+# The downgrade guard in decide.sh only fires when a proposal sorts BELOW the
+# current version, so a source that freezes AT the current value reads as
+# "already latest" forever. That is the blind spot this closes. nodejs.org's
+# frozen HTML index (2026-04-17) was only ever noticed because the frozen value
+# happened to sort below the pin — a freeze one day later would have been silent.
+#
+# The clock is injected in every case: the fixtures carry real dates, so a test
+# that trusted the wall clock would pass today and fail on its own without a
+# single edit. That is the same stale-fixture trap section 32 was built around.
+
+_STALE_LIBS="
+source '${_GS_EU2_LIB}/core/staleness.sh'
+"
+
+# 2026-08-25T00:00:00Z — the reference "now" for every case below.
+_STALE_NOW=1787616000
+
+t "t117a: fresh — a same-day nightly is silent" bash -c "
+    ${_STALE_LIBS}
+    out=\$(_gs_eu2_staleness_verdict '7d' 'v27.0.0-nightly202608254b5e86c4e2' ${_STALE_NOW})
+    [[ -z \"\$out\" ]] || { echo \"expected silence for a same-day nightly, got: '\$out'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t117b: FROZEN AT CURRENT — the blind spot: proposed == current, both stale" bash -c "
+    ${_STALE_LIBS}
+    out=\$(_gs_eu2_staleness_verdict '7d' 'v26.0.0-nightly20260417b178842482' ${_STALE_NOW})
+    [[ -n \"\$out\" ]] || { echo 'a 130-day-old proposal must not be silent — this is the whole point of the flag'; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '20260417' || { echo \"error must name the date it found; got: '\$out'\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'frozen' || { echo \"error must say the source looks frozen; got: '\$out'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t117c: boundary — exactly at the threshold is fresh, one day past is stale" bash -c "
+    ${_STALE_LIBS}
+    # 2026-08-18 is exactly 7 days before the reference now.
+    at=\$(_gs_eu2_staleness_verdict '7d' 'v27.0.0-nightly2026081813fcd6f3e0' ${_STALE_NOW})
+    [[ -z \"\$at\" ]] || { echo \"exactly-at-threshold must be fresh, got: '\$at'\"; echo FAIL; exit 0; }
+    # 2026-08-17 is 8 days before, one past the threshold.
+    past=\$(_gs_eu2_staleness_verdict '7d' 'v27.0.0-nightly20260817977c20ed67' ${_STALE_NOW})
+    [[ -n \"\$past\" ]] || { echo 'one day past the threshold must fire'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t117d: no flag — no contract, so never stale however old" bash -c "
+    ${_STALE_LIBS}
+    out=\$(_gs_eu2_staleness_verdict '' 'v8.0.0-nightly20161201cf719152b0' ${_STALE_NOW})
+    [[ -z \"\$out\" ]] || { echo \"a record with no stale-after must never fire, got: '\$out'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# A failed fetch leaves proposed empty and carries its own error. Reporting a
+# freeze on top would misdiagnose a transport failure as an upstream one — the
+# operator would go looking at the wrong end of the wire.
+t "t117e: empty proposed — a failed fetch is not a frozen source" bash -c "
+    ${_STALE_LIBS}
+    out=\$(_gs_eu2_staleness_verdict '7d' '' ${_STALE_NOW})
+    [[ -z \"\$out\" ]] || { echo \"empty proposed must not be reported as stale, got: '\$out'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# A contract that cannot be evaluated must be loud, not silently skipped —
+# silently skipping is exactly how a guard becomes dead code nobody notices.
+t "t117f: undateable proposed — the contract cannot be evaluated, so it ERRORs" bash -c "
+    ${_STALE_LIBS}
+    out=\$(_gs_eu2_staleness_verdict '7d' '18.3-alpine3.23' ${_STALE_NOW})
+    [[ -n \"\$out\" ]] || { echo 'a declared contract that cannot be evaluated must not be silent'; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'carries no date' || { echo \"expected the undateable message; got: '\$out'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t117g: a future-dated version is fresh — the bias is never toward a false alarm" bash -c "
+    ${_STALE_LIBS}
+    out=\$(_gs_eu2_staleness_verdict '7d' 'v27.0.0-nightly20270101aaaaaaaaaa' ${_STALE_NOW})
+    [[ -z \"\$out\" ]] || { echo \"a future date must not fire, got: '\$out'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t117h: threshold parsing — only a positive whole-day count is accepted" bash -c "
+    ${_STALE_LIBS}
+    _gs_eu2_staleness_parse_days '7d'   >/dev/null || { echo '7d must parse';   echo FAIL; exit 0; }
+    _gs_eu2_staleness_parse_days '30d'  >/dev/null || { echo '30d must parse';  echo FAIL; exit 0; }
+    for bad in '0d' '7' 'd' '7h' 'banana' '-3d' '07d' ''; do
+        if _gs_eu2_staleness_parse_days \"\$bad\" >/dev/null 2>&1; then
+            echo \"'\$bad' must be refused as a threshold\"; echo FAIL; exit 0
+        fi
+    done
+    echo PASS
+"
+
+# 'date -d' is the validator, so a capture that is not a real calendar date
+# routes to the undateable path rather than silently computing an age from it.
+t "t117i: an impossible calendar date is treated as no date, not as an age" bash -c "
+    ${_STALE_LIBS}
+    _gs_eu2_staleness_extract_date 'v1.0.0-nightly20261340deadbeef' >/dev/null 2>&1 && {
+        echo 'month 13 must not validate as a date'; echo FAIL; exit 0; }
+    out=\$(_gs_eu2_staleness_verdict '7d' 'v1.0.0-nightly20261340deadbeef' ${_STALE_NOW})
+    echo \"\$out\" | grep -qF 'carries no date' || { echo \"expected undateable, got: '\$out'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# The date must come from the anchored shape decide.sh already uses, not from a
+# bare 8-digit scan — otherwise an unrelated build number would be read as a date.
+t "t117j: the date is read from the anchored shape, not any 8 digits" bash -c "
+    ${_STALE_LIBS}
+    # 8 digits present, but not followed by a hex run to end of string.
+    _gs_eu2_staleness_extract_date '20260417-build-xyz!' >/dev/null 2>&1 && {
+        echo 'a bare 8-digit run not in the anchored shape must not be read as a date'; echo FAIL; exit 0; }
+    d=\$(_gs_eu2_staleness_extract_date 'v27.0.0-nightly202608254b5e86c4e2')
+    [[ \"\$d\" == '20260825' ]] || { echo \"expected 20260825, got: '\$d'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ── End-to-end: the gate must be WIRED, not merely implemented ─────────────
+# A guard that exists but is never called is the failure mode this repo has hit
+# before (a fully-implemented robots checker guarded by an always-null argument).
+# These run the real CLI so a missing call site fails here rather than in prod.
+
+t "t117k: end to end — a stale record becomes ERROR through the real CLI" bash -c "
+    f=\${TMP_DIR}/t117k.env
+    printf '# @todo env-update (stale-after:7d) (channel:nightly) (fetch-json:max_by(.date).version) url:https://nodejs.org/download/nightly/index.json v26.0.0-nightly20260417b178842482\nGLOBAL_STACK_T117K=v26.0.0-nightly20260417b178842482\n' > \"\$f\"
+    out=\$(export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'; export _GS_EU2_CACHE_DIR=\"\${TMP_DIR}/t117k_cache\"; export _GS_EU2_NOW_EPOCH=1798761600; bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>&1 || true)
+    echo \"\$out\" | grep -qF '[ERROR' || { echo \"expected an ERROR decision from a frozen source; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qiF 'frozen' || { echo \"expected the frozen-source wording; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# --force-auto upgrades HOLD to AUTO. It must not be able to launder a frozen
+# source into an applied update: the gate sits after the force-auto block, and
+# moving it above is a sabotage this case is built to catch.
+t "t117l: --force-auto cannot override a staleness ERROR" bash -c "
+    f=\${TMP_DIR}/t117l.env
+    printf '# @todo env-update (stale-after:7d) (channel:nightly) (fetch-json:max_by(.date).version) url:https://nodejs.org/download/nightly/index.json v26.0.0-nightly20260417b178842482\nGLOBAL_STACK_T117L=v26.0.0-nightly20260417b178842482\n' > \"\$f\"
+    out=\$(export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'; export _GS_EU2_CACHE_DIR=\"\${TMP_DIR}/t117l_cache\"; export _GS_EU2_NOW_EPOCH=1798761600; bash '${ENV_UPDATE_V2}' --check --dry-run --force-auto --confirm='Confirm override' --env-file=\"\$f\" 2>&1 || true)
+    echo \"\$out\" | grep -qF '[ERROR' || { echo \"--force-auto must not launder a frozen source into AUTO; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# A malformed threshold is a config error and belongs at parse time, next to the
+# empty (skip:)/(lock:) reason refusals — not discovered later as a fetch result.
+t "t117m: a malformed threshold is refused at parse time" bash -c "
+    f=\${TMP_DIR}/t117m.env
+    printf '# @todo env-update (stale-after:banana) github:testowner/testrepo 1.0.0\nGLOBAL_STACK_T117M=1.0.0\n' > \"\$f\"
+    # Must REFUSE — a non-zero exit. Grepping for the flag name alone would pass
+    # vacuously today, because an unrecognised flag is simply left in the
+    # annotation and echoed back as part of raw_annotation.
+    if bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" >/dev/null 2>&1; then
+        echo 'a malformed (stale-after:) threshold must refuse at parse time, not be accepted'; echo FAIL; exit 0
+    fi
+    err=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1 >/dev/null || true)
+    echo \"\$err\" | grep -qF 'stale-after' || { echo \"the refusal must name the flag; got: \$err\"; echo FAIL; exit 0; }
+    echo \"\$err\" | grep -qE 'Nd|expected|invalid|malformed' || { echo \"the refusal must say what was expected; got: \$err\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t117n: stale_after is a dumpable record field (not silently dropped)" bash -c "
+    f=\${TMP_DIR}/t117n.env
+    printf '# @todo env-update (stale-after:7d) github:testowner/testrepo 1.0.0\nGLOBAL_STACK_T117N=1.0.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>/dev/null)
+    echo \"\$out\" | grep -qF 'stale_after: 7d' || { echo \"stale_after missing from --dump; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+_flush_section
+
 TOTAL=$(( PASS + FAIL ))
 BAR="━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 

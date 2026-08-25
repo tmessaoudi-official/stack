@@ -37,7 +37,7 @@ _gs_eu2_is_recognized_flag() {
   case "${_name}" in
     override | manual | hold | use-sha | prefer-specific | check-tags | \
       note | \
-      channel | skip | lock | \
+      channel | skip | lock | stale-after | \
       tag-filter | tag-exclude | tag-strip-prefix | tag-strip-suffix | \
       tag-channel-prefix | \
       tag-extract | tag-suffix | tag-replace | \
@@ -199,6 +199,16 @@ _gs_eu2_dispatch_flag() {
         exit 1
       fi
       ;;
+    stale-after)
+      # Whole positive days only. "0d" is refused rather than read as "disabled"
+      # or "always stale": a freshness contract that can never hold, or can never
+      # fire, is a disabled feature wearing a configured one's clothes.
+      if [[ ! "${_val}" =~ ^[1-9][0-9]*d$ ]]; then
+        printf 'env-update: %s:%s: malformed stale-after — expected Nd (whole positive days, e.g. 7d), got %q\n' \
+          "${_env_file}" "${_lnum}" "${_val:-<empty>}" >&2
+        exit 1
+      fi
+      ;;
     tag-replace)
       if [[ -z "${_val}" || "${_val}" != *:* ]]; then
         printf 'env-update: %s:%s: flag tag-replace requires FROM:TO format\n' \
@@ -247,6 +257,7 @@ _gs_eu2_dispatch_flag() {
     channel) _gs_eu2_record_set "${_idx}" channel "${_val}" ;;
     skip) _gs_eu2_record_set "${_idx}" skip_reason "${_val}" ;;
     lock) _gs_eu2_record_set "${_idx}" lock_reason "${_val}" ;;
+    stale-after) _gs_eu2_record_set "${_idx}" stale_after "${_val}" ;;
     tag-filter) _gs_eu2_record_set "${_idx}" tag_filter "${_val}" ;;
     tag-exclude) _gs_eu2_record_set "${_idx}" tag_exclude "${_val}" ;;
     tag-strip-prefix) _gs_eu2_record_set "${_idx}" tag_strip_prefix "${_val}" ;;

@@ -33,6 +33,8 @@ source "$(dirname "${BASH_SOURCE[0]}")/core/parse.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/core/cache.sh"
 # shellcheck source=./core/decide.sh
 source "$(dirname "${BASH_SOURCE[0]}")/core/decide.sh"
+# shellcheck source=./core/staleness.sh
+source "$(dirname "${BASH_SOURCE[0]}")/core/staleness.sh"
 # shellcheck source=./fetchers/github.sh
 source "$(dirname "${BASH_SOURCE[0]}")/fetchers/github.sh"
 # shellcheck source=./fetchers/codeberg.sh
@@ -215,6 +217,32 @@ _gs_eu2_classify_record() {
         -z "${_cr_skip_reason}" ]]; then
     _gs_eu2_record_set "${_cr_i}" decision "LOCK"
     _gs_eu2_record_set "${_cr_i}" error_message "${_cr_lock_reason}"
+  fi
+
+  # Phase 3b: staleness gate — (stale-after:Nd) turns a frozen upstream into ERROR.
+  #
+  # Placed AFTER the force-auto upgrade and the lock gate deliberately:
+  #   - after force-auto, so --force-auto cannot launder a frozen source into an
+  #     applied update (moving this above that block is a sabotage case);
+  #   - after the lock gate, following the existing rule that a lock does not
+  #     hide a fetch failure — it does not hide a frozen source either.
+  # Nothing downstream can resurrect it: the SHA gate (Phase 4) fires only on
+  # SKIP, and Phase 5 only annotates SKIP.
+  #
+  # Runs REGARDLESS of decision, which is the entire point. A source frozen at
+  # the current value classifies SKIP ("already latest") and is exactly the
+  # blind spot the downgrade guard cannot see.
+  local _cr_stale_after _cr_stale_msg
+  _cr_stale_after="$(_gs_eu2_record_get "${_cr_i}" stale_after)"
+  if [[ -n "${_cr_stale_after}" ]]; then
+    _cr_stale_msg="$(_gs_eu2_staleness_verdict \
+      "${_cr_stale_after}" \
+      "$(_gs_eu2_record_get "${_cr_i}" proposed_version)" \
+      "$(_gs_eu2_staleness_now)")"
+    if [[ -n "${_cr_stale_msg}" ]]; then
+      _gs_eu2_record_set "${_cr_i}" decision "ERROR"
+      _gs_eu2_record_set "${_cr_i}" error_message "${_cr_stale_msg}"
+    fi
   fi
 
   # Phase 4: SHA classification — SKIP → SHA when annotation sha lags proposed sha.
