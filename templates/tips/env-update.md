@@ -1295,6 +1295,35 @@ Two sub-modes:
   looking for versioned directory entries (containing at least one digit), sorts them with
   `sort -V`, takes the highest. If nothing found, returns an error.
 
+  > **An HTML directory index is a scraped implementation detail, not an API — prefer a
+  > machine-readable endpoint when the source offers one.** `GLOBAL_STACK_NODEEDGE_VERSION`
+  > originally scraped `https://nodejs.org/download/nightly/`. Upstream stopped regenerating
+  > that page on **2026-04-17** (verified: `last-modified: Fri, 17 Apr 2026` returned on a
+  > `cf-cache-status: MISS`, so it is the origin's own content, not a CDN artifact), while
+  > the tarballs and `index.json` in the same tree stayed live. The scraper kept working
+  > perfectly and kept returning the newest entry the frozen page still listed —
+  > `v26.0.0-nightly20260417…` — four months behind reality, which surfaced as a
+  > `would downgrade` SKIP rather than an error. The record now uses Tier 2 against the
+  > live `index.json`:
+  >
+  > ```
+  > (channel:nightly) (fetch-json:max_by(.date).version) url:https://nodejs.org/download/nightly/index.json
+  > ```
+  >
+  > Three things worth keeping in mind if you touch this record:
+  >
+  > - **Use `max_by(.date)`, never `.[0]`.** `index.json` is *mostly* newest-first, but it
+  >   has genuine ordering violations in its historical tail (observed at indices 133, 191,
+  >   210, 237), so `.[0]` is a latent version of the same class of bug.
+  > - **Keep `(channel:nightly)` even though Tier 2 ignores it.** It is what gates Tier 3
+  >   (`url.sh`: `[[ -n "${_urls}" && "${_channel}" != "nightly" ]]`), so if `fetch-json` is
+  >   ever removed the `urls:` GitHub field would otherwise start returning *stable* tags.
+  >   It also supplies the channel word in report messages. It is not dead decoration.
+  > - **A frozen source that falls behind is caught; one that freezes at the current value
+  >   is not.** The downgrade guard (`decide.sh` step 5) only fires when the proposal sorts
+  >   *below* current, so a source pinned at exactly the current version reads as "up to
+  >   date" indefinitely. There is no staleness check today.
+
 - **Apache/SVN/GNU detection** — triggered when the URL contains `svn.apache.org/repos/asf/`,
   `/pub/gnu/`, or `apache.org.*tags/`. Fetches the HTML directory listing, extracts `href`
   values containing version numbers (`[0-9]+\.[0-9]`), applies `version_prefix` filtering,

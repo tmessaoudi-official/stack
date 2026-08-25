@@ -1,0 +1,62 @@
+[
+  {
+    "version": "v27.0.0-nightly20260823eae0ca39be",
+    "date": "2026-08-23",
+    "files": [
+      "linux-x64",
+      "src"
+    ],
+    "npm": "11.19.0",
+    "v8": "14.6.202.34",
+    "lts": false,
+    "security": false
+  },
+  {
+    "version": "v27.0.0-nightly202608254b5e86c4e2",
+    "date": "2026-08-25",
+    "files": [
+      "linux-x64",
+      "src"
+    ],
+    "npm": "11.19.0",
+    "v8": "14.6.202.34",
+    "lts": false,
+    "security": false
+  },
+  {
+    "version": "v27.0.0-nightly202608242dbf9d733e",
+    "date": "2026-08-24",
+    "files": [
+      "linux-x64",
+      "src"
+    ],
+    "npm": "11.19.0",
+    "v8": "14.6.202.34",
+    "lts": false,
+    "security": false
+  },
+  {
+    "version": "v27.0.0-nightly20260801a6a1bd4de0",
+    "date": "2026-08-01",
+    "files": [
+      "linux-x64",
+      "src"
+    ],
+    "npm": "11.18.0",
+    "v8": "14.6.202.34",
+    "lts": false,
+    "security": false
+  },
+  {
+    "version": "v26.0.0-nightly20260501fc192ee030",
+    "date": "2026-05-01",
+    "files": [
+      "linux-x64",
+      "src"
+    ],
+    "npm": "11.13.0",
+    "v8": "14.6.202.34",
+    "lts": false,
+    "security": false
+  }
+]

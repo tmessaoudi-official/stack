@@ -3485,6 +3485,32 @@ t "t37k2: tier precedence — channel:nightly + urls: uses Tier 4 nightly, not T
     echo PASS
 "
 
+# Regression: upstream data-source freeze. nodejs.org stopped regenerating the
+# HTML directory index at https://nodejs.org/download/nightly/ on 2026-04-17
+# (verified via a cache-MISS last-modified header), so Tier 4's listing can no
+# longer see past that date and proposes a downgrade. index.json is the live
+# source and is reached through Tier 2. This asserts Tier 2 wins over BOTH
+# Tier 3 (urls: GitHub stable tags) and Tier 4 (channel:nightly listing) when
+# fetch_json is set — the tier order is what makes the .env fix work.
+# The fixture deliberately places a NON-newest entry at .[0] so that a
+# regression to '.[0].version' fails instead of coincidentally passing.
+t "t37k3: tier precedence — fetch-json (Tier 2) wins over channel:nightly Tier 4 listing" bash -c "
+    ${_URL_LIBS}
+    export _GS_EU2_CACHE_DIR=\"\${TMP_DIR}/url_cache_nightly_json\"
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type            'url'
+    _gs_eu2_record_set \$idx identifier      'https://nodejs.org/download/nightly/index.json'
+    _gs_eu2_record_set \$idx fetch_json      'max_by(.date).version'
+    _gs_eu2_record_set \$idx channel         'nightly'
+    _gs_eu2_record_set \$idx urls            'https://github.com/nodejs/node'
+    _gs_eu2_record_set \$idx current_version 'v27.0.0-nightly202608090700e749eb'
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_NODEEDGE_VERSION'
+    _gs_eu2_fetch_url \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$val\" == 'v27.0.0-nightly202608254b5e86c4e2' ]] || { echo \"expected Tier-2 index.json max_by(.date) v27.0.0-nightly202608254b5e86c4e2, got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
 # ── Tier 5 (url-probe) ────────────────────────────────────────────────────
 
 t "t37l: url-probe — finds first matching codename path (kubic unstable noble)" bash -c "
