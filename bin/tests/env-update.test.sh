@@ -12530,6 +12530,91 @@ t "t117n: stale_after is a dumpable record field (not silently dropped)" bash -c
 
 _flush_section
 
+section "118 — apply writes bytes, not escape sequences (awk -v)"
+
+# awk applies escape-sequence processing to a -v assignment, so a literal
+# backslash in an upstream-controlled value is INTERPRETED rather than carried
+# through. Every value crossing into _gs_eu2_apply_single is upstream-controlled.
+#
+#   $ awk -v v='1.0.1\back' 'BEGIN{printf "%s", v}' | od -c
+#   0000000   1   .   0   .   1  \b   a   c   k          <-- 0x08 BACKSPACE
+#   $ v='1.0.1\back' awk 'BEGIN{printf "%s", ENVIRON["v"]}' | od -c
+#   0000000   1   .   0   .   1   \   b   a   c   k      <-- correct
+#
+# Two distinct failures, both silent — the report line prints the correct string
+# while the file receives something else:
+#   a) the VAR= value is written with a control character, which then propagates
+#      through env-scan into .env.local and Dockerfile ARG lines;
+#   b) a raw_annotation containing an escape no longer compares equal to the line
+#      on disk, so the annotation is not rewritten at all and the record
+#      re-proposes the same bump on every subsequent run.
+#
+# The values are passed through the environment and read via ENVIRON, which is
+# the only assignment path awk leaves verbatim.
+
+t "t118a: a literal backslash in the value reaches the file byte-exactly" bash -c "
+    source '${_GS_EU2_LIB}/core/apply.sh'
+    f=\${TMP_DIR}/t118a.env
+    want='1.0.1\\back'
+    printf 'GLOBAL_STACK_T118A=1.0.0\n' > \"\$f\"
+    _gs_eu2_apply_single \"\$f\" 'GLOBAL_STACK_T118A' \"\$want\"
+    got=\$(sed -n 's/^GLOBAL_STACK_T118A=//p' \"\$f\")
+    if [[ \"\$got\" != \"\$want\" ]]; then
+        printf 'want: '; printf '%s' \"\$want\" | od -c | head -1
+        printf 'got : '; printf '%s' \"\$got\"  | od -c | head -1
+        echo FAIL; exit 0
+    fi
+    echo PASS
+"
+
+t "t118b: an annotation containing an escape still matches and is rewritten" bash -c "
+    source '${_GS_EU2_LIB}/core/apply.sh'
+    f=\${TMP_DIR}/t118b.env
+    # A backslash reaches an annotation through (urls:) — a Windows-style path or
+    # an escaped upstream ref is enough. '\\b' is a recognised awk escape, so -v
+    # collapses it and the \$0 == raw_ann comparison can never hold.
+    ann='# @todo env-update (urls:C:\\build\\x) github:testowner/testrepo 1.0.0'
+    printf '%s\nGLOBAL_STACK_T118B=1.0.0\n' \"\$ann\" > \"\$f\"
+    _gs_eu2_apply_single \"\$f\" 'GLOBAL_STACK_T118B' '1.0.1' \"\$ann\" '1.0.0'
+    line=\$(sed -n 1p \"\$f\")
+    echo \"\$line\" | grep -qF '1.0.1' || { echo \"annotation not rewritten: \$line\"; echo FAIL; exit 0; }
+    echo \"\$line\" | grep -qF 'C:\\build\\x' || { echo \"annotation corrupted: \$line\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t118c: (replace:) cascade writes are verbatim too" bash -c "
+    source '${_GS_EU2_LIB}/core/apply.sh'
+    f=\${TMP_DIR}/t118c.env
+    want='2.0.0\\tzip'
+    printf 'GLOBAL_STACK_T118C=1.0.0\n' > \"\$f\"
+    _gs_eu2_apply_replace_target \"\$f\" 'GLOBAL_STACK_T118C' \"\$want\"
+    got=\$(sed -n 's/^GLOBAL_STACK_T118C=//p' \"\$f\")
+    if [[ \"\$got\" != \"\$want\" ]]; then
+        printf 'want: '; printf '%s' \"\$want\" | od -c | head -1
+        printf 'got : '; printf '%s' \"\$got\"  | od -c | head -1
+        echo FAIL; exit 0
+    fi
+    echo PASS
+"
+
+t "t118d: no control character can reach the file (end-to-end --apply)" bash -c "
+    d=\${TMP_DIR}/t118d; mkdir -p \"\$d/fx\"
+    printf '[{\"version\":\"1.0.1\\\\\\\\back\",\"date\":\"2026-08-25\"}]' > \"\$d/fx/nodejs.org_download_nightly_index.json\"
+    f=\$d/t.env
+    printf '# @todo env-update (fetch-json:max_by(.date).version) url:https://nodejs.org/download/nightly/index.json 1.0.0\nGLOBAL_STACK_T118D=1.0.0\n' > \"\$f\"
+    _GS_EU2_HTTP_FIXTURE_DIR=\"\$d/fx\" _GS_EU2_CACHE_DIR=\"\$d/c\" bash '${ENV_UPDATE_V2}' --env-file=\"\$f\" --apply --yes >/dev/null 2>&1
+    # Any C0 control character other than the line feeds is corruption.
+    if LC_ALL=C grep -qP '[\x00-\x08\x0b-\x1f]' \"\$f\"; then
+        printf 'control character written to env file:\n'; od -c \"\$f\" | head -5
+        echo FAIL; exit 0
+    fi
+    grep -qF '1.0.1\\back' \"\$f\" || { echo \"value not written verbatim:\"; cat \"\$f\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+_flush_section
+
+
 TOTAL=$(( PASS + FAIL ))
 BAR="━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 

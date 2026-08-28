@@ -82,10 +82,37 @@ _gs_eu2_apply_single() {
         _annotation_only="${9:-false}" _bare_sha="${10:-}" _ver_prefix="${11:-}"
   local _tmp
   _tmp="$(mktemp)" || { printf 'env-update/apply: mktemp failed\n' >&2; return 1; }
-  awk -v var="${_var}" -v newval="${_new}" -v raw_ann="${_raw_ann}" \
-      -v curval="${_cur}" -v cur_sha="${_cur_sha}" -v new_sha="${_new_sha}" \
-      -v use_sha="${_use_sha}" -v annotation_only="${_annotation_only}" \
-      -v bare_sha="${_bare_sha}" -v ver_prefix="${_ver_prefix}" '
+  # Values cross into awk through ENVIRON, never through -v. awk applies
+  # escape-sequence processing to a -v assignment, and every value here is
+  # upstream-controlled, so a literal backslash in a fetched version was
+  # INTERPRETED rather than carried through:
+  #
+  #   awk -v v='1.0.1\back'  BEGIN{print v}  ->  1.0.1<0x08>ack
+  #   v='1.0.1\back' awk 'BEGIN{print ENVIRON["v"]}'  ->  1.0.1\back
+  #
+  # Two silent failures came out of that, both with a correct-looking report
+  # line over a wrong file: a control character written into the VAR= value
+  # (and onward through env-scan into .env.local and Dockerfile ARGs), and a
+  # raw_ann carrying an escape no longer comparing equal to the line on disk,
+  # so the annotation was never rewritten and the record re-proposed forever.
+  _GS_EU2_AWK_VAR="${_var}" _GS_EU2_AWK_NEWVAL="${_new}" \
+    _GS_EU2_AWK_RAW_ANN="${_raw_ann}" _GS_EU2_AWK_CURVAL="${_cur}" \
+    _GS_EU2_AWK_CUR_SHA="${_cur_sha}" _GS_EU2_AWK_NEW_SHA="${_new_sha}" \
+    _GS_EU2_AWK_USE_SHA="${_use_sha}" _GS_EU2_AWK_ANN_ONLY="${_annotation_only}" \
+    _GS_EU2_AWK_BARE_SHA="${_bare_sha}" _GS_EU2_AWK_VER_PREFIX="${_ver_prefix}" \
+    awk '
+    BEGIN {
+      var             = ENVIRON["_GS_EU2_AWK_VAR"]
+      newval          = ENVIRON["_GS_EU2_AWK_NEWVAL"]
+      raw_ann         = ENVIRON["_GS_EU2_AWK_RAW_ANN"]
+      curval          = ENVIRON["_GS_EU2_AWK_CURVAL"]
+      cur_sha         = ENVIRON["_GS_EU2_AWK_CUR_SHA"]
+      new_sha         = ENVIRON["_GS_EU2_AWK_NEW_SHA"]
+      use_sha         = ENVIRON["_GS_EU2_AWK_USE_SHA"]
+      annotation_only = ENVIRON["_GS_EU2_AWK_ANN_ONLY"]
+      bare_sha        = ENVIRON["_GS_EU2_AWK_BARE_SHA"]
+      ver_prefix      = ENVIRON["_GS_EU2_AWK_VER_PREFIX"]
+    }
     /^[[:space:]]*#/ {
       if (raw_ann != "" && $0 == raw_ann) {
         line = $0
@@ -150,7 +177,10 @@ _gs_eu2_apply_replace_target() {
   _tmp="$(mktemp)"
   umask "${_art_old_umask}"
   [[ -n "${_tmp}" ]] || { printf 'env-update/apply: mktemp failed\n' >&2; return 1; }
-  awk -v var="${_var}" -v newval="${_new}" '
+  # ENVIRON, not -v — see _gs_eu2_apply_single for why.
+  _GS_EU2_AWK_VAR="${_var}" _GS_EU2_AWK_NEWVAL="${_new}" \
+    awk '
+    BEGIN { var = ENVIRON["_GS_EU2_AWK_VAR"]; newval = ENVIRON["_GS_EU2_AWK_NEWVAL"] }
     index($0, var "=") == 1 { print var "=" newval; next }
     { print }
   ' "${_file}" > "${_tmp}" || { rm -f "${_tmp}"; return 1; }
