@@ -144,8 +144,12 @@ docker-cli: create-paths
 	# COMPOSE_BAKE=${GLOBAL_STACK_DOCKER_CLI_NO_COMPOSE_BAKE} 
 	${GLOBAL_STACK_DOCKER_CLI} ${GLOBAL_STACK_DOCKER_CLI_FLAGS} ${GLOBAL_STACK_DOCKER_CLI_EXEC} ${GLOBAL_STACK_DOCKER_CLI_EXEC_FLAGS} ${GLOBAL_STACK_DOCKER_CLI_SERVICE} ${GLOBAL_STACK_DOCKER_CLI_CONTAINER_COMMAND}
 create-buildx-builder:
-	docker buildx stop docker-buildx-builder &>/dev/null
-	docker buildx rm docker-buildx-builder &>/dev/null
+	# Best-effort teardown before create: both exit 1 when the builder does not
+	# exist, which is the expected state on a fresh machine. `&>` used to hide
+	# that by accident -- dash parses it as `&` + redirect, backgrounding the
+	# command instead of silencing it, which also raced `rm` against `stop`.
+	docker buildx stop docker-buildx-builder >/dev/null 2>&1 || true
+	docker buildx rm docker-buildx-builder >/dev/null 2>&1 || true
 	docker build --file docker/buildkit/Dockerfile --build-arg GLOBAL_STACK_MOBY_BUILDKIT_VERSION=${GLOBAL_STACK_MOBY_BUILDKIT_VERSION} --build-arg GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS=${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS} --tag custom-moby/buildkit .
 	rm -rf ${GLOBAL_STACK_DOCKER_ROOT_PATH}/docker/registry/config.local.json
 	[ ! -f ${GLOBAL_STACK_DOCKER_ROOT_PATH}/docker/registry/config.local.json ] && cp ${GLOBAL_STACK_DOCKER_ROOT_PATH}/docker/registry/config.json ${GLOBAL_STACK_DOCKER_ROOT_PATH}/docker/registry/config.local.json || true
@@ -251,17 +255,17 @@ wait-healthy:
 	printf "Stack settled: %s healthy, %s failed\n" "$$(ls tools/successes/ 2>/dev/null | wc -l | tr -d " ")" "$$(ls tools/errors/ 2>/dev/null | wc -l | tr -d " ")"'
 	@if [ "$$(ls tools/errors/ 2>/dev/null | wc -l)" -gt 0 ]; then echo "Failed services:" && ls tools/errors/; exit 1; fi
 save:
-	source ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV} && docker save $$(docker images --format '{{.Repository}}:{{.Tag}}') -o var/images/stack-${GLOBAL_STACK_VERSION}.tar
+	docker save $$(docker images --format '{{.Repository}}:{{.Tag}}') -o var/images/stack-${GLOBAL_STACK_VERSION}.tar
 commit:
 	@test -n "$(CONTAINER_NAME)" || (echo "Error: CONTAINER_NAME is required. Usage: make commit CONTAINER_NAME=<name> REPOSITORY_TAG=<repo:tag>"; exit 1)
 	@test -n "$(REPOSITORY_TAG)" || (echo "Error: REPOSITORY_TAG is required. Usage: make commit CONTAINER_NAME=<name> REPOSITORY_TAG=<repo:tag>"; exit 1)
-	source ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV} && docker commit ${CONTAINER_NAME} ${REPOSITORY_TAG}
+	docker commit ${CONTAINER_NAME} ${REPOSITORY_TAG}
 restore:
-	source ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV} && docker load -i var/images/stack-${GLOBAL_STACK_VERSION}.tar
+	docker load -i var/images/stack-${GLOBAL_STACK_VERSION}.tar
 log-follow:
 	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs --follow" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
 hard-restart:
-	@test -d var/tools || { echo "FATAL: var/tools/ is missing — cannot proceed with hard-restart. Restore it from a backup or run 'make save && make load' first."; exit 1; }
+	@test -d var/tools || { echo "FATAL: var/tools/ is missing — cannot proceed with hard-restart. var/tools is a manual snapshot of a healthy tools/ tree: take one with 'cp -R tools var/tools' while the stack is up. (make save/restore act on var/images, not var/tools.)"; exit 1; }
 	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="down" GLOBAL_STACK_DOCKER_CLI_EXEC_FLAGS="--rmi all --volumes --remove-orphans" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
 	docker system prune -a -f --volumes
 	yes y | docker-reclaim-disk-space-script.sh || echo 'script does not exist'
@@ -275,7 +279,7 @@ hard-restart:
 	$(MAKE) build --silent --ignore-errors --keep-going --warn-undefined-variables
 	$(MAKE) up --silent --ignore-errors --keep-going --warn-undefined-variables
 soft-restart:
-	@test -d var/tools || { echo "FATAL: var/tools/ is missing — cannot proceed with soft-restart. Restore it from a backup or run 'make save && make load' first."; exit 1; }
+	@test -d var/tools || { echo "FATAL: var/tools/ is missing — cannot proceed with soft-restart. var/tools is a manual snapshot of a healthy tools/ tree: take one with 'cp -R tools var/tools' while the stack is up. (make save/restore act on var/images, not var/tools.)"; exit 1; }
 	$(MAKE) down --silent --ignore-errors --keep-going --warn-undefined-variables
 	sudo rm -rf tools
 	cp -R var/tools/ tools
