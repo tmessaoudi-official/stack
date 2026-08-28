@@ -85,7 +85,7 @@ _gs_es_propagate_to_dockerfiles() {
   # ── Walk all Dockerfiles under docker_search_root ────────────────────────
   local _total_values=0
   local _total_files=0
-  local _dockerfile _arg_line _df_var _df_val _env_val
+  local _dockerfile _arg_line _df_var _df_val _env_val _df_raw _df_comment _df_quote
   local _backup_enabled="${_GS_ES_CFG[backup]:-true}"
   local _backup_suffix="${_GS_ES_CFG[backup_suffix]:-.bak}"
   local _backup_ts="${_GS_ES_CFG[_backup_ts]:-}"
@@ -108,7 +108,42 @@ _gs_es_propagate_to_dockerfiles() {
       # Match lines of the form: ARG VAR=value
       if [[ "${_arg_line}" =~ ^ARG[[:space:]]+([A-Za-z0-9_]+)=(.*)$ ]]; then
         _df_var="${BASH_REMATCH[1]}"
-        _df_val="${BASH_REMATCH[2]}"
+        _df_raw="${BASH_REMATCH[2]}"
+
+        # The comparison below must be made against the value BuildKit actually
+        # resolves, not the raw token: otherwise a Dockerfile that is already in
+        # sync compares unequal forever, and every run reports drift and rewrites
+        # it. Both shapes were verified against a real `docker build`
+        # (2026-08-28): `ARG X=1.2.3 # note` → `1.2.3`, `ARG X="1.2.3"` →
+        # `1.2.3`, while `ARG X=a#b` → `a#b` (a '#' only opens a comment when
+        # whitespace precedes it).
+        #
+        # Both the quote style and the comment are kept aside and re-applied on
+        # write, so a rewrite never silently drops a pinning rationale.
+        _df_comment=''
+        _df_val="${_df_raw}"
+        local _scan="${_df_raw}" _seen='' _head _prefix _ws
+        while [[ "${_scan}" == *'#'* ]]; do
+          _head="${_scan%%#*}"
+          if [[ "${_head}" =~ [[:space:]]$ ]]; then
+            _prefix="${_seen}${_head}"
+            _df_val="${_prefix%"${_prefix##*[![:space:]]}"}"
+            _ws="${_prefix:${#_df_val}}"
+            _df_comment="${_ws}${_df_raw:${#_prefix}}"
+            break
+          fi
+          _seen="${_seen}${_head}#"
+          _scan="${_scan#*#}"
+        done
+
+        _df_quote=''
+        if [[ "${_df_val}" =~ ^\"(.*)\"$ ]]; then
+          _df_quote='"'
+          _df_val="${BASH_REMATCH[1]}"
+        elif [[ "${_df_val}" =~ ^\'(.*)\'$ ]]; then
+          _df_quote="'"
+          _df_val="${BASH_REMATCH[1]}"
+        fi
 
         # Only act on vars that are in our env map
         if [[ -n "${_prop_env_map[${_df_var}]+set}" ]]; then
@@ -133,20 +168,23 @@ _gs_es_propagate_to_dockerfiles() {
                 _file_backed_up=1
               fi
               # A1: Escape _env_val for |-delimited sed expression to prevent injection
-              local _escaped_val="${_env_val//\\/\\\\}"   # escape backslash first
-              _escaped_val="${_escaped_val//|/\\|}"        # escape pipe (our delimiter)
-              _escaped_val="${_escaped_val//&/\\&}"        # escape & (sed backreference)
-              # B3: Preserve original ARG quoting style
-              local _write_val
-              if [[ "${_df_val}" =~ ^\"(.*)\"$ ]]; then
-                _write_val="\"${_escaped_val}\""
-              elif [[ "${_df_val}" =~ ^\'(.*)\'$ ]]; then
-                _write_val="'${_escaped_val}'"
-              else
-                _write_val="${_escaped_val}"
-              fi
-              # Rewrite the ARG line in-place
-              sed -i "s|^ARG ${_df_var}=.*|ARG ${_df_var}=${_write_val}|" "${_dockerfile}"
+              local _escaped_val="${_env_val//\\/\\\\}" # escape backslash first
+              _escaped_val="${_escaped_val//|/\\|}"     # escape pipe (our delimiter)
+              _escaped_val="${_escaped_val//&/\\&}"     # escape & (sed backreference)
+              # B3: Preserve original ARG quoting style, detected above.
+              local _write_val="${_df_quote}${_escaped_val}${_df_quote}"
+              # Carry the trailing comment through the rewrite. It goes through
+              # the same escaping as the value: it lands on sed's replacement
+              # side, where '\' and '&' are metacharacters.
+              local _escaped_comment="${_df_comment//\\/\\\\}"
+              _escaped_comment="${_escaped_comment//|/\\|}"
+              _escaped_comment="${_escaped_comment//&/\\&}"
+              # Rewrite the ARG line in-place. The address must be as tolerant as
+              # the detection above (`^ARG[[:space:]]+`): a literal '^ARG ' here
+              # silently matched nothing on a tab- or double-space-separated line,
+              # so the run reported and counted a propagation it never performed.
+              sed -i -E "s|^ARG[[:space:]]+${_df_var}=.*|ARG ${_df_var}=${_write_val}${_escaped_comment}|" \
+                "${_dockerfile}"
             fi
             ((_file_values++)) || true
             ((_total_values++)) || true
@@ -159,7 +197,15 @@ _gs_es_propagate_to_dockerfiles() {
     if [[ "${_file_changed}" -eq 1 ]]; then
       ((_total_files++)) || true
     fi
-  done < <(find "${docker_search_root}" -type f -name "Dockerfile*" 2>/dev/null | LC_ALL=C sort)
+    # The `Dockerfile*` glob also matches the backups this very function writes
+    # next to a gitignored Dockerfile (`Dockerfile.bak.<ts>` — see
+    # core/backup.sh). Rewriting those turns the documented rollback path into a
+    # no-op: run 1 saves the old value, run 2 walks the backup and updates it to
+    # the new one, so restoring it restores nothing. They are also counted as
+    # separate "files" in the summary. Exclude anything carrying the backup
+    # suffix.
+  done < <(find "${docker_search_root}" -type f -name "Dockerfile*" \
+    ! -name "*${_backup_suffix}.*" 2>/dev/null | LC_ALL=C sort)
 
   if [[ "${dry_run}" == "true" ]]; then
     printf ' [propagate] (dry-run) would propagate %d value(s) across %d file(s)\n' "${_total_values}" "${_total_files}"

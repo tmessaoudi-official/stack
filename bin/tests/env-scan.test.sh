@@ -2772,6 +2772,119 @@ t "t39c: @local-keep + sync-values=false: both mechanisms independently preserve
 _flush_section
 
 # ═══════════════════════════════════════════════════════════════════════════
+section "40 — propagate: ARG line shapes the rewrite must handle"
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Detection at propagate.sh:106 is tolerant (`^ARG[[:space:]]+`), the rewrite at
+# :145 was not (`^ARG ` — one literal space). Anything the first matched and the
+# second did not was REPORTED and COUNTED as propagated while the file stayed
+# unchanged: a success line over an unwritten file, which no amount of reading
+# the report can catch. `make check-image-versions` would then flag the same
+# drift straight afterwards, and re-running env-scan would "fix" it forever.
+#
+# The quoted and trailing-comment shapes are the mirror image: the comparison
+# saw a token the .env value can never equal, so the line was reported as
+# drifted and rewritten on EVERY run — `--dry-run`, the documented way to check
+# whether the tree is in sync, became a permanent false positive.
+#
+# BuildKit's own parsing is the authority for the comment case (verified with a
+# real build, 2026-08-28): `ARG X=1.2.3   # note` yields X=1.2.3, so the comment
+# is a comment — not part of the value — and must survive the rewrite.
+
+# Drive propagation through the CLI, as section 22 does; assert on the FILE, never
+# on the report line, since a wrong report line is the defect under test.
+
+t "t40a: ARG separated by a TAB is actually rewritten, not just reported" bash -c "
+    D=\${TMP_DIR}/t40a; mkdir -p \"\$D/docker/images/svc\"
+    printf 'GLOBAL_STACK_T40A=9.9.9\n' > \"\$D/.env\"
+    printf 'GLOBAL_STACK_T40A=9.9.9\n' > \"\$D/.env.local\"
+    printf 'ARG\tGLOBAL_STACK_T40A=OLD\n' > \"\$D/docker/images/svc/Dockerfile\"
+    bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=false --check-missing=false \
+        --show-added-entries=false --show-different-entries=false --backup=false >/dev/null 2>&1 || true
+    if grep -qF 'OLD' \"\$D/docker/images/svc/Dockerfile\"; then
+        printf 'file still holds OLD after a run that reported propagation:\n'
+        cat -A \"\$D/docker/images/svc/Dockerfile\"
+        echo FAIL; exit 0
+    fi
+    grep -qF '9.9.9' \"\$D/docker/images/svc/Dockerfile\" \
+        || { echo 'new value absent'; cat -A \"\$D/docker/images/svc/Dockerfile\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t40b: ARG separated by TWO SPACES is actually rewritten" bash -c "
+    D=\${TMP_DIR}/t40b; mkdir -p \"\$D/docker/images/svc\"
+    printf 'GLOBAL_STACK_T40B=9.9.9\n' > \"\$D/.env\"
+    printf 'GLOBAL_STACK_T40B=9.9.9\n' > \"\$D/.env.local\"
+    printf 'ARG  GLOBAL_STACK_T40B=OLD\n' > \"\$D/docker/images/svc/Dockerfile\"
+    bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=false --check-missing=false \
+        --show-added-entries=false --show-different-entries=false --backup=false >/dev/null 2>&1 || true
+    if grep -qF 'OLD' \"\$D/docker/images/svc/Dockerfile\"; then
+        printf 'file still holds OLD:\n'; cat -A \"\$D/docker/images/svc/Dockerfile\"; echo FAIL; exit 0
+    fi
+    echo PASS
+"
+
+t "t40c: a QUOTED ARG already equal to .env is not reported as drift and converges" bash -c "
+    D=\${TMP_DIR}/t40c; mkdir -p \"\$D/docker/images/svc\"
+    printf 'GLOBAL_STACK_T40C=1.2.3\n' > \"\$D/.env\"
+    printf 'GLOBAL_STACK_T40C=1.2.3\n' > \"\$D/.env.local\"
+    printf 'ARG GLOBAL_STACK_T40C=\"1.2.3\"\n' > \"\$D/docker/images/svc/Dockerfile\"
+    out=\$(bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=false --check-missing=false \
+        --show-added-entries=false --show-different-entries=false --backup=false --dry-run 2>&1 || true)
+    echo \"\$out\" | grep -qF 'GLOBAL_STACK_T40C' \
+        && { echo \"an in-sync quoted ARG must not report drift; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t40d: a TRAILING-COMMENT ARG already equal to .env is not reported as drift" bash -c "
+    D=\${TMP_DIR}/t40d; mkdir -p \"\$D/docker/images/svc\"
+    printf 'GLOBAL_STACK_T40D=1.2.3\n' > \"\$D/.env\"
+    printf 'GLOBAL_STACK_T40D=1.2.3\n' > \"\$D/.env.local\"
+    printf 'ARG GLOBAL_STACK_T40D=1.2.3   # pinned, see upstream CVE\n' > \"\$D/docker/images/svc/Dockerfile\"
+    out=\$(bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=false --check-missing=false \
+        --show-added-entries=false --show-different-entries=false --backup=false --dry-run 2>&1 || true)
+    echo \"\$out\" | grep -qF 'GLOBAL_STACK_T40D' \
+        && { echo \"BuildKit strips the comment, so this IS in sync; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t40e: a real bump keeps the trailing comment (Chesterton's fence)" bash -c "
+    D=\${TMP_DIR}/t40e; mkdir -p \"\$D/docker/images/svc\"
+    printf 'GLOBAL_STACK_T40E=2.0.0\n' > \"\$D/.env\"
+    printf 'GLOBAL_STACK_T40E=2.0.0\n' > \"\$D/.env.local\"
+    printf 'ARG GLOBAL_STACK_T40E=1.2.3   # pinned, see upstream CVE\n' > \"\$D/docker/images/svc/Dockerfile\"
+    bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=false --check-missing=false \
+        --show-added-entries=false --show-different-entries=false --backup=false >/dev/null 2>&1 || true
+    line=\$(cat \"\$D/docker/images/svc/Dockerfile\")
+    echo \"\$line\" | grep -qF '2.0.0' \
+        || { echo \"value not bumped: \$line\"; echo FAIL; exit 0; }
+    echo \"\$line\" | grep -qF '# pinned, see upstream CVE' \
+        || { echo \"rationale comment silently deleted: \$line\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t40f: propagation does not rewrite env-scan's own Dockerfile.bak.* backups" bash -c "
+    D=\${TMP_DIR}/t40f; mkdir -p \"\$D/docker/images/svc\"
+    printf 'GLOBAL_STACK_T40F=2.0.0\n' > \"\$D/.env\"
+    printf 'GLOBAL_STACK_T40F=2.0.0\n' > \"\$D/.env.local\"
+    printf 'ARG GLOBAL_STACK_T40F=1.5.0\n' > \"\$D/docker/images/svc/Dockerfile\"
+    # A backup taken by an earlier run — the whole point of it is to still hold
+    # the OLD value, so restoring it is a real rollback.
+    printf 'ARG GLOBAL_STACK_T40F=1.0.0\n' > \"\$D/docker/images/svc/Dockerfile.bak.20260101-000000-0000\"
+    bash '${ENV_SCAN}' --dir=\"\$D\" --scan-sources=false --check-missing=false \
+        --show-added-entries=false --show-different-entries=false --backup=false >/dev/null 2>&1 || true
+    grep -qF '2.0.0' \"\$D/docker/images/svc/Dockerfile\" \
+        || { echo 'live Dockerfile not propagated'; echo FAIL; exit 0; }
+    bak=\$(cat \"\$D/docker/images/svc/Dockerfile.bak.20260101-000000-0000\")
+    [[ \"\$bak\" == 'ARG GLOBAL_STACK_T40F=1.0.0' ]] \
+        || { echo \"backup clobbered — rollback destroyed: \$bak\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+_flush_section
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section
