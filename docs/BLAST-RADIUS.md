@@ -25,6 +25,7 @@
 > | `GLOBAL_STACK_RELOAD_*=true` | Forces a full tier reinstall (30+ min). Reset to `false` after use. |
 > | `bin/env-update.sh --apply` | Rewrites `.env`; cascades into `.env.local` + Dockerfile `ARG` lines via `env-scan`. Rollback: `git checkout -- .env` then restore the newest `.env.local.bak.*`. Always `--check --dry-run` first. |
 > | `make save` | Exports **every** Docker image on the machine, not just stack images — slow and disk-hungry. |
+> | `bin/git-strip-coauthored.sh --apply` | **Irreversible history rewrite.** Runs `git filter-repo --force`, which bypasses filter-repo's own fresh-clone guard, drops `refs/original`, expires the reflog and gc's — there is no `ORIG_HEAD` to return to, and every commit SHA changes. Other clones recover only with `git fetch && git reset --hard origin/master`. Reporting is the default; the rewrite needs `--apply`, and `--yes` on top when not on a TTY. |
 
 ---
 
