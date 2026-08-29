@@ -115,7 +115,7 @@ touches was carried, and nothing downstream still refers to the old shape.*
 ## Regression angle
 
 - Any changed shared helper (`bin/lib/**`, `base-bin/global-stack-base-prologue.sh`): enumerate ALL
-  callers with grep and account for each. The prologue is sourced by 49 scripts — verify that number
+  callers with grep and account for each. The prologue is sourced by 50 scripts — verify that number
   rather than trusting it.
 - Deleted code: grep every remaining reference. A deletion is the easiest incomplete change to ship,
   because nothing fails until the path is taken.
