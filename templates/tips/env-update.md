@@ -461,6 +461,25 @@ The `+resolve N` and `N depends-on-warn` signals are omitted from the line when 
 | `FALLBACK` | Overlay: range annotation fell back to LOW major (HIGH not yet in registry). **Not added to total** — the record is also counted as AUTO or SKIP. |
 | `ERROR` | Fetch failed (network, rate limit, parse error) |
 
+**Every one of the 12 fetcher types escalates a hard transport failure to `ERROR`** — and therefore
+to exit 1, unless `--no-fail` is passed. This is what makes `--check` usable as a cron or CI gate:
+a dead upstream fails the run rather than reading as "nothing to do". Until 2026-08-29 `url:`,
+`sdkman:` and `sdkmanager:` set only `error_message` and left the decision empty, which `decide.sh`
+classifies as `SKIP` — so 33 live records could never fail a run however dead their upstream was.
+
+The boundary is deliberate, and the other side of it still yields `SKIP` + exit 0:
+
+| Stays `SKIP` | Why |
+|---|---|
+| a `fetch-extract` pattern or `fetch-json` jq path that matches nothing on a **200** | the upstream is reachable and its shape changed — `(stale-after:Nd)` is the guard for that |
+| `sdkman not installed`, `sdkmanager not found` | a missing local toolchain must never fail someone else's run |
+| `url-probe` finding no accessible path | a probe expects most candidates to 404 and cannot distinguish that from a network outage |
+| tier 3 (`urls:` → GitHub) failing | a fallback chain by design: it tries the next `urls:` entry, then the directory listing |
+| `no versions matched filters` | the filters are the annotation author's own constraint |
+
+One residual gap, recorded rather than hidden: on a machine with **no sdkman installed**, a dead
+broker is indistinguishable from "not installed" and still reads as `SKIP`.
+
 **Secondary sub-line signals** (shown only when at least one is > 0; `--no-drift` suppresses DRIFT, DOWNGRADE, FORCE-DOWNGRADE, and REPLACE-DRIFT but not WATCH, `+sha`, or `+replace`):
 
 | Signal | Meaning |

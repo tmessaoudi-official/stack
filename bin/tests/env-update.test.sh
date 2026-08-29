@@ -12614,6 +12614,166 @@ t "t118d: no control character can reach the file (end-to-end --apply)" bash -c 
 
 _flush_section
 
+# ═══════════════════════════════════════════════════════════════════════════
+section "119 — a transport failure is an ERROR, not a SKIP (url/sdkman/sdkmanager)"
+# ═══════════════════════════════════════════════════════════════════════════
+# 10 of the 12 fetchers set decision \"ERROR\" on a hard transport failure. url,
+# sdkman and sdkmanager set it ZERO times: they wrote only error_message, and
+# decide.sh classifies an empty proposed_version as SKIP. So --check exited 0
+# no matter what happened upstream, and /check-versions in cron or CI was
+# structurally incapable of failing for those 33 live records.
+#
+# Section 107 already exercises the inject seam, but only against dockerhub —
+# one of the fetchers that was never broken — and asserts a loose
+# 'ERROR|error|injected', which the seam's own stderr line satisfies on its
+# own. These tests assert the [ERROR] decision token AND the exit code.
+#
+# The boundary matters as much as the escalation: \"not installed\" and
+# \"matched nothing on a 200\" must STAY SKIP, or a machine without a local
+# toolchain fails CI for no reason. Both directions are asserted below.
+
+# t119a: url fetch-json — an injected 503 must be ERROR + exit 1.
+# Pre-fix this reported [SKIP] blaming the jq path for an HTTP failure.
+t "t119a: url fetch-json transport failure is ERROR + exit 1" bash -c "
+    d=\${TMP_DIR}/t119a; mkdir -p \"\$d\"
+    f=\$d/t.env
+    printf '# @todo env-update (fetch-json:max_by(.date).version) url:https://nodejs.org/download/nightly/index.json 1.0.0\nGLOBAL_STACK_T119A=1.0.0\n' > \"\$f\"
+    out=\$(_GS_EU2_HTTP_INJECT_STATUS=503 _GS_EU2_CACHE_DIR=\"\$d/c\" bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1); rc=\$?
+    echo \"\$out\" | grep -q '\[ERROR' || { echo \"no [ERROR] token; got: \$out\"; echo FAIL; exit 0; }
+    [[ \$rc -eq 1 ]] || { echo \"exit \$rc, want 1 — a dead upstream must fail the run\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t119b: the message must name the transport failure, not the jq path.
+# Pre-fix: \"fetch-json jq path '…' returned empty\" — which sends the reader to
+# edit an expression that was never wrong.
+t "t119b: url fetch-json 503 message blames the fetch, not the jq path" bash -c "
+    d=\${TMP_DIR}/t119b; mkdir -p \"\$d\"
+    f=\$d/t.env
+    printf '# @todo env-update (fetch-json:max_by(.date).version) url:https://nodejs.org/download/nightly/index.json 1.0.0\nGLOBAL_STACK_T119B=1.0.0\n' > \"\$f\"
+    out=\$(_GS_EU2_HTTP_INJECT_STATUS=503 _GS_EU2_CACHE_DIR=\"\$d/c\" bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -q 'jq path' && { echo \"message still blames the jq path: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qi 'fetch failed' || { echo \"message does not say the fetch failed: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t119c: url fetch-extract (tier 1) — already distinguished _fetch_ok, never escalated.
+t "t119c: url fetch-extract transport failure is ERROR + exit 1" bash -c "
+    d=\${TMP_DIR}/t119c; mkdir -p \"\$d\"
+    f=\$d/t.env
+    printf '# @todo env-update (fetch-extract:v([0-9.]+)) url:https://example.invalid/releases 1.0.0\nGLOBAL_STACK_T119C=1.0.0\n' > \"\$f\"
+    out=\$(_GS_EU2_HTTP_INJECT_STATUS=503 _GS_EU2_CACHE_DIR=\"\$d/c\" bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1); rc=\$?
+    echo \"\$out\" | grep -q '\[ERROR' || { echo \"no [ERROR] token; got: \$out\"; echo FAIL; exit 0; }
+    [[ \$rc -eq 1 ]] || { echo \"exit \$rc, want 1\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t119d: url channel:nightly directory listing (tier 4a).
+t "t119d: url channel:nightly transport failure is ERROR + exit 1" bash -c "
+    d=\${TMP_DIR}/t119d; mkdir -p \"\$d\"
+    f=\$d/t.env
+    printf '# @todo env-update (channel:nightly) url:https://nodejs.org/download/nightly/ v1.0.0-nightly1\nGLOBAL_STACK_T119D=v1.0.0-nightly1\n' > \"\$f\"
+    out=\$(_GS_EU2_HTTP_INJECT_STATUS=503 _GS_EU2_CACHE_DIR=\"\$d/c\" bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1); rc=\$?
+    echo \"\$out\" | grep -q '\[ERROR' || { echo \"no [ERROR] token; got: \$out\"; echo FAIL; exit 0; }
+    [[ \$rc -eq 1 ]] || { echo \"exit \$rc, want 1\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t119e: url directory listing (tier 4b) — the svn.apache.org / GNU scrapes.
+t "t119e: url directory-listing transport failure is ERROR + exit 1" bash -c "
+    d=\${TMP_DIR}/t119e; mkdir -p \"\$d\"
+    f=\$d/t.env
+    printf '# @todo env-update url:https://svn.apache.org/repos/asf/apr/apr/tags/ 1.7.6\nGLOBAL_STACK_T119E=1.7.6\n' > \"\$f\"
+    out=\$(_GS_EU2_HTTP_INJECT_STATUS=503 _GS_EU2_CACHE_DIR=\"\$d/c\" bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1); rc=\$?
+    echo \"\$out\" | grep -q '\[ERROR' || { echo \"no [ERROR] token; got: \$out\"; echo FAIL; exit 0; }
+    [[ \$rc -eq 1 ]] || { echo \"exit \$rc, want 1\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t119f: sdkman — the API-fetch-failed branch.
+# The discrimination order in sdkman.sh is fixture-missing → not-installed →
+# API-fetch-failed, so the fake SDKMAN_DIR below is REQUIRED: without it the
+# harness machine takes the not-installed branch and this test would be red for
+# the wrong reason. Deliberately no _GS_EU2_HTTP_FIXTURE_DIR, for the same reason.
+t "t119f: sdkman API transport failure is ERROR + exit 1" bash -c "
+    d=\${TMP_DIR}/t119f; mkdir -p \"\$d/sdk/bin\"; : > \"\$d/sdk/bin/sdkman-init.sh\"
+    f=\$d/t.env
+    printf '# @todo env-update sdkman:java 21 21.0.5-tem\nGLOBAL_STACK_T119F=21.0.5-tem\n' > \"\$f\"
+    out=\$(SDKMAN_DIR=\"\$d/sdk\" _GS_EU2_HTTP_INJECT_STATUS=503 _GS_EU2_CACHE_DIR=\"\$d/c\" bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1); rc=\$?
+    echo \"\$out\" | grep -q '\[ERROR' || { echo \"no [ERROR] token; got: \$out\"; echo FAIL; exit 0; }
+    [[ \$rc -eq 1 ]] || { echo \"exit \$rc, want 1\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t119g: BOUNDARY — sdkman not installed stays SKIP + exit 0. A machine without
+# a local toolchain must not fail CI. Pointing SDKMAN_DIR at an empty dir takes
+# the not-installed branch even though the injection is armed.
+t "t119g: boundary — sdkman not installed stays SKIP + exit 0" bash -c "
+    d=\${TMP_DIR}/t119g; mkdir -p \"\$d/nosdk\"
+    f=\$d/t.env
+    printf '# @todo env-update sdkman:java 21 21.0.5-tem\nGLOBAL_STACK_T119G=21.0.5-tem\n' > \"\$f\"
+    out=\$(SDKMAN_DIR=\"\$d/nosdk\" _GS_EU2_HTTP_INJECT_STATUS=503 _GS_EU2_CACHE_DIR=\"\$d/c\" bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1); rc=\$?
+    echo \"\$out\" | grep -q '\[SKIP' || { echo \"expected [SKIP] for a missing local install; got: \$out\"; echo FAIL; exit 0; }
+    [[ \$rc -eq 0 ]] || { echo \"exit \$rc, want 0 — a missing local toolchain must not fail the run\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t119h: BOUNDARY — a jq path that legitimately matches nothing on a 200 stays
+# SKIP. The upstream is reachable and its shape changed; (stale-after:Nd) is the
+# guard for that, not an ERROR.
+t "t119h: boundary — jq path empty on a 200 stays SKIP + exit 0" bash -c "
+    d=\${TMP_DIR}/t119h; mkdir -p \"\$d/fx\"
+    printf '[{\"other\":\"x\"}]' > \"\$d/fx/nodejs.org_download_nightly_index.json\"
+    f=\$d/t.env
+    printf '# @todo env-update (fetch-json:max_by(.date).version) url:https://nodejs.org/download/nightly/index.json 1.0.0\nGLOBAL_STACK_T119H=1.0.0\n' > \"\$f\"
+    out=\$(_GS_EU2_HTTP_FIXTURE_DIR=\"\$d/fx\" _GS_EU2_CACHE_DIR=\"\$d/c\" bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1); rc=\$?
+    echo \"\$out\" | grep -q '\[SKIP' || { echo \"expected [SKIP] for an empty match on a 200; got: \$out\"; echo FAIL; exit 0; }
+    [[ \$rc -eq 0 ]] || { echo \"exit \$rc, want 0\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t119i: sdkmanager — the binary is present but --list produced nothing.
+# The not-found branch precedes this one, so a fake sdkmanager on PATH is what
+# separates the two.
+t "t119i: sdkmanager empty --list is ERROR + exit 1" bash -c "
+    d=\${TMP_DIR}/t119i; mkdir -p \"\$d/bin\"
+    printf '#!/bin/bash\nexit 0\n' > \"\$d/bin/sdkmanager\"; chmod +x \"\$d/bin/sdkmanager\"
+    f=\$d/t.env
+    printf '# @todo env-update sdkmanager:platform-tools 35.0.2\nGLOBAL_STACK_T119I=35.0.2\n' > \"\$f\"
+    out=\$(PATH=\"\$d/bin:\$PATH\" _GS_EU2_CACHE_DIR=\"\$d/c\" bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1); rc=\$?
+    echo \"\$out\" | grep -q '\[ERROR' || { echo \"no [ERROR] token; got: \$out\"; echo FAIL; exit 0; }
+    [[ \$rc -eq 1 ]] || { echo \"exit \$rc, want 1\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t119j: --no-fail remains the documented escape hatch for callers that want
+# the old exit-0 behaviour on a dead upstream.
+t "t119j: --no-fail still exits 0 on a transport ERROR" bash -c "
+    d=\${TMP_DIR}/t119j; mkdir -p \"\$d\"
+    f=\$d/t.env
+    printf '# @todo env-update (fetch-json:max_by(.date).version) url:https://nodejs.org/download/nightly/index.json 1.0.0\nGLOBAL_STACK_T119J=1.0.0\n' > \"\$f\"
+    out=\$(_GS_EU2_HTTP_INJECT_STATUS=503 _GS_EU2_CACHE_DIR=\"\$d/c\" bash '${ENV_UPDATE_V2}' --check --no-fail --env-file=\"\$f\" 2>&1); rc=\$?
+    echo \"\$out\" | grep -q '\[ERROR' || { echo \"no [ERROR] token; got: \$out\"; echo FAIL; exit 0; }
+    [[ \$rc -eq 0 ]] || { echo \"exit \$rc, want 0 under --no-fail\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t119k: no fetcher may regress to zero ERROR sites. This is the structural
+# guard — the defect was invisible for as long as it was because nothing
+# asserted that every fetcher CAN report a transport failure.
+t "t119k: every network fetcher has at least one decision ERROR site" bash -c "
+    missing=''
+    for fx in '${_GS_EU2_LIB}'/fetchers/*.sh; do
+        b=\$(basename \"\$fx\" .sh)
+        n=\$(grep -cE 'decision[[:space:]]+\"ERROR\"' \"\$fx\" || true)
+        [[ \"\$n\" -gt 0 ]] || missing=\"\$missing \$b\"
+    done
+    [[ -z \"\$missing\" ]] || { echo \"fetchers that can never report a transport failure:\$missing\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+_flush_section
+
 
 TOTAL=$(( PASS + FAIL ))
 BAR="━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

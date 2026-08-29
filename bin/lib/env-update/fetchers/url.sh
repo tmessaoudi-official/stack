@@ -59,6 +59,28 @@ source "$(dirname "${BASH_SOURCE[0]}")/github.sh"
 #
 # The identifier field holds the primary URL for all tiers except Tier 3 (which
 # reads additional URLs from the urls: field).
+
+# _gs_eu2_url_fail_transport — record a HARD transport failure as ERROR.
+#
+# Args:  $1 idx   — record index
+#        $2 sink  — diagnostics sink from _gs_eu2_http_diag_new (may be empty)
+#        $3 tier  — tier label for the message ("fetch-json", "channel:nightly", …)
+#        $4 url   — URL that failed
+#
+# Every other network fetcher escalates a transport failure to decision "ERROR";
+# this file used to set only error_message, and decide.sh classifies an empty
+# proposed_version as SKIP — so --check exited 0 however dead the upstream was.
+# Reserved for the case where the HTTP layer itself failed: a pattern or jq path
+# that matches nothing on a 200 is NOT this, and must stay SKIP.
+_gs_eu2_url_fail_transport() {
+  local _idx="${1}" _sink="${2:-}" _tier="${3}" _url="${4}"
+  local _st=""
+  [[ -n "${_sink}" ]] && _st="$(_gs_eu2_http_diag_status "${_sink}")"
+  _gs_eu2_record_set "${_idx}" decision "ERROR"
+  _gs_eu2_record_set "${_idx}" error_message \
+    "url: ${_tier} fetch failed for ${_url}${_st:+ (HTTP ${_st})}"
+}
+
 _gs_eu2_fetch_url() {
   local _idx="${1}"
 
@@ -88,8 +110,9 @@ _gs_eu2_fetch_url() {
   # Fetch URL body; run perl regex, capture group 1; sort -V; take highest.
   # ────────────────────────────────────────────────────────────────────────
   if [[ -n "${_fetch_extract}" ]]; then
-    local _body _fetch_ok=false
-    if _body="$(_gs_eu2_http_get "${_identifier}" 2>/dev/null)"; then
+    local _body _fetch_ok=false _t1_sink
+    _t1_sink="$(_gs_eu2_http_diag_new)" || _t1_sink=""
+    if _body="$(_gs_eu2_http_get "${_identifier}" "${_t1_sink}" 2>/dev/null)"; then
       _fetch_ok=true
       _proposed="$(printf '%s' "${_body}" | \
         perl -ne "if (/${_fetch_extract}/) { print \"\$1\n\" }" 2>/dev/null | \
@@ -97,20 +120,23 @@ _gs_eu2_fetch_url() {
     fi
 
     if [[ -n "${_proposed}" ]]; then
+      _gs_eu2_http_diag_free "${_t1_sink}"
       [[ -n "${_version_prefix}" ]] && _proposed="${_version_prefix}${_proposed}"
       _gs_eu2_record_set "${_idx}" proposed_version "${_proposed}"
       [[ "${_no_cache}" != "true" ]] && _gs_eu2_cache_write "${_cache_key}" "${_proposed}"
       return 0
     fi
 
-    # Distinguish HTTP fetch failure from a regex that matched nothing
+    # Distinguish HTTP fetch failure (ERROR — the upstream is unreachable) from a
+    # regex that matched nothing on a 200 (SKIP — reachable, shape changed; that
+    # is what (stale-after:Nd) is for).
     if [[ "${_fetch_ok}" != "true" ]]; then
-      _gs_eu2_record_set "${_idx}" error_message \
-        "url: fetch failed for ${_identifier}"
+      _gs_eu2_url_fail_transport "${_idx}" "${_t1_sink}" "fetch-extract" "${_identifier}"
     else
       _gs_eu2_record_set "${_idx}" error_message \
         "url: fetch-extract pattern '${_fetch_extract}' matched nothing from ${_identifier}"
     fi
+    _gs_eu2_http_diag_free "${_t1_sink}"
     return 0
   fi
 
@@ -119,8 +145,10 @@ _gs_eu2_fetch_url() {
   # Fetch URL as JSON; extract via jq path.
   # ────────────────────────────────────────────────────────────────────────
   if [[ -n "${_fetch_json}" ]]; then
-    local _json
-    if _json="$(_gs_eu2_http_get "${_identifier}" 2>/dev/null)"; then
+    local _json _json_ok=false _t2_sink
+    _t2_sink="$(_gs_eu2_http_diag_new)" || _t2_sink=""
+    if _json="$(_gs_eu2_http_get "${_identifier}" "${_t2_sink}" 2>/dev/null)"; then
+      _json_ok=true
       _proposed="$(printf '%s' "${_json}" | jq -r "${_fetch_json}" 2>/dev/null || true)"
       # Discard the literal string "null" (jq output when key is JSON null).
       # Use exact-match only — substring replacement would corrupt versions like "null-rc1".
@@ -129,14 +157,23 @@ _gs_eu2_fetch_url() {
     fi
 
     if [[ -n "${_proposed}" ]]; then
+      _gs_eu2_http_diag_free "${_t2_sink}"
       [[ -n "${_version_prefix}" ]] && _proposed="${_version_prefix}${_proposed}"
       _gs_eu2_record_set "${_idx}" proposed_version "${_proposed}"
       [[ "${_no_cache}" != "true" ]] && _gs_eu2_cache_write "${_cache_key}" "${_proposed}"
       return 0
     fi
 
-    _gs_eu2_record_set "${_idx}" error_message \
-      "url: fetch-json jq path '${_fetch_json}' returned empty from ${_identifier}"
+    # Until 2026-08-29 both outcomes shared the jq-path message, so an HTTP 503
+    # was reported as "jq path returned empty" — sending the reader to edit an
+    # expression that was never wrong.
+    if [[ "${_json_ok}" != "true" ]]; then
+      _gs_eu2_url_fail_transport "${_idx}" "${_t2_sink}" "fetch-json" "${_identifier}"
+    else
+      _gs_eu2_record_set "${_idx}" error_message \
+        "url: fetch-json jq path '${_fetch_json}' returned empty from ${_identifier}"
+    fi
+    _gs_eu2_http_diag_free "${_t2_sink}"
     return 0
   fi
 
@@ -206,8 +243,10 @@ _gs_eu2_fetch_url() {
 
   # Sub-mode a: channel:nightly — directory listing of version dirs
   if [[ "${_channel}" == "nightly" ]]; then
-    local _nightly_html
-    if _nightly_html="$(_gs_eu2_http_get "${_identifier}" 2>/dev/null)"; then
+    local _nightly_html _nightly_ok=false _t4a_sink
+    _t4a_sink="$(_gs_eu2_http_diag_new)" || _t4a_sink=""
+    if _nightly_html="$(_gs_eu2_http_get "${_identifier}" "${_t4a_sink}" 2>/dev/null)"; then
+      _nightly_ok=true
       local _entries
       _entries="$(printf '%s' "${_nightly_html}" | \
         perl -ne 'while (/href="([^"\/][^"]*\/?)"/g) { print "$1\n" }' 2>/dev/null | \
@@ -232,12 +271,18 @@ _gs_eu2_fetch_url() {
     if [[ -n "${_proposed}" ]]; then
       [[ -n "${_version_prefix}" ]] && _proposed="${_version_prefix}${_proposed}"
       _gs_eu2_record_set "${_idx}" proposed_version "${_proposed}"
+      _gs_eu2_http_diag_free "${_t4a_sink}"
       [[ "${_no_cache}" != "true" ]] && _gs_eu2_cache_write "${_cache_key}" "${_proposed}"
       return 0
     fi
 
-    _gs_eu2_record_set "${_idx}" error_message \
-      "url: channel:nightly — no version entries found at ${_identifier}"
+    if [[ "${_nightly_ok}" != "true" ]]; then
+      _gs_eu2_url_fail_transport "${_idx}" "${_t4a_sink}" "channel:nightly" "${_identifier}"
+    else
+      _gs_eu2_record_set "${_idx}" error_message \
+        "url: channel:nightly — no version entries found at ${_identifier}"
+    fi
+    _gs_eu2_http_diag_free "${_t4a_sink}"
     return 0
   fi
 
@@ -250,8 +295,10 @@ _gs_eu2_fetch_url() {
   fi
 
   if [[ "${_is_dir_listing}" == "true" ]]; then
-    local _dir_html
-    if _dir_html="$(_gs_eu2_http_get "${_identifier}" 2>/dev/null)"; then
+    local _dir_html _dir_ok=false _t4b_sink
+    _t4b_sink="$(_gs_eu2_http_diag_new)" || _t4b_sink=""
+    if _dir_html="$(_gs_eu2_http_get "${_identifier}" "${_t4b_sink}" 2>/dev/null)"; then
+      _dir_ok=true
       # Extract href values that look like versioned paths.
       # Handles both bare version numbers and paths like "tags/1.6.3/" from SVN.
       local _raw_candidates
@@ -287,6 +334,7 @@ _gs_eu2_fetch_url() {
         local _best
         _best="$(_gs_eu2_channel_select_best "${_dir_versions}" "${_channel}")"
         if [[ -n "${_best}" ]]; then
+          _gs_eu2_http_diag_free "${_t4b_sink}"
           [[ -n "${_version_prefix}" ]] && _best="${_version_prefix}${_best}"
           _gs_eu2_record_set "${_idx}" proposed_version "${_best}"
           [[ "${_no_cache}" != "true" ]] && _gs_eu2_cache_write "${_cache_key}" "${_best}"
@@ -294,9 +342,15 @@ _gs_eu2_fetch_url() {
         fi
       fi
     fi
-    # Dir-listing fetch failed or no versions found — fall through to error
-    _gs_eu2_record_set "${_idx}" error_message \
-      "url: directory listing — no version entries found at ${_identifier}"
+    # Split what used to be one message: an unreachable listing is an ERROR, a
+    # reachable one with no version hrefs is a SKIP.
+    if [[ "${_dir_ok}" != "true" ]]; then
+      _gs_eu2_url_fail_transport "${_idx}" "${_t4b_sink}" "directory listing" "${_identifier}"
+    else
+      _gs_eu2_record_set "${_idx}" error_message \
+        "url: directory listing — no version entries found at ${_identifier}"
+    fi
+    _gs_eu2_http_diag_free "${_t4b_sink}"
     return 0
   fi
 

@@ -147,6 +147,11 @@ _gs_eu2_fetch_sdkmanager() {
   fi
 
   if [[ -z "${_list_output}" ]]; then
+    # The not-found branch above already caught "no local toolchain", so reaching
+    # here means the binary IS present and produced nothing — a real failure
+    # (commonly no network). Escalate like every other fetcher; without this the
+    # 5 live sdkmanager records could never fail a --check run.
+    _gs_eu2_record_set "${_idx}" decision "ERROR"
     _gs_eu2_record_set "${_idx}" error_message "sdkmanager --list returned no output"
     return 0
   fi

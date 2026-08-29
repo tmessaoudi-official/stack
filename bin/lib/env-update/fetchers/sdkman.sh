@@ -262,7 +262,14 @@ _gs_eu2_fetch_sdkman() {
     elif [[ ! -f "${_sdk_dir}/bin/sdkman-init.sh" ]]; then
       _err_msg="sdkman not installed (SDKMAN_DIR=${_sdk_dir})"
     else
+      # The only branch of the three that is a genuine upstream failure: sdkman
+      # IS installed and the broker still returned nothing. Escalate it the way
+      # every other network fetcher does — the other two branches are a test
+      # seam and a missing local toolchain, neither of which may fail a run.
+      # Note the residual gap: on a machine with no sdkman install, a dead
+      # broker is indistinguishable from "not installed" and stays SKIP.
       _err_msg="sdkman API fetch failed for candidate '${_identifier}'"
+      _gs_eu2_record_set "${_idx}" decision "ERROR"
     fi
     _gs_eu2_record_set "${_idx}" error_message "${_err_msg}"
     return 0
