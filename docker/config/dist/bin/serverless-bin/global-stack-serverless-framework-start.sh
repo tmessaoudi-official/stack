@@ -1,7 +1,15 @@
 #!/bin/bash
-set -xeE -o pipefail
 
+set -xeE -o pipefail
+shopt -s extdebug
+IFS=$'\n\t'
+source global-stack-base-prologue.sh
 SECONDS=0
+
+# This service declares GLOBAL_STACK_ERROR_TOKEN=serverless and a marker
+# healthcheck, so a stale error file from a previous failed run would keep the
+# container unhealthy forever even once the cause is fixed.
+rm -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}/${GLOBAL_STACK_ERROR_TOKEN:-}"
 
 sed -i '/# global-stack-setup-started/,/# global-stack-setup-finished/d' "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 

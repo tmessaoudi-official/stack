@@ -10,7 +10,7 @@ if [ -n "${1}" ]; then
   fi
 fi
 
-if [[ "" = "${CURRENT_RUBY_VERSION}" ]]; then
+if [[ "" = "${RBENV_CURRENT_RUBY_VERSION}" ]]; then
   RBENV_CURRENT_RUBY_VERSION="${RUBY_VERSION}"
 fi
 

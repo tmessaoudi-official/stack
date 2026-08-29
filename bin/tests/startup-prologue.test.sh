@@ -4,7 +4,7 @@
 #
 # Tests:
 #   1. Prologue file passes bash -n
-#   2. All 49 migrated startup scripts pass bash -n
+#   2. All 50 migrated startup scripts pass bash -n (discovered dynamically)
 #   3. GS_STARTUP_DRY_RUN=1 exits 0 without running install code
 #   4. GS_STARTUP_DRY_RUN=0 (default) does not exit early
 #   5. stackCatch writes error token on non-zero exit
@@ -82,7 +82,10 @@ printf '\n%b── Section 2: Migrated scripts syntax (bash -n)%b\n' "${C_BOLD}"
 
 migrated_count=0
 while IFS= read -r -d '' f; do
-  if grep -q "source global-stack-base-prologue.sh" "${f}"; then
+  # Anchored: an unanchored match also hits the prologue's OWN header comment
+  # ("#   source global-stack-base-prologue.sh"), inflating the printed count
+  # past the number quoted in CLAUDE.md. Section 1 already bash -n's the prologue.
+  if grep -q '^source global-stack-base-prologue\.sh$' "${f}"; then
     assert_pass "bash -n: $(basename "${f}")" bash -n "${f}"
     migrated_count=$((migrated_count + 1))
   fi
@@ -929,6 +932,280 @@ else
   FAILURES+=("16g: persistent failure propagates to error token")
   printf '  %b✗%b  16g: second failure did NOT write error token (would mask failure)\n' "${C_RED}" "${C_RESET}"
 fi
+
+# ─── Section 17: prologue chain dedup guard (hunt F1) ──────────────────────
+# _stack_register_chain must not append a second entry for the same PID. The
+# guard READ ${GLOBAL_INTTERNAL_STACK_SCRIPT_CHAIN} — double T, a name nothing
+# in the repo ever assigns — so it expanded empty, the test was always true and
+# the chain grew one entry per source. The chain is what a crash report prints
+# to say which *-start.sh led to the failure, so duplicates corrupt the one
+# artefact you read when a container dies.
+printf '\n%b── Section 17: prologue chain dedup guard%b\n' "${C_BOLD}" "${C_RESET}"
+
+assert_fail "17a: prologue carries no GLOBAL_INTTERNAL_ typo" \
+  grep -q 'GLOBAL_INTTERNAL_' "${PROLOGUE}"
+
+cat >"${TMP_DIR}/test-chain.sh" <<'TESTEOF'
+#!/bin/bash
+set -eE -o pipefail
+source global-stack-base-prologue.sh
+source global-stack-base-prologue.sh
+printf 'CHAIN=%s\n' "${GLOBAL_INTERNAL_STACK_SCRIPT_CHAIN}"
+TESTEOF
+chmod +x "${TMP_DIR}/test-chain.sh"
+# One entry → no '|' separator. Two entries (guard dead) → exactly one '|'.
+_chain_out=$(
+  GLOBAL_STACK_DOCKER_TOOLS_PATH="${TMP_DIR}" \
+    PATH="${DIST_BIN}/base-bin:${PATH}" \
+    bash "${TMP_DIR}/test-chain.sh" 2>/dev/null | grep '^CHAIN=' || true
+)
+if [[ -n "${_chain_out}" && "${_chain_out}" != *'|'* ]]; then
+  PASS=$((PASS + 1))
+  printf '  %b✓%b  17b: sourcing twice registers the chain entry once\n' "${C_GREEN}" "${C_RESET}"
+else
+  FAIL=$((FAIL + 1))
+  FAILURES+=("17b: chain entry duplicated on re-source")
+  printf '  %b✗%b  17b: chain entry duplicated on re-source (%s)\n' "${C_RED}" "${C_RESET}" "${_chain_out}"
+fi
+
+# ─── Section 18: serverless + alltogether error signalling (hunt F5, F6) ───
+# F5: 04serverless-framework declares GLOBAL_STACK_ERROR_TOKEN=serverless and a
+# marker healthcheck, but armed NO handler — it neither sourced this prologue
+# nor defined its own stackCatch. Every failure was invisible: no error token,
+# so `ls tools/errors/` (step 1 of the documented runbook) reported nothing
+# wrong while the container stayed unhealthy behind the 24h start_period.
+# F6: neither serverless nor alltogether cleared a STALE error token, so a
+# service that failed once reported unhealthy forever after the cause was fixed
+# — `make restart-05stable` could not recover it, only a full `make down`.
+printf '\n%b── Section 18: serverless + alltogether error signalling%b\n' "${C_BOLD}" "${C_RESET}"
+
+_sls="${DIST_BIN}/serverless-bin/global-stack-serverless-framework-start.sh"
+_alt="${DIST_BIN}/alltogether/global-stack-alltogether-start.sh"
+
+assert_pass "18a: serverless sources the shared prologue" \
+  grep -q '^source global-stack-base-prologue.sh$' "${_sls}"
+
+# F6 — assert the LITERAL the convention audit greps for, at both new sites.
+_f6_literal='rm -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}/${GLOBAL_STACK_ERROR_TOKEN:-}"'
+assert_pass "18b: serverless clears a stale error token at startup" \
+  grep -qF "${_f6_literal}" "${_sls}"
+assert_pass "18c: alltogether clears a stale error token at startup" \
+  grep -qF "${_f6_literal}" "${_alt}"
+
+# 18d — BEHAVIOURAL: the dry-run seam. Red before the fix (the script had no
+# prologue, so it ignored GS_STARTUP_DRY_RUN and ran real work — the hunt repro
+# observed `sed: can't read /home/nosuchuser/.bashrc` and exit 2).
+# The suite runs under `set -e`, and the pre-fix script exits 2 here — capture
+# the status without letting it abort the run.
+_sls_dry_exit=0
+_sls_dry_out=$(
+  GS_STARTUP_DRY_RUN=1 \
+    GLOBAL_STACK_ERROR_TOKEN=serverless \
+    GLOBAL_STACK_DOCKER_TOOLS_PATH="${TMP_DIR}" \
+    GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS="${TMP_DIR}/sls-errors" \
+    GLOBAL_STACK_DOCKER_USER_ID=nosuchuser \
+    GLOBAL_STACK_SHELL_RC_TARGET=.bashrc \
+    GLOBAL_STACK_WAIT_FOR_TIMEOUT=2 \
+    PATH="${DIST_BIN}/base-bin:${PATH}" \
+    bash "${_sls}" 2>&1
+) || _sls_dry_exit=$?
+if [[ "${_sls_dry_exit}" -eq 0 ]] && ! echo "${_sls_dry_out}" | grep -q "can't read"; then
+  PASS=$((PASS + 1))
+  printf '  %b✓%b  18d: serverless honours GS_STARTUP_DRY_RUN=1 (exit 0, no work done)\n' "${C_GREEN}" "${C_RESET}"
+else
+  FAIL=$((FAIL + 1))
+  FAILURES+=("18d: serverless honours GS_STARTUP_DRY_RUN=1")
+  printf '  %b✗%b  18d: serverless dry-run exit=%d (want 0); ran real work\n' "${C_RED}" "${C_RESET}" "${_sls_dry_exit}"
+fi
+
+# 18e — BEHAVIOURAL, the P0 itself: a real failure must write the error token.
+# The failing `sed` on line 6 (unreadable shellrc) stands in for any of the
+# ~230 lines that can fail. Red before the fix: errors/ stayed empty.
+mkdir -p "${TMP_DIR}/sls-errors2"
+GLOBAL_STACK_ERROR_TOKEN=serverless \
+  GLOBAL_STACK_DOCKER_TOOLS_PATH="${TMP_DIR}" \
+  GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS="${TMP_DIR}/sls-errors2" \
+  GLOBAL_STACK_DOCKER_USER_ID=nosuchuser \
+  GLOBAL_STACK_SHELL_RC_TARGET=.bashrc \
+  GLOBAL_STACK_WAIT_FOR_TIMEOUT=2 \
+  PATH="${DIST_BIN}/base-bin:${PATH}" \
+  bash "${_sls}" >/dev/null 2>&1 || true
+if [[ -f "${TMP_DIR}/sls-errors2/serverless" ]]; then
+  PASS=$((PASS + 1))
+  printf '  %b✓%b  18e: a serverless failure writes tools/errors/serverless\n' "${C_GREEN}" "${C_RESET}"
+else
+  FAIL=$((FAIL + 1))
+  FAILURES+=("18e: serverless failure writes an error token")
+  printf '  %b✗%b  18e: serverless failed SILENTLY — no error token written\n' "${C_RED}" "${C_RESET}"
+fi
+
+# ─── Section 19: web-server handlers report exit 1 (hunt F2) ───────────────
+# The 8 caddy/nginx/httpd handlers excluded exit code 1 from REPORTING:
+# `[[ $exit_code -ne 0 && $exit_code -ne 141 && $exit_code -ne 1 ]]`. Code 1 is
+# the most common failure in their own chain (their *-setup.sh and
+# *-iou-common.sh both end their error path in a literal `exit 1`), so a real
+# failure produced total silence: no message, no tools/elapsed line, no token.
+#
+# Verified by execution before the fix: dropping the `-ne 1` arm does NOT change
+# control flow (set -e already aborts wherever the ERR trap fires) — but it DOES
+# make every report fire twice, because that arm was accidentally absorbing the
+# EXIT-trap re-entry after the handler's own `exit 1`. The second report carries
+# the trap's line number instead of the failure's. Hence the _STACK_CAUGHT
+# guard, matching the shared prologue's name.
+printf '\n%b── Section 19: web-server handlers report exit 1%b\n' "${C_BOLD}" "${C_RESET}"
+
+WEB_SERVER_SCRIPTS=(
+  "caddy-bin/global-stack-caddy-start.sh"
+  "caddy-bin/global-stack-caddy-setup.sh"
+  "nginx-bin/global-stack-nginx-start.sh"
+  "nginx-bin/global-stack-nginx-setup.sh"
+  "nginx-bin/global-stack-nginx-iou-common.sh"
+  "httpd-bin/global-stack-httpd-start.sh"
+  "httpd-bin/global-stack-httpd-setup.sh"
+  "httpd-bin/global-stack-httpd-iou-common.sh"
+)
+
+for _ws in "${WEB_SERVER_SCRIPTS[@]}"; do
+  _ws_path="${DIST_BIN}/${_ws}"
+  # Anchor on the closing `]]`: a bare '-ne 1' also matches the '-ne 141'
+  # SIGPIPE arm, which must SURVIVE — that pattern can never go green.
+  assert_fail "19a: $(basename "${_ws}") no longer exempts exit code 1" \
+    grep -q 'exit_code -ne 1 \]\]' "${_ws_path}"
+  assert_pass "19a: $(basename "${_ws}") keeps the 141 (SIGPIPE) exemption" \
+    grep -q 'exit_code -ne 141 \]\]' "${_ws_path}"
+  assert_pass "19b: $(basename "${_ws}") carries the _STACK_CAUGHT re-entry guard" \
+    grep -q '_STACK_CAUGHT' "${_ws_path}"
+done
+
+# BEHAVIOURAL — extract the SHIPPED handler by PATTERN (never line numbers,
+# which rot the moment the guard line is added), arm the same trap, and force a
+# failure with a known exit code. Reports are counted, not merely detected:
+# "reported once" is the whole contract.
+_ws_reports() { # $1 = script path, $2 = exit code to force; echoes the count
+  local src="$1" code="$2" h="${TMP_DIR}/ws-harness.sh" out
+  {
+    printf '#!/bin/bash\nset -eE -o pipefail\n'
+    sed -n '/^stackCatch() {/,/^}/p' "${src}"
+    printf 'trap %s ERR EXIT\n' "'stackCatch \$? \${LINENO} \"\${BASH_COMMAND}\"'"
+    printf '(exit %s)\n' "${code}"
+  } >"${h}"
+  out=$(
+    GLOBAL_STACK_ERROR_TOKEN=ws-token \
+      GLOBAL_STACK_DOCKER_TOOLS_PATH="${TMP_DIR}/ws" \
+      GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS="${TMP_DIR}/ws" \
+      bash "${h}" 2>&1 || true
+  )
+  printf '%s' "${out}" | grep -c 'Error detected!' || true
+}
+mkdir -p "${TMP_DIR}/ws"
+_ws_probe="${DIST_BIN}/caddy-bin/global-stack-caddy-start.sh"
+
+_n=$(_ws_reports "${_ws_probe}" 1)
+if [[ "${_n}" == "1" ]]; then
+  PASS=$((PASS + 1))
+  printf '  %b✓%b  19c: exit 1 is reported, exactly once\n' "${C_GREEN}" "${C_RESET}"
+else
+  FAIL=$((FAIL + 1))
+  FAILURES+=("19c: exit 1 reported exactly once (got ${_n})")
+  printf '  %b✗%b  19c: exit 1 produced %s reports (want 1)\n' "${C_RED}" "${C_RESET}" "${_n}"
+fi
+
+# Regression fence for the naive fix: without the guard this becomes 2.
+_n=$(_ws_reports "${_ws_probe}" 2)
+if [[ "${_n}" == "1" ]]; then
+  PASS=$((PASS + 1))
+  printf '  %b✓%b  19d: exit 2 still reported exactly once (no EXIT re-entry)\n' "${C_GREEN}" "${C_RESET}"
+else
+  FAIL=$((FAIL + 1))
+  FAILURES+=("19d: exit 2 reported exactly once (got ${_n})")
+  printf '  %b✗%b  19d: exit 2 produced %s reports (want 1)\n' "${C_RED}" "${C_RESET}" "${_n}"
+fi
+
+# 141 = SIGPIPE, the one exemption that stays: `caddy stop | head` is routine.
+_n=$(_ws_reports "${_ws_probe}" 141)
+if [[ "${_n}" == "0" ]]; then
+  PASS=$((PASS + 1))
+  printf '  %b✓%b  19e: exit 141 (SIGPIPE) stays exempt\n' "${C_GREEN}" "${C_RESET}"
+else
+  FAIL=$((FAIL + 1))
+  FAILURES+=("19e: exit 141 stays exempt (got ${_n})")
+  printf '  %b✗%b  19e: exit 141 produced %s reports (want 0)\n' "${C_RED}" "${C_RESET}" "${_n}"
+fi
+
+_n=$(_ws_reports "${_ws_probe}" 0)
+if [[ "${_n}" == "0" ]]; then
+  PASS=$((PASS + 1))
+  printf '  %b✓%b  19f: clean exit reports nothing\n' "${C_GREEN}" "${C_RESET}"
+else
+  FAIL=$((FAIL + 1))
+  FAILURES+=("19f: clean exit reports nothing (got ${_n})")
+  printf '  %b✗%b  19f: clean exit produced %s reports (want 0)\n' "${C_RED}" "${C_RESET}" "${_n}"
+fi
+
+# The token must carry the FAILURE's line, not the trap's re-entry line 1.
+if [[ -f "${TMP_DIR}/ws/ws-token" ]] && ! grep -q '^line: 1$' "${TMP_DIR}/ws/ws-token"; then
+  PASS=$((PASS + 1))
+  printf '  %b✓%b  19g: error token records the failing line, not the re-entry\n' "${C_GREEN}" "${C_RESET}"
+else
+  FAIL=$((FAIL + 1))
+  FAILURES+=("19g: error token records the failing line")
+  printf '  %b✗%b  19g: error token missing or overwritten by the EXIT re-entry\n' "${C_RED}" "${C_RESET}"
+fi
+
+# ─── Section 20: rbenv version resolver (hunt F7) ──────────────────────────
+# global-stack-rbenv-find-latest.sh resolved the newest matching Ruby, then
+# tested ${CURRENT_RUBY_VERSION} — missing the RBENV_ prefix, a name set nowhere
+# in the repo. The script runs without -u, so it expanded empty, the test was
+# always true, and the next line unconditionally overwrote the result with the
+# raw pin. The whole `rbenv install --list-all` lookup was dead code, so a
+# partial pin (GLOBAL_STACK_RUBY3_VERSION=3.4) — the entire reason the resolver
+# and the _AS label scheme exist — reached `rbenv install` verbatim and failed.
+printf '\n%b── Section 20: rbenv version resolver%b\n' "${C_BOLD}" "${C_RESET}"
+
+_rb_find="${DIST_BIN}/rbenv-bin/global-stack-rbenv-find-latest.sh"
+_py_find="${DIST_BIN}/pyenv-bin/global-stack-pyenv-find-latest.sh"
+
+mkdir -p "${TMP_DIR}/rb/bin" "${TMP_DIR}/rb/root/versions"
+printf '#!/bin/bash\nprintf "3.4.8\\n3.4.9\\n3.4.10\\n"\n' >"${TMP_DIR}/rb/bin/rbenv"
+printf '#!/bin/bash\nprintf "  3.14.5\\n  3.14.6\\n  3.14.7\\n"\n' >"${TMP_DIR}/rb/bin/pyenv"
+chmod +x "${TMP_DIR}/rb/bin/rbenv" "${TMP_DIR}/rb/bin/pyenv"
+
+_rb_out=$(
+  env -i PATH="${TMP_DIR}/rb/bin:/usr/bin:/bin" \
+    RBENV_ROOT="${TMP_DIR}/rb/root" RUBY_VERSION=3.4 \
+    bash "${_rb_find}" 3.4 2>/dev/null | tail -n1
+)
+if [[ "${_rb_out}" == "3.4.10" ]]; then
+  PASS=$((PASS + 1))
+  printf '  %b✓%b  20a: a partial pin (3.4) resolves to the newest match (3.4.10)\n' "${C_GREEN}" "${C_RESET}"
+else
+  FAIL=$((FAIL + 1))
+  FAILURES+=("20a: partial pin resolves to newest match (got '${_rb_out}')")
+  printf '  %b✗%b  20a: partial pin resolved to %s, want 3.4.10 (result discarded)\n' "${C_RED}" "${C_RESET}" "${_rb_out}"
+fi
+
+assert_fail "20b: resolver reads no unprefixed CURRENT_RUBY_VERSION" \
+  grep -Eq '\$\{CURRENT_RUBY_VERSION[:}]' "${_rb_find}"
+
+# An already-installed exact version must still short-circuit to itself.
+mkdir -p "${TMP_DIR}/rb/root/versions/3.4.9"
+_rb_exact=$(
+  env -i PATH="${TMP_DIR}/rb/bin:/usr/bin:/bin" \
+    RBENV_ROOT="${TMP_DIR}/rb/root" RUBY_VERSION=3.4.9 \
+    bash "${_rb_find}" 3.4.9 2>/dev/null | tail -n1
+)
+assert_pass "20c: an installed exact version short-circuits to itself" \
+  test "${_rb_exact}" = "3.4.9"
+
+# Control — the pyenv twin was always correct; it must stay correct.
+_py_out=$(
+  env -i PATH="${TMP_DIR}/rb/bin:/usr/bin:/bin" \
+    PYENV_ROOT="${TMP_DIR}/rb/root" PYTHON_VERSION=3.14 \
+    GLOBAL_STACK_PYTHON_STABLE=true \
+    bash "${_py_find}" 3.14 2>/dev/null | tail -n1
+)
+assert_pass "20d: control — the pyenv twin still resolves correctly" \
+  test "${_py_out}" = "3.14.7"
 
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'

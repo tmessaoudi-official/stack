@@ -6,6 +6,12 @@ IFS=$'\n\t'
 source global-stack-base-prologue.sh
 SECONDS=0
 
+# 05stable / 05edge / local.05* use a marker healthcheck, so a stale error file
+# from a previous failed run keeps the container unhealthy even after a clean
+# restart writes its success marker — `make restart-05stable` could not recover
+# it, only a full `make down`.
+rm -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}/${GLOBAL_STACK_ERROR_TOKEN:-}"
+
 sed -i '/# global-stack-setup-started/,/# global-stack-setup-finished/d' "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 
 sleep 1

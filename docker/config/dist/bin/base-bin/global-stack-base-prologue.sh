@@ -8,8 +8,15 @@
 #   IFS=$'\n\t'
 #   source global-stack-base-prologue.sh
 #
-# Scripts NOT covered (they keep their own stackCatch — deliberate 141/1 exemption):
+# Scripts NOT covered (they keep their own stackCatch — deliberate 141 exemption):
 #   caddy-bin/*, httpd-bin/*, nginx-bin/*, android-bin/global-stack-android-setup*.sh
+# Those handlers used to exempt exit code 1 as well. That was removed (2026-08-29):
+# code 1 is the most common failure in their own chain, and exempting it produced
+# total silence rather than a tolerated error — dropping it changes no control flow,
+# since `set -e` already aborts wherever the ERR trap fires. They now carry the same
+# _STACK_CAUGHT re-entry guard used below, which the `-ne 1` arm had been serving by
+# accident: without it, the handler's own `exit 1` re-enters through the EXIT trap
+# and overwrites the error token with the trap's line number.
 #
 # Dry-run seam:
 #   GS_STARTUP_DRY_RUN=1 bash global-stack-nvm-start.sh   # exits before any install work
@@ -210,7 +217,7 @@ _stack_register_chain() {
   local entry
   entry="$(_stack_abspath "${0}")#$$"
   # The chain already ends with our PID if this process registered before.
-  if [[ "${GLOBAL_INTTERNAL_STACK_SCRIPT_CHAIN:-}" != *"#$$" ]]; then
+  if [[ "${GLOBAL_INTERNAL_STACK_SCRIPT_CHAIN:-}" != *"#$$" ]]; then
     GLOBAL_INTERNAL_STACK_SCRIPT_CHAIN="${GLOBAL_INTERNAL_STACK_SCRIPT_CHAIN:+${GLOBAL_INTERNAL_STACK_SCRIPT_CHAIN}|}${entry}"
   fi
   export GLOBAL_INTERNAL_STACK_SCRIPT_CHAIN
