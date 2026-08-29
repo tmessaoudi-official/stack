@@ -11063,6 +11063,11 @@ _flush_section
 # Section 107 — P1 audit: HTTP error injection seam + --force-auto alone exits 1
 # ═══════════════════════════════════════════════════════════════════════════
 section "107 — P1 audit: HTTP inject seam + --force-auto alone exits 1"
+# These three asserted `grep -qE 'ERROR|error|injected'` until 2026-08-29 — a
+# pattern the inject seam's OWN stderr line ("env-update: injected HTTP error
+# 503 …") satisfies on its own, so they would have stayed green even if the
+# fetcher had regressed to SKIP. They now assert the [ERROR] decision token.
+# They also only ever covered dockerhub; section 119 covers the rest.
 
 # t107a: _GS_EU2_HTTP_INJECT_STATUS=429 → fetcher returns ERROR
 t "t107a: HTTP_INJECT_STATUS=429 produces ERROR output" bash -c "
@@ -11071,7 +11076,7 @@ t "t107a: HTTP_INJECT_STATUS=429 produces ERROR output" bash -c "
     f=\${TMP_DIR}/t107a.env
     printf '# @todo env-update dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T107A=18.3-alpine3.23\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --check --no-fail --env-file=\"\$f\" 2>&1)
-    echo \"\$out\" | grep -qE 'ERROR|error|injected' || { echo \"expected ERROR in output; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -q '\[ERROR' || { echo \"expected the [ERROR] decision token; got: \$out\"; echo FAIL; exit 0; }
     echo PASS
 "
 
@@ -11082,7 +11087,7 @@ t "t107b: HTTP_INJECT_STATUS=503 produces ERROR output" bash -c "
     f=\${TMP_DIR}/t107b.env
     printf '# @todo env-update dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T107B=18.3-alpine3.23\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --check --no-fail --env-file=\"\$f\" 2>&1)
-    echo \"\$out\" | grep -qE 'ERROR|error|injected' || { echo \"expected ERROR in output; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -q '\[ERROR' || { echo \"expected the [ERROR] decision token; got: \$out\"; echo FAIL; exit 0; }
     echo PASS
 "
 
@@ -11093,7 +11098,7 @@ t "t107c: HTTP_INJECT_STATUS=malformed-json produces parse ERROR" bash -c "
     f=\${TMP_DIR}/t107c.env
     printf '# @todo env-update dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T107C=18.3-alpine3.23\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --check --no-fail --env-file=\"\$f\" 2>&1)
-    echo \"\$out\" | grep -qE 'ERROR|error|parse' || { echo \"expected ERROR/parse in output; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -q '\[ERROR' || { echo \"expected the [ERROR] decision token; got: \$out\"; echo FAIL; exit 0; }
     echo PASS
 "
 
