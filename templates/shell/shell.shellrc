@@ -10,3 +10,19 @@ alias phpstorm='/opt/${GLOBAL_STACK_DOCKER_USER_ID}/intellij/phpstorm/bin/phpsto
 alias webstorm='/opt/${GLOBAL_STACK_DOCKER_USER_ID}/intellij/webstorm/bin/webstorm'
 alias megit='/opt/${GLOBAL_STACK_DOCKER_USER_ID}/megit/megit'
 alias sublime_text='/opt/${GLOBAL_STACK_DOCKER_USER_ID}/sublime_text/sublime_text'
+
+# >>> gs-claude-fullauto
+# Claude Code full-auto (2026-08-29). In INTERACTIVE shells only, plain `claude` carries
+# --allow-dangerously-skip-permissions: bypassPermissions enters the Shift+Tab cycle UNARMED —
+# every session still starts in its normal mode; the human arms it with Shift+Tab, and
+# statusline line 2 shows `⚠⚠⚠ BYPASS` while armed. What still interrupts while armed:
+# settings.json `deny` rules (block), `ask` rules (prompt) and exit-2 PreToolUse hooks — the
+# curated kill-list. CAVEAT: while bypass is merely AVAILABLE, plan mode's edit/shell blocks are
+# not enforced (deny/ask still apply); run `command claude` for a session where bypass is
+# unreachable and plan mode stays a hard gate. Non-interactive shells (scripts, hooks,
+# `claude -p` subprocesses, agent harnesses) never get the function: they keep the bare binary.
+# Record: ~/.claude/docs/plans/full-auto-mode.plan.md → ## Audit (rulings A–H, B-2).
+if [[ $- == *i* ]]; then
+	claude() { command claude --allow-dangerously-skip-permissions "$@"; }
+fi
+# <<< gs-claude-fullauto
