@@ -1,6 +1,11 @@
 {
   "permissions": {
     "defaultMode": "auto",
+    "ask": [
+      "Bash(bin/env-update.sh --apply*)",
+      "Bash(bash bin/env-update.sh --apply*)",
+      "Bash(/stack/bin/env-update.sh --apply*)"
+    ],
     "allow": [
       "Bash(git:*)",
       "Bash(make:*)",
@@ -74,7 +79,11 @@
       "Grep",
       "WebFetch",
       "WebSearch",
-      "mcp__github"
+      "mcp__github",
+      "Bash(/stack/bin/env-update.sh --check *)",
+      "Bash(/stack/bin/env-update.sh --dry-run *)",
+      "Bash(/stack/bin/env-update.sh --version *)",
+      "Bash(/stack/bin/env-update.sh --dump *)"
     ]
   },
   "hooks": {
