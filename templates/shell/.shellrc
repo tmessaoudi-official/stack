@@ -68,6 +68,6 @@ fi
 # `claude -p` subprocesses, agent harnesses) never get the function: they keep the bare binary.
 # Record: ~/.claude/docs/plans/full-auto-mode.plan.md → ## Audit (rulings A–H, B-2).
 if [[ $- == *i* ]]; then
-	claude() { command claude --allow-dangerously-skip-permissions "$@"; }
+	claude() { command claude --allow-dangerously-skip-permissions --permission-mode plan "$@"; }
 fi
 # <<< gs-claude-fullauto
