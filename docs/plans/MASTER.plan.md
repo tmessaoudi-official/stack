@@ -73,6 +73,76 @@ labels) and post-push commit signing.
   `ARG`s in `00base` etc.) are ALREADY correctly covered by the ARG-drift mechanism
   (`env-scan` propagation + `check-image-versions` + rebuild) — classify, don't migrate.
 
+### Executor entries
+
+- [2026-09-01] DONE: Stage 1 landed as `0cc4c4d` — 5 plans moved to `docs/archive/plans/` as
+  pure renames (`git diff --cached -M --stat`: 5 files, 0 lines changed), `MASTER.plan.md`
+  tracked (529 insertions), `var/claude/hunt/MASTER-TRIAGE.md` banner applied, pushed
+  (`8486f62..0cc4c4d`, `git rev-list --count origin/master..master` = 0).
+- [2026-09-01] TRACK 0 BASELINE (at `0cc4c4d`, tallies read from each suite's own final line):
+  env-update **836/836**; env-scan **186/186**; startup-prologue **182/182**; makefile-posix
+  **5/5**; check-bake-targets **12/12**; git-strip-coauthored **27/27**;
+  check-image-versions **17/17**; profile-shell **12/12**; claude-fullauto-shell **20/20
+  after the fix below** (was 3/20). `docker compose --env-file .env.local config -q` exit 0.
+  `make check-image-versions` silent + exit 0, and that silence is **certified non-vacuous**:
+  43 Dockerfiles, 11 matching `^FROM …${GLOBAL_STACK_IMAGE_*_VERSION}`, 11 comparisons
+  actually executed (`bash -x` trace counts 12 `_gs_civ_checked=` lines = init + 11) — a real
+  "no drift", not the F8 vacuity signature.
+- [2026-09-01] AGREED (Track 0 red, fixed as `7e79d39`): `claude-fullauto-shell.test.sh` was
+  red at baseline because `8486f62` added `--permission-mode plan` to the `claude()` wrapper
+  in all three templates without updating the suite. The **template is right, the assertions
+  were stale** — cases 3 and 7 now pin the whole flag prefix in order. Case 7 (zsh) was
+  *latently* red: skipped on this host for lack of zsh, so it would have surfaced only on a
+  host that has it. Case 0 keeps its bare-substring form on purpose (vacuity guard).
+  Sabotage-checked; restore `cmp`-verified.
+- [2026-09-01] CORRECTION (Track 1a scope — the plan's 9-file list is wrong in BOTH
+  directions; use this set instead): the fetchers that apply tag flags between a cache read
+  and a cache write are **codeberg, dockerhub, ghcr, github, npm, pypi, quay, rubygems,
+  url** [Verified: `git grep -l apply_tag_flags bin/lib/env-update/fetchers/`]. `sdkman.sh`
+  is a **false member** of the plan's list — it uses no tag flags at all [Verified: `git grep
+  -n 'tag_filter\|tag_strip\|tag_extract\|tag_exclude\|tag_replace' fetchers/sdkman.sh`
+  returns nothing]. `url.sh` is **missing** from it and has the identical defect: key built
+  at `:101`, read at `:104`, tag flags applied at `:219`, cache written at `:226` with that
+  same key. Implementing the plan's list verbatim would have left `url.sh` poisoned — the
+  exact "a 10th fetcher forgets it" hazard the plan warns against.
+- [2026-09-01] AGREED (Track 1a design, refines the cache-key ruling): the hash must be
+  folded in at the **`local _cache_key=` construction line**, never inside
+  `_gs_eu2_cache_try_load` — `_gs_eu2_cache_write` takes only `(_key, _value)` and receives
+  no record index [Verified: `core/cache.sh:77`], so hashing on the read side alone would
+  make the read key differ from the write key. For `url.sh` fold it at `:101` only: all five
+  `cache_write` sites (`:126, :163, :226, :275, :340`) reuse that one key, and a superset key
+  is harmless for the tiers that apply no flags. `url.sh:413` (`url-probe`) is a separate key
+  — confirm no tag-flag application sits between its read and its write before excluding it.
+  The structural guard is a **paired-set assertion**, not "helper present in every fetcher"
+  (pecl/sdkman/sdkmanager legitimately apply no flags): the set of files matching
+  `apply_tag_flags_from_record` must be a SUBSET of the set matching the key helper.
+- [2026-09-01] REFUTED-AT-EXECUTION (no work item): the 4th bug from the 2026-08-28/29 hunt —
+  `awk -v` escape-processing corrupting version strings — is **already fixed** at `9e61c05`
+  ("pass values into awk via ENVIRON so a backslash is not interpreted"). The only surviving
+  `awk -v` occurrence in `bin/lib/env-update/` is the explanatory comment at `apply.sh:90`
+  [Verified: `git grep -n 'awk -v' bin/lib/env-update/`]. Recorded so it is not silently
+  dropped; it was absorbed by neither the plan body nor the register.
+- [2026-09-01] CORRECTION (Track 3b): `bin/tests/check-image-versions.test.sh` **already
+  exists** (17/17 green) since `9398486`, which also fixed a `$PWD`-resolution vacuity in the
+  script. Track 3b's evidence step is therefore **extend, not create**, and the suite is
+  added to the Track 0 battery above. F8 is **half-fixed**: the 0-Dockerfiles guard is
+  present (`:63-69`), the 0-*comparisons* guard is still absent (`:84` still skips silently
+  when either side is unreadable). F9 (`:36` defaults to `.env`, not `.env.local`) and F14
+  (mode `100644` [Verified: `git ls-files -s`]) remain fully live.
+- [2026-09-01] CORRECTION (Track 3c F12 ordering — the fix must capture EARLIER than the plan
+  implies): `bin/open-all-envs.sh` overwrites the host's `~/.sdkman/etc/config` with an
+  unconditional `echo … > "${HOME}/.sdkman/etc/config"` at `:191`, i.e. **before** the
+  `rm -rf` at `:195`. Content capture must happen before that first `>`, not merely before
+  the `rm -rf`. Worse than stated: the script's final act (`:205`) leaves the developer's
+  config replaced by the single line `sdkman_healthcheck_enable=false`, so a completed run is
+  destructive even when nothing errors. F11 also confirmed live: no `set -euo pipefail`, and
+  `.env` is read as a bare relative path at `:180` and `:203`.
+- [2026-09-01] CONFIRMED-AT-EXECUTION (Track 2a): the defect reproduces exactly as specced —
+  `caddy:22`, `httpd:23`, `nginx:23` all write the same `${…_SUCCESSES}/web-server`, three
+  consumers wait on it (`alltogether:20`, `localstack:11`, `serverless:19`), and none of
+  `01caddy` / `01nginx` / `01httpd` defines `GLOBAL_STACK_ERROR_TOKEN` in its compose file
+  [Verified: `git grep -n GLOBAL_STACK_ERROR_TOKEN` over the three files returns nothing].
+
 The executor APPENDS its own dated `AGREED:` entries here (e.g. the F3 classification
 outcome, Track 5 audit rulings) as it goes — this file is where rulings land. Never backdate;
 never write an entry for a ruling that was not actually taken (forged-AGREED hazard, global
@@ -123,6 +193,8 @@ bash bin/tests/env-scan.test.sh
 bash bin/tests/startup-prologue.test.sh    # 182 at planning time
 bash bin/tests/makefile-posix.test.sh
 bash bin/tests/check-bake-targets.test.sh
+bash bin/tests/check-image-versions.test.sh   # ADDED 2026-09-01: exists since 9398486; the
+                                              #   plan's original 8-suite list omitted it
 bash bin/tests/git-strip-coauthored.test.sh
 bash bin/tests/profile-shell.test.sh        < /dev/null   # spawns bash -i
 bash bin/tests/claude-fullauto-shell.test.sh < /dev/null  # spawns bash -i
