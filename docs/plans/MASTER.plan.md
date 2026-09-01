@@ -94,7 +94,18 @@ labels) and post-push commit signing.
   were stale** — cases 3 and 7 now pin the whole flag prefix in order. Case 7 (zsh) was
   *latently* red: skipped on this host for lack of zsh, so it would have surfaced only on a
   host that has it. Case 0 keeps its bare-substring form on purpose (vacuity guard).
-  Sabotage-checked; restore `cmp`-verified.
+  Sabotage-checked; restore `cmp`-verified. **Certified-by-execution boundary**: cases 0–6
+  (bash, all three templates) ran green; the case-7 (zsh) assertion is fixed **by inspection
+  only** — zsh is not installed on this host, so that string has never been executed. Its
+  correctness is [Inferred] from the identical bash cases.
+- [2026-09-01] CARRIED (P3, developer's own call — NOT executor work): `8486f62` added
+  `--permission-mode plan` to the wrapper but three prose surfaces still describe it as
+  adding a single flag — the template block's own comment ("every session still starts in its
+  normal mode", now inaccurate: sessions open in plan mode), the test header comment at
+  `bin/tests/claude-fullauto-shell.test.sh:8`, and the global `~/.claude/CLAUDE.md`
+  § full-auto paragraph. The templates would need a triple-identical edit (out of Track 0's
+  scope), and `~/.claude` is out of this plan's scope entirely. Recorded so the drift is not
+  invisible.
 - [2026-09-01] CORRECTION (Track 1a scope — the plan's 9-file list is wrong in BOTH
   directions; use this set instead): the fetchers that apply tag flags between a cache read
   and a cache write are **codeberg, dockerhub, ghcr, github, npm, pypi, quay, rubygems,
