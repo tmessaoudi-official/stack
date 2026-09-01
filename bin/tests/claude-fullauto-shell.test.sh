@@ -53,12 +53,17 @@ for f in "${FILES[@]}"; do
   grep -q 'command claude' <<<"${BLOCK}" && ok "${f}: block calls the bare binary via 'command'" \
     || ko "${f}: block does not use 'command claude' — recursion/escape hatch broken"
 
-  # ── Case 3: interactive → flag + args pass through (real bytes, forced -i) ──
+  # ── Case 3: interactive → flags + args pass through (real bytes, forced -i) ──
+  # Both launch flags are pinned, in order, ahead of the user's own args: the bypass flag
+  # (puts bypassPermissions in the Shift+Tab cycle, unarmed) and `--permission-mode plan`
+  # (added 8486f62 — sessions open in plan mode). Asserting the whole ARGV rather than a
+  # substring is deliberate: a silent drop of either flag, or a reorder that puts a user
+  # arg ahead of them, must be red.
   P="$(mktemp)"; { printf '%s\n' "${BLOCK}"; printf '%s\n' 'claude one "two words"'; } > "${P}"
   out="$(PATH="${FAKEBIN}:${PATH}" bash -i "${P}" 2>/dev/null </dev/null || true)"
-  [[ "${out}" == *'ARGV:--allow-dangerously-skip-permissions one two words'* ]] \
-    && ok "${f}: interactive: flag first, args preserved" \
-    || ko "${f}: interactive: expected flag+args, got '${out}'"
+  [[ "${out}" == *'ARGV:--allow-dangerously-skip-permissions --permission-mode plan one two words'* ]] \
+    && ok "${f}: interactive: both flags first, in order, args preserved" \
+    || ko "${f}: interactive: expected flags+args, got '${out}'"
 
   # ── Case 4: interactive → `command claude` reaches the bare binary ───────
   { printf '%s\n' "${BLOCK}"; printf '%s\n' 'command claude plain'; } > "${P}"
@@ -89,7 +94,7 @@ fi
 if command -v zsh >/dev/null 2>&1 && [[ -n "$(extract .shellrc)" ]]; then
   P="$(mktemp)"; { extract .shellrc; printf '%s\n' 'claude z'; } > "${P}"
   out="$(PATH="${FAKEBIN}:${PATH}" zsh -i "${P}" 2>/dev/null </dev/null || true)"
-  [[ "${out}" == *'ARGV:--allow-dangerously-skip-permissions z'* ]] && ok "zsh: interactive wrapper works" || ko "zsh: wrapper broken: '${out}'"
+  [[ "${out}" == *'ARGV:--allow-dangerously-skip-permissions --permission-mode plan z'* ]] && ok "zsh: interactive wrapper works" || ko "zsh: wrapper broken: '${out}'"
   rm -f "${P}"
 else
   printf '  %b-%b  zsh: not installed — case skipped (bash-certified only)\n' "${C_BOLD}" "${C_RESET}"
