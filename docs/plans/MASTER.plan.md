@@ -293,6 +293,30 @@ labels) and post-push commit signing.
   quietly lose it again. Suite 17 → **30/30**; five sabotages, all red for their stated reason,
   all restores `cmp`-verified.
 
+- [2026-09-02] CONFIRMED-AT-EXECUTION (Track 3a/3d — both Makefile findings reproduce, and the
+  sandbox that proves them is cheaper than expected): `wait-healthy` is testable in a
+  copy-to-tempdir tree holding nothing but the `Makefile` and a two-line `.env.local`, with a
+  stub `docker` answering the two shapes the recipe uses (`ps -q` and `ps --format
+  "{{.Health}}"`). The whole repo is not needed, and `tools/errors/` then resolves inside the
+  sandbox instead of the real tree — which matters, because the target's failure branch reads
+  that directory. F6 red baseline: `Stack settled: 0 healthy, 0 failed`, **rc=0**, with the
+  stack down. F7 red baseline: `sed: can't read .env.local` on the first `make` of a clone.
+  New suite `bin/tests/wait-healthy.test.sh` **9/9**; `makefile-posix` 5 → **7/7**.
+- [2026-09-02] AGREED (Track 3a — the F6 suite guards BOTH directions): three of its nine cases
+  exist to stop the fix over-reaching, not to prove it. A count guard that returned too eagerly
+  would make `wait-healthy` stop waiting, which is the same class of silent wrong answer in the
+  other direction — so case 4 drives the stub `starting` → `healthy` and asserts the target
+  really spent a ~10 s settle cycle. Sabotage M3 is the one that matters most: it leaves the
+  new message intact and changes only `exit 1` → `exit 0`, and the suite still reds, so the
+  exit code is pinned independently of the wording.
+- [2026-09-02] AGREED (Track 3d — the guard goes on the shell call, not on stderr): the fix is
+  `$(shell test -f <file> && sed …)`, never `2>/dev/null`. Redirecting would silence the
+  fresh-clone case and an `.env.local` that exists but is genuinely unreadable, which is a real
+  failure this repo would then never report. Non-vacuity kept on both sides: the suite asserts
+  `make help` still produces output on the fresh clone (so a silent stderr is not a make that
+  died early), and the real repo still resolves **885** `GLOBAL_STACK_*` variables through the
+  guarded export.
+
 The executor APPENDS its own dated `AGREED:` entries here (e.g. the F3 classification
 outcome, Track 5 audit rulings) as it goes — this file is where rulings land. Never backdate;
 never write an entry for a ruling that was not actually taken (forged-AGREED hazard, global

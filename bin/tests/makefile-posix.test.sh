@@ -110,6 +110,30 @@ else
   fi
 fi
 
+# ── A fresh clone must not greet the developer with an error ────────────────
+# `-include ${DOT_ENV}` is tolerant, but the `export $(shell sed …)` beside it
+# ran unconditionally, so EVERY make invocation on a clone that has not yet run
+# env-scan printed `sed: can't read .env.local` before doing its job. The fix is
+# a guard on the shell call, not 2>/dev/null: suppressing it would also hide a
+# genuinely unreadable .env.local.
+printf '\n%b── Makefile on a fresh clone ──%b\n' "${C_BOLD}" "${C_RESET}"
+
+FRESH="$(mktemp -d)"
+cp "${REPO_ROOT}/Makefile" "${FRESH}/Makefile"
+fresh_err="$(cd "${FRESH}" && timeout 60 make help 2>&1 >/dev/null)"
+if grep -q "can't read" <<<"${fresh_err}"; then
+  ko "make on a clone without .env.local prints: $(head -1 <<<"${fresh_err}")"
+else
+  ok "make on a clone without .env.local emits nothing on stderr"
+fi
+# Non-vacuity: prove `make help` really ran, so a silent stderr is not simply a
+# make that died before reaching the export line.
+fresh_out="$(cd "${FRESH}" && timeout 60 make help 2>/dev/null)"
+[[ -n "${fresh_out}" ]] \
+  && ok "fresh-clone: make help still produced output" \
+  || ko "fresh-clone: make help produced nothing — the stderr check is vacuous"
+rm -rf "${FRESH}"
+
 # ── Summary ─────────────────────────────────────────────────────────────────
 TOTAL=$((PASS + FAIL))
 printf '\n'

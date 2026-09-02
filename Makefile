@@ -9,7 +9,11 @@ GLOBAL_STACK_DOCKER_CLI_DOT_ENV ?= .env.local
 GLOBAL_STACK_DOCKER_CLI_FLAGS ?=
 
 -include ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}
-export $(shell sed 's/=.*//' ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV})
+# The -include above is tolerant; this line was not, so every make invocation on
+# a clone that has not yet run env-scan printed `sed: can't read .env.local`
+# before doing its job. Guard the shell call rather than redirecting its stderr —
+# suppression would also hide an .env.local that exists but cannot be read.
+export $(shell test -f ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV} && sed 's/=.*//' ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV})
 
 GLOBAL_STACK_DOCKER_CLI_NO_COMPOSE_BAKE ?= ${COMPOSE_BAKE}
 
@@ -248,8 +252,17 @@ health:
 	@echo "=== Success tokens ===" && ls tools/successes/ 2>/dev/null || echo "(none)"
 	@echo "=== Error tokens ===" && ls tools/errors/ 2>/dev/null || echo "(none)"
 	@echo "=== Container status ===" && docker compose --env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV} ps --format "table {{.Name}}\t{{.Status}}\t{{.Health}}" 2>/dev/null || true
+# A stack that is DOWN used to settle instantly and exit 0: `ps --format
+# "{{.Health}}"` prints nothing when no container exists, so the loop below is
+# never entered and the errors dir is empty because nothing ever ran. Count the
+# containers first — zero is a failure, not a settled stack.
 wait-healthy:
-	@bash -c 'echo "Waiting for stack to settle..."; \
+	@bash -c '_gs_running="$$(docker compose --env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV} ps -q | wc -l | tr -d " ")"; \
+	if [ "$${_gs_running}" -eq 0 ]; then \
+		echo "wait-healthy: the stack is not running (0 containers) — nothing to wait for. Run make up first." >&2; \
+		exit 1; \
+	fi; \
+	echo "Waiting for stack to settle..."; \
 	while docker compose --env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV} ps --format "{{.Health}}" 2>/dev/null | grep -q starting; do \
 		printf "  %s healthy, %s failed — still starting...\n" "$$(ls tools/successes/ 2>/dev/null | wc -l | tr -d " ")" "$$(ls tools/errors/ 2>/dev/null | wc -l | tr -d " ")"; \
 		sleep 10; \
