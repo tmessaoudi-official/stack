@@ -30,16 +30,46 @@ if grep -Eq '^COMPOSE_FILE=.*;[[:space:]]*$' "$FILE_PATH"; then
   WARNINGS+=("COMPOSE_FILE ends with ';' — Docker Compose breaks silently on a trailing separator.")
 fi
 
-# 2. Port vars with a non-empty value must end with ':' (host half of HOST:CONTAINER);
-#    otherwise the numbers concatenate (e.g. 427083306). Empty value = no binding = OK.
+ENV_DIR=$(dirname "$FILE_PATH")
+
+# 2. Port vars. Whether a value must end with ':' is a property of the CONSUMER,
+#    not of the variable. A compose file writing `${VAR:-}3306` concatenates, so
+#    the ':' has to be there or the host port becomes 427083306. A compose file
+#    writing `${VAR:-}:${VAR:-}`, or a Makefile writing `${VAR}:5000`, supplies
+#    the colon itself — a trailing ':' there IS the bug. Keying on the
+#    concatenating consumer form is what makes this check right in both
+#    directions, and it needs no annotations and no list to maintain.
+#    The name pattern also admits range-style _PORT_<n>_<n>
+#    (GLOBAL_STACK_LOCALSTACK_LOCALSTACK_PORT_4510_4559), which the old
+#    `_PORT_[0-9]+=` shape could never match — and which is the one variable in
+#    this repo whose consumer genuinely concatenates.
+shopt -s nullglob
+_CONSUMERS=("$ENV_DIR"/docker/images/*/docker-compose.yaml)
+shopt -u nullglob
+
+_PORT_CANDIDATES=0
 while IFS= read -r line; do
-  WARNINGS+=("${line%%=*} is set but does not end with ':' — host/container ports will concatenate.")
-done < <(grep -E '^GLOBAL_STACK[A-Z0-9_]*_PORT_[0-9]+=.*[^:]$' "$FILE_PATH" || true)
+  _var="${line%%=*}"
+  _val="${line#*=}"
+  # Empty value = no host binding at all = correct, nothing to say.
+  if [[ -z "$_val" ]]; then continue; fi
+  if [[ "$_val" == *: ]]; then continue; fi
+  _PORT_CANDIDATES=$((_PORT_CANDIDATES + 1))
+  if ((${#_CONSUMERS[@]} == 0)); then continue; fi
+  if grep -qE '\$\{'"${_var}"':-\}[0-9]' "${_CONSUMERS[@]}"; then
+    WARNINGS+=("${_var} is set but does not end with ':' — its compose consumer appends the container port directly, so the two numbers concatenate.")
+  fi
+done < <(grep -E '^GLOBAL_STACK[A-Z0-9_]*_PORT_[0-9]+(_[0-9]+)*=' "$FILE_PATH" || true)
+
+# A consumer-keyed check with no consumers to read examined nothing. Reporting
+# that as clean is how a guard quietly stops guarding.
+if ((_PORT_CANDIDATES > 0)) && ((${#_CONSUMERS[@]} == 0)); then
+  WARNINGS+=("port check could not run: no docker/images/*/docker-compose.yaml under $ENV_DIR to identify concatenating consumers ($_PORT_CANDIDATES port var(s) left unchecked).")
+fi
 
 # 3. COMPOSE_FILE entries referencing files that don't exist (skip expansion-dependent entries)
 COMPOSE_LINE=$(grep -E '^COMPOSE_FILE=' "$FILE_PATH" | tail -1) || COMPOSE_LINE=""
 if [[ -n "$COMPOSE_LINE" ]]; then
-  ENV_DIR=$(dirname "$FILE_PATH")
   IFS=';' read -ra _ENTRIES <<<"${COMPOSE_LINE#COMPOSE_FILE=}"
   for entry in "${_ENTRIES[@]}"; do
     [[ -z "$entry" || "$entry" == *'$'* ]] && continue

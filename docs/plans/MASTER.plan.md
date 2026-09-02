@@ -317,6 +317,28 @@ labels) and post-push commit signing.
   died early), and the real repo still resolves **885** `GLOBAL_STACK_*` variables through the
   guarded export.
 
+- [2026-09-02] CONFIRMED-AT-EXECUTION (Track 4a — F13 reproduces on BOTH halves, on real data):
+  red baseline 6/12 — the hook emitted **5** false port warnings on `.env.local` and 1 on
+  `.env`, and did not match the range-style var at all. The consumer forms are now pinned:
+  `local.05…/docker-compose.yaml:161` is `${VAR:-}:${VAR:-}` and `Makefile:170` is
+  `--publish ${VAR}:5000` (both supply the colon), against `01localstack-localstack:36`
+  `${VAR:-}4510-4559` (concatenating). After the fix the hook is silent on both real files;
+  strip the colon from that one real variable, against the REAL compose tree (temp dir with a
+  symlinked `docker/`), and it fires naming exactly that variable — so the silence is
+  certified non-vacuous rather than assumed. Four sabotages red for their stated reason;
+  E4 (drop the already-terminated skip) produces **53** false warnings on the real
+  `.env.local`, which is the scale of noise the consumer key removes.
+- [2026-09-02] AGREED (Track 4a — the vacuity guard is part of the fix, not decoration): a
+  consumer-keyed check with no consumer files to read has examined nothing, and reporting that
+  as clean is how a guard quietly stops guarding. When port candidates exist and the glob
+  matches zero compose files, the hook now says the port check could not run. Same shape as the
+  Track 3b aggregate; both come from the same lesson — silence must mean "checked and clean",
+  never "did not look".
+- [2026-09-02] NOTED (CLAUDE.md § Gotchas corrected in the same commit): the standing entry
+  "Port vars must end with `:` when set" was **wrong for five of this repo's port vars** and is
+  the belief that produced the buggy hook. Rewritten to state the consumer rule, with both
+  consumer forms and the line numbers.
+
 The executor APPENDS its own dated `AGREED:` entries here (e.g. the F3 classification
 outcome, Track 5 audit rulings) as it goes — this file is where rulings land. Never backdate;
 never write an entry for a ruling that was not actually taken (forged-AGREED hazard, global
