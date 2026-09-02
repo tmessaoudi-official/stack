@@ -827,6 +827,23 @@ every class-3 var has a terminal state (gated / already-gated / class-2 / class-
 
 - Docker Hub anonymous page cap: a cap-hit is now SILENT where it used to be a loud ERROR
   (accepted risk, ruling 2026-08-21, re-affirmed 2026-08-31).
+- **Web-server shared SUCCESS marker, unlocked** (carried from Track 2a as the plan directed):
+  `caddy`/`nginx`/`httpd` each `sudo rm -rf` the shared `successes/web-server` with no lock. A real
+  race only when 2+ alternatives are enabled at once. Not fixed in Track 2a.
+- **A DISABLED web-server alternative cannot clear its own stale error token** (found in Track 2a,
+  not anticipated by the plan). caddy fails → `errors/caddy`; the developer edits `COMPOSE_FILE` to
+  nginx and runs `up` **without** `make down`; consumers now fail-fast on a token whose producer is
+  no longer in the stack. The clause that covers it — "`make down` clears `errors/*`" — is a real
+  precondition, not a proof. The alternative (COMPOSE_FILE introspection in the consumer) is
+  REJECTED by ruling, so this stays carried.
+- **nvm still gates on the raw pin** (hunt F8, fixed for pyenv/rbenv in Track 2c). Its resolver is
+  `nvm version`, which needs nvm sourced ~130 lines below the gate. Latent while every node pin is
+  fully qualified; a partial pin (`v24`) would recompile every boot. Pinned by §22f so it cannot be
+  "fixed" by copying the pyenv shape into a script where the resolver is not yet available.
+- **`02sdkman` receives `GLOBAL_STACK_USE_LOCKS` and ignores it** (Track 2b). Its guards are
+  commented out (`TODO.md:197`) because the script leaks fd 200 when locks are disabled. Plumbing
+  reaches all six readers; toggling works for five. The fix is a restructure of the acquire/release
+  blocks, already tracked in `TODO.md`.
 - sdkman fetcher: on a machine without sdkman, a dead broker is indistinguishable from
   "not installed" → SKIP (recorded residual).
 - url fetcher tier 3: transport failures invisible when no tier 4 applies → falls to

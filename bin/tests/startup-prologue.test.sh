@@ -1451,7 +1451,13 @@ _gate_decision() {
     "${root}=${TMP_DIR}/gate-${rt}-root" \
     PYTHON_VERSION="${pin}" PYTHON_VERSION_AS=3 \
     RUBY_VERSION="${pin}" RUBY_VERSION_AS=3 \
-    bash "${h}" 2>/dev/null | sed -n 's/^DECISION=//p'
+    bash "${h}" 2>/dev/null | sed -n 's/^DECISION=//p' || true
+  # `|| true` because this suite runs under `set -euo pipefail`: without it a
+  # harness that crashes (a moved extraction anchor, a prologue that fails to
+  # source) propagates through the command substitution and kills the RUN with
+  # no summary line, instead of yielding an empty decision and redding 22a.
+  # That exact mechanism ate §21's output before the ls|grep here became find.
+  # Mirrors §19's _ws_reports, which guards its harness for the same reason.
 }
 
 # The pin is partial; the marker holds what the manager actually resolved it to.

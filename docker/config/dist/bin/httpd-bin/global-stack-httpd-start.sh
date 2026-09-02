@@ -58,7 +58,8 @@ SECONDS=0
 
 # Clear this run's stale error token before doing anything that can fail, so a
 # consumer waiting on successes/web-server does not fail-fast on the PREVIOUS
-# boot's failure. Byte-matches the repo-wide literal (19 sites).
+# boot's failure. Byte-matches the repo-wide literal the convention audit
+# greps for — no count here, a number in a comment only rots.
 rm -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}/${GLOBAL_STACK_ERROR_TOKEN:-}"
 
 # Remove old httpd success directory

@@ -175,7 +175,17 @@ Use the same template above but replace the `healthcheck` block with:
       timeout: 5s
       retries: 5
 ```
-And remove the `GLOBAL_STACK_ERROR_TOKEN` env var (file-based tokens are tier 02/03 only).
+And remove the `GLOBAL_STACK_ERROR_TOKEN` env var — file-based tokens belong to services that
+run a `dist/bin` startup script, which is tier 02/03 in the ordinary case.
+
+**Except when the new service is a web-server ALTERNATIVE** (a fourth sibling of `01caddy` /
+`01nginx` / `01httpd`, signalling the shared `successes/web-server`). Those are tier 01, have an
+HTTP healthcheck, and still declare an error token — not for their own health, but so a consumer
+waiting on `successes/web-server` can fail fast instead of hanging for
+`GLOBAL_STACK_WAIT_FOR_TIMEOUT`. Removing it there resurrects hunt F4. In that case: give the
+service its own `GLOBAL_STACK_ERROR_TOKEN`, clear the stale token at startup the way the three
+siblings do, and add the token to `base-bin/global-stack-base-wait-for.sh` — `bin/tests/
+startup-prologue.test.sh` §21c reds until you do. See `CLAUDE.md` § Gotchas, token invariant.
 
 ---
 
