@@ -47,17 +47,27 @@ if [[ "${PYENV_MODE}" = "setup" ]]; then
     rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/python.${PYTHON_VERSION_AS:-${PYTHON_VERSION:-}}" "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/python.${PYTHON_VERSION_AS:-${PYTHON_VERSION:-}}"
   fi
 
-  # Version-mismatch gate: compare against the raw $PYTHON_VERSION pin (NOT the
-  # empty-at-gate-time $PYENV_VERSION). The marker stores the pyenv-resolved
-  # version which == the raw value for fully-qualified pins. On mismatch, warn +
-  # clean the old pyenv version dir and package markers, then drop the marker so
-  # the setup block reinstalls + repopulates. set -eE safe (helper returns 0).
+  # Version-mismatch gate. The marker stores the pyenv-RESOLVED version — it is
+  # written from find-latest at the install site below — so gating on the raw
+  # pin made every PARTIAL pin look like a version change on EVERY boot: 3.14
+  # against a marker holding 3.14.7, which is the entire reason find-latest and
+  # the _AS label scheme exist. WARN, wipe the version dir and every pkg marker,
+  # recompile the interpreter, every start, forever. Resolve first and gate on
+  # the same value the marker gets; the resolved value is REUSED at the install
+  # site, so "gate on what gets written" holds by construction rather than by
+  # two calls agreeing. Resolving here is safe and cheap: this runs after
+  # wait-for successes/pyenv (so pyenv exists) and `pyenv install --list` reads
+  # local python-build definitions. Consequence worth knowing: a partial pin now
+  # re-resolves every boot, so a pyenv upgrade shipping newer definitions
+  # triggers a real reinstall-with-WARN — which is the point of the gate.
+  # set -eE safe (find-latest falls back to the raw pin; the gate returns 0).
   _python_label="${PYTHON_VERSION_AS:-${PYTHON_VERSION:-}}"
   _python_marker="${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/python.${_python_label}"
-  _python_gate="$(gs_version_gate "${_python_marker}" "${PYTHON_VERSION:-}" "python.${_python_label}")"
+  _python_resolved="$(global-stack-pyenv-find-latest.sh "${PYTHON_VERSION:-}")"
+  _python_gate="$(gs_version_gate "${_python_marker}" "${_python_resolved}" "python.${_python_label}")"
   if [[ "${_python_gate}" == "reinstall" ]]; then
     _python_old="$(cat "${_python_marker}" 2>/dev/null || true)"
-    if [[ -n "${_python_old}" && "${_python_old}" != "${PYTHON_VERSION:-}" ]]; then
+    if [[ -n "${_python_old}" && "${_python_old}" != "${_python_resolved}" ]]; then
       printf '\nCleaning old python version dir %s\n' "${_python_old}"
       rm -rf "${PYENV_ROOT}/versions/${_python_old}"
     fi
@@ -134,7 +144,9 @@ fi
 if [[ "${PYENV_MODE}" = "setup" ]]; then
   export PYENV_VERSION=""
   if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/python.${PYTHON_VERSION_AS:-${PYTHON_VERSION:-}}" || "true" = "${GLOBAL_STACK_RELOAD_PYENV}" ]]; then
-    export PYENV_VERSION=$(global-stack-pyenv-find-latest.sh "${PYTHON_VERSION}")
+    # Reuse the value the gate above resolved — a second call could disagree and
+    # would silently reinstate the raw-vs-resolved mismatch this fix removed.
+    export PYENV_VERSION="${_python_resolved}"
     source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/pyenv.shellrc" && global-stack-pyenv-python${PYTHON_VERSION_AS}-install-version.sh
 
     source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/pyenv.shellrc" && eval "$(pyenv init -)" && eval "$(pyenv init --path)" && pyenv shell && global-stack-pyenv-python${PYTHON_VERSION_AS}-setup-version.sh

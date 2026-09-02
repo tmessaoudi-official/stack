@@ -45,17 +45,26 @@ if [[ "${RBENV_MODE}" = "setup" ]]; then
     rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/ruby.${RUBY_VERSION_AS:-${RUBY_VERSION:-}}" "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/ruby.${RUBY_VERSION_AS:-${RUBY_VERSION:-}}"
   fi
 
-  # Version-mismatch gate: compare against the raw $RUBY_VERSION pin. The marker
-  # stores the rbenv-resolved version (RBENV_VERSION) which == the raw value for
-  # fully-qualified pins. On mismatch, warn + clean the old rbenv version dir and
-  # package markers, then drop the marker so the setup block reinstalls +
-  # repopulates. set -eE safe (helper returns 0, WARN on stderr).
+  # Version-mismatch gate. The marker stores the rbenv-RESOLVED version
+  # (RBENV_VERSION, written at the install site below), so gating on the raw pin
+  # made every PARTIAL pin look like a version change on EVERY boot: 3.4 against
+  # a marker holding 3.4.10, which is the entire reason find-latest and the _AS
+  # label scheme exist. Resolve first and gate on the same value the marker
+  # gets; the resolved value is REUSED at the install site, so "gate on what
+  # gets written" holds by construction rather than by two calls agreeing.
+  # Resolving here is safe: this runs after wait-for successes/rbenv, and
+  # find-latest short-circuits to the pin when the version dir already exists.
+  # Consequence worth knowing: a partial pin now re-resolves every boot, so an
+  # rbenv upgrade shipping newer definitions triggers a real reinstall-with-WARN
+  # — which is the point of the gate. set -eE safe (find-latest falls back to
+  # the raw pin; the gate returns 0, WARN on stderr).
   _ruby_label="${RUBY_VERSION_AS:-${RUBY_VERSION:-}}"
   _ruby_marker="${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/ruby.${_ruby_label}"
-  _ruby_gate="$(gs_version_gate "${_ruby_marker}" "${RUBY_VERSION:-}" "ruby.${_ruby_label}")"
+  _ruby_resolved="$(global-stack-rbenv-find-latest.sh "${RUBY_VERSION:-}")"
+  _ruby_gate="$(gs_version_gate "${_ruby_marker}" "${_ruby_resolved}" "ruby.${_ruby_label}")"
   if [[ "${_ruby_gate}" == "reinstall" ]]; then
     _ruby_old="$(cat "${_ruby_marker}" 2>/dev/null || true)"
-    if [[ -n "${_ruby_old}" && "${_ruby_old}" != "${RUBY_VERSION:-}" ]]; then
+    if [[ -n "${_ruby_old}" && "${_ruby_old}" != "${_ruby_resolved}" ]]; then
       printf '\nCleaning old ruby version dir %s\n' "${_ruby_old}"
       rm -rf "${RBENV_ROOT}/versions/${_ruby_old}"
     fi
@@ -124,7 +133,9 @@ if [[ "${RBENV_MODE}" = "install" ]]; then
 fi
 
 if [[ "${RBENV_MODE}" = "setup" ]]; then
-  export RBENV_VERSION=$(global-stack-rbenv-find-latest.sh "${RUBY_VERSION}")
+  # Reuse the value the gate above resolved — a second call could disagree and
+  # would silently reinstate the raw-vs-resolved mismatch this fix removed.
+  export RBENV_VERSION="${_ruby_resolved}"
 
   if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/ruby.${RUBY_VERSION_AS:-${RUBY_VERSION:-}}" || "true" = "${GLOBAL_STACK_RELOAD_RUBY}" ]]; then
     source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/rbenv.shellrc" && rbenv install --verbose --skip-existing --keep "${RBENV_VERSION}"

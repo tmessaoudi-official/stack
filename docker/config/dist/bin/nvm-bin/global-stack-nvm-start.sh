@@ -53,6 +53,16 @@ if [[ "${NVM_MODE}" = "setup" ]]; then
   # marker stores $(nvm version "$NODE_VERSION") == the raw value for fully-
   # qualified pins (verified on-disk incl. nightly). set -eE safe: helper returns
   # 0 and emits the decision on stdout (WARN on stderr).
+  #
+  # CARRIED GAP (hunt F8) — pyenv and rbenv had this same raw-vs-resolved shape
+  # and were fixed by resolving before gating; nvm was NOT, because the resolver
+  # here is `nvm version`, which needs nvm sourced — that happens ~130 lines
+  # below, so it cannot be resolved early here without restructuring the lock
+  # acquisition around it. The defect stays LATENT while every node pin in .env
+  # is fully qualified (v24.19.0, v26.7.0): a PARTIAL pin such as v24 would
+  # mismatch its own v24.19.0 marker and recompile on every boot. Do not copy
+  # the pyenv shape here without moving the nvm source first. Pinned by
+  # bin/tests/startup-prologue.test.sh §22f.
   _node_marker="${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/node.${_node_version_label}"
   _node_gate="$(gs_version_gate "${_node_marker}" "${NODE_VERSION:-}" "node.${_node_version_label}")"
   if [[ "${_node_gate}" == "reinstall" ]]; then

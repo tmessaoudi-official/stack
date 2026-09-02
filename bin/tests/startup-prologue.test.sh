@@ -368,16 +368,23 @@ fi
 
 # ─── Section 9: version-gate wiring — correct compare target per runtime ────
 # Each wired tier-03 startup script must pass the CORRECT expected version var to
-# gs_version_gate (the loop-proof lynchpin). Notably python MUST compare against
-# $PYTHON_VERSION, not the empty-at-gate-time $PYENV_VERSION. Un-wired scripts are
-# skipped so this section grows coverage across the checkpoint-2 per-runtime commits.
+# gs_version_gate (the loop-proof lynchpin). Notably python must never compare
+# against the empty-at-gate-time $PYENV_VERSION. Un-wired scripts are skipped so
+# this section grows coverage across the checkpoint-2 per-runtime commits.
+#
+# pyenv and rbenv gate on $_python_resolved / $_ruby_resolved since hunt F8: the
+# marker holds the manager-RESOLVED version, so comparing the raw pin reinstalled
+# every boot for a partial pin. This section asserted the raw pin and was
+# therefore GREEN ON THE DEFECT — it is updated, not worked around, and §22 below
+# covers the behaviour. The raw pin is still asserted where it belongs: as the
+# argument handed to find-latest.
 printf '\n%b── Section 9: version-gate wiring (compare target)%b\n' "${C_BOLD}" "${C_RESET}"
 
 GATE_WIRING=(
   "nvm-bin/global-stack-nvm-start.sh:NODE_VERSION"
   "phpbrew-bin/global-stack-phpbrew-start.sh:PHP_VERSION_NAME"
-  "pyenv-bin/global-stack-pyenv-start.sh:PYTHON_VERSION"
-  "rbenv-bin/global-stack-rbenv-start.sh:RUBY_VERSION"
+  "pyenv-bin/global-stack-pyenv-start.sh:_python_resolved"
+  "rbenv-bin/global-stack-rbenv-start.sh:_ruby_resolved"
   "sdkman-bin/global-stack-sdkman-start.sh:JAVA_VERSION"
   "fvm-bin/global-stack-fvm-start.sh:FLUTTER_VERSION"
 )
@@ -399,6 +406,23 @@ for pair in "${GATE_WIRING[@]}"; do
   fi
 done
 printf '  (checked %d wired runtime scripts)\n' "${gate_wired_count}"
+
+# The resolved value must come FROM the raw pin — resolving the wrong input
+# would satisfy the loop above while gating on something unrelated.
+assert_pass "9: pyenv resolves from \$PYTHON_VERSION" \
+  grep -Eq 'pyenv-find-latest\.sh "\$\{PYTHON_VERSION[:}]' \
+  "${DIST_BIN}/pyenv-bin/global-stack-pyenv-start.sh"
+assert_pass "9: rbenv resolves from \$RUBY_VERSION" \
+  grep -Eq 'rbenv-find-latest\.sh "\$\{RUBY_VERSION[:}]' \
+  "${DIST_BIN}/rbenv-bin/global-stack-rbenv-start.sh"
+# The original contract this section was written for: never the manager's own
+# version var, which is empty at gate time.
+assert_fail "9: pyenv never gates on the empty-at-gate-time \$PYENV_VERSION" \
+  grep -q 'gs_version_gate .*\${PYENV_VERSION' \
+  "${DIST_BIN}/pyenv-bin/global-stack-pyenv-start.sh"
+assert_fail "9: rbenv never gates on the empty-at-gate-time \$RBENV_VERSION" \
+  grep -q 'gs_version_gate .*\${RBENV_VERSION' \
+  "${DIST_BIN}/rbenv-bin/global-stack-rbenv-start.sh"
 
 # ─── Section 10: base-setup-packages per-slot marker gate (checkpoint 3a) ───
 # The package engine must key markers by INSTALL_PACKAGE SLOT, not package NAME,
@@ -1360,6 +1384,117 @@ for _i in 0 1 2; do
   assert_pass "21i: ${_rt} writes errors/${_tok:-<none>} on failure" \
     test -n "${_tok}" -a "${_got}" = "${_tok}"
 done
+
+# ─── Section 22: resolve-before-gate for partial pins (hunt F8) ────────────
+# pyenv and rbenv WRITE the manager-resolved version into tools/versions/ (the
+# output of global-stack-{pyenv,rbenv}-find-latest.sh) but GATED on the raw pin.
+# For a fully-qualified pin the two are equal, which is why the comment at each
+# gate claimed it was safe. For a PARTIAL pin — 3.14 against a marker holding
+# 3.14.7, the entire reason find-latest and the _AS label scheme exist — they
+# differ on every boot: the gate WARNs "version changed", wipes the version dir
+# and every pkg.* marker, and reinstalls the interpreter. Every start. Forever.
+#
+# Fix: resolve first and gate on the same value the marker write uses. The
+# resolved value is REUSED at the install site rather than recomputed, so
+# "gate on what gets written" is true by construction, not by two calls
+# agreeing. Behaviour change worth naming: a partial pin now re-resolves every
+# boot, so a manager upgrade shipping newer definitions triggers a genuine
+# reinstall-with-WARN. That is the intent (a version bump must reinstall), not
+# a side effect.
+#
+# nvm is NOT fixed here: `nvm version` needs nvm sourced, which happens ~130
+# lines after its gate. Carried in the plan's register with that reason.
+printf '\n%b── Section 22: resolve-before-gate for partial pins%b\n' "${C_BOLD}" "${C_RESET}"
+
+# _gate_decision <runtime> <pin> <marker-content> <what find-latest resolves to>
+# Extracts the SHIPPED gate block by pattern, stubs the resolver, echoes the
+# decision. Never line numbers — the block moves every time it is edited.
+_gate_decision() {
+  local rt="$1" pin="$2" marker_body="$3" resolved="$4"
+  local var root src h stub_dir vers
+  case "${rt}" in
+    pyenv)
+      var=_python
+      root=PYENV_ROOT
+      src="${DIST_BIN}/pyenv-bin/global-stack-pyenv-start.sh"
+      ;;
+    rbenv)
+      var=_ruby
+      root=RBENV_ROOT
+      src="${DIST_BIN}/rbenv-bin/global-stack-rbenv-start.sh"
+      ;;
+  esac
+  h="${TMP_DIR}/gate-${rt}.sh"
+  stub_dir="${TMP_DIR}/gate-${rt}-bin"
+  vers="${TMP_DIR}/gate-${rt}-versions"
+  rm -rf "${stub_dir}" "${vers}"
+  mkdir -p "${stub_dir}" "${vers}" "${TMP_DIR}/gate-${rt}-root/versions"
+  printf '#!/bin/bash\nprintf "%%s\\n" "%s"\n' "${resolved}" \
+    >"${stub_dir}/global-stack-${rt}-find-latest.sh"
+  chmod +x "${stub_dir}/global-stack-${rt}-find-latest.sh"
+  {
+    printf '#!/bin/bash\nset -eE -o pipefail\nsource global-stack-base-prologue.sh\n'
+    sed -n "/^  ${var}_label=/,/^    rm -f \"\${${var}_marker}\"\$/p" "${src}"
+    printf '  fi\n'
+    printf 'printf "DECISION=%%s\\n" "${%s_gate}"\n' "${var}"
+  } >"${h}"
+  # The gate labels the marker with the _AS value, so the file is python.3 / ruby.3.
+  local marker_name
+  [[ "${rt}" == pyenv ]] && marker_name="python.3" || marker_name="ruby.3"
+  [[ -n "${marker_body}" ]] && printf '%s\n' "${marker_body}" >"${vers}/${marker_name}"
+  env \
+    PATH="${stub_dir}:${DIST_BIN}/base-bin:${PATH}" \
+    GLOBAL_STACK_ERROR_TOKEN="gate-token" \
+    GLOBAL_STACK_DOCKER_TOOLS_PATH="${TMP_DIR}" \
+    GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS="${TMP_DIR}" \
+    GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS="${vers}" \
+    "${root}=${TMP_DIR}/gate-${rt}-root" \
+    PYTHON_VERSION="${pin}" PYTHON_VERSION_AS=3 \
+    RUBY_VERSION="${pin}" RUBY_VERSION_AS=3 \
+    bash "${h}" 2>/dev/null | sed -n 's/^DECISION=//p'
+}
+
+# The pin is partial; the marker holds what the manager actually resolved it to.
+# This is the whole defect: identical state, reported as a version change.
+for _rt in pyenv rbenv; do
+  _d="$(_gate_decision "${_rt}" 3.14 3.14.7 3.14.7)"
+  if [[ "${_d}" == "skip" ]]; then
+    PASS=$((PASS + 1))
+    printf '  %b✓%b  22a: %s partial pin matching its resolved marker → skip\n' "${C_GREEN}" "${C_RESET}" "${_rt}"
+  else
+    FAIL=$((FAIL + 1))
+    FAILURES+=("22a: ${_rt} partial pin → skip (got '${_d}')")
+    printf '  %b✗%b  22a: %s partial pin gave %s — spurious reinstall on every boot\n' "${C_RED}" "${C_RESET}" "${_rt}" "${_d:-<none>}"
+  fi
+
+  # A partial pin that now resolves HIGHER is a real bump and must reinstall.
+  _d="$(_gate_decision "${_rt}" 3.14 3.14.7 3.14.9)"
+  assert_pass "22b: ${_rt} partial pin resolving higher → reinstall" \
+    test "${_d}" = "reinstall"
+
+  # Regression: the fully-qualified case every pin in .env uses today.
+  _d="$(_gate_decision "${_rt}" 3.14.7 3.14.7 3.14.7)"
+  assert_pass "22c: ${_rt} fully-qualified pin unchanged → skip" \
+    test "${_d}" = "skip"
+  _d="$(_gate_decision "${_rt}" 3.14.8 3.14.7 3.14.8)"
+  assert_pass "22d: ${_rt} fully-qualified pin bumped → reinstall" \
+    test "${_d}" = "reinstall"
+done
+
+# The value the gate compares must be the SAME variable the install path writes
+# — not a second call to find-latest that happens to agree.
+assert_pass "22e: pyenv gates and installs from one resolved value" \
+  grep -q 'PYENV_VERSION="\?\${_python_resolved}' \
+  "${DIST_BIN}/pyenv-bin/global-stack-pyenv-start.sh"
+assert_pass "22e: rbenv gates and installs from one resolved value" \
+  grep -q 'RBENV_VERSION="\?\${_ruby_resolved}' \
+  "${DIST_BIN}/rbenv-bin/global-stack-rbenv-start.sh"
+
+# Carried, not fixed — pinned so it cannot be silently "fixed" by copying the
+# pyenv shape into a script where the resolver is not yet available.
+assert_pass "22f: nvm still gates on the raw pin, and says why" \
+  grep -q 'resolved early here' \
+  "${DIST_BIN}/nvm-bin/global-stack-nvm-start.sh"
 
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'

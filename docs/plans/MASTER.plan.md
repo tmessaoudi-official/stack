@@ -427,6 +427,24 @@ labels) and post-push commit signing.
   run stops after step (2), and BOTH halves are `UNCERTIFIED-BY-EXECUTION`: value visibility inside
   a running container, and lock-serialized tier-03 parallel install.
 
+- [2026-09-02 17:05] CORRECTION (Track 2c): §9 of `startup-prologue.test.sh` was **green on the
+  defect** — it asserted `gs_version_gate .*${PYTHON_VERSION}` / `${RUBY_VERSION}` as the required
+  compare target, which is exactly the raw pin F8 is about. Same shape as Session B's
+  `check-image-versions` case 4. Updated, not routed around: §9 now asserts the resolved value, and
+  asserts the raw pin where it belongs — as the argument handed to `find-latest` — plus the original
+  never-`${PYENV_VERSION}` contract it was written for.
+- [2026-09-02 17:05] NOTED (Track 2c): behaviour change beyond "stop the spurious reinstall", stated
+  because it is not obvious from the diff. A partial pin now **re-resolves on every boot**, so a
+  pyenv/rbenv upgrade shipping newer definitions triggers a genuine reinstall-with-WARN. That is the
+  gate's purpose (a version bump must reinstall), and it is why prefix-tolerant string matching was
+  rejected as the alternative fix: it would silently pin a partial pin to whatever it first resolved
+  to. Recorded in the code comments and in `CLAUDE.md` § Gotchas.
+- [2026-09-02 17:05] NOTED (Track 2c): the resolved value is REUSED at each install site
+  (`pyenv:137`, `rbenv:127`) rather than recomputed, so "gate on the value the marker gets" holds by
+  construction. Sabotage P2 restores the second call and reds §22e — with a second call the two can
+  disagree and the mismatch returns silently. This also removed one SC2155 finding from each script
+  (`export X=$(...)` → `export X="${...}"`), so both files' shellcheck sets shrank by one.
+
 The executor APPENDS its own dated `AGREED:` entries here (e.g. the F3 classification
 outcome, Track 5 audit rulings) as it goes — this file is where rulings land. Never backdate;
 never write an entry for a ruling that was not actually taken (forged-AGREED hazard, global
