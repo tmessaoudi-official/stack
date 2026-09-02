@@ -71,15 +71,21 @@ GLOBAL_STACK_BAR_VERSION=2.0
 '
 
 # make_sandbox <env-content> [sdk-behaviour]
-#   sdk-behaviour "interrupt" makes the `sdk` shell function raise SIGINT the way
-#   a terminal does — at the whole process GROUP (`kill -INT 0`), landing mid-run
-#   after the config was captured. `kill -INT $$` is not a substitute: the script
-#   calls `sdk list … | grep ""`, and a SIGINT raised from inside a pipeline is
-#   swallowed [Verified: the loop runs to completion, exit 0; the same kill
-#   outside a pipeline exits 130]. Because it hits the group, the case runs under
-#   `setsid -w` or it takes this suite down with it.
+#   sdk-behaviour "interrupt" kills the script mid-run, after the config was
+#   captured and before the explicit restore, so only the EXIT trap can save it.
+#   The vector is `kill -TERM $$`, chosen for determinism after measuring three:
+#   `kill -INT $$` is SWALLOWED because the script calls `sdk list … | grep ""`
+#   and a SIGINT raised inside a pipeline does not stop the shell [Verified: loop
+#   runs to completion, exit 0]; `kill -INT 0` reaches the group the way a
+#   terminal's Ctrl-C does but RACES the pipeline's own completion [Verified:
+#   11/12 runs exit 130, 1/12 exits 0 — a flaky test is worse than no test];
+#   `kill -TERM $$` is 12/12 deterministic and needs no `setsid` isolation. The
+#   guarantee under test is the same for all three — the shell dies mid-block and
+#   the EXIT trap runs — and that trap is confirmed to fire for INT and TERM
+#   alike [Verified: exit 130 / 143, the line after the kill never executes].
 make_sandbox() {
   local _env_content="${1}" _sdk_behaviour="${2:-noop}" _c
+  RUN_EXTRA_ENV=()
   SBX="$(mktemp -d)"
   SANDBOXES+=("${SBX}")
   mkdir -p "${SBX}/bin" "${SBX}/stub" "${SBX}/home/.sdkman/etc" "${SBX}/foreign"
@@ -103,18 +109,21 @@ EOF
   {
     printf 'nvm() { :; }\n'
     if [[ "${_sdk_behaviour}" == "interrupt" ]]; then
-      printf 'sdk() { kill -INT 0; }\n'
+      printf 'sdk() { kill -TERM $$; }\n'
     else
       printf 'sdk() { :; }\n'
     fi
   } >"${SBX}/profile.sh"
 }
 
-# run_sut <cwd> [isolated] — sets RUN_OUT and RUN_RC.
+# Extra KEY=VAL pairs spliced into the `env -i` of the next run_sut. Reset per
+# case by make_sandbox so one case cannot leak into the next.
+RUN_EXTRA_ENV=()
+
+# run_sut <cwd> — sets RUN_OUT and RUN_RC.
 run_sut() {
-  local _pre=()
-  [[ "${2:-}" == "isolated" ]] && _pre=(setsid -w)
-  RUN_OUT="$(cd "${1}" && ${_pre[@]+"${_pre[@]}"} env -i \
+  RUN_OUT="$(cd "${1}" && env -i \
+    ${RUN_EXTRA_ENV[@]+"${RUN_EXTRA_ENV[@]}"} \
     HOME="${SBX}/home" \
     PATH="${SBX}/stub:/usr/local/bin:/usr/bin:/bin" \
     _GS_EU_MD_PROFILE_SH="${SBX}/profile.sh" \
@@ -197,17 +206,72 @@ make_sandbox "${ENV_WITH_LINKS}" interrupt
 SDK_CFG="${SBX}/home/.sdkman/etc/config"
 printf 'sdkman_auto_answer=true\nsdkman_debug_mode=false\n' >"${SDK_CFG}"
 cp "${SDK_CFG}" "${SBX}/config.original"
-run_sut "${SBX}/foreign" isolated
+run_sut "${SBX}/foreign"
 
-# 130 = killed by SIGINT. Asserting it proves the interrupt really fired, so a
+# 143 = killed by SIGTERM. Asserting it proves the kill really landed, so a
 # green restore below cannot be a run that simply never reached the sdk loop.
-[[ "${RUN_RC}" -eq 130 ]] \
-  && ok "the interrupt fired (exit 130)" \
-  || ko "expected exit 130 from the SIGINT, got ${RUN_RC}; output: ${RUN_OUT}"
+[[ "${RUN_RC}" -eq 143 ]] \
+  && ok "the kill landed mid-run (exit 143)" \
+  || ko "expected exit 143 from the signal, got ${RUN_RC}; output: ${RUN_OUT}"
 
 cmp -s "${SBX}/config.original" "${SDK_CFG}" \
   && ok "config restored byte-identical after the interrupt" \
   || ko "interrupted run left: $(tr '\n' '|' <"${SDK_CFG}" 2>/dev/null || echo '<deleted>')"
+
+# ── The safety net's OWN failure paths must not be the destructive ones ─────
+# A backup that silently did not happen is worse than no backup at all: the
+# restore then runs against nothing and "restores" by deleting. Both shapes
+# below end with the developer's file intact or explicitly preserved.
+printf '\n  %b6. a backup that fails does not cost the config%b\n' "${C_BOLD}" "${C_RESET}"
+
+# mktemp cannot create the backup → the block must not run at all.
+make_sandbox "${ENV_WITH_LINKS}"
+SDK_CFG="${SBX}/home/.sdkman/etc/config"
+printf 'sdkman_auto_answer=true\nsdkman_debug_mode=false\n' >"${SDK_CFG}"
+cp "${SDK_CFG}" "${SBX}/config.original"
+RUN_EXTRA_ENV=(TMPDIR=/nonexistent/no-such-dir)
+run_sut "${SBX}/foreign"
+
+cmp -s "${SBX}/config.original" "${SDK_CFG}" \
+  && ok "mktemp failure: config untouched" \
+  || ko "mktemp failure destroyed the config — now: $(tr '\n' '|' <"${SDK_CFG}" 2>/dev/null || echo '<deleted>')"
+
+grep -qi 'could not back up' <<<"${RUN_OUT}" \
+  && ok "mktemp failure: says the listing was skipped, not silently dropped" \
+  || ko "no message about the failed backup: $(tr '\n' '|' <<<"${RUN_OUT}")"
+
+# The restore itself fails → the backup must survive and the WARN must be true.
+REAL_CP="$(command -v cp)"
+make_sandbox "${ENV_WITH_LINKS}"
+SDK_CFG="${SBX}/home/.sdkman/etc/config"
+printf 'sdkman_auto_answer=true\nsdkman_debug_mode=false\n' >"${SDK_CFG}"
+cp "${SDK_CFG}" "${SBX}/config.original"
+# Fails only when the config is the DESTINATION, so the capture succeeds and the
+# restore does not — `cp -p src dst` puts the destination last.
+cat >"${SBX}/stub/cp" <<EOF
+#!/usr/bin/env bash
+if [[ "\${@: -1}" == "${SDK_CFG}" ]]; then
+  echo "cp: simulated failure" >&2
+  exit 1
+fi
+exec "${REAL_CP}" "\$@"
+EOF
+chmod +x "${SBX}/stub/cp"
+run_sut "${SBX}/foreign"
+
+_bak_path="$(sed -n 's/.*your original is kept at \(.*\)$/\1/p' <<<"${RUN_OUT}" | tail -1)"
+[[ -n "${_bak_path}" ]] \
+  && ok "restore failure: WARN names the kept backup" \
+  || ko "restore failed with no WARN naming a backup: $(tr '\n' '|' <<<"${RUN_OUT}")"
+
+if [[ -n "${_bak_path}" && -f "${_bak_path}" ]]; then
+  cmp -s "${_bak_path}" "${SBX}/config.original" \
+    && ok "restore failure: the kept backup really is the original" \
+    || ko "the kept backup is not the original content"
+  rm -f "${_bak_path}"
+else
+  ko "the WARN promised a backup at '${_bak_path}' and it is not there"
+fi
 
 # ── The doc block is the same bytes as the script ──────────────────────────
 printf '\n  %b6. templates/tips/open-many-links.md stays in sync%b\n' "${C_BOLD}" "${C_RESET}"

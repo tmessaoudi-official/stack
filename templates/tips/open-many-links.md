@@ -232,58 +232,88 @@ sdkmanager --sdk_root="${ANDROID_HOME}" --list
 # exact bytes here — before the first write — and put them back on every path out.
 _GS_EU_MD_SDK_CFG="${HOME}/.sdkman/etc/config"
 _GS_EU_MD_SDK_CFG_BAK=""
+# Tracked separately from the backup path: inferring "there was a file" from
+# "the backup variable is non-empty" is wrong on exactly the path that matters.
+# If mktemp fails, the variable is empty while the developer's config very much
+# exists, and the restore would take the never-existed branch and DELETE it.
+# Defence in depth rather than the live fix: the _SAFE guard below skips the
+# whole block when the capture failed, so restore is currently never reached in
+# that state and no test can tell this flag from the old inference. It keeps
+# _gs_eu_md_sdk_cfg_restore correct on its own terms, so moving or reusing the
+# block later cannot silently reopen the deletion path.
+_GS_EU_MD_SDK_CFG_EXISTED=false
+_GS_EU_MD_SDK_CFG_SAFE=true
 if [[ -f "${_GS_EU_MD_SDK_CFG}" ]]; then
+  _GS_EU_MD_SDK_CFG_EXISTED=true
   _GS_EU_MD_SDK_CFG_BAK="$(mktemp)"
-  cp -p "${_GS_EU_MD_SDK_CFG}" "${_GS_EU_MD_SDK_CFG_BAK}"
+  # The capture is verified, not assumed. mktemp creates the file, so a cp that
+  # fails leaves a 0-byte "backup" that restores cleanly over the original and
+  # even passes cmp — both sides being empty.
+  if [[ -z "${_GS_EU_MD_SDK_CFG_BAK}" ]] \
+    || ! cp -p "${_GS_EU_MD_SDK_CFG}" "${_GS_EU_MD_SDK_CFG_BAK}" \
+    || ! cmp -s "${_GS_EU_MD_SDK_CFG}" "${_GS_EU_MD_SDK_CFG_BAK}"; then
+    _GS_EU_MD_SDK_CFG_SAFE=false
+  fi
 fi
 
 # Idempotent on purpose: it runs once explicitly at the end and once more from
 # the EXIT trap. It deliberately does NOT clear the trap — a handler that
 # returns hands control back to the script, and the lines after it would rewrite
-# the file again with nothing armed to undo them.
+# the file again with nothing armed to undo them. The backup is deleted HERE and
+# only after a verified restore: deleting it in the caller would throw away the
+# developer's only copy on the very path the WARN says it is being kept.
 _gs_eu_md_sdk_cfg_restore() {
-  if [[ -n "${_GS_EU_MD_SDK_CFG_BAK}" ]]; then
-    [[ -f "${_GS_EU_MD_SDK_CFG_BAK}" ]] || return 0
-    cp -p "${_GS_EU_MD_SDK_CFG_BAK}" "${_GS_EU_MD_SDK_CFG}"
-    cmp -s "${_GS_EU_MD_SDK_CFG_BAK}" "${_GS_EU_MD_SDK_CFG}" \
-      || echo "WARN: could not restore ${_GS_EU_MD_SDK_CFG} — your original is kept at ${_GS_EU_MD_SDK_CFG_BAK}" >&2
-  else
+  if [[ "${_GS_EU_MD_SDK_CFG_EXISTED}" != true ]]; then
     # No config existed before this run: remove only what the script created.
     rm -f "${_GS_EU_MD_SDK_CFG}"
+    return 0
+  fi
+  [[ -n "${_GS_EU_MD_SDK_CFG_BAK}" && -f "${_GS_EU_MD_SDK_CFG_BAK}" ]] || return 0
+  if cp -p "${_GS_EU_MD_SDK_CFG_BAK}" "${_GS_EU_MD_SDK_CFG}" \
+    && cmp -s "${_GS_EU_MD_SDK_CFG_BAK}" "${_GS_EU_MD_SDK_CFG}"; then
+    rm -f "${_GS_EU_MD_SDK_CFG_BAK}"
+  else
+    echo "WARN: could not restore ${_GS_EU_MD_SDK_CFG} — your original is kept at ${_GS_EU_MD_SDK_CFG_BAK}" >&2
   fi
 }
-# EXIT alone is the right signal set: a non-interactive bash killed by INT or
-# TERM runs its EXIT trap and stops [Verified: exit 130 / 143, the line after
-# the kill never runs], so trapping those too would only resume the script
-# mid-block. Not armed interactively, where it would displace the developer's
-# own EXIT trap.
-[[ "$-" == *i* ]] || trap _gs_eu_md_sdk_cfg_restore EXIT
 
-mkdir -p "${HOME}/.sdkman/etc/"
-touch "${HOME}/.sdkman/etc/config"
+if [[ "${_GS_EU_MD_SDK_CFG_SAFE}" != true ]]; then
+  # Never write to a file that could not be backed up. Listing sdk versions is
+  # not worth the developer's config, so the whole block is skipped instead.
+  echo "ERROR: could not back up ${_GS_EU_MD_SDK_CFG} — skipping the sdkman version listing rather than risk it" >&2
+else
+  # EXIT alone is the right signal set: a non-interactive bash killed by INT or
+  # TERM runs its EXIT trap and stops [Verified: exit 130 / 143, the line after
+  # the kill never runs], so trapping those too would only resume the script
+  # mid-block. Not armed interactively, where it would displace the developer's
+  # own EXIT trap.
+  [[ "$-" == *i* ]] || trap _gs_eu_md_sdk_cfg_restore EXIT
 
-echo "sdkman_healthcheck_enable=true" > "${HOME}/.sdkman/etc/config"
+  mkdir -p "${HOME}/.sdkman/etc/"
+  touch "${HOME}/.sdkman/etc/config"
 
-source "${HOME}/.sdkman/etc/config"
+  echo "sdkman_healthcheck_enable=true" > "${HOME}/.sdkman/etc/config"
 
-rm -rf "${HOME}/.sdkman/etc/config"
-# Enumerate sdkman tools dynamically from .env @todo env-update annotations so this
-# list can never drift: extract each sdkman:TOOL identifier (the char class stops at
-# the ':' before any :major suffix, so java:17 → java), strip the prefix, dedup.
-while read -r _GS_EU_MD_SDK_TOOL; do
-  [[ -z "${_GS_EU_MD_SDK_TOOL}" ]] && continue
-  echo "${_GS_EU_MD_SDK_TOOL}"
-  sdk list "${_GS_EU_MD_SDK_TOOL}" | grep ""
-done < <(grep -E '@todo.*env-update.*sdkman:' "${_GS_EU_MD_DOT_ENV}" | grep -oE 'sdkman:[a-zA-Z0-9_-]+' | sed 's/^sdkman://' | sort -u)
+  source "${HOME}/.sdkman/etc/config"
 
-echo "sdkman_healthcheck_enable=false" > "${HOME}/.sdkman/etc/config"
+  rm -rf "${HOME}/.sdkman/etc/config"
+  # Enumerate sdkman tools dynamically from .env @todo env-update annotations so this
+  # list can never drift: extract each sdkman:TOOL identifier (the char class stops at
+  # the ':' before any :major suffix, so java:17 → java), strip the prefix, dedup.
+  while read -r _GS_EU_MD_SDK_TOOL; do
+    [[ -z "${_GS_EU_MD_SDK_TOOL}" ]] && continue
+    echo "${_GS_EU_MD_SDK_TOOL}"
+    sdk list "${_GS_EU_MD_SDK_TOOL}" | grep ""
+  done < <(grep -E '@todo.*env-update.*sdkman:' "${_GS_EU_MD_DOT_ENV}" | grep -oE 'sdkman:[a-zA-Z0-9_-]+' | sed 's/^sdkman://' | sort -u)
 
-source "${HOME}/.sdkman/etc/config"
+  echo "sdkman_healthcheck_enable=false" > "${HOME}/.sdkman/etc/config"
 
-# The shell now carries sdkman_healthcheck_enable=false, which is the point of
-# the two writes above. Hand the file itself back exactly as it was found.
-_gs_eu_md_sdk_cfg_restore
-rm -f "${_GS_EU_MD_SDK_CFG_BAK}"
+  source "${HOME}/.sdkman/etc/config"
+
+  # The shell now carries sdkman_healthcheck_enable=false, which is the point of
+  # the two writes above. Hand the file itself back exactly as it was found.
+  _gs_eu_md_sdk_cfg_restore
+fi
 
 bin/env-update.sh --check --no-cache
 ```

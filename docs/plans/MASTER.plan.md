@@ -339,6 +339,41 @@ labels) and post-push commit signing.
   the belief that produced the buggy hook. Rewritten to state the consumer rule, with both
   consumer forms and the line numbers.
 
+- [2026-09-02] CORRECTION (Track 3c follow-up — the F12 SAFETY NET had destructive failure
+  paths of its own, and none of S1-S6 touched them): a backup that silently did not happen is
+  worse than no backup, because the restore then "restores" by deleting. Three shapes, all
+  real: (1) `mktemp` fails while the config exists → the backup variable is empty, restore
+  takes the never-existed branch and `rm -f`s the developer's file [Verified: standalone probe
+  printed *"would rm -f the developer's config"*]; (2) the capture `cp` fails into the file
+  `mktemp` already created → a 0-byte "backup" restores cleanly over the original AND passes
+  `cmp`, both sides being empty; (3) the restore's own WARN said *"your original is kept at
+  <bak>"* while the caller deleted that backup on the very next line. Fixes: the capture is
+  verified with `cmp` and, when it fails, the ENTIRE sdkman block is skipped — never write to a
+  file you could not back up; the backup is deleted inside the restore and only after a
+  verified copy; the caller's trailing `rm -f` is gone. Two new cases (`TMPDIR` pointed at a
+  missing directory; a stub `cp` that fails only when the config is the DESTINATION, so the
+  capture succeeds and the restore does not). Sabotages S8/S9 red them.
+- [2026-09-02] NOTED (UNCERTIFIED-BY-EXECUTION, named rather than hidden): the separate
+  `_GS_EU_MD_SDK_CFG_EXISTED` flag is **defence in depth, not a certified guarantee** —
+  sabotage S7 reverts it to the old `[[ -n "${BAK}" ]]` inference and NOTHING behavioural reds,
+  because the `_SAFE` guard means restore is never reached in the state that distinguishes
+  them. It is kept so `_gs_eu_md_sdk_cfg_restore` is correct on its own terms if the block is
+  ever moved or reused. Two further dimensions of this track are also uncertified: the
+  `[[ $- == *i* ]]` interactive-paste path has never executed (every case runs
+  non-interactively), and `make wait-healthy` has never been run against a REAL running stack —
+  the suite proves the recipe's logic against a stub `docker`, not that a live compose
+  deployment emits the states the stub emits.
+- [2026-09-02] NOTED (a FLAKY test was nearly committed — the interrupt vector): the first
+  green 12/12 was luck. `kill -INT 0` reaches the process group the way Ctrl-C does, but races
+  the pipeline's own completion: measured **11/12 runs exit 130, 1/12 exits 0**, and the suite
+  reproduced that as 2 passes and 1 failure in three consecutive runs. The race is the missing
+  dwell after the kill — the stub returned immediately, so bash could reap the pipeline before
+  acting on its pending signal. Replaced with `kill -TERM $$`, **12/12 deterministic**, which
+  also removes the `setsid -w` isolation the group signal required. The guarantee is unchanged
+  (the shell dies mid-block, only the EXIT trap can restore) and that trap fires for INT and
+  TERM alike. Suite re-run four times: 16/16 each. The lesson generalises past this repo: a
+  signal-based test needs its determinism MEASURED over repeats, not observed once.
+
 The executor APPENDS its own dated `AGREED:` entries here (e.g. the F3 classification
 outcome, Track 5 audit rulings) as it goes — this file is where rulings land. Never backdate;
 never write an entry for a ruling that was not actually taken (forged-AGREED hazard, global
