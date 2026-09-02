@@ -263,6 +263,36 @@ labels) and post-push commit signing.
   **171 URLs enumerated, rc=0**, real `~/.sdkman/etc/config` md5 unchanged, and the temp home
   left with no config file behind.
 
+- [2026-09-02] CORRECTION (Track 3b — the existing suite PINNED the F8 defect): case 4 of
+  `bin/tests/check-image-versions.test.sh` asserted `[[ -z "$out" ]] && ok "missing-env-var:
+  skipped silently"`. The silent skip at `:83` was not merely untested, it was **encoded as
+  expected behaviour**, so fixing F8 required flipping an existing green assertion rather than
+  only adding new ones. Worth generalising: an extend-not-create evidence step must read the
+  existing assertions for the defect before adding cases beside them, or the fix and the suite
+  contradict each other.
+- [2026-09-02] REVISED (Track 3b F8 — the plan's guard condition would have cried wolf): the
+  plan specifies "zero comparisons with >0 Dockerfiles → WARN". That fires on a tree whose
+  services all chain `FROM ${GLOBAL_STACK_VERSION}`, where zero comparisons is the CORRECT
+  answer and nothing is wrong [Verified: sabotage T3 removes the extra gate and case 3
+  immediately reds with `WARN: 0 image service(s) … the version check did NOT run`]. The guard
+  implemented is therefore gated on **candidates** — services whose `FROM` actually references
+  a `GLOBAL_STACK_IMAGE_*_VERSION` — and fires only when candidates > 0 and comparisons == 0.
+  The root fix is one level lower and is what the plan's own diagnosis pointed at: `:83` no
+  longer skips in silence at all, it names the service and which side is unreadable. The
+  aggregate is the backstop, not the mechanism; it also catches the case the plan's version
+  misses entirely — 10 of 11 compared and one silently dropped.
+- [2026-09-02] CONFIRMED-AT-EXECUTION (Track 3b F9 + the non-vacuity re-check it demands): the
+  default env file is now `.env.local` when present, `.env` otherwise, and every WARN names the
+  file it read. Because the compared values change, Track 0's "silent AND non-vacuous" baseline
+  had to be re-established rather than assumed: under the new default the real repo yields
+  **11 candidates, 11 comparisons, 0 dropped**, reading `/stack/.env.local` [Verified: `bash -x`
+  trace — 12 `_gs_civ_candidates=` and 12 `_gs_civ_checked=` lines = init + 11 each], output
+  silent, `make check-image-versions` rc=0. Silence still means clean; it no longer means
+  "examined nothing". F14 done in the same commit: `git update-index --chmod=+x` →
+  `git ls-files -s` reports `100755`, and case 14 asserts it so `core.fileMode=false` cannot
+  quietly lose it again. Suite 17 → **30/30**; five sabotages, all red for their stated reason,
+  all restores `cmp`-verified.
+
 The executor APPENDS its own dated `AGREED:` entries here (e.g. the F3 classification
 outcome, Track 5 audit rulings) as it goes — this file is where rulings land. Never backdate;
 never write an entry for a ruling that was not actually taken (forged-AGREED hazard, global
