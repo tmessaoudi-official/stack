@@ -1207,6 +1207,160 @@ _py_out=$(
 assert_pass "20d: control — the pyenv twin still resolves correctly" \
   test "${_py_out}" = "3.14.7"
 
+# ─── Section 21: web-server per-service error tokens (hunt F4) ─────────────
+# caddy, nginx and httpd are interchangeable ALTERNATIVES that all signal the
+# same successes/web-server marker, and none of them declared an error token.
+# global-stack-base-wait-for.sh derives the error path from the success path, so
+# it polled errors/web-server — a path with no producer anywhere in the repo. A
+# failed web server therefore hung its three consumers (alltogether, localstack,
+# serverless) for the full GLOBAL_STACK_WAIT_FOR_TIMEOUT and then reported a
+# timeout against THEMSELVES, pointing the reader at the wrong container.
+#
+# Fix: each web server declares its own GLOBAL_STACK_ERROR_TOKEN and clears its
+# own stale token at startup; wait-for polls all three IN ADDITION to the
+# derived path when the dependency is successes/web-server. Poll-all-three needs
+# no COMPOSE_FILE introspection: a web server that is not enabled writes
+# nothing. The shared SUCCESS marker semantics are deliberately unchanged — this
+# is the one documented exception to the token invariant (CLAUDE.md § Gotchas).
+printf '\n%b── Section 21: web-server per-service error tokens%b\n' "${C_BOLD}" "${C_RESET}"
+
+WAIT_FOR="${DIST_BIN}/base-bin/global-stack-base-wait-for.sh"
+IMAGES_DIR="${SCRIPT_DIR}/../../docker/images"
+
+WEB_SERVER_SERVICES=(01caddy 01nginx 01httpd)
+_ws_declared=()
+
+for _svc in "${WEB_SERVER_SERVICES[@]}"; do
+  _tok="$(grep -oP 'GLOBAL_STACK_ERROR_TOKEN=\K\S+' \
+    "${IMAGES_DIR}/${_svc}/docker-compose.yaml" 2>/dev/null || true)"
+  assert_pass "21a: ${_svc} declares its own GLOBAL_STACK_ERROR_TOKEN" \
+    test -n "${_tok}"
+  # The token must NOT be the shared success marker: that is the whole point of
+  # per-service tokens, and reusing it would resurrect the no-producer bug.
+  assert_pass "21a: ${_svc} token is not the shared 'web-server' marker" \
+    test "${_tok:-web-server}" != "web-server"
+  [[ -n "${_tok}" ]] && _ws_declared+=("${_tok}")
+done
+
+# Each producer clears its own stale token at startup — byte-matching the
+# repo-wide literal the convention audit greps for.
+for _svc in caddy nginx httpd; do
+  assert_pass "21b: ${_svc}-start.sh clears its own stale error token" \
+    grep -qF 'rm -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}/${GLOBAL_STACK_ERROR_TOKEN:-}"' \
+    "${DIST_BIN}/${_svc}-bin/global-stack-${_svc}-start.sh"
+done
+
+# Drift guard: wait-for hardcodes three literals that live in three OTHER files.
+# Read the tokens from compose and assert wait-for names each one — a rename
+# would otherwise uncouple the two sides silently, with every other test green.
+# The count assertion keeps the loop below from passing by iterating zero times.
+assert_pass "21c: all three web-server tokens were read from compose" \
+  test "${#_ws_declared[@]}" -eq 3
+for _tok in ${_ws_declared+"${_ws_declared[@]}"}; do
+  assert_pass "21c: base-wait-for.sh names the '${_tok}' token from compose" \
+    grep -qF "errors/${_tok}" "${WAIT_FOR}"
+done
+
+# ── BEHAVIOURAL ──
+# _wf_run <dependency-path> → "<rc>|<single-line output>"
+_wf_run() {
+  local out rc
+  out=$(GLOBAL_STACK_WAIT_FOR_TIMEOUT=2 bash "${WAIT_FOR}" "$1" 2>&1) && rc=0 || rc=$?
+  printf '%s|%s' "${rc}" "$(printf '%s' "${out}" | tr '\n' ' ')"
+}
+
+_wf_tools="${TMP_DIR}/wf"
+mkdir -p "${_wf_tools}/successes" "${_wf_tools}/errors"
+_wf_dep="${_wf_tools}/successes/web-server"
+
+for _tok in caddy nginx httpd; do
+  rm -f "${_wf_tools}/errors/"*
+  : >"${_wf_tools}/errors/${_tok}"
+  _wf_r="$(_wf_run "${_wf_dep}")"
+  if [[ "${_wf_r}" == 1\|*"error token found"*"errors/${_tok}"* ]]; then
+    PASS=$((PASS + 1))
+    printf '  %b✓%b  21d: waiting on web-server fail-fasts on errors/%s\n' "${C_GREEN}" "${C_RESET}" "${_tok}"
+  else
+    FAIL=$((FAIL + 1))
+    FAILURES+=("21d: fail-fast on errors/${_tok} (got ${_wf_r})")
+    printf '  %b✗%b  21d: errors/%s did not fail-fast — got %s\n' "${C_RED}" "${C_RESET}" "${_tok}" "${_wf_r}"
+  fi
+done
+
+# The derived path must SURVIVE for web-server too, so a future errors/web-server
+# producer is not silently ignored.
+rm -f "${_wf_tools}/errors/"*
+: >"${_wf_tools}/errors/web-server"
+_wf_r="$(_wf_run "${_wf_dep}")"
+assert_pass "21e: the derived errors/web-server path is still honoured" \
+  test "${_wf_r#1|}" != "${_wf_r}"
+
+# An unrelated token must NOT fail-fast — poll-all-three must not become
+# poll-anything, or every consumer dies on an unrelated service's failure.
+rm -f "${_wf_tools}/errors/"*
+: >"${_wf_tools}/errors/unrelated"
+_wf_r="$(_wf_run "${_wf_dep}")"
+if [[ "${_wf_r}" == 1\|*"timed out"* ]]; then
+  PASS=$((PASS + 1))
+  printf '  %b✓%b  21f: an unrelated error token does not fail-fast\n' "${C_GREEN}" "${C_RESET}"
+else
+  FAIL=$((FAIL + 1))
+  FAILURES+=("21f: unrelated token must not fail-fast (got ${_wf_r})")
+  printf '  %b✗%b  21f: unrelated token changed the outcome — got %s\n' "${C_RED}" "${C_RESET}" "${_wf_r}"
+fi
+
+# Regression: an ordinary dependency still fail-fasts on its own derived path.
+rm -f "${_wf_tools}/errors/"*
+: >"${_wf_tools}/errors/nvm"
+_wf_r="$(_wf_run "${_wf_tools}/successes/nvm")"
+if [[ "${_wf_r}" == 1\|*"errors/nvm"* ]]; then
+  PASS=$((PASS + 1))
+  printf '  %b✓%b  21g: an ordinary dependency still uses its derived error path\n' "${C_GREEN}" "${C_RESET}"
+else
+  FAIL=$((FAIL + 1))
+  FAILURES+=("21g: derived error path regression (got ${_wf_r})")
+  printf '  %b✗%b  21g: derived error path regressed — got %s\n' "${C_RED}" "${C_RESET}" "${_wf_r}"
+fi
+
+# Regression: a present success marker still returns 0 with no error files.
+rm -f "${_wf_tools}/errors/"*
+: >"${_wf_dep}"
+_wf_r="$(_wf_run "${_wf_dep}")"
+assert_pass "21h: a satisfied dependency still returns 0" \
+  test "${_wf_r%%|*}" = "0"
+rm -f "${_wf_dep}"
+
+# Each producer's SHIPPED handler must write exactly the token its own compose
+# file declares. Extracted by pattern, never by line number.
+_ws_token_file() { # $1 = script path, $2 = token → echoes the file it created
+  local src="$1" tok="$2" h="${TMP_DIR}/ws-token.sh" d="${TMP_DIR}/ws-token-errors"
+  rm -rf "${d}"
+  mkdir -p "${d}"
+  {
+    printf '#!/bin/bash\nset -eE -o pipefail\n'
+    sed -n '/^stackCatch() {/,/^}/p' "${src}"
+    printf 'trap %s ERR EXIT\n' "'stackCatch \$? \${LINENO} \"\${BASH_COMMAND}\"'"
+    printf '(exit 1)\n'
+  } >"${h}"
+  GLOBAL_STACK_ERROR_TOKEN="${tok}" \
+    GLOBAL_STACK_DOCKER_TOOLS_PATH="${d}" \
+    GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS="${d}" \
+    bash "${h}" >/dev/null 2>&1 || true
+  # find, not `ls | grep`: grep exits 1 on an empty errors dir, which is exactly
+  # the pre-fix case this must be able to OBSERVE rather than die on.
+  find "${d}" -maxdepth 1 -type f ! -name elapsed -printf '%f\n' 2>/dev/null | head -1
+}
+
+for _i in 0 1 2; do
+  _svc="${WEB_SERVER_SERVICES[${_i}]}"
+  _rt="${_svc#01}"
+  _tok="$(grep -oP 'GLOBAL_STACK_ERROR_TOKEN=\K\S+' \
+    "${IMAGES_DIR}/${_svc}/docker-compose.yaml" 2>/dev/null || true)"
+  _got="$(_ws_token_file "${DIST_BIN}/${_rt}-bin/global-stack-${_rt}-start.sh" "${_tok:-}")"
+  assert_pass "21i: ${_rt} writes errors/${_tok:-<none>} on failure" \
+    test -n "${_tok}" -a "${_got}" = "${_tok}"
+done
+
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
 if [[ "${FAIL}" -eq 0 ]]; then

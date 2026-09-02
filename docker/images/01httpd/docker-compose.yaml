@@ -35,6 +35,12 @@ services:
       - GLOBAL_STACK_RELOAD_HTTPD=${GLOBAL_STACK_RELOAD_HTTPD}
       - GLOBAL_STACK_RELOAD_HTTP_COMMON=${GLOBAL_STACK_RELOAD_HTTP_COMMON}
       - GLOBAL_STACK_WAIT_FOR_TIMEOUT=${GLOBAL_STACK_WAIT_FOR_TIMEOUT}
+      # Token-invariant exception (CLAUDE.md § Gotchas): caddy, nginx and httpd
+      # are interchangeable alternatives sharing ONE success marker
+      # (successes/web-server), so the ERROR token is per-service while the
+      # success token stays shared. Without it nothing writes an error file and
+      # a failed web server hangs its consumers for the full wait timeout.
+      - GLOBAL_STACK_ERROR_TOKEN=httpd
     networks:
       - public
     ports:

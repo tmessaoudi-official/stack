@@ -39,7 +39,10 @@ real failure mode documented in `CLAUDE.md` § Gotchas, not a hypothetical.
   compose file; the success write must be `tools/successes/${GLOBAL_STACK_ERROR_TOKEN}`. A different
   literal on the success side yields a container that is **fully functional yet permanently
   unhealthy**, masked for 24h by `start_period` — which is exactly why it survives review. Any
-  health-signalling edit with a hardcoded success name is **P0**.
+  health-signalling edit with a hardcoded success name is **P0**. **One exception, by ruling:**
+  `01caddy`/`01nginx`/`01httpd` are interchangeable alternatives sharing the single
+  `successes/web-server` marker, so their error tokens are per-service (`caddy`/`nginx`/`httpd`)
+  while the success write stays shared — see `CLAUDE.md` § Gotchas. Do not report it as a mismatch.
 - **One script, two tiers (P0 — unintended blast radius).** Startup scripts under
   `docker/config/dist/bin/<rt>-bin/` serve BOTH the tier-02 installer (`MODE=install`) and every
   tier-03 consumer (`MODE=setup`). A change guarded by neither `MODE` branch lands on all of them.
@@ -88,6 +91,8 @@ as category **K** alongside A–J. It targets the failure class unique to /stack
 >    Cross-check every `docker/images/*/docker-compose.yaml` `GLOBAL_STACK_ERROR_TOKEN` against the
 >    literal the startup script actually writes. A mismatch = permanently unhealthy yet working,
 >    masked for 24h by `start_period`. **This is the single highest-value check in this skill.**
+>    Skip `01caddy`/`01nginx`/`01httpd` — their shared `successes/web-server` marker is the one
+>    ruled exception (above), not a defect.
 > 2. **`MODE` branch asymmetry** — a startup script serving both `MODE=install` (tier 02) and
 >    `MODE=setup` (tier 03) where a code path is reachable in one mode but assumes state only the
 >    other creates.

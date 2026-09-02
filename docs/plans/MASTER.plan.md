@@ -374,6 +374,40 @@ labels) and post-push commit signing.
   TERM alike. Suite re-run four times: 16/16 each. The lesson generalises past this repo: a
   signal-based test needs its determinism MEASURED over repeats, not observed once.
 
+- [2026-09-02 15:40] CORRECTION (Track 2a): the stale-error-clearing literal
+  `rm -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}/${GLOBAL_STACK_ERROR_TOKEN:-}"` exists at
+  **19** sites, not the 10 this plan states — `git grep -n 'PATH_ERRORS}/${GLOBAL_STACK_ERROR_TOKEN'
+  -- docker/config/dist/bin | grep 'rm -f'`. The convention is byte-matched at all three new
+  sites. Measured hazard, recorded not fixed: with an unset token the literal expands to
+  `rm -f "<errors>/"`, which is *Is a directory*, rc 1, and under `set -eE` + the ERR trap aborts
+  the script (probe: `bash -c 'set -eEuo pipefail; trap ...; rm -f "$1/"'` → TRAP-FIRED rc=1).
+  All 19 existing sites already carry that shape; adopting it adds no new class of failure.
+- [2026-09-02 15:40] AGREED (Track 2a): the token invariant gains its FIRST documented exception.
+  The three web servers keep the shared `successes/web-server` write and gain per-service error
+  tokens. Three claim surfaces had to move with the code or they would have made the change look
+  like a defect: `CLAUDE.md` § Gotchas (the invariant itself), `.claude/skills/validate/SKILL.md`
+  step 8 (whose loop would emit a **P0 that is not one** — the three have no success literal in
+  their HTTP healthcheck at all, so `err_token != ok_token` fires unconditionally), and
+  `.claude/skills/stack-lenses/SKILL.md` in both places it states the invariant. Found by the
+  blast-radius lens; none was in the plan.
+- [2026-09-02 15:40] AGREED (Track 2a): `base-wait-for.sh` writes the three tokens as full
+  `errors/<name>` literals rather than composing them from a variable, purely so §21c can grep
+  them. The guard reads the tokens from the three compose files and asserts wait-for names each
+  one — three literals in one file coupled to three literals in three other files is exactly the
+  shape that drifts silently. Sabotage W1 (rename in compose only) reds it.
+- [2026-09-02 15:40] NOTED (Track 2a) → register: a **disabled** alternative cannot clear its own
+  stale token. caddy fails → `errors/caddy`; the developer switches `COMPOSE_FILE` to nginx and
+  runs `up` **without** `make down`; consumers now fail-fast on a token whose producer is no
+  longer in the stack. The plan's third safety clause ("`make down` clears `errors/*`") is what
+  covers this, and it is a real precondition, not a proof. Carried, not fixed.
+- [2026-09-02 15:40] REVISED (Track 2c): the plan scopes F8 to pyenv. `rbenv:55` and `nvm:57`
+  have the **identical** raw-vs-resolved shape and all three carry the same comment claiming the
+  marker "== the raw value for fully-qualified pins". It is latent only because every pin in
+  `.env` is fully qualified today (`3.14.7`, `3.4.10`, `v24.19.0`); a partial pin — the entire
+  reason `find-latest` and the `_AS` label scheme exist — reinstalls on EVERY boot. Full-set
+  coverage puts rbenv in scope. **nvm is carried**: `nvm version` needs nvm sourced, which happens
+  ~130 lines after the gate, so resolving early there is a restructure, not a fix.
+
 The executor APPENDS its own dated `AGREED:` entries here (e.g. the F3 classification
 outcome, Track 5 audit rulings) as it goes — this file is where rulings land. Never backdate;
 never write an entry for a ruling that was not actually taken (forged-AGREED hazard, global

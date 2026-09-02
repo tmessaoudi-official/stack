@@ -23,6 +23,12 @@ Validate the Docker Compose configuration and environment consistency.
    ```bash
    for f in docker/images/*/docker-compose.yaml; do
      svc=$(dirname "$f" | xargs basename)
+     # The three web servers are the documented exception (CLAUDE.md § Gotchas):
+     # interchangeable alternatives sharing ONE successes/web-server marker, so
+     # their error token is per-service by design and their HTTP healthcheck
+     # carries no success literal at all. Comparing them yields a P0 that is not
+     # one. Every other service is still checked.
+     case "$svc" in 01caddy | 01nginx | 01httpd) continue ;; esac
      err_token=$(grep 'GLOBAL_STACK_ERROR_TOKEN=' "$f" 2>/dev/null | grep -oP 'GLOBAL_STACK_ERROR_TOKEN=\K\S+')
      ok_token=$(grep -oP 'TOOLS_PATH_SUCCESSES\}/\K[^"& ]+' "$f" 2>/dev/null | head -1)
      [[ -z "$err_token" ]] && continue
