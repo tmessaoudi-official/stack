@@ -1,9 +1,20 @@
 ---
-# Shared environment variables — extend this in base volume variants (base, base-6vol).
+# Shared environment variables — extend this in base volume variants
+# (base, base-6vol).
 #
 # Provides: 14 GLOBAL_STACK_BASE_* vars (AWS endpoints, credentials, CA certs,
-#   serverless access key) + 2 user identity vars (USER_EMAIL, USER_NAME).
-# All runtime services inherit these via their base variant → runtime → service chain.
+#   serverless access key) + 2 user identity vars (USER_EMAIL, USER_NAME)
+#   + GLOBAL_STACK_USE_LOCKS.
+# All runtime services inherit these via their base variant → runtime →
+# service chain.
+#
+# GLOBAL_STACK_USE_LOCKS lives here because six startup scripts read it AT
+# RUNTIME (nvm, pyenv, rbenv, phpbrew, sdkman, fvm — all six serve both the
+# tier-02 installer and every tier-03 consumer). It was previously passed only
+# as a 00base BUILD arg, baked into the image ENV, so flipping it in .env.local
+# changed nothing and the tier-03 install race could never be serialized. The
+# build arg is kept as a harmless default: compose `environment:` overrides
+# image ENV at runtime. Pinned by bin/tests/compose-env-plumbing.test.sh.
 #
 # NOT included (service-specific): build, image, depends_on, volumes, networks,
 #   healthcheck, labels, ports, extra_hosts.
@@ -27,3 +38,4 @@ services:
       - SERVERLESS_ACCESS_KEY=${GLOBAL_STACK_BASE_SERVERLESS_ACCESS_KEY}
       - GLOBAL_STACK_DOCKER_USER_EMAIL=${GLOBAL_STACK_DOCKER_USER_EMAIL}
       - GLOBAL_STACK_DOCKER_USER_NAME=${GLOBAL_STACK_DOCKER_USER_NAME}
+      - GLOBAL_STACK_USE_LOCKS=${GLOBAL_STACK_USE_LOCKS}

@@ -116,6 +116,10 @@ services:
       - REQUESTS_CA_BUNDLE=${GLOBAL_STACK_BASE_REQUESTS_CA_BUNDLE}
       - CURL_CA_BUNDLE=${GLOBAL_STACK_BASE_CURL_CA_BUNDLE}
       - SERVERLESS_ACCESS_KEY=${GLOBAL_STACK_BASE_SERVERLESS_ACCESS_KEY}
+      # 00base cannot extend the base-env fragment (it is the image that
+      # fragment's consumers are built FROM), so it repeats the list inline.
+      # Keep in step with compose-fragments/base-env.compose.yaml.
+      - GLOBAL_STACK_USE_LOCKS=${GLOBAL_STACK_USE_LOCKS}
       - GLOBAL_STACK_DOCKER_USER_EMAIL=${GLOBAL_STACK_DOCKER_USER_EMAIL}
       - GLOBAL_STACK_DOCKER_USER_NAME=${GLOBAL_STACK_DOCKER_USER_NAME}
       - GLOBAL_STACK_WAIT_FOR_TIMEOUT=${GLOBAL_STACK_WAIT_FOR_TIMEOUT}

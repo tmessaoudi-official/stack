@@ -408,6 +408,25 @@ labels) and post-push commit signing.
   coverage puts rbenv in scope. **nvm is carried**: `nvm version` needs nvm sourced, which happens
   ~130 lines after the gate, so resolving early there is a restructure, not a fix.
 
+- [2026-09-02 16:20] AGREED (Track 2b): the plan's "enumerate readers and map each to its service
+  compose file" is **one line**, not thirty-three. The extends chain resolves to a single shared
+  environment fragment: every tier-02/03/04/05 service reaches
+  `docker/config/compose-fragments/base-env.compose.yaml` through `base`, `base-6vol` or one of the
+  five `<lang>-packages` fragments (which themselves extend base/base-6vol), and `01caddy`,
+  `03flutter3`, `01selenium-*` and `02sonarqube` extend it directly. Declaring the var there covered
+  **32 services** in one edit — the count is not asserted from a list kept in the test, it is read
+  out of the resolved config. `00base` needed a second line: it *is* the image the fragment's
+  consumers are built FROM, so it cannot extend it and repeats the list inline.
+- [2026-09-02 16:20] NOTED (Track 2b): `02sdkman` receives the value and **ignores it**. Its
+  `USE_LOCKS` guards are commented out (`TODO.md:197`) so `flock` runs unconditionally, because the
+  script leaks fd 200 when locks are disabled. The plumbing lands for all six readers; toggling
+  works for five. Not fixed here — it is a restructure of the acquire/release blocks, and TODO.md
+  already tracks it.
+- [2026-09-02 16:20] NOTED (Track 2b): evidence step (3) could not run —
+  `docker compose ps -q | wc -l` = **0**, the stack is down. Per the plan's own instruction the
+  run stops after step (2), and BOTH halves are `UNCERTIFIED-BY-EXECUTION`: value visibility inside
+  a running container, and lock-serialized tier-03 parallel install.
+
 The executor APPENDS its own dated `AGREED:` entries here (e.g. the F3 classification
 outcome, Track 5 audit rulings) as it goes — this file is where rulings land. Never backdate;
 never write an entry for a ruling that was not actually taken (forged-AGREED hazard, global
