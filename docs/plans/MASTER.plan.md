@@ -214,6 +214,55 @@ labels) and post-push commit signing.
   budget for this. Post-Track-1 total: **844** (195 + 246 + 242 + 161) = baseline 836 + 4
   (§120) + 4 (§121).
 
+- [2026-09-02] REVISED (Track 3c — `set -euo pipefail` is NOT applied to
+  `bin/open-all-envs.sh`, and the plan's instruction to add it is withdrawn): two
+  independent grounds, either sufficient. (1) **Paste safety.** The script is
+  byte-identical-paired with `templates/tips/open-many-links.md`, whose block is meant to be
+  pasted into a live shell — the repo already carries a rule for exactly this file requiring
+  the `(cd X && cmd)` form over `cd || exit`. `set -e`, `set -u` and a bare `exit` all
+  terminate the developer's interactive shell, so strict mode would turn a documented tip into
+  a terminal-killer. (2) **The script legitimately runs commands that fail.**
+  `npm --global outdated` returns non-zero whenever anything IS outdated
+  [Verified: `npm --global outdated; echo $?` → **1** on this host today], so `set -e` would
+  abort at `:183` and the python and sdkman sections would never run — strict mode would make
+  the script *less* correct, not safer. What replaces it: the two real defects are fixed at
+  the root (absolute repo-root `.env`; capture-and-restore of the sdkman config), and the
+  zero-link failure exits only when not interactive (`[[ "$-" == *i* ]]`), which is the same
+  dual-surface contract the `(cd X && cmd)` rule already encodes.
+- [2026-09-02] AGREED (Track 3c trap design): the restore is trapped on **EXIT only**, and the
+  handler deliberately never clears the trap. Trapping INT/TERM as well is the trap that looks
+  like the safe choice and is not — a handler that RETURNS hands control back to the script,
+  so the remaining lines would rewrite the config again with nothing armed to undo them. Not
+  needed either: a non-interactive bash killed by INT or TERM runs its EXIT trap and stops
+  [Verified: exit 130 / 143, the line after the kill never executed]. The handler is idempotent
+  (`[[ -f "${bak}" ]] || return 0`) because it genuinely runs twice — once explicitly, once
+  from the trap, and a group signal can even run it in a subshell as well. The trap is not
+  armed in an interactive shell, where it would displace the developer's own EXIT trap.
+- [2026-09-02] NOTED (Track 3c test-construction trap — the second "green over a path that
+  never ran" of this plan): the interrupt case first used `sdk() { kill -INT $$; }`. A SIGINT
+  raised from **inside a pipeline** is swallowed — the script calls `sdk list … | grep ""`, the
+  loop ran to completion and exited 0 [Verified: minimal repro prints `REACHED-END`, rc=0;
+  the identical kill outside a pipeline exits 130]. The faithful vector is `kill -INT 0` (a
+  terminal signals the whole process group), which requires the case to run under `setsid -w`
+  or it takes the suite down with it. It also exercises the handler's idempotence for free:
+  the subshell runs the EXIT trap too.
+- [2026-09-02] AGREED (Track 3c — the doc pairing is now EXECUTABLE, not a convention): the
+  `open-many-links.md` block was regenerated mechanically from `tail -n +2` of the script
+  rather than hand-synced, and `open-all-envs.test.sh` case 6 asserts the pairing
+  (`diff` of script lines 2-N against doc lines 9-(N+7), plus a guard that the doc's two extra
+  trailing lines still exist so the +7 offset stays true). Sabotage S6 — one digit changed in
+  the doc alone — reds exactly that one case and nothing else. The script also gained the
+  trailing newline it was missing, without which the diff can never be byte-exact.
+- [2026-09-02] CONFIRMED-AT-EXECUTION (Track 3c F12 is destructive on the SUCCESS path, as the
+  earlier correction predicted): the red baseline shows a fully successful run leaving the
+  developer's config as the single line `sdkman_healthcheck_enable=false`, with a seeded
+  `sdkman_debug_mode=false` **gone**. Interrupted mid-run it is worse — the file is left
+  `<deleted>`, because `rm -rf` has already run by then (sabotage S1). Red baseline 10/12 →
+  12/12 after the fix; six sabotages, all red for their stated reason, all restores
+  `cmp`-verified. Live end-to-end run against the real 380-annotation `.env` with a temp HOME:
+  **171 URLs enumerated, rc=0**, real `~/.sdkman/etc/config` md5 unchanged, and the temp home
+  left with no config file behind.
+
 The executor APPENDS its own dated `AGREED:` entries here (e.g. the F3 classification
 outcome, Track 5 audit rulings) as it goes — this file is where rulings land. Never backdate;
 never write an entry for a ruling that was not actually taken (forged-AGREED hazard, global

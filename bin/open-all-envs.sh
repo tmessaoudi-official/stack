@@ -1,7 +1,25 @@
 #!/usr/bin/env bash
 
 # this first
-source /etc/profile.d/stack.sh
+# _GS_EU_MD_PROFILE_SH is a test seam and nothing else: every real run resolves
+# the default. Without it a sandboxed run sources the host profile and is pulled
+# straight back onto the real nvm/npm/pyenv (precedent: _GS_CIV_ENV_FILE).
+# shellcheck source=/dev/null
+source "${_GS_EU_MD_PROFILE_SH:-/etc/profile.d/stack.sh}"
+
+# Resolve the checkout once so `.env` below is read from the repo and not from
+# the caller's cwd. Read as a bare relative path, this script enumerated
+# nothing, opened ZERO links and still exited 0 from every directory but /stack
+# — a run that did nothing was indistinguishable from one that worked.
+# BASH_SOURCE is empty when this block is pasted into an interactive shell; the
+# host checkout is required to live at /stack (CLAUDE.md § Gotchas: the
+# tools/.shellrc exports bake that path in), so that is the fallback.
+if [[ -n "${BASH_SOURCE[0]:-}" ]]; then
+  _GS_EU_MD_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+else
+  _GS_EU_MD_ROOT="/stack"
+fi
+_GS_EU_MD_DOT_ENV="${_GS_EU_MD_ROOT}/.env"
 
 ## Open all (env-update) links in .env order (one loop, all types, legacy fallback)
 
@@ -34,12 +52,17 @@ _gs_eu_md_resolve_url_vars() {
 # Track already-opened URLs so we never open the same tab twice (newline-separated string)
 _GS_EU_MD_SEEN_URLS=""
 
+# How many URLs were actually handed to the browser. Zero is a failure, not a
+# clean run: it means the .env scan below matched nothing at all.
+_GS_EU_MD_OPENED=0
+
 # Helper: open one URL — skips duplicates, sleeps so Firefox processes each tab in order
 _gs_eu_md_open_url() {
   local browser="${GLOBAL_STACK_ENV_UPDATE_NAVIGATOR:-firefox}"
   local priv_flag="${GLOBAL_STACK_ENV_UPDATE_NAVIGATOR_PRIVATE_ARG:---private-window}"
   grep -qxF "${1}" <<< "${_GS_EU_MD_SEEN_URLS}" && return 0
   _GS_EU_MD_SEEN_URLS+="${1}"$'\n'
+  _GS_EU_MD_OPENED=$((_GS_EU_MD_OPENED + 1))
   "${browser}" "${priv_flag}" "${1}" &
   wait $!
   sleep 0.4
@@ -177,13 +200,57 @@ while read -r line; do
     done < <(grep -oE 'https?://[^[:space:]]+' <<< "${line}")
   fi
 
-done < <(awk '!seen[$0]++' .env)
+done < <(awk '!seen[$0]++' "${_GS_EU_MD_DOT_ENV}")
+
+# A run that opened nothing did not succeed quietly — the .env above was
+# unreadable, or carries no annotations at all. Say so and stop. Pasted into an
+# interactive shell this block must not close the developer's terminal, so the
+# exit is taken only when running as a script ($- carries 'i' only when
+# interactive) — same paste-safety rule as the `(cd X && cmd)` form below.
+if ((_GS_EU_MD_OPENED == 0)); then
+  echo "ERROR: no links opened — ${_GS_EU_MD_DOT_ENV} is unreadable or has no '@todo env-update' annotations" >&2
+  [[ "$-" == *i* ]] || exit 1
+fi
 
 # then those
 for _GS_EU_MD_NODE_VERSION in $(compgen -v | grep -E '^GLOBAL_STACK_NODE([0-9]+|EDGE|[0-9]+_[0-9]+)_VERSION$'); do echo ""; echo "Node ${_GS_EU_MD_NODE_VERSION}: ${!_GS_EU_MD_NODE_VERSION}"; nvm use "${!_GS_EU_MD_NODE_VERSION}"; npm --global outdated; done
 (cd /stack/tools/serverless-framework && npm outdated)
 for _GS_EU_MD_PYTHON_VERSION in $(compgen -v | grep -E '^GLOBAL_STACK_PYTHON([0-9]+|EDGE|[0-9]+_[0-9]+)_VERSION$'); do echo ""; echo "Python ${_GS_EU_MD_PYTHON_VERSION}: ${!_GS_EU_MD_PYTHON_VERSION}"; /stack/tools/pyenv/versions/"${!_GS_EU_MD_PYTHON_VERSION}"/bin/pip"${!_GS_EU_MD_PYTHON_VERSION%.*}" list --outdated; done
 sdkmanager --sdk_root="${ANDROID_HOME}" --list
+
+# The block below steers sdkman's healthcheck by rewriting ~/.sdkman/etc/config.
+# That file belongs to the developer, not to this script: it used to be clobbered
+# by the first `>`, deleted outright by `rm -rf`, and left as the single line
+# `sdkman_healthcheck_enable=false` even when the run SUCCEEDED. Capture its
+# exact bytes here — before the first write — and put them back on every path out.
+_GS_EU_MD_SDK_CFG="${HOME}/.sdkman/etc/config"
+_GS_EU_MD_SDK_CFG_BAK=""
+if [[ -f "${_GS_EU_MD_SDK_CFG}" ]]; then
+  _GS_EU_MD_SDK_CFG_BAK="$(mktemp)"
+  cp -p "${_GS_EU_MD_SDK_CFG}" "${_GS_EU_MD_SDK_CFG_BAK}"
+fi
+
+# Idempotent on purpose: it runs once explicitly at the end and once more from
+# the EXIT trap. It deliberately does NOT clear the trap — a handler that
+# returns hands control back to the script, and the lines after it would rewrite
+# the file again with nothing armed to undo them.
+_gs_eu_md_sdk_cfg_restore() {
+  if [[ -n "${_GS_EU_MD_SDK_CFG_BAK}" ]]; then
+    [[ -f "${_GS_EU_MD_SDK_CFG_BAK}" ]] || return 0
+    cp -p "${_GS_EU_MD_SDK_CFG_BAK}" "${_GS_EU_MD_SDK_CFG}"
+    cmp -s "${_GS_EU_MD_SDK_CFG_BAK}" "${_GS_EU_MD_SDK_CFG}" \
+      || echo "WARN: could not restore ${_GS_EU_MD_SDK_CFG} — your original is kept at ${_GS_EU_MD_SDK_CFG_BAK}" >&2
+  else
+    # No config existed before this run: remove only what the script created.
+    rm -f "${_GS_EU_MD_SDK_CFG}"
+  fi
+}
+# EXIT alone is the right signal set: a non-interactive bash killed by INT or
+# TERM runs its EXIT trap and stops [Verified: exit 130 / 143, the line after
+# the kill never runs], so trapping those too would only resume the script
+# mid-block. Not armed interactively, where it would displace the developer's
+# own EXIT trap.
+[[ "$-" == *i* ]] || trap _gs_eu_md_sdk_cfg_restore EXIT
 
 mkdir -p "${HOME}/.sdkman/etc/"
 touch "${HOME}/.sdkman/etc/config"
@@ -200,8 +267,13 @@ while read -r _GS_EU_MD_SDK_TOOL; do
   [[ -z "${_GS_EU_MD_SDK_TOOL}" ]] && continue
   echo "${_GS_EU_MD_SDK_TOOL}"
   sdk list "${_GS_EU_MD_SDK_TOOL}" | grep ""
-done < <(grep -E '@todo.*env-update.*sdkman:' .env | grep -oE 'sdkman:[a-zA-Z0-9_-]+' | sed 's/^sdkman://' | sort -u)
+done < <(grep -E '@todo.*env-update.*sdkman:' "${_GS_EU_MD_DOT_ENV}" | grep -oE 'sdkman:[a-zA-Z0-9_-]+' | sed 's/^sdkman://' | sort -u)
 
 echo "sdkman_healthcheck_enable=false" > "${HOME}/.sdkman/etc/config"
 
 source "${HOME}/.sdkman/etc/config"
+
+# The shell now carries sdkman_healthcheck_enable=false, which is the point of
+# the two writes above. Hand the file itself back exactly as it was found.
+_gs_eu_md_sdk_cfg_restore
+rm -f "${_GS_EU_MD_SDK_CFG_BAK}"
