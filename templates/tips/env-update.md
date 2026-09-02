@@ -238,6 +238,15 @@ These flags are applied in the following order to the raw tag/version list fetch
 
 After the pipeline, channel selection picks the best remaining version.
 
+**`tag_flags_fingerprint` — why the cache keys below carry one.** Every fetcher that runs this
+pipeline folds an 8-hex digest of the seven tag-flag fields (`tag_filter`, `tag_exclude`,
+`tag_extract`, `tag_strip_prefix`, `tag_strip_suffix`, `tag_replace_from`, `tag_replace_to`)
+into its cache key. Without it, two variables tracking the *same* upstream and differing only
+in their tag flags share one cache entry, and the second reads back the first's answer —
+including a version its own `(tag-filter)` rejects, reported and written to `.env` as though
+it had been fetched. The digest is stable for a given flag set and constant for a flag-less
+record, so it costs one cache generation and nothing after that.
+
 | Flag | Record field | Applies to | Description |
 |------|-------------|------|---|
 | `(tag-filter:REGEX)` | `tag_filter` | All except `sdkman`, `sdkmanager`, `url`(tiers 1-2) | Keep only tags matching ERE regex. Applied to the raw tag name. |
@@ -937,7 +946,7 @@ A filtered re-query was considered as an automatic fix and **rejected**: it need
 - `tag-suffix` must match the exact literal suffix (not a regex) — the code escapes it before using it in grep.
 - **Do NOT use `(prefer-specific)` with Postgres**: `postgres:18.3-alpine3.23` is the real specific tag — no `18.3.x` Docker tags exist. The filter would drop all tags and produce SKIP.
 
-**Cache key:** `dockerhub:namespace/image:tag_suffix:major_hint:channel`
+**Cache key:** `dockerhub:namespace/image:tag_suffix:major_hint:major_hint_min:channel:prefer_specific:watch_major_depth:tag_flags_fingerprint`
 
 **Example annotations:**
 ```bash
@@ -976,7 +985,7 @@ GLOBAL_STACK_VALKEY_VERSION=9.0.3-alpine3.23
 
 **Version prefix:** Applied after channel selection if `version_prefix` is set.
 
-**Cache key:** `github:owner/repo:major_hint:channel` (normal mode); `github:owner/repo:major_hint:channel:tags` (check-tags / --with-tags mode — separate key to prevent cache contamination).
+**Cache key:** `github:owner/repo:major_hint:major_hint_min:channel:watch_major_depth:tag_flags_fingerprint`, with `:tcp_<STR>` appended when `(tag-channel-prefix:STR)` is set and `:tags` appended in check-tags / `--with-tags` mode — each suffix keeps that mode's answers out of the plain key.
 
 **Merge mode (`(check-tags)` / `--with-tags`):**
 
@@ -1065,7 +1074,7 @@ GLOBAL_STACK_PHP_DEFAULT_FFI_VERSION=
 - Deprecated package versions are excluded from the full version list path.
 - The stable fast path (`dist-tags.latest`) does not apply tag flags — it returns the registry's declared "latest" directly.
 
-**Cache key:** `npm:package-name:major_hint:channel`
+**Cache key:** `npm:package-name:major_hint:major_hint_min:channel:watch_major_depth:tag_flags_fingerprint`
 
 **Example annotation:**
 ```bash
@@ -1151,7 +1160,7 @@ GLOBAL_STACK_PHP_DEFAULT_ZMQ_VERSION=
 - A release is considered yanked only if ALL its files are yanked. Partially yanked releases (some files yanked) are still included.
 - The `pip index versions` output format varies across pip versions — the extraction uses `grep -oE '\([^)]+\)'` to find the versions list in parentheses.
 
-**Cache key:** `pypi:package-name:major_hint:channel`
+**Cache key:** `pypi:package-name:major_hint:major_hint_min:channel:watch_major_depth:tag_flags_fingerprint`
 
 **Example annotation:**
 ```bash
@@ -1181,7 +1190,7 @@ GLOBAL_STACK_ANSIBLE_VERSION=10.7.0
 
 **Pitfalls:**
 
-**Cache key:** `quay:org/image:major_hint:channel`
+**Cache key:** `quay:org/image:major_hint:major_hint_min:channel:watch_major_depth:tag_flags_fingerprint`
 
 **Example annotation:**
 ```bash
@@ -1213,7 +1222,7 @@ GLOBAL_STACK_KEYCLOAK_VERSION=26.1.4
 - Yanked versions are excluded from the full list.
 - The gems endpoint only returns the single current stable version — for channel-aware selection, the versions endpoint is needed.
 
-**Cache key:** `rubygems:gem-name:major_hint:channel`
+**Cache key:** `rubygems:gem-name:major_hint:major_hint_min:channel:watch_major_depth:tag_flags_fingerprint`
 
 **Example annotation:**
 ```bash
@@ -1395,7 +1404,7 @@ returns 0 with empty proposed_version. `decide.sh` will classify as SKIP.
 
 **Version prefix:** Applied in Tiers 1, 2, 3, and 4 to the selected version.
 
-**Cache key:** `url:URL:fe_flag:fj_flag:up_flag:channel`
+**Cache key:** `url:URL:fe_flag:fj_flag:up_flag:channel:tag_flags_fingerprint`
 
 **Example annotations:**
 ```bash
@@ -1447,7 +1456,7 @@ Both are best-effort: a failing or empty tags call keeps the releases pool rathe
 
 **Version prefix:** Applied after channel selection.
 
-**Cache key:** `codeberg:owner/repo:major_hint:channel`
+**Cache key:** `codeberg:owner/repo:major_hint:major_hint_min:channel:watch_major_depth:tag_flags_fingerprint`
 
 **Example annotation:**
 ```bash
@@ -1475,7 +1484,7 @@ GLOBAL_STACK_GOTOSOCIAL_VERSION=0.17.3
 
 **Version prefix:** Applied after channel selection.
 
-**Cache key:** `ghcr:owner/image:major_hint:channel`
+**Cache key:** `ghcr:owner/image:major_hint:major_hint_min:channel:watch_major_depth:tag_flags_fingerprint`
 
 **Example annotations:**
 ```bash

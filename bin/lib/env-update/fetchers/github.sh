@@ -252,7 +252,8 @@ _gs_eu2_fetch_github() {
 
   # Build cache key — include merge_mode, watch depth, channel prefix, and major_hint_min
   # so range annotations (:LOW-HIGH) don't collide with plain major-pin annotations (:HIGH).
-  local _cache_key="github:${_identifier}:${_major_hint}:${_major_hint_min}:${_channel}:${_wm_depth_ck}"
+  local _cache_key
+  _cache_key="github:${_identifier}:${_major_hint}:${_major_hint_min}:${_channel}:${_wm_depth_ck}:$(_gs_eu2_tag_flags_fingerprint "${_idx}")"
   [[ -n "${_tcp}" ]] && _cache_key="${_cache_key}:tcp_${_tcp}"
   [[ "${_merge_mode}" == "true" ]] && _cache_key="${_cache_key}:tags"
 

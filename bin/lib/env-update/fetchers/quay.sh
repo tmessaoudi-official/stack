@@ -92,7 +92,8 @@ _gs_eu2_fetch_quay() {
   _wm_depth_ck="$(_gs_eu2_record_get "${_idx}" watch_major_depth)"
 
   # Build cache key — include major_hint_min so range annotations don't collide.
-  local _cache_key="quay:${_identifier}:${_major_hint}:${_major_hint_min}:${_channel}:${_wm_depth_ck}"
+  local _cache_key
+  _cache_key="quay:${_identifier}:${_major_hint}:${_major_hint_min}:${_channel}:${_wm_depth_ck}:$(_gs_eu2_tag_flags_fingerprint "${_idx}")"
 
   # Cache read
   _gs_eu2_cache_try_load "${_idx}" "${_cache_key}" "${_major_hint:-}" "${_major_hint_min:-}" && return 0

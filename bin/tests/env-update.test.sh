@@ -1025,12 +1025,15 @@ t "t15c: tag-suffix filter applied" bash -c "
 
 t "t15d: cache hit skips HTTP call (sets proposed_version from cache)" bash -c "
     ${_DH_LIBS}
-    # Key must match what fetcher computes: dockerhub:<ns>:<tag_suffix>:<major_hint>:<major_hint_min>:<channel>:<prefer_specific>:<watch_major_depth>
-    _gs_eu2_cache_write 'dockerhub:library/postgres::::::' '18.3-alpine3.23-CACHED'
     _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
     _gs_eu2_record_set \$idx type       'dockerhub'
     _gs_eu2_record_set \$idx identifier '_/postgres'
     _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_POSTGRES18_VERSION'
+    # Key must match what the fetcher computes:
+    #   dockerhub:<ns>:<tag_suffix>:<major_hint>:<major_hint_min>:<channel>:<prefer_specific>:<watch_major_depth>:<tag-flag fingerprint>
+    # The fingerprint is read off the record rather than pasted in, so this
+    # test tracks the key format instead of pinning one snapshot of it.
+    _gs_eu2_cache_write \"dockerhub:library/postgres:::::::\$(_gs_eu2_tag_flags_fingerprint \$idx)\" '18.3-alpine3.23-CACHED'
     _gs_eu2_fetch_dockerhub \$idx
     val=\$(_gs_eu2_record_get \$idx proposed_version)
     [[ \"\$val\" == '18.3-alpine3.23-CACHED' ]] || { echo \"cache not used: \$val\"; echo FAIL; exit 0; }
@@ -12774,6 +12777,110 @@ t "t119k: every network fetcher has at least one decision ERROR site" bash -c "
         [[ \"\$n\" -gt 0 ]] || missing=\"\$missing \$b\"
     done
     [[ -z \"\$missing\" ]] || { echo \"fetchers that can never report a transport failure:\$missing\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 120 — the cache key covers the 7 tag flags
+#
+# The cache key was built from identifier/hint/channel only, so two records
+# for the SAME upstream differing only in their tag flags collided on one
+# cache file. The second record read back the first's answer — including a
+# version its OWN tag-filter rejects, which is the failure this section pins.
+# Silent by construction: the report line and the written .env value are both
+# a plausible version, just the wrong one.
+# ═══════════════════════════════════════════════════════════════════════════
+section "120 — cache key covers the tag flags"
+
+# t120a: the defect itself. library/postgres' fixture carries both 18.x and
+# 17.5 tags, so a (tag-filter:^17\.) record inheriting an unfiltered record's
+# 18.x answer is unmistakable — a proposal the record's own filter rejects.
+t "t120a: a tag-filter'd record does not read back an unfiltered record's answer" bash -c "
+    ${_DH_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t120a_cache
+    # Record A — no tag flags. Populates the cache.
+    _gs_eu2_record_new; a=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$a type       'dockerhub'
+    _gs_eu2_record_set \$a identifier '_/postgres'
+    _gs_eu2_record_set \$a env_var    'GLOBAL_STACK_T120A_A_VERSION'
+    _gs_eu2_fetch_dockerhub \$a
+    va=\$(_gs_eu2_record_get \$a proposed_version)
+    [[ \"\$va\" == 18.* ]] || { echo \"setup broken — record A resolved to '\$va', expected 18.x\"; echo FAIL; exit 0; }
+    # The write must have happened, or B's hit/miss proves nothing (dry_run
+    # makes _gs_eu2_cache_write a no-op, which would make this test vacuous).
+    ls \${TMP_DIR}/t120a_cache/*.cache >/dev/null 2>&1 || { echo 'setup broken — record A wrote no cache file'; echo FAIL; exit 0; }
+    # Record B — same image, (tag-filter:^17\.). Must NOT inherit A's answer.
+    _gs_eu2_record_new; b=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$b type       'dockerhub'
+    _gs_eu2_record_set \$b identifier '_/postgres'
+    _gs_eu2_record_set \$b env_var    'GLOBAL_STACK_T120A_B_VERSION'
+    _gs_eu2_record_set \$b tag_filter '^17\\.'
+    _gs_eu2_fetch_dockerhub \$b
+    vb=\$(_gs_eu2_record_get \$b proposed_version)
+    [[ \"\$vb\" == 17.* ]] || { echo \"cache poisoning — tag-filter '^17.' proposed '\$vb' (record A had cached '\$va')\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t120b: the structural guard. t120a can only ever exercise one fetcher; this
+# asserts the property across all of them, so a 10th fetcher that applies tag
+# flags and forgets the fingerprint is red on the day it lands rather than the
+# day someone notices a wrong version. Also pins the set coincidence the guard
+# rests on: applying tag flags and sourcing core/tag_flags.sh are the same set.
+t "t120b: every tag-flag-applying fetcher folds the flag fingerprint into its cache key" bash -c "
+    applies=''; sources=''; missing=''
+    for fx in '${_GS_EU2_LIB}'/fetchers/*.sh; do
+        b=\$(basename \"\$fx\" .sh)
+        grep -q 'apply_tag_flags_from_record' \"\$fx\" && applies=\"\$applies \$b\"
+        grep -q 'core/tag_flags\.sh' \"\$fx\"          && sources=\"\$sources \$b\"
+        grep -q 'apply_tag_flags_from_record' \"\$fx\" || continue
+        grep -qE '_cache_key=.*_gs_eu2_tag_flags_fingerprint' \"\$fx\" || missing=\"\$missing \$b\"
+    done
+    [[ \"\$applies\" == \"\$sources\" ]] || { echo \"set drift — applies tag flags:\$applies / sources tag_flags.sh:\$sources\"; echo FAIL; exit 0; }
+    [[ -n \"\$applies\" ]] || { echo 'vacuous — no fetcher matched apply_tag_flags_from_record'; echo FAIL; exit 0; }
+    [[ -z \"\$missing\" ]] || { echo \"applies tag flags but omits the fingerprint from its cache key:\$missing\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t120c: the fingerprint discriminates on each of the 7 fields independently.
+# A fingerprint covering only some of them would leave the same poisoning for
+# the fields it skipped.
+t "t120c: fingerprint changes when any one of the 7 tag flags changes" bash -c "
+    source '${_GS_EU2_LIB}/core/records.sh'
+    source '${_GS_EU2_LIB}/core/tag_flags.sh'
+    _gs_eu2_record_new; base=\${_GS_EU2_LAST_IDX}
+    fp_base=\$(_gs_eu2_tag_flags_fingerprint \$base)
+    [[ -n \"\$fp_base\" ]] || { echo 'empty fingerprint for a flag-less record'; echo FAIL; exit 0; }
+    for fld in tag_filter tag_exclude tag_strip_prefix tag_strip_suffix tag_extract tag_replace_from tag_replace_to; do
+        _gs_eu2_record_new; i=\${_GS_EU2_LAST_IDX}
+        _gs_eu2_record_set \$i \"\$fld\" 'XYZ'
+        fp=\$(_gs_eu2_tag_flags_fingerprint \$i)
+        [[ \"\$fp\" != \"\$fp_base\" ]] || { echo \"fingerprint ignores \$fld\"; echo FAIL; exit 0; }
+    done
+    # Stable for a fixed flag set — otherwise every run is a cache miss.
+    _gs_eu2_record_new; x=\${_GS_EU2_LAST_IDX}; _gs_eu2_record_set \$x tag_filter '^17\\.'
+    _gs_eu2_record_new; y=\${_GS_EU2_LAST_IDX}; _gs_eu2_record_set \$y tag_filter '^17\\.'
+    [[ \"\$(_gs_eu2_tag_flags_fingerprint \$x)\" == \"\$(_gs_eu2_tag_flags_fingerprint \$y)\" ]] \
+        || { echo 'fingerprint unstable for identical flag sets'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t120d: field boundaries are unambiguous. Joining the 7 fields with a printable
+# separator lets a flag value containing that separator impersonate a different
+# flag set — the poisoning this section fixes, reintroduced one layer down.
+t "t120d: fingerprint fields cannot bleed across the separator" bash -c "
+    source '${_GS_EU2_LIB}/core/records.sh'
+    source '${_GS_EU2_LIB}/core/tag_flags.sh'
+    # The boundary-shift pair: same field count, one ':' moved from inside a
+    # value to between two values. Any join on a printable separator maps both
+    # to 'a:b:c:::::' — only a separator no value can contain keeps them apart.
+    _gs_eu2_record_new; p=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$p tag_filter  'a:b'
+    _gs_eu2_record_set \$p tag_exclude 'c'
+    _gs_eu2_record_new; q=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$q tag_filter  'a'
+    _gs_eu2_record_set \$q tag_exclude 'b:c'
+    [[ \"\$(_gs_eu2_tag_flags_fingerprint \$p)\" != \"\$(_gs_eu2_tag_flags_fingerprint \$q)\" ]] \
+        || { echo 'separator collision — two different flag sets share one fingerprint'; echo FAIL; exit 0; }
     echo PASS
 "
 

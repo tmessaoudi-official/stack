@@ -163,7 +163,8 @@ _gs_eu2_fetch_dockerhub() {
 
   # Build cache key — include prefer_specific, watch depth, and major_hint_min so range
   # annotations (:LOW-HIGH) don't collide with plain major-pin annotations (:HIGH).
-  local _cache_key="dockerhub:${_ns}:${_tag_suffix}:${_major_hint}:${_major_hint_min}:${_channel}:${_prefer_specific}:${_wm_depth_ck}"
+  local _cache_key
+  _cache_key="dockerhub:${_ns}:${_tag_suffix}:${_major_hint}:${_major_hint_min}:${_channel}:${_prefer_specific}:${_wm_depth_ck}:$(_gs_eu2_tag_flags_fingerprint "${_idx}")"
 
   # Cache read
   _gs_eu2_cache_try_load "${_idx}" "${_cache_key}" "${_major_hint:-}" "${_major_hint_min:-}" && return 0

@@ -154,6 +154,46 @@ labels) and post-push commit signing.
   `01caddy` / `01nginx` / `01httpd` defines `GLOBAL_STACK_ERROR_TOKEN` in its compose file
   [Verified: `git grep -n GLOBAL_STACK_ERROR_TOKEN` over the three files returns nothing].
 
+- [2026-09-02] AGREED (Track 1a design): the fingerprint is `_gs_eu2_tag_flags_fingerprint`
+  in `core/tag_flags.sh` — an 8-hex `md5sum | cut -c1-8` (the tool `cache.sh:38` already uses;
+  no new dependency) over the same 7 fields `_gs_eu2_apply_tag_flags_from_record` reads,
+  **NUL-separated**. NUL because a bash string cannot contain one: a printable separator
+  reintroduces the very collision the fix exists to prevent, one layer down. Appended
+  **unconditionally**, including for flag-less records — a "skip the suffix when no flags are
+  set" branch is one that can be half-applied, and the cost of not having it is one cache
+  generation, in `/tmp`, under a 3600 s TTL.
+- [2026-09-02] AGREED (Track 1a guard rests on a set coincidence, now pinned): the fetchers
+  that apply tag flags, those that `source core/tag_flags.sh`, and those needing the
+  fingerprint are the SAME 9 — `pecl` / `sdkman` / `sdkmanager` are in none of the three
+  [Verified: per-file `grep -c` — `tagflags=0` for exactly those three]. `t120b` asserts both
+  the membership and the coincidence, so a 10th fetcher cannot quietly join two of the sets.
+  Independently corroborated by the documentation written before this work:
+  `templates/tips/env-update.md:243` scopes `(tag-filter)` to *"All except `sdkman`,
+  `sdkmanager`, `url`(tiers 1-2)"* — naming the two excluded fetchers the code analysis found,
+  and confirming `url` is IN for its later tiers. The plan's original nine (which dropped
+  `url` and kept `sdkman`) contradicted the repo's own reference on both counts.
+- [2026-09-02] CORRECTION (`url.sh:413` is IN, and for a better reason than "no flags
+  between"): the second cache site is `_gs_eu2_url_probe_check`, whose value **is** the
+  proposed version for url-probe records, and it is handed the same `_cache_key` from `:371`.
+  Fixing `:101` therefore fixes `:413` — no second edit, and none was made.
+- [2026-09-02] CARRIED (not fixed, out of Track 1a's stated scope — the 7 tag flags):
+  `version_prefix` is applied to `_proposed` **before** the cache write in both `url.sh`
+  (`:124` → `:126`) and `github.sh` (`:589` → `:595`) while appearing in neither key — the
+  same poisoning shape for a different field. Note-only; no evidence it is live in `.env`.
+- [2026-09-02] REFUTED (`tag_channel_prefix` — a finding I raised and then disproved before
+  acting on it): it looked like `version_prefix`'s twin, because it is absent from the
+  `local _cache_key=` construction line. It is **not** — `github.sh:257` appends
+  `:tcp_${_tcp}` to the key afterwards, and `:258` appends `:tags` for merge mode. So
+  `templates/tips/env-update.md:250` ("Cache key is segregated from non-flag runs") is TRUE
+  and nothing is owed here. Recorded because the near-miss generalises: a
+  `grep 'local _cache_key='` sweep sees construction and misses **post-construction
+  appends**, and only `grep '_cache_key="\${_cache_key}'` finds those — two sites, both in
+  `github.sh`, none anywhere else [Verified: that grep across all 12 fetchers].
+- [2026-09-02] NOTED (pre-existing, untouched): `templates/tips/env-update.md` documents
+  per-fetcher cache keys at `:940`, `:979`, `:1068`, `:1154`, `:1184`, `:1216`, and every one
+  of them was **already** stale before this change — none lists `major_hint_min`,
+  `prefer_specific` or `watch_major_depth`, all of which have been in the keys for some time.
+
 The executor APPENDS its own dated `AGREED:` entries here (e.g. the F3 classification
 outcome, Track 5 audit rulings) as it goes — this file is where rulings land. Never backdate;
 never write an entry for a ruling that was not actually taken (forged-AGREED hazard, global

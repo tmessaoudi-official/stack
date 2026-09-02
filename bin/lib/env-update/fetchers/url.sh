@@ -96,9 +96,11 @@ _gs_eu2_fetch_url() {
   _version_prefix="$(_gs_eu2_record_get "${_idx}" version_prefix)"
   _no_cache="${_GS_EU2_CFG[no_cache]:-false}"
 
-  # Build a stable cache key covering all discriminating fields (extract values included)
+  # Build a stable cache key covering all discriminating fields — the extract
+  # values, and the tag flags via their fingerprint (two records for the same
+  # URL differing only in (tag-filter) must not share a cache entry).
   local _cache_key
-  _cache_key="url:${_identifier}:${_fetch_extract:-}:${_fetch_json:-}:${_url_probe:+up}:${_channel}"
+  _cache_key="url:${_identifier}:${_fetch_extract:-}:${_fetch_json:-}:${_url_probe:+up}:${_channel}:$(_gs_eu2_tag_flags_fingerprint "${_idx}")"
 
   # Cache read
   _gs_eu2_cache_try_load "${_idx}" "${_cache_key}" && return 0

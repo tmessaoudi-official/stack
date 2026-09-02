@@ -3,6 +3,7 @@
 #
 # Exports:   _gs_eu2_is_floating_tag  _gs_eu2_filter_specific_tags
 #            _gs_eu2_apply_tag_flags  _gs_eu2_apply_tag_flags_from_record
+#            _gs_eu2_tag_flags_fingerprint
 # Sources:   none
 # Deps:      perl (for tag-extract regex capture groups)
 # Env:       none
@@ -125,4 +126,38 @@ _gs_eu2_apply_tag_flags_from_record() {
     "$(_gs_eu2_record_get "${_idx}" tag_extract)" \
     "$(_gs_eu2_record_get "${_idx}" tag_replace_from)" \
     "$(_gs_eu2_record_get "${_idx}" tag_replace_to)"
+}
+
+# _gs_eu2_tag_flags_fingerprint — short stable digest of a record's 7 tag flags.
+#
+# Args:    $1 record_idx — 0-based record index
+# Reads:   the same 7 record fields _gs_eu2_apply_tag_flags_from_record reads
+# Prints:  8 hex characters
+# Returns: 0 always
+# Side fx: none
+#
+# Belongs in every fetcher cache key. Two records for the SAME upstream that
+# differ only in their tag flags produce different answers, so a key blind to
+# the flags lets the second read back the first's — including a version its own
+# (tag-filter) rejects, reported and written as though it had been fetched.
+#
+# Fields are NUL-separated: a bash string cannot contain NUL, so no flag value
+# can impersonate a field boundary.  A printable separator would reintroduce
+# exactly the collision this function exists to prevent, one layer down.
+#
+# Always non-empty, including for a flag-less record (a constant digest of 7
+# empty fields).  Suppressing the suffix when no flags are set would be a
+# branch that can be half-applied; the cost of not having it is one cache
+# generation, in /tmp, under a 3600 s TTL.
+_gs_eu2_tag_flags_fingerprint() {
+  local _idx="${1}"
+  printf '%s\0' \
+    "$(_gs_eu2_record_get "${_idx}" tag_filter)" \
+    "$(_gs_eu2_record_get "${_idx}" tag_exclude)" \
+    "$(_gs_eu2_record_get "${_idx}" tag_strip_prefix)" \
+    "$(_gs_eu2_record_get "${_idx}" tag_strip_suffix)" \
+    "$(_gs_eu2_record_get "${_idx}" tag_extract)" \
+    "$(_gs_eu2_record_get "${_idx}" tag_replace_from)" \
+    "$(_gs_eu2_record_get "${_idx}" tag_replace_to)" \
+    | md5sum | cut -c1-8
 }

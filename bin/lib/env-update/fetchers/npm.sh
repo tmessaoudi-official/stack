@@ -85,7 +85,8 @@ _gs_eu2_fetch_npm() {
 
   # Build cache key — include major_hint_min so range annotations (:LOW-HIGH) don't
   # collide with plain major-pin annotations (:HIGH) that share the same HIGH.
-  local _cache_key="npm:${_identifier}:${_major_hint}:${_major_hint_min}:${_channel}:${_wm_depth_ck}"
+  local _cache_key
+  _cache_key="npm:${_identifier}:${_major_hint}:${_major_hint_min}:${_channel}:${_wm_depth_ck}:$(_gs_eu2_tag_flags_fingerprint "${_idx}")"
 
   # Cache read
   _gs_eu2_cache_try_load "${_idx}" "${_cache_key}" "${_major_hint:-}" "${_major_hint_min:-}" && return 0
