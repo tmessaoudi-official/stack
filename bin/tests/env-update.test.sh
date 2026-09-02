@@ -12884,6 +12884,58 @@ t "t120d: fingerprint fields cannot bleed across the separator" bash -c "
     echo PASS
 "
 
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 121 — the <empty> placeholder is a placeholder, not a value
+#
+# Three parse errors substitute the literal string "<empty>" for an absent
+# value and then hand it to %q, which escapes it: the reader is told the
+# annotation contained "\<empty\>", which looks like a real (and bizarre)
+# value rather than "this field was blank". The escaping is right for a real
+# value and wrong for the stand-in — so the branch, not the format, is the fix.
+# ═══════════════════════════════════════════════════════════════════════════
+section "121 — <empty> placeholder is not shell-escaped"
+
+t "t121a: (stale-after:) reports 'got <empty>' unescaped" bash -c "
+    f=\${TMP_DIR}/t121a.env
+    printf '# @todo env-update (stale-after:) github:foo/bar 1.2.3\nGLOBAL_STACK_T121A_VERSION=1.2.3\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1 || true)
+    echo \"\$out\" | grep -qF 'got <empty>' || { echo \"expected literal 'got <empty>', got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '\\\\<empty' && { echo \"placeholder still escaped by %q: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t121b: (depends-on:) reports 'got <empty>' unescaped" bash -c "
+    f=\${TMP_DIR}/t121b.env
+    printf '# @todo env-update (depends-on:) github:foo/bar 1.2.3\nGLOBAL_STACK_T121B_VERSION=1.2.3\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1 || true)
+    echo \"\$out\" | grep -qF 'got <empty>' || { echo \"expected literal 'got <empty>', got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '\\\\<empty' && { echo \"placeholder still escaped by %q: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t121c: an annotation with no TYPE:IDENTIFIER reports '(got: <empty>)' unescaped" bash -c "
+    f=\${TMP_DIR}/t121c.env
+    # Flags only, no TYPE:IDENTIFIER. A bare '# @todo env-update' with nothing
+    # after it is not treated as an annotation at all, so it never reaches this
+    # branch — the value has to be emptied by hoisting, not by omission.
+    printf '# @todo env-update (channel:rc)\nGLOBAL_STACK_T121C_VERSION=1.2.3\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1 || true)
+    echo \"\$out\" | grep -qF '(got: <empty>)' || { echo \"expected literal '(got: <empty>)', got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '\\\\<empty' && { echo \"placeholder still escaped by %q: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# t121d: the other half of the contract. A REAL malformed value still goes
+# through %q — dropping the escaping to fix the placeholder would let a value
+# containing whitespace or a metacharacter print unquoted and unreadable.
+t "t121d: a real malformed value is still shell-escaped" bash -c "
+    f=\${TMP_DIR}/t121d.env
+    printf '# @todo env-update (depends-on:a b) github:foo/bar 1.2.3\nGLOBAL_STACK_T121D_VERSION=1.2.3\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1 || true)
+    echo \"\$out\" | grep -qF 'got a\\ b' || { echo \"expected %q-escaped backslash-space form, got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
 _flush_section
 
 

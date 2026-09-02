@@ -1851,6 +1851,11 @@ These errors abort the tool on the first bad annotation. The format is:
 env-update: FILE:LINE: MESSAGE
 ```
 
+In the messages below, `"..."` is the offending value, shell-escaped so that
+whitespace and metacharacters are visible. When the value is **absent** the
+message reads the bare marker `<empty>` instead — never `\<empty\>`, which would
+look like a value rather than the absence of one.
+
 | Error message | Cause | Fix |
 |--------------|-------|-----|
 | `unknown flag "NAME" in annotation` | A `(flagname)` or `(flagname:val)` token whose name is not in the recognized flag set. | Check spelling of the flag name. |
@@ -1858,6 +1863,7 @@ env-update: FILE:LINE: MESSAGE
 | `flag tag-replace requires FROM:TO format` | `(tag-replace:ONETHING)` — no second colon separator. | Use `(tag-replace:FROM:TO)`. |
 | `malformed depends-on — expected VAR:constraint, got "..."` | `(depends-on:JUST_A_VAR)` — no constraint after colon. | Use `(depends-on:VAR:major)`. |
 | `annotation has no TYPE:IDENTIFIER (got: "...")` | The annotation line has no recognizable `type:identifier` token. | Add the type and identifier: `dockerhub:_/image`. |
+| `malformed stale-after — expected Nd …, got "..."` | `(stale-after:0d)`, `(stale-after:7)` or an empty value. | Use whole positive days: `(stale-after:7d)`. |
 | `duplicate @todo env-update before assignment (previous at line N)` | Two `@todo env-update` annotations in a row without a variable assignment between them. | Remove the duplicate or add the missing `VAR=value` line. |
 | `annotation not followed by variable assignment (got: LINE)` | A non-blank, non-comment, non-assignment line appeared after the annotation. | Ensure the next non-comment line is `VAR=value`. |
 

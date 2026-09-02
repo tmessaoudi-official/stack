@@ -194,6 +194,26 @@ labels) and post-push commit signing.
   of them was **already** stale before this change — none lists `major_hint_min`,
   `prefer_specific` or `watch_major_depth`, all of which have been in the keys for some time.
 
+- [2026-09-02] AGREED (Track 1b shape): the fix is a branch, not a format change.
+  `_gs_eu2_shown_value` in `core/parse.sh` prints the bare marker for an absent value and
+  keeps `%q` for a real one — both halves matter, so `t121d` asserts a real malformed value
+  (`(depends-on:a b)` → `a\ b`) is STILL escaped. It is green before the fix and red only if
+  the fix over-reaches; sabotage S5 (drop `%q` outright — the lazy fix) reds exactly it, and
+  S4 (re-escape the marker) reds the other three. Neither mutation is caught by the other's
+  test, which is why both exist.
+- [2026-09-02] NOTED (Track 1b test-construction trap): a bare `# @todo env-update` with
+  nothing after it is not treated as an annotation at all, so it never reaches the
+  no-TYPE:IDENTIFIER branch. `t121c` reaches it with a flags-only annotation
+  (`(channel:rc)`), where the value is emptied by hoisting rather than by omission. The first
+  draft used the bare form and went green against the UNFIXED parser — a passing test over a
+  path that never ran.
+- [2026-09-02] NOTED (suite runtime): the env-update suite exceeds 15 minutes wall-clock and
+  cannot complete in one foreground tool call; a background run is stopped at turn end. It is
+  run as four disjoint `--section` chunks (1-30 / 31-60 / 61-95 / 96-121, ~2 / 3.5 / 6 / 1
+  min), each reporting its own authoritative `ALL PASSED ✓ N / N`. The close-out battery must
+  budget for this. Post-Track-1 total: **844** (195 + 246 + 242 + 161) = baseline 836 + 4
+  (§120) + 4 (§121).
+
 The executor APPENDS its own dated `AGREED:` entries here (e.g. the F3 classification
 outcome, Track 5 audit rulings) as it goes — this file is where rulings land. Never backdate;
 never write an entry for a ruling that was not actually taken (forged-AGREED hazard, global

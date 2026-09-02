@@ -3,6 +3,7 @@
 #
 # Exports:   _gs_eu2_is_recognized_flag  _gs_eu2_hoist_all_flags
 #            _gs_eu2_dispatch_flag  _gs_eu2_parse_env_file
+#            _gs_eu2_shown_value
 # Sources:   core/records.sh
 # Deps:      bash 4.3+ (nameref used in _gs_eu2_hoist_all_flags)
 # Env:       none
@@ -22,6 +23,26 @@ readonly _GS_EU2_PARSE_SH_LOADED=1
 
 # shellcheck source=./records.sh
 source "$(dirname "${BASH_SOURCE[0]}")/records.sh"
+
+# _gs_eu2_shown_value — render a possibly-absent annotation value for an error.
+#
+# Args:    $1 value — the value as parsed (may be empty)
+# Prints:  %q-escaped value, or the bare marker <empty> when the value is absent
+# Returns: 0 always
+# Side fx: none
+#
+# The two halves need opposite treatment. A real value is escaped, so an
+# operator can see the whitespace or metacharacter that made it malformed. The
+# absent-value marker must NOT be, because %q renders <empty> as \<empty\> —
+# which reads as a real, bizarre value rather than "this field was blank", and
+# sends the reader looking for a backslash that is not in their .env file.
+_gs_eu2_shown_value() {
+  if [[ -z "${1}" ]]; then
+    printf '<empty>'
+    return 0
+  fi
+  printf '%q' "${1}"
+}
 
 # _gs_eu2_is_recognized_flag — test whether a flag name is in the known-flag set.
 #
@@ -204,8 +225,8 @@ _gs_eu2_dispatch_flag() {
       # or "always stale": a freshness contract that can never hold, or can never
       # fire, is a disabled feature wearing a configured one's clothes.
       if [[ ! "${_val}" =~ ^[1-9][0-9]*d$ ]]; then
-        printf 'env-update: %s:%s: malformed stale-after — expected Nd (whole positive days, e.g. 7d), got %q\n' \
-          "${_env_file}" "${_lnum}" "${_val:-<empty>}" >&2
+        printf 'env-update: %s:%s: malformed stale-after — expected Nd (whole positive days, e.g. 7d), got %s\n' \
+          "${_env_file}" "${_lnum}" "$(_gs_eu2_shown_value "${_val}")" >&2
         exit 1
       fi
       ;;
@@ -225,8 +246,8 @@ _gs_eu2_dispatch_flag() {
       ;;
     depends-on)
       if [[ -z "${_val}" || "${_val}" != *:* ]]; then
-        printf 'env-update: %s:%s: malformed depends-on — expected VAR:constraint, got %q\n' \
-          "${_env_file}" "${_lnum}" "${_val:-<empty>}" >&2
+        printf 'env-update: %s:%s: malformed depends-on — expected VAR:constraint, got %s\n' \
+          "${_env_file}" "${_lnum}" "$(_gs_eu2_shown_value "${_val}")" >&2
         exit 1
       fi
       ;;
@@ -398,8 +419,8 @@ _gs_eu2_parse_env_file() {
             "${_env_file}" "${_line_number}" "${_bad_flag}" >&2
         else
           local _got="${_content_clean%% *}"
-          printf 'env-update: %s:%s: annotation has no TYPE:IDENTIFIER (got: %q)\n' \
-            "${_env_file}" "${_line_number}" "${_got:-<empty>}" >&2
+          printf 'env-update: %s:%s: annotation has no TYPE:IDENTIFIER (got: %s)\n' \
+            "${_env_file}" "${_line_number}" "$(_gs_eu2_shown_value "${_got}")" >&2
         fi
         exit 1
       fi
