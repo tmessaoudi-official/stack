@@ -1277,7 +1277,7 @@ class-3 var is absent from this accounting, and no gate site in B lacks a class-
 | 20 | Track 5b — converge all 17 web-server compares on gs_version_gate (WARN + one idiom) | L | done | e9fd01e | docker/config/dist/bin/nginx-bin/*.sh docker/config/dist/bin/httpd-bin/*.sh docker/config/dist/bin/caddy-bin/*.sh bin/tests/startup-prologue.test.sh |
 | 21 | Track 5b — remainder named by 5a: phpmyadmin, 00base runtime installs, elasticmq, rbenv plugins. frankenphp NOT gated (path-keyed); awscli has no pin | M | done | ae4f4df 53c0859 | docker/config/dist/bin/base-bin/*.sh docker/config/dist/bin/phpmyadmin-bin/*.sh docker/config/dist/bin/serverless-bin/*.sh docker/config/dist/bin/rbenv-bin/*.sh bin/tests/startup-prologue.test.sh |
 | 22 | Track 5 docs — CLAUDE.md Gotchas + two-phase note once the gate is universal | S | blocked | - | CLAUDE.md |
-| 23 | Close-out — terminal states + SHAs in plan, full battery re-run, advisor, push | M | todo | - | docs/plans/MASTER.plan.md CLAUDE.md |
+| 23 | Close-out — terminal states + SHAs in plan, full battery re-run, advisor, push | M | done | 4eb16c6 | docs/plans/MASTER.plan.md |
 | 24 | Developer input — supervised rebuild/bring-up closing the 4 UNCERTIFIED labels | M | blocked | - | - |
 | 25 | Sweep — web-server iou handlers write an error token on exit 1; de-hardcode WEB_SERVER_SCRIPTS | M | done | a1ba6f1 | docker/config/dist/bin/caddy-bin/*.sh docker/config/dist/bin/httpd-bin/*.sh docker/config/dist/bin/nginx-bin/*.sh bin/tests/startup-prologue.test.sh |
 | 26 | Sweep — retire the stale `# @todo fix pin versions` TODOs (NOT pin: .hadolint.yaml already rules against it) | L | done | fc10204 | docker/images/*/Dockerfile* templates/ghost-blog/Dockerfile |
