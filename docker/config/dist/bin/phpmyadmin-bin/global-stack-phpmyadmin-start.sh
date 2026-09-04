@@ -40,13 +40,27 @@ echo "export PATH" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL
 
 source "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 
-if [ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpmyadmin" ] || [ "${GLOBAL_STACK_RELOAD_PHPMYADMIN}" = "true" ]; then
+# Row 21. All three guards below were exist-only, and the marker write at the foot
+# of this script sat OUTSIDE every condition — so it was rewritten with the current
+# pin on every boot and could never serve as a comparison. A PHPMYADMIN_VERSION or
+# _TYPE_VERSION bump therefore did nothing at all without RELOAD_PHPMYADMIN.
+# The marker is composite because the TYPE (branch/tag/commit) changes what gets
+# built from the same version string, so the two together are the identity.
+# gs_version_gate comes from the prologue this script already sources.
+_pma_want="${GLOBAL_STACK_PHPMYADMIN_VERSION};type=${GLOBAL_STACK_PHPMYADMIN_TYPE_VERSION}"
+_pma_gate="$(gs_version_gate "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpmyadmin" "${_pma_want}" "phpmyadmin")"
+_pma_install=0
+if [ "${_pma_gate}" != "skip" ] || [ "${GLOBAL_STACK_RELOAD_PHPMYADMIN}" = "true" ]; then
+  _pma_install=1
+fi
+
+if [ "${_pma_install}" = "1" ]; then
   rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin" "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpmyadmin"
 fi
 
 mkdir -p "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin"
 
-if [ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpmyadmin" ] || [ "${GLOBAL_STACK_RELOAD_PHPMYADMIN}" = "true" ]; then
+if [ "${_pma_install}" = "1" ]; then
   global-stack-phpmyadmin-iou.sh
 fi
 
@@ -54,7 +68,7 @@ global-stack-phpmyadmin-sync-dist.sh
 
 cd "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin"
 
-if [ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpmyadmin" ] || [ "${GLOBAL_STACK_RELOAD_PHPMYADMIN}" = "true" ]; then
+if [ "${_pma_install}" = "1" ]; then
   if [[ "${GLOBAL_STACK_PHPMYADMIN_TYPE_VERSION}" == "branch" ]]; then
     sed -i 's/"name": "phpmyadmin\/phpmyadmin",/"name": "phpmyadmin\/phpmyadminx",/' "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin/composer.json" 
     composer install --ignore-platform-reqs
@@ -71,9 +85,11 @@ if [ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpmyadmin" ] || [ "${GLOB
     yarn install
     yarn build
   fi
+  # Marker last, and INSIDE the install branch. It used to sit outside every
+  # condition, so it was refreshed on every boot and always matched — which is
+  # precisely why a version bump was invisible.
+  printf '%s\n' "${_pma_want}" >"${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpmyadmin"
 fi
-
-echo "${GLOBAL_STACK_PHPMYADMIN_VERSION}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpmyadmin"
 
 chmod 0444 "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin/config."*
 chmod 0640 "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin/config.secret.inc.php"

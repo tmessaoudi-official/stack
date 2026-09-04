@@ -1978,6 +1978,74 @@ assert_pass "27f: build-tools bump → reinstall" \
 assert_pass "27f: ndk bump → reinstall" \
   test "$(_android_decision "${_want}" 1.0 2.0 3.1)" = "reinstall"
 
+# ─── Section 28: 00base + phpmyadmin gates (row 21, part 1) ───────────────
+printf '\n%b── Section 28: 00base install + phpmyadmin gates%b\n' "${C_BOLD}" "${C_RESET}"
+
+# Row 21. The 00base tools (go, zig, hurl, mise) are installed AT RUNTIME by
+# global-stack-base-start.sh, not at image build — the 5a audit found them because
+# they arrive by image ENV and therefore look build-time. All four were exist-only.
+# awscli is deliberately absent: it has no .env version var at all (its guard is
+# `! -d`), so there is nothing to gate.
+for _t in go zig hurl mise; do
+  _f="${DIST_BIN}/base-bin/global-stack-base-install-${_t}.sh"
+  assert_pass "28a: base-install-${_t} sources the gate helper ALONE" \
+    grep -q '^source global-stack-base-version-gate\.sh$' "${_f}"
+  assert_fail "28a: base-install-${_t} does NOT source the prologue" \
+    grep -q 'global-stack-base-prologue\.sh' "${_f}"
+  assert_pass "28b: base-install-${_t} gates on base.${_t}" \
+    grep -q "gs_version_gate .*VERSIONS}/base\.${_t}\"" "${_f}"
+  assert_pass "28b: base-install-${_t} writes its marker" \
+    grep -q "printf '%s\\\\n'.*VERSIONS}/base\.${_t}\"" "${_f}"
+done
+
+assert_fail "28c: awscli is NOT gated (it has no .env version var)" \
+  grep -q 'gs_version_gate' "${DIST_BIN}/base-bin/global-stack-base-install-awscli.sh"
+
+# phpmyadmin: three exist-only guards, and a marker write that sat OUTSIDE every
+# condition so it was refreshed on every boot and could never be compared.
+PMA="${DIST_BIN}/phpmyadmin-bin/global-stack-phpmyadmin-start.sh"
+assert_pass "28d: phpmyadmin composes a version+type marker" \
+  grep -q '^_pma_want=.*PHPMYADMIN_VERSION.*PHPMYADMIN_TYPE_VERSION' "${PMA}"
+_pma_guards="$(grep -c '\[ "${_pma_install}" = "1" \]' "${PMA}" || true)"
+assert_pass "28d: all three phpmyadmin branches use the gate decision" \
+  test "${_pma_guards}" = "3"
+assert_fail "28e: no exist-only phpmyadmin marker guard remains" \
+  grep -q '! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpmyadmin"' "${PMA}"
+# the marker write must now be indented INSIDE the install branch, not at column 0
+assert_fail "28e: the phpmyadmin marker write is no longer top-level" \
+  grep -q '^printf .*VERSIONS}/phpmyadmin"' "${PMA}"
+
+# ── behavioural: the base-install gate decision, extracted by pattern ──
+_base_tool_decision() {
+  local tool="$1" marker_body="$2" pin="$3" root="${TMP_DIR}/basetool" var
+  case "${tool}" in
+    go) var=GLOBAL_STACK_GO_VERSION ;; zig) var=GLOBAL_STACK_ZIG_VERSION ;;
+    hurl) var=GLOBAL_STACK_HURL_VERSION ;; mise) var=GLOBAL_STACK_MISE_VERSION ;;
+  esac
+  rm -rf "${root}"; mkdir -p "${root}/vers"
+  {
+    printf '#!/bin/bash\nset -euo pipefail\n'
+    printf 'source global-stack-base-version-gate.sh\n'
+    grep -m1 "^_${tool}_gate=" "${DIST_BIN}/base-bin/global-stack-base-install-${tool}.sh" || true
+    printf 'printf "DECISION=%%s\\n" "${_%s_gate:-<no-gate>}"\n' "${tool}"
+  } >"${root}/block.sh"
+  [[ -n "${marker_body}" ]] && printf '%s\n' "${marker_body}" >"${root}/vers/base.${tool}"
+  env PATH="${DIST_BIN}/base-bin:${PATH}" "${var}=${pin}" \
+    GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS="${root}/vers" \
+    bash "${root}/block.sh" 2>/dev/null | sed -n 's/^DECISION=//p' || true
+}
+
+for _t in go zig hurl mise; do
+  assert_pass "28f: ${_t} no marker → install" \
+    test "$(_base_tool_decision "${_t}" "" 1.0.0)" = "install"
+  assert_pass "28f: ${_t} marker matches → skip" \
+    test "$(_base_tool_decision "${_t}" 1.0.0 1.0.0)" = "skip"
+  # THE DEFECT: these bumps previously did nothing — the guard only asked whether
+  # the binary was on PATH.
+  assert_pass "28g: ${_t} pin bumped → reinstall" \
+    test "$(_base_tool_decision "${_t}" 1.0.0 1.0.1)" = "reinstall"
+done
+
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
 if [[ "${FAIL}" -eq 0 ]]; then
