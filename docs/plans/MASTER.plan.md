@@ -489,6 +489,23 @@ labels) and post-push commit signing.
   handover script, never a commit by Claude. Row 28's *direction* is still unruled and sits
   in `### Needs input`.
 
+- [2026-09-04 13:05] AGREED (row 17, mechanism ruling owed by the 12:18 entry): the blanket
+  `composer global update --ignore-platform-reqs --with-all-dependencies` is **DELETED**, not
+  constrained. Evidence for the choice: `laravel/installer` is the ONLY `composer global
+  require` in the repo [`git grep 'composer global'` → 2 hits, both in this one file], and the
+  `rsync`ed seed at `conf/phpbrew-composer/source/` contains only `src/` with no
+  `composer.json`, so the update maintained no other global package. With the require pinned,
+  the line's sole remaining effect would be to move that pin. `laravel/installer` is pinned to
+  `v5.32.0` — the value `bin/env-update.sh --check` resolved, not a guess; since the tool was
+  previously unpinned it was already floating at latest, so this records the installed version
+  rather than bumping it.
+- [2026-09-04 13:05] AGREED (row 17, defect found during execution): the ten marker-based
+  phpbrew tools wrote their marker **BEFORE** installing, so a failed install recorded success
+  and every later boot skipped it. That is worse than the "works but silent" the Track 5 seed
+  table describes, and it is the reason the migration is a fix rather than a refactor. All ten
+  now write the marker as the last statement of the install branch; `startup-prologue.test.sh`
+  §25d pins that ordering structurally for every block.
+
 The executor APPENDS its own dated `AGREED:` entries here (e.g. the F3 classification
 outcome, Track 5 audit rulings) as it goes — this file is where rulings land. Never backdate;
 never write an entry for a ruling that was not actually taken (forged-AGREED hazard, global
@@ -1175,7 +1192,7 @@ class-3 var is absent from this accounting, and no gate site in B lacks a class-
 | 14 | Track 5a — bidirectional audit (all _VERSION vars x all gate sites) into a plan appendix | L | done | 7782701 | .env docs/plans/MASTER.plan.md docker/config/dist/bin/*/*.sh |
 | 15 | Track 5b — extract gs_version_gate into its own sourceable helper (prologue-exempt safe) | M | done | b27aca7 | docker/config/dist/bin/base-bin/*.sh bin/tests/startup-prologue.test.sh |
 | 16 | Track 5b — gate nvm-install-tools (deno, bun) | M | done | b08ce58 | docker/config/dist/bin/nvm-bin/*.sh bin/tests/startup-prologue.test.sh |
-| 17 | Track 5b — gate phpbrew-install-tools (deployer, symfony-cli, laravel/installer, ...) | L | todo | - | docker/config/dist/bin/phpbrew-bin/*.sh .env |
+| 17 | Track 5b — gate phpbrew-install-tools (11 tools incl. laravel/installer pin) | L | done | 0e71e5b | docker/config/dist/bin/phpbrew-bin/*.sh .env docker/images/02phpbrew/docker-compose.yaml bin/tests/startup-prologue.test.sh |
 | 18 | Track 5b — gate rust tools (cargo-nextest/outdated/zigbuild, jujutsu, mergiraf, rustup-init); all 5 arrive by image ENV, not compose env — decide the cascade | M | todo | - | docker/config/dist/bin/rust-bin/*.sh .env docker/images/00base/* |
 | 19 | Track 5b — gate android (sdkmanager + 5 uncompared vars) | M | todo | - | docker/config/dist/bin/android-bin/*.sh |
 | 20 | Track 5b — gate web-server sub-components (mod_security, coreruleset, cjose, liboauth2, apr) | L | todo | - | docker/config/dist/bin/nginx-bin/*.sh docker/config/dist/bin/httpd-bin/*.sh |
