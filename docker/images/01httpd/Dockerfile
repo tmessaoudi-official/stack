@@ -19,7 +19,8 @@ SHELL ["/bin/bash", "-xeEu", "-o", "pipefail", "-c"]
 
 # NOTE: This package list is shared with 01httpd, 01nginx, and 01caddy.
 # If you add, remove, or update a package here, do the same in the other two.
-# @todo fix pin versions
+# apt packages are deliberately NOT pinned — see .hadolint.yaml (DL3008 ignored:
+# development environment, intentionally tracks latest). Ruling 2026-09-04, row 26.
 RUN shopt -s extdebug \
     && IFS=$'\n\t' \
     && apt-get update --allow-releaseinfo-change \

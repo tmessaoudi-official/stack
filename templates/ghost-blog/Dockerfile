@@ -17,7 +17,8 @@ USER root
 
 SHELL ["/bin/bash", "-xeE", "-o", "pipefail", "-c"]
 
-# @todo fix pin versions
+# apt packages are deliberately NOT pinned — see .hadolint.yaml (DL3008 ignored:
+# development environment, intentionally tracks latest). Ruling 2026-09-04, row 26.
 # hadolint ignore=DL3008,DL3018
 RUN shopt -s extdebug \
     && IFS=$'\n\t' \

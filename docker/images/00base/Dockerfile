@@ -171,7 +171,10 @@ COPY docker/images/00base/conf/bin/ /usr/local/bin/
 
 # && sed -i "s|current_dist|wanted_dist|g" /etc/apt/sources.list \
 # && sed -i "s|current_dist|wanted_dist|g" /etc/apt/sources.list.d/ubuntu.sources \
-# @todo fix pin versions
+# apt packages are deliberately NOT pinned — see .hadolint.yaml, which ignores
+# DL3008 because this is a development environment that intentionally tracks
+# latest packages. Exact apt pins also break the build when the archive rotates a
+# superseded version off the mirror. (Developer ruling 2026-09-04, row 26.)
 RUN --mount=type=secret,id=global_stack_secret_docker_password \
     shopt -s extdebug \
     && IFS=$'\n\t' \

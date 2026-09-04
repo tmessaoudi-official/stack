@@ -15,7 +15,8 @@ LABEL maintainer="Takieddine Messaoudi <takieddine.messaoudi.official@gmail.com>
 
 USER root
 
-# @todo fix pin versions
+# apt packages are deliberately NOT pinned — see .hadolint.yaml (DL3008 ignored:
+# development environment, intentionally tracks latest). Ruling 2026-09-04, row 26.
 RUN apt-get update --allow-releaseinfo-change \
     && apt-get install -y --no-install-recommends --fix-missing \
     libnss3-tools \
