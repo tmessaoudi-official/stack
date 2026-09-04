@@ -489,7 +489,7 @@ labels) and post-push commit signing.
   handover script, never a commit by Claude. Row 28's *direction* is still unruled and sits
   in `### Needs input`.
 
-- [2026-09-04 13:05] AGREED (row 17, mechanism ruling owed by the 12:18 entry): the blanket
+- [2026-09-04 14:18] AGREED (row 17, mechanism ruling owed by the 12:18 entry): the blanket
   `composer global update --ignore-platform-reqs --with-all-dependencies` is **DELETED**, not
   constrained. Evidence for the choice: `laravel/installer` is the ONLY `composer global
   require` in the repo [`git grep 'composer global'` → 2 hits, both in this one file], and the
@@ -499,7 +499,7 @@ labels) and post-push commit signing.
   `v5.32.0` — the value `bin/env-update.sh --check` resolved, not a guess; since the tool was
   previously unpinned it was already floating at latest, so this records the installed version
   rather than bumping it.
-- [2026-09-04 13:05] AGREED (row 17, defect found during execution): the ten marker-based
+- [2026-09-04 14:18] AGREED (row 17, defect found during execution): the ten marker-based
   phpbrew tools wrote their marker **BEFORE** installing, so a failed install recorded success
   and every later boot skipped it. That is worse than the "works but silent" the Track 5 seed
   table describes, and it is the reason the migration is a fix rather than a refactor. All ten
