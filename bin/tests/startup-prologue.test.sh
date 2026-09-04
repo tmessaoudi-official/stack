@@ -1704,6 +1704,106 @@ for _tool in deno bun; do
   assert_pass "24e: ${_tool} failed install writes no marker" test "${_r}" = "<none>|0"
 done
 
+# ─── Section 25: phpbrew-install-tools version gates (row 17) ─────────────
+printf '\n%b── Section 25: phpbrew-install-tools gates%b\n' "${C_BOLD}" "${C_RESET}"
+
+# Row 17. Eleven tools. Ten were marker-based but wrote the marker BEFORE
+# installing, so a failed install recorded success and every later boot skipped
+# it; two of those ten (deployer, symfony-cli) never read their marker at all.
+# The eleventh, laravel/installer, was unpinned and followed by a blanket
+# `composer global update --with-all-dependencies` that would move any pin back.
+#
+# COVERAGE HONESTY: one tool (zephir) is covered behaviourally below; the other
+# ten are covered STRUCTURALLY by the marker-last invariant. Behavioural cover for
+# all eleven would need stubs for composer, git, php, rsync and tar. The
+# structural invariant is what the marker-first defect violated, so it is the one
+# that matters — but it is a weaker guarantee than §24's per-tool execution.
+PHPBREW_TOOLS="${DIST_BIN}/phpbrew-bin/global-stack-phpbrew-install-tools.sh"
+
+assert_pass "25a: phpbrew-install-tools passes bash -n" bash -n "${PHPBREW_TOOLS}"
+
+# Every tool goes through the gate, and every tool writes exactly one marker.
+_pt_gates="$(grep -c 'gs_version_gate ' "${PHPBREW_TOOLS}" || true)"
+_pt_writes="$(grep -c "printf '%s\\\\n'.*TOOLS_PATH_VERSIONS" "${PHPBREW_TOOLS}" || true)"
+assert_pass "25b: 11 gate calls" test "${_pt_gates}" = "11"
+assert_pass "25b: 11 marker writes" test "${_pt_writes}" = "11"
+
+# THE DEFECT: the old shape wrote the marker with `echo -e "${X}" > .../versions/`
+# as the FIRST statement of the install branch. None may remain.
+_pt_first="$(grep -c 'echo -e "\${[A-Z_]*}" > "\${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}' "${PHPBREW_TOOLS}" || true)"
+assert_pass "25c: no marker-first writes remain" test "${_pt_first}" = "0"
+
+# Marker-last, structurally: every marker write is the final statement of its
+# branch, i.e. the next non-blank line is the closing `fi`. Under `set -e` that is
+# what makes a failed install unable to leave a satisfied marker behind.
+_pt_bad="$(awk '
+  /printf .%s\\n.*TOOLS_PATH_VERSIONS/ { pending=1; next }
+  pending && /^[[:space:]]*$/          { next }
+  pending                              { if ($0 !~ /^fi$/) bad++; pending=0 }
+  END { print bad+0 }
+' "${PHPBREW_TOOLS}")"
+assert_pass "25d: every marker write is the last statement in its branch" \
+  test "${_pt_bad}" = "0"
+
+# laravel/installer: pinned require, and the blanket global update is gone from
+# the executable body (it survives only in the comment that explains its removal).
+assert_pass "25e: laravel/installer require is pinned to the .env var" \
+  grep -q 'composer global require --ignore-platform-reqs "laravel/installer:\${GLOBAL_STACK_LARAVEL_INSTALLER_VERSION}"' \
+  "${PHPBREW_TOOLS}"
+_pt_upd="$(grep -v '^[[:space:]]*#' "${PHPBREW_TOOLS}" | grep -c 'composer global update' || true)"
+assert_pass "25e: no executable 'composer global update' remains" test "${_pt_upd}" = "0"
+
+# The new var must reach the container, or the gate reinstalls every boot.
+REPO_ROOT="${SCRIPT_DIR}/../.."
+assert_pass "25f: .env pins laravel/installer" \
+  grep -q '^GLOBAL_STACK_LARAVEL_INSTALLER_VERSION=' "${REPO_ROOT}/.env"
+assert_pass "25f: .env carries its @todo env-update annotation" \
+  grep -q '^# @todo env-update github:laravel/installer' "${REPO_ROOT}/.env"
+assert_pass "25f: 02phpbrew compose passes it into the container" \
+  grep -q 'GLOBAL_STACK_LARAVEL_INSTALLER_VERSION=\${GLOBAL_STACK_LARAVEL_INSTALLER_VERSION}' \
+  "${REPO_ROOT}/docker/images/02phpbrew/docker-compose.yaml"
+
+# ── behavioural: zephir, the simplest curl→mv→chmod shape ──
+_zephir_run() {
+  local marker_body="$1" pin="$2" phar_present="$3" curl_fail="${4:-0}"
+  local root="${TMP_DIR}/pbtools"
+  rm -rf "${root}"; mkdir -p "${root}/vers" "${root}/bin" "${root}/stub" "${root}/run"
+  {
+    printf '#!/bin/bash\n'
+    printf '[ "${CURL_FAIL:-0}" = "1" ] && exit 22\n'
+    printf 'touch zephir.phar\n'
+  } >"${root}/stub/curl"
+  chmod +x "${root}/stub/curl"
+  # every other block must be a no-op: give them matching markers and files
+  for t in composer laravel-installer phalcon deployer symfony-cli pickle pie mago castor \
+           fabpot-local-php-security-checker; do
+    printf 'noop\n' >"${root}/vers/phpbrew.${t}"
+  done
+  [[ -n "${marker_body}" ]] && printf '%s\n' "${marker_body}" >"${root}/vers/phpbrew.zephir"
+  [[ "${phar_present}" == "1" ]] && touch "${root}/bin/zephir"
+  # run ONLY the zephir block: extract it by its anchors, never by line number
+  awk '/^ZEPHIR_LANG_PHAR_FILE=/,/^rm -rf zephir\.pha\*/' "${PHPBREW_TOOLS}" >"${root}/run/block.sh"
+  ( cd "${root}/run" && env \
+      PATH="${root}/stub:${DIST_BIN}/base-bin:${PATH}" \
+      CURL_FAIL="${curl_fail}" \
+      PHPBREW_BIN="${root}/bin" \
+      GLOBAL_STACK_ZEPHIR_LANG_VERSION="${pin}" \
+      GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS="${root}/vers" \
+      bash -c 'set -e; source global-stack-base-version-gate.sh; source ./block.sh' ) >/dev/null 2>&1 || true
+  local after="<none>"
+  [[ -f "${root}/vers/phpbrew.zephir" ]] && after="$(cat "${root}/vers/phpbrew.zephir")"
+  printf '%s' "${after}"
+}
+
+assert_pass "25g: zephir first install writes the marker" \
+  test "$(_zephir_run "" 1.0.0 0)" = "1.0.0"
+assert_pass "25g: zephir marker matching the pin → skip" \
+  test "$(_zephir_run 1.0.0 1.0.0 1)" = "1.0.0"
+assert_pass "25g: zephir pin bumped → reinstall, marker updated" \
+  test "$(_zephir_run 1.0.0 1.0.1 1)" = "1.0.1"
+assert_pass "25h: zephir failed download leaves no satisfied marker" \
+  test "$(_zephir_run "" 1.0.0 0 1)" = "<none>"
+
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
 if [[ "${FAIL}" -eq 0 ]]; then
