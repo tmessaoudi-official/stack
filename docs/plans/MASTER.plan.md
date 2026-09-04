@@ -1276,7 +1276,7 @@ class-3 var is absent from this accounting, and no gate site in B lacks a class-
 | 19 | Track 5b — gate android SDK components (composite marker on the 3 LIVE pins) | M | done | 0415ca3 | docker/config/dist/bin/android-bin/*.sh bin/tests/startup-prologue.test.sh |
 | 20 | Track 5b — converge all 17 web-server compares on gs_version_gate (WARN + one idiom) | L | done | e9fd01e | docker/config/dist/bin/nginx-bin/*.sh docker/config/dist/bin/httpd-bin/*.sh docker/config/dist/bin/caddy-bin/*.sh bin/tests/startup-prologue.test.sh |
 | 21 | Track 5b — remainder named by 5a: phpmyadmin, 00base runtime installs, elasticmq, rbenv plugins. frankenphp NOT gated (path-keyed); awscli has no pin | M | done | ae4f4df 53c0859 | docker/config/dist/bin/base-bin/*.sh docker/config/dist/bin/phpmyadmin-bin/*.sh docker/config/dist/bin/serverless-bin/*.sh docker/config/dist/bin/rbenv-bin/*.sh bin/tests/startup-prologue.test.sh |
-| 22 | Track 5 docs — CLAUDE.md Gotchas + two-phase note once the gate is universal | S | todo | - | CLAUDE.md |
+| 22 | Track 5 docs — CLAUDE.md Gotchas + two-phase note once the gate is universal | S | blocked | - | CLAUDE.md |
 | 23 | Close-out — terminal states + SHAs in plan, full battery re-run, advisor, push | M | todo | - | docs/plans/MASTER.plan.md CLAUDE.md |
 | 24 | Developer input — supervised rebuild/bring-up closing the 4 UNCERTIFIED labels | M | blocked | - | - |
 | 25 | Sweep — web-server iou handlers write an error token on exit 1; de-hardcode WEB_SERVER_SCRIPTS | M | done | a1ba6f1 | docker/config/dist/bin/caddy-bin/*.sh docker/config/dist/bin/httpd-bin/*.sh docker/config/dist/bin/nginx-bin/*.sh bin/tests/startup-prologue.test.sh |
@@ -1338,10 +1338,12 @@ class-3 var is absent from this accounting, and no gate site in B lacks a class-
   (`bin/env-update.sh --check --filter=LARAVEL_INSTALLER` → resolved `v5.32.0`), but that is one
   fetcher path, not the suite. Re-run it alone on an unloaded machine before trusting the
   milestone as fully certified.
-- MASTER.plan.md:484 claims F2 startup-health-signalling "fully executed" —
-  it is 8 of 11 handlers (see Fragile). **Row 25 (2026-09-04) made this claim TRUE**: all 11
-  handlers now report exit 1. The `:484` wording still describes the old state and is corrected
-  by the row 22/27 handover script.
+- MASTER.plan.md:484 claims F2 startup-health-signalling "fully executed". That claim was
+  **FALSE when written** — it was 8 of 11 handlers, and the sweep caught it. Row 25
+  (2026-09-04) closed the gap in the code, which does not retroactively make a past-tense
+  statement about 2026-09-01 true; it makes it moot. The wording stands as a historical record
+  of what was believed then. What needed correcting was `CLAUDE.md`'s *present-tense* claim,
+  and that is in the row 22/27 handover script.
 - Rows 13/14 Files columns do not match what their shas touched.
 - Stale counts in CLAUDE.md: makefile-posix 5→7 (:323), open-all-envs 12→16
   (:327), env-update "117 sections"→125 declared (:321); "next free LOCAL slot
