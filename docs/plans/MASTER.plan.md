@@ -584,6 +584,13 @@ labels) and post-push commit signing.
   were accurate about WHERE the issue was and wrong about WHAT it was, because both classified
   from grep output. Treat any lens finding's "what to do" as a hypothesis to verify, not a
   worklist item — the location is the reliable part.
+- [2026-09-04 23:53] AGREED: row 28 — KEEP the three `ask` entries in `.claude/settings.json`
+  (all `bin/env-update.sh --apply*`, added `95ccbb7`) and CORRECT the docs that say the file is
+  allow-list only. Rationale accepted: an `ask` prompts and is answered in-session, a `deny`
+  dead-ends, and the no-denies ruling is about unrecoverable blocks. Eight claim sites across
+  `CLAUDE.md` (:26/:45/:49/:143/:369), both reviewer agent defs and `docs/BLAST-RADIUS.md:10`
+  ship in ONE handover script, `/tmp/fix-ask-tier-docs-20260904.sh`, because none of the
+  three files is Claude-writable without either the classifier or Rule 5 in the way.
 
 The executor APPENDS its own dated `AGREED:` entries here (e.g. the F3 classification
 outcome, Track 5 audit rulings) as it goes — this file is where rulings land. Never backdate;
@@ -1282,28 +1289,28 @@ class-3 var is absent from this accounting, and no gate site in B lacks a class-
 | 25 | Sweep — web-server iou handlers write an error token on exit 1; de-hardcode WEB_SERVER_SCRIPTS | M | done | a1ba6f1 | docker/config/dist/bin/caddy-bin/*.sh docker/config/dist/bin/httpd-bin/*.sh docker/config/dist/bin/nginx-bin/*.sh bin/tests/startup-prologue.test.sh |
 | 26 | Sweep — retire the stale `# @todo fix pin versions` TODOs (NOT pin: .hadolint.yaml already rules against it) | L | done | fc10204 | docker/images/*/Dockerfile* templates/ghost-blog/Dockerfile |
 | 27 | Sweep — CLAUDE.md corrections (141/1 claim, stale suite counts, LOCAL slot, exclusion list) | S | done | 3f94de3 | CLAUDE.md |
-| 28 | Sweep — settings.json ask-tier vs CLAUDE.md:49/:369; direction unruled | S | blocked | - | .claude/settings.json CLAUDE.md |
+| 28 | Sweep — settings.json ask-tier vs CLAUDE.md; RULED 2026-09-04 keep the `ask` trio, correct 8 doc claims — handover script /tmp/fix-ask-tier-docs-20260904.sh awaits the developer | S | blocked | - | CLAUDE.md .claude/agents/reproducibility-reviewer.md .claude/agents/stack-infra-reviewer.md docs/BLAST-RADIUS.md |
 | 29 | Sweep — prune TODO.md (item 189 + zig drift done; consolidate its 5 container-test items with row 24) | S | done | cec239d | TODO.md |
 <!-- /progress-block -->
 ### Blocked
 - Row 24 — the supervised rebuild/bring-up. Also the SAME blocker as TODO.md's
   entire "Requires container testing" section (TODO.md:11,25,31,38,48): one
   blocker recorded in two files.
+- Row 28 — ruled; waits on the developer running `/tmp/fix-ask-tier-docs-20260904.sh`
+  (`CLAUDE.md` is classifier-blocked and the two agent defs need developer authorisation).
 
 ### Needs input
-- **Row 28 — the ONLY item still awaiting a ruling.** `.claude/settings.json`
-  carries a live 3-entry `ask` tier, while `CLAUDE.md:49` and `:369` both state
-  the file is allow-list only with no `ask` tier at all. One of the two is wrong.
-  Recommendation: correct `CLAUDE.md`, because `95ccbb7` added those entries
-  to gate a real `.env` write, and `ask` PROMPTS rather than dead-ends — so it
-  does not violate the no-denies ruling, which is about unrecoverable blocks.
-  [Verified 2026-09-04: `git show 95ccbb7 -- .claude/settings.json` adds exactly
-  three `ask` entries, and all three are `bin/env-update.sh --apply*` spellings —
-  the one command in this repo that rewrites `.env`. The commit subject names
-  only the read-only allows, so the `ask` tier rode along in it; the entries
-  themselves are unambiguous about intent.] Alternative: drop the three entries and keep the doc.
-  Claude cannot write either file (both classifier-blocked); whichever way it is
-  ruled, the change ships as a handover script.
+- (none open.)
+- (RULED 2026-09-04 23:53) Row 28: the developer chose *"Correct CLAUDE.md"* — the three
+  `ask` entries stay (all `bin/env-update.sh --apply*`, the one command that rewrites `.env`;
+  added `95ccbb7`) and the docs are corrected. The sweep found EIGHT claim sites, not two:
+  `CLAUDE.md:26/:45/:49/:143/:369`, `.claude/agents/reproducibility-reviewer.md:28`,
+  `.claude/agents/stack-infra-reviewer.md:122`, `docs/BLAST-RADIUS.md:10`. All eight ship in
+  `/tmp/fix-ask-tier-docs-20260904.sh` (dry-run proven on a scratch copy: 8 replacements,
+  0 stale claims left in any file, a second run aborts on every anchor). Row 28 stays
+  `blocked` until the developer runs it, then moves to `done` with that commit's sha. The
+  archived 2026-08-06 ruling at `docs/archive/plans/claude-bundle-cross-repo-audit.plan.md:19`
+  is left as written — archived plans are archived unchanged (2026-08-31).
 - (CLOSED 2026-09-04) Row 17, laravel/installer: the developer ruled *"widen the
   guard — fix it too"*. `composer global update --with-all-dependencies` was
   DELETED and the tool pinned to `GLOBAL_STACK_LARAVEL_INSTALLER_VERSION`;
