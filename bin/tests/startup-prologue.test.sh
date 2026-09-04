@@ -1078,25 +1078,32 @@ fi
 # guard, matching the shared prologue's name.
 printf '\n%b── Section 19: web-server handlers report exit 1%b\n' "${C_BOLD}" "${C_RESET}"
 
-WEB_SERVER_SCRIPTS=(
-  "caddy-bin/global-stack-caddy-start.sh"
-  "caddy-bin/global-stack-caddy-setup.sh"
-  "nginx-bin/global-stack-nginx-start.sh"
-  "nginx-bin/global-stack-nginx-setup.sh"
-  "nginx-bin/global-stack-nginx-iou-common.sh"
-  "httpd-bin/global-stack-httpd-start.sh"
-  "httpd-bin/global-stack-httpd-setup.sh"
-  "httpd-bin/global-stack-httpd-iou-common.sh"
-)
+# Row 25: DISCOVERED, not hardcoded. This was an 8-entry literal list that happened
+# to omit caddy-iou.sh, httpd-iou.sh and nginx-iou.sh — the exact three scripts that
+# still carried the exit-1 exemption, so §19 could never go red for them and the
+# defect survived the 2026-08-29 migration unnoticed. Any script in the three
+# web-server trees that defines its own stackCatch is now covered automatically, so
+# a new one cannot be invisible to this section.
+WEB_SERVER_SCRIPTS=()
+while IFS= read -r -d '' _f; do
+  grep -q '^stackCatch() {' "${_f}" || continue
+  WEB_SERVER_SCRIPTS+=("${_f#"${DIST_BIN}/"}")
+done < <(find "${DIST_BIN}/caddy-bin" "${DIST_BIN}/nginx-bin" "${DIST_BIN}/httpd-bin" \
+              -name '*.sh' -print0 | sort -z)
+printf '  (discovered %d web-server handlers)\n' "${#WEB_SERVER_SCRIPTS[@]}"
 
 for _ws in "${WEB_SERVER_SCRIPTS[@]}"; do
   _ws_path="${DIST_BIN}/${_ws}"
   # Anchor on the closing `]]`: a bare '-ne 1' also matches the '-ne 141'
   # SIGPIPE arm, which must SURVIVE — that pattern can never go green.
+  # Row 25: the pattern now tolerates BOTH spellings, `$exit_code` and
+  # `"${exit_code}"`. The old fixed-string form only matched the unquoted one, so
+  # it silently passed over any handler written the other way — the same
+  # can-never-fire defect as the hardcoded script list this section used to carry.
   assert_fail "19a: $(basename "${_ws}") no longer exempts exit code 1" \
-    grep -q 'exit_code -ne 1 \]\]' "${_ws_path}"
+    grep -qE '\$\{?exit_code\}?"? -ne 1 \]\]' "${_ws_path}"
   assert_pass "19a: $(basename "${_ws}") keeps the 141 (SIGPIPE) exemption" \
-    grep -q 'exit_code -ne 141 \]\]' "${_ws_path}"
+    grep -qE '\$\{?exit_code\}?"? -ne 141 \]\]' "${_ws_path}"
   assert_pass "19b: $(basename "${_ws}") carries the _STACK_CAUGHT re-entry guard" \
     grep -q '_STACK_CAUGHT' "${_ws_path}"
 done

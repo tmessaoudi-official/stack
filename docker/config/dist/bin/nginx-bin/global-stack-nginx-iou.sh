@@ -33,7 +33,16 @@ stackCatch() {
   local exit_code=${1}
   local line_num=${2}
   local command=${3}
-  if [[ "${exit_code}" -ne 0 && "${exit_code}" -ne 141 && "${exit_code}" -ne 1 ]]; then
+  # Re-entry guard: ERR fires first, then this handler's own `exit 1` comes back
+  # through the EXIT trap and would overwrite the error token with the trap's own
+  # line number. The `-ne 1` arm removed below had been doing this by accident, at
+  # the cost of silencing exit 1 — the most common real failure in this script's
+  # own chain, so a failed INSTALL wrote no error token at all (row 25).
+  if [[ -n "${_STACK_CAUGHT:-}" ]]; then
+    return 0
+  fi
+  if [[ "${exit_code}" -ne 0 && "${exit_code}" -ne 141 ]]; then
+    _STACK_CAUGHT=1
     echo "Error detected !!"
     echo -e "$(date '+%d-%m-%Y %H:%M:%S'): Error - ** line: ${line_num} ** ** command: ${command} ** nginx global-stack-nginx-iou.sh" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/elapsed"
     [[ -n "${GLOBAL_STACK_ERROR_TOKEN:-}" ]] && printf 'line: %s\ncommand: %s\n' "${2}" "${3}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}/${GLOBAL_STACK_ERROR_TOKEN}"
