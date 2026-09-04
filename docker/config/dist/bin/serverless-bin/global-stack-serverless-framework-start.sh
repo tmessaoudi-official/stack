@@ -141,8 +141,16 @@ if [[ ! -d "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/bin" ]]; then
   mkdir -p "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/bin"
 fi
 
-if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/bin/elasticmq-server-all.jar" ]]; then
+# Row 21. Was exist-only, and the jar is written to a FIXED filename (unlike
+# frankenphp, whose artifact path embeds its version and is therefore already
+# version-sensitive), so a GLOBAL_STACK_SERVERLESS_FRAMEWORK_ELASTICMQ_VERSION bump
+# left the old jar in place forever. The -f check is kept as a floor.
+# gs_version_gate comes from the prologue this script already sources.
+_elasticmq_gate="$(gs_version_gate "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/serverless.elasticmq" "${GLOBAL_STACK_SERVERLESS_FRAMEWORK_ELASTICMQ_VERSION}" "serverless.elasticmq")"
+if [ "${_elasticmq_gate}" != "skip" ] || [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/bin/elasticmq-server-all.jar" ]]; then
   curl --connect-timeout 30 --max-time 300 -fsSL -o "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/bin/elasticmq-server-all.jar" "https://github.com/softwaremill/elasticmq/releases/download/${GLOBAL_STACK_SERVERLESS_FRAMEWORK_ELASTICMQ_VERSION}/elasticmq-server-all-$(echo "${GLOBAL_STACK_SERVERLESS_FRAMEWORK_ELASTICMQ_VERSION}" | sed 's/v//').jar"
+  # Marker last: under `set -e` a failed download aborts before this line.
+  printf '%s\n' "${GLOBAL_STACK_SERVERLESS_FRAMEWORK_ELASTICMQ_VERSION}" >"${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/serverless.elasticmq"
 fi
 
 chmod a+x "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/bin/elasticmq-server-all.jar"

@@ -2046,6 +2046,74 @@ for _t in go zig hurl mise; do
     test "$(_base_tool_decision "${_t}" 1.0.0 1.0.1)" = "reinstall"
 done
 
+# ─── Section 29: elasticmq, rbenv plugins, frankenphp (row 21, part 2) ────
+printf '\n%b── Section 29: elasticmq / rbenv plugins / frankenphp%b\n' "${C_BOLD}" "${C_RESET}"
+
+SLS="${DIST_BIN}/serverless-bin/global-stack-serverless-framework-start.sh"
+RBIOU="${DIST_BIN}/rbenv-bin/global-stack-rbenv-iou.sh"
+FRANKEN="${DIST_BIN}/php8.4-bin/global-stack-phpbrew-php8.4-setup-version.sh"
+
+# elasticmq downloads to a FIXED filename, so an exist-only guard pinned the old
+# jar forever.
+assert_pass "29a: elasticmq is gated" \
+  grep -q 'gs_version_gate .*VERSIONS}/serverless\.elasticmq"' "${SLS}"
+assert_pass "29a: elasticmq writes its marker" \
+  grep -q "printf '%s\\\\n'.*VERSIONS}/serverless\.elasticmq\"" "${SLS}"
+
+# The rbenv plugins must be gated INDEPENDENTLY of the rbenv fresh-clone branch:
+# nested inside it, a plugin-only bump did nothing and an rbenv bump re-cloned both.
+for _p in ruby-build gemset; do
+  assert_pass "29b: rbenv ${_p} plugin is gated" \
+    grep -q "gs_version_gate .*VERSIONS}/rbenv\.${_p}\"" "${RBIOU}"
+done
+# structural: neither plugin clone may sit inside the `! -d ${RBENV_ROOT}/.git` block
+_rb_nested="$(awk '
+  /^if \[ ! -d "\$\{RBENV_ROOT\}\/\.git" \]; then/ { inblk=1; next }
+  inblk && /^fi$/ { inblk=0; next }
+  inblk && /plugins\/(ruby-build|rbenv-gemset)/ { n++ }
+  END { print n+0 }
+' "${RBIOU}")"
+assert_pass "29b: no plugin clone remains inside the rbenv fresh-clone branch" \
+  test "${_rb_nested}" = "0"
+
+# frankenphp is deliberately NOT gated: its artifact path embeds the version, so a
+# bump already downloads a different file. A marker would be redundant state.
+assert_fail "29c: frankenphp is deliberately NOT gated (path-keyed by version)" \
+  grep -q 'gs_version_gate' "${FRANKEN}"
+assert_pass "29c: frankenphp's artifact path still embeds its version" \
+  grep -q 'frankenphp-\${GLOBAL_STACK_FRANKENPHP_VERSION}\.tar\.gz' "${FRANKEN}"
+
+# ── behavioural: elasticmq + both rbenv plugins ──
+_r21_decision() {
+  local anchor="$1" marker="$2" body="$3" pin="$4" var="$5" file="$6"
+  local root="${TMP_DIR}/r21"
+  rm -rf "${root}"; mkdir -p "${root}/vers"
+  # the anchor carries the source file's indentation; strip it before deriving the
+  # variable name, or the generated script references a name containing spaces.
+  local varname="${anchor%%=*}"
+  varname="${varname#"${varname%%[![:space:]]*}"}"
+  { printf '#!/bin/bash\nset -e\n'
+    printf 'source global-stack-base-version-gate.sh\n'
+    grep -m1 "^${anchor}" "${file}" || true
+    printf 'printf "DECISION=%%s\\n" "${%s:-<no-gate>}"\n' "${varname}"
+  } >"${root}/block.sh"
+  [[ -n "${body}" ]] && printf '%s\n' "${body}" >"${root}/vers/${marker}"
+  env PATH="${DIST_BIN}/base-bin:${PATH}" "${var}=${pin}" \
+    GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS="${root}/vers" \
+    bash "${root}/block.sh" 2>/dev/null | sed -n 's/^DECISION=//p' || true
+}
+
+assert_pass "29d: elasticmq no marker → install" \
+  test "$(_r21_decision '_elasticmq_gate=' serverless.elasticmq "" v1.0 GLOBAL_STACK_SERVERLESS_FRAMEWORK_ELASTICMQ_VERSION "${SLS}")" = "install"
+assert_pass "29d: elasticmq marker matches → skip" \
+  test "$(_r21_decision '_elasticmq_gate=' serverless.elasticmq v1.0 v1.0 GLOBAL_STACK_SERVERLESS_FRAMEWORK_ELASTICMQ_VERSION "${SLS}")" = "skip"
+assert_pass "29e: elasticmq pin bumped → reinstall" \
+  test "$(_r21_decision '_elasticmq_gate=' serverless.elasticmq v1.0 v1.1 GLOBAL_STACK_SERVERLESS_FRAMEWORK_ELASTICMQ_VERSION "${SLS}")" = "reinstall"
+assert_pass "29f: rbenv ruby-build pin bumped → reinstall" \
+  test "$(_r21_decision '  _rb_build_gate=' rbenv.ruby-build v1.0 v1.1 GLOBAL_STACK_RBENV_RUBY_BUILD_VERSION "${RBIOU}")" = "reinstall"
+assert_pass "29f: rbenv gemset pin unchanged → skip" \
+  test "$(_r21_decision '  _rb_gemset_gate=' rbenv.gemset v2.0 v2.0 GLOBAL_STACK_RBENV_GEMSET_VERSION "${RBIOU}")" = "skip"
+
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
 if [[ "${FAIL}" -eq 0 ]]; then
