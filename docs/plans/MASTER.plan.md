@@ -1163,7 +1163,47 @@ class-3 var is absent from this accounting, and no gate site in B lacks a class-
 | 24 | Developer input — supervised rebuild/bring-up closing the 4 UNCERTIFIED labels | M | blocked | - | - |
 <!-- /progress-block -->
 ### Blocked
+- Row 24 — the supervised rebuild/bring-up. Also the SAME blocker as TODO.md's
+  entire "Requires container testing" section (TODO.md:11,25,31,38,48): one
+  blocker recorded in two files.
+
 ### Needs input
+- Row 17, laravel/installer: unpinned AND followed by `composer global update
+  --with-all-dependencies` (phpbrew-install-tools.sh:31-34), which defeats any
+  gate row 17 adds. Closing it needs an install-logic change the Track 5 scope
+  guard (:793) forbids — a developer ruling, not executor work.
+
 ### Needs research
+- Row 20: the per-site compare shape in {caddy,httpd,nginx}-iou*.sh is unread;
+  none of the three calls gs_version_gate.
+- Whether to split row 21 into 21a (prologue-sourcing: phpmyadmin, serverless,
+  rbenv-iou, frankenphp) and 21b (exempt: 00base installs), which have
+  different dependencies on row 15.
+
 ### Fragile
+- Full 12-entry register lives at MASTER.plan.md:848 — this heading is the
+  collector-visible pointer to it.
+- caddy-iou.sh:21, httpd-iou.sh:26, nginx-iou.sh:33 still exempt exit 1 and
+  lack _STACK_CAUGHT: a failed web-server INSTALL writes no error token.
+- DO NOT "simplify": `((_elapsed++)) || true` (base-wait-for.sh:44) and
+  `((COMMAND_COUNTER++)) || true` (base-setup-packages.sh:52) — post-increment
+  from 0 returns status 1 under set -e. Verified by repro.
+- sdkman-start.sh's three `set +E` blocks are inert (shopt -s extdebug at :4
+  re-enables errtrace), while :145 and base-setup-packages.sh:38 both describe
+  them as providing tolerance.
+- caddy-start.sh:8 is the only one of 18 PATH= assignments missing its colon;
+  works only because the scripts it calls live in /usr/local/bin.
+
 ### Known issues
+- MASTER.plan.md:484 claims F2 startup-health-signalling "fully executed" —
+  it is 8 of 11 handlers (see Fragile).
+- Rows 13/14 Files columns do not match what their shas touched.
+- Stale counts in CLAUDE.md: makefile-posix 5→7 (:323), open-all-envs 12→16
+  (:327), env-update "117 sections"→125 declared (:321); "next free LOCAL slot
+  41719" (:404) is taken → 41720.
+- `# @todo fix pin versions` across 14 Dockerfiles — unplanned, unrowed.
+- TODO.md:189 (WAIT_FOR_TIMEOUT from .env) is already done (.env:46).
+- DECLINED by the developer 2026-09-03, recorded so they are not re-surfaced
+  as new: CLAUDE.md:337 "141/1 exemption is gone"; the hardcoded
+  WEB_SERVER_SCRIPTS array at startup-prologue.test.sh:1081; the live 3-entry
+  `ask` tier in .claude/settings.json vs CLAUDE.md:49/:369.
