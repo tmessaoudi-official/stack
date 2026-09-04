@@ -6,6 +6,10 @@ Generated: 2026-05-17 — tracks items from the package audit + runtime tier upd
 
 ## 🧪 Requires container testing
 
+> These are ONE blocker seen from two files: the same supervised bring-up that
+> `docs/plans/MASTER.plan.md` tracks as its blocked row 24. Closing that row closes this
+> section. Do not schedule them separately.
+
 Run these manually after the next rebuild. Each has a specific command.
 
 - [ ] **giget and tsx install on all Node tiers** — added to `node-packages.compose.yaml` (Fix 3, 2026-05-17) but never container-tested. Verify both packages install and are usable on every node tier:
@@ -167,7 +171,9 @@ Implement in risk order.
 
 - [ ] **`05stable` requires `03node24` always in `COMPOSE_FILE`** — `05stable` depends on `03node24` and activates `NODE_VERSION=${GLOBAL_STACK_NODE24_VERSION}`. If `03node24` is ever removed from `COMPOSE_FILE` while `05stable` remains active, the container will wait for a success marker that never comes. Safe currently (03node24 is in COMPOSE_FILE), but worth documenting: add a comment in `05stable/docker-compose.yaml` on the `03node24` depends_on line.
 
-- [ ] **Zig version drift in `00base`** — `env-scan --dry-run` reports `GLOBAL_STACK_ZIG_VERSION` has two different values inside `docker/images/00base/` (Dockerfile vs docker-compose). Clean up in a dedicated commit after verifying which value is canonical.
+- [x] **Zig version drift in `00base` — DONE** [verified 2026-09-04: `Dockerfile:46` is a bare
+  `ARG GLOBAL_STACK_ZIG_VERSION` with no default, and `docker-compose.yaml:18` supplies it as a
+  build arg — there is no second value left to drift from. The `.env` value is canonical].
 
 ---
 
@@ -186,7 +192,11 @@ Implement in risk order.
 - [ ] **Groovy VX2 re-enable on Java 26** — same situation: `GLOBAL_STACK_JAVA26_SDKMAN_INSTALL_PACKAGE_GROOVY_VX2_VERSION` is empty (not in Java 26 test matrix). Monitor Groovy 4.x for Java 26 compatibility.
 
 
-GLOBAL_STACK_WAIT_FOR_TIMEOUT should be read from .env !!
+- [x] **`GLOBAL_STACK_WAIT_FOR_TIMEOUT` from `.env` — DONE** [verified 2026-09-04: `.env:46`
+  sets it, and 45 service compose files pass it into their containers]. The only residual is
+  the `:-3600` fallback in `base-bin/global-stack-base-wait-for.sh:4`, which
+  `docs/specs/elapsed-write.md:152` says should not exist — that is the part still open, not
+  the `.env` plumbing.
 
 - [x] **Atomic shellrc writes — DONE (E-4)** — all writers of shared-volume `tools/.shellrc/<runtime>.shellrc` files now publish via `{ ... } > "<f>.tmp" && mv "<f>.tmp" "<f>"` (atomic rename on the same filesystem; the host sources via the `*.shellrc` glob, which excludes the `.tmp` staging file). **7 scripts in scope** (the actual shared-volume writers): `nvm`, `phpbrew`, `fvm`, `pyenv`, `rbenv`, `sdkman` `*-start.sh` plus `base-install-mise.sh`. **5 scripts deliberately out of scope**: `base-prepare-shell.sh`, `phpbrew-reload-bash.sh`, `android`, `phpmyadmin`, `serverless`, `alltogether` — these append `source …` lines to the **container's private** login rc (`~/.bashrc`-equivalent), which the host does NOT source; E-4's host-partial-read risk does not apply, and converting an append to a tmp+rename would change append semantics to a full read-modify-write rewrite (riskier, no benefit). Regression-guarded by Section 7 of `bin/tests/startup-prologue.test.sh` (asserts each in-scope script publishes via tmp+`mv` and never redirects directly to the final `.shellrc` path).
 
