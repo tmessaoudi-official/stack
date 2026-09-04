@@ -589,7 +589,7 @@ labels) and post-push commit signing.
   allow-list only. Rationale accepted: an `ask` prompts and is answered in-session, a `deny`
   dead-ends, and the no-denies ruling is about unrecoverable blocks. Eight claim sites across
   `CLAUDE.md` (:26/:45/:49/:143/:369), both reviewer agent defs and `docs/BLAST-RADIUS.md:10`
-  ship in ONE handover script, `/tmp/fix-ask-tier-docs-20260904.sh`, because none of the
+  ship in ONE handover script, `var/claude/fix-ask-tier-docs-20260904.sh`, because none of the
   three files is Claude-writable without either the classifier or Rule 5 in the way.
 
 The executor APPENDS its own dated `AGREED:` entries here (e.g. the F3 classification
@@ -1289,14 +1289,14 @@ class-3 var is absent from this accounting, and no gate site in B lacks a class-
 | 25 | Sweep — web-server iou handlers write an error token on exit 1; de-hardcode WEB_SERVER_SCRIPTS | M | done | a1ba6f1 | docker/config/dist/bin/caddy-bin/*.sh docker/config/dist/bin/httpd-bin/*.sh docker/config/dist/bin/nginx-bin/*.sh bin/tests/startup-prologue.test.sh |
 | 26 | Sweep — retire the stale `# @todo fix pin versions` TODOs (NOT pin: .hadolint.yaml already rules against it) | L | done | fc10204 | docker/images/*/Dockerfile* templates/ghost-blog/Dockerfile |
 | 27 | Sweep — CLAUDE.md corrections (141/1 claim, stale suite counts, LOCAL slot, exclusion list) | S | done | 3f94de3 | CLAUDE.md |
-| 28 | Sweep — settings.json ask-tier vs CLAUDE.md; RULED 2026-09-04 keep the `ask` trio, correct 8 doc claims — handover script /tmp/fix-ask-tier-docs-20260904.sh awaits the developer | S | blocked | - | CLAUDE.md .claude/agents/reproducibility-reviewer.md .claude/agents/stack-infra-reviewer.md docs/BLAST-RADIUS.md |
+| 28 | Sweep — settings.json ask-tier vs CLAUDE.md; RULED 2026-09-04 keep the `ask` trio, correct 8 doc claims — handover script var/claude/fix-ask-tier-docs-20260904.sh awaits the developer | S | blocked | - | CLAUDE.md .claude/agents/reproducibility-reviewer.md .claude/agents/stack-infra-reviewer.md docs/BLAST-RADIUS.md |
 | 29 | Sweep — prune TODO.md (item 189 + zig drift done; consolidate its 5 container-test items with row 24) | S | done | cec239d | TODO.md |
 <!-- /progress-block -->
 ### Blocked
 - Row 24 — the supervised rebuild/bring-up. Also the SAME blocker as TODO.md's
   entire "Requires container testing" section (TODO.md:11,25,31,38,48): one
   blocker recorded in two files.
-- Row 28 — ruled; waits on the developer running `/tmp/fix-ask-tier-docs-20260904.sh`
+- Row 28 — ruled; waits on the developer running `var/claude/fix-ask-tier-docs-20260904.sh`
   (`CLAUDE.md` is classifier-blocked and the two agent defs need developer authorisation).
 
 ### Needs input
@@ -1306,7 +1306,7 @@ class-3 var is absent from this accounting, and no gate site in B lacks a class-
   added `95ccbb7`) and the docs are corrected. The sweep found EIGHT claim sites, not two:
   `CLAUDE.md:26/:45/:49/:143/:369`, `.claude/agents/reproducibility-reviewer.md:28`,
   `.claude/agents/stack-infra-reviewer.md:122`, `docs/BLAST-RADIUS.md:10`. All eight ship in
-  `/tmp/fix-ask-tier-docs-20260904.sh` (dry-run proven on a scratch copy: 8 replacements,
+  `var/claude/fix-ask-tier-docs-20260904.sh` (dry-run proven on a scratch copy: 8 replacements,
   0 stale claims left in any file, a second run aborts on every anchor). Row 28 stays
   `blocked` until the developer runs it, then moves to `done` with that commit's sha. The
   archived 2026-08-06 ruling at `docs/archive/plans/claude-bundle-cross-repo-audit.plan.md:19`
