@@ -1804,6 +1804,89 @@ assert_pass "25g: zephir pin bumped → reinstall, marker updated" \
 assert_pass "25h: zephir failed download leaves no satisfied marker" \
   test "$(_zephir_run "" 1.0.0 0 1)" = "<none>"
 
+# ─── Section 26: rust tool version gates (row 18) ─────────────────────────
+printf '\n%b── Section 26: rust install-tool gates%b\n' "${C_BOLD}" "${C_RESET}"
+
+# Row 18. All five were exist-only (`"" = "$(command -v X)"`), so a version bump
+# did nothing and none kept a marker. They are invoked as bare commands by
+# rust-start.sh, so each is its own process and must source the gate helper —
+# this is the first row that consumes row 15's extraction.
+RUST_BIN="${DIST_BIN}/rust-bin"
+
+for _t in cargo-nextest cargo-outdated cargo-zigbuild jujutsu mergiraf; do
+  assert_pass "26a: rust-install-${_t} sources the gate helper ALONE" \
+    grep -q '^source global-stack-base-version-gate\.sh$' \
+    "${RUST_BIN}/global-stack-rust-install-${_t}.sh"
+  assert_fail "26a: rust-install-${_t} does NOT source the full prologue" \
+    grep -q 'global-stack-base-prologue\.sh' \
+    "${RUST_BIN}/global-stack-rust-install-${_t}.sh"
+done
+
+# The cascade fix: these five reached the container only through the 00base image
+# ENV, so a .env bump could not be seen at runtime until a rebuild.
+for _v in CARGO_NEXTEST CARGO_OUTDATED CARGO_ZIGBUILD JUJUTSU MERGIRAF; do
+  assert_pass "26b: 02rust passes GLOBAL_STACK_${_v}_VERSION at runtime" \
+    grep -q "GLOBAL_STACK_${_v}_VERSION=\${GLOBAL_STACK_${_v}_VERSION}" \
+    "${SCRIPT_DIR}/../../docker/images/02rust/docker-compose.yaml"
+done
+
+# _rust_tool_run <tool> <marker_body> <pin> <binary_present> → "<marker>|<forced?>"
+_rust_tool_run() {
+  local tool="$1" marker_body="$2" pin="$3" bin_present="$4"
+  local root="${TMP_DIR}/rusttool" var
+  rm -rf "${root}"; mkdir -p "${root}/vers" "${root}/stub" "${root}/run"
+  case "${tool}" in
+    cargo-nextest)  var=GLOBAL_STACK_CARGO_NEXTEST_VERSION ;;
+    cargo-outdated) var=GLOBAL_STACK_CARGO_OUTDATED_VERSION ;;
+    cargo-zigbuild) var=GLOBAL_STACK_CARGO_ZIGBUILD_VERSION ;;
+    jujutsu)        var=GLOBAL_STACK_JUJUTSU_VERSION ;;
+    mergiraf)       var=GLOBAL_STACK_MERGIRAF_VERSION ;;
+  esac
+  # cargo stub records whether --force was passed; rustup/git/sudo are no-ops.
+  { printf '#!/bin/bash\n'
+    printf 'for a in "$@"; do [ "$a" = "--force" ] && echo forced > "%s/forced"; done\n' "${root}"
+    printf 'exit 0\n'; } >"${root}/stub/cargo"
+  for n in rustup git; do printf '#!/bin/bash\nexit 0\n' >"${root}/stub/${n}"; done
+  # sudo must really run mkdir/chmod/rm: mergiraf's script does `cd /tmp/mergiraf`
+  # right after creating it, and a no-op sudo makes that cd fail under set -e —
+  # which looks like a gate defect but is only a blunt stub. chown is skipped
+  # because the fixture's user/group do not exist. Only /tmp/mergiraf is touched,
+  # and the script itself removes it on the way out.
+  { printf '#!/bin/bash\n'
+    printf 'case "$1" in chown) exit 0 ;; *) exec "$@" ;; esac\n'; } >"${root}/stub/sudo"
+  # the binary-present case: a stub named after the tool's command
+  local cmd="${tool}"; [[ "${tool}" == jujutsu ]] && cmd=jj
+  [[ "${bin_present}" == "1" ]] && printf '#!/bin/bash\nexit 0\n' >"${root}/stub/${cmd}"
+  chmod +x "${root}/stub/"*
+  [[ -n "${marker_body}" ]] && printf '%s\n' "${marker_body}" >"${root}/vers/rust.${tool}"
+
+  ( cd "${root}/run" && env \
+      PATH="${root}/stub:${DIST_BIN}/base-bin:/usr/bin:/bin" \
+      "${var}=${pin}" \
+      GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS="${root}/vers" \
+      GLOBAL_STACK_DOCKER_ROOT_PATH="${root}/run" \
+      GLOBAL_STACK_DOCKER_USER_ID=u GLOBAL_STACK_DOCKER_GROUP_ID=g \
+      bash "${RUST_BIN}/global-stack-rust-install-${tool}.sh" ) >/dev/null 2>&1 || true
+
+  local after="<none>" forced=no
+  [[ -f "${root}/vers/rust.${tool}" ]] && after="$(cat "${root}/vers/rust.${tool}")"
+  [[ -f "${root}/forced" ]] && forced=yes
+  printf '%s|%s' "${after}" "${forced}"
+}
+
+for _t in cargo-nextest cargo-outdated cargo-zigbuild jujutsu mergiraf; do
+  # first install: marker written, no --force needed
+  assert_pass "26c: ${_t} first install writes the marker unforced" \
+    test "$(_rust_tool_run "${_t}" "" 1.0.0 0)" = "1.0.0|no"
+  # marker matches and the binary is present → skip entirely
+  assert_pass "26d: ${_t} marker matching the pin → skip" \
+    test "$(_rust_tool_run "${_t}" 1.0.0 1.0.0 1)" = "1.0.0|no"
+  # THE DEFECT: a bump used to do nothing. Now it reinstalls, forced, and the
+  # marker moves to the new pin.
+  assert_pass "26e: ${_t} pin bumped → forced reinstall, marker updated" \
+    test "$(_rust_tool_run "${_t}" 1.0.0 1.0.1 1)" = "1.0.1|yes"
+done
+
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
 if [[ "${FAIL}" -eq 0 ]]; then

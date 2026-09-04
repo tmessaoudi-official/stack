@@ -20,6 +20,16 @@ services:
       - GLOBAL_STACK_RELOAD_RUST=${GLOBAL_STACK_RELOAD_RUST}
       - GLOBAL_STACK_RUST_VERSION=${GLOBAL_STACK_RUST_VERSION}
       - GLOBAL_STACK_RUSTUP_INIT_VERSION=${GLOBAL_STACK_RUSTUP_INIT_VERSION}
+      # Row 18: these five reached the container ONLY through the 00base image ENV
+      # (Dockerfile ARG->ENV), which is baked at build time — so a .env bump was
+      # invisible to a runtime gate until the image was rebuilt, and the gate would
+      # have compared against a stale baked value forever. Same defect shape as
+      # GLOBAL_STACK_USE_LOCKS in Track 2b. Passing them at runtime fixes that.
+      - GLOBAL_STACK_CARGO_NEXTEST_VERSION=${GLOBAL_STACK_CARGO_NEXTEST_VERSION}
+      - GLOBAL_STACK_CARGO_OUTDATED_VERSION=${GLOBAL_STACK_CARGO_OUTDATED_VERSION}
+      - GLOBAL_STACK_CARGO_ZIGBUILD_VERSION=${GLOBAL_STACK_CARGO_ZIGBUILD_VERSION}
+      - GLOBAL_STACK_JUJUTSU_VERSION=${GLOBAL_STACK_JUJUTSU_VERSION}
+      - GLOBAL_STACK_MERGIRAF_VERSION=${GLOBAL_STACK_MERGIRAF_VERSION}
       - RUSTUP_HOME=${GLOBAL_STACK_RUSTUP_HOME}
       - CARGO_HOME=${GLOBAL_STACK_CARGO_HOME}
       - GLOBAL_STACK_WAIT_FOR_TIMEOUT=${GLOBAL_STACK_WAIT_FOR_TIMEOUT}
