@@ -918,3 +918,38 @@ every class-3 var has a terminal state (gated / already-gated / class-2 / class-
 5. `git grep -l 'MASTER-TRIAGE'` in tracked files returns only historical/archive
    references; the gitignored triage file carries the superseded banner.
 6. Completion report names every UNCERTIFIED-BY-EXECUTION dimension in those words.
+
+## Status
+<!-- progress-block v1 -->
+| # | Step | Size | State | Evidence | Files |
+|---|------|------|-------|----------|-------|
+| 1 | Stage 1 — unify plans into MASTER, archive the 5 superseded | S | done | 0cc4c4d | docs/plans/*.md docs/archive/plans/*.md |
+| 2 | Track 0 — baseline battery certification of HEAD | M | done | 29eaaa6 | docs/plans/MASTER.plan.md bin/tests/*.test.sh |
+| 3 | Track 1a — F2 tag-flag fingerprint in all 9 fetcher cache keys | M | done | b43d74d | bin/lib/env-update/*.sh templates/tips/env-update.md |
+| 4 | Track 1b — F3 `<empty>` placeholder escaping in parse errors | S | done | 2483ff6 | bin/lib/env-update/core/parse.sh bin/tests/env-update.test.sh |
+| 5 | Track 2a — F4 per-service web-server error tokens | M | done | 7176367 | docker/images/01caddy/* docker/images/01nginx/* docker/images/01httpd/* docker/config/dist/bin/base-bin/*.sh |
+| 6 | Track 2b — F3 GLOBAL_STACK_USE_LOCKS reaches containers at runtime | M | done | 26b9d7a | docker/images/*/docker-compose.yaml bin/tests/compose-env-plumbing.test.sh |
+| 7 | Track 2c — F8 pyenv/rbenv gate on the resolved version, not the raw pin | M | done | bef24bd | docker/config/dist/bin/pyenv-bin/*.sh docker/config/dist/bin/rbenv-bin/*.sh |
+| 8 | Track 3a+3d — F6 wait-healthy false-OK; F7 fresh-clone sed noise | M | done | d39dc48 | Makefile bin/tests/wait-healthy.test.sh |
+| 9 | Track 3b — F8/F9/F14 check-image-versions (vacuity, .env.local, mode) | M | done | 59a6f82 | bin/check-image-versions.sh bin/tests/check-image-versions.test.sh |
+| 10 | Track 3c — F11/F12 open-all-envs .env resolution + host ~/.sdkman destruction | M | done | 7d70a82 | bin/open-all-envs.sh templates/tips/open-many-links.md |
+| 11 | Track 3c follow-up — sdkman backup must not destroy the file when it fails | S | done | d5adf56 | bin/open-all-envs.sh |
+| 12 | Track 4a — F13 env-guard port check keyed on the consumer | M | done | f7db75b | .claude/hooks/env-guard-on-write.sh bin/tests/env-guard.test.sh |
+| 13 | Track 2a docs — stop /new-service resurrecting F4; carry the four residuals | S | done | 53aff52 | .claude/skills/new-service/SKILL.md docs/plans/MASTER.plan.md |
+| 14 | Track 5a — bidirectional audit (all _VERSION vars x all gate sites) into a plan appendix | L | todo | - | .env docs/plans/MASTER.plan.md docker/config/dist/bin/*/*.sh |
+| 15 | Track 5b — extract gs_version_gate into its own sourceable helper (prologue-exempt safe) | M | todo | - | docker/config/dist/bin/base-bin/*.sh bin/tests/startup-prologue.test.sh |
+| 16 | Track 5b — gate nvm-install-tools (deno, bun) | M | todo | - | docker/config/dist/bin/nvm-bin/*.sh |
+| 17 | Track 5b — gate phpbrew-install-tools (deployer, symfony-cli, laravel/installer, ...) | L | todo | - | docker/config/dist/bin/phpbrew-bin/*.sh .env |
+| 18 | Track 5b — gate rust tools (cargo-nextest/outdated/zigbuild, jujutsu, mergiraf) | M | todo | - | docker/config/dist/bin/rust-bin/*.sh |
+| 19 | Track 5b — gate android (sdkmanager + 5 uncompared vars) | M | todo | - | docker/config/dist/bin/android-bin/*.sh |
+| 20 | Track 5b — gate web-server sub-components (mod_security, coreruleset, cjose, liboauth2, apr) | L | todo | - | docker/config/dist/bin/nginx-bin/*.sh docker/config/dist/bin/httpd-bin/*.sh |
+| 21 | Track 5b — remainder named by 5a (wkhtmltopdf, sonar-scanner-cli, elasticmq, rbenv/fvm extras) | M | todo | - | docker/config/dist/bin/*/*.sh |
+| 22 | Track 5 docs — CLAUDE.md Gotchas + two-phase note once the gate is universal | S | todo | - | CLAUDE.md |
+| 23 | Close-out — terminal states + SHAs in plan, full battery re-run, advisor, push | M | todo | - | docs/plans/MASTER.plan.md CLAUDE.md |
+| 24 | Developer input — supervised rebuild/bring-up closing the 4 UNCERTIFIED labels | M | blocked | - | - |
+<!-- /progress-block -->
+### Blocked
+### Needs input
+### Needs research
+### Fragile
+### Known issues
