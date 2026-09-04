@@ -1887,6 +1887,97 @@ for _t in cargo-nextest cargo-outdated cargo-zigbuild jujutsu mergiraf; do
     test "$(_rust_tool_run "${_t}" 1.0.0 1.0.1 1)" = "1.0.1|yes"
 done
 
+# ─── Section 27: android SDK component gate (row 19) ──────────────────────
+printf '\n%b── Section 27: android SDK component gate%b\n' "${C_BOLD}" "${C_RESET}"
+
+# Row 19. android.sdkmanager holds the sdkmanager BINARY's own version, so it could
+# never detect an SDK component bump — the five GLOBAL_STACK_ANDROID_*_VERSION pins
+# were never compared to anything. A composite marker now carries the three pins the
+# live sdkmanager call actually uses.
+AND_START="${DIST_BIN}/android-bin/global-stack-android-start.sh"
+AND_SETUP="${DIST_BIN}/android-bin/global-stack-android-setup.sh"
+
+assert_pass "27a: android-start sources the gate helper ALONE" \
+  grep -q '^source global-stack-base-version-gate\.sh$' "${AND_START}"
+assert_fail "27a: android-start does NOT source the prologue" \
+  grep -q 'global-stack-base-prologue\.sh' "${AND_START}"
+assert_fail "27a: android-setup does NOT source the prologue (stays exempt)" \
+  grep -q 'global-stack-base-prologue\.sh' "${AND_SETUP}"
+
+# The composite must carry exactly the three LIVE pins. NDK_BUNDLE and
+# PLATFORM_TOOLS appear only in a commented-out sdkmanager line, and Track 5 says
+# commented-out installs stay out — so including them would force a reinstall on a
+# bump that changes nothing.
+for _v in CMDLINE_TOOLS BUILD_TOOLS NDK; do
+  assert_pass "27b: composite marker includes ${_v}" \
+    grep -q "GS_ANDROID_SDK_WANT=.*GLOBAL_STACK_ANDROID_${_v}_VERSION" "${AND_START}"
+done
+# `|| true` for the same reason as the harness below: a missing anchor is the
+# red-first case, not a harness error, and an unguarded command substitution
+# under `set -e` aborts the RUN with no tally instead of redding.
+_and_want_line="$(grep -m1 '^GS_ANDROID_SDK_WANT=' "${AND_START}" || true)"
+for _v in NDK_BUNDLE PLATFORM_TOOLS; do
+  case "${_and_want_line}" in
+    *"GLOBAL_STACK_ANDROID_${_v}_VERSION"*)
+      FAIL=$((FAIL + 1)); FAILURES+=("27b: composite wrongly includes ${_v}")
+      printf '  %b✗%b  27b: composite wrongly includes %s (comment-only var)\n' "${C_RED}" "${C_RESET}" "${_v}" ;;
+    *)
+      PASS=$((PASS + 1))
+      printf '  %b✓%b  27b: composite excludes %s (comment-only var)\n' "${C_GREEN}" "${C_RESET}" "${_v}" ;;
+  esac
+done
+
+# Both the wipe branch and the setup branch must consult the gate, or a component
+# bump would clean but not reinstall (or reinstall onto a dirty tree).
+_and_gated="$(grep -c '\[ "${_android_gate}" != "skip" \]' "${AND_START}" || true)"
+assert_pass "27c: both android branches consult the gate" test "${_and_gated}" = "2"
+
+# Marker-last, and never written from a standalone setup run.
+assert_pass "27d: android-setup writes the composite marker" \
+  grep -q 'GS_ANDROID_SDK_WANT.*> "\${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/android.sdk"' "${AND_SETUP}"
+assert_pass "27d: and only when the compose-time value was exported" \
+  grep -q '\[\[ -n "\${GS_ANDROID_SDK_WANT:-}" \]\]' "${AND_SETUP}"
+
+# ── behavioural: the gate block, extracted by pattern (never by line number) ──
+_android_decision() {
+  local marker_body="$1" cmdline="$2" build="$3" ndk="$4"
+  local root="${TMP_DIR}/android" h
+  rm -rf "${root}"; mkdir -p "${root}/vers"
+  h="${root}/block.sh"
+  {
+    printf '#!/bin/bash\nset -e\n'
+    printf 'source global-stack-base-version-gate.sh\n'
+    # `|| true`: grep exits 1 by contract when the anchor is absent, which is the
+    # legitimate red-first case (the gate does not exist yet). Without it this
+    # suite's `set -euo pipefail` kills the whole RUN with no tally line instead
+    # of redding — the same harness defect §15 has, recorded in the plan's
+    # ### Fragile section.
+    grep -m1 '^GS_ANDROID_SDK_WANT=' "${AND_START}" || true
+    grep -m1 '^_android_gate=' "${AND_START}" || true
+    printf 'printf "DECISION=%%s\\n" "${_android_gate:-<no-gate>}"\n'
+  } >"${h}"
+  [[ -n "${marker_body}" ]] && printf '%s\n' "${marker_body}" >"${root}/vers/android.sdk"
+  env PATH="${DIST_BIN}/base-bin:${PATH}" \
+    GLOBAL_STACK_ANDROID_CMDLINE_TOOLS_VERSION="${cmdline}" \
+    GLOBAL_STACK_ANDROID_BUILD_TOOLS_VERSION="${build}" \
+    GLOBAL_STACK_ANDROID_NDK_VERSION="${ndk}" \
+    GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS="${root}/vers" \
+    bash "${h}" 2>/dev/null | sed -n 's/^DECISION=//p' || true
+}
+
+_want="cmdline-tools=1.0;build-tools=2.0;ndk=3.0"
+assert_pass "27e: no marker → install" \
+  test "$(_android_decision "" 1.0 2.0 3.0)" = "install"
+assert_pass "27e: composite matches → skip" \
+  test "$(_android_decision "${_want}" 1.0 2.0 3.0)" = "skip"
+# THE DEFECT: each of these bumps previously did nothing at all.
+assert_pass "27f: cmdline-tools bump → reinstall" \
+  test "$(_android_decision "${_want}" 1.1 2.0 3.0)" = "reinstall"
+assert_pass "27f: build-tools bump → reinstall" \
+  test "$(_android_decision "${_want}" 1.0 2.1 3.0)" = "reinstall"
+assert_pass "27f: ndk bump → reinstall" \
+  test "$(_android_decision "${_want}" 1.0 2.0 3.1)" = "reinstall"
+
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
 if [[ "${FAIL}" -eq 0 ]]; then

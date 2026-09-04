@@ -35,3 +35,10 @@ yes | sdkmanager --sdk_root="${ANDROID_HOME}" --licenses
 set -xeEu -o pipefail
 # rm -rf ${ANDROID_HOME}/licenses
 echo "$(sdkmanager --sdk_root="${ANDROID_HOME}" --version)" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/android.sdkmanager"
+# Row 19: the component-pin marker the gate in global-stack-android-start.sh reads.
+# Composed THERE and exported, deliberately not recomputed here — two copies of the
+# same string would drift and every boot would then look like a version change.
+# Written last, so a failed sdkmanager run above cannot record success. Empty when
+# this script is run standalone: that leaves the marker absent, and the next start
+# reinstalls rather than trusting an unverified state.
+[[ -n "${GS_ANDROID_SDK_WANT:-}" ]] && printf '%s\n' "${GS_ANDROID_SDK_WANT}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/android.sdk"

@@ -70,13 +70,31 @@ global_stack_base_setup_packages \
   --command='echo "sdk use ${PACKAGE_NAME} \"${PACKAGE_VERSION}\"" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"'
 set -E
 
-if [ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/android.sdkmanager" ] || [ "${GLOBAL_STACK_RELOAD_ANDROID}" = "true" ]; then
-  sudo rm -rf "${ANDROID_HOME}" "${ANDROID_SDK_HOME}" "${ANDROID_SDK_ROOT}" "${GRADLE_USER_HOME}" "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/android.sdkmanager"
+# Row 18/19. This script is prologue-EXEMPT (its own stackCatch above, which ends
+# in `sleep infinity` rather than exiting), so it takes the version gate ALONE.
+# Sourcing it here also covers global-stack-base-setup-packages.sh, sourced above:
+# that library calls gs_version_gate when a caller passes --marker-prefix, and this
+# caller does not — so the gate was an unbound command waiting to happen.
+source global-stack-base-version-gate.sh
+
+# The android.sdkmanager marker holds the sdkmanager BINARY's own version, which is
+# not any of the .env pins — so it could never detect an SDK component bump. This
+# composite marker carries the three pins that the sdkmanager call actually uses.
+# GLOBAL_STACK_ANDROID_NDK_BUNDLE_VERSION and _PLATFORM_TOOLS_VERSION are
+# deliberately absent: they appear ONLY in the commented-out "@todo fix version not
+# found" line in global-stack-android-setup.sh, and the live call passes bare
+# "ndk-bundle" and "platform-tools". Commented-out installs stay out (Track 5).
+GS_ANDROID_SDK_WANT="cmdline-tools=${GLOBAL_STACK_ANDROID_CMDLINE_TOOLS_VERSION};build-tools=${GLOBAL_STACK_ANDROID_BUILD_TOOLS_VERSION};ndk=${GLOBAL_STACK_ANDROID_NDK_VERSION}"
+export GS_ANDROID_SDK_WANT
+_android_gate="$(gs_version_gate "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/android.sdk" "${GS_ANDROID_SDK_WANT}" "android.sdk")"
+
+if [ "${_android_gate}" != "skip" ] || [ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/android.sdkmanager" ] || [ "${GLOBAL_STACK_RELOAD_ANDROID}" = "true" ]; then
+  sudo rm -rf "${ANDROID_HOME}" "${ANDROID_SDK_HOME}" "${ANDROID_SDK_ROOT}" "${GRADLE_USER_HOME}" "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/android.sdkmanager" "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/android.sdk"
 fi
 
 mkdir -p "${ANDROID_HOME}" "${ANDROID_SDK_HOME}/.android" "${ANDROID_SDK_ROOT}" "${GRADLE_USER_HOME}"
 
-if [ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/android.sdkmanager" ] || [ "${GLOBAL_STACK_RELOAD_ANDROID}" = "true" ]; then
+if [ "${_android_gate}" != "skip" ] || [ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/android.sdkmanager" ] || [ "${GLOBAL_STACK_RELOAD_ANDROID}" = "true" ]; then
   global-stack-android-setup.sh
 fi
 
