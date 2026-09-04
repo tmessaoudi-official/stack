@@ -467,6 +467,28 @@ labels) and post-push commit signing.
   pin with its curl line commented out, so those compares are against the pin and the
   sdkman/rust gates cannot WARN spuriously.
 
+- [2026-09-04 12:18] AGREED (developer ruling, Track 5b): **the scope guard at `:793` is
+  amended.** Install-logic changes are permitted *where a `.env` pin cannot otherwise hold*.
+  First and so far only instance: `phpbrew-install-tools.sh:32` installs `laravel/installer`
+  unpinned and `:34` then runs `composer global update --ignore-platform-reqs
+  --with-all-dependencies`, which would move any tool row 17 gates back off its pin — so a
+  gate alone cannot work there. Everywhere else the guard stands unchanged: no tool
+  additions or removals, no version bumps, no install-logic rewrites beyond gate + marker
+  discipline. The mechanism at `:34` (delete versus constrain) is NOT ruled here — deleting
+  stops every global composer package updating, not only gated ones, so whichever row 17
+  chooses gets its own dated entry.
+- [2026-09-04 12:18] AGREED (developer ruling): **the five defect groups found by the
+  2026-09-04 five-lens sweep are absorbed into this plan as rows 25–29**, rather than
+  recorded and left. They are: the three web-server `*-iou.sh` exit-1 exemptions plus the
+  hardcoded `WEB_SERVER_SCRIPTS` array that hid them (25); the 14 Dockerfiles carrying
+  `# @todo fix pin versions` (26); the `CLAUDE.md` corrections (27); the
+  `.claude/settings.json` `ask`-tier contradiction (28); and the `TODO.md` prune (29).
+  This **supersedes the 2026-09-03 decline** of the first, the test-array and the
+  settings.json items — they were declined then and are in scope now. Rows 27 and 28 are
+  `blocked`, not `todo`: both touch classifier-blocked files, so their terminal state is a
+  handover script, never a commit by Claude. Row 28's *direction* is still unruled and sits
+  in `### Needs input`.
+
 The executor APPENDS its own dated `AGREED:` entries here (e.g. the F3 classification
 outcome, Track 5 audit rulings) as it goes — this file is where rulings land. Never backdate;
 never write an entry for a ruling that was not actually taken (forged-AGREED hazard, global
@@ -1161,6 +1183,11 @@ class-3 var is absent from this accounting, and no gate site in B lacks a class-
 | 22 | Track 5 docs — CLAUDE.md Gotchas + two-phase note once the gate is universal | S | todo | - | CLAUDE.md |
 | 23 | Close-out — terminal states + SHAs in plan, full battery re-run, advisor, push | M | todo | - | docs/plans/MASTER.plan.md CLAUDE.md |
 | 24 | Developer input — supervised rebuild/bring-up closing the 4 UNCERTIFIED labels | M | blocked | - | - |
+| 25 | Sweep — web-server iou handlers write an error token on exit 1; de-hardcode WEB_SERVER_SCRIPTS | M | todo | - | docker/config/dist/bin/caddy-bin/*.sh docker/config/dist/bin/httpd-bin/*.sh docker/config/dist/bin/nginx-bin/*.sh bin/tests/startup-prologue.test.sh |
+| 26 | Sweep — pin the 14 Dockerfiles carrying `# @todo fix pin versions` | L | todo | - | docker/images/*/Dockerfile* templates/ghost-blog/Dockerfile |
+| 27 | Sweep — CLAUDE.md corrections (141/1 claim, stale suite counts, LOCAL slot, exclusion list) | S | blocked | - | CLAUDE.md |
+| 28 | Sweep — settings.json ask-tier vs CLAUDE.md:49/:369; direction unruled | S | blocked | - | .claude/settings.json CLAUDE.md |
+| 29 | Sweep — prune TODO.md (item 189 + zig drift done; consolidate its 5 container-test items with row 24) | S | todo | - | TODO.md |
 <!-- /progress-block -->
 ### Blocked
 - Row 24 — the supervised rebuild/bring-up. Also the SAME blocker as TODO.md's
@@ -1207,3 +1234,117 @@ class-3 var is absent from this accounting, and no gate site in B lacks a class-
   as new: CLAUDE.md:337 "141/1 exemption is gone"; the hardcoded
   WEB_SERVER_SCRIPTS array at startup-prologue.test.sh:1081; the live 3-entry
   `ask` tier in .claude/settings.json vs CLAUDE.md:49/:369.
+
+## Goal
+<!-- goal-block -->
+**Goal.** Bring `MASTER.plan.md` to a terminal state: every runtime-installed tool in
+`/stack` reinstalls-with-WARN on a `.env` version bump through the single
+`gs_version_gate` pattern, the five defect groups the 2026-09-04 sweep found outside the
+plan are closed, and the whole is pushed to `master` with every finding carrying a
+terminal state and every unproven dimension named `UNCERTIFIED-BY-EXECUTION`.
+
+### In scope
+
+- **Rows 15–23** as written: extract `gs_version_gate` into
+  `base-bin/global-stack-base-version-gate.sh` (row 15 — it gates rows 18, 19, 20 and the
+  exempt half of 21, four of six migration rows), migrate the 50 actionable class-3 sites
+  the 5a appendix names, then docs and close-out.
+- **Row 17 additionally pins `laravel/installer`** (`phpbrew-install-tools.sh:32`) and
+  stops `:34`'s `composer global update --ignore-platform-reqs --with-all-dependencies`
+  from moving a gated tool off its pin.
+- **Rows 25–29, absorbed by developer ruling 2026-09-04:**
+  - 25 — the exit-1 exemption and missing `_STACK_CAUGHT` in `caddy-iou.sh:21`,
+    `httpd-iou.sh:26`, `nginx-iou.sh:33`, so a failed web-server *install* writes an error
+    token; plus replacing `startup-prologue.test.sh:1081`'s hardcoded 8-entry
+    `WEB_SERVER_SCRIPTS` array with discovery, since that array is why §19 never went red
+    for those three.
+  - 26 — pin the 14 Dockerfiles carrying `# @todo fix pin versions`
+    [Verified: `git grep -l` over `docker/**Dockerfile*` and `templates/**Dockerfile*` → 14].
+  - 27 — `CLAUDE.md` corrections: the false "141/1 exemption is gone" (`:337`), stale suite
+    counts (`:321` env-update, `:323` makefile-posix 5→7, `:327` open-all-envs 12→16), the
+    taken LOCAL slot (`:404`, 41719 → 41720), and the incomplete prologue-exclusion list.
+  - 28 — resolve the contradiction between `.claude/settings.json`'s live 3-entry `ask`
+    tier and `CLAUDE.md:49`/`:369` ("no deny and no ask tier at all").
+  - 29 — prune `TODO.md`: item 189 (`WAIT_FOR_TIMEOUT` from `.env`) and the 00base zig
+    drift are already done, and its 5-item "Requires container testing" section is the
+    same blocker as row 24.
+
+### Out of scope
+
+- `/stack/projects/*`, anything under `~/.claude`, new services, reviewer panels, named
+  subagents.
+- **Version bumps for their own sake.** Row 26 is not an exception: pinning a floating
+  install records the version already being installed, it does not move it.
+- Anything destructive — no `make hard-restart` / `soft-restart` / `save`, no
+  `docker volume rm`. The only container operations permitted are a single-service
+  recreate plus login, and only if the stack is already up.
+- Row 24's supervised bring-up: an external dependency, not executor work.
+
+### Done when
+
+1. Status-block rows exist for 25–29, and `bash ~/.claude/bin/project-state.sh` reports
+   `steps_done + steps_blocked == steps_total` with `staleness == []`.
+2. `git grep -n 'gs_version_gate()' docker/config/dist/bin/` returns exactly 1 hit, and
+   `git grep -l 'base-prologue.sh' docker/config/dist/bin/{caddy,nginx,httpd,android}-bin/`
+   returns nothing — the helper exists and the exempt scripts source only it.
+3. Every class-3 var in the 5a appendix carries a terminal state: `gated`,
+   `already-gated`, `reclassified`, or `REFUTED-AT-EXECUTION` with evidence.
+4. **Row 17's observable**, mechanism-agnostic: after a `.env` bump and a phpbrew
+   reinstall, `composer global show laravel/installer` reports the pinned version and no
+   other gated tool's marker has changed.
+5. `git grep -c '@todo fix pin versions' -- 'docker/**Dockerfile*' 'templates/**Dockerfile*'`
+   returns 0.
+6. `bash bin/tests/startup-prologue.test.sh` green, with a section proving the three
+   web-server handlers now write an error token on exit 1 — red-first, and sabotage-checked
+   by restoring one exemption.
+7. Every suite in `bin/tests/*.test.sh` green, each suite's own final tally line pasted.
+8. All 13 original findings plus the 5 absorbed groups carry a terminal state — FIXED
+   (sha) / REFUTED-AT-EXECUTION (evidence) / CARRIED (register entry). None silently
+   dropped.
+9. Pushed to `master` with plain `git push`; `git.ahead == 0`; the completion report names
+   each unproven dimension in the words `UNCERTIFIED-BY-EXECUTION`.
+
+### Constraints
+
+- **The Track 5 scope guard (`:793`) is amended, not ignored** (ruling 2026-09-04):
+  install-logic changes are permitted *where a `.env` pin cannot otherwise hold* — first
+  and so far only instance, `phpbrew-install-tools.sh:32-34`. Everywhere else the guard
+  stands: no tool additions or removals, no version bumps, no install-logic rewrites
+  beyond gate + marker discipline.
+- **Row 17's mechanism is row 17's call** — delete `:34` or constrain it — bounded by "no
+  tool additions/removals". Deleting stops *every* global composer package updating, not
+  only gated ones, so whichever is chosen gets its own dated `AGREED`.
+- **Rows 27 and 28 cannot reach `done` by Claude's hand.** `CLAUDE.md` and
+  `.claude/settings.json` are classifier-blocked, so their terminal state is a
+  `/tmp/<verb>-<topic>-20260904.sh` handed over for `! bash` execution. They are therefore
+  `blocked`, like row 24, and the stop condition's
+  `steps_done + steps_blocked == steps_total` absorbs them.
+- Order: 15 before 18/19/20/21b; 16, 17 and 21a are parallel-safe with 15. Row 20 is the
+  tail of the critical path and its per-site compare shape is still unread.
+- `GS_STARTUP_DRY_RUN` exits at prologue `:319`, *after* the gate at `:264`, so a script
+  sourcing only the helper has no dry-run seam — rows 18/19/20/21b must stub `curl`/`git`
+  on PATH instead, which is why they cost more than their size suggests.
+- `master` only, plain `git push` (never `-u`), fixed identity, **no `Co-Authored-By` and
+  no `Claude-Session` trailer**, conventional prefixes, one self-contained green commit per
+  finding.
+- Write/Edit tools for every file change (Bash-written files bypass all lint hooks);
+  `git --no-pager -c core.pager=cat diff --no-ext-diff`; `git grep`, never `grep -rn`;
+  `docker compose config` always `-q` — plain `config` prints every secret.
+- `advisor()`-only certification; the 5-round escalation cap is the sole permitted
+  question. Per-project autonomous sentinel is present, so the certification-tier question
+  is suppressed.
+
+### Ambiguities resolved
+
+| Question | Ruling | Who |
+|---|---|---|
+| Re-prove the landed rows? | No — taken as given | Developer, 2026-09-04 |
+| End before or after the supervised rebuild? | Before — push with labels named | Developer, 2026-09-04 |
+| Is the goal met with row 17 partly done? | No — widen the scope guard and fix `laravel/installer` | Developer, 2026-09-04 |
+| Do the sweep's out-of-plan defects join the goal? | Yes — all five groups, rows 25–29 | Developer, 2026-09-04 |
+| Which way does row 28 go? | **Unruled.** Recommended: correct `CLAUDE.md`, because `95ccbb7` added the `ask` entries to gate a real `.env` write and `ask` prompts rather than dead-ends, so it does not violate the "no denies" ruling. Alternative: remove the three entries. Routed to `### Needs input` | — |
+| Does 5a's seed table define 5b's worklist? | No — the appendix does | Plan `:737-739` |
+| Are working-but-hand-rolled compares in scope? | Yes — silent and duplicated, converge | Plan `:773` |
+| Class-1/class-2 vars: migrate? | No — classify and record | Plan `:70-75` |
+| Split row 21 into 21a/21b? | Does not change the outcome; recorded in `### Needs research`, not asked | — |
+<!-- /goal-block -->
