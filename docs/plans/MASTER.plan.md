@@ -1278,7 +1278,7 @@ class-3 var is absent from this accounting, and no gate site in B lacks a class-
 | 21 | Track 5b — remainder named by 5a: phpmyadmin, 00base runtime installs, elasticmq, rbenv plugins. frankenphp NOT gated (path-keyed); awscli has no pin | M | done | ae4f4df 53c0859 | docker/config/dist/bin/base-bin/*.sh docker/config/dist/bin/phpmyadmin-bin/*.sh docker/config/dist/bin/serverless-bin/*.sh docker/config/dist/bin/rbenv-bin/*.sh bin/tests/startup-prologue.test.sh |
 | 22 | Track 5 docs — CLAUDE.md Gotchas + two-phase note once the gate is universal | S | done | 3f94de3 | CLAUDE.md |
 | 23 | Close-out — terminal states + SHAs in plan, full battery re-run, advisor, push | M | done | 4eb16c6 | docs/plans/MASTER.plan.md |
-| 24 | Developer input — supervised rebuild/bring-up closing the 4 UNCERTIFIED labels | M | blocked | - | - |
+| 24 | Developer input — supervised rebuild/bring-up closing 8 of the 9 UNCERTIFIED-BY-EXECUTION dimensions | M | blocked | - | - |
 | 25 | Sweep — web-server iou handlers write an error token on exit 1; de-hardcode WEB_SERVER_SCRIPTS | M | done | a1ba6f1 | docker/config/dist/bin/caddy-bin/*.sh docker/config/dist/bin/httpd-bin/*.sh docker/config/dist/bin/nginx-bin/*.sh bin/tests/startup-prologue.test.sh |
 | 26 | Sweep — retire the stale `# @todo fix pin versions` TODOs (NOT pin: .hadolint.yaml already rules against it) | L | done | fc10204 | docker/images/*/Dockerfile* templates/ghost-blog/Dockerfile |
 | 27 | Sweep — CLAUDE.md corrections (141/1 claim, stale suite counts, LOCAL slot, exclusion list) | S | done | 3f94de3 | CLAUDE.md |
@@ -1295,9 +1295,13 @@ class-3 var is absent from this accounting, and no gate site in B lacks a class-
   carries a live 3-entry `ask` tier, while `CLAUDE.md:49` and `:369` both state
   the file is allow-list only with no `ask` tier at all. One of the two is wrong.
   Recommendation: correct `CLAUDE.md`, because `95ccbb7` added those entries
-  deliberately to gate a real `.env` write, and `ask` PROMPTS rather than
-  dead-ends — so it does not violate the no-denies ruling, which is about
-  unrecoverable blocks. Alternative: drop the three entries and keep the doc.
+  to gate a real `.env` write, and `ask` PROMPTS rather than dead-ends — so it
+  does not violate the no-denies ruling, which is about unrecoverable blocks.
+  [Verified 2026-09-04: `git show 95ccbb7 -- .claude/settings.json` adds exactly
+  three `ask` entries, and all three are `bin/env-update.sh --apply*` spellings —
+  the one command in this repo that rewrites `.env`. The commit subject names
+  only the read-only allows, so the `ask` tier rode along in it; the entries
+  themselves are unambiguous about intent.] Alternative: drop the three entries and keep the doc.
   Claude cannot write either file (both classifier-blocked); whichever way it is
   ruled, the change ships as a handover script.
 - (CLOSED 2026-09-04) Row 17, laravel/installer: the developer ruled *"widen the
