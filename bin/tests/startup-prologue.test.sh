@@ -1608,6 +1608,102 @@ for _ex in caddy-bin/global-stack-caddy-start.sh nginx-bin/global-stack-nginx-st
     grep -q '^source global-stack-base-prologue\.sh$' "${DIST_BIN}/${_ex}"
 done
 
+# ─── Section 24: nvm-install-tools deno/bun version gate (row 16) ─────────
+printf '\n%b── Section 24: nvm-install-tools deno/bun gate%b\n' "${C_BOLD}" "${C_RESET}"
+
+# Row 16, the first Track 5b migration. Both blocks were exist-only
+# (`[ -f "${DENO_JS}" ]`), so a GLOBAL_STACK_DENO_VERSION / _BUN_VERSION bump did
+# nothing at all and neither tool had a marker. This section is the shape rows
+# 17-21 copy: stub curl on PATH, drive the gate from a fixture tools tree.
+NVM_TOOLS="${DIST_BIN}/nvm-bin/global-stack-nvm-install-tools.sh"
+
+# _nvm_tools_run <tool> <marker_body> <pin> <binary_present> [curl_fail]
+#   echoes: "<decision-ish trace>|<marker content after the run>|<binary present>"
+_nvm_tools_run() {
+  local tool="$1" marker_body="$2" pin="$3" bin_present="$4" curl_fail="${5:-0}"
+  local root="${TMP_DIR}/nvmtools"
+  rm -rf "${root}"
+  mkdir -p "${root}/vers" "${root}/deno/bin" "${root}/bun/bin" "${root}/stub" \
+           "${root}/errors" "${root}/run"
+
+  # curl stub: for deno the script downloads an installer to a file and runs it;
+  # for bun it pipes curl's stdout into `bash -s <version>`. Both shapes covered.
+  {
+    printf '#!/bin/bash\n'
+    printf '[ "${CURL_FAIL:-0}" = "1" ] && exit 22\n'
+    printf 'out=""; prev=""\n'
+    printf 'for a in "$@"; do [ "$prev" = "-o" ] && out="$a"; prev="$a"; done\n'
+    printf 'if [ -n "$out" ]; then\n'
+    printf '  printf "#!/bin/bash\\nmkdir -p \\"%%s/bin\\"\\ntouch \\"%%s/bin/deno\\"\\n" "${DENO_INSTALL}" "${DENO_INSTALL}" > "$out"\n'
+    printf 'else\n'
+    printf '  printf "mkdir -p \\"%%s/bin\\"\\ntouch \\"%%s/bin/bun\\"\\n" "${BUN_INSTALL}" "${BUN_INSTALL}"\n'
+    printf 'fi\n'
+  } >"${root}/stub/curl"
+  chmod +x "${root}/stub/curl"
+
+  [[ -n "${marker_body}" ]] && printf '%s\n' "${marker_body}" >"${root}/vers/nvm.${tool}"
+  if [[ "${bin_present}" == "1" ]]; then
+    touch "${root}/deno/bin/deno" "${root}/bun/bin/bun"
+  else
+    rm -f "${root}/deno/bin/deno" "${root}/bun/bin/bun"
+  fi
+
+  # Pin the tool under test; give the OTHER tool a matching marker + binary so it
+  # is a no-op and cannot pollute the assertion.
+  local deno_pin bun_pin
+  if [[ "${tool}" == deno ]]; then
+    deno_pin="${pin}"; bun_pin="9.9.9"
+    printf '9.9.9\n' >"${root}/vers/nvm.bun"; touch "${root}/bun/bin/bun"
+  else
+    bun_pin="${pin}"; deno_pin="9.9.9"
+    printf '9.9.9\n' >"${root}/vers/nvm.deno"; touch "${root}/deno/bin/deno"
+  fi
+
+  ( cd "${root}/run" && env \
+      PATH="${root}/stub:${DIST_BIN}/base-bin:${PATH}" \
+      CURL_FAIL="${curl_fail}" \
+      DENO_INSTALL="${root}/deno" \
+      BUN_INSTALL="${root}/bun" \
+      GLOBAL_STACK_DENO_VERSION="${deno_pin}" \
+      GLOBAL_STACK_BUN_VERSION="${bun_pin}" \
+      GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS="${root}/vers" \
+      GLOBAL_STACK_DOCKER_TOOLS_PATH="${root}" \
+      GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS="${root}/errors" \
+      GLOBAL_STACK_ERROR_TOKEN="nvm-test" \
+      bash "${NVM_TOOLS}" >/dev/null 2>&1 ) || true
+
+  local after="<none>"
+  [[ -f "${root}/vers/nvm.${tool}" ]] && after="$(cat "${root}/vers/nvm.${tool}")"
+  local present=0
+  [[ -f "${root}/${tool}/bin/${tool}" ]] && present=1
+  printf '%s|%s' "${after}" "${present}"
+}
+
+for _tool in deno bun; do
+  # absent marker, absent binary → install, marker written with the pin
+  _r="$(_nvm_tools_run "${_tool}" "" 1.2.3 0)"
+  assert_pass "24a: ${_tool} first install writes the marker" test "${_r}" = "1.2.3|1"
+
+  # marker == pin, binary present → skip, marker untouched
+  _r="$(_nvm_tools_run "${_tool}" 1.2.3 1.2.3 1)"
+  assert_pass "24b: ${_tool} marker matching the pin → skip" test "${_r}" = "1.2.3|1"
+
+  # marker != pin → reinstall, marker updated to the new pin. THE DEFECT: before
+  # row 16 this did nothing, because the guard only asked whether the binary existed.
+  _r="$(_nvm_tools_run "${_tool}" 1.2.3 1.2.4 1)"
+  assert_pass "24c: ${_tool} pin bumped → reinstall and marker updated" test "${_r}" = "1.2.4|1"
+
+  # marker says up to date but the artifact is gone (a hand-cleaned tools/ tree):
+  # must still install. Preserves the old exist-only behaviour as a floor.
+  _r="$(_nvm_tools_run "${_tool}" 1.2.3 1.2.3 0)"
+  assert_pass "24d: ${_tool} marker matches but binary missing → still installs" \
+    test "${_r}" = "1.2.3|1"
+
+  # a failed download must NOT leave a satisfied marker behind
+  _r="$(_nvm_tools_run "${_tool}" "" 1.2.3 0 1)"
+  assert_pass "24e: ${_tool} failed install writes no marker" test "${_r}" = "<none>|0"
+done
+
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
 if [[ "${FAIL}" -eq 0 ]]; then
