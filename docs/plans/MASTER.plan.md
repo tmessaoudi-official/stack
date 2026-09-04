@@ -506,6 +506,26 @@ labels) and post-push commit signing.
   now write the marker as the last statement of the install branch; `startup-prologue.test.sh`
   §25d pins that ordering structurally for every block.
 
+- [2026-09-04 14:27] AGREED (row 18, second instance of the widened scope guard): `cargo
+  install` gains `--force` **on the reinstall path only**. `cargo install` is not guaranteed to
+  replace an already-installed binary without it, so a bump could no-op while the marker write
+  that follows recorded the new version — the marker-first defect in a new guise. This is an
+  install-logic change and qualifies under the 2026-09-04 guard amendment ("where a `.env` pin
+  cannot otherwise hold"). `cargo` 1.98.0 is present on the dev host but the replace-vs-skip
+  behaviour was NOT verified empirically; `--force` was chosen precisely so the outcome does
+  not depend on that unverified detail.
+- [2026-09-04 14:27] AGREED (row 18, cascade decision the plan left open): the five rust tool
+  vars are added to `02rust`'s compose `environment:`. They previously reached the container
+  ONLY via the `00base` Dockerfile `ARG`→`ENV` flow, which bakes at build time — so a `.env`
+  bump was invisible to a runtime gate until the image was rebuilt, and the gate would have
+  compared against a stale baked value forever. Same shape as `GLOBAL_STACK_USE_LOCKS` in
+  Track 2b. Verified resolving in-container the Track 2b way.
+- [2026-09-04 14:27] CORRECTION (5a appendix): `RUSTUP_INIT` was listed under `exist-only`.
+  That is wrong — `rust-iou.sh:19,31` content-compares both `rust-init` and `rust` against
+  their pins (`!=`), so both are `hand-rolled`, not exist-only. They work; converging them onto
+  the helper for the WARN is left to row 21. The exist-only count of 41 is unchanged in kind
+  but this one var moves category.
+
 The executor APPENDS its own dated `AGREED:` entries here (e.g. the F3 classification
 outcome, Track 5 audit rulings) as it goes — this file is where rulings land. Never backdate;
 never write an entry for a ruling that was not actually taken (forged-AGREED hazard, global
@@ -1193,7 +1213,7 @@ class-3 var is absent from this accounting, and no gate site in B lacks a class-
 | 15 | Track 5b — extract gs_version_gate into its own sourceable helper (prologue-exempt safe) | M | done | b27aca7 | docker/config/dist/bin/base-bin/*.sh bin/tests/startup-prologue.test.sh |
 | 16 | Track 5b — gate nvm-install-tools (deno, bun) | M | done | b08ce58 | docker/config/dist/bin/nvm-bin/*.sh bin/tests/startup-prologue.test.sh |
 | 17 | Track 5b — gate phpbrew-install-tools (11 tools incl. laravel/installer pin) | L | done | 0e71e5b | docker/config/dist/bin/phpbrew-bin/*.sh .env docker/images/02phpbrew/docker-compose.yaml bin/tests/startup-prologue.test.sh |
-| 18 | Track 5b — gate rust tools (cargo-nextest/outdated/zigbuild, jujutsu, mergiraf, rustup-init); all 5 arrive by image ENV, not compose env — decide the cascade | M | todo | - | docker/config/dist/bin/rust-bin/*.sh .env docker/images/00base/* |
+| 18 | Track 5b — gate the 5 rust tools + deliver their pins at runtime (cascade: added to 02rust compose) | M | done | 0b5593a | docker/config/dist/bin/rust-bin/*.sh docker/images/02rust/docker-compose.yaml bin/tests/startup-prologue.test.sh |
 | 19 | Track 5b — gate android (sdkmanager + 5 uncompared vars) | M | todo | - | docker/config/dist/bin/android-bin/*.sh |
 | 20 | Track 5b — gate web-server sub-components (mod_security, coreruleset, cjose, liboauth2, apr) | L | todo | - | docker/config/dist/bin/nginx-bin/*.sh docker/config/dist/bin/httpd-bin/*.sh |
 | 21 | Track 5b — remainder named by 5a: phpmyadmin, 00base runtime installs (go/zig/hurl/mise/awscli), frankenphp, rbenv gemset+ruby-build, elasticmq. NOT wkhtmltopdf/sonar-scanner-cli — 5a proved those class 1 | M | todo | - | docker/config/dist/bin/*/*.sh |
