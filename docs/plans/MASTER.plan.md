@@ -1327,8 +1327,21 @@ class-3 var is absent from this accounting, and no gate site in B lacks a class-
   Always `md5sum -c` the restore.
 
 ### Known issues
+- **`bin/tests/env-update.test.sh` is UNCERTIFIED for this milestone (2026-09-04).** Two
+  background runs were SIGKILLed by the box, not failed: the first reached section 121 of ~125
+  with 0 failures, the second died at section 18. Neither produced the authoritative
+  `ALL PASSED` tally line, so neither counts as green. This matches CLAUDE.md's "heavy parallel
+  builds get killed on this box" — the suite runs 8 parallel fetch workers. It is the ONE suite
+  of 13 not certified in the close-out battery. It matters because row 17 added
+  `GLOBAL_STACK_LARAVEL_INSTALLER_VERSION` + its `@todo env-update` annotation to `.env`, which
+  this suite's parser reads; the annotation itself WAS exercised directly
+  (`bin/env-update.sh --check --filter=LARAVEL_INSTALLER` → resolved `v5.32.0`), but that is one
+  fetcher path, not the suite. Re-run it alone on an unloaded machine before trusting the
+  milestone as fully certified.
 - MASTER.plan.md:484 claims F2 startup-health-signalling "fully executed" —
-  it is 8 of 11 handlers (see Fragile).
+  it is 8 of 11 handlers (see Fragile). **Row 25 (2026-09-04) made this claim TRUE**: all 11
+  handlers now report exit 1. The `:484` wording still describes the old state and is corrected
+  by the row 22/27 handover script.
 - Rows 13/14 Files columns do not match what their shas touched.
 - Stale counts in CLAUDE.md: makefile-posix 5→7 (:323), open-all-envs 12→16
   (:327), env-update "117 sections"→125 declared (:321); "next free LOCAL slot
