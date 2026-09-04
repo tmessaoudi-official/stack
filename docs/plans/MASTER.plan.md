@@ -556,6 +556,19 @@ labels) and post-push commit signing.
   output rather than by reading each block. **Row 20 and any later audit should read the site
   before trusting the appendix's shape column.** The var inventory itself stands.
 
+- [2026-09-04 14:55] NOTED (row 20): the row is **17 sites, not 14**. The 5a appendix's count
+  used a pattern matching only the singular `*_VERSION_PATH` spelling and so missed each
+  server's OWN version compare (`NGINX_VERSIONS_PATH`, `HTTPD_VERSIONS_PATH`,
+  `CADDY_VERSIONS_PATH`). Fifth correction to the appendix's shape/count column. Row 20 is
+  also the only Track 5b row that is NOT a defect fix: every site already compared correctly,
+  so what it buys is the WARN and one idiom. `startup-prologue.test.sh` §30b makes the
+  convergence checkable — zero hand-rolled marker compares may remain in the three trees.
+- [2026-09-04 14:55] NOTED (row 20): no duplicate WARN arises from `*-iou-common.sh` gating
+  the same markers as its caller. The caller's cleanup block deletes the marker on a mismatch
+  before invoking the IOU script, so the inner gate sees an absent marker and returns
+  `install`, which is silent by design. Do not "fix" this by suppressing the inner gate's
+  stderr — the silence is structural, not incidental.
+
 The executor APPENDS its own dated `AGREED:` entries here (e.g. the F3 classification
 outcome, Track 5 audit rulings) as it goes — this file is where rulings land. Never backdate;
 never write an entry for a ruling that was not actually taken (forged-AGREED hazard, global
@@ -1245,7 +1258,7 @@ class-3 var is absent from this accounting, and no gate site in B lacks a class-
 | 17 | Track 5b — gate phpbrew-install-tools (11 tools incl. laravel/installer pin) | L | done | 0e71e5b | docker/config/dist/bin/phpbrew-bin/*.sh .env docker/images/02phpbrew/docker-compose.yaml bin/tests/startup-prologue.test.sh |
 | 18 | Track 5b — gate the 5 rust tools + deliver their pins at runtime (cascade: added to 02rust compose) | M | done | 0b5593a | docker/config/dist/bin/rust-bin/*.sh docker/images/02rust/docker-compose.yaml bin/tests/startup-prologue.test.sh |
 | 19 | Track 5b — gate android SDK components (composite marker on the 3 LIVE pins) | M | done | 0415ca3 | docker/config/dist/bin/android-bin/*.sh bin/tests/startup-prologue.test.sh |
-| 20 | Track 5b — gate web-server sub-components (mod_security, coreruleset, cjose, liboauth2, apr) | L | todo | - | docker/config/dist/bin/nginx-bin/*.sh docker/config/dist/bin/httpd-bin/*.sh |
+| 20 | Track 5b — converge all 17 web-server compares on gs_version_gate (WARN + one idiom) | L | done | e9fd01e | docker/config/dist/bin/nginx-bin/*.sh docker/config/dist/bin/httpd-bin/*.sh docker/config/dist/bin/caddy-bin/*.sh bin/tests/startup-prologue.test.sh |
 | 21 | Track 5b — remainder named by 5a: phpmyadmin, 00base runtime installs, elasticmq, rbenv plugins. frankenphp NOT gated (path-keyed); awscli has no pin | M | done | ae4f4df 53c0859 | docker/config/dist/bin/base-bin/*.sh docker/config/dist/bin/phpmyadmin-bin/*.sh docker/config/dist/bin/serverless-bin/*.sh docker/config/dist/bin/rbenv-bin/*.sh bin/tests/startup-prologue.test.sh |
 | 22 | Track 5 docs — CLAUDE.md Gotchas + two-phase note once the gate is universal | S | todo | - | CLAUDE.md |
 | 23 | Close-out — terminal states + SHAs in plan, full battery re-run, advisor, push | M | todo | - | docs/plans/MASTER.plan.md CLAUDE.md |
