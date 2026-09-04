@@ -1279,11 +1279,11 @@ class-3 var is absent from this accounting, and no gate site in B lacks a class-
 | 22 | Track 5 docs — CLAUDE.md Gotchas + two-phase note once the gate is universal | S | todo | - | CLAUDE.md |
 | 23 | Close-out — terminal states + SHAs in plan, full battery re-run, advisor, push | M | todo | - | docs/plans/MASTER.plan.md CLAUDE.md |
 | 24 | Developer input — supervised rebuild/bring-up closing the 4 UNCERTIFIED labels | M | blocked | - | - |
-| 25 | Sweep — web-server iou handlers write an error token on exit 1; de-hardcode WEB_SERVER_SCRIPTS | M | todo | - | docker/config/dist/bin/caddy-bin/*.sh docker/config/dist/bin/httpd-bin/*.sh docker/config/dist/bin/nginx-bin/*.sh bin/tests/startup-prologue.test.sh |
+| 25 | Sweep — web-server iou handlers write an error token on exit 1; de-hardcode WEB_SERVER_SCRIPTS | M | done | a1ba6f1 | docker/config/dist/bin/caddy-bin/*.sh docker/config/dist/bin/httpd-bin/*.sh docker/config/dist/bin/nginx-bin/*.sh bin/tests/startup-prologue.test.sh |
 | 26 | Sweep — retire the stale `# @todo fix pin versions` TODOs (NOT pin: .hadolint.yaml already rules against it) | L | done | fc10204 | docker/images/*/Dockerfile* templates/ghost-blog/Dockerfile |
 | 27 | Sweep — CLAUDE.md corrections (141/1 claim, stale suite counts, LOCAL slot, exclusion list) | S | blocked | - | CLAUDE.md |
 | 28 | Sweep — settings.json ask-tier vs CLAUDE.md:49/:369; direction unruled | S | blocked | - | .claude/settings.json CLAUDE.md |
-| 29 | Sweep — prune TODO.md (item 189 + zig drift done; consolidate its 5 container-test items with row 24) | S | todo | - | TODO.md |
+| 29 | Sweep — prune TODO.md (item 189 + zig drift done; consolidate its 5 container-test items with row 24) | S | done | cec239d | TODO.md |
 <!-- /progress-block -->
 ### Blocked
 - Row 24 — the supervised rebuild/bring-up. Also the SAME blocker as TODO.md's
