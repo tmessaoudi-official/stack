@@ -1173,7 +1173,7 @@ class-3 var is absent from this accounting, and no gate site in B lacks a class-
 | 12 | Track 4a — F13 env-guard port check keyed on the consumer | M | done | f7db75b | .claude/hooks/env-guard-on-write.sh bin/tests/env-guard.test.sh |
 | 13 | Track 2a docs — stop /new-service resurrecting F4; carry the four residuals | S | done | 53aff52 | .claude/skills/new-service/SKILL.md docs/plans/MASTER.plan.md |
 | 14 | Track 5a — bidirectional audit (all _VERSION vars x all gate sites) into a plan appendix | L | done | 7782701 | .env docs/plans/MASTER.plan.md docker/config/dist/bin/*/*.sh |
-| 15 | Track 5b — extract gs_version_gate into its own sourceable helper (prologue-exempt safe) | M | todo | - | docker/config/dist/bin/base-bin/*.sh bin/tests/startup-prologue.test.sh |
+| 15 | Track 5b — extract gs_version_gate into its own sourceable helper (prologue-exempt safe) | M | done | b27aca7 | docker/config/dist/bin/base-bin/*.sh bin/tests/startup-prologue.test.sh |
 | 16 | Track 5b — gate nvm-install-tools (deno, bun) | M | todo | - | docker/config/dist/bin/nvm-bin/*.sh |
 | 17 | Track 5b — gate phpbrew-install-tools (deployer, symfony-cli, laravel/installer, ...) | L | todo | - | docker/config/dist/bin/phpbrew-bin/*.sh .env |
 | 18 | Track 5b — gate rust tools (cargo-nextest/outdated/zigbuild, jujutsu, mergiraf, rustup-init); all 5 arrive by image ENV, not compose env — decide the cascade | M | todo | - | docker/config/dist/bin/rust-bin/*.sh .env docker/images/00base/* |
@@ -1220,6 +1220,15 @@ class-3 var is absent from this accounting, and no gate site in B lacks a class-
   them as providing tolerance.
 - caddy-start.sh:8 is the only one of 18 PATH= assignments missing its colon;
   works only because the scripts it calls live in /usr/local/bin.
+- startup-prologue.test.sh §15's harness ABORTS the whole suite (exit 127, no
+  tally line) when gs_version_gate is undefined, instead of redding — observed
+  under row 15's sabotage 1. §22's harness guards this with `|| true`; §15's does
+  not. A broken helper source line therefore kills the run rather than reporting
+  it. Not fixed in row 15 (out of its scope); a candidate for row 21 or 23.
+- SABOTAGE HYGIENE: back up with `cp -a` before mutating, never restore with
+  `git checkout` — on uncommitted work it restores HEAD and silently destroys the
+  edits under test. Cost a re-do in row 15; the md5 check is what caught it.
+  Always `md5sum -c` the restore.
 
 ### Known issues
 - MASTER.plan.md:484 claims F2 startup-health-signalling "fully executed" —

@@ -1589,6 +1589,17 @@ for _u in "-u" ""; do
     env PATH="${DIST_BIN}/base-bin:${PATH}" bash "${TMP_DIR}/vg-twice.sh"
 done
 
+# The delivery path the other 23* rows do not exercise: the prologue sourced by an
+# EXPLICIT path while base-bin is absent from PATH (how a host-side
+# GS_STARTUP_DRY_RUN run behaves if the PATH prepend is forgotten). The sibling
+# source must still resolve — it depends on BASH_SOURCE, not on PATH.
+printf '#!/bin/bash\nsource %s\ndeclare -F gs_version_gate\n' \
+  "$(cd "${DIST_BIN}/base-bin" && pwd)/global-stack-base-prologue.sh" \
+  >"${TMP_DIR}/vg-explicit.sh"
+assert_output_contains "23j: explicit-path source resolves the helper with base-bin off PATH" \
+  "gs_version_gate" \
+  env -i PATH=/usr/bin:/bin HOME="${HOME}" bash "${TMP_DIR}/vg-explicit.sh"
+
 # The exemption itself: these must never gain a prologue source line, or the
 # extraction was pointless and their stackCatch would be swapped.
 for _ex in caddy-bin/global-stack-caddy-start.sh nginx-bin/global-stack-nginx-start.sh \
