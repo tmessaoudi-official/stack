@@ -445,6 +445,28 @@ labels) and post-push commit signing.
   disagree and the mismatch returns silently. This also removed one SC2155 finding from each script
   (`export X=$(...)` → `export X="${...}"`), so both files' shellcheck sets shrank by one.
 
+- [2026-09-04 09:40] AGREED (Track 5a): Inventory A is **412** vars, not the ~380 estimated at
+  planning time, and splits 38 / 160 / 138 / 73 / 1 / 2 across classes 1 / 2 / 2↑ / 3 / 3U / 4.
+  The **2↑** class is new and was not anticipated by the plan: 138 `_DEFAULT_*` vars are
+  upstream of a gated class-2 slot through `.env`'s own `${}` expansion, so they are already
+  covered *through their referrer*. Recording them as dead — which an audit keyed only on
+  file references would have done — would have put ~138 live vars into the plan as dead.
+- [2026-09-04 09:40] AGREED (Track 5a): the **manager `warn-gated` shape is an accepted
+  pattern, not a gap**. Seven managers (nvm, phpbrew, pyenv, rbenv, sdkman, rust, fvm) call
+  `gs_version_gate … >/dev/null || true` for the WARN and decide with an adjacent inline
+  compare. `CLAUDE.md` § Gotchas documents this deliberately, and `nvm` gates on the raw pin
+  by necessity (its resolver needs nvm sourced later in the file), pinned by
+  `startup-prologue.test.sh` §22f. 5b must not converge these.
+- [2026-09-04 09:40] AGREED (Track 5a): the seed table was **incomplete in three groups** and
+  **wrong in one**. Added: `phpmyadmin` (write-only marker, same defect as deployer), the five
+  00base tools installed at runtime from `base-start.sh:29-38` (go/zig/hurl/mise/awscli), and
+  the five rust tools from `rust-start.sh:51-55` whose image-ENV delivery makes them look
+  build-time. Removed: `wkhtmltopdf` and `sonar-scanner-cli` are class 1 (image build), so
+  they are already covered and leave row 21. Every `*_LATEST` variable in
+  `phpbrew-install-tools.sh` / `rust-iou.sh` / `sdkman-start.sh` is assigned from the `.env`
+  pin with its curl line commented out, so those compares are against the pin and the
+  sdkman/rust gates cannot WARN spuriously.
+
 The executor APPENDS its own dated `AGREED:` entries here (e.g. the F3 classification
 outcome, Track 5 audit rulings) as it goes — this file is where rulings land. Never backdate;
 never write an entry for a ruling that was not actually taken (forged-AGREED hazard, global
@@ -918,6 +940,192 @@ every class-3 var has a terminal state (gated / already-gated / class-2 / class-
 5. `git grep -l 'MASTER-TRIAGE'` in tracked files returns only historical/archive
    references; the gitignored triage file carries the superseded banner.
 6. Completion report names every UNCERTIFIED-BY-EXECUTION dimension in those words.
+
+---
+
+## Appendix — Track 5a bidirectional audit (2026-09-04)
+
+Required location per Track 5a. Both inventories were enumerated **independently**;
+neither was derived from the other, and neither started from the seed-list table.
+Everything below is reproducible from the commands quoted — no script was added to
+`bin/` (scope guard).
+
+### Method, and the four defects it had to survive
+
+Classification is by **consuming mechanism**, computed from four indexes joined against
+the var list rather than 380+ per-var greps. Four defects were found and fixed *during*
+the audit; each one had changed the class-3 count, so they are recorded here rather than
+silently corrected:
+
+1. **Compose fragments were not globbed.** `docker/config/compose-fragments/*.compose.yaml`
+   carries every `*_INSTALL_PACKAGE_*` mapping (151 lines). Without it all 160 class-2
+   vars fell through to "dead".
+2. **The image-ENV delivery path was missed.** A var can reach a container via
+   `environment:` **or** via the Dockerfile `ARG`→`ENV` flow (`00base/Dockerfile:75` ARG,
+   `:150` ENV). Classifying on the compose channel alone under-counted class 3 by eleven
+   runtime-installed tools (rust `cargo-*`, jujutsu, mergiraf, go, zig, hurl, mise…).
+3. **Alias direction was inverted.** For `- KEY=${VALUE}` the `.env` var is the `${}`
+   right-hand side, not the first match on the line. Only bites where both sides are
+   `GLOBAL_STACK_*_VERSION` names — `03php8-4/docker-compose.yaml:24`
+   (`- GLOBAL_STACK_FRANKENPHP_VERSION=${GLOBAL_STACK_FRANKENPHP_8_4_VERSION}`), which
+   misfiled the three per-version frankenphp source vars.
+4. **`.env`-internal `${}` expansion was ignored.** 138 `_INSTALL_PACKAGE_*` vars are
+   defined as `${GLOBAL_STACK_*_DEFAULT_*_VERSION}` (`grep -c '_INSTALL_PACKAGE_.*=\${GLOBAL_STACK_[A-Z0-9_]*_DEFAULT_' .env` → 138).
+   The `_DEFAULT_*` family is therefore **upstream of a gated class-2 slot**, not dead.
+   Recording ~138 live vars as dead would have been the worst outcome this audit could
+   produce, since 5b and every later session would build on it.
+
+Two traps worth carrying: `docker/images/local.*/` is **gitignored**, so `git grep` cannot
+see it — those two dirs on disk were read directly and contribute **0** `_VERSION` hits;
+and `docker/buildkit/Dockerfile` lives outside `docker/images/`, so its ARGs need an
+explicit index entry. Per RTK-local.md, presence/absence was never concluded from
+rtk-rewritten `git grep` output — the last four vars were re-checked through `rtk proxy`
+after a filtered run returned a false empty.
+
+### Inventory A — every `GLOBAL_STACK_*_VERSION` in `.env`
+
+```
+grep -oE '^GLOBAL_STACK_[A-Z0-9_]+_VERSION' .env | sort -u | wc -l   →  412
+```
+
+**412**, not the ~380 the Track 5 text estimated. The count is the figure Done-when #1
+checks; re-run the command rather than trusting this number if `.env` has moved on.
+
+| Class | N | Meaning | Disposition |
+|---|---|---|---|
+| 1 | 38 | image tag / Dockerfile `ARG` at build | ALREADY covered (env-scan ARG propagation + `check-image-versions` + rebuild) — record, don't touch |
+| 2 | 160 | `setup-packages.sh` pkg slot | ALREADY gated (`gs_version_gate` at `base-setup-packages.sh:97`) — record |
+| 2↑ | 138 | `_DEFAULT_*`, upstream of a class-2 slot by `.env` expansion | ALREADY gated *through its referrer* — record; a bump propagates at compose resolution |
+| 3 | 73 | runtime install script | **THE TARGET SET** — see the worklist below |
+| 3U | 1 | delivered to a container, no in-repo reader | record |
+| 4 | 2 | dead | record as such |
+| | **412** | | |
+
+**Class 1 (38)** — `GLOBAL_STACK_` prefix and `_VERSION` suffix elided; braces enumerate
+the family in full:
+`BAT_{-}, CLAUDE_{CODE}, CORENTINTH_{IT_TOOLS}, DIFFTASTIC_{-}, DOCKER_{BUILDX, COMPOSE, TOOLS_PATH}, FRANKENPHP_{WATCHER}, GITLEAKS_{-}, HADOLINT_{-}, IMAGE_{AXLLENT_MAILPIT, DPAGE_PGADMIN4, EPICLABS_DOCKER_ORACLE_XE_11G, KEYCLOAK_KEYCLOAK, MARIADB13, MONGO7, MONGOCLIENT_MONGOCLIENT, MYSQL9, POSTGRES18, SELENIUM_STANDALONE_CHROME, SELENIUM_STANDALONE_FIREFOX, UBUNTU}, LOCALSTACK_{LOCALSTACK}, MOBY_{BUILDKIT}, PODMAN_{COMPOSE}, REDIS_{-}, RTK_{-}, SHELLCHECK_{-}, SHFMT_{-}, SONARQUBE_{-}, SONAR_{SCANNER_CLI}, SOPS_{-}, TASK_{-}, VALKEY_{-}, WKHTMLTOPDF_{-}, YAMLFMT_{-}, YQ_{-}`
+plus `DOCKER_LOCAL_REGISTRY_VERSION` — classified by hand, its only consumer is
+`Makefile:174` (`registry:${…}`), which no compose/Dockerfile index covers.
+
+**Class 2 (160)** — `JAVA26_{SDKMAN_INSTALL_PACKAGE_GRADLE_VX2, …_GROOVY_VX2, …_SPARK_VX1, …_SPARK_VX2} (4)`,
+`JAVA_INSTALL_PACKAGE_{ANT, GRADLE_VX1, GRADLE_VX2, GROOVY_VX1, GROOVY_VX2, JBANG, KOTLIN, MAVEN_VX1, MAVEN_VX2, MAVEN_VX3, MICRONAUT, POMCHECKER, QUARKUS, SCALA, SPARK_VX1, SPARK_VX2, SPRINGBOOT, TOMCAT} (18)`,
+`NODE24_INSTALL_PACKAGE_{TYPES_NODE} (1)`, `NODE26_INSTALL_PACKAGE_{TYPES_NODE} (1)`,
+`NODEEDGE_INSTALL_PACKAGE_{CORDOVA_RES, TYPES_NODE} (2)`,
+`NODE_INSTALL_PACKAGE_{…60 slots…} (60)`, `PHP8_{5_INSTALL_PACKAGE_OPCACHE} (1)`,
+`PHPEDGE_INSTALL_PACKAGE_{AMQP, APCU, GD, IMAGICK, MEMCACHED, OPCACHE, PECL_HTTP, PHALCON, RAPHF, REDIS, SSH2, XDEBUG, YAML} (13)`,
+`PHP_INSTALL_PACKAGE_{…34 slots…} (34)`, `PYTHON_INSTALL_PACKAGE_{…24 slots…} (24)`,
+`RUBY_INSTALL_PACKAGE_{FASTLANE, GOOGLE_API_CLIENT} (2)`.
+The 60/34/24 slot names are exactly the `_DEFAULT_` names listed next — the two families
+are one-to-one by construction.
+
+**Class 2↑ (138)** — `JAVA_DEFAULT_{…18}`, `NODE_DEFAULT_{ANGULAR_CLI, ANGULAR_DEVKIT_ARCHITECT, ANGULAR_DEVKIT_SCHEMATICS_CLI, BIOMEJS_BIOME, CAPACITOR_CLI, COLORS, COMMITIZEN, COMMITLINT_CLI, COMMITLINT_CONFIG_CONVENTIONAL, CONCURRENTLY, CORDOVA_RES, CORDOVA, DEGIT, EMBER_CLI, ESLINT, EXPRESS_GENERATOR, GATSBY_CLI, GIGET, GITLAB_CI_LOCAL, HONO, HUSKY, HYGEN, IONIC_CLI, KNEX, LINT_STAGED, LOOPBACK_CLI, NATIVE_RUN, NESTJS_CLI, NEWMAN, NRWL_CLI, NRWL_TAO, NX, PLAYWRIGHT, PNPM, PRETTIER_ESLINT, PRETTIER, PURESCRIPT, QUASAR_CLI, REACT_SCRIPTS, REACT, RESTIFY, SAILS, SASS, SEQUELIZE, SERVERLESS, SPAGO, TS_NODE, TSX, TYPESCRIPT, TYPES_FILESYSTEM, VITEST, VITE, VSCODE_VSCE, VUE_CLI_PLUGIN_BABEL, VUE_CLI_PLUGIN_ESLINT, VUE_CLI_SERVICE, VUE_CLI, YARN, YO, ZOD} (60)`,
+`PHP_DEFAULT_{AMQP, APCU, EXIF, FFI, FTP, GD, GETTEXT, GMP, ICONV, IMAGICK, INOTIFY, INTL, LDAP, MEMCACHED, MEMCACHE, MONGODB, OPCACHE, PECL_HTTP, PHALCON, PROPRO, PSR, RAPHF, REDIS, SOAP, SSH2, SWOOLE, TIMECOP, UUID, XDEBUG, XML, YAML, ZEPHIR_PARSER, ZIP, ZMQ} (34)`,
+`PYTHON_DEFAULT_{ATTRDICT3, ATTRDICT, AWSCLI_LOCAL, BLINKER, DJANGO, FASTAPI, FLASK, MYSQLCLIENT, NATSORT, PIPENV, PIP, PSYCOPG2, PYLINT, PYTHON_DOTENV, PYYAML, SETUPTOOLS, SIMPLEJSON, SQLFLUFF, UV, VIRTUALENV, WATCHDOG, WHEEL, WXPYTHON, YAMLLINT} (24)`,
+`RUBY_DEFAULT_{FASTLANE, GOOGLE_API_CLIENT} (2)`. `JAVA_DEFAULT_` expands the same 18
+slots as `JAVA_INSTALL_PACKAGE_` above.
+
+**Class 3U (1)** — `GLOBAL_STACK_CORENTINTH_IT_TOOLS_NJS_VERSION`, delivered as
+`NJS_VERSION` by `00corentinth-it-tools/docker-compose.yaml:18` to a third-party image;
+no startup script in this repo reads it. Not a 5b row.
+
+**Class 4 (2, dead)** — `GLOBAL_STACK_MCP_SOOPERSET_MCP_ATLASSIAN_VERSION`,
+`GLOBAL_STACK_MCP_ZEREIGHT_MCP_GITLAB_VERSION`. Zero references in the tracked tree
+outside `.env`. Also class 4 by the Track 5 ruling, and deliberately excluded from the
+count above because they carry no `.env` var of their own: the commented-out deno
+`aleph`/`mandarinets` installs — `GLOBAL_STACK_DENO_ALEPH_VERSION` and
+`GLOBAL_STACK_DENO_MANDARINETS_VERSION` do exist and reach `02nvm`, but their only
+consumer is commented out in `nvm-install-tools.sh`; they stay out.
+
+### Inventory B — every gate call site and marker read/write
+
+```
+git grep -n 'gs_version_gate\|VERSIONS}/' docker/config/dist/bin/   →  169 lines, 21 files
+git grep -n 'gs_version_gate()' docker/config/dist/bin/             →  1 definition
+```
+
+`gs_version_gate` is defined once, at `base-bin/global-stack-base-prologue.sh:264`, and
+called from **8 files**: `base-setup-packages.sh:97` (pkg slots), `fvm-start.sh:53,79`,
+`nvm-start.sh:67,97`, `phpbrew-start.sh:57,87,123`, `pyenv-start.sh:67,96`,
+`rbenv-start.sh:64,93`, `rust-start.sh:32`, `sdkman-start.sh:66,89`. Every other
+`tools/versions/` touch in the remaining 13 files is a raw read or write with no
+content comparison driven by the helper.
+
+### A ∩ B — the class-3 worklist, with a terminal state for every var
+
+Five statuses. Only **exist-only** and **hand-rolled** are 5b work.
+
+| Status | N | Meaning |
+|---|---|---|
+| `gated` | 13 | the helper drives the decision |
+| `warn-gated` | 7 | helper called for the WARN only (`>/dev/null \|\| true`), decision by an adjacent inline compare — **the documented manager shape, an accepted pattern, NOT a gap** |
+| `hand-rolled` | 9 | real content-compare against the pin, but silent and duplicated — converge |
+| `exist-only` | 41 | **the gaps**: a version bump does nothing |
+| `ref-only` | 1 | read for PATH construction, not an install site |
+| `commented` | 2 | the deno `aleph`/`mandarinets` vars — consumer commented out, stay out |
+| | **73** | sums to class 3 exactly: every var has one status, none has two |
+
+**`gated` (13)** — via the compose alias, so the `GLOBAL_STACK_` name never appears in the
+script: `NODE24`, `NODE26`, `NODEEDGE` (`node.<label>`, `nvm-start.sh:67`); `PHP8_4`,
+`PHP8_5`, `PHPEDGE` (`php.<AS>`, `phpbrew-start.sh:57`, plus the edge SHA sidecar `:87`);
+`PYTHON3` (`pyenv-start.sh:67`); `RUBY3`, `RUBY4` (`rbenv-start.sh:64`); `JAVA17`,
+`JAVA21`, `JAVA26` (`sdkman-start.sh:66`); `FLUTTER3` (`fvm-start.sh:53`).
+
+**`warn-gated` (7)** — the manager pattern: `NVM`, `PHPBREW`, `PYENV`, `RBENV`, `SDKMAN`,
+`RUST`, `FVM`. **Do not "converge" these in 5b.** `CLAUDE.md` § Gotchas documents the
+shape deliberately (managers WARN on a manager-version bump but reinstall the manager
+only, with no cascade to runtimes), and `nvm` additionally gates on the *raw* pin because
+its resolver needs nvm sourced ~130 lines further down — pinned by
+`startup-prologue.test.sh` §22f precisely so nobody copies the pyenv shape into it.
+
+**`hand-rolled` (9)** — `COMPOSER`, `ZEPHIR_LANG`, `PHALCON_DEVTOOLS`, `PICKLE`, `PIE`,
+`MAGO`, `CASTOR`, `FABPOT_LOCAL_PHP_SECURITY_CHECKER` in
+`phpbrew-install-tools.sh` (`[[ -f phar && $X_LATEST = $(cat marker) ]]`), plus `MKCERT`
+at `base-start.sh:20` (compares `mkcert --version`, no marker at all). **The `*_LATEST`
+variables are not network fetches** — every one is assigned from the `.env` pin with the
+curl line commented out (`phpbrew-install-tools.sh:9-10`, `rust-iou.sh:12-13`,
+`sdkman-start.sh:82`), so these really are compares against the pin. The same fact
+retires a worry worth recording: the `sdkman`/`rust` markers are written with the pin, so
+their `:89`/`:32` gates cannot WARN spuriously.
+
+**`exist-only` (41) — the 5b worklist.** Three of these groups are **absent from the Track
+5 seed table**, which is exactly what 5a existed to find:
+
+| Group | Vars | Site | Defect |
+|---|---|---|---|
+| nvm tools | `DENO`, `BUN` | `nvm-install-tools.sh` | `[ -f … ]`, no marker (seed list) |
+| phpbrew tools | `DEPLOYER`, `SYMFONY_CLI` | `phpbrew-install-tools.sh:65,89` | marker written, guard checks only `-f` (seed list) |
+| **phpmyadmin** | `PHPMYADMIN`, `PHPMYADMIN_TYPE` | `phpmyadmin-start.sh:43,49,57` + write-only `:76` | **NOT in the seed list** — identical write-only-marker defect to deployer |
+| android | `ANDROID_BUILD_TOOLS`, `ANDROID_CMDLINE_TOOLS`, `ANDROID_NDK`, `ANDROID_NDK_BUNDLE`, `ANDROID_PLATFORM_TOOLS` | `android-start.sh:73,79` / `android-setup.sh:37` | exist-only `android.sdkmanager`; the 5 vars never compared (seed list) |
+| **00base tools** | `GO`, `ZIG`, `HURL`, `MISE` (+ awscli, which has no `.env` var — `[[ ! -d … ]]`) | `base-install-*.sh`, all called from `base-start.sh:29-38` | **NOT in the seed list** — `command -v X` empty; no marker |
+| **rust tools** | `CARGO_NEXTEST`, `CARGO_OUTDATED`, `CARGO_ZIGBUILD`, `JUJUTSU`, `MERGIRAF` | `rust-install-*.sh`, called from `rust-start.sh:51-55` | seed list said "audit gating"; the answer is **none** — `command -v X` empty, no marker. Delivered by image ENV, so they look build-time and are not |
+| web servers | `CADDY`, `HTTPD`, `HTTPD_APR`, `HTTPD_APR_UTIL`, `HTTPD_MOD_AUTH_OPENIDC`, `HTTPD_MODSECURITY_MOD`, `HTTP_CORERULESET`, `HTTP_MODSECURITY_LIB`, `NGINX`, `NGINX_CJOSE`, `NGINX_LIBOAUTH2`, `NGINX_MOD_AUTH_OPENIDC`, `NGINX_MODSECURITY_MOD` | `{caddy,httpd,nginx}-iou*.sh` | `*_VERSION_PATH` markers declared in `*-start.sh`; **no `gs_version_gate` in any of the three** — per-site compare shape still to be read in row 20 |
+| frankenphp | `FRANKENPHP`, `FRANKENPHP_8_4`, `FRANKENPHP_8_5`, `FRANKENPHP_EDGE` | `php8.4-bin/…-setup-version.sh` | no marker |
+| rbenv extras | `RBENV_GEMSET`, `RBENV_RUBY_BUILD` | `rbenv-iou.sh` | no marker |
+| serverless | `SERVERLESS_FRAMEWORK_ELASTICMQ` | `serverless-framework-start.sh` | no marker |
+| rustup | `RUSTUP_INIT` | `rust-iou.sh:9,27` | writes `rust-init` from the pin; compare shape to confirm in row 18 |
+
+**`ref-only` (1)** — `NGINX_AUTOMAKE_VERSION`, used only to build `PATH`
+(`nginx-start.sh:8,15`). Not an install site; not a 5b row.
+
+**The line Track 5a asked for:** `A(class 3) − B(gated ∪ warn-gated)` = **53 vars**, of which
+**50 are actionable 5b rows** (41 exist-only + 9 hand-rolled) across **11 sites**; the other
+three are non-rows (1 ref-only + 2 commented-out). The five statuses sum to 73, which is
+class 3 exactly — every class-3 var has one terminal state and none has two [Verified: the
+status sets are bijective with the class-3 list, `comm` empty in both directions]. No
+class-3 var is absent from this accounting, and no gate site in B lacks a class-3 var in A.
+
+### What this changes for rows 15–21
+
+- **Row 18 (rust) grows and changes shape**: the five cargo/jj/mergiraf tools are runtime
+  installs delivered by image ENV, so the `.env` → compose `environment:` cascade does
+  **not** currently carry them; gating them means deciding whether to add the compose
+  entry or read the image ENV. That is the F3-shape hazard the plan warns about.
+- **Row 21 grows**: `wkhtmltopdf` and `sonar-scanner-cli` are **class 1**, not runtime
+  installs — they leave the worklist. The 00base tools (go/zig/hurl/mise/awscli) and
+  phpmyadmin join it.
+- **Row 20 keeps its audit step**: none of the three web-server scripts calls the helper,
+  and they are the prologue-exempt ones, so row 15's helper extraction is a hard
+  prerequisite for row 20 specifically.
 
 ## Status
 <!-- progress-block v1 -->
