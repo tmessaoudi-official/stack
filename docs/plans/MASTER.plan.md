@@ -1132,8 +1132,8 @@ Five statuses. Only **exist-only** and **hand-rolled** are 5b work.
 |---|---|---|
 | `gated` | 13 | the helper drives the decision |
 | `warn-gated` | 7 | helper called for the WARN only (`>/dev/null \|\| true`), decision by an adjacent inline compare — **the documented manager shape, an accepted pattern, NOT a gap** |
-| `hand-rolled` | 9 | real content-compare against the pin, but silent and duplicated — converge |
-| `exist-only` | 41 | **the gaps**: a version bump does nothing |
+| `hand-rolled` | 9 → **22** | real content-compare against the pin, but silent and duplicated — converge. Corrected 2026-09-04: the 13 web-server vars were mis-filed as exist-only (see the row-20 note below); they compare correctly, they are just silent |
+| `exist-only` | 41 → **28** | **the gaps**: a version bump does nothing |
 | `ref-only` | 1 | read for PATH construction, not an install site |
 | `commented` | 2 | the deno `aleph`/`mandarinets` vars — consumer commented out, stay out |
 | | **73** | sums to class 3 exactly: every var has one status, none has two |
@@ -1178,7 +1178,7 @@ their `:89`/`:32` gates cannot WARN spuriously.
 | android | `ANDROID_BUILD_TOOLS`, `ANDROID_CMDLINE_TOOLS`, `ANDROID_NDK`, `ANDROID_NDK_BUNDLE`, `ANDROID_PLATFORM_TOOLS` | `android-start.sh:73,79` / `android-setup.sh:37` | exist-only `android.sdkmanager`; the 5 vars never compared (seed list) |
 | **00base tools** | `GO`, `ZIG`, `HURL`, `MISE` (+ awscli, which has no `.env` var — `[[ ! -d … ]]`) | `base-install-*.sh`, all called from `base-start.sh:29-38` | **NOT in the seed list** — `command -v X` empty; no marker |
 | **rust tools** | `CARGO_NEXTEST`, `CARGO_OUTDATED`, `CARGO_ZIGBUILD`, `JUJUTSU`, `MERGIRAF` | `rust-install-*.sh`, called from `rust-start.sh:51-55` | seed list said "audit gating"; the answer is **none** — `command -v X` empty, no marker. Delivered by image ENV, so they look build-time and are not |
-| web servers | `CADDY`, `HTTPD`, `HTTPD_APR`, `HTTPD_APR_UTIL`, `HTTPD_MOD_AUTH_OPENIDC`, `HTTPD_MODSECURITY_MOD`, `HTTP_CORERULESET`, `HTTP_MODSECURITY_LIB`, `NGINX`, `NGINX_CJOSE`, `NGINX_LIBOAUTH2`, `NGINX_MOD_AUTH_OPENIDC`, `NGINX_MODSECURITY_MOD` | `{caddy,httpd,nginx}-iou*.sh` | `*_VERSION_PATH` markers declared in `*-start.sh`; **no `gs_version_gate` in any of the three** — per-site compare shape still to be read in row 20 |
+| web servers | `CADDY`, `HTTPD`, `HTTPD_APR`, `HTTPD_APR_UTIL`, `HTTPD_MOD_AUTH_OPENIDC`, `HTTPD_MODSECURITY_MOD`, `HTTP_CORERULESET`, `HTTP_MODSECURITY_LIB`, `NGINX`, `NGINX_CJOSE`, `NGINX_LIBOAUTH2`, `NGINX_MOD_AUTH_OPENIDC`, `NGINX_MODSECURITY_MOD` | `{caddy,httpd,nginx}-iou*.sh` + `*-start.sh` | **CORRECTED 2026-09-04 (row 20 read): these are `hand-rolled`, NOT `exist-only`.** Every site is `{ [[ ! -e P ]] \|\| [[ "$(cat P)" != "$V" ]]; }` — a real content-compare, semantically identical to `gs_version_gate != "skip"`, but silent and duplicated across **14 sites in 5 files** (httpd-start 4, nginx-start 5, httpd-iou-common 2, nginx-iou-common 2, nginx-iou 1). Converging them buys the WARN and one shape, not new detection |
 | frankenphp | `FRANKENPHP`, `FRANKENPHP_8_4`, `FRANKENPHP_8_5`, `FRANKENPHP_EDGE` | `php8.4-bin/…-setup-version.sh` | no marker |
 | rbenv extras | `RBENV_GEMSET`, `RBENV_RUBY_BUILD` | `rbenv-iou.sh:13-19` | **not exist-only** — guarded only by `-n VERSION` and re-cloned unconditionally *inside the manager's reinstall branch*, so a plugin-only bump does nothing while an rbenv bump re-clones both. Still a gap; different 5b shape |
 | serverless | `SERVERLESS_FRAMEWORK_ELASTICMQ` | `serverless-framework-start.sh` | no marker |
