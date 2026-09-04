@@ -1502,6 +1502,101 @@ assert_pass "22f: nvm still gates on the raw pin, and says why" \
   grep -q 'resolved early here' \
   "${DIST_BIN}/nvm-bin/global-stack-nvm-start.sh"
 
+# ─── Section 23: gs_version_gate is a standalone sourceable helper ────────
+printf '\n%b── Section 23: version-gate helper (prologue-exempt safe)%b\n' "${C_BOLD}" "${C_RESET}"
+
+# Row 15. The gate used to live in the prologue, but caddy/nginx/httpd and
+# android-setup are DELIBERATELY prologue-exempt (own stackCatch), so they could
+# not reach it without swapping their ERR-trap handling. Extracting it lets them
+# source the gate ALONE. See MASTER.plan.md Track 5 "Prologue-exemption collision".
+VERSION_GATE="${DIST_BIN}/base-bin/global-stack-base-version-gate.sh"
+
+assert_pass "23a: helper file exists" test -f "${VERSION_GATE}"
+assert_pass "23a: helper passes bash -n" bash -n "${VERSION_GATE}"
+assert_pass "23b: helper passes shellcheck (warning level)" \
+  shellcheck --severity=warning "${VERSION_GATE}"
+
+# The goal's stop condition greps for exactly one definition; pin it here so the
+# clause is backed by a test rather than by a one-off command.
+_vg_def_files="$(grep -rl '^gs_version_gate() {' "${DIST_BIN}" 2>/dev/null | sort)"
+_vg_def_n="$(printf '%s\n' "${_vg_def_files}" | grep -c . || true)"
+assert_pass "23c: gs_version_gate is defined in exactly one file" \
+  test "${_vg_def_n}" = "1"
+assert_pass "23c: that one file is the helper, not the prologue" \
+  test "${_vg_def_files}" = "${VERSION_GATE}"
+
+assert_pass "23d: prologue sources the helper" \
+  grep -q 'global-stack-base-version-gate\.sh' "${PROLOGUE}"
+
+# The helper must NOT bring the prologue's error handling with it — an exempt
+# script sourcing it keeps its own stackCatch.
+assert_fail "23e: helper does not define stackCatch" \
+  grep -q '^stackCatch() {' "${VERSION_GATE}"
+assert_fail "23e: helper registers no traps" \
+  grep -q '^trap ' "${VERSION_GATE}"
+
+# ── the guarantee row 15 exists to deliver ──
+# A script with its OWN stackCatch, sourcing ONLY the helper (no prologue), gets
+# all three decisions AND fires its ERR trap exactly zero times. The counter is a
+# FILE, not a variable: the gate is called inside $( ), so a subshell increment
+# would never reach the parent and the assertion would pass vacuously.
+_vg_harness() {
+  local marker_body="$1" expected="$2" vers="${TMP_DIR}/vg-vers" h="${TMP_DIR}/vg-harness.sh"
+  local fires="${TMP_DIR}/vg-fires"
+  rm -rf "${vers}" "${fires}"
+  mkdir -p "${vers}"
+  [[ -n "${marker_body}" ]] && printf '%s\n' "${marker_body}" >"${vers}/tool.marker"
+  {
+    printf '#!/bin/bash\n'
+    printf 'set -xeE -o pipefail\n'
+    printf 'shopt -s extdebug\n'
+    printf "IFS=\$'\\\\n\\\\t'\n"
+    # the exempt scripts' shape: their own handler, not the prologue's
+    printf 'stackCatch() { echo fire >> "%s"; }\n' "${fires}"
+    printf 'trap %s ERR\n' "'stackCatch \"\${?}\" \"\${LINENO}\" \"\${BASH_COMMAND}\" \"\${BASH_SOURCE[0]}\"'"
+    printf 'source global-stack-base-version-gate.sh\n'
+    printf 'd="$(gs_version_gate "%s/tool.marker" "%s" "tool")"\n' "${vers}" "${expected}"
+    printf 'printf "DECISION=%%s\\\\n" "${d}"\n'
+  } >"${h}"
+  env PATH="${DIST_BIN}/base-bin:${PATH}" bash "${h}" 2>/dev/null |
+    sed -n 's/^DECISION=//p' || true
+}
+
+_d="$(_vg_harness "" 1.2.3)"
+assert_pass "23f: helper alone, marker absent → install" test "${_d}" = "install"
+_d="$(_vg_harness 1.2.3 1.2.3)"
+assert_pass "23f: helper alone, marker equal → skip" test "${_d}" = "skip"
+_d="$(_vg_harness 1.2.3 1.2.4)"
+assert_pass "23f: helper alone, marker differs → reinstall" test "${_d}" = "reinstall"
+
+# Zero ERR fires across the three decisions above (the last run's log; each run
+# resets it). A gate that returns non-zero here would write tools/errors/<token>
+# in production and mask the container as unhealthy behind the 24h start_period.
+# Guarded against vacuity: with no helper the fire log never exists and a bare
+# count-is-zero assertion would pass while nothing ran. The decision from the
+# same run must therefore also be present.
+_vg_fire_n="$(grep -c . "${TMP_DIR}/vg-fires" 2>/dev/null || echo 0)"
+assert_pass "23g: helper fires the caller's ERR trap zero times (and did run)" \
+  test "${_vg_fire_n}${_d}" = "0reinstall"
+
+# Double-source must be safe, and safe under BOTH set flag regimes: base-* scripts
+# run `set -xeEu`, the tier-02/03 scripts run `set -xeE` without -u.
+for _u in "-u" ""; do
+  _lbl="${_u:-no -u}"
+  printf '#!/bin/bash\nset -eE %s\nsource global-stack-base-version-gate.sh\nsource global-stack-base-version-gate.sh\ngs_version_gate /nonexistent x l\n' "${_u}" \
+    >"${TMP_DIR}/vg-twice.sh"
+  assert_pass "23h: double-source is safe (${_lbl})" \
+    env PATH="${DIST_BIN}/base-bin:${PATH}" bash "${TMP_DIR}/vg-twice.sh"
+done
+
+# The exemption itself: these must never gain a prologue source line, or the
+# extraction was pointless and their stackCatch would be swapped.
+for _ex in caddy-bin/global-stack-caddy-start.sh nginx-bin/global-stack-nginx-start.sh \
+           httpd-bin/global-stack-httpd-start.sh android-bin/global-stack-android-setup.sh; do
+  assert_fail "23i: $(basename "${_ex}") stays prologue-exempt" \
+    grep -q '^source global-stack-base-prologue\.sh$' "${DIST_BIN}/${_ex}"
+done
+
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
 if [[ "${FAIL}" -eq 0 ]]; then

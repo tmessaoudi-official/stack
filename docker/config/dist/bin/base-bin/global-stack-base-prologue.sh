@@ -10,6 +10,9 @@
 #
 # Scripts NOT covered (they keep their own stackCatch — deliberate 141 exemption):
 #   caddy-bin/*, httpd-bin/*, nginx-bin/*, android-bin/global-stack-android-setup*.sh
+# Those scripts MAY source global-stack-base-version-gate.sh on its own to reach the
+# version gate without taking this prologue's error handling (row 15, 2026-09-04).
+# None does yet — rows 18-21 of MASTER.plan.md are what make them use it.
 # Those handlers used to exempt exit code 1 as well. That was removed (2026-08-29):
 # code 1 is the most common failure in their own chain, and exempting it produced
 # total silence rather than a tolerated error — dropping it changes no control flow,
@@ -244,43 +247,17 @@ trap 'stackCatch 141 "${LINENO}" "${BASH_COMMAND}" "${BASH_SOURCE[0]}" SIGPIPE' 
 # trap 'stackCatch 130 "${LINENO}" "${BASH_COMMAND}" "${BASH_SOURCE[0]}" SIGINT'  SIGINT
 # trap 'stackCatch 143 "${LINENO}" "${BASH_COMMAND}" "${BASH_SOURCE[0]}" SIGTERM' SIGTERM
 
-# gs_version_gate <marker_path> <expected_value> [label]
-#
-# Content-compare gate for tools/versions/<marker> files. Emits ONE decision word
-# on STDOUT — install | skip | reinstall — and, only on a real mismatch (marker
-# exists but its content differs from <expected_value>), a loud WARN on STDERR.
-#
-#   install    marker absent            → first install, silent
-#   skip       marker == expected       → up to date, silent
-#   reinstall  marker != expected       → version changed, WARN + caller reinstalls
-#
-# ERR-trap safe by contract: this runs sourced into `set -eE` with the stackCatch
-# ERR trap armed. Every path ends in `return 0` and the only comparison that can
-# be false lives inside `if`, so the gate NEVER returns non-zero for a normal
-# decision — a non-zero return would fire stackCatch, write tools/errors/<token>,
-# and mask the container as permanently unhealthy behind the 24h start_period.
-# Callers capture the decision (e.g. `dec="$(gs_version_gate ...)"`); the WARN
-# goes to STDERR so it is never swallowed by the command substitution.
-gs_version_gate() {
-  local _gvg_marker="${1:-}" _gvg_expected="${2:-}" _gvg_label="${3:-${1:-marker}}"
-  local _gvg_current
-
-  if [[ ! -f "${_gvg_marker}" ]]; then
-    printf 'install\n'
-    return 0
-  fi
-
-  _gvg_current="$(cat "${_gvg_marker}" 2>/dev/null || true)"
-  if [[ "${_gvg_current}" == "${_gvg_expected}" ]]; then
-    printf 'skip\n'
-    return 0
-  fi
-
-  printf 'WARN: %s version changed (marker=%s expected=%s) — reinstalling\n' \
-    "${_gvg_label}" "${_gvg_current}" "${_gvg_expected}" >&2
-  printf 'reinstall\n'
-  return 0
-}
+# The version gate lives in its own file so the prologue-EXEMPT scripts (caddy,
+# httpd, nginx, android-setup — see the header above) can source the gate ALONE,
+# without swapping their own stackCatch for this one. Sourced by sibling path
+# rather than by PATH: bash resolves a PATH lookup to a full path, so
+# BASH_SOURCE[0] names this file's directory whether the prologue was found on
+# PATH or sourced directly, and the helper sits beside it in both the repo tree
+# (base-bin/) and the container (/usr/local/bin, flat-copied by
+# global-stack-base-sync-bin-n-exec.sh). All existing call sites are unchanged.
+# Exempt scripts use: source global-stack-base-version-gate.sh
+# shellcheck source=docker/config/dist/bin/base-bin/global-stack-base-version-gate.sh
+source "${BASH_SOURCE[0]%/*}/global-stack-base-version-gate.sh"
 
 # gs_install_retry_purge <cache_dir> <command...>
 #
