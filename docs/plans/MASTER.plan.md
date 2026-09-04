@@ -526,6 +526,21 @@ labels) and post-push commit signing.
   the helper for the WARN is left to row 21. The exist-only count of 41 is unchanged in kind
   but this one var moves category.
 
+- [2026-09-04 14:34] CORRECTION (5a appendix, row 19): the appendix says "the 5
+  `GLOBAL_STACK_ANDROID_*_VERSION` vars are NEVER compared". True, but incomplete — only
+  THREE are live. `NDK_BUNDLE` and `PLATFORM_TOOLS` appear solely in the commented-out
+  `@todo fix version not found` line of `android-setup.sh`; the live `sdkmanager` call passes
+  bare `"ndk-bundle"` and `"platform-tools"`. They are therefore comment-only (class 4 in
+  substance) and were deliberately EXCLUDED from the composite marker: including them would
+  force a reinstall on a bump that changes nothing installed.
+- [2026-09-04 14:34] AGREED (row 19): the android gate uses a COMPOSITE marker
+  (`android.sdk`, holding `cmdline-tools=…;build-tools=…;ndk=…`) rather than one marker per
+  component, because the three pins are consumed by a single `sdkmanager` invocation that
+  installs them together — per-component markers would imply an independence the install does
+  not have. It is composed once in `android-start.sh` and exported to `android-setup.sh`
+  rather than recomputed there: two copies of the string would drift, and every boot would
+  then read as a version change.
+
 The executor APPENDS its own dated `AGREED:` entries here (e.g. the F3 classification
 outcome, Track 5 audit rulings) as it goes — this file is where rulings land. Never backdate;
 never write an entry for a ruling that was not actually taken (forged-AGREED hazard, global
@@ -1214,7 +1229,7 @@ class-3 var is absent from this accounting, and no gate site in B lacks a class-
 | 16 | Track 5b — gate nvm-install-tools (deno, bun) | M | done | b08ce58 | docker/config/dist/bin/nvm-bin/*.sh bin/tests/startup-prologue.test.sh |
 | 17 | Track 5b — gate phpbrew-install-tools (11 tools incl. laravel/installer pin) | L | done | 0e71e5b | docker/config/dist/bin/phpbrew-bin/*.sh .env docker/images/02phpbrew/docker-compose.yaml bin/tests/startup-prologue.test.sh |
 | 18 | Track 5b — gate the 5 rust tools + deliver their pins at runtime (cascade: added to 02rust compose) | M | done | 0b5593a | docker/config/dist/bin/rust-bin/*.sh docker/images/02rust/docker-compose.yaml bin/tests/startup-prologue.test.sh |
-| 19 | Track 5b — gate android (sdkmanager + 5 uncompared vars) | M | todo | - | docker/config/dist/bin/android-bin/*.sh |
+| 19 | Track 5b — gate android SDK components (composite marker on the 3 LIVE pins) | M | done | 0415ca3 | docker/config/dist/bin/android-bin/*.sh bin/tests/startup-prologue.test.sh |
 | 20 | Track 5b — gate web-server sub-components (mod_security, coreruleset, cjose, liboauth2, apr) | L | todo | - | docker/config/dist/bin/nginx-bin/*.sh docker/config/dist/bin/httpd-bin/*.sh |
 | 21 | Track 5b — remainder named by 5a: phpmyadmin, 00base runtime installs (go/zig/hurl/mise/awscli), frankenphp, rbenv gemset+ruby-build, elasticmq. NOT wkhtmltopdf/sonar-scanner-cli — 5a proved those class 1 | M | todo | - | docker/config/dist/bin/*/*.sh |
 | 22 | Track 5 docs — CLAUDE.md Gotchas + two-phase note once the gate is universal | S | todo | - | CLAUDE.md |
