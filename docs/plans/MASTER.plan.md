@@ -995,7 +995,7 @@ checks; re-run the command rather than trusting this number if `.env` has moved 
 |---|---|---|---|
 | 1 | 38 | image tag / Dockerfile `ARG` at build | ALREADY covered (env-scan ARG propagation + `check-image-versions` + rebuild) — record, don't touch |
 | 2 | 160 | `setup-packages.sh` pkg slot | ALREADY gated (`gs_version_gate` at `base-setup-packages.sh:97`) — record |
-| 2↑ | 138 | `_DEFAULT_*`, upstream of a class-2 slot by `.env` expansion | ALREADY gated *through its referrer* — record; a bump propagates at compose resolution |
+| 2↑ | 138 | `_DEFAULT_*`, upstream of a class-2 slot by `.env` expansion | ALREADY gated *through its referrer* — record; a bump propagates at compose resolution. **No compose entry is needed** for these: env-scan carries the upstream var, so the expansion resolves before any container sees it [Verified: `grep -c '_DEFAULT_.*_VERSION=' .env.local` → 138]. The new-var cascade rule (above) therefore does not apply to a `_DEFAULT_` var |
 | 3 | 73 | runtime install script | **THE TARGET SET** — see the worklist below |
 | 3U | 1 | delivered to a container, no in-repo reader | record |
 | 4 | 2 | dead | record as such |
@@ -1077,6 +1077,12 @@ only, with no cascade to runtimes), and `nvm` additionally gates on the *raw* pi
 its resolver needs nvm sourced ~130 lines further down — pinned by
 `startup-prologue.test.sh` §22f precisely so nobody copies the pyenv shape into it.
 
+Two write-placement worries were checked and are **not** findings: `rust-iou.sh:35` writes
+the `rust` marker only from inside `rust-start.sh`'s reinstall branch (`:42-45` calls it),
+and `sdkman-start.sh:95` writes the `sdkman` marker inside its own
+`SDK_LATEST != SDK_CURRENT` branch. Neither rewrites its marker every boot, so neither
+gate is blinded.
+
 **`hand-rolled` (9)** — `COMPOSER`, `ZEPHIR_LANG`, `PHALCON_DEVTOOLS`, `PICKLE`, `PIE`,
 `MAGO`, `CASTOR`, `FABPOT_LOCAL_PHP_SECURITY_CHECKER` in
 `phpbrew-install-tools.sh` (`[[ -f phar && $X_LATEST = $(cat marker) ]]`), plus `MKCERT`
@@ -1100,9 +1106,9 @@ their `:89`/`:32` gates cannot WARN spuriously.
 | **rust tools** | `CARGO_NEXTEST`, `CARGO_OUTDATED`, `CARGO_ZIGBUILD`, `JUJUTSU`, `MERGIRAF` | `rust-install-*.sh`, called from `rust-start.sh:51-55` | seed list said "audit gating"; the answer is **none** — `command -v X` empty, no marker. Delivered by image ENV, so they look build-time and are not |
 | web servers | `CADDY`, `HTTPD`, `HTTPD_APR`, `HTTPD_APR_UTIL`, `HTTPD_MOD_AUTH_OPENIDC`, `HTTPD_MODSECURITY_MOD`, `HTTP_CORERULESET`, `HTTP_MODSECURITY_LIB`, `NGINX`, `NGINX_CJOSE`, `NGINX_LIBOAUTH2`, `NGINX_MOD_AUTH_OPENIDC`, `NGINX_MODSECURITY_MOD` | `{caddy,httpd,nginx}-iou*.sh` | `*_VERSION_PATH` markers declared in `*-start.sh`; **no `gs_version_gate` in any of the three** — per-site compare shape still to be read in row 20 |
 | frankenphp | `FRANKENPHP`, `FRANKENPHP_8_4`, `FRANKENPHP_8_5`, `FRANKENPHP_EDGE` | `php8.4-bin/…-setup-version.sh` | no marker |
-| rbenv extras | `RBENV_GEMSET`, `RBENV_RUBY_BUILD` | `rbenv-iou.sh` | no marker |
+| rbenv extras | `RBENV_GEMSET`, `RBENV_RUBY_BUILD` | `rbenv-iou.sh:13-19` | **not exist-only** — guarded only by `-n VERSION` and re-cloned unconditionally *inside the manager's reinstall branch*, so a plugin-only bump does nothing while an rbenv bump re-clones both. Still a gap; different 5b shape |
 | serverless | `SERVERLESS_FRAMEWORK_ELASTICMQ` | `serverless-framework-start.sh` | no marker |
-| rustup | `RUSTUP_INIT` | `rust-iou.sh:9,27` | writes `rust-init` from the pin; compare shape to confirm in row 18 |
+| rustup | `RUSTUP_INIT` | `rust-iou.sh:9,27` | writes `rust-init` from the pin, but only ever from inside `rust-start.sh`'s reinstall branch (`:42-45`), so it never self-clears on a `RUSTUP_INIT` bump |
 
 **`ref-only` (1)** — `NGINX_AUTOMAKE_VERSION`, used only to build `PATH`
 (`nginx-start.sh:8,15`). Not an install site; not a 5b row.
@@ -1148,10 +1154,10 @@ class-3 var is absent from this accounting, and no gate site in B lacks a class-
 | 15 | Track 5b — extract gs_version_gate into its own sourceable helper (prologue-exempt safe) | M | todo | - | docker/config/dist/bin/base-bin/*.sh bin/tests/startup-prologue.test.sh |
 | 16 | Track 5b — gate nvm-install-tools (deno, bun) | M | todo | - | docker/config/dist/bin/nvm-bin/*.sh |
 | 17 | Track 5b — gate phpbrew-install-tools (deployer, symfony-cli, laravel/installer, ...) | L | todo | - | docker/config/dist/bin/phpbrew-bin/*.sh .env |
-| 18 | Track 5b — gate rust tools (cargo-nextest/outdated/zigbuild, jujutsu, mergiraf) | M | todo | - | docker/config/dist/bin/rust-bin/*.sh |
+| 18 | Track 5b — gate rust tools (cargo-nextest/outdated/zigbuild, jujutsu, mergiraf, rustup-init); all 5 arrive by image ENV, not compose env — decide the cascade | M | todo | - | docker/config/dist/bin/rust-bin/*.sh .env docker/images/00base/* |
 | 19 | Track 5b — gate android (sdkmanager + 5 uncompared vars) | M | todo | - | docker/config/dist/bin/android-bin/*.sh |
 | 20 | Track 5b — gate web-server sub-components (mod_security, coreruleset, cjose, liboauth2, apr) | L | todo | - | docker/config/dist/bin/nginx-bin/*.sh docker/config/dist/bin/httpd-bin/*.sh |
-| 21 | Track 5b — remainder named by 5a (wkhtmltopdf, sonar-scanner-cli, elasticmq, rbenv/fvm extras) | M | todo | - | docker/config/dist/bin/*/*.sh |
+| 21 | Track 5b — remainder named by 5a: phpmyadmin, 00base runtime installs (go/zig/hurl/mise/awscli), frankenphp, rbenv gemset+ruby-build, elasticmq. NOT wkhtmltopdf/sonar-scanner-cli — 5a proved those class 1 | M | todo | - | docker/config/dist/bin/*/*.sh |
 | 22 | Track 5 docs — CLAUDE.md Gotchas + two-phase note once the gate is universal | S | todo | - | CLAUDE.md |
 | 23 | Close-out — terminal states + SHAs in plan, full battery re-run, advisor, push | M | todo | - | docs/plans/MASTER.plan.md CLAUDE.md |
 | 24 | Developer input — supervised rebuild/bring-up closing the 4 UNCERTIFIED labels | M | blocked | - | - |
