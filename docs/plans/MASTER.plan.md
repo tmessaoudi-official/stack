@@ -569,6 +569,22 @@ labels) and post-push commit signing.
   `install`, which is silent by design. Do not "fix" this by suppressing the inner gate's
   stderr — the silence is structural, not incidental.
 
+- [2026-09-04 15:35] AGREED (developer ruling, row 26): the 14 `# @todo fix pin versions`
+  comments are **retired, not acted on**. They mark ~144 `apt-get` packages across four
+  different base distros — not `.env` version vars, which is what the sweep's description
+  implied and what the absorb-everything ruling was given on. `.hadolint.yaml` already ignores
+  DL3008 with the comment *"acceptable in development environments where we intentionally
+  track latest packages"*, and zero apt packages are pinned anywhere in the repo: the lint
+  config was the standing decision and the TODOs contradicted it. Exact apt pins would also
+  break the build whenever the archive rotates a superseded version off the mirror. Each
+  comment is REPLACED by the ruling rather than deleted, so the absence of a pin is explained
+  where it would otherwise look like an oversight.
+- [2026-09-04 15:35] NOTED: this is the second time a sweep-lens description proved wrong
+  about the SHAPE of the work (after the 5a appendix's five shape corrections). Both lenses
+  were accurate about WHERE the issue was and wrong about WHAT it was, because both classified
+  from grep output. Treat any lens finding's "what to do" as a hypothesis to verify, not a
+  worklist item — the location is the reliable part.
+
 The executor APPENDS its own dated `AGREED:` entries here (e.g. the F3 classification
 outcome, Track 5 audit rulings) as it goes — this file is where rulings land. Never backdate;
 never write an entry for a ruling that was not actually taken (forged-AGREED hazard, global
@@ -1264,7 +1280,7 @@ class-3 var is absent from this accounting, and no gate site in B lacks a class-
 | 23 | Close-out — terminal states + SHAs in plan, full battery re-run, advisor, push | M | todo | - | docs/plans/MASTER.plan.md CLAUDE.md |
 | 24 | Developer input — supervised rebuild/bring-up closing the 4 UNCERTIFIED labels | M | blocked | - | - |
 | 25 | Sweep — web-server iou handlers write an error token on exit 1; de-hardcode WEB_SERVER_SCRIPTS | M | todo | - | docker/config/dist/bin/caddy-bin/*.sh docker/config/dist/bin/httpd-bin/*.sh docker/config/dist/bin/nginx-bin/*.sh bin/tests/startup-prologue.test.sh |
-| 26 | Sweep — pin the 14 Dockerfiles carrying `# @todo fix pin versions` | L | todo | - | docker/images/*/Dockerfile* templates/ghost-blog/Dockerfile |
+| 26 | Sweep — retire the stale `# @todo fix pin versions` TODOs (NOT pin: .hadolint.yaml already rules against it) | L | done | fc10204 | docker/images/*/Dockerfile* templates/ghost-blog/Dockerfile |
 | 27 | Sweep — CLAUDE.md corrections (141/1 claim, stale suite counts, LOCAL slot, exclusion list) | S | blocked | - | CLAUDE.md |
 | 28 | Sweep — settings.json ask-tier vs CLAUDE.md:49/:369; direction unruled | S | blocked | - | .claude/settings.json CLAUDE.md |
 | 29 | Sweep — prune TODO.md (item 189 + zig drift done; consolidate its 5 container-test items with row 24) | S | todo | - | TODO.md |
