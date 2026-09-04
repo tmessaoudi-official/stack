@@ -1144,7 +1144,7 @@ class-3 var is absent from this accounting, and no gate site in B lacks a class-
 | 11 | Track 3c follow-up — sdkman backup must not destroy the file when it fails | S | done | d5adf56 | bin/open-all-envs.sh |
 | 12 | Track 4a — F13 env-guard port check keyed on the consumer | M | done | f7db75b | .claude/hooks/env-guard-on-write.sh bin/tests/env-guard.test.sh |
 | 13 | Track 2a docs — stop /new-service resurrecting F4; carry the four residuals | S | done | 53aff52 | .claude/skills/new-service/SKILL.md docs/plans/MASTER.plan.md |
-| 14 | Track 5a — bidirectional audit (all _VERSION vars x all gate sites) into a plan appendix | L | todo | - | .env docs/plans/MASTER.plan.md docker/config/dist/bin/*/*.sh |
+| 14 | Track 5a — bidirectional audit (all _VERSION vars x all gate sites) into a plan appendix | L | done | 7782701 | .env docs/plans/MASTER.plan.md docker/config/dist/bin/*/*.sh |
 | 15 | Track 5b — extract gs_version_gate into its own sourceable helper (prologue-exempt safe) | M | todo | - | docker/config/dist/bin/base-bin/*.sh bin/tests/startup-prologue.test.sh |
 | 16 | Track 5b — gate nvm-install-tools (deno, bun) | M | todo | - | docker/config/dist/bin/nvm-bin/*.sh |
 | 17 | Track 5b — gate phpbrew-install-tools (deployer, symfony-cli, laravel/installer, ...) | L | todo | - | docker/config/dist/bin/phpbrew-bin/*.sh .env |
