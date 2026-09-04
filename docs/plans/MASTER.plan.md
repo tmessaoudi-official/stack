@@ -1267,8 +1267,8 @@ class-3 var is absent from this accounting, and no gate site in B lacks a class-
 | 10 | Track 3c — F11/F12 open-all-envs .env resolution + host ~/.sdkman destruction | M | done | 7d70a82 | bin/open-all-envs.sh templates/tips/open-many-links.md |
 | 11 | Track 3c follow-up — sdkman backup must not destroy the file when it fails | S | done | d5adf56 | bin/open-all-envs.sh |
 | 12 | Track 4a — F13 env-guard port check keyed on the consumer | M | done | f7db75b | .claude/hooks/env-guard-on-write.sh bin/tests/env-guard.test.sh |
-| 13 | Track 2a docs — stop /new-service resurrecting F4; carry the four residuals | S | done | 53aff52 | .claude/skills/new-service/SKILL.md docs/plans/MASTER.plan.md |
-| 14 | Track 5a — bidirectional audit (all _VERSION vars x all gate sites) into a plan appendix | L | done | 7782701 | .env docs/plans/MASTER.plan.md docker/config/dist/bin/*/*.sh |
+| 13 | Track 2a docs — stop /new-service resurrecting F4; carry the four residuals | S | done | 53aff52 | .claude/skills/new-service/SKILL.md bin/tests/startup-prologue.test.sh docker/config/dist/bin/*/*-start.sh docs/plans/MASTER.plan.md |
+| 14 | Track 5a — bidirectional audit (all _VERSION vars x all gate sites) into a plan appendix | L | done | 7782701 | docs/plans/MASTER.plan.md |
 | 15 | Track 5b — extract gs_version_gate into its own sourceable helper (prologue-exempt safe) | M | done | b27aca7 | docker/config/dist/bin/base-bin/*.sh bin/tests/startup-prologue.test.sh |
 | 16 | Track 5b — gate nvm-install-tools (deno, bun) | M | done | b08ce58 | docker/config/dist/bin/nvm-bin/*.sh bin/tests/startup-prologue.test.sh |
 | 17 | Track 5b — gate phpbrew-install-tools (11 tools incl. laravel/installer pin) | L | done | 0e71e5b | docker/config/dist/bin/phpbrew-bin/*.sh .env docker/images/02phpbrew/docker-compose.yaml bin/tests/startup-prologue.test.sh |
@@ -1291,23 +1291,40 @@ class-3 var is absent from this accounting, and no gate site in B lacks a class-
   blocker recorded in two files.
 
 ### Needs input
-- Row 17, laravel/installer: unpinned AND followed by `composer global update
-  --with-all-dependencies` (phpbrew-install-tools.sh:31-34), which defeats any
-  gate row 17 adds. Closing it needs an install-logic change the Track 5 scope
-  guard (:793) forbids — a developer ruling, not executor work.
+- **Row 28 — the ONLY item still awaiting a ruling.** `.claude/settings.json`
+  carries a live 3-entry `ask` tier, while `CLAUDE.md:49` and `:369` both state
+  the file is allow-list only with no `ask` tier at all. One of the two is wrong.
+  Recommendation: correct `CLAUDE.md`, because `95ccbb7` added those entries
+  deliberately to gate a real `.env` write, and `ask` PROMPTS rather than
+  dead-ends — so it does not violate the no-denies ruling, which is about
+  unrecoverable blocks. Alternative: drop the three entries and keep the doc.
+  Claude cannot write either file (both classifier-blocked); whichever way it is
+  ruled, the change ships as a handover script.
+- (CLOSED 2026-09-04) Row 17, laravel/installer: the developer ruled *"widen the
+  guard — fix it too"*. `composer global update --with-all-dependencies` was
+  DELETED and the tool pinned to `GLOBAL_STACK_LARAVEL_INSTALLER_VERSION`;
+  landed at `0e71e5b`.
 
 ### Needs research
-- Row 20: the per-site compare shape in {caddy,httpd,nginx}-iou*.sh is unread;
-  none of the three calls gs_version_gate.
-- Whether to split row 21 into 21a (prologue-sourcing: phpmyadmin, serverless,
-  rbenv-iou, frankenphp) and 21b (exempt: 00base installs), which have
-  different dependencies on row 15.
+- (none open.) Both questions were answered by work that landed:
+  row 20 read all 17 web-server compare sites and converged them on
+  `gs_version_gate` (`e9fd01e`); the 21a/21b split WAS taken and both halves
+  landed (`ae4f4df`, `53c0859`), with `frankenphp` ruled out of scope (its
+  artifact path embeds the version) and `awscli` excluded (no `.env` pin).
 
 ### Fragile
 - Full 12-entry register lives at MASTER.plan.md:848 — this heading is the
   collector-visible pointer to it.
-- caddy-iou.sh:21, httpd-iou.sh:26, nginx-iou.sh:33 still exempt exit 1 and
-  lack _STACK_CAUGHT: a failed web-server INSTALL writes no error token.
+- (FIXED in row 25, `a1ba6f1` — kept for the lesson.) caddy-iou.sh, httpd-iou.sh
+  and nginx-iou.sh exempted exit 1 and lacked `_STACK_CAUGHT`, so a failed
+  web-server INSTALL wrote no error token at all. It survived the 2026-08-29
+  migration because TWO checks were each structurally incapable of firing:
+  `startup-prologue.test.sh` §19 iterated a hardcoded 8-entry array that omitted
+  exactly these three, and CLAUDE.md described the exemption as already gone. Two
+  can't-fire checks read as two passing checks. §19 now DISCOVERS handlers (11),
+  which is what makes it able to fail. NOTE: the fix is certified by handler SHAPE
+  only — no run has yet observed one of these writing `tools/errors/<token>`; that
+  is the heaviest of the nine UNCERTIFIED dimensions and closes with row 24.
 - DO NOT "simplify": `((_elapsed++)) || true` (base-wait-for.sh:44) and
   `((COMMAND_COUNTER++)) || true` (base-setup-packages.sh:52) — post-increment
   from 0 returns status 1 under set -e. Verified by repro.
@@ -1344,16 +1361,35 @@ class-3 var is absent from this accounting, and no gate site in B lacks a class-
   statement about 2026-09-01 true; it makes it moot. The wording stands as a historical record
   of what was believed then. What needed correcting was `CLAUDE.md`'s *present-tense* claim,
   and that is in the row 22/27 handover script.
-- Rows 13/14 Files columns do not match what their shas touched.
-- Stale counts in CLAUDE.md: makefile-posix 5→7 (:323), open-all-envs 12→16
-  (:327), env-update "117 sections"→125 declared (:321); "next free LOCAL slot
-  41719" (:404) is taken → 41720.
-- `# @todo fix pin versions` across 14 Dockerfiles — unplanned, unrowed.
+- (CLOSED 2026-09-04) Rows 13/14 Files columns did not match what their shas
+  touched — row 13 under-listed (its sha also touched the three `*-start.sh`
+  scripts and the test suite), row 14 over-listed `.env` and the startup scripts
+  when `7782701` was a plan-only audit commit. Both cells now match `git show
+  --stat`. The collector never flagged either, because it only requires OVERLAP
+  between the sha and the Files cell, not equality — an over-listed cell passes.
+- (MOSTLY CLOSED 2026-09-04, `3f94de3`.) Applied: makefile-posix 5→7,
+  open-all-envs 12→16, startup-prologue 220→392, LOCAL slot 41719→41720.
+  DELIBERATELY NOT APPLIED: the env-update tally at `CLAUDE.md:321`. That suite
+  was SIGKILLed twice today without producing its authoritative `ALL PASSED`
+  line, so there is no MEASURED number to write — and writing an unmeasured one
+  is precisely how the four stale counts above came to exist. The line already
+  instructs the reader to re-run rather than trust it. Correct it only from a
+  tally line produced by a completed run.
+- (CLOSED 2026-09-04, `fc10204`.) `# @todo fix pin versions` across 14
+  Dockerfiles became row 26, and the ruling INVERTED the finding: `.hadolint.yaml`
+  already ignores DL3008 for this repo, so the TODOs contradicted a standing
+  decision, and acting on them would have broken builds on the next Debian/Ubuntu
+  archive rotation. They were removed, not actioned.
 - TODO.md:189 (WAIT_FOR_TIMEOUT from .env) is already done (.env:46).
-- DECLINED by the developer 2026-09-03, recorded so they are not re-surfaced
-  as new: CLAUDE.md:337 "141/1 exemption is gone"; the hardcoded
-  WEB_SERVER_SCRIPTS array at startup-prologue.test.sh:1081; the live 3-entry
-  `ask` tier in .claude/settings.json vs CLAUDE.md:49/:369.
+- SUPERSEDED: three items were declined by the developer on 2026-09-03, then
+  the 2026-09-04 ruling *"absorb everything the sweep found"* reversed two of
+  them. `CLAUDE.md:337`'s "141/1 exemption is gone" claim and the hardcoded
+  `WEB_SERVER_SCRIPTS` array both became row 25 and are FIXED (`a1ba6f1`,
+  `3f94de3`). Only the third — the live 3-entry `ask` tier in
+  `.claude/settings.json` vs `CLAUDE.md:49`/`:369` — is still open; it is row 28
+  and now sits in ### Needs input with a recommendation. A decline is not
+  permanent: re-surface a declined item when the surrounding work changes what
+  it costs.
 
 ## Goal
 <!-- goal-block -->
