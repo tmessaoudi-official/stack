@@ -541,6 +541,21 @@ labels) and post-push commit signing.
   rather than recomputed there: two copies of the string would drift, and every boot would
   then read as a version change.
 
+- [2026-09-04 14:46] AGREED (row 21): **frankenphp is deliberately NOT gated.** Its artifact
+  path embeds the version (`frankenphp-${GLOBAL_STACK_FRANKENPHP_VERSION}.tar.gz`, and the
+  extract dir likewise), so a bump already downloads a different file and rebuilds — it is
+  version-sensitive by construction. A marker would add redundant state that could only drift
+  out of agreement with the path. Pinned by `startup-prologue.test.sh` §29c so nobody "fixes"
+  it later. Same reasoning retires `awscli`: it has no `.env` version var at all, so there is
+  nothing to compare.
+- [2026-09-04 14:46] NOTED (row 21): the 5a appendix's SHAPE classification has now been
+  corrected four times — `RUSTUP_INIT` (hand-rolled, not exist-only), the two comment-only
+  android vars, the 13 web-server vars (hand-rolled, not exist-only), and frankenphp
+  (path-keyed, needs no gate). The appendix was reliable about WHICH vars exist and which are
+  ungated, and unreliable about the shape of each site, because shapes were inferred from grep
+  output rather than by reading each block. **Row 20 and any later audit should read the site
+  before trusting the appendix's shape column.** The var inventory itself stands.
+
 The executor APPENDS its own dated `AGREED:` entries here (e.g. the F3 classification
 outcome, Track 5 audit rulings) as it goes — this file is where rulings land. Never backdate;
 never write an entry for a ruling that was not actually taken (forged-AGREED hazard, global
@@ -1231,7 +1246,7 @@ class-3 var is absent from this accounting, and no gate site in B lacks a class-
 | 18 | Track 5b — gate the 5 rust tools + deliver their pins at runtime (cascade: added to 02rust compose) | M | done | 0b5593a | docker/config/dist/bin/rust-bin/*.sh docker/images/02rust/docker-compose.yaml bin/tests/startup-prologue.test.sh |
 | 19 | Track 5b — gate android SDK components (composite marker on the 3 LIVE pins) | M | done | 0415ca3 | docker/config/dist/bin/android-bin/*.sh bin/tests/startup-prologue.test.sh |
 | 20 | Track 5b — gate web-server sub-components (mod_security, coreruleset, cjose, liboauth2, apr) | L | todo | - | docker/config/dist/bin/nginx-bin/*.sh docker/config/dist/bin/httpd-bin/*.sh |
-| 21 | Track 5b — remainder named by 5a: phpmyadmin, 00base runtime installs (go/zig/hurl/mise/awscli), frankenphp, rbenv gemset+ruby-build, elasticmq. NOT wkhtmltopdf/sonar-scanner-cli — 5a proved those class 1 | M | todo | - | docker/config/dist/bin/*/*.sh |
+| 21 | Track 5b — remainder named by 5a: phpmyadmin, 00base runtime installs, elasticmq, rbenv plugins. frankenphp NOT gated (path-keyed); awscli has no pin | M | done | ae4f4df 53c0859 | docker/config/dist/bin/base-bin/*.sh docker/config/dist/bin/phpmyadmin-bin/*.sh docker/config/dist/bin/serverless-bin/*.sh docker/config/dist/bin/rbenv-bin/*.sh bin/tests/startup-prologue.test.sh |
 | 22 | Track 5 docs — CLAUDE.md Gotchas + two-phase note once the gate is universal | S | todo | - | CLAUDE.md |
 | 23 | Close-out — terminal states + SHAs in plan, full battery re-run, advisor, push | M | todo | - | docs/plans/MASTER.plan.md CLAUDE.md |
 | 24 | Developer input — supervised rebuild/bring-up closing the 4 UNCERTIFIED labels | M | blocked | - | - |
