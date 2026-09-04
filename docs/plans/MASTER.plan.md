@@ -445,19 +445,19 @@ labels) and post-push commit signing.
   disagree and the mismatch returns silently. This also removed one SC2155 finding from each script
   (`export X=$(...)` → `export X="${...}"`), so both files' shellcheck sets shrank by one.
 
-- [2026-09-04 09:40] AGREED (Track 5a): Inventory A is **412** vars, not the ~380 estimated at
+- [2026-09-04 09:38] AGREED (Track 5a): Inventory A is **412** vars, not the ~380 estimated at
   planning time, and splits 38 / 160 / 138 / 73 / 1 / 2 across classes 1 / 2 / 2↑ / 3 / 3U / 4.
   The **2↑** class is new and was not anticipated by the plan: 138 `_DEFAULT_*` vars are
   upstream of a gated class-2 slot through `.env`'s own `${}` expansion, so they are already
   covered *through their referrer*. Recording them as dead — which an audit keyed only on
   file references would have done — would have put ~138 live vars into the plan as dead.
-- [2026-09-04 09:40] AGREED (Track 5a): the **manager `warn-gated` shape is an accepted
+- [2026-09-04 09:38] AGREED (Track 5a): the **manager `warn-gated` shape is an accepted
   pattern, not a gap**. Seven managers (nvm, phpbrew, pyenv, rbenv, sdkman, rust, fvm) call
   `gs_version_gate … >/dev/null || true` for the WARN and decide with an adjacent inline
   compare. `CLAUDE.md` § Gotchas documents this deliberately, and `nvm` gates on the raw pin
   by necessity (its resolver needs nvm sourced later in the file), pinned by
   `startup-prologue.test.sh` §22f. 5b must not converge these.
-- [2026-09-04 09:40] AGREED (Track 5a): the seed table was **incomplete in three groups** and
+- [2026-09-04 09:38] AGREED (Track 5a): the seed table was **incomplete in three groups** and
   **wrong in one**. Added: `phpmyadmin` (write-only marker, same defect as deployer), the five
   00base tools installed at runtime from `base-start.sh:29-38` (go/zig/hurl/mise/awscli), and
   the five rust tools from `rust-start.sh:51-55` whose image-ENV delivery makes them look
