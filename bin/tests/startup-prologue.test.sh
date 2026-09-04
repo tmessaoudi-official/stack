@@ -2114,6 +2114,81 @@ assert_pass "29f: rbenv ruby-build pin bumped → reinstall" \
 assert_pass "29f: rbenv gemset pin unchanged → skip" \
   test "$(_r21_decision '  _rb_gemset_gate=' rbenv.gemset v2.0 v2.0 GLOBAL_STACK_RBENV_GEMSET_VERSION "${RBIOU}")" = "skip"
 
+# ─── Section 30: web-server gates (row 20) ────────────────────────────────
+printf '\n%b── Section 30: web-server version gates%b\n' "${C_BOLD}" "${C_RESET}"
+
+# Row 20, the last Track 5b migration. These 17 sites already compared correctly —
+# { ! -e P || $(cat P) != $V } is exactly `gate != skip` — so this row buys the
+# WARN and ONE idiom, not new detection. All three servers are prologue-EXEMPT, so
+# every one of them sources the helper ALONE: this row is why row 15 existed.
+declare -a _WS_FILES=(
+  "httpd-bin/global-stack-httpd-start.sh"
+  "httpd-bin/global-stack-httpd-iou-common.sh"
+  "nginx-bin/global-stack-nginx-start.sh"
+  "nginx-bin/global-stack-nginx-iou-common.sh"
+  "nginx-bin/global-stack-nginx-iou.sh"
+  "caddy-bin/global-stack-caddy-start.sh"
+)
+
+for _f in "${_WS_FILES[@]}"; do
+  assert_pass "30a: ${_f##*/} sources the gate helper ALONE" \
+    grep -q '^source global-stack-base-version-gate\.sh$' "${DIST_BIN}/${_f}"
+  assert_fail "30a: ${_f##*/} does NOT source the prologue (stays exempt)" \
+    grep -q 'global-stack-base-prologue\.sh' "${DIST_BIN}/${_f}"
+  assert_pass "30a: ${_f##*/} still passes bash -n" bash -n "${DIST_BIN}/${_f}"
+done
+
+# THE CONVERGENCE: not one hand-rolled marker compare may remain in any of the
+# three web-server trees. This is the assertion that makes "one idiom" checkable.
+_ws_handrolled=0
+while IFS= read -r -d '' _f; do
+  _n="$(grep -c 'cat "\${[A-Z_]*VERSION\(S\)\?_PATH}")" !=' "${_f}" || true)"
+  _ws_handrolled=$((_ws_handrolled + _n))
+done < <(find "${DIST_BIN}/nginx-bin" "${DIST_BIN}/httpd-bin" "${DIST_BIN}/caddy-bin" -name '*.sh' -print0)
+assert_pass "30b: zero hand-rolled marker compares remain in the web-server trees" \
+  test "${_ws_handrolled}" = "0"
+
+# Each server's own version is gated (these three were missed by an earlier count
+# that only matched the singular *_VERSION_PATH spelling).
+assert_pass "30c: nginx gates its own version" \
+  grep -q 'gs_version_gate "\${NGINX_VERSIONS_PATH}"' "${DIST_BIN}/nginx-bin/global-stack-nginx-start.sh"
+assert_pass "30c: httpd gates its own version" \
+  grep -q 'gs_version_gate "\${HTTPD_VERSIONS_PATH}"' "${DIST_BIN}/httpd-bin/global-stack-httpd-start.sh"
+assert_pass "30c: caddy gates its own version" \
+  grep -q 'gs_version_gate "\${CADDY_VERSIONS_PATH}"' "${DIST_BIN}/caddy-bin/global-stack-caddy-start.sh"
+
+# The shared-marker invariant must survive: all three still write ONE
+# successes/web-server, and each keeps its own distinct error token (F4).
+for _s in caddy nginx httpd; do
+  assert_pass "30d: ${_s} still writes the shared successes/web-server marker" \
+    grep -q 'SUCCESSES}/web-server' "${DIST_BIN}/${_s}-bin/global-stack-${_s}-start.sh"
+done
+
+# ── behavioural: one gate per server, driven from a fixture tree ──
+_ws_decision() {
+  local anchor="$1" marker="$2" body="$3" pin="$4" var="$5" pathvar="$6" file="$7"
+  local root="${TMP_DIR}/ws"
+  rm -rf "${root}"; mkdir -p "${root}/vers"
+  { printf '#!/bin/bash\nset -e\n'
+    printf 'source global-stack-base-version-gate.sh\n'
+    printf '%s="%s/vers/%s"\n' "${pathvar}" "${root}" "${marker}"
+    grep -m1 "^${anchor}" "${file}" || true
+    printf 'printf "DECISION=%%s\\n" "${%s:-<no-gate>}"\n' "${anchor%%=*}"
+  } >"${root}/block.sh"
+  [[ -n "${body}" ]] && printf '%s\n' "${body}" >"${root}/vers/${marker}"
+  env PATH="${DIST_BIN}/base-bin:${PATH}" "${var}=${pin}" \
+    bash "${root}/block.sh" 2>/dev/null | sed -n 's/^DECISION=//p' || true
+}
+
+assert_pass "30e: nginx unchanged pin → skip" \
+  test "$(_ws_decision _ngx_gate nginx 1.0 1.0 GLOBAL_STACK_NGINX_VERSION NGINX_VERSIONS_PATH "${DIST_BIN}/nginx-bin/global-stack-nginx-start.sh")" = "skip"
+assert_pass "30e: nginx bumped pin → reinstall" \
+  test "$(_ws_decision _ngx_gate nginx 1.0 1.1 GLOBAL_STACK_NGINX_VERSION NGINX_VERSIONS_PATH "${DIST_BIN}/nginx-bin/global-stack-nginx-start.sh")" = "reinstall"
+assert_pass "30f: httpd bumped pin → reinstall" \
+  test "$(_ws_decision _httpd_gate httpd 2.4.1 2.4.2 GLOBAL_STACK_HTTPD_VERSION HTTPD_VERSIONS_PATH "${DIST_BIN}/httpd-bin/global-stack-httpd-start.sh")" = "reinstall"
+assert_pass "30f: caddy no marker → install" \
+  test "$(_ws_decision _caddy_gate caddy "" 2.8 GLOBAL_STACK_CADDY_VERSION CADDY_VERSIONS_PATH "${DIST_BIN}/caddy-bin/global-stack-caddy-start.sh")" = "install"
+
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
 if [[ "${FAIL}" -eq 0 ]]; then

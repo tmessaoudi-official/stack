@@ -69,10 +69,15 @@ sudo rm -rf \
 global-stack-base-wait-for.sh \
   "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/base"
 
+# Row 20. Prologue-EXEMPT script, so the version gate is sourced ALONE — that is
+# what row 15's extraction exists for. Sourced here, above the first use.
+source global-stack-base-version-gate.sh
+
+_httpd_gate="$(gs_version_gate "${HTTPD_VERSIONS_PATH}" "${GLOBAL_STACK_HTTPD_VERSION}" "httpd")"
+
 # Clean up old installations if needed
 if [[ "${GLOBAL_STACK_RELOAD_HTTPD}" == "true" ]] || \
-   [[ ! -e "${HTTPD_VERSIONS_PATH}" ]] || \
-   [[ "$(cat "${HTTPD_VERSIONS_PATH}")" != "${GLOBAL_STACK_HTTPD_VERSION}" ]]; then
+   [ "${_httpd_gate}" != "skip" ]; then
   rm -rf \
     "${HTTPD_PATH}" \
     "${HTTPD_VERSIONS_PATH}" \
@@ -87,10 +92,22 @@ if [[ "${GLOBAL_STACK_RELOAD_HTTP_COMMON}" == "true" ]]; then
     "${HTTP_COMMON_CORERULESET_VERSION_PATH}"
 fi
 
+# The compares below were already correct: { ! -e P || $(cat P) != $V } is exactly
+# `gate != skip`. What they lacked was the WARN, and there were four copies of the
+# same expression. Each gate is computed ONCE here, AFTER the RELOAD cleanup above
+# (which may delete the marker), and referenced by both the cleanup and the IOU
+# decision below, so a version change is announced once rather than per test site.
+_httpd_modsec_gate=skip
+if [[ -n "${GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION}" ]]; then
+  _httpd_modsec_gate="$(gs_version_gate "${HTTP_COMMON_MOD_SECURITY_VERSION_PATH}" "${GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION}" "http.mod_security")"
+fi
+_httpd_crs_gate=skip
+if [[ -n "${GLOBAL_STACK_HTTP_CORERULESET_VERSION}" ]]; then
+  _httpd_crs_gate="$(gs_version_gate "${HTTP_COMMON_CORERULESET_VERSION_PATH}" "${GLOBAL_STACK_HTTP_CORERULESET_VERSION}" "http.coreruleset")"
+fi
+
 # Clean mod_security if version mismatch
-if [[ -n "${GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION}" ]] && \
-   { [[ ! -e "${HTTP_COMMON_MOD_SECURITY_VERSION_PATH}" ]] || \
-     [[ "$(cat "${HTTP_COMMON_MOD_SECURITY_VERSION_PATH}")" != "${GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION}" ]]; }; then
+if [ "${_httpd_modsec_gate}" != "skip" ]; then
   rm -rf \
     "${MODSECURITY_SOURCE_LIB_PATH}" \
     "${MODSECURITY_LIB_PATH}" \
@@ -101,9 +118,7 @@ if [[ -n "${GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION}" ]] && \
 fi
 
 # Clean CoreRuleSet if version mismatch
-if [[ -n "${GLOBAL_STACK_HTTP_CORERULESET_VERSION}" ]] && \
-   { [[ ! -e "${HTTP_COMMON_CORERULESET_VERSION_PATH}" ]] || \
-     [[ "$(cat "${HTTP_COMMON_CORERULESET_VERSION_PATH}")" != "${GLOBAL_STACK_HTTP_CORERULESET_VERSION}" ]]; }; then
+if [ "${_httpd_crs_gate}" != "skip" ]; then
   rm -rf \
     "${CORERULESET_PATH}" \
     "${HTTP_COMMON_CORERULESET_VERSION_PATH}"
@@ -115,12 +130,8 @@ mkdir -p \
 
 # Run IOU setup for common HTTPd components if required
 if [[ "${GLOBAL_STACK_RELOAD_HTTP_COMMON}" == "true" ]] || \
-   { [[ -n "${GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION}" ]] && \
-     { [[ ! -e "${HTTP_COMMON_MOD_SECURITY_VERSION_PATH}" ]] || \
-       [[ "$(cat "${HTTP_COMMON_MOD_SECURITY_VERSION_PATH}")" != "${GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION}" ]]; }; } || \
-   { [[ -n "${GLOBAL_STACK_HTTP_CORERULESET_VERSION}" ]] && \
-     { [[ ! -e "${HTTP_COMMON_CORERULESET_VERSION_PATH}" ]] || \
-       [[ "$(cat "${HTTP_COMMON_CORERULESET_VERSION_PATH}")" != "${GLOBAL_STACK_HTTP_CORERULESET_VERSION}" ]]; }; }; then
+   [ "${_httpd_modsec_gate}" != "skip" ] || \
+   [ "${_httpd_crs_gate}" != "skip" ]; then
   global-stack-httpd-iou-common.sh \
     "${HTTP_COMMONS_PATH}" \
     "${HTTP_COMMON_MOD_SECURITY_VERSION_PATH}" \

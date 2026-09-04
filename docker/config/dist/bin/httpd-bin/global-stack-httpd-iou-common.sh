@@ -37,10 +37,15 @@ stackCatch() {
 # Trap errors for cleanup or error reporting
 trap 'stackCatch $? ${LINENO} "${BASH_COMMAND}"' ERR EXIT
 
+# Row 20: converged on gs_version_gate. Prologue-exempt script, so the helper is
+# sourced alone. No duplicate WARN results from the caller also gating: the caller's
+# cleanup block deletes the marker on a mismatch, so by the time this runs the gate
+# returns `install` (silent) rather than `reinstall`.
+source global-stack-base-version-gate.sh
+
 # Install ModSecurity if needed
 if [[ -n "${GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION}" ]] && \
-   { [[ ! -e "${HTTP_COMMON_MOD_SECURITY_VERSION_PATH}" ]] || \
-     [[ "$(cat "${HTTP_COMMON_MOD_SECURITY_VERSION_PATH}")" != "${GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION}" ]]; }; then
+   [ "$(gs_version_gate "${HTTP_COMMON_MOD_SECURITY_VERSION_PATH}" "${GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION}" "http.mod_security")" != "skip" ]; then
   
   # Create directory for the ModSecurity source & lib
   mkdir -p \
@@ -81,8 +86,7 @@ fi
 
 # Install Core Rule Set if needed
 if [[ -n "${GLOBAL_STACK_HTTP_CORERULESET_VERSION}" ]] && \
-   { [[ ! -e "${HTTP_COMMON_CORERULESET_VERSION_PATH}" ]] || \
-     [[ "$(cat "${HTTP_COMMON_CORERULESET_VERSION_PATH}")" != "${GLOBAL_STACK_HTTP_CORERULESET_VERSION}" ]]; }; then
+   [ "$(gs_version_gate "${HTTP_COMMON_CORERULESET_VERSION_PATH}" "${GLOBAL_STACK_HTTP_CORERULESET_VERSION}" "http.coreruleset")" != "skip" ]; then
   
   # Create directory for Core Rule Set
   mkdir -p \

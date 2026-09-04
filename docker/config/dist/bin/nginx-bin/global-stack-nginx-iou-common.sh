@@ -5,6 +5,9 @@ set -xeEuo pipefail
 shopt -s extdebug
 IFS=$'\n\t'
 
+# Row 20: prologue-exempt, so the version gate is sourced alone.
+source global-stack-base-version-gate.sh
+
 # Define reusable paths passed as arguments
 HTTP_COMMONS_PATH="${1}"
 HTTP_COMMON_MOD_SECURITY_VERSION_PATH="${2}"
@@ -39,8 +42,7 @@ trap 'stackCatch $? ${LINENO} "${BASH_COMMAND}"' ERR EXIT
 
 # Install ModSecurity if needed
 if [[ -n "${GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION}" ]] && \
-   { [[ ! -e "${HTTP_COMMON_MOD_SECURITY_VERSION_PATH}" ]] || \
-     [[ "$(cat "${HTTP_COMMON_MOD_SECURITY_VERSION_PATH}")" != "${GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION}" ]]; }; then
+   [ "$(gs_version_gate "${HTTP_COMMON_MOD_SECURITY_VERSION_PATH}" "${GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION}" "http.mod_security")" != "skip" ]; then
   
   # Create directory for the ModSecurity source & lib
   mkdir -p \
@@ -81,8 +83,7 @@ fi
 
 # Install Core Rule Set if needed
 if [[ -n "${GLOBAL_STACK_HTTP_CORERULESET_VERSION}" ]] && \
-   { [[ ! -e "${HTTP_COMMON_CORERULESET_VERSION_PATH}" ]] || \
-     [[ "$(cat "${HTTP_COMMON_CORERULESET_VERSION_PATH}")" != "${GLOBAL_STACK_HTTP_CORERULESET_VERSION}" ]]; }; then
+   [ "$(gs_version_gate "${HTTP_COMMON_CORERULESET_VERSION_PATH}" "${GLOBAL_STACK_HTTP_CORERULESET_VERSION}" "http.coreruleset")" != "skip" ]; then
   
   # Create directory for Core Rule Set
   mkdir -p \

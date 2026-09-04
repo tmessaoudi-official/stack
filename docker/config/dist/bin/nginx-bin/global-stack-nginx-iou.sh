@@ -6,6 +6,9 @@ set -xeEuo pipefail
 shopt -s extdebug
 IFS=$'\n\t'
 
+# Row 20: prologue-exempt, so the version gate is sourced alone.
+source global-stack-base-version-gate.sh
+
 # Define reusable paths
 NGINX_PATH="${1}"
 HTTP_COMMONS_PATH="${2}"
@@ -121,7 +124,7 @@ fi
 # Install cJOSE if needed
 if [[ -n "${GLOBAL_STACK_NGINX_CJOSE_VERSION}" ]] && \
    { [[ ! -e "${NGINX_CJOSE_VERSION_PATH}" ]] || \
-     [[ "$(cat "${NGINX_CJOSE_VERSION_PATH}")" != "${GLOBAL_STACK_NGINX_CJOSE_VERSION}" ]]; }; then
+     [[ "$(gs_version_gate "${NGINX_CJOSE_VERSION_PATH}" "${GLOBAL_STACK_NGINX_CJOSE_VERSION}" "nginx.cjose")" != "skip" ]]; }; then
   
   # Create directory for cJOSE source & lib
   mkdir -p \

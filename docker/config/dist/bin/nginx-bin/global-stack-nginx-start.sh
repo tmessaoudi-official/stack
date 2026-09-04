@@ -75,10 +75,15 @@ sudo rm -rf \
 global-stack-base-wait-for.sh \
   "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/base"
 
+# Row 20. Prologue-EXEMPT script, so the version gate is sourced ALONE — that is
+# what row 15's extraction exists for. Sourced here, above the first use.
+source global-stack-base-version-gate.sh
+
+_ngx_gate="$(gs_version_gate "${NGINX_VERSIONS_PATH}" "${GLOBAL_STACK_NGINX_VERSION}" "nginx")"
+
 # Clean up old installations if needed
 if [[ "${GLOBAL_STACK_RELOAD_NGINX}" == "true" ]] || \
-   [[ ! -e "${NGINX_VERSIONS_PATH}" ]] || \
-   [[ "$(cat "${NGINX_VERSIONS_PATH}")" != "${GLOBAL_STACK_NGINX_VERSION}" ]]; then
+   [ "${_ngx_gate}" != "skip" ]; then
   rm -rf \
     "${NGINX_PATH}" \
     "${NGINX_VERSIONS_PATH}" \
@@ -95,10 +100,29 @@ if [[ "${GLOBAL_STACK_RELOAD_HTTP_COMMON}" == "true" ]]; then
     "${HTTP_COMMON_CORERULESET_VERSION_PATH}"
 fi
 
+# The four compares below were already correct — { ! -e P || $(cat P) != $V } is
+# exactly `gate != skip` — but silent and repeated. Each gate is computed ONCE,
+# AFTER the RELOAD cleanup above (which may delete a marker), and reused by both
+# the cleanup blocks and the IOU decision, so a change is announced once per boot.
+_ngx_modsec_gate=skip
+if [[ -n "${GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION}" ]]; then
+  _ngx_modsec_gate="$(gs_version_gate "${HTTP_COMMON_MOD_SECURITY_VERSION_PATH}" "${GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION}" "http.mod_security")"
+fi
+_ngx_cjose_gate=skip
+if [[ -n "${GLOBAL_STACK_NGINX_CJOSE_VERSION}" ]]; then
+  _ngx_cjose_gate="$(gs_version_gate "${NGINX_CJOSE_VERSION_PATH}" "${GLOBAL_STACK_NGINX_CJOSE_VERSION}" "nginx.cjose")"
+fi
+_ngx_liboauth2_gate=skip
+if [[ -n "${GLOBAL_STACK_NGINX_LIBOAUTH2_VERSION}" ]]; then
+  _ngx_liboauth2_gate="$(gs_version_gate "${NGINX_LIBOAUTH2_VERSION_PATH}" "${GLOBAL_STACK_NGINX_LIBOAUTH2_VERSION}" "nginx.liboauth2")"
+fi
+_ngx_crs_gate=skip
+if [[ -n "${GLOBAL_STACK_HTTP_CORERULESET_VERSION}" ]]; then
+  _ngx_crs_gate="$(gs_version_gate "${HTTP_COMMON_CORERULESET_VERSION_PATH}" "${GLOBAL_STACK_HTTP_CORERULESET_VERSION}" "http.coreruleset")"
+fi
+
 # Clean mod_security if version mismatch
-if [[ -n "${GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION}" ]] && \
-   { [[ ! -e "${HTTP_COMMON_MOD_SECURITY_VERSION_PATH}" ]] || \
-     [[ "$(cat "${HTTP_COMMON_MOD_SECURITY_VERSION_PATH}")" != "${GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION}" ]]; }; then
+if [ "${_ngx_modsec_gate}" != "skip" ]; then
   rm -rf \
     "${MODSECURITY_SOURCE_LIB_PATH}" \
     "${MODSECURITY_LIB_PATH}" \
@@ -109,9 +133,7 @@ if [[ -n "${GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION}" ]] && \
 fi
 
 # Clean mod_auth_openidc if version mismatch
-if [[ -n "${GLOBAL_STACK_NGINX_CJOSE_VERSION}" ]] && \
-   { [[ ! -e "${NGINX_CJOSE_VERSION_PATH}" ]] || \
-     [[ "$(cat "${NGINX_CJOSE_VERSION_PATH}")" != "${GLOBAL_STACK_NGINX_CJOSE_VERSION}" ]]; }; then
+if [ "${_ngx_cjose_gate}" != "skip" ]; then
   rm -rf \
     "${CJOSE_SOURCE_PATH}" \
     "${CJOSE_PATH}" \
@@ -119,9 +141,7 @@ if [[ -n "${GLOBAL_STACK_NGINX_CJOSE_VERSION}" ]] && \
 fi
 
 # Clean mod_auth_openidc if version mismatch
-if [[ -n "${GLOBAL_STACK_NGINX_LIBOAUTH2_VERSION}" ]] && \
-   { [[ ! -e "${NGINX_LIBOAUTH2_VERSION_PATH}" ]] || \
-     [[ "$(cat "${NGINX_LIBOAUTH2_VERSION_PATH}")" != "${GLOBAL_STACK_NGINX_LIBOAUTH2_VERSION}" ]]; }; then
+if [ "${_ngx_liboauth2_gate}" != "skip" ]; then
   rm -rf \
     "${LIBOAUTH2_SOURCE_PATH}" \
     "${LIBOAUTH2_PATH}" \
@@ -129,9 +149,7 @@ if [[ -n "${GLOBAL_STACK_NGINX_LIBOAUTH2_VERSION}" ]] && \
 fi
 
 # Clean CoreRuleSet if version mismatch
-if [[ -n "${GLOBAL_STACK_HTTP_CORERULESET_VERSION}" ]] && \
-   { [[ ! -e "${HTTP_COMMON_CORERULESET_VERSION_PATH}" ]] || \
-     [[ "$(cat "${HTTP_COMMON_CORERULESET_VERSION_PATH}")" != "${GLOBAL_STACK_HTTP_CORERULESET_VERSION}" ]]; }; then
+if [ "${_ngx_crs_gate}" != "skip" ]; then
   rm -rf \
     "${CORERULESET_PATH}" \
     "${HTTP_COMMON_CORERULESET_VERSION_PATH}"
@@ -143,12 +161,8 @@ mkdir -p \
 
 # Run IOU setup for common HTTPd components if required
 if [[ "${GLOBAL_STACK_RELOAD_HTTP_COMMON}" == "true" ]] || \
-   { [[ -n "${GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION}" ]] && \
-     { [[ ! -e "${HTTP_COMMON_MOD_SECURITY_VERSION_PATH}" ]] || \
-       [[ "$(cat "${HTTP_COMMON_MOD_SECURITY_VERSION_PATH}")" != "${GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION}" ]]; }; } || \
-   { [[ -n "${GLOBAL_STACK_HTTP_CORERULESET_VERSION}" ]] && \
-     { [[ ! -e "${HTTP_COMMON_CORERULESET_VERSION_PATH}" ]] || \
-       [[ "$(cat "${HTTP_COMMON_CORERULESET_VERSION_PATH}")" != "${GLOBAL_STACK_HTTP_CORERULESET_VERSION}" ]]; }; }; then
+   [ "${_ngx_modsec_gate}" != "skip" ] || \
+   [ "${_ngx_crs_gate}" != "skip" ]; then
   global-stack-nginx-iou-common.sh \
     "${HTTP_COMMONS_PATH}" \
     "${HTTP_COMMON_MOD_SECURITY_VERSION_PATH}" \

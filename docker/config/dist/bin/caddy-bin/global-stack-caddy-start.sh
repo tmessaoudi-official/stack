@@ -60,10 +60,15 @@ sudo rm -rf \
 global-stack-base-wait-for.sh \
   "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/base"
 
+# Row 20. Prologue-EXEMPT script, so the version gate is sourced ALONE — that is
+# what row 15's extraction exists for.
+source global-stack-base-version-gate.sh
+
+_caddy_gate="$(gs_version_gate "${CADDY_VERSIONS_PATH}" "${GLOBAL_STACK_CADDY_VERSION}" "caddy")"
+
 # Clean up old installations if needed
 if [[ "${GLOBAL_STACK_RELOAD_CADDY}" = "true" ]] || \
-   [[ ! -f "${CADDY_VERSIONS_PATH}" ]] || \
-   [[ "$(cat "${CADDY_VERSIONS_PATH}")" != "${GLOBAL_STACK_CADDY_VERSION}" ]]; then
+   [ "${_caddy_gate}" != "skip" ]; then
   rm -rf \
     "${CADDY_PATH}" \
     "${CADDY_VERSIONS_PATH}" \
