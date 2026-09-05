@@ -598,7 +598,11 @@ labels) and post-push commit signing.
   (21 mount it directly, the rest extend/anchor 00base), and the only Dockerfile delta since
   the last bring-up (`fc10204`) is comment-only — so `make up` + `make wait-healthy` certifies
   the eight dimensions WITHOUT a rebuild, which this box's heavy-build SIGKILL history argues
-  against. `config -q` and `check-image-versions` both pass at `b3c5995`.
+  against. `config -q` and `check-image-versions` both pass at `b3c5995`. Image age checked
+  too: the 40 stack images date from 2026-08-25, and since then ZERO non-comment Dockerfile
+  or `conf/` lines changed (baseline `c9b4576`); the six `.env` pin bumps in that window
+  (mailpit image, mise, claude-code, mcp-gitlab, biome, pnpm) are compose `image:` pulls or
+  runtime installs the gate handles — none is a Dockerfile `ARG`.
 
 The executor APPENDS its own dated `AGREED:` entries here (e.g. the F3 classification
 outcome, Track 5 audit rulings) as it goes — this file is where rulings land. Never backdate;
