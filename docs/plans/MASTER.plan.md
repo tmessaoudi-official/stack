@@ -1399,8 +1399,9 @@ class-3 var is absent from this accounting, and no gate site in B lacks a class-
   line, so there is no MEASURED number to write — and writing an unmeasured one
   is precisely how the four stale counts above came to exist. The line already
   instructs the reader to re-run rather than trust it. Correct it only from a
-  tally line produced by a completed run. (CLOSED 2026-09-05: measured — 844 tests, 118
-  sections; the `CLAUDE.md:321` correction is a one-line `sed` handed to the developer.)
+  tally line produced by a completed run. (CLOSED 2026-09-05: measured — 844 tests from the
+  suite's own `ALL PASSED` line, 118 distinct section numbers counted in its output; landed
+  at `CLAUDE.md:321` in `bc892ac` via a one-line `sed` run by the developer.)
 - (CLOSED 2026-09-04, `fc10204`.) `# @todo fix pin versions` across 14
   Dockerfiles became row 26, and the ruling INVERTED the finding: `.hadolint.yaml`
   already ignores DL3008 for this repo, so the TODOs contradicted a standing
