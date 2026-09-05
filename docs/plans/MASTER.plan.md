@@ -591,6 +591,14 @@ labels) and post-push commit signing.
   `CLAUDE.md` (:26/:45/:49/:143/:369), both reviewer agent defs and `docs/BLAST-RADIUS.md:10`
   ship in ONE handover script, `var/claude/fix-ask-tier-docs-20260904.sh`, because none of the
   three files is Claude-writable without either the classifier or Rule 5 in the way.
+- [2026-09-05 06:25] AGREED: row 24 (the certifying bring-up) is POSTPONED — developer's
+  choice from *make up + wait-healthy* / *down-n-rebuild-force-recreate* / *postpone*. Finding
+  recorded for whenever it runs: the stack is DOWN (0 stack containers, 338 `tools/versions`
+  markers persisting), every compose file reaches the bind-mounted `docker/config/dist/bin`
+  (21 mount it directly, the rest extend/anchor 00base), and the only Dockerfile delta since
+  the last bring-up (`fc10204`) is comment-only — so `make up` + `make wait-healthy` certifies
+  the eight dimensions WITHOUT a rebuild, which this box's heavy-build SIGKILL history argues
+  against. `config -q` and `check-image-versions` both pass at `b3c5995`.
 
 The executor APPENDS its own dated `AGREED:` entries here (e.g. the F3 classification
 outcome, Track 5 audit rulings) as it goes — this file is where rulings land. Never backdate;
@@ -1293,7 +1301,8 @@ class-3 var is absent from this accounting, and no gate site in B lacks a class-
 | 29 | Sweep — prune TODO.md (item 189 + zig drift done; consolidate its 5 container-test items with row 24) | S | done | cec239d | TODO.md |
 <!-- /progress-block -->
 ### Blocked
-- Row 24 — the supervised rebuild/bring-up. Also the SAME blocker as TODO.md's
+- Row 24 — the supervised bring-up (POSTPONED by the developer 2026-09-05; see the
+  06:25 ruling: it is a `make up` from cold, no rebuild needed). Also the SAME blocker as TODO.md's
   entire "Requires container testing" section (TODO.md:11,25,31,38,48): one
   blocker recorded in two files.
 
