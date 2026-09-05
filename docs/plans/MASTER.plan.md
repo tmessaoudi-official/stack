@@ -637,7 +637,7 @@ Certify current HEAD by executing the full battery. The suite's own final
 per-section `└─` lines, never assert an expected count from this file:
 
 ```bash
-bash bin/tests/env-update.test.sh          # large; last observed 836/836 — re-read, don't trust this hint
+bash bin/tests/env-update.test.sh          # large; last observed 844/844 on 2026-09-05 (426 s) — re-read, don't trust this hint
 bash bin/tests/env-scan.test.sh
 bash bin/tests/startup-prologue.test.sh    # 182 at planning time
 bash bin/tests/makefile-posix.test.sh
@@ -1353,7 +1353,10 @@ class-3 var is absent from this accounting, and no gate site in B lacks a class-
   Always `md5sum -c` the restore.
 
 ### Known issues
-- **`bin/tests/env-update.test.sh` is UNCERTIFIED for this milestone (2026-09-04).** Two
+- (CLOSED 2026-09-05.) `bin/tests/env-update.test.sh` ran to completion on an idle box:
+  `ALL PASSED ✓ 844 / 844`, exit 0, 426 s, 118 distinct sections (highest number 121). The
+  ninth UNCERTIFIED-BY-EXECUTION dimension is closed; row 24's bring-up covers the other
+  eight. History of the 2026-09-04 entry, kept for the lesson: two
   background runs were SIGKILLed by the box, not failed: the first reached section 121 of ~125
   with 0 failures, the second died at section 18. Neither produced the authoritative
   `ALL PASSED` tally line, so neither counts as green. This matches CLAUDE.md's "heavy parallel
@@ -1383,7 +1386,8 @@ class-3 var is absent from this accounting, and no gate site in B lacks a class-
   line, so there is no MEASURED number to write — and writing an unmeasured one
   is precisely how the four stale counts above came to exist. The line already
   instructs the reader to re-run rather than trust it. Correct it only from a
-  tally line produced by a completed run.
+  tally line produced by a completed run. (CLOSED 2026-09-05: measured — 844 tests, 118
+  sections; the `CLAUDE.md:321` correction is a one-line `sed` handed to the developer.)
 - (CLOSED 2026-09-04, `fc10204`.) `# @todo fix pin versions` across 14
   Dockerfiles became row 26, and the ruling INVERTED the finding: `.hadolint.yaml`
   already ignores DL3008 for this repo, so the TODOs contradicted a standing
