@@ -25,8 +25,9 @@ are specific to this project's shape and that nothing else will catch:
    `var/`, `.env.local`, `docker-compose*.local.yaml`, `local.*` image dirs and named Docker volumes are
    all absent from a fresh clone. A change that silently depends on any of them works for the author
    and fails for a clean checkout — and the failure surfaces 10+ minutes into a rebuild, not at review.
-2. **This repo has no `deny` list and no `ask` tier** (`defaultMode: auto`, allow-list only — a
-   developer ruling, because a cloud session has no terminal in which to approve an `ask`). Nothing
+2. **This repo has no `deny` list** (`defaultMode: auto`, an allow-list plus three `ask` entries
+   that gate only `bin/env-update.sh --apply*` — a developer ruling, because a denied command has
+   no terminal to fall back to; the `ask` trio was kept 2026-09-04 since an `ask` prompts instead). Nothing
    mechanically stops a destructive command. The discipline **is** the control, so a change that makes a
    destructive path easier to trigger accidentally has no safety net behind it.
 

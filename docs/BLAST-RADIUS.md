@@ -7,8 +7,8 @@
 
 > **/stack container note (2026-08-05):** none of the *machinery* named in this file exists here —
 > no `~/.claude/state/`, no `~/.claude/hooks/`, no bash firewall, no bypass sentinels, and no
-> `ask`/`deny` permission tier (the settings are **allow-list only** by developer ruling, because he
-> drives this container from the web app with no terminal to approve an `ask` from). Read the rest of
+> `deny` permission tier (the settings are an **allow-list** by developer ruling, plus — since
+> `95ccbb7` — three `ask` entries gating only `bin/env-update.sh --apply*`). Read the rest of
 > this file for its **reasoning** — the pre-flight checks, the backup-and-rollback discipline, and the
 > state-dependence insight all still apply, and apply *harder* precisely because nothing here will
 > stop you. The real protections in this project are: everything lives in git on `master`,

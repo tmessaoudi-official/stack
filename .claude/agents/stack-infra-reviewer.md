@@ -119,8 +119,8 @@ skim past your real findings:
 - `password = username` for local service credentials (all default to `developer`)
 - `core.fileMode=false`, so a `chmod` never appears in `git diff` — note it in the commit message instead
 - `set -xeE -o pipefail` without `-u` in container startup scripts
-- The allow-list-only `.claude/settings.json` with no `deny`/`ask` tier — a developer ruling, made
-  because an `ask` blocks him with no terminal to approve from
+- The `.claude/settings.json` with no `deny` tier and an `ask` tier limited to
+  `bin/env-update.sh --apply*` — a developer ruling (no denies 2026-08-06; the `ask` trio kept 2026-09-04)
 
 ## Output format
 
