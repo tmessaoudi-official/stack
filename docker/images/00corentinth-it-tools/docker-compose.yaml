@@ -14,6 +14,10 @@ services:
       stack.tier: "tools"
       stack.version: "${GLOBAL_STACK_VERSION}"
     environment:
+      # Unset TZ => UTC, so this container's tools/elapsed
+      # timestamps disagreed with every other service by 2h.
+      # tzdata is already in this image, so TZ alone suffices.
+      - TZ=${GLOBAL_STACK_TIMEZONE}
       - NGINX_VERSION=${GLOBAL_STACK_NGINX_VERSION}
       - NJS_VERSION=${GLOBAL_STACK_CORENTINTH_IT_TOOLS_NJS_VERSION}
       - GLOBAL_STACK_DOCKER_TOOLS_PATH=${GLOBAL_STACK_DOCKER_TOOLS_PATH}
