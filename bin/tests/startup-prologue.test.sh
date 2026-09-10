@@ -2425,6 +2425,54 @@ assert_pass "38c: the excludes match GLOBAL_STACK_SHELL_HISTORY_TARGET" \
 assert_pass "38c: the excludes match GLOBAL_STACK_SHELL_ZSH_HISTORY_TARGET" \
   grep -qF -- "--exclude=${_zh}" "${_CH}"
 
+# ─── §39: caddy plugins are pinned like the core (2026-09-10) ───────────────
+# The caddy CORE is pinned (`git clone --branch "${GLOBAL_STACK_CADDY_VERSION}"`) but its
+# four plugins were fetched by `caddy add-package <module>` with no version, so Go resolved
+# whatever was latest at build time and nothing recorded the result. Measured on the running
+# container: http.encoders.br v1.6.0, http.handlers.cache v0.16.0, security v1.1.64, and
+# caddy.logging.encoders.transform v0.0.0-20260423033309-ba4124974830 -- a Go PSEUDO-version,
+# i.e. that module has no tagged release at all and tracks a commit. Two builds from one
+# commit could differ. None of the four had an .env entry, so env-update could not see them.
+_CIOU="${DIST_BIN}/caddy-bin/global-stack-caddy-iou.sh"
+assert_fail "39a: no add-package call is left unpinned" \
+  bash -c 'grep -E "caddy add-package [^@]+$" "$1" | grep -qv "^[[:space:]]*#"' _ "${_CIOU}"
+for _p in TRANSFORM_ENCODER BROTLI SECURITY CACHE_HANDLER; do
+  assert_pass "39b: .env defines GLOBAL_STACK_CADDY_${_p}_VERSION" \
+    grep -Eq "^GLOBAL_STACK_CADDY_${_p}_VERSION=.+" "${REPO_ROOT}/.env"
+  assert_pass "39b: ...and it carries an @todo env-update annotation" \
+    bash -c 'grep -B1 "^GLOBAL_STACK_CADDY_${2}_VERSION=" "$1" | grep -q "@todo env-update"' \
+      _ "${REPO_ROOT}/.env" "${_p}"
+  assert_pass "39c: 01caddy plumbs GLOBAL_STACK_CADDY_${_p}_VERSION into the container" \
+    grep -q "GLOBAL_STACK_CADDY_${_p}_VERSION=\${GLOBAL_STACK_CADDY_${_p}_VERSION}" \
+      "${REPO_ROOT}/docker/images/01caddy/docker-compose.yaml"
+done
+assert_fail "39d: the caddy script no longer claims to be Httpd" \
+  grep -q 'Httpd is already the latest version' "${_CIOU}"
+
+# ─── §40: postgres initialises with a provider Alpine can honour (2026-09-10) ─
+# The image is postgres:18.x-ALPINE (musl). glibc locales do not exist there -- localedef is
+# absent and /usr/lib/locale is empty -- but the image sets LANG=en_US.utf8, so initdb
+# recorded datcollate=en_US.utf8 with the libc provider and then silently degraded to C.
+# Proven on the running cluster: ORDER BY returned 'Banana,Zebra,apple,cherry' (code-point
+# order), while pg_database claimed en_US.utf8. The metadata LIED.
+# Two consequences: sort order differs from any glibc production (a dev/prod divergence that
+# hides bugs), and if the effective collation ever changes -- a Debian-based image, locales
+# appearing in a rebuild -- every existing text index is silently wrong until REINDEX.
+# Fix applies to FRESHLY-INITIALISED clusters only: initdb runs solely on an empty data dir,
+# so existing volumes keep the old metadata until they are recreated. Verified in a throwaway
+# container: builtin+C.UTF-8 alone leaves datcollate=en_US.utf8 (it comes from LANG); adding
+# LANG=C.UTF-8 yields datcollate=C, provider=b, locale=C.UTF-8 with sort order UNCHANGED.
+# (--lc-collate=C alongside the builtin provider makes initdb fail outright -- do not add it.)
+_PGC="${REPO_ROOT}/docker/images/01postgres18/docker-compose.yaml"
+assert_pass "40a: postgres pins the builtin locale provider" \
+  grep -Eq 'POSTGRES_INITDB_ARGS=.*--locale-provider=builtin' "${_PGC}"
+assert_pass "40a: ...with the C.UTF-8 builtin locale" \
+  grep -Eq 'POSTGRES_INITDB_ARGS=.*--builtin-locale=C\.UTF-8' "${_PGC}"
+assert_pass "40b: LANG is overridden so datcollate/datctype are not en_US.utf8" \
+  grep -Eq '^\s*-\s*LANG=C\.UTF-8\s*$' "${_PGC}"
+assert_fail "40c: --lc-collate is NOT passed (initdb rejects it with builtin)" \
+  grep -Eq 'POSTGRES_INITDB_ARGS=.*--lc-collate' "${_PGC}"
+
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
 if [[ "${FAIL}" -eq 0 ]]; then
