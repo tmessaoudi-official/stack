@@ -2473,6 +2473,63 @@ assert_pass "40b: LANG is overridden so datcollate/datctype are not en_US.utf8" 
 assert_fail "40c: --lc-collate is NOT passed (initdb rejects it with builtin)" \
   grep -Eq 'POSTGRES_INITDB_ARGS=.*--lc-collate' "${_PGC}"
 
+# ─── Section 41: the phpbrew ini baseline must pick up NEW extensions ─────
+printf '\n%b── Section 41: phpbrew dist-db baseline vs newly added extensions%b\n' \
+  "${C_BOLD}" "${C_RESET}"
+
+# copy-dist-conf.sh RESETS var/db to the var/dist-db baseline on every start, and
+# the package loop that installs extensions runs BEFORE it (phpbrew-start.sh:148
+# sources setup-packages, :161 runs copy-dist-conf). The baseline used to be
+# captured once, on the first cold run, and frozen: an extension added to .env
+# afterwards was built, had its ini written and ENABLED by phpbrew, and then lost
+# it to the reset -- .so on disk, absent from `php -m`, no error token written, so
+# the container reported healthy. Silent, the same class as a token mismatch.
+# These cases run the SHIPPED script twice against a sandbox tree.
+_DDB="${TMP_DIR}/distdb"
+_DDB_PHP="${_DDB}/phpbrew/php/php-test"
+_DDB_DIST="${_DDB}/dist"
+_distdb_run() {
+  # `|| true`: this suite runs under `set -e`, so a sandbox that fails to set up
+  # must RED the cases below rather than kill the run before it prints a summary.
+  # Same guard, and the same reason, as §22's _gate_decision.
+  env -i PATH="${DIST_BIN}/base-bin:/usr/bin:/bin" HOME="${_DDB}" \
+    GLOBAL_STACK_DOCKER_TOOLS_PATH="${_DDB}" \
+    GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS="${_DDB}" \
+    PHPBREW_ROOT="${_DDB}/phpbrew" \
+    PHP_VERSION_NAME=php-test PHP_VERSION_AS=9-9 \
+    GLOBAL_STACK_DOCKER_ROOT_DIST_PATH="${_DDB_DIST}" \
+    bash "${DIST_BIN}/phpbrew-bin/global-stack-phpbrew-copy-dist-conf.sh" \
+    >/dev/null 2>&1 || true
+}
+rm -rf "${_DDB}"
+mkdir -p "${_DDB_PHP}/var/db" "${_DDB_PHP}/var/log" "${_DDB_PHP}/etc/fpm" \
+  "${_DDB_PHP}/etc/php-fpm.d" "${_DDB_DIST}/conf/phpbrew-conf.d" \
+  "${_DDB_DIST}/conf/php9-9-conf.d" "${_DDB_DIST}/conf/phpbrew-php-fpm.d" \
+  "${_DDB_DIST}/conf/php9-9-php-fpm.d"
+# stands in for the four opt-in inis the repo really ships commented out:
+# zephir_parser, phalcon, swoole, xdebug.
+printf ';extension=optin.so\n' >"${_DDB_DIST}/conf/phpbrew-conf.d/optin.ini"
+printf 'extension=redis.so\n' >"${_DDB_PHP}/var/db/redis.ini"
+_distdb_run                                                  # cold: baseline captured
+printf 'extension=foo.so\n' >"${_DDB_PHP}/var/db/foo.ini"    # a NEW extension installs
+printf 'extension=HAND.so\n' >"${_DDB_PHP}/var/db/redis.ini" # and an old one is hand-edited
+_distdb_run                                                  # the next restart
+
+# 41a keeps 41d honest: without it, a sandbox that never ran would leave
+# dist-db/optin.ini absent and 41d would pass having tested nothing.
+assert_pass "41a: sandbox precondition — the shipped script ran and built a baseline" \
+  test -s "${_DDB_PHP}/var/dist-db/redis.ini"
+assert_pass "41b: an extension added AFTER the cold run survives the var/db reset" \
+  grep -qx 'extension=foo.so' "${_DDB_PHP}/var/db/foo.ini"
+assert_pass "41c: a hand-edit to var/db does NOT poison the frozen baseline" \
+  grep -qx 'extension=redis.so' "${_DDB_PHP}/var/dist-db/redis.ini"
+assert_fail "41d: a repo-owned conf.d ini never enters the baseline" \
+  test -e "${_DDB_PHP}/var/dist-db/optin.ini"
+assert_pass "41e: an opt-in extension is still commented out after the reset" \
+  grep -qx ';extension=optin.so' "${_DDB_PHP}/var/db/optin.ini"
+assert_pass "41f: var/db is still reset to the baseline (the hand-edit is reverted)" \
+  grep -qx 'extension=redis.so' "${_DDB_PHP}/var/db/redis.ini"
+
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
 if [[ "${FAIL}" -eq 0 ]]; then
