@@ -2,7 +2,11 @@
 # hadolint global configuration
 # https://github.com/hadolint/hadolint
 
-ignore:
+# The key is `ignored:`, NOT `ignore:`. hadolint accepts an
+# unknown top-level key silently and discards it, so `ignore:`
+# left this whole list INERT and every Dockerfile was reported
+# despite the rulings below. Verified on hadolint 2.15.1.
+ignored:
   # DL3008: Pin versions in apt-get install — acceptable in development environments
   # where we intentionally track latest packages
   - DL3008

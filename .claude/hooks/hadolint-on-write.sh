@@ -29,7 +29,19 @@ fi
 
 LINT_OUTPUT=$(hadolint "$FILE_PATH" 2>&1) || true
 
-if [[ -n "$LINT_OUTPUT" ]]; then
+# A PARSE FAILURE is not a lint finding — it means hadolint checked NOTHING in this file.
+# Reported as "N issue(s)" it reads like a minor nit, and a zero-findings file reads as
+# clean, so the gap is invisible. hadolint 2.15.1 cannot parse
+# `FROM ${ALIAS}:${PORT}/img:${VER}`, which 33 of this repo's 43 Dockerfiles use (Docker
+# builds them fine — it is an upstream parser limit, not a defect here). Say so plainly.
+if echo "$LINT_OUTPUT" | grep -qE '^[^:]+:[0-9]+:[0-9]+ (unexpected|expecting)'; then
+  log_obs WARN hadolint-on-write "-stack | $FILE_PATH: NOT LINTED (hadolint parse failure)" || true
+  jq -n --arg msg "hadolint could NOT PARSE $FILE_PATH — the file was NOT LINTED (zero findings here means unchecked, not clean):
+$LINT_OUTPUT
+
+Known cause: hadolint cannot parse 'FROM \${ALIAS}:\${PORT}/image:\${TAG}'. Docker builds it fine." \
+    '{ "systemMessage": $msg }'
+elif [[ -n "$LINT_OUTPUT" ]]; then
   ISSUE_COUNT=$(echo "$LINT_OUTPUT" | wc -l)
   log_obs WARN hadolint-on-write "-stack | $FILE_PATH: $ISSUE_COUNT issue(s)" || true
   jq -n --arg msg "hadolint found $ISSUE_COUNT issue(s) in $FILE_PATH:
