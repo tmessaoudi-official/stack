@@ -85,19 +85,31 @@ echo "sdkman_healthcheck_enable=false" > "${HOME}/.sdkman/etc/config"
 
 source "${HOME}/.sdkman/etc/config"
 
-set +e
+# `set +E`, NOT `set +e`. sdkman's `sdk use` returns 0 on success; the non-zero that
+# reaches us comes from `__sdkman_path_contains` (src/sdkman-path-helpers.sh:23), which
+# greps $PATH as a boolean two levels deep inside $(...). Errexit is auto-unset in a
+# command substitution, so it is the inherited ERR trap -- not errexit -- that fires there.
+# `set +e` leaves the trap armed and so never suppressed it: that is what killed this
+# service. `set +E` disables trap INHERITANCE into the nested substitution while leaving
+# the trap armed at THIS level, so a genuine `sdk use` failure (__sdk_use returns 1 on
+# "Candidate version is not installed") is still reported. Do not "fix" this into an
+# `if`/`||` condition context: that suppresses errexit too and swallows the real failures.
+set +E
 sdk use java "${JAVA_VERSION}"
-set -e
+set -E
 echo "sdk use java '${JAVA_VERSION}'" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 
 source /usr/local/bin/global-stack-base-setup-packages.sh
-set +e
+# Same mechanism as the `sdk use java` above -- see that comment. `set +E` keeps errexit
+# armed, so a genuinely failed slot command still aborts the loop loudly, before the
+# marker write.
+set +E
 global_stack_base_setup_packages \
   --prefix='SDKMAN' \
   --command='echo -e "**** Using ${PACKAGE_NAME} ${PACKAGE_VERSION}"' \
   --command='sdk use ${PACKAGE_NAME} "${PACKAGE_VERSION}"' \
   --command='echo "sdk use ${PACKAGE_NAME} \"${PACKAGE_VERSION}\"" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"'
-set -e
+set -E
 
 global-stack-base-init-mkcert.sh
 global-stack-nvm-eval-yarnrc.sh
