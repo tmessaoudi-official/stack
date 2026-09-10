@@ -282,6 +282,7 @@ log-follow:
 hard-restart:
 	@test -d var/tools || { echo "FATAL: var/tools/ is missing — cannot proceed with hard-restart. var/tools is a manual snapshot of a healthy tools/ tree: take one with 'cp -R tools var/tools' while the stack is up. (make save/restore act on var/images, not var/tools.)"; exit 1; }
 	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="down" GLOBAL_STACK_DOCKER_CLI_EXEC_FLAGS="--rmi all --volumes --remove-orphans" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
+	docker ps -q | xargs -r docker stop
 	docker system prune -a -f --volumes
 	yes y | docker-reclaim-disk-space-script.sh || echo 'script does not exist'
 	bin/env-scan.sh --yes
@@ -296,6 +297,7 @@ hard-restart:
 soft-restart:
 	@test -d var/tools || { echo "FATAL: var/tools/ is missing — cannot proceed with soft-restart. var/tools is a manual snapshot of a healthy tools/ tree: take one with 'cp -R tools var/tools' while the stack is up. (make save/restore act on var/images, not var/tools.)"; exit 1; }
 	$(MAKE) down --silent --ignore-errors --keep-going --warn-undefined-variables
+	docker ps -q | xargs -r docker stop
 	sudo rm -rf tools
 	cp -R var/tools/ tools
 	$(MAKE) up --silent --ignore-errors --keep-going --warn-undefined-variables
