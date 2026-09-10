@@ -2530,6 +2530,82 @@ assert_pass "41e: an opt-in extension is still commented out after the reset" \
 assert_pass "41f: var/db is still reset to the baseline (the hand-edit is reverted)" \
   grep -qx 'extension=redis.so' "${_DDB_PHP}/var/db/redis.ini"
 
+# ─── Section 42: mkcert init reports honestly; the host CA bundle is ro ────
+printf '\n%b── Section 42: mkcert init diagnosis + host trust-store mounts%b\n' \
+  "${C_BOLD}" "${C_RESET}"
+
+# Of the 31 containers that run init-mkcert, exactly ONE fails: 02sonarqube, the
+# only one where mkcert can see a JDK (JAVA_HOME + keytool). mkcert then also
+# targets the JAVA truststore, which is root:root 644, and the container runs as
+# uid 1000 -- so it shells out to sudo and gets "a password is required". The old
+# handler blamed a "busy ca-certificates.crt" instead, a cause that cannot single
+# out the one container with a JDK, and swallowed mkcert's two ERROR lines under a
+# reassuring WARNING. Containers reach the local CA through ${SSL_CERT_FILE}, which
+# a JVM does not read -- that is the real consequence and it must be said.
+_MKC="${DIST_BIN}/base-bin/global-stack-base-init-mkcert.sh"
+assert_fail "42a: init-mkcert no longer asserts the disproven 'busy ca-certificates.crt' cause" \
+  grep -q 'busy ca-certificates.crt' "${_MKC}"
+
+# Behavioural: run the SHIPPED script against a stub mkcert, in a sandbox CAROOT.
+_MKC_SB="${TMP_DIR}/mkcert-sb"
+_mkcert_run() { # $1 = exit code the stub returns
+  rm -rf "${_MKC_SB}"
+  mkdir -p "${_MKC_SB}/bin" "${_MKC_SB}/caroot"
+  printf 'KEYSTUB\n' >"${_MKC_SB}/caroot/rootCA-key.pem"
+  printf 'CERTSTUB\n' >"${_MKC_SB}/caroot/rootCA.pem"
+  {
+    printf '#!/bin/bash\n'
+    if [[ "$1" == 0 ]]; then
+      # what mkcert really prints when it has nothing to do
+      printf 'echo "The local CA is already installed in the system trust store!"\n'
+    else
+      # the two lines 02sonarqube really emits
+      printf 'echo "ERROR: failed to execute \\"keytool -importcert\\": exit status 1"\n'
+      printf 'echo "sudo: a password is required" >&2\n'
+    fi
+    printf 'exit %s\n' "$1"
+  } >"${_MKC_SB}/bin/mkcert"
+  chmod +x "${_MKC_SB}/bin/mkcert"
+  env PATH="${_MKC_SB}/bin:/usr/bin:/bin" CAROOT="${_MKC_SB}/caroot" \
+    bash "${_MKC}" 2>&1
+  printf 'RC=%s\n' "$?"
+}
+_mkc_fail_out="$(_mkcert_run 1 || true)"
+_mkc_ok_out="$(_mkcert_run 0 || true)"
+
+assert_output_contains "42b: a failing mkcert has its OWN error surfaced, not swallowed" \
+  'keytool -importcert' printf '%s' "${_mkc_fail_out}"
+assert_output_contains "42c: the failure names the JVM as the store that stays untrusting" \
+  'JVM' printf '%s' "${_mkc_fail_out}"
+assert_output_contains "42d: a failing mkcert still exits 0 — 31 containers must not die" \
+  'RC=0' printf '%s' "${_mkc_fail_out}"
+# Asserts on the diagnosis the SCRIPT adds, never on mkcert's own passthrough
+# output — otherwise a stub that prints an error on success would decide it.
+assert_fail "42e: a SUCCEEDING mkcert draws no failure diagnosis from the script" \
+  bash -c 'printf "%s" "$1" | grep -q "JVM"' _ "${_mkc_ok_out}"
+# Non-vacuity for 42e: the success path must have actually run and said something.
+assert_output_contains "42f: ...and the success path still passes mkcert's own output through" \
+  'already installed' printf '%s' "${_mkc_ok_out}"
+
+# The host's real /etc/ssl/certs/ca-certificates.crt is bind-mounted into 10
+# services plus 2 compose fragments. Containers only ever READ it (init-mkcert
+# cats it into rootCA-Bundle.pem); the one legitimate writer is Makefile:170,
+# which runs on the HOST. An rw mount is a live container→host-trust-store path.
+_ca_rw="$(git -C "${REPO_ROOT}" grep -l -E '/etc/ssl/certs/ca-certificates\.crt:/etc/ssl/certs/ca-certificates\.crt:rw' \
+  -- 'docker/images/*/docker-compose.yaml' 'docker/config/compose-fragments/*.yaml' 2>/dev/null || true)"
+assert_pass "42g: no compose file mounts the host CA bundle read-write" \
+  test -z "${_ca_rw}"
+# Non-vacuity: the grep must still be able to SEE those mounts at all, so a typo
+# in the pattern cannot make 42g pass by matching nothing anywhere.
+_ca_any="$(git -C "${REPO_ROOT}" grep -l -E '/etc/ssl/certs/ca-certificates\.crt:/etc/ssl/certs/ca-certificates\.crt:' \
+  -- 'docker/images/*/docker-compose.yaml' 'docker/config/compose-fragments/*.yaml' 2>/dev/null | wc -l)"
+assert_pass "42h: ...and the 12 mounts are still found by the pattern (42g is not vacuous)" \
+  test "${_ca_any}" -eq 12
+
+_SQD="${REPO_ROOT}/docker/images/02sonarqube/Dockerfile"
+assert_pass "42i: sonarqube makes the JVM truststore writable by its runtime user" \
+  grep -Eq 'chmod .*g\+w .*(cacerts|security)' "${_SQD}"
+
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
 if [[ "${FAIL}" -eq 0 ]]; then

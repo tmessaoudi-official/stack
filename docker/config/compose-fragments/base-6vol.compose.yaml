@@ -22,7 +22,7 @@ services:
       - public
     working_dir: ${GLOBAL_STACK_DOCKER_WORKDIR}
     volumes:
-      - /etc/ssl/certs/ca-certificates.crt:/etc/ssl/certs/ca-certificates.crt:rw,delegated
+      - /etc/ssl/certs/ca-certificates.crt:/etc/ssl/certs/ca-certificates.crt:ro,delegated
       - ${GLOBAL_STACK_DOCKER_ROOT_PATH}/projects:${GLOBAL_STACK_DOCKER_WORKDIR}:rw
       - ${GLOBAL_STACK_DOCKER_ROOT_PATH}/tools:${GLOBAL_STACK_DOCKER_TOOLS_PATH}:rw
       - ${GLOBAL_STACK_DOCKER_ROOT_PATH}/${GLOBAL_STACK_SHELL_HISTORY}:/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_HISTORY_TARGET}:rw

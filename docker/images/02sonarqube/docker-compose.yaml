@@ -38,7 +38,7 @@ services:
       - SONAR_JDBC_PASSWORD=${GLOBAL_STACK_SONARQUBE_JDBC_PASSWORD}
       - TZ=${GLOBAL_STACK_TIMEZONE}
     volumes:
-      - /etc/ssl/certs/ca-certificates.crt:/etc/ssl/certs/ca-certificates.crt:rw,delegated
+      - /etc/ssl/certs/ca-certificates.crt:/etc/ssl/certs/ca-certificates.crt:ro,delegated
       - ./projects:${GLOBAL_STACK_DOCKER_WORKDIR}:rw
       - ./tools:${GLOBAL_STACK_DOCKER_TOOLS_PATH}:rw
       - ./docker/config/root:${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/home/user:rw
