@@ -3,8 +3,19 @@
 # This is a function library sourced by caller scripts (e.g. serverless-framework-start.sh).
 # Adding set flags here would bleed them into any sourcing script's execution context,
 # potentially altering the caller's error-handling behaviour in hard-to-debug ways.
-# Additionally, the compgen|grep|sort|while pipeline at line 36 exits 1 with pipefail
-# when no matching variables are found — a valid no-op case that must not abort.
+# The slot loop is fed by a PROCESS SUBSTITUTION, not a pipeline. Both reasons matter:
+#   1. stdin — the loop's input must never reach the commands it evals. A prompting child
+#      (`sdk install` asking "set as default? (Y/n)") otherwise consumes the REMAINING slot
+#      list and silently skips packages. Observed 2026-09-10: kotlin was eaten right after
+#      gradle's prompt, and 03java17-zulu then died on `sdk use kotlin`.
+#      NOTE: switching the pipeline to a process substitution does NOT fix this on its own —
+#      the body still inherits that FD as stdin. The `</dev/null` on each eval below is the
+#      part that actually closes the hole; both were verified against a prompting stub.
+#   2. exit status — compgen|grep|sort exits 1 under pipefail when nothing matches, a
+#      valid no-op that must not abort. A process substitution's status is never checked,
+#      so that case is inert by construction rather than by the absence of set -e here.
+# The body now also runs in the CURRENT shell instead of a pipeline subshell, so the ERR
+# trap reports the real failing line instead of `command: sort ** line: 1`.
 
 global_stack_base_setup_packages() {
     local PREFIX
@@ -68,7 +79,7 @@ global_stack_base_setup_packages() {
         exit 1
     fi
 
-    compgen -A variable | grep "^${PREFIX}_INSTALL_PACKAGE_" | sort | while read -r VARIABLE_NAME; do
+    while read -r VARIABLE_NAME; do
         PACKAGE_CONFIG_TEMPLATE="$(echo "${VARIABLE_NAME}" | sed "s/${PREFIX}_INSTALL_PACKAGE_/${PREFIX}_CONFIG_PACKAGE_/")"
         PACKAGE_CONFIG_NAME="$(echo "${PACKAGE_CONFIG_TEMPLATE}" |  sed 's/_VERSION$/_NAME/')"
         PACKAGE_CONFIG_COMMAND_SUFFIX="$(echo "${PACKAGE_CONFIG_TEMPLATE}" | sed 's/_VERSION$/_COMMAND_SUFFIX/')"
@@ -103,7 +114,7 @@ global_stack_base_setup_packages() {
                     PACKAGE_OLD_VERSION="$(cat "${_pkg_marker}" 2>/dev/null || true)"
                     if [[ -n "${PACKAGE_OLD_VERSION}" && "${PACKAGE_OLD_VERSION}" != "${PACKAGE_VERSION}" ]]; then
                         # Caller cleanup template (PACKAGE_OLD_VERSION in scope); non-fatal.
-                        eval "${CLEANUP_COMMAND}" || true
+                        eval "${CLEANUP_COMMAND}" </dev/null || true
                     fi
                 fi
             fi
@@ -113,11 +124,11 @@ global_stack_base_setup_packages() {
                 if [[ -n "${TOLERANT}" ]]; then
                     # Tolerant callers run under set +E; capture a failed command so
                     # a satisfied marker is NOT written for a failed install.
-                    eval "${COMMANDS[${INDEX}]}" || _cmd_ok=0
+                    eval "${COMMANDS[${INDEX}]}" </dev/null || _cmd_ok=0
                 else
                     # Default (set -e) callers: a failed command aborts here — loud,
                     # before the marker write below — never a silent stale marker.
-                    eval "${COMMANDS[${INDEX}]}"
+                    eval "${COMMANDS[${INDEX}]}" </dev/null
                 fi
             done
             # Record the installed version only after a SUCCESSFUL install, so a
@@ -133,5 +144,5 @@ global_stack_base_setup_packages() {
                 fi
             fi
         fi
-    done
+    done < <(compgen -A variable | grep "^${PREFIX}_INSTALL_PACKAGE_" | sort)
 }
