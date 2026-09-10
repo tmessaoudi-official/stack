@@ -23,7 +23,19 @@ if [[ "${GLOBAL_STACK_DOCKER_USER_CONFIG:-}" != ":" && "${GLOBAL_STACK_DOCKER_US
 
         if [[ -d "${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/home/user" && -d "${GLOBAL_STACK_BASE_USER_HOME}" ]]; then
             echo -e "\nrsynching ${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/home/user/ into ${GLOBAL_STACK_BASE_USER_HOME} \n"
+            # --exclude the two shell history files. docker/config/root is bind-mounted
+            # BOTH as this rsync's SOURCE (/stack/dist/home/user) and as the destination
+            # files themselves (/home/developer/.bash_history, .zsh_history) -- same inode
+            # on both sides. So rsync copied each onto itself and could not rename over its
+            # own bind mount ("Device or resource busy"), producing a code-23 error on every
+            # boot in 28 of 45 containers. Shared history comes from the BIND MOUNT, not
+            # from here: this copy has never once succeeded, and sharing works anyway.
+            # Removing it also restores meaning to exit 23, which the guard below would
+            # otherwise swallow on every boot, hiding a genuine copy failure.
+            # The literals are pinned to GLOBAL_STACK_SHELL_*_TARGET by startup-prologue §38c.
             sudo rsync -raz --ignore-times \
+                --exclude=.bash_history \
+                --exclude=.zsh_history \
                 ${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/home/user/ \
                 ${GLOBAL_STACK_BASE_USER_HOME} \
                 || { _rsync_exit=$?; [ $_rsync_exit -eq 23 ] && echo "rsync exit 23: some files busy/locked (e.g. .bash_history), continuing" || exit $_rsync_exit; }
