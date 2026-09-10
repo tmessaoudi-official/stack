@@ -46,6 +46,16 @@ RUN find /usr/local/bin/ -type f -exec chmod a+x {} \;
 RUN chown -R sonarqube:root /opt/sonarqube/sonar-scanner-cli/ \
     && chmod -R a+rwx /opt/sonarqube/sonar-scanner-cli/
 
+# This is the ONE container where mkcert can see a JDK, so it is the one where
+# `mkcert -install` also tries the Java truststore. cacerts ships root:root 644
+# and sonarqube runs as uid 1000 gid 0, so mkcert fell back to sudo and got
+# "a password is required" -- leaving the JVM unable to validate any local-CA
+# certificate, while curl/node/python trusted it fine via ${SSL_CERT_FILE},
+# which no JVM reads. Group-write is enough (the user's primary group IS root
+# here, same reason the chown above targets sonarqube:root) and keeps mkcert's
+# own native mechanism working instead of bolting on a second truststore.
+RUN chmod g+w "${JAVA_HOME}/lib/security/cacerts"
+
 ENV PATH="/opt/sonarqube/sonar-scanner-cli/bin:${PATH}"
 
 USER sonarqube
