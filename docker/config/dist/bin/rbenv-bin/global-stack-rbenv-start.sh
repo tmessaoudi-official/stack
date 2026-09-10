@@ -157,7 +157,12 @@ if [[ "${RBENV_MODE}" = "setup" ]]; then
     --marker-prefix="ruby.${RUBY_VERSION_AS:-${RUBY_VERSION:-}}" \
     --cleanup-command='gem uninstall ${PACKAGE_NAME} -v "${PACKAGE_OLD_VERSION}" -x -I || true' \
     --command='echo -e "**** Installing/Updating ${PACKAGE_NAME} ${PACKAGE_VERSION} ${PACKAGE_COMMAND_SUFFIX}"' \
-    --command='gem --backtrace --debug install ${PACKAGE_NAME}:${PACKAGE_VERSION} ${PACKAGE_COMMAND_SUFFIX}'
+    # No `--debug`: it means "Turn on Ruby debugging" (rubygems/command.rb:617) and prints
+    # every exception rubygems RESCUES -- the cache-miss stat in remote_fetcher.rb:288, the
+    # file-walk misses in fileutils.rb. On a HEALTHY run that was 81% of 03ruby3's log and
+    # 75% of 03ruby4's, which buries a real failure. `--backtrace` is kept: "Show stack
+    # backtrace on errors" (command.rb:613) is what actually helps when an install fails.
+    --command='gem --backtrace install ${PACKAGE_NAME}:${PACKAGE_VERSION} ${PACKAGE_COMMAND_SUFFIX}'
 
   if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/ruby.${RUBY_VERSION_AS:-${RUBY_VERSION:-}}" || "true" = "${GLOBAL_STACK_RELOAD_RUBY}" ]]; then
     source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/rbenv.shellrc" && eval "$(rbenv init - --no-rehash ${GLOBAL_STACK_SHELL})" && rbenv shell && rbenv local "${RBENV_VERSION}" && global-stack-rbenv-ruby${RUBY_VERSION_AS}-setup-version.sh
