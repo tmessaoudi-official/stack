@@ -2606,6 +2606,76 @@ _SQD="${REPO_ROOT}/docker/images/02sonarqube/Dockerfile"
 assert_pass "42i: sonarqube makes the JVM truststore writable by its runtime user" \
   grep -Eq 'chmod .*g\+w .*(cacerts|security)' "${_SQD}"
 
+# ─── Section 43: android — single-sourced API levels / image tag, no sdkmanager ──
+printf '\n%b── Section 43: android SDK pins, AVD template and the deprecated sdkmanager%b\n' \
+  "${C_BOLD}" "${C_RESET}"
+
+# All three auto-created AVDs were unloadable: conf/android-avd-conf/config-apis.ini
+# hardcoded system-images/{androidSystemName}/google_apis/x86_64/ while the setup
+# script installed google_apis_ps16k. avdmanager's own verdict was "Missing system
+# image android-37.x/google_apis/x86_64" for every one of them. Google ships a plain
+# google_apis image for 37.0 ONLY -- 37.1 and 37.2-beta1 have none -- so the template
+# was the wrong side. Both now read the tag from .env.
+_ANDC="${REPO_ROOT}/docker/config/dist/conf/android-avd-conf/config-apis.ini"
+_ANDS="${DIST_BIN}/android-bin/global-stack-android-setup.sh"
+_ANDD="${DIST_BIN}/android-bin/global-stack-android-setup-dist.sh"
+
+assert_fail "43a: the AVD template no longer hardcodes a system-image tag" \
+  grep -Eq '^(image\.sysdir\.1|tag\.id|tag\.ids)=.*google_apis' "${_ANDC}"
+assert_fail "43b: ...nor a hardcoded abi" \
+  grep -Eq '^(abi\.type|hw\.cpu\.arch)=x86_64' "${_ANDC}"
+
+# The real drift guard: EVERY placeholder in the template must be substituted by the
+# sed in setup-dist.sh. Adding a placeholder and forgetting the sed leaves a literal
+# {androidImageTag} in image.sysdir.1 — which fails exactly as silently as the wrong
+# tag did. Derived from the files, never from a list written here.
+_unsubbed=""
+while IFS= read -r _ph; do
+  grep -qF -- "s|${_ph}|" "${_ANDD}" || _unsubbed="${_unsubbed} ${_ph}"
+done < <(grep -oE '\{[A-Za-z]+\}' "${_ANDC}" | sort -u)
+assert_pass "43c: every AVD-template placeholder is substituted by setup-dist.sh" \
+  test -z "${_unsubbed}"
+# Non-vacuity for 43c: the template must actually contain placeholders to check.
+assert_pass "43d: ...and the template really has placeholders (43c is not vacuous)" \
+  bash -c '[ "$(grep -ocE "\{[A-Za-z]+\}" "$1")" -ge 6 ]' _ "${_ANDC}"
+
+assert_pass "43e: setup-dist.sh fails loudly on an unsubstituted placeholder" \
+  grep -q 'unsubstituted placeholder' "${_ANDD}"
+
+# sdkmanager is deprecated and is now only a shim over `android sdk`.
+assert_fail "43f: the setup script no longer invokes the deprecated sdkmanager" \
+  grep -Eq '(^|[^a-z-])sdkmanager --sdk_root' "${_ANDS}"
+assert_pass "43g: ...it uses android sdk install --sdk= instead" \
+  grep -q 'android sdk install --sdk=' "${_ANDS}"
+# The licence feeders caused "echo: write error: Broken pipe" on lines 30/32,
+# because line 6 ignores SIGPIPE so the write returns EPIPE instead of dying.
+# NOTE: these two must look at CODE only. The comment block in that script quotes
+# both the old feeder and --licenses verbatim to explain why they went, so a naive
+# grep matches the prose and reds a correct file — the same weak-assertion trap
+# that bit 34d/35b/36b earlier. Strip comment lines first.
+assert_fail "43h: the yes-feeders that caused the broken-pipe error are gone" \
+  bash -c "grep -v '^[[:space:]]*#' \"\$1\" | grep -q \"while true; do echo 'y'\"" _ "${_ANDS}"
+assert_fail "43i: ...and so is the --licenses call upstream now calls unnecessary" \
+  bash -c "grep -v '^[[:space:]]*#' \"\$1\" | grep -q -- '--licenses'" _ "${_ANDS}"
+
+# `android sdk install` EXITS 0 on "Package <id> not found", so set -e cannot catch
+# a renamed package — the most plausible route by which the ps16k rename shipped.
+assert_pass "43j: the setup script verifies the packages actually installed" \
+  grep -q 'reported success but these packages are absent' "${_ANDS}"
+
+# API levels and the image tag are single-sourced in .env, not literals.
+assert_fail "43k: no literal android API level is left in the setup script" \
+  grep -Eq '"(platforms|system-images);android-[0-9]' "${_ANDS}"
+assert_fail "43l: nor in the AVD creation script" \
+  grep -Eq 'system-images;android-[0-9]' "${_ANDD}"
+for _v in API_LEVEL_1 API_LEVEL_2 API_LEVEL_3 SYSTEM_IMAGE_TAG SYSTEM_IMAGE_PLAYSTORE_TAG SYSTEM_IMAGE_ABI; do
+  assert_pass "43m: .env defines GLOBAL_STACK_ANDROID_${_v}" \
+    grep -q "^GLOBAL_STACK_ANDROID_${_v}=" "${REPO_ROOT}/.env"
+  assert_pass "43n: 04android plumbs GLOBAL_STACK_ANDROID_${_v}" \
+    grep -q "GLOBAL_STACK_ANDROID_${_v}=\${GLOBAL_STACK_ANDROID_${_v}}" \
+    "${REPO_ROOT}/docker/images/04android/docker-compose.yaml"
+done
+
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
 if [[ "${FAIL}" -eq 0 ]]; then
