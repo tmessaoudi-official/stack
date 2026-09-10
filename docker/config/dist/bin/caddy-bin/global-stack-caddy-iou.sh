@@ -58,10 +58,14 @@ if [[ "${GLOBAL_STACK_CADDY_VERSION}" != "${CURRENT_CADDY_VERSION}" ]]; then
   # Build and configure caddy
   go build -o ${CADDY_PATH}/bin/caddy
 
-  ${CADDY_PATH}/bin/caddy add-package github.com/caddyserver/transform-encoder
-  ${CADDY_PATH}/bin/caddy add-package github.com/ueffel/caddy-brotli
-  ${CADDY_PATH}/bin/caddy add-package github.com/greenpau/caddy-security
-  ${CADDY_PATH}/bin/caddy add-package github.com/caddyserver/cache-handler
+  # Every plugin is version-pinned. A bare `add-package <module>` resolves to whatever Go
+  # considers latest AT BUILD TIME, so two builds from the same commit could produce
+  # different binaries while the caddy core itself was pinned. transform-encoder has no
+  # tagged release at all, so it is pinned by commit SHA (see the .env annotation).
+  ${CADDY_PATH}/bin/caddy add-package "github.com/caddyserver/transform-encoder@${GLOBAL_STACK_CADDY_TRANSFORM_ENCODER_VERSION}"
+  ${CADDY_PATH}/bin/caddy add-package "github.com/ueffel/caddy-brotli@${GLOBAL_STACK_CADDY_BROTLI_VERSION}"
+  ${CADDY_PATH}/bin/caddy add-package "github.com/greenpau/caddy-security@${GLOBAL_STACK_CADDY_SECURITY_VERSION}"
+  ${CADDY_PATH}/bin/caddy add-package "github.com/caddyserver/cache-handler@${GLOBAL_STACK_CADDY_CACHE_HANDLER_VERSION}"
   # ${CADDY_PATH}/bin/caddy add-package github.com/dunglas/caddy-cbrotli
 
   cd "${CADDY_PATH}"
@@ -69,7 +73,7 @@ if [[ "${GLOBAL_STACK_CADDY_VERSION}" != "${CURRENT_CADDY_VERSION}" ]]; then
   rm -rf \
     "${CADDY_PATH}/caddy-build"
 else
-  echo -e "\nHttpd is already the latest version (${GLOBAL_STACK_CADDY_VERSION} - ${CURRENT_CADDY_VERSION})"
+  echo -e "\nCaddy is already the latest version (${GLOBAL_STACK_CADDY_VERSION} - ${CURRENT_CADDY_VERSION})"
 fi
 
 # Final permissions and cleanup
