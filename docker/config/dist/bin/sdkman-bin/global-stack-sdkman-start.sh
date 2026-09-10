@@ -43,12 +43,17 @@ if [[ "${SDKMAN_MODE}" = "setup" ]]; then
   global-stack-base-wait-for.sh \
     "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/sdkman"
 
-  # if [[ "true" = "${GLOBAL_STACK_USE_LOCKS}" ]]; then
+  # UNCONDITIONAL by design -- deliberately NOT gated on GLOBAL_STACK_USE_LOCKS, unlike
+  # every other manager (fvm/nvm/phpbrew/pyenv/rbenv all honour that flag). 02sdkman and
+  # 03java17/21/26 share ONE ${SDKMAN_DIR} on the tools volume, and installing several java
+  # versions at once does not work -- sdkman errors out (developer ruling, 2026-09-10).
+  # This block used to carry the guard as commented-out code, which reads as an accident;
+  # do not "restore" it. Making the installs safely parallel would need real evidence and
+  # testing first. Pinned by bin/tests/startup-prologue.test.sh §34.
   printf '\nAcquiring sdkman lock ...\n'
   exec 200>"${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/sdkman.flock"
   flock 200
   printf 'Lock acquired\n'
-  # fi
 
   if [[ "${GLOBAL_STACK_RELOAD_JAVA:-false}" = "true" ]]; then
     printf '\nReloading java %s ...\n' "${JAVA_VERSION_AS:-${JAVA_VERSION:-}}"
@@ -108,8 +113,35 @@ echo 'source "${SDKMAN_DIR}"/bin/sdkman-init.sh' >> "/home/${GLOBAL_STACK_DOCKER
 # @todo this is temporary
 rsync -rav ${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/conf/sdkman/src/ "${SDKMAN_DIR}"/src
 rsync -rav ${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/conf/sdkman/bin/ "${SDKMAN_DIR}"/bin
+# The patched sdkman-init.sh (third hand-patched fork artifact, recorded in .env alongside
+# the release zip and the installer). It carries an `@changed stack` block sourcing
+# ${HOME}/.sdkman/etc/config at INIT time. Without it, sdk() reaches
+# __sdkman_update_service_availability (src/sdkman-main.sh:81) BEFORE either config load
+# (:84 SDKMAN_DIR, :88 HOME), so sdkman_healthcheck_enable is still unset and every `sdk`
+# call fires a live healthcheck curl (connect_timeout=7, max_time=10) -- and the installer
+# itself writes sdkman_healthcheck_enable=true into ${SDKMAN_DIR}/etc/config.
+# MUST come after the conf/sdkman/bin/ rsync above: both target ${SDKMAN_DIR}/bin. The
+# installer re-run below cannot undo it -- it early-exits when ${SDKMAN_DIR} exists
+# (conf/sdkman/bin/sdkman.installer.sh:138), so its `cp -rf` only ever runs on a fresh
+# install, which by then has already happened above.
+rsync -rav ${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/conf/sdkman/sdk-init/ "${SDKMAN_DIR}"/bin
+
 "${GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN}"/sdkman.installer.sh
 source "${SDKMAN_DIR}"/bin/sdkman-init.sh
+
+# sdkman prompts ("Do you want X to be set as default? (Y/n)") whenever a CURRENT version
+# already exists, and that prompt READS FROM THE CALLER'S STDIN. Set the knobs IN-PROCESS,
+# after init: sdkman reads them as plain shell variables at call time
+# (src/sdkman-install.sh:39, src/sdkman-upgrade.sh:74) and uses this exact idiom itself
+# (src/sdkman-env.sh:57). In-process rather than ${SDKMAN_DIR}/etc/config because THAT file
+# is on the shared tools volume (15+ containers start concurrently) and the installer rewrites
+# it with sdkman_healthcheck_enable=true anyway. This is belt-and-braces over the config file
+# written above: it also covers sdkman_auto_answer, which the config file deliberately does
+# not carry (it would change behaviour for a human running `sdk install` interactively here).
+# shellcheck disable=SC2034  # consumed by the sourced sdkman sources, not by this file
+sdkman_auto_answer=true
+# shellcheck disable=SC2034  # ditto
+sdkman_healthcheck_enable=false
 
 # @todo to be done manually for now !!
 #source /home/"${GLOBAL_STACK_DOCKER_USER_ID}"/${GLOBAL_STACK_SHELL_RC_TARGET} && sdk selfupdate force
@@ -193,11 +225,10 @@ if [[ "${SDKMAN_MODE}" = "setup" ]]; then
   echo "${JAVA_VERSION}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/java.${JAVA_VERSION_AS:-${JAVA_VERSION:-}}"
   printf '\nWriting success\n'
   : > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/java.${JAVA_VERSION_AS:-${JAVA_VERSION:-}}"
-  # if [[ "true" = "${GLOBAL_STACK_USE_LOCKS}" ]]; then
+  # Unconditional release -- pairs with the unconditional acquire above.
   printf '\nReleasing sdkman lock\n'
   flock -u 200
   exec 200>&-
-  # fi
 fi
 
 if [[ "${SDKMAN_MODE:-}" = "install" ]] && [[ "${GLOBAL_STACK_RELOAD_SDKMAN:-false}" = "true" ]]; then
