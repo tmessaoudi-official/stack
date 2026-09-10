@@ -2196,6 +2196,235 @@ assert_pass "30f: httpd bumped pin → reinstall" \
 assert_pass "30f: caddy no marker → install" \
   test "$(_ws_decision _caddy_gate caddy "" 2.8 GLOBAL_STACK_CADDY_VERSION CADDY_VERSIONS_PATH "${DIST_BIN}/caddy-bin/global-stack-caddy-start.sh")" = "install"
 
+# ─── §31: sdkman guard shape + slot-loop stdin (2026-09-10) ──────────────────
+# Two silent-failure regressions found after the first `make hard-restart`.
+#
+# 31a-c: `sdk use` returns 0 on success; the non-zero that reaches a caller comes from
+# __sdkman_path_contains (tools/sdkman/src/sdkman-path-helpers.sh:23) grepping $PATH as a
+# boolean, two levels deep inside $(...). Errexit is auto-unset in a command substitution,
+# so it is the INHERITED ERR TRAP that fires -- `set +e` leaves the trap armed and never
+# suppressed it, which killed 04serverless-framework outright. `set +E` disarms trap
+# inheritance while keeping the trap live at the call site, so a genuine failure is still
+# reported. A condition context (`if sdk use ...; then :; fi`) also survives the benign
+# case but SWALLOWS real failures -- 31c is what reds if anyone "simplifies" it that way.
+_sdkman_guard() { # $1=shape(old|new|cond) $2=mode(ok|fail)
+  ( set -eE -o pipefail
+    _C=0; stackCatch(){ [[ ${_C} = 1 ]] && return; _C=1; echo "TOKEN"; exit 1; }
+    trap 'stackCatch' ERR
+    source "${REPO_ROOT}/tools/sdkman/src/sdkman-path-helpers.sh"
+    HOME=/nonexistent-gs-test; PATH="/usr/bin:/bin"
+    _u(){ [[ "$2" = fail ]] && return 1; __sdkman_add_to_path java; }
+    case "$1" in
+      old)  set +e; _u "$1" "$2"; set -e ;;
+      new)  set +E; _u "$1" "$2"; set -E ;;
+      cond) if _u "$1" "$2"; then :; fi ;;
+    esac
+    echo "CONTINUED" ) 2>/dev/null | grep -Eo 'TOKEN|CONTINUED' | head -1
+}
+assert_pass "31a: benign nested-grep miss -- 'set +e' aborts (the serverless bug)" \
+  test "$(_sdkman_guard old ok)" = "TOKEN"
+assert_pass "31b: benign nested-grep miss -- 'set +E' continues" \
+  test "$(_sdkman_guard new ok)" = "CONTINUED"
+assert_pass "31c: a REAL sdk-use failure still reports under 'set +E'" \
+  test "$(_sdkman_guard new fail)" = "TOKEN"
+assert_pass "31c: a condition context would SWALLOW that real failure -- do not use one" \
+  test "$(_sdkman_guard cond fail)" = "CONTINUED"
+_SV="${DIST_BIN}/serverless-bin/global-stack-serverless-framework-start.sh"
+assert_fail "31d: serverless carries no bare 'set +e' / 'set -e' (must be +E/-E)" \
+  grep -Eq '^[[:space:]]*set [+-]e[[:space:]]*$' "${_SV}"
+assert_pass "31d: serverless arms the errtrace guard around sdk use" \
+  grep -Eq '^[[:space:]]*set \+E[[:space:]]*$' "${_SV}"
+
+# 31e-f: the slot loop fed `compgen | grep | sort | while read`. A prompting child inside
+# the loop body inherits the loop's stdin and eats the remaining slot list -- one package
+# silently vanished (kotlin, slot 3 of 4) with no error anywhere. Process substitution
+# alone is NOT sufficient: the body still inherits that FD. Each eval needs </dev/null.
+_SP="${DIST_BIN}/base-bin/global-stack-base-setup-packages.sh"
+assert_fail "31e: slot loop is not fed by a pipeline (subshell + stdin theft)" \
+  grep -Eq 'compgen -A variable \| grep .* \| sort \| while read' "${_SP}"
+assert_pass "31e: slot loop reads from process substitution" \
+  grep -Eq 'done < <\(compgen -A variable' "${_SP}"
+assert_fail "31f: no eval of a caller command leaves stdin open (all have </dev/null)" \
+  bash -c 'grep -E "^[[:space:]]*eval \"\\$\\{(COMMANDS|CLEANUP_COMMAND)" "$1" | grep -qv "</dev/null"' _ "${_SP}"
+
+# ─── §32: the sdk-init patch is actually deployed (2026-09-10) ───────────────
+# conf/sdkman/sdk-init/sdkman-init.sh carries an `@changed stack` block sourcing
+# ${HOME}/.sdkman/etc/config at INIT time. It is registered in .env as one of three
+# hand-patched fork artifacts, but was rsynced nowhere -- so every `sdk` call ran
+# __sdkman_update_service_availability (sdkman-main.sh:81) BEFORE either config load
+# (:84, :88), i.e. a live curl with connect_timeout=7 / max_time=10 on every call.
+# The rsync must land AFTER the conf/sdkman/bin/ rsync (which targets the same dir).
+# The installer is idempotent (`if [ -d "$SDKMAN_DIR" ]` -> exit 0), so the second
+# installer run cannot undo it.
+_SDKI="${DIST_BIN}/sdkman-bin/global-stack-sdkman-start.sh"
+assert_pass "32a: sdk-init/ is rsynced into \${SDKMAN_DIR}/bin" \
+  grep -Eq 'rsync .*conf/sdkman/sdk-init/ +"\$\{SDKMAN_DIR\}"/bin' "${_SDKI}"
+assert_pass "32b: the sdk-init rsync comes AFTER the conf/sdkman/bin/ rsync" \
+  bash -c 'b=$(grep -n "conf/sdkman/bin/" "$1" | tail -1 | cut -d: -f1); i=$(grep -n "conf/sdkman/sdk-init/" "$1" | tail -1 | cut -d: -f1); [ -n "$b" ] && [ -n "$i" ] && [ "$i" -gt "$b" ]' _ "${_SDKI}"
+assert_pass "32c: the shipped sdk-init still carries the @changed stack block" \
+  grep -q '@changed stack' "${REPO_ROOT}/docker/config/dist/conf/sdkman/sdk-init/sdkman-init.sh"
+assert_pass "32c: ...and that block sources \${HOME}/.sdkman/etc/config" \
+  grep -Eq 'source "\$\{HOME\}/\.sdkman/etc/config"' "${REPO_ROOT}/docker/config/dist/conf/sdkman/sdk-init/sdkman-init.sh"
+assert_pass "32d: .env still records sdk-init as a hand-patched fork artifact" \
+  grep -q 'conf/sdkman/sdk-init/sdkman-init.sh' "${REPO_ROOT}/.env"
+assert_pass "32e: the per-container \${HOME}/.sdkman/etc/config write is still present" \
+  grep -Eq 'echo "sdkman_healthcheck_enable=false" > "\$\{HOME\}/\.sdkman/etc/config"' "${_SDKI}"
+# §32h: token invariant drift guard for serverless -- the success-write literal must equal
+# the GLOBAL_STACK_ERROR_TOKEN declared in its compose file. They agree today; nothing
+# pinned them, so a rename in compose would silently leave a permanently-unhealthy-yet-
+# functional container, masked by start_period: 24h. Same shape as §21's web-server guard.
+_SLS_TOKEN="$(sed -n 's/.*GLOBAL_STACK_ERROR_TOKEN=\([A-Za-z0-9_.-]*\).*/\1/p' \
+  "${REPO_ROOT}/docker/images/04serverless-framework/docker-compose.yaml" | head -1)"
+assert_pass "32h: serverless compose declares a non-empty GLOBAL_STACK_ERROR_TOKEN" \
+  test -n "${_SLS_TOKEN}"
+assert_pass "32h: serverless success write uses that exact token (no drift)" \
+  grep -Eq "TOOLS_PATH_SUCCESSES\}\"?/${_SLS_TOKEN}\"?\$" \
+    "${DIST_BIN}/serverless-bin/global-stack-serverless-framework-start.sh"
+assert_pass "32h: serverless healthcheck polls that exact token" \
+  grep -q "SUCCESSES}/${_SLS_TOKEN}" "${REPO_ROOT}/docker/images/04serverless-framework/docker-compose.yaml"
+
+# ─── §33: gem install is not run in rubygems debug mode (2026-09-10) ─────────
+# `gem --debug` means "Turn on Ruby debugging" (rubygems/command.rb:617) and prints every
+# exception rubygems RESCUES -- cache-miss stats in remote_fetcher.rb:288, file-walk misses
+# in fileutils.rb. Measured on a healthy run: 15613/19056 log lines in 03ruby3 (81%) and
+# 10807/14259 in 03ruby4 (75%) were rescued-exception prints, with both containers healthy
+# and their success markers present. That volume buries a real failure.
+# `--backtrace` is KEPT: it is "Show stack backtrace on errors" (command.rb:613), which is
+# what actually helps when a gem install fails.
+_RBE="${DIST_BIN}/rbenv-bin/global-stack-rbenv-start.sh"
+assert_fail "33a: gem install does not pass --debug (rescued-exception spam)" \
+  grep -Eq "gem[^']*--debug[^']*install" "${_RBE}"
+assert_pass "33b: gem install still passes --backtrace (errors stay diagnosable)" \
+  grep -Eq "gem[^']*--backtrace[^']*install" "${_RBE}"
+
+# ─── §34: the sdkman lock is UNCONDITIONAL by design (2026-09-10) ────────────
+# Every other manager (fvm/nvm/phpbrew/pyenv/rbenv) gates its flock on
+# GLOBAL_STACK_USE_LOCKS. sdkman deliberately does NOT: 02sdkman and 03java17/21/26 share
+# one ${SDKMAN_DIR} on the tools volume, and installing several java versions at once
+# fails -- sdkman errors (developer ruling, 2026-09-10). The guard used to be present as
+# COMMENTED-OUT code, which reads as an accident and invites a "fix" that reintroduces the
+# breakage. These assertions pin the intent so that cannot happen silently.
+_SDKL="${DIST_BIN}/sdkman-bin/global-stack-sdkman-start.sh"
+assert_pass "34a: sdkman takes its flock" \
+  grep -Eq 'exec 200>"\$\{GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS\}/sdkman\.flock"' "${_SDKL}"
+assert_fail "34b: the sdkman flock is NOT gated on GLOBAL_STACK_USE_LOCKS" \
+  bash -c 'grep -B3 "exec 200>.*sdkman\.flock" "$1" | grep -q "USE_LOCKS"' _ "${_SDKL}"
+assert_fail "34c: no commented-out USE_LOCKS guard is left to look like an accident" \
+  grep -Eq '^[[:space:]]*#[[:space:]]*(if \[\[ "true" = "\$\{GLOBAL_STACK_USE_LOCKS\}"|fi)[[:space:]]*$' "${_SDKL}"
+assert_pass "34d: the file states WHY it is unconditional (shared SDKMAN_DIR)" \
+  grep -q 'UNCONDITIONAL by design' "${_SDKL}"
+assert_pass "34d: ...and names the shared-dir reason, not just the word" \
+  bash -c 'grep -A4 "UNCONDITIONAL by design" "$1" | grep -q "SDKMAN_DIR"' _ "${_SDKL}"
+assert_pass "34e: sibling managers DO honour the flag (rbenv as reference)" \
+  bash -c 'grep -B3 "exec 200>.*rbenv\.flock" "$1" | grep -q "USE_LOCKS"' _ "${DIST_BIN}/rbenv-bin/global-stack-rbenv-start.sh"
+
+# ─── §35: container timezones (2026-09-10) ──────────────────────────────────
+# Measured on a live stack: every stack container reported CEST except four.
+#   it-tools     TZ unset,     tzdata present -> plain UTC
+#   oracle       TZ declared,  tzdata ABSENT  -> runs UTC, prints the literal "Europe"
+#   mongoclient  TZ declared,  tzdata ABSENT  -> same
+#   registry     TZ unset,     tzdata ABSENT, Alpine, no Dockerfile (Makefile docker run)
+# The mislabel is worse than plain UTC: "14:17 Europe" reads as local time while the host
+# is 16:17 CEST, so anyone correlating tools/elapsed across containers is off by two hours.
+# registry is deliberately NOT fixed -- setting TZ without tzdata would turn its honest UTC
+# into the mislabelled form. GLOBAL_STACK_TIMEZONE is the canonical var (00base Dockerfile).
+_TZ_IT="${REPO_ROOT}/docker/images/00corentinth-it-tools/docker-compose.yaml"
+_TZ_OR="${REPO_ROOT}/docker/images/01epiclabs-docker-oracle-xe-11g"
+_TZ_MO="${REPO_ROOT}/docker/images/02mongoclient-mongoclient"
+assert_pass "35a: it-tools declares TZ from GLOBAL_STACK_TIMEZONE" \
+  grep -Eq '^\s*-\s*TZ=\$\{GLOBAL_STACK_TIMEZONE\}' "${_TZ_IT}"
+assert_pass "35b: oracle still declares TZ" \
+  grep -Eq '^\s*-\s*TZ=\$\{GLOBAL_STACK_TIMEZONE\}' "${_TZ_OR}/docker-compose.yaml"
+assert_pass "35b: oracle installs tzdata (in the RUN, not just a comment)" \
+  bash -c 'grep -A6 "apt-get install" "$1" | grep -Eq "^\\s*tzdata\\s*\\\\?\\s*$"' _ "${_TZ_OR}/Dockerfile"
+assert_pass "35b: oracle reconfigures tzdata non-interactively" \
+  bash -c 'grep -q "dpkg-reconfigure tzdata" "$1" && grep -q "DEBIAN_FRONTEND" "$1"' _ "${_TZ_OR}/Dockerfile"
+assert_pass "35c: mongoclient still declares TZ" \
+  grep -Eq '^\s*-\s*TZ=\$\{GLOBAL_STACK_TIMEZONE\}' "${_TZ_MO}/docker-compose.yaml"
+assert_pass "35c: mongoclient installs tzdata (in the RUN, not just a comment)" \
+  bash -c 'grep -A6 "apt-get install" "$1" | grep -Eq "^\\s*tzdata\\s*\\\\?\\s*$"' _ "${_TZ_MO}/Dockerfile"
+assert_pass "35c: mongoclient reconfigures tzdata non-interactively" \
+  bash -c 'grep -q "dpkg-reconfigure tzdata" "$1" && grep -q "DEBIAN_FRONTEND" "$1"' _ "${_TZ_MO}/Dockerfile"
+assert_pass "35d: GLOBAL_STACK_TIMEZONE is defined in .env" \
+  grep -Eq '^GLOBAL_STACK_TIMEZONE=.+' "${REPO_ROOT}/.env"
+
+# ─── §36: the hadolint ignore list is actually honoured (2026-09-10) ─────────
+# .hadolint.yaml used the key `ignore:`. hadolint expects `ignored:` and silently accepts
+# (and discards) the unknown key, so the documented DL3008/DL3018 ruling was INERT and the
+# PostToolUse hook reported them on every parseable Dockerfile. Auto-discovery works once
+# the key is right -- `--config` was never the problem. Verified against hadolint 2.15.1:
+#   ignore:  -> DL3008 still reported;  ignored: -> suppressed, with and without --config.
+_HL="${REPO_ROOT}/.hadolint.yaml"
+assert_pass "36a: .hadolint.yaml uses the key hadolint actually reads" \
+  grep -Eq '^ignored:' "${_HL}"
+assert_fail "36a: ...and not the silently-discarded 'ignore:'" \
+  grep -Eq '^ignore:' "${_HL}"
+assert_pass "36b: the ruling's codes are LIST ENTRIES, not just mentioned in prose" \
+  bash -c 'grep -Eq "^[[:space:]]+-[[:space:]]*DL3008[[:space:]]*$" "$1" \
+        && grep -Eq "^[[:space:]]+-[[:space:]]*DL3018[[:space:]]*$" "$1"' _ "${_HL}"
+# Functional check: an unpinned apt-get install must lint clean from the repo root.
+_hl_probe() {
+  local d="${TMP_DIR}/hlprobe"; mkdir -p "${d}"
+  cp "${_HL}" "${d}/.hadolint.yaml"
+  printf 'FROM ubuntu:24.04\nRUN apt-get update && apt-get install -y curl\n' >"${d}/Dockerfile"
+  ( cd "${d}" && hadolint Dockerfile 2>&1 | grep -c 'DL3008' || true )
+}
+assert_pass "36c: an unpinned apt-get install reports no DL3008 under this config" \
+  test "$(_hl_probe)" = "0"
+
+# ─── §37: a hadolint PARSE FAILURE is reported as unchecked (2026-09-10) ─────
+# hadolint 2.15.1 cannot parse `FROM ${ALIAS}:${PORT}/img:${VER}` -- 33 of this repo's 43
+# Dockerfiles use that shape, and Docker builds them all fine, so this is an upstream
+# parser limitation, not a defect in the Dockerfiles. The danger is that a parse failure
+# yields ZERO findings, which reads as clean: those 33 files have had no lint coverage at
+# all. The hook used to fold it into "hadolint found N issue(s)". It must say the file was
+# NOT LINTED. Restructuring the FROM lines is deliberately out of scope (developer ruling).
+_HOOK="${REPO_ROOT}/.claude/hooks/hadolint-on-write.sh"
+_hook_msg() { # $1 = Dockerfile content
+  local d="${TMP_DIR}/hookprobe"; mkdir -p "${d}"
+  printf '%s\n' "$1" >"${d}/Dockerfile"
+  printf '{"tool_input":{"file_path":"%s/Dockerfile"}}' "${d}" \
+    | bash "${_HOOK}" 2>/dev/null || true
+}
+assert_output_contains "37a: an unparseable FROM is reported as NOT LINTED" "NOT LINTED" \
+  _hook_msg 'ARG A=r.local
+ARG P=5000
+ARG V=1
+FROM ${A}:${P}/img:${V}'
+assert_pass "37b: a parseable Dockerfile is NOT reported as unlinted" \
+  bash -c '! printf "{\"tool_input\":{\"file_path\":\"%s\"}}" "$2" | bash "$1" 2>/dev/null | grep -q "NOT LINTED"' \
+    _ "${_HOOK}" "${REPO_ROOT}/docker/images/02mongoclient-mongoclient/Dockerfile"
+assert_pass "37c: the hook still reports ordinary findings" \
+  grep -q 'issue(s)' "${_HOOK}"
+
+# ─── §38: the home rsync excludes the bind-mounted history files (2026-09-10) ─
+# /stack/docker/config/root is bind-mounted BOTH as the rsync source (/stack/dist/home/user)
+# and as the two destination files (/home/developer/.bash_history, .zsh_history), so rsync
+# copied each history file ONTO ITSELF and failed to rename over its own bind mount:
+#   rsync: [receiver] rename ".bash_history.XXXXXX" -> ".bash_history": Device or resource busy
+#   rsync error: some files/attrs were not transferred (code 23)
+# 28 of 45 running containers emitted that every boot. Verified by inode: the source and
+# destination paths are the SAME file (33030169 / 33075857). Shared history comes from the
+# BIND MOUNT, not from this rsync -- the rsync of these two files has never once succeeded,
+# and sharing works regardless. Excluding them removes an operation that always failed and
+# restores meaning to exit 23, which the guard below otherwise swallows wholesale.
+_CH="${DIST_BIN}/base-bin/global-stack-base-chown-home.sh"
+assert_pass "38a: the home rsync excludes the bind-mounted bash history" \
+  grep -Eq -- '--exclude=[^ ]*\.bash_history' "${_CH}"
+assert_pass "38a: ...and the zsh history" \
+  grep -Eq -- '--exclude=[^ ]*\.zsh_history' "${_CH}"
+assert_pass "38b: the narrow code-23 guard is still there as a real safety net" \
+  bash -c 'grep -q "_rsync_exit -eq 23" "$1" && grep -q "exit \$_rsync_exit" "$1"' _ "${_CH}"
+# Drift guard: the excluded literals must match what compose actually bind-mounts.
+_bh="$(sed -n 's/^GLOBAL_STACK_SHELL_HISTORY_TARGET=//p' "${REPO_ROOT}/.env" | head -1)"
+_zh="$(sed -n 's/^GLOBAL_STACK_SHELL_ZSH_HISTORY_TARGET=//p' "${REPO_ROOT}/.env" | head -1)"
+assert_pass "38c: .env still defines both history targets" \
+  bash -c '[ -n "$1" ] && [ -n "$2" ]' _ "${_bh}" "${_zh}"
+assert_pass "38c: the excludes match GLOBAL_STACK_SHELL_HISTORY_TARGET" \
+  grep -qF -- "--exclude=${_bh}" "${_CH}"
+assert_pass "38c: the excludes match GLOBAL_STACK_SHELL_ZSH_HISTORY_TARGET" \
+  grep -qF -- "--exclude=${_zh}" "${_CH}"
+
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
 if [[ "${FAIL}" -eq 0 ]]; then
