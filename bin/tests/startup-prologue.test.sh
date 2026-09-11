@@ -2034,12 +2034,14 @@ assert_fail "27a: android-start does NOT source the prologue" \
 assert_fail "27a: android-setup does NOT source the prologue (stays exempt)" \
   grep -q 'global-stack-base-prologue\.sh' "${AND_SETUP}"
 
-# The four LIVE *_VERSION pins. PLATFORM_TOOLS joined this list in row 33: it is
-# NOT comment-only — `_pkgs` installs "platform-tools;${…_PLATFORM_TOOLS_VERSION}"
-# as a real element, and the fence in android-start.sh claiming otherwise was
-# half-false. NDK_BUNDLE genuinely is comment-only: the live array passes a bare
-# "ndk-bundle" with no version, so including it would force a reinstall on a bump
-# that changes nothing. §47 checks the whole set both ways; this loop is the
+# The four LIVE *_VERSION pins. PLATFORM_TOOLS joined this list in row 33, on the
+# reasoning that `_pkgs` installed "platform-tools;${…}" as a real element. Row 36
+# measured that id: it installs nothing (single-instance packages take no version).
+# It belongs in the set anyway, for the sounder reason — the install id is bare and
+# the pin is ASSERTED against the build upstream served, so a bump must change the
+# marker or the reinstall that picks up the new build never happens. NDK_BUNDLE has
+# no consumer at all, live or asserted, so including it would force a reinstall on a
+# bump that changes nothing. §47 checks the whole set both ways; this loop is the
 # named-pin regression guard.
 for _v in CMDLINE_TOOLS PLATFORM_TOOLS BUILD_TOOLS NDK; do
   assert_pass "27b: composite marker includes ${_v}" \
@@ -2913,21 +2915,34 @@ done
 # ── Behavioural: run the SHIPPED install+verify block against a stubbed `android` ──
 #
 # Four guarantees no grep reaches: the flag lands in the GLOBAL position, the verify
-# loop covers EVERY id the install asks for, the platform-tools exception matches the
-# real CLI, and a package that did not install is actually caught.
+# loop covers EVERY id the install asks for, a single-instance id is sent the way the
+# real CLI accepts it, and a package that did not install is actually caught.
 #
 # The stub is a faithful model of `android 1.0.15985488` (the build the pinned
 # commandlinetools-linux-15859902_latest.zip yields), measured 2026-09-11:
 #   * a --sdk that is not in the global position is rejected with exit 2
-#   * `sdk list` prints the install id with ';' -> '/', EXCEPT platform-tools, which
-#     is single-instance upstream and is listed BARE with its version in column 2
-# Only that TRANSFORM RULE belongs to the test; the ids come from the script itself,
-# so the probe cannot pass by agreeing with itself. The rule is what catches the
-# obvious-but-wrong single-array refactor: a naive ';'->'/' of platform-tools;<ver>
-# yields platform-tools/<ver>, which never appears in a listing, so a CORRECT install
-# would report itself missing.
-_andv_probe() { # $1 = list id to omit ("" = omit none); echoes "<rc>|<absent-ids>"
-  local omit="${1}" d="${TMP_DIR}/andv" rc out
+#   * `sdk list` prints the install id with ';' -> '/', uniformly
+#   * the three SINGLE-INSTANCE packages (platform-tools, ndk-bundle, emulator) take
+#     NO version: sent one, the CLI prints "Package <id>/<ver> not found." and EXITS
+#     0, installing nothing; installed bare, they are LISTED bare with the version
+#     upstream served in column 2
+# Only those RULES belong to the test; the ids come from the script itself, so the
+# probe cannot pass by agreeing with itself.
+#
+# That second rule is row 36, and it is the one this stub used to get wrong. It
+# recorded every argument it was handed and then re-applied the SCRIPT's own
+# "platform-tools;<ver>" -> bare mapping when listing — modelling the bug instead of
+# the CLI — so an id that could never install reported itself present, and 43q-43t
+# were green on a platform-tools that was absent from every android container. A
+# stub that mirrors the code's assumption tests nothing but the mirror.
+# $1 = list id to omit ("" = omit none)
+# $2 = version the stub reports for platform-tools (default: the pin the probe env
+#      sets below, i.e. the matching case). Single-instance packages take no version
+#      at install time, so the pin is an EXPECTED version the verify asserts against
+#      what upstream actually served -- $2 is how the mismatch arm gets exercised.
+# echoes "<rc>|<absent-ids>|<version-warn>"
+_andv_probe() {
+  local omit="${1}" ptv="${2:-37.0.1}" d="${TMP_DIR}/andv" rc out
   rm -rf "${d}"
   mkdir -p "${d}/bin" "${d}/versions"
   : >"${d}/asked"
@@ -2935,22 +2950,44 @@ _andv_probe() { # $1 = list id to omit ("" = omit none); echoes "<rc>|<absent-id
 #!/bin/bash
 D="${d}"
 OMIT="${omit}"
+PTV="${ptv}"
 case "\${1}" in
   --version) echo "1.0.0-stub"; exit 0 ;;
   --sdk=*) shift ;;
   *) echo "Unknown option: '\${1}'" >&2; exit 2 ;;
 esac
 case "\${1}.\${2}" in
-  sdk.install) shift 2; printf '%s\n' "\$@" >>"\${D}/asked"; exit 0 ;;
+  sdk.install)
+    shift 2
+    # The real CLI rejects a version suffix on a SINGLE-INSTANCE package: it prints
+    # "Package <id>/<ver> not found." -- note the ';' is rendered as '/' in the
+    # message, which is what a reader greps the logs for -- installs nothing, and
+    # EXITS 0. Modelling that is the whole point: the previous stub recorded every
+    # argument it was handed and then re-applied the script's own ';'->bare
+    # transform when listing, so an id that could never install reported itself
+    # present and 43q-43t were green on it for a day [measured 2026-09-11 against
+    # android 1.0.15985488: all three of these answer "not found" + exit 0, while
+    # multi-instance "build-tools;37.0.0" is accepted].
+    for _a in "\$@"; do
+      case "\${_a}" in
+        platform-tools\\;* | ndk-bundle\\;* | emulator\\;*)
+          printf 'Package %s not found.\n' "\${_a//;//}"
+          continue ;;
+      esac
+      printf '%s\n' "\${_a}" >>"\${D}/asked"
+    done
+    exit 0 ;;
   sdk.list)
     echo "Installed packages:"
     while IFS= read -r p; do
-      case "\${p}" in
-        platform-tools\\;*) id="platform-tools" ;;
-        *) id="\${p//;//}" ;;
-      esac
+      # Uniform ';'->'/': the single-instance ids are bare on BOTH sides now, so the
+      # listing needs no exception. The arm that used to live here mirrored the
+      # install bug rather than the CLI.
+      id="\${p//;//}"
       [ "\${id}" = "\${OMIT}" ] && continue
-      printf '  %s  1.2.3  description\n' "\${id}"
+      v=1.2.3
+      if [ "\${id}" = "platform-tools" ]; then v="\${PTV}"; fi
+      printf '  %s  %s  description\n' "\${id}" "\${v}"
     done <"\${D}/asked"
     exit 0 ;;
 esac
@@ -2989,9 +3026,16 @@ STUB
       GLOBAL_STACK_ANDROID_SYSTEM_IMAGE_ABI=x86_64 \
       bash "${d}/run.sh" 2>&1
   )" && rc=0 || rc=$?
-  # Anchor on ^FATAL: — the extracted block re-enables `set -x`, so the xtrace line
-  # for that very printf is also in the stream and would be scraped alongside it.
-  printf '%s|%s' "${rc}" "$(printf '%s\n' "${out}" | sed -n 's/^FATAL:.*these packages are absent://p')"
+  # Anchor on ^FATAL: / ^WARN: — the extracted block re-enables `set -x`, so the
+  # xtrace line for that very printf is also in the stream and would be scraped
+  # alongside it. (xtrace lines open with `+`, so the anchor is what excludes them.)
+  local warn
+  warn="$(printf '%s\n' "${out}" | sed -n 's/^WARN: //p')"
+  # `none` rather than empty: a bare empty third field makes "no warning" a SUBSTRING
+  # of "some warning", so `assert_output_contains '0||'` could never tell them apart.
+  printf '%s|%s|%s' "${rc}" \
+    "$(printf '%s\n' "${out}" | sed -n 's/^FATAL:.*these packages are absent://p')" \
+    "${warn:-none}"
 }
 
 # Non-vacuity: the extraction must actually find the package array. If setup.sh stops
@@ -3015,6 +3059,43 @@ assert_output_contains "43s: a missing add-on is caught (was uncovered pre-fix)"
 assert_output_contains "43t: a missing playstore system image is caught (was uncovered pre-fix)" \
   '1| system-images/android-37.1/google_apis_playstore_ps16k/x86_64' \
   _andv_probe "system-images/android-37.1/google_apis_playstore_ps16k/x86_64"
+
+# ─── the single-instance class (row 36) ────────────────────────────────────
+# platform-tools, ndk-bundle and emulator take NO version: the CLI answers
+# "Package <id>/<ver> not found." and EXITS 0, so a version suffix installs nothing
+# and `set -e` cannot see it. This shipped on platform-tools for a day while the
+# verify's own listing exception transformed the id back to bare and reported it
+# present -- which is why the check below is STATIC and covers all three, not just
+# the member that broke. 43q is the behavioural half; this is the one that names
+# the offender.
+#
+# Comment lines are STRIPPED (the §19 lesson): the class note in setup.sh now spells
+# out all three failing ids verbatim as evidence, and an explanatory comment must
+# never be able to change what a test demands.
+_a43_si_bad="$(grep -v '^[[:space:]]*#' "${_ANDS}" \
+  | grep -oE '(platform-tools|ndk-bundle|emulator);' | sort -u | tr '\n' ' ' || true)"
+assert_pass "43z: no single-instance package id carries a version suffix (offenders: ${_a43_si_bad:-none})" \
+  test -z "${_a43_si_bad}"
+# Non-vacuity for 43z: the three ids must actually be present as live install ids. A
+# renamed array or a stopped strip would otherwise scan nothing and pass green.
+_a43_si_n="$(grep -v '^[[:space:]]*#' "${_ANDS}" \
+  | grep -coE '"(platform-tools|ndk-bundle|emulator)"' || true)"
+assert_pass "43z2: ...and all three are really installed bare (43z is not vacuous, found ${_a43_si_n})" \
+  test "${_a43_si_n}" -ge 3
+
+# A single-instance pin is an EXPECTED version, not a requestable one -- upstream
+# serves what it serves. So the verify asserts it and WARNs; it does not FATAL, and
+# that is not a swallowed error: the only remedy for a real mismatch is an `.env`
+# bump (the pin is env-update-tracked, `@todo env-update sdkmanager:platform-tools`),
+# and failing hard would block 04android plus the three consumers behind it on what
+# is documentation drift, not a broken SDK.
+assert_output_contains "43aa: a matching platform-tools version raises no warning" \
+  '0||none' _andv_probe "" "37.0.1"
+assert_output_contains "43ab: a platform-tools version adrift from the pin WARNs" \
+  '|platform-tools 9.9.9 != pinned 37.0.1' _andv_probe "" "9.9.9"
+# ...and the drift is a WARNING only: rc stays 0 and nothing is reported absent.
+assert_output_contains "43ac: ...but does not fail the install (WARN, not FATAL)" \
+  '0||platform-tools' _andv_probe "" "9.9.9"
 
 # setup-dist.sh's AVD loop is EXECUTED here, not grepped. 43c/43e/43l are static and
 # were green both before and after the loop was rewritten from glob-and-reverse-parse

@@ -117,14 +117,19 @@ source global-stack-base-version-gate.sh
 # and instead did nothing, and API_LEVEL_3's pending move off a beta would have read
 # as applied while the old platform stayed on disk.
 #
-# GLOBAL_STACK_ANDROID_PLATFORM_TOOLS_VERSION is IN. The old fence here claimed it
-# was comment-only alongside _NDK_BUNDLE_VERSION; that was half false —
-# global-stack-android-setup.sh's `_pkgs` array installs
-# "platform-tools;${GLOBAL_STACK_ANDROID_PLATFORM_TOOLS_VERSION}" as a live element.
-# _NDK_BUNDLE_VERSION genuinely is comment-only (the live array passes a bare
-# "ndk-bundle" with no version), so it stays OUT: Track 5 says commented-out
-# installs stay out, and including it would force a reinstall for a value nothing
-# reads.
+# GLOBAL_STACK_ANDROID_PLATFORM_TOOLS_VERSION is IN — as an EXPECTED version, which
+# is not the reason row 33 gave. Row 33 said the `_pkgs` array installs
+# "platform-tools;${…}" as a live element; row 36 measured that id and found it
+# installs NOTHING ("Package platform-tools/37.0.1 not found.", exit 0 — platform-
+# tools is single-instance upstream and takes no version). The id is bare now, and
+# the pin is asserted against the build upstream actually served, after the verify
+# loop in global-stack-android-setup.sh. So it stays IN for a sound reason: bumping
+# it must change the marker, because the reinstall that follows is the ONLY way a
+# single-instance package picks up a new build.
+# _NDK_BUNDLE_VERSION is a different case and stays OUT — it has no consumer at all,
+# live or asserted (the array passes a bare "ndk-bundle", and nothing compares its
+# version). Track 5 says values nothing reads stay out of the composite, so a bump
+# cannot force a reinstall for nothing.
 #
 # The SYSTEM_IMAGE_* three are included even while INSTALL_SYSTEM_IMAGES=false, when
 # they install nothing. That is deliberate: the cost of the spurious reinstall is

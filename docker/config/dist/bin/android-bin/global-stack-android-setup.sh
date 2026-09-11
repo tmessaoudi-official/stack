@@ -64,10 +64,30 @@ unzip "${ANDROID_HOME}/tools.zip" && rm "${ANDROID_HOME}/tools.zip"
 # closed it wrote licenses/android-sdk-license unprompted. Upstream
 # agrees -- `--licenses` now answers "The --licenses option is no longer needed."
 #
-# platform-tools IS pinned now: "platform-tools;<ver>" installs correctly. ndk-bundle
-# is NOT, and must not be: "ndk-bundle;22.1.7171670" answers "Package
-# ndk-bundle/22.1.7171670 not found." and EXITS 0, installing nothing. That is what
-# the old `@todo fix version not found !!!` was about. See the .env annotations.
+# THREE of these packages are SINGLE-INSTANCE upstream -- platform-tools, ndk-bundle
+# and emulator -- and a single-instance id takes NO version. Append one and the CLI
+# answers "Package <id>/<ver> not found." and EXITS 0, installing nothing. Measured,
+# all three, against android 1.0.15985488 [2026-09-11]:
+#
+#   platform-tools;37.0.1     -> Package platform-tools/37.0.1 not found.      exit 0
+#   ndk-bundle;22.1.7171670   -> Package ndk-bundle/22.1.7171670 not found.    exit 0
+#   emulator;37.1.11          -> Package emulator/37.1.11 not found.           exit 0
+#   build-tools;37.0.0        -> (accepted -- multi-instance, version required)
+#
+# The line that used to stand here claimed "platform-tools IS pinned now:
+# platform-tools;<ver> installs correctly", in the same breath as correctly
+# describing ndk-bundle failing this exact way. It was false, and the VERIFY LOOP
+# BELOW IS WHAT CAUGHT IT -- on the first boot that ever executed this block it
+# printed "these packages are absent: platform-tools" and exited 1, exactly as
+# designed. The blind spot was not here; it was the TEST STUB, which accepted the
+# versioned id and then listed it bare, so the suite was green on a package the real
+# CLI never installed. That is also what the old `@todo fix version not found !!!`
+# was about. See the .env annotations.
+#
+# So the version pins for these three are EXPECTED versions, not requestable ones:
+# whatever upstream currently serves is what gets installed. _PLATFORM_TOOLS_VERSION
+# is asserted against the installed build after the verify loop; _NDK_BUNDLE_VERSION
+# has no consumer at all (it is a record of the bundled version -- see .env).
 #
 # The package set is declared ONCE, here, and the verification loop below iterates
 # these same arrays. Row 25's lesson one level down: the loop used to carry its own
@@ -77,7 +97,7 @@ unzip "${ANDROID_HOME}/tools.zip" && rm "${ANDROID_HOME}/tools.zip"
 # @todo check-updates
 _pkgs=(
   "cmdline-tools;${GLOBAL_STACK_ANDROID_CMDLINE_TOOLS_VERSION}"
-  "platform-tools;${GLOBAL_STACK_ANDROID_PLATFORM_TOOLS_VERSION}"
+  "platform-tools"
   "build-tools;36.0.0" "build-tools;36.1.0"
   "build-tools;${GLOBAL_STACK_ANDROID_BUILD_TOOLS_VERSION}"
   "ndk-bundle" "ndk;${GLOBAL_STACK_ANDROID_NDK_VERSION}"
@@ -119,15 +139,17 @@ set -xeEu -o pipefail
 _installed="$(android --sdk="${ANDROID_HOME}" sdk list)"
 _missing=""
 for _want in "${_pkgs[@]}" ${_img_pkgs[@]+"${_img_pkgs[@]}"}; do
-  # The listing's id column is the install id with ';' -> '/'. ONE exception:
-  # platform-tools is single-instance upstream, so it is installed as
-  # "platform-tools;<ver>" but LISTED bare, with its version in the second column.
-  # Transforming it like the rest yields "platform-tools/<ver>", which never appears
-  # in any listing -- a correct install would report itself missing.
-  case "${_want}" in
-    "platform-tools;"*) _id="platform-tools" ;;
-    *) _id="${_want//;//}" ;;
-  esac
+  # The listing's id column is the install id with ';' -> '/', with NO exception: the
+  # single-instance ids are bare on BOTH sides -- bare going in (see the class note
+  # above) and listed bare with their version in column 2. An exception used to live
+  # here, mapping "platform-tools;<ver>" back to bare. Its listing-side half was
+  # CORRECT -- platform-tools really is listed bare -- but it existed only because the
+  # install array one up carried a version, so it encoded a false premise about the
+  # install side. It masked nothing: with the versioned id it mapped to bare, grepped,
+  # found nothing, and FATALed -- which is exactly how this bug was caught, live, on
+  # the first boot that ever ran this block. With the install id bare, "${_want//;//}"
+  # already yields bare and the exception is simply unnecessary.
+  _id="${_want//;//}"
   printf '%s\n' "${_installed}" | grep -qF -- "${_id}" || _missing="${_missing} ${_id}"
 done
 if [ -n "${_missing}" ]; then
@@ -136,6 +158,28 @@ if [ -n "${_missing}" ]; then
   printf '       android --sdk=<sdk root> sdk list --all --beta before assuming a network\n' >&2
   printf '       problem (--sdk is a GLOBAL option: it goes BEFORE the subcommand).\n' >&2
   exit 1
+fi
+
+# platform-tools is single-instance, so its version is NOT requestable -- the install
+# above asked for a bare id and upstream served whatever it currently offers. The
+# .env pin is therefore an EXPECTED version, and this is where it earns its keep:
+# assert it against the build actually on disk (column 2 of the bare listing line).
+#
+# WARN, deliberately NOT fatal, and this is not a swallowed error -- there is no
+# failure here to absorb. The install succeeded; the pin is simply describing a build
+# upstream has moved past. The only remedy is a human `.env` bump (the pin is
+# env-update-tracked: `@todo env-update sdkmanager:platform-tools`), and exiting 1
+# would strand 04android plus 05stable/05edge/local.05 behind documentation drift.
+#
+# Fires once per INSTALL, not once per boot: the gate keys on the pin, so after a
+# mismatch the marker still carries platform-tools=<pin> and the next boot answers
+# `skip` without reaching this line. Bumping .env changes the marker, which forces
+# the reinstall that picks up upstream's current build -- which is what the pin means
+# for a single-instance package.
+_ptv_got="$(printf '%s\n' "${_installed}" | awk '$1 == "platform-tools" { print $2; exit }')"
+if [ "${_ptv_got}" != "${GLOBAL_STACK_ANDROID_PLATFORM_TOOLS_VERSION}" ]; then
+  printf 'WARN: platform-tools %s != pinned %s (single-instance: upstream serves one build, the pin cannot request another - bump .env to match)\n' \
+    "${_ptv_got:-<absent>}" "${GLOBAL_STACK_ANDROID_PLATFORM_TOOLS_VERSION}" >&2
 fi
 
 # rm -rf ${ANDROID_HOME}/licenses
