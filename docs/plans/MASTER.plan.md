@@ -842,6 +842,35 @@ Rule 17).
   re-download. `.env.local` was backed up to `/tmp/env.local.bak.1789152647` before the flip, the
   master `.env` stays `false`, and the flag is reset once the run is read.
 
+- [2026-09-11 21:25] RAN (row 24) — the supervised bring-up, with `RELOAD_ANDROID=true` per the
+  21:10 ruling, against `cd591f8` + `5fe9435`. Result: `make down-n-up` → **44/44 healthy, 0 error
+  tokens**; `04android` gate → `reinstall`, `sudo rm -rf /stack/tools/android`, full SDK rebuilt.
+  Row 38 live: `_ptv_got=37.0.1`, `adb` = `37.0.1-15733141`, no `WARN: platform-tools`, no
+  `these packages are absent`, and the command actually issued was
+  `android --sdk=/stack/tools/android sdk install emulator …` — `--sdk` GLOBAL (row 31) and the
+  single-instance id BARE (row 38), read off the live log rather than inferred.
+  **A METHOD FINDING that nearly produced a false green.** The bring-up ALONE does not exercise
+  row 39, and the green would have read as though it did. `/home/developer` is CONTAINER-LOCAL —
+  `docker inspect` shows only `.bash_history`, `.zsh_history` and the dist source as mounts — so
+  `down-n-up` RECREATES the container and hands `chown-home` an EMPTY `$HOME` with no cached
+  executable to strip; the launcher then re-downloaded at 0755 twenty-five seconds AFTER container
+  start (mtime 20:57:40 vs StartedAt 20:57:15). The tell was the mtime, not the mode: a 0755 file
+  whose mtime PREDATES the boot would have meant the permission pass had missed it, and a 0755
+  file whose mtime POSTDATES it means there was nothing there when the pass ran. Checking that is
+  what stopped "44 healthy" being reported as row-39 certification.
+  The real proof needed a RESTART (not a recreate), so a cache existed at the moment of the pass:
+  **755 before → 700 after**, then `android --version` → `1.0.16261425`, and **zero**
+  `Failed to exec android binary` / `Permission denied (os error 13)` across the whole boot, with
+  the ensuing multi-GB reinstall driven BY that 0700 launcher. Under `chmod 600` that middle value
+  is 600 and the next exec is the EACCES this row exists to fix. Container healthy in ~270-360 s.
+  Generalises beyond android: **a cache-stripping defect cannot be tested by recreating the
+  container that holds the cache** — the recreate destroys the fixture. Same family as the
+  warm-volume `skip` that hid row 31, met from the testing side instead of the code side.
+  Residuals named, not folded in: `USE_LOCKS=false` so lock-serialized tier-03 install stayed
+  untestable, and the two web-server failure dimensions need deliberate failure injection against a
+  live stack — not an executor's call. `.env.local` restored to `RELOAD_ANDROID=false` and diffed
+  against `/tmp/env.local.bak.1789152647`: that one line, no other drift.
+
 ## Planning-time verified state (2026-08-31/09-01)
 
 - Tree clean at `8486f62` [Verified: `git status --porcelain` empty].
@@ -1530,7 +1559,7 @@ class-3 var is absent from this accounting, and no gate site in B lacks a class-
 | 21 | Track 5b — remainder named by 5a: phpmyadmin, 00base runtime installs, elasticmq, rbenv plugins. frankenphp NOT gated (path-keyed); awscli has no pin | M | done | ae4f4df 53c0859 | docker/config/dist/bin/base-bin/*.sh docker/config/dist/bin/phpmyadmin-bin/*.sh docker/config/dist/bin/serverless-bin/*.sh docker/config/dist/bin/rbenv-bin/*.sh bin/tests/startup-prologue.test.sh |
 | 22 | Track 5 docs — CLAUDE.md Gotchas + two-phase note once the gate is universal | S | done | 3f94de3 | CLAUDE.md |
 | 23 | Close-out — terminal states + SHAs in plan, full battery re-run, advisor, push | M | done | 4eb16c6 | docs/plans/MASTER.plan.md |
-| 24 | Developer input — supervised rebuild/bring-up closing 8 of the 9 UNCERTIFIED-BY-EXECUTION dimensions | M | blocked | - | - |
+| 24 | Developer input — supervised rebuild/bring-up closing 8 of the 9 UNCERTIFIED-BY-EXECUTION dimensions. RAN 2026-09-11 21:1x against `cd591f8`/`5fe9435` with `RELOAD_ANDROID=true`. Closed: whole stack up from cold (44/44 healthy, 0 error tokens), value visibility in a running container, marker-driven real reinstall, and both row-38 and row-39 live. NOT closed, and still `UNCERTIFIED-BY-EXECUTION` in those words: lock-serialized tier-03 parallel install (`USE_LOCKS=false`, untestable this run), a web-server handler actually writing `tools/errors/<token>`, and consumer fail-fast behind a failed web server — the last two need deliberate failure injection, which was not authorised. State is `done` with NO sha on purpose: a bring-up is not a commit, so the collector reads it as *claimed*, not *verified*. | M | done | - | - |
 | 25 | Sweep — web-server iou handlers write an error token on exit 1; de-hardcode WEB_SERVER_SCRIPTS | M | done | a1ba6f1 | docker/config/dist/bin/caddy-bin/*.sh docker/config/dist/bin/httpd-bin/*.sh docker/config/dist/bin/nginx-bin/*.sh bin/tests/startup-prologue.test.sh |
 | 26 | Sweep — retire the stale `# @todo fix pin versions` TODOs (NOT pin: .hadolint.yaml already rules against it) | L | done | fc10204 | docker/images/*/Dockerfile* templates/ghost-blog/Dockerfile |
 | 27 | Sweep — CLAUDE.md corrections (141/1 claim, stale suite counts, LOCAL slot, exclusion list) | S | done | 3f94de3 | CLAUDE.md |
@@ -1548,10 +1577,18 @@ class-3 var is absent from this accounting, and no gate site in B lacks a class-
 | 39 | P0 found while verifying row 38, and the reason row 38 needed a hand-deleted cache to go green. `base-bin/global-stack-base-chown-home.sh:50` ran `find "$HOME/" -type f -exec sudo chmod 600` from the ENTRYPOINT of every container, and a numeric `600` also strips the OWNER's execute bit -- so any tool caching an executable under `$HOME` is disarmed on the NEXT boot. Measured: `~/.android/bin/android-cli` (the launcher's 87 MB self-download, 0755) becomes `-rw-------` and the SDK reinstall dies `Failed to exec android binary: Permission denied (os error 13)`; second instance same day, serverless v4 caches `sf-core.js`, a bundled `esbuild` and `invoke.py` under `~/.serverless/releases/<ver>/` at 0755. The first draft of this row blamed `binary.js`'s `existsSync(binaryPath)` gate and was WRONG -- `binaryPath` is `<serverless>/node_modules/.bin/serverless-linux-amd64-<v>`, under `tools/`, which chown-home never touches. Measured instead: with all three release files at 0600 `serverless --version` still returns 4.42.0 (the Go launcher runs sf-core.js via `node`; read suffices), while the bundled `esbuild` is a native ELF that answers `Permission denied` at 0600 and prints `0.28.2` at 0755 -- so the break is real but confined to a bundling/deploy path, and is [Inferred], not exercised. ARMED, not always-firing: a normal boot never invokes `android` (`gs_version_gate` -> skip; `avdmanager` is a 5760-byte shell script calling `java` directly), so only a reinstall boot meets a stripped cache -- the same hiding pattern as row 31. Fixed with `chmod ug-s,go-rwx` (every group/other bit gone, setuid/setgid gone, owner untouched; can only PRESERVE an x, never add one), ssh verified satisfied against a real sshd (600/700 accepted, 640/660/604 rejected), and the `.docker/cli-plugins` `a+x` arm DELETED rather than joined by a second exception (it never fired; docker's plugins live in /usr/libexec). New §51, 606 -> 614. Certified by execution: `04android` restarted with the fixture in place, synced script line 89 shows `ug-s,go-rwx`, `android-cli` survived at `-rwx------`, `android --version` = 1.0.16261425, container healthy in 57s, 0 error tokens. | S | done | 5fe9435 | docker/config/dist/bin/base-bin/global-stack-base-chown-home.sh bin/tests/startup-prologue.test.sh CLAUDE.md |
 <!-- /progress-block -->
 ### Blocked
-- Row 24 — the supervised bring-up (POSTPONED by the developer 2026-09-05; see the
-  06:25 ruling: it is a `make up` from cold, no rebuild needed). Also the SAME blocker as TODO.md's
-  entire "Requires container testing" section (TODO.md:11,25,31,38,48): one
-  blocker recorded in two files.
+- (CLEARED 2026-09-11 21:1x.) Row 24 — the supervised bring-up RAN. Kept for the trail: it was
+  POSTPONED by the developer 2026-09-05 (06:25 ruling: a `make up` from cold, no rebuild needed),
+  and was the SAME blocker as TODO.md's entire "Requires container testing" section
+  (TODO.md:11,25,31,38,48) — one blocker recorded in two files.
+- THREE dimensions survive the bring-up and are still `UNCERTIFIED-BY-EXECUTION`, named rather
+  than folded into a green: (1) lock-serialized tier-03 parallel install — `GLOBAL_STACK_USE_LOCKS`
+  is `false`, so the run could not exercise it and a green here would be vacuous; (2) a web-server
+  handler writing `tools/errors/<token>` on a failed install — `01caddy` came up healthy, and this
+  is the heaviest of the nine (row 25's fix is certified by handler SHAPE only, never by a run);
+  (3) consumer fail-fast behind a failed web server. (2) and (3) need a DELIBERATELY failed web
+  server, which is failure injection against a live stack and was not authorised — it is a
+  developer call, not an executor one.
 
 ### Needs input
 - (none open.)
