@@ -152,16 +152,25 @@ if [[ "${RBENV_MODE}" = "setup" ]]; then
   source /usr/local/bin/global-stack-base-setup-packages.sh
   source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/rbenv.shellrc"
   eval "$(rbenv init - --no-rehash ${GLOBAL_STACK_SHELL})"
+  # No `--debug`: it means "Turn on Ruby debugging" (rubygems/command.rb:617) and prints
+  # every exception rubygems RESCUES -- the cache-miss stat in remote_fetcher.rb:288, the
+  # file-walk misses in fileutils.rb. On a HEALTHY run that was 81% of 03ruby3's log and
+  # 75% of 03ruby4's, which buries a real failure. `--backtrace` is kept: "Show stack
+  # backtrace on errors" (command.rb:613) is what actually helps when an install fails.
+  #
+  # This comment lives ABOVE the call, never between its continued lines. A `\` splices
+  # the NEXT line on, so a comment placed mid-continuation ends the command at its `#`,
+  # and each remaining argument line is then run as its OWN command. Not a style point:
+  # 7e8c0b2 parked this very text mid-continuation and the call silently dropped to FOUR
+  # arguments -- `gem install` was never passed, so no gem could ever be installed --
+  # while the orphaned argument line died `command not found`, exit 127, taking 03ruby3
+  # and 03ruby4 down on the next restart. It survived 30h only because those containers
+  # predated the commit [measured 2026-09-11]. startup-prologue.test.sh 50 guards it.
   global_stack_base_setup_packages \
     --prefix='RUBY' \
     --marker-prefix="ruby.${RUBY_VERSION_AS:-${RUBY_VERSION:-}}" \
     --cleanup-command='gem uninstall ${PACKAGE_NAME} -v "${PACKAGE_OLD_VERSION}" -x -I || true' \
     --command='echo -e "**** Installing/Updating ${PACKAGE_NAME} ${PACKAGE_VERSION} ${PACKAGE_COMMAND_SUFFIX}"' \
-    # No `--debug`: it means "Turn on Ruby debugging" (rubygems/command.rb:617) and prints
-    # every exception rubygems RESCUES -- the cache-miss stat in remote_fetcher.rb:288, the
-    # file-walk misses in fileutils.rb. On a HEALTHY run that was 81% of 03ruby3's log and
-    # 75% of 03ruby4's, which buries a real failure. `--backtrace` is kept: "Show stack
-    # backtrace on errors" (command.rb:613) is what actually helps when an install fails.
     --command='gem --backtrace install ${PACKAGE_NAME}:${PACKAGE_VERSION} ${PACKAGE_COMMAND_SUFFIX}'
 
   if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/ruby.${RUBY_VERSION_AS:-${RUBY_VERSION:-}}" || "true" = "${GLOBAL_STACK_RELOAD_RUBY}" ]]; then

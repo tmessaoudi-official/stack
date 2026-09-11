@@ -3550,6 +3550,45 @@ done || true)"
 assert_pass "49b: every positional read is below its handler (offenders: ${_a49_bad:-none})" \
   test -z "${_a49_bad}"
 
+# ─── Section 50: no comment inside a line continuation (row 36) ────────────
+# A `\` at end of line splices the NEXT line on. If that next line is a COMMENT,
+# the command ends at its `#` — and every remaining argument line below is then
+# executed as its OWN command. Both halves are silent in different ways:
+#
+#   * the call runs with FEWER arguments than written, doing less than it says
+#   * the orphaned argument lines die `command not found`, exit 127
+#
+# Shipped and measured [row 36, 2026-09-11]: 7e8c0b2 moved an explanatory
+# comment about `gem --debug` between the continued arguments of
+# rbenv-start.sh's `global_stack_base_setup_packages` call. The call silently
+# dropped from five arguments to FOUR — `gem install` was never passed, so no
+# ruby gem could ever be installed — and the orphaned `--command='gem ...'` line
+# ran as a command, exit 127, killing 03ruby3 and 03ruby4. It went unnoticed for
+# a day because those containers had started seven hours BEFORE that commit;
+# the developer's next restart is what surfaced it.
+#
+# The check is narrowed to a comment continuing a LIVE line. A comment line
+# whose predecessor is ALSO a comment ending in `\` is an ordinary commented-out
+# block — six of those exist in this tree (nginx-iou, httpd-setup, caddy-start,
+# phpedge-install-fpm) and they must stay green.
+printf '\n%b── Section 50: no comment inside a line continuation%b\n' "${C_BOLD}" "${C_RESET}"
+
+# `|| true`: an empty sweep is 50a's red, not a harness abort.
+_a50_cont="$(find "${DIST_BIN}" "${SCRIPT_DIR}/.." -name '*.sh' -type f 2>/dev/null | sort -u \
+  | xargs grep -c '\\[[:space:]]*$' 2>/dev/null | awk -F: '{n+=$2} END{print n+0}' || true)"
+assert_pass "50a: >= 100 line-continuations discovered to scan (found ${_a50_cont})" \
+  test "${_a50_cont:-0}" -ge 100
+
+_a50_bad="$(find "${DIST_BIN}" "${SCRIPT_DIR}/.." -name '*.sh' -type f 2>/dev/null | sort -u \
+  | while read -r _f; do
+    awk -v F="$(basename "${_f}")" '
+      prev ~ /\\[[:space:]]*$/ && prev !~ /^[[:space:]]*#/ && $0 ~ /^[[:space:]]*#/ {
+        printf "%s:%d ", F, NR
+      } { prev = $0 }' "${_f}"
+  done || true)"
+assert_pass "50b: no comment line continues a live continued line (offenders: ${_a50_bad:-none})" \
+  test -z "${_a50_bad}"
+
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
 if [[ "${FAIL}" -eq 0 ]]; then
