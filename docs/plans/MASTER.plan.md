@@ -667,6 +667,141 @@ labels) and post-push commit signing.
   cannot return -- a hardcoded list of four would be the same can-never-fire defect §19 had.
   Certification tier for both gates: `advisor()` only.
 
+- [2026-09-11 14:34] AGREED (row 33 + a hygiene sweep): after row 32 closed, the remaining backlog
+  was counted rather than drip-fed -- **16 open, 1 live defect**. Ruling: fix the live one as its
+  own row, then BATCH items 2-6 into a single hygiene change, then re-verify items 8-16 in one pass
+  and report them as a list to rule on once. **Nothing is to be committed**: the developer reviews
+  the whole working tree first (verbatim: "wait don't commit ! let me review everything !").
+  The live defect turned out MUCH wider than filed as A8. Filed as "platform-tools is pinned but
+  absent from the gate's composite marker"; measured, **9 of the 12** `GLOBAL_STACK_ANDROID_*` vars
+  that `global-stack-android-setup.sh` consumes are absent from `GS_ANDROID_SDK_WANT` -- only
+  `cmdline-tools`, `build-tools` and `ndk` are in it. Missing: `API_LEVEL_1/2/3`,
+  `SYSTEM_IMAGE_TAG`, `SYSTEM_IMAGE_PLAYSTORE_TAG`, `SYSTEM_IMAGE_ABI`, `PLATFORM_TOOLS_VERSION`,
+  `INSTALL_SYSTEM_IMAGES`, `SDK_BUILD`. Each is a `.env` bump that changes what is installed while
+  leaving the marker byte-identical, so `gs_version_gate` answers `skip` and the bump never lands --
+  the exact silent class Track 5 exists to close, one level up from row 31. Two bite now: flipping
+  `INSTALL_SYSTEM_IMAGES` to true installs an emulator + 6 images and would do nothing, and the
+  pending `API_LEVEL_3` bump off `37.2-beta1` onto the shipped stable would read as applied and
+  would not be. The fence comment at `android-start.sh:110-113` asserting both `_NDK_BUNDLE_VERSION`
+  and `_PLATFORM_TOOLS_VERSION` are "deliberately absent... the live call passes bare" is now HALF
+  FALSE: row 31 made platform-tools a pinned id at `setup.sh:80`. Known cost, stated up front:
+  widening the marker changes its content once, and `android-start.sh:119` answers a mismatch with
+  `sudo rm -rf "${ANDROID_HOME}"` -- so the next `make up` does one full SDK reinstall. That
+  reinstall is also the first time row 31's `--sdk` fix would ever execute, which is a row-24
+  UNCERTIFIED dimension, so the cost is not pure loss.
+- [2026-09-11 15:50] BUILT (row 33, uncommitted by instruction): the widening landed in the working
+  tree. Red-first was measured BEFORE `android-start.sh` was touched and matched the prediction
+  exactly -- 27f redded on precisely the nine missing inputs and stayed green on the three that were
+  already covered, 47b named the same nine, 12 failures / 594 total. After the fix: 594/594.
+  The red-first run IS the sabotage table for this row: one case per key, each changing exactly one
+  field, so every one of the twelve has an individually demonstrated red path. Two self-inflicted
+  lint regressions were caught by a before/after parity measurement against `HEAD` and fixed:
+  SC2043 (the `for _v in NDK_BUNDLE` loop became one-element once `PLATFORM_TOOLS` moved to the
+  include loop) and two `|`-continuations that shfmt's `-bn` style wants as `\` + leading `|`.
+  Final parity: shellcheck identical but for one added SC2016 (a deliberately single-quoted
+  `printf` of generated code, matching the 77 already there), shfmt zero new objections on both
+  files. The live `tools/versions/android.sdk` was verified byte-unchanged (56 B, Sep 10 14:19)
+  after every probe run -- §46's tmpdir pin plus §27's own `GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS`
+  override are what keep a probe from overwriting it and triggering the `sudo rm -rf`.
+  UNCERTIFIED-BY-EXECUTION: no bring-up. That the widened marker actually drives a successful
+  reinstall is exactly the row-24 dimension, and it stays unproven until a `make up`.
+- [2026-09-11 16:20] FINDING (row 34 — the hygiene batch, NOT a developer ruling): the batch was
+  authorised as five items. Verified against the tree, **four of the five are wrong as filed**, and
+  the re-verification is worth more than the changes. Every one was caught by reading the fence
+  before touching it, which is the whole point of the rule.
+  **(2) dead `_NDK_BUNDLE_VERSION` plumbing — HALF real.** `.env:1338` carries a `lock:` annotation
+  and a six-line fence: the var "RECORDS the revision the bare install yields; it cannot drive it.
+  Do not 'fix' it into a versioned id." So the VAR is a deliberate record and STAYS. What was
+  genuinely dead is the `environment:` plumbing injecting it into four containers where no script
+  reads it — removed from `04android`, `05edge`, `05stable` and the gitignored `local.05` (edited,
+  backup kept, never staged), each leaving a comment saying why, plus a cross-reference in `.env`.
+  Verified: resolved config carries 0 occurrences of NDK_BUNDLE and still 48 of the 12 real android
+  inputs (12 x 4 services).
+  **(3) rootAVD pin — ALREADY DECLINED on the merits**, 2026-09-11 10:12, and the reason still
+  holds: "the clone is consumed by nothing executable and gitlab is not one of the 12 fetcher
+  types, so a pin would never auto-update". Not re-litigated. Its idempotence half is real but
+  narrow — `git clone` into an existing dir exits 128, reachable ONLY on a standalone debugging run,
+  because the production path wipes `ANDROID_HOME` at `start.sh:144` before calling setup at :150.
+  **(4) `conf/sdkman/sdk-init/` orphan removal — FALSIFIED.** It is not an orphan: 5.1K of live
+  code, rsynced into `${SDKMAN_DIR}/bin` at `sdkman-start.sh:127`, pinned by four §32 assertions and
+  recorded in `.env:437`. Removing it would break the SDKMAN init patch and red the suite.
+  **(5) `API_LEVEL_3` off `37.2-beta1` onto stable — FALSIFIED.** `.env:1352` reads
+  `(lock:API level ...; android-37.2 STABLE exists upstream, this is deliberately the beta)`. The
+  stable being available is the documented PREMISE of the lock, not evidence against it. Changing
+  it needs a developer ruling, not a hygiene sweep. Note row 33 now makes that bump WORK when it is
+  taken: API_LEVEL_3 is in the composite, so it will force the reinstall it never used to.
+  **(6) trailing newlines — REAL and done.** 49 of the 103 dist/bin scripts then present lacked one; all 103 now
+  (102 since row 35 deleted the callerless `base-set-bash-strict.sh`)
+  carry one. Verified mechanically: every one of the 49 is exactly `1/1` in `--numstat`, so the
+  final byte moved and nothing else.
+- [2026-09-11 17:10] 6C FINDING (rows 33/34, not a developer ruling — no question was put): the
+  pre-completion check demanded a red path for §47a and §47c, which the red-first run had not
+  produced (it proved 47b only). Measuring them found a REAL defect in §47 itself. `_a47_consumed`
+  had no `|| true`, so pointing `AND_SETUP` at a nonexistent file did not RED 47a — it killed the
+  whole run at that line with no tally, which reads as a crash rather than as the guard firing.
+  This is the harness trap already recorded in ### Fragile and already guarded three times in this
+  file; §47 reproduced it. Fixed, and both directions now measured: with the guard, the broken root
+  reds `47a ... (found 0)` and the run still tallies — and 47b goes GREEN on that empty set
+  (`uncovered: none`), which is precisely the vacuity 47a exists to catch, demonstrated live rather
+  than argued. 47c was proven separately by adding `;fake=${GLOBAL_STACK_ANDROID_FAKE}` to the
+  composite: it reds naming the dead key. Both mutations restored and the restores verified by
+  sha256 — `start.sh` back to `9f94fa375fb880c4`, numstat `31/6`.
+  Also closed here: `env-update.test.sh` 844/844 run because `.env` was edited (that suite owns
+  `.env` parsing); the `.env` note reworded from "the four android compose files" to name the three
+  TRACKED ones plus "any `local.*` variant", since a clean clone would read "four" and find three;
+  and the three node `*-setup.sh` confirmed byte-identical at last (`865e2047d297113e`) — row 32
+  left node26 differing by its trailing newline, and the row-34 sweep closed it.
+- [2026-09-11 16:45] RE-VERIFICATION of backlog items 8-16, measured today, one pass, nothing
+  changed by it — this is the list the developer rules on once:
+  **A3(ii) AVD naming** — STILL TRUE, still cosmetic. `setup-dist.sh:68` hardcodes
+  `..._android_${ver}_google_apis` while the image tag is `google_apis_ps16k`. The triage itself
+  downgraded it to "a labelling lie, not a functional break", and row 31 DECLINED the rename with a
+  reason that still holds: `setup-dist.sh` runs every start, so `avdmanager create --force` under a
+  new name would create three NEW AVDs beside the three that exist. Leave it.
+  **The mis-rooted DOCTYPE x81 / "corrupted package.xml" x246 scan** — remains what it was filed as:
+  root cause NOT found, the original hypothesis FALSIFIED, the scan itself mis-rooted. No new
+  evidence today; it needs a bring-up to re-observe, so it is a row-24 dependant.
+  **Dockerfiles unparseable by hadolint** — REAL, and the numbers drifted: filed 33 of 43, measured
+  **32 of 41** today. Root cause now identified and it is NOT ours: hadolint's parser cannot read a
+  registry `host:port` in a `FROM` when the port comes from an `ARG` —
+  `FROM ${ALIAS}:${PORT}/image:${VERSION}` gives `unexpected ':' expecting ... the image tag`. The
+  only "fix" would be restructuring every FROM line and breaking the local-registry build chain.
+  Document as an upstream limitation; do not touch the Dockerfiles.
+  **`MODE=setup` java-marker gate** — already widened: `sdkman-start.sh:70-71` gates on
+  `java.${_java_label}` via `gs_version_gate`, and :181 passes `--marker-prefix`. Closed.
+  **`cmdline-tools` PATH order** — the ordering is deliberate, but the investigation turned up
+  something NOT filed: `android-start.sh:48` and :55 both contain a **double colon**
+  (`...${FLUTTER_VERSION:-}/bin::${ANDROID_HOME}/cmdline-tools/bin`). An empty PATH element means
+  "the current directory" to POSIX, so every container running this start script has `.` on its
+  PATH. Small, real, and one character to fix — NOT fixed here because it is outside both
+  authorised rows and the developer asked to review before anything else lands.
+  **rust yanked crates** — no yank handling exists for the rust fetcher (the only `yank` logic in
+  the tree is `fetchers/pypi.sh`, which excludes yanked releases properly). Still open as filed.
+  **E3** — informational root-cause note, not a defect. No action.
+  **E7-f** — CLOSED row 35. `base-bin/global-stack-base-set-bash-strict.sh` deleted. Zero callers
+  re-confirmed under BOTH sweeps (`git grep` and plain `grep` over `docker/`, `bin/`, the Makefile
+  and the gitignored compose files); the only hits were the file itself, this plan and the triage
+  report. It is the pre-prologue ERR/EXIT handler and writes strictly LESS than `stackCatch` (no
+  line number, no command, no `_STACK_CAUGHT` re-entry guard). dist/bin drops 103 -> 102; §46a's
+  floor is `>= 90`, so it stays green.
+  **E7-g** — CLOSED row 35, and it was NOT merely latent: measured argless, all three exited 1 with
+  ZERO files in `tools/errors/`. The fix had to move the reads below the `stackCatch` DEFINITION,
+  not below the `trap` line as filed — the trap body calls `stackCatch`, so a read in between dies
+  with `stackCatch: command not found` and still writes nothing. After: each writes its token
+  naming the offending command (`line: 1 command: CADDY_PATH="${1}"`). All three callers do pass it. (`android-setup.sh`'s `${1}` is a
+  stackCatch function parameter — different thing, not a member of this class.)
+
+- [2026-09-11 18:05] AGREED: row 35 — finish the remaining six backlog items in one batch, commit
+  nothing, present the whole tree for review at the end (developer ruling, verbatim: *"You know what
+  finish everything but don't commit ! let me review zt the end !"*). Three of the six were filed
+  wrongly and were corrected against the code before implementation, not after: the `::` defect is at
+  FOUR sites (`alltogether-start.sh` carries the same copy-pasted PATH as `android-start.sh`), not
+  two; `caddy-start.sh:8` is a glued re-include that loses the first inherited PATH element, not just
+  a missing separator; and the §15 abort is not §15's at all but `assert_output_contains`'s, shared by
+  31 call sites. E8 (rust yanked crates) was RETRACTED in the triage itself — `/stack` owns no crate
+  or lockfile — so the batch is six, not seven. The `set +E`-is-inert Fragile entry was falsified by
+  measurement and corrected in place with a tombstone rather than deleted.
+
 The executor APPENDS its own dated `AGREED:` entries here (e.g. the F3 classification
 outcome, Track 5 audit rulings) as it goes — this file is where rulings land. Never backdate;
 never write an entry for a ruling that was not actually taken (forged-AGREED hazard, global
@@ -1369,6 +1504,9 @@ class-3 var is absent from this accounting, and no gate site in B lacks a class-
 | 30 | E7 — normalize the 3 android stackCatch handlers to the post-row-25 shape (exit 1 reported, `_STACK_CAUGHT`, 141 exemption on start, error token written before `sleep infinity`, `message:`→`command:`); extend §19 discovery to the whole exempt family, shape-agnostic; fix the new-service scaffold | M | done | 36e03cd | docker/config/dist/bin/android-bin/*.sh bin/tests/startup-prologue.test.sh .claude/skills/new-service/SKILL.md |
 | 31 | P0 — `--sdk` is a GLOBAL option, not a subcommand option: `b2ae4d1` wrote `android sdk install --sdk=…` at all 3 call sites, which the CLI rejects with exit 2. Move it to `android --sdk=… sdk …`, drop the `2>/dev/null` OR-TRUE swallow that turned that exit 2 into a FATAL blaming the package ids, make one array the source of truth for install AND verify (11 of 24 ids were verified while the comment claimed all), replace `.env`'s stale line-number anchors with names, decouple the config.ini rewrite from the `_google_apis` reverse-parse, quote `${ANDROID_HOME}`, rename `..._SDK_URL`→`..._SDK_BUILD` | M | done | 76dadb1 | docker/config/dist/bin/android-bin/global-stack-android-setup*.sh .env docker/images/0{4android,5edge,5stable}/docker-compose.yaml bin/tests/startup-prologue.test.sh bin/tests/env-update.test.sh templates/tips/env-update.md |
 | 32 | A10 at whole-class scope — a trailing test-led `[[ cond ]] && cmd` returns the FALSE test as the SCRIPT's exit status. 4 sites: `android-setup.sh` (unreachable today — `start.sh:115` exports the var before its only call site) and `node24/node26/nodeedge-setup.sh` (reachable — `nvm-start.sh:143` calls them as bare statements under `set -xeEu` with the prologue ERR trap). Convert to `if`, behaviour identical; add §46, a DISCOVERY-based guard (a hardcoded list of 4 would be §19's can-never-fire defect again) narrowed to TEST-led `&&` so the legitimate OR-TRUE and `cmd &&` last lines stay green | M | done | 75a8291 | docker/config/dist/bin/android-bin/global-stack-android-setup.sh docker/config/dist/bin/node*-bin/global-stack-nvm-node*-setup.sh bin/tests/startup-prologue.test.sh |
+| 33 | A8a at its real width — the android SDK gate's composite marker carried 3 of the 12 `GLOBAL_STACK_ANDROID_*` inputs `setup.sh` actually consumes, so a bump of any of the other NINE was silently never applied (`gs_version_gate` answered `skip`). Widen `GS_ANDROID_SDK_WANT` to all 12 in a fixed order on ONE line (§27 extracts it with `grep -m1`), rewrite the half-false fence comment that called `_PLATFORM_TOOLS_VERSION` comment-only when row 31 made it a pinned id, and add §47 — a DISCOVERY-based bidirectional check (consumed ⊆ composite AND composite ⊆ consumed) with a `>= 12` floor. §27's probe now pins all 12 explicitly (it was inheriting 9 from the developer's shell) and bumps them one at a time. Cost stated up front: one forced full SDK reinstall on the next `make up` | M | doing | - | docker/config/dist/bin/android-bin/global-stack-android-start.sh bin/tests/startup-prologue.test.sh CLAUDE.md |
+| 34 | Hygiene batch, authorised as 5 items — 4 falsified or already settled on re-verification (see the 16:20 FINDING). DONE: the dead `_NDK_BUNDLE_VERSION` compose plumbing removed from 4 files (the `.env` var itself is a documented deliberate RECORD and stays), and trailing newlines added to the 49 of the 103 dist/bin scripts then present that lacked one (102 since row 35), each exactly `1/1` in numstat. NOT DONE with evidence: rootAVD pin (declined on the merits 2026-09-11 10:12, reason still valid), `sdk-init` removal (not an orphan — live rsync at `sdkman-start.sh:127`, 4 assertions pin it), `API_LEVEL_3` bump (a documented `lock:` on the beta) | S | doing | - | docker/images/0{4android,5edge,5stable}/docker-compose.yaml .env docker/config/dist/bin/**/*.sh |
+| 35 | Remainder of the hygiene backlog, six items after E8's retraction. **PATH well-formedness**: a literal `::` (POSIX empty element = the CURRENT DIRECTORY on PATH) at FOUR sites, not the 2 filed — `android-start.sh` and `alltogether-start.sh`, twice each; and `caddy-start.sh:8` glued `${PATH}` with no colon, so `caddy/bin` was never on PATH AND the first inherited element was eaten (line 15 wrote the correct form, proving a typo; it expands the corrupted value, so one fix repairs both). New §48 discovers both classes over the 38 PATH-writing lines with a `>= 30` floor, ANCHORED — a bare `PATH=` also matches every `*_PATH=` var here, inflating the corpus to 138 and making the floor unfalsifiable. **E7-g at CLASS scope — filed as 3, the sweep found 8**: the three `*-setup.sh` plus `caddy-iou.sh`, `httpd-iou{,-common}.sh` and `nginx-iou{,-common}.sh`, the same family row 25's Files cell scoped away. All read `${1}` under `set -u` above their handler; measured argless all eight exit 1 writing ZERO error tokens — the same unattributable death row 30 fixed in `android-start.sh`. Reads moved below whichever of the `trap` line and the `stackCatch` DEFINITION comes LAST — half the family traps first, half defines first, and getting only one right still writes nothing. New §49 ENUMERATES the class (`set -u` + a column-0 positional read) rather than listing it, with `base-dump-pg-project.sh` a named exemption; its S3 sabotage proves the half-fix reds. **E7-f**: `base-set-bash-strict.sh` deleted, zero callers under both sweeps, superseded by the prologue. **Harness abort**: fixed at the root — not §15 but `assert_output_contains`'s unguarded `out=$("$@" 2>&1)`, shared by all 31 call sites. **Fragile register**: the `set +E`-is-inert entry was wrong on all three claims (measured: `set +E` works under extdebug) | M | doing | - | docker/config/dist/bin/**/*.sh bin/tests/startup-prologue.test.sh docs/plans/MASTER.plan.md CLAUDE.md |
 <!-- /progress-block -->
 ### Blocked
 - Row 24 — the supervised bring-up (POSTPONED by the developer 2026-09-05; see the
@@ -1416,16 +1554,37 @@ class-3 var is absent from this accounting, and no gate site in B lacks a class-
 - DO NOT "simplify": `((_elapsed++)) || true` (base-wait-for.sh:44) and
   `((COMMAND_COUNTER++)) || true` (base-setup-packages.sh:52) — post-increment
   from 0 returns status 1 under set -e. Verified by repro.
-- sdkman-start.sh's three `set +E` blocks are inert (shopt -s extdebug at :4
-  re-enables errtrace), while :145 and base-setup-packages.sh:38 both describe
-  them as providing tolerance.
-- caddy-start.sh:8 is the only one of 18 PATH= assignments missing its colon;
-  works only because the scripts it calls live in /usr/local/bin.
-- startup-prologue.test.sh §15's harness ABORTS the whole suite (exit 127, no
-  tally line) when gs_version_gate is undefined, instead of redding — observed
-  under row 15's sabotage 1. §22's harness guards this with `|| true`; §15's does
-  not. A broken helper source line therefore kills the run rather than reporting
-  it. Not fixed in row 15 (out of its scope); a candidate for row 21 or 23.
+- ~~sdkman-start.sh's three `set +E` blocks are inert~~ — **this entry was WRONG
+  on all three of its claims; corrected row 35, 2026-09-11.** (1) The premise is
+  false: `set +E` WORKS under extdebug. Measured — `bash -c 'shopt -s extdebug;
+  set -E; set +E; shopt -o errtrace'` reports `errtrace off`, and `SHELLOPTS`
+  drops `errtrace` with it. `extdebug` turns errtrace ON when it is set; it does
+  not pin it on against a later `set +E`. The blocks provide the tolerance they
+  claim and the comments describing them are accurate. (2) The line numbers were
+  stale: the blocks are at 161/163, 178/187 and 192/199, not `:145`. (3)
+  `base-setup-packages.sh:38` is not about tolerance at all — the real reference
+  is **:125** ("Tolerant callers run under set +E; capture a failed command so
+  …"). Note also the `set +E` family is wider than sdkman: serverless-framework
+  -start.sh:97,106, alltogether-start.sh:82,88 and android-start.sh:86,92.
+  Kept rather than deleted: a register entry that was acted on as true for four
+  rows should leave a tombstone, not vanish.
+- ~~caddy-start.sh:8 is the only one of 18 PATH= assignments missing its colon~~
+  — FIXED row 35. Two corrections to the entry as filed: the corpus is **38**
+  PATH-writing lines across dist/bin, not 18 (an unanchored `PATH=` grep says 138 by sweeping
+  in every `*_PATH=` variable — the mistake §48 was written with and corrected in the same row); and "works only because the scripts
+  it calls live in /usr/local/bin" understated it — the missing colon meant
+  `${TOOLS}/caddy/bin` was never on PATH *and* the first inherited element was
+  consumed by the concatenation. Line 15 wrote the correct form into the shellrc
+  from the already-corrupted value, so the one fix repaired both. Pinned by §48c.
+- ~~startup-prologue.test.sh §15's harness ABORTS the whole suite~~ — FIXED row
+  35, at the root rather than at §15. The abort was not §15's: it is
+  `assert_output_contains`'s unguarded `out=$("$@" 2>&1)` (line 63) under the
+  suite's `set -euo pipefail`, shared by all **31** of its call sites; §15 was
+  merely the first to exercise it. Re-measured before the fix — renaming
+  `gs_version_gate` aborted at Section 15 with exit 127 and ZERO tally lines;
+  after, the same sabotage exits 1 with a full tally and 26 red assertions, each
+  carrying the child's exit code so a 127 is distinguishable from an output
+  mismatch.
 - SABOTAGE HYGIENE: back up with `cp -a` before mutating, never restore with
   `git checkout` — on uncommitted work it restores HEAD and silently destroys the
   edits under test. Cost a re-do in row 15; the md5 check is what caught it.

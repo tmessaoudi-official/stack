@@ -5,11 +5,6 @@ set -xeEu -o pipefail
 shopt -s extdebug
 IFS=$'\n\t'
 
-NGINX_PATH="${1}"
-MODSECURITY_TMP_PATH="${2}"
-MODSECURITY_LOGS_PATH="${3}"
-MODSECURITY_CONF_PATH="${4}"
-
 # Trap for specific signals and errors
 trap '' PIPE SIGPIPE SIGHUP
 trap 'stackCatch $? ${LINENO} "${BASH_COMMAND}"' EXIT ERR
@@ -34,6 +29,19 @@ stackCatch() {
     exit 1
   fi
 }
+
+# Positional reads live BELOW stackCatch, not above the trap. Under `set -u` an
+# argument-less invocation makes `${1}` a fatal shell error, and the EXIT trap is
+# what turns that into an error token — but the trap BODY calls stackCatch, so a
+# read placed between the `trap` line and the function definition still dies with
+# `stackCatch: command not found` and writes nothing. Measured [row 35]: argless,
+# all three exited 1 with ZERO files in tools/errors/, i.e. the same unattributable
+# death row 30 fixed in android-start.sh — unhealthy for the full 24h start_period
+# with nothing naming the cause.
+NGINX_PATH="${1}"
+MODSECURITY_TMP_PATH="${2}"
+MODSECURITY_LOGS_PATH="${3}"
+MODSECURITY_CONF_PATH="${4}"
 
 # Navigate to the NGINX directory and clean up old builds
 cd ${NGINX_PATH}

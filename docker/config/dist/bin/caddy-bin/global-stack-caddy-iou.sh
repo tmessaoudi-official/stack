@@ -6,11 +6,6 @@ set -xeEuo pipefail
 shopt -s extdebug
 IFS=$'\n\t'
 
-# Define reusable paths
-CADDY_PATH="${1}"
-HTTP_COMMONS_PATH="${2}"
-CADDY_VERSIONS_PATH="${3}"
-
 # Trap errors and handle cleanup or error reporting
 trap 'stackCatch $? ${LINENO} "${BASH_COMMAND}"' ERR EXIT
 
@@ -34,6 +29,20 @@ stackCatch() {
     exit 1
   fi
 }
+
+# Positional reads live BELOW stackCatch. Under `set -u` an argument-less
+# invocation makes `${1}` a fatal shell error, and the EXIT/ERR trap is what
+# turns that into an error token — but the trap BODY calls stackCatch, so a read
+# placed above the function definition dies with `stackCatch: command not found`
+# and writes nothing. Measured argless [row 35]: exit 1 with ZERO files in
+# tools/errors/, the unattributable death row 30 fixed in android-start.sh. This
+# family was missed by row 25, whose Files cell scoped it to the three
+# web-server trees, and by row 35's own filing, which named only the three
+# *-setup.sh — startup-prologue.test.sh §49 now enumerates the class instead.
+# Define reusable paths
+CADDY_PATH="${1}"
+HTTP_COMMONS_PATH="${2}"
+CADDY_VERSIONS_PATH="${3}"
 
 cd "${CADDY_PATH}"
 

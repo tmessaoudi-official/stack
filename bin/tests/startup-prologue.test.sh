@@ -59,15 +59,24 @@ assert_output_contains() {
   local label="$1"
   local pattern="$2"
   shift 2
-  local out
-  out=$("$@" 2>&1)
+  local out rc=0
+  # `|| rc=$?` — the command under test exiting non-zero is a RED for this
+  # assertion, not a harness error. `assert_pass`/`assert_fail` already get this
+  # right by testing in an `if`; this helper did not, and an unguarded
+  # `out=$(...)` under this suite's `set -euo pipefail` kills the whole RUN.
+  # Measured, not assumed [row 35]: renaming `gs_version_gate` in the shipped
+  # helper aborted the run at Section 15 with exit 127, no tally line and no ✗ —
+  # which reads as a crash, strictly worse than a red. 31 call sites shared it.
+  # The code is printed on failure so a 127 (helper missing) is distinguishable
+  # from a genuine output mismatch.
+  out=$("$@" 2>&1) || rc=$?
   if echo "${out}" | grep -q "${pattern}"; then
     PASS=$((PASS + 1))
     printf '  %b✓%b  %s\n' "${C_GREEN}" "${C_RESET}" "${label}"
   else
     FAIL=$((FAIL + 1))
     FAILURES+=("${label}")
-    printf '  %b✗%b  %s  (output: %s)\n' "${C_RED}" "${C_RESET}" "${label}" "${out:0:100}"
+    printf '  %b✗%b  %s  (rc=%s, output: %s)\n' "${C_RED}" "${C_RESET}" "${label}" "${rc}" "${out:0:100}"
   fi
 }
 
@@ -2011,9 +2020,10 @@ done
 printf '\n%b── Section 27: android SDK component gate%b\n' "${C_BOLD}" "${C_RESET}"
 
 # Row 19. android.sdkmanager holds the sdkmanager BINARY's own version, so it could
-# never detect an SDK component bump — the five GLOBAL_STACK_ANDROID_*_VERSION pins
-# were never compared to anything. A composite marker now carries the three pins the
-# live sdkmanager call actually uses.
+# never detect an SDK component bump — the GLOBAL_STACK_ANDROID_* pins were never
+# compared to anything. A composite marker now carries the inputs the live install
+# actually consumes. Row 33 widened that from 3 to all 12: §47 below derives the set
+# from setup.sh rather than trusting a list anyone has to remember to extend.
 AND_START="${DIST_BIN}/android-bin/global-stack-android-start.sh"
 AND_SETUP="${DIST_BIN}/android-bin/global-stack-android-setup.sh"
 
@@ -2024,11 +2034,14 @@ assert_fail "27a: android-start does NOT source the prologue" \
 assert_fail "27a: android-setup does NOT source the prologue (stays exempt)" \
   grep -q 'global-stack-base-prologue\.sh' "${AND_SETUP}"
 
-# The composite must carry exactly the three LIVE pins. NDK_BUNDLE and
-# PLATFORM_TOOLS appear only in a commented-out sdkmanager line, and Track 5 says
-# commented-out installs stay out — so including them would force a reinstall on a
-# bump that changes nothing.
-for _v in CMDLINE_TOOLS BUILD_TOOLS NDK; do
+# The four LIVE *_VERSION pins. PLATFORM_TOOLS joined this list in row 33: it is
+# NOT comment-only — `_pkgs` installs "platform-tools;${…_PLATFORM_TOOLS_VERSION}"
+# as a real element, and the fence in android-start.sh claiming otherwise was
+# half-false. NDK_BUNDLE genuinely is comment-only: the live array passes a bare
+# "ndk-bundle" with no version, so including it would force a reinstall on a bump
+# that changes nothing. §47 checks the whole set both ways; this loop is the
+# named-pin regression guard.
+for _v in CMDLINE_TOOLS PLATFORM_TOOLS BUILD_TOOLS NDK; do
   assert_pass "27b: composite marker includes ${_v}" \
     grep -q "GS_ANDROID_SDK_WANT=.*GLOBAL_STACK_ANDROID_${_v}_VERSION" "${AND_START}"
 done
@@ -2036,16 +2049,22 @@ done
 # red-first case, not a harness error, and an unguarded command substitution
 # under `set -e` aborts the RUN with no tally instead of redding.
 _and_want_line="$(grep -m1 '^GS_ANDROID_SDK_WANT=' "${AND_START}" || true)"
-for _v in NDK_BUNDLE PLATFORM_TOOLS; do
-  case "${_and_want_line}" in
-    *"GLOBAL_STACK_ANDROID_${_v}_VERSION"*)
-      FAIL=$((FAIL + 1)); FAILURES+=("27b: composite wrongly includes ${_v}")
-      printf '  %b✗%b  27b: composite wrongly includes %s (comment-only var)\n' "${C_RED}" "${C_RESET}" "${_v}" ;;
-    *)
-      PASS=$((PASS + 1))
-      printf '  %b✓%b  27b: composite excludes %s (comment-only var)\n' "${C_GREEN}" "${C_RESET}" "${_v}" ;;
-  esac
-done
+# NDK_BUNDLE is the one consumed-LOOKING name that must stay OUT. Row 33 emptied
+# this of its second member (PLATFORM_TOOLS moved to the include loop above), so it
+# is no longer a `for`: shellcheck SC2043 objects to a one-element loop, and §47
+# covers the general case in both directions anyway.
+_v=NDK_BUNDLE
+case "${_and_want_line}" in
+  *"GLOBAL_STACK_ANDROID_${_v}_VERSION"*)
+    FAIL=$((FAIL + 1))
+    FAILURES+=("27b: composite wrongly includes ${_v}")
+    printf '  %b✗%b  27b: composite wrongly includes %s (comment-only var)\n' "${C_RED}" "${C_RESET}" "${_v}"
+    ;;
+  *)
+    PASS=$((PASS + 1))
+    printf '  %b✓%b  27b: composite excludes %s (comment-only var)\n' "${C_GREEN}" "${C_RESET}" "${_v}"
+    ;;
+esac
 
 # Both the wipe branch and the setup branch must consult the gate, or a component
 # bump would clean but not reinstall (or reinstall onto a dirty tree).
@@ -2064,10 +2083,65 @@ assert_pass "27d: and only when the compose-time value was exported" \
   grep -q '\[\[ -n "\${GS_ANDROID_SDK_WANT:-}" \]\]' "${AND_SETUP}"
 
 # ── behavioural: the gate block, extracted by pattern (never by line number) ──
+#
+# The 12 values are SYNTHETIC, mutually distinct, and contain neither `;` nor `=`:
+# a fixture copied from .env would pass even when fixture and code were both wrong
+# (the no-fixture-leakage rule), and a value carrying the composite's own
+# separators would make a field boundary unreadable.
+#
+# All 12 are pinned EXPLICITLY. This is `env`, not `env -i` — PATH has to survive —
+# so any input left unpinned would be inherited from the developer's shell, where
+# the /stack vars are commonly exported: green on this machine, red on a clean one.
+_and_env=(
+  GLOBAL_STACK_ANDROID_SDK_BUILD=synthbuild
+  GLOBAL_STACK_ANDROID_CMDLINE_TOOLS_VERSION=1.0
+  GLOBAL_STACK_ANDROID_PLATFORM_TOOLS_VERSION=2.0
+  GLOBAL_STACK_ANDROID_BUILD_TOOLS_VERSION=3.0
+  GLOBAL_STACK_ANDROID_NDK_VERSION=4.0
+  GLOBAL_STACK_ANDROID_API_LEVEL_1=5.0
+  GLOBAL_STACK_ANDROID_API_LEVEL_2=6.0
+  GLOBAL_STACK_ANDROID_API_LEVEL_3=7.0
+  GLOBAL_STACK_ANDROID_INSTALL_SYSTEM_IMAGES=synthimages
+  GLOBAL_STACK_ANDROID_SYSTEM_IMAGE_TAG=synthtag
+  GLOBAL_STACK_ANDROID_SYSTEM_IMAGE_PLAYSTORE_TAG=synthpstag
+  GLOBAL_STACK_ANDROID_SYSTEM_IMAGE_ABI=synthabi
+)
+
+# The same array with ONE key's value replaced. Bash has no map; this is a prefix
+# match on `KEY=`, emitted one assignment per line for `mapfile`.
+_and_env_with() {
+  local key="$1" val="$2" e
+  for e in "${_and_env[@]}"; do
+    case "${e}" in
+      "${key}="*) printf '%s\n' "${key}=${val}" ;;
+      *) printf '%s\n' "${e}" ;;
+    esac
+  done
+}
+
+# The composite the SHIPPED line computes for a given environment. Deriving the
+# fixture instead of transcribing it means a change to the marker's FORMAT reds for
+# the right reason (the format moved) rather than for transcription drift, and the
+# bump cases below stay meaningful without anyone re-typing a 12-field string.
+_android_want() {
+  local root="${TMP_DIR}/android-want" h
+  rm -rf "${root}"
+  mkdir -p "${root}"
+  h="${root}/want.sh"
+  {
+    printf '#!/bin/bash\nset -e\n'
+    grep -m1 '^GS_ANDROID_SDK_WANT=' "${AND_START}" || true
+    printf 'printf "%%s\\n" "${GS_ANDROID_SDK_WANT:-<no-want-line>}"\n'
+  } >"${h}"
+  env "$@" bash "${h}" 2>/dev/null || true
+}
+
 _android_decision() {
-  local marker_body="$1" cmdline="$2" build="$3" ndk="$4"
+  local marker_body="$1"
+  shift
   local root="${TMP_DIR}/android" h
-  rm -rf "${root}"; mkdir -p "${root}/vers"
+  rm -rf "${root}"
+  mkdir -p "${root}/vers"
   h="${root}/block.sh"
   {
     printf '#!/bin/bash\nset -e\n'
@@ -2081,27 +2155,48 @@ _android_decision() {
     grep -m1 '^_android_gate=' "${AND_START}" || true
     printf 'printf "DECISION=%%s\\n" "${_android_gate:-<no-gate>}"\n'
   } >"${h}"
-  [[ -n "${marker_body}" ]] && printf '%s\n' "${marker_body}" >"${root}/vers/android.sdk"
+  if [[ -n "${marker_body}" ]]; then
+    printf '%s\n' "${marker_body}" >"${root}/vers/android.sdk"
+  fi
   env PATH="${DIST_BIN}/base-bin:${PATH}" \
-    GLOBAL_STACK_ANDROID_CMDLINE_TOOLS_VERSION="${cmdline}" \
-    GLOBAL_STACK_ANDROID_BUILD_TOOLS_VERSION="${build}" \
-    GLOBAL_STACK_ANDROID_NDK_VERSION="${ndk}" \
     GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS="${root}/vers" \
+    "$@" \
     bash "${h}" 2>/dev/null | sed -n 's/^DECISION=//p' || true
 }
 
-_want="cmdline-tools=1.0;build-tools=2.0;ndk=3.0"
+_want="$(_android_want "${_and_env[@]}")"
+
+# Non-vacuity for the DERIVED fixture. If the `^GS_ANDROID_SDK_WANT=` anchor stops
+# matching, _android_want emits its sentinel and 27e reds correctly — but every 27f
+# bump below would then pass VACUOUSLY, because a sentinel that never changes makes
+# EVERY value change look like a reinstall. So prove the derived string really
+# carries all 12 synthetic values before trusting a single bump result.
+_want_missing=""
+for _e in "${_and_env[@]}"; do
+  case "${_want}" in
+    *"${_e#*=}"*) ;;
+    *) _want_missing="${_want_missing} ${_e#GLOBAL_STACK_ANDROID_}" ;;
+  esac
+done
+assert_pass "27b2: derived composite carries all 12 synthetic values (missing:${_want_missing:- none})" \
+  test -z "${_want_missing}"
+
 assert_pass "27e: no marker → install" \
-  test "$(_android_decision "" 1.0 2.0 3.0)" = "install"
+  test "$(_android_decision "" "${_and_env[@]}")" = "install"
 assert_pass "27e: composite matches → skip" \
-  test "$(_android_decision "${_want}" 1.0 2.0 3.0)" = "skip"
-# THE DEFECT: each of these bumps previously did nothing at all.
-assert_pass "27f: cmdline-tools bump → reinstall" \
-  test "$(_android_decision "${_want}" 1.1 2.0 3.0)" = "reinstall"
-assert_pass "27f: build-tools bump → reinstall" \
-  test "$(_android_decision "${_want}" 1.0 2.1 3.0)" = "reinstall"
-assert_pass "27f: ndk bump → reinstall" \
-  test "$(_android_decision "${_want}" 1.0 2.0 3.1)" = "reinstall"
+  test "$(_android_decision "${_want}" "${_and_env[@]}")" = "skip"
+
+# THE DEFECT, at its real width (row 33): the composite carried 3 of the 12 inputs
+# setup.sh consumes, so a bump of any of the other NINE was silently never applied
+# — gs_version_gate said `skip`, the SDK kept the old component, and nothing
+# warned. One case per key, each changing exactly ONE field, so a red names the
+# input that stopped being watched rather than reporting a vague mismatch.
+for _e in "${_and_env[@]}"; do
+  _k="${_e%%=*}"
+  mapfile -t _bumped < <(_and_env_with "${_k}" bumpedvalue)
+  assert_pass "27f: ${_k#GLOBAL_STACK_ANDROID_} bump → reinstall" \
+    test "$(_android_decision "${_want}" "${_bumped[@]}")" = "reinstall"
+done
 
 # ─── Section 28: 00base + phpmyadmin gates (row 21, part 1) ───────────────
 printf '\n%b── Section 28: 00base install + phpmyadmin gates%b\n' "${C_BOLD}" "${C_RESET}"
@@ -3280,6 +3375,180 @@ assert_output_contains "46d: var UNSET -> exit 0, and no marker written" \
   '^0|absent$' _a10_probe unset
 assert_output_contains "46e: var SET -> exit 0, marker written to the PROBE dir" \
   '^0|present$' _a10_probe set
+
+# ─── Section 47: the android composite is DISCOVERED, not curated (row 33) ───
+printf '\n%b── Section 47: android composite ↔ setup.sh consumed set%b\n' "${C_BOLD}" "${C_RESET}"
+
+# Row 33. The composite marker is the ONLY thing that makes an .env bump of an SDK
+# input reach the SDK: gs_version_gate compares it, and a mismatch is what drives
+# the `sudo rm -rf "${ANDROID_HOME}"` and the reinstall. An input that setup.sh
+# CONSUMES but the composite OMITS is therefore a bump that is silently never
+# applied — which is what row 19 shipped, covering 3 of 12.
+#
+# So the set is DISCOVERED from setup.sh rather than listed here: a hardcoded list
+# of twelve would be §19's can-never-fire defect a third time, and the list that
+# needs extending is precisely the one nobody remembers to extend.
+#
+# Comment LINES are stripped first (the §19 shape). setup.sh's own prose names
+# NDK_BUNDLE_VERSION and PLATFORM_TOOLS_VERSION while explaining what is and is not
+# installed — an explanatory comment must never be able to change what this test
+# demands, which is §19's other lesson.
+#
+# BIDIRECTIONAL, deliberately. Consumed-minus-composite catches the row-19 gap.
+# Composite-minus-consumed catches its mirror: a var dropped from setup.sh whose
+# key lingers in the composite, where a bump would force a full SDK reinstall for a
+# value nothing reads any more.
+# `|| true` on BOTH: a missing file or a stopped anchor is the red-first case —
+# 47a's floor reports `found 0`, 47b reports every input uncovered — not a harness
+# error. Without it this suite's `set -euo pipefail` kills the whole RUN at this
+# line with no tally, which is strictly worse than a red: it reads as a crash
+# rather than as the guard firing. Measured, not assumed [row 33]: pointing
+# AND_SETUP at a nonexistent file aborted the run here until this was added.
+_a47_consumed="$(grep -v '^[[:space:]]*#' "${AND_SETUP}" \
+  | grep -oE 'GLOBAL_STACK_ANDROID_[A-Z0-9_]+' | sort -u || true)"
+_a47_want="$(grep -m1 '^GS_ANDROID_SDK_WANT=' "${AND_START}" \
+  | grep -oE 'GLOBAL_STACK_ANDROID_[A-Z0-9_]+' | sort -u || true)"
+
+# Non-vacuity floor: 12 as of row 33. Without it, a typo'd path or a strip that
+# matched nothing would compare two EMPTY sets and report a clean pass.
+_a47_n="$(printf '%s\n' "${_a47_consumed}" | grep -c . || true)"
+assert_pass "47a: setup.sh consumes >= 12 android inputs (found ${_a47_n})" \
+  test "${_a47_n}" -ge 12
+
+_a47_uncovered="$(comm -23 <(printf '%s\n' "${_a47_consumed}") <(printf '%s\n' "${_a47_want}"))"
+_a47_u_disp="$(printf '%s' "${_a47_uncovered}" | tr '\n' ' ')"
+assert_pass "47b: every input setup.sh consumes is in the composite (uncovered: ${_a47_u_disp:-none})" \
+  test -z "${_a47_uncovered}"
+
+_a47_dead="$(comm -13 <(printf '%s\n' "${_a47_consumed}") <(printf '%s\n' "${_a47_want}"))"
+_a47_d_disp="$(printf '%s' "${_a47_dead}" | tr '\n' ' ')"
+assert_pass "47c: the composite carries no key setup.sh no longer consumes (dead: ${_a47_d_disp:-none})" \
+  test -z "${_a47_dead}"
+
+# ─── Section 48: PATH assignments are well-formed (row 35) ─────────────────
+# Two silent defects, both shipped, both found by reading rather than by any
+# failure they caused — because neither produces an error message:
+#
+#   (a) an EMPTY PATH element. POSIX says an empty element means the CURRENT
+#       DIRECTORY, so a literal `::` puts `.` on PATH for every process the
+#       container starts, including anything the host sources out of
+#       tools/.shellrc/. Four sites carried `/bin::${ANDROID_HOME}/…` —
+#       android-start.sh and alltogether-start.sh, twice each (the live PATH=
+#       assignment and the line echoed into the user's shellrc).
+#
+#   (b) a CONCATENATED re-include. `PATH="${TOOLS}/caddy/bin${PATH}"` (missing
+#       colon) does not add the directory at all: it glues it to the front of
+#       the first inherited element, so BOTH are lost — caddy/bin is not on PATH
+#       and neither is whatever /usr/local/bin-ish entry came first. It shipped
+#       in caddy-start.sh:8 while line 15 wrote the CORRECT `caddy/bin:${PATH}`
+#       into the shellrc, which is what proved it a typo rather than intent —
+#       and since line 15 expands the already-corrupted value, one fix repaired
+#       both.
+#
+# DISCOVERED, never listed: a hardcoded set of four would be Section 19's defect
+# again. Comment lines are stripped first (this file's own prose quotes `::`).
+# Note the mkcert calls' `::1` is IPv6 localhost and legitimate; it is excluded
+# structurally, not by name — those lines carry no `PATH=` at all.
+printf '\n%b── Section 48: PATH assignment well-formedness%b\n' "${C_BOLD}" "${C_RESET}"
+
+# The pattern is ANCHORED. A bare `PATH=` also matches every `*_PATH=` variable
+# in this tree — CADDY_PATH, MODSECURITY_TMP_PATH, CJOSE_PATH and ~100 more —
+# which inflated the corpus from 38 to 138 and made the floor unfalsifiable: the
+# real PATH writes could collapse to zero and 48a would still count 100+. It also
+# made 48b false-positive on any `FOO_PATH="a::b"`. Measured [row 35]: unanchored
+# 138, anchored 38.
+_A48_PAT='(^|[^A-Za-z0-9_])PATH='
+
+# `|| true` on all three: an empty result is the red-first case (48a's floor
+# reports `found 0`), not a harness error — the class this suite's own
+# `assert_output_contains` used to get wrong, see its comment.
+_a48_lines="$(find "${DIST_BIN}" -name '*.sh' -type f -print0 \
+  | xargs -0 grep -hE "${_A48_PAT}" 2>/dev/null | grep -v '^[[:space:]]*#' || true)"
+_a48_n="$(printf '%s\n' "${_a48_lines}" | grep -c . || true)"
+assert_pass "48a: >= 30 PATH-writing lines discovered (found ${_a48_n})" \
+  test "${_a48_n}" -ge 30
+
+# 48b: no empty PATH element. Reported per-FILE so a red names the offenders.
+_a48_empty="$(find "${DIST_BIN}" -name '*.sh' -type f -print0 \
+  | xargs -0 grep -lE "${_A48_PAT}" 2>/dev/null \
+  | while read -r _f; do
+    grep -v '^[[:space:]]*#' "${_f}" | grep -qE "${_A48_PAT}.*::" && basename "${_f}"
+  done || true)"
+_a48_e_disp="$(printf '%s' "${_a48_empty}" | tr '\n' ' ')"
+assert_pass "48b: no '::' empty element in any PATH assignment (offenders: ${_a48_e_disp:-none})" \
+  test -z "${_a48_empty}"
+
+# 48c: every re-include of ${PATH} is preceded by ':' or by the start of the
+# value — anything else concatenates. The character class permits `:` (the
+# correct separator), `=`/quote (value start) and whitespace (a continuation).
+_a48_glued="$(find "${DIST_BIN}" -name '*.sh' -type f -print0 \
+  | xargs -0 grep -lE "${_A48_PAT}" 2>/dev/null \
+  | while read -r _f; do
+    grep -v '^[[:space:]]*#' "${_f}" | grep -E "${_A48_PAT}" \
+      | grep -qE '[^:="'"'"'[:space:]]\$\{PATH\}' && basename "${_f}"
+  done || true)"
+_a48_g_disp="$(printf '%s' "${_a48_glued}" | tr '\n' ' ')"
+assert_pass "48c: every \${PATH} re-include is colon-separated (offenders: ${_a48_g_disp:-none})" \
+  test -z "${_a48_glued}"
+
+# ─── Section 49: positional reads are below the handler (row 35) ───────────
+# Under `set -u` a missing argument is a FATAL SHELL ERROR, not a failed
+# command. The EXIT/ERR trap is what converts it into an error token — so a
+# top-level `${1}` read that executes before the handler is fully in place dies
+# writing NOTHING, and the service is unhealthy for the full 24h start_period
+# with nothing in tools/errors/ naming the cause. Measured [row 35]: argless,
+# eight scripts exited 1 with ZERO token files.
+#
+# "In place" means BOTH halves, whichever comes last: the `trap` line AND the
+# `stackCatch` definition the trap body calls. Half of the family defines the
+# function first and traps after; the other half traps first. Getting only one
+# right still writes nothing — a read between a `trap` and a later function
+# definition dies with `stackCatch: command not found`.
+#
+# ENUMERATED, not listed. Row 25 fixed this family's sibling defect with a Files
+# cell scoped to three directories and missed the rest; row 30 found the android
+# handlers the same way; row 35 was FILED as three `*-setup.sh` and the sweep
+# found five more `*-iou*.sh`. A hardcoded list would be that mistake a fourth
+# time, so the set is discovered from `set -u` + a column-0 positional read.
+printf '\n%b── Section 49: positional reads below the handler%b\n' "${C_BOLD}" "${C_RESET}"
+
+# Emits "<file>:<first positional read line>:<last handler line>" per candidate.
+# `|| true`: an empty sweep is 49a's red, not a harness abort.
+_a49_rows="$(find "${DIST_BIN}" -name '*.sh' -type f | sort | while read -r _f; do
+  grep -qE '^set .*-[a-zA-Z]*u' "${_f}" || continue
+  _p="$(grep -nE '^[A-Za-z_][A-Za-z0-9_]*="?\$\{?[1-9]' "${_f}" | head -1 | cut -d: -f1)"
+  [[ -z "${_p}" ]] && continue
+  # last line at which the handler becomes usable: the trap, the close of a local
+  # stackCatch, or the prologue source (which installs both at once).
+  _t="$(grep -nE "^trap .*(ERR|EXIT)" "${_f}" | tail -1 | cut -d: -f1)"
+  _s="$(grep -nE '^source .*prologue' "${_f}" | head -1 | cut -d: -f1)"
+  _c=""
+  if grep -qE '^stackCatch\(\)' "${_f}"; then
+    _c="$(awk '/^stackCatch\(\)/{f=1} f&&/^}$/{print NR; exit}' "${_f}")"
+  fi
+  _last=0
+  for _n in "${_t}" "${_s}" "${_c}"; do
+    [[ -n "${_n}" ]] && [[ "${_n}" -gt "${_last}" ]] && _last="${_n}"
+  done
+  printf '%s:%s:%s\n' "$(basename "${_f}")" "${_p}" "${_last}"
+done || true)"
+
+_a49_n="$(printf '%s\n' "${_a49_rows}" | grep -c . || true)"
+assert_pass "49a: >= 8 scripts with set -u and a top-level positional read (found ${_a49_n})" \
+  test "${_a49_n}" -ge 8
+
+# A candidate with NO handler at all (_last == 0) is reported too: it cannot
+# write a token by construction. global-stack-base-dump-pg-project.sh is the one
+# such script today and is deliberately EXEMPT — it is a hand-run pg_dump
+# utility with zero callers in docker/ or the Makefile, no GLOBAL_STACK_ERROR_TOKEN
+# and no role in health signalling, so stderr + exit 1 is the correct contract.
+_a49_bad="$(printf '%s\n' "${_a49_rows}" | while IFS=: read -r _n _p _l; do
+  [[ -z "${_n}" ]] && continue
+  [[ "${_n}" == "global-stack-base-dump-pg-project.sh" ]] && continue
+  [[ "${_l}" -eq 0 || "${_p}" -lt "${_l}" ]] && printf '%s(read@%s,handler@%s) ' "${_n}" "${_p}" "${_l}"
+done || true)"
+assert_pass "49b: every positional read is below its handler (offenders: ${_a49_bad:-none})" \
+  test -z "${_a49_bad}"
 
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'

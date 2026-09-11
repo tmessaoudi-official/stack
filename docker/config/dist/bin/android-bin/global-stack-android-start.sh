@@ -45,14 +45,14 @@ SECONDS=0
 sudo rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/android"
 rm -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}/${GLOBAL_STACK_ERROR_TOKEN:-}"
 
-PATH="${GLOBAL_STACK_DOCKER_TOOLS_PATH}/yarn/bin:${DENO_DIR}/bin:${BUN_INSTALL}/bin:${PNPM_HOME}:${RBENV_ROOT}/bin:${PUB_CACHE}/bin:${FVM_CACHE_PATH}/versions/${FLUTTER_VERSION:-}/bin::${ANDROID_HOME}/cmdline-tools/bin:${ANDROID_HOME}/cmdline-tools/tools/bin:${ANDROID_HOME}/tools:${ANDROID_HOME}/tools/bin:${ANDROID_HOME}/platform-tools:${ANDROID_HOME}/build-tools/${GLOBAL_STACK_ANDROID_BUILD_TOOLS_VERSION}:${ANDROID_HOME}/cmdline-tools/${GLOBAL_STACK_ANDROID_CMDLINE_TOOLS_VERSION}/bin:${ANDROID_NDK_HOME}:${ANDROID_SDK_ROOT}/emulator:${PATH}"
+PATH="${GLOBAL_STACK_DOCKER_TOOLS_PATH}/yarn/bin:${DENO_DIR}/bin:${BUN_INSTALL}/bin:${PNPM_HOME}:${RBENV_ROOT}/bin:${PUB_CACHE}/bin:${FVM_CACHE_PATH}/versions/${FLUTTER_VERSION:-}/bin:${ANDROID_HOME}/cmdline-tools/bin:${ANDROID_HOME}/cmdline-tools/tools/bin:${ANDROID_HOME}/tools:${ANDROID_HOME}/tools/bin:${ANDROID_HOME}/platform-tools:${ANDROID_HOME}/build-tools/${GLOBAL_STACK_ANDROID_BUILD_TOOLS_VERSION}:${ANDROID_HOME}/cmdline-tools/${GLOBAL_STACK_ANDROID_CMDLINE_TOOLS_VERSION}/bin:${ANDROID_NDK_HOME}:${ANDROID_SDK_ROOT}/emulator:${PATH}"
 export PATH
 
 sed -i '/# global-stack-setup-started/,/# global-stack-setup-finished/d' "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 
 echo "# global-stack-setup-started" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 
-echo "PATH=${GLOBAL_STACK_DOCKER_TOOLS_PATH}/yarn/bin:${DENO_DIR}/bin:${BUN_INSTALL}/bin:${PNPM_HOME}:${RBENV_ROOT}/bin:${PUB_CACHE}/bin:${FVM_CACHE_PATH}/versions/${FLUTTER_VERSION:-}/bin::${ANDROID_HOME}/cmdline-tools/bin:${ANDROID_HOME}/cmdline-tools/tools/bin:${ANDROID_HOME}/tools:${ANDROID_HOME}/tools/bin:${ANDROID_HOME}/platform-tools:${ANDROID_HOME}/build-tools/${GLOBAL_STACK_ANDROID_BUILD_TOOLS_VERSION}:${ANDROID_HOME}/cmdline-tools/${GLOBAL_STACK_ANDROID_CMDLINE_TOOLS_VERSION}/bin:${ANDROID_NDK_HOME}:${ANDROID_SDK_ROOT}/emulator:${PATH}" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
+echo "PATH=${GLOBAL_STACK_DOCKER_TOOLS_PATH}/yarn/bin:${DENO_DIR}/bin:${BUN_INSTALL}/bin:${PNPM_HOME}:${RBENV_ROOT}/bin:${PUB_CACHE}/bin:${FVM_CACHE_PATH}/versions/${FLUTTER_VERSION:-}/bin:${ANDROID_HOME}/cmdline-tools/bin:${ANDROID_HOME}/cmdline-tools/tools/bin:${ANDROID_HOME}/tools:${ANDROID_HOME}/tools/bin:${ANDROID_HOME}/platform-tools:${ANDROID_HOME}/build-tools/${GLOBAL_STACK_ANDROID_BUILD_TOOLS_VERSION}:${ANDROID_HOME}/cmdline-tools/${GLOBAL_STACK_ANDROID_CMDLINE_TOOLS_VERSION}/bin:${ANDROID_NDK_HOME}:${ANDROID_SDK_ROOT}/emulator:${PATH}" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 echo "export PATH" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 
 global-stack-base-wait-for.sh \
@@ -106,12 +106,37 @@ source global-stack-base-version-gate.sh
 
 # The android.sdkmanager marker holds the sdkmanager BINARY's own version, which is
 # not any of the .env pins — so it could never detect an SDK component bump. This
-# composite marker carries the three pins that the sdkmanager call actually uses.
-# GLOBAL_STACK_ANDROID_NDK_BUNDLE_VERSION and _PLATFORM_TOOLS_VERSION are
-# deliberately absent: they appear ONLY in the commented-out "@todo fix version not
-# found" line in global-stack-android-setup.sh, and the live call passes bare
-# "ndk-bundle" and "platform-tools". Commented-out installs stay out (Track 5).
-GS_ANDROID_SDK_WANT="cmdline-tools=${GLOBAL_STACK_ANDROID_CMDLINE_TOOLS_VERSION};build-tools=${GLOBAL_STACK_ANDROID_BUILD_TOOLS_VERSION};ndk=${GLOBAL_STACK_ANDROID_NDK_VERSION}"
+# composite marker carries the inputs the install actually consumes, and it is the
+# ONLY thing that makes a bump of one of them reach the SDK: gs_version_gate
+# compares it, and the mismatch is what drives the wipe-and-reinstall below.
+#
+# ALL TWELVE, since row 33. It carried three (cmdline-tools, build-tools, ndk), so a
+# bump of any of the other nine was silently never applied — the gate said `skip`,
+# the SDK kept the old component, and nothing warned. The two that mattered most:
+# INSTALL_SYSTEM_IMAGES=true would have installed an emulator and six system images
+# and instead did nothing, and API_LEVEL_3's pending move off a beta would have read
+# as applied while the old platform stayed on disk.
+#
+# GLOBAL_STACK_ANDROID_PLATFORM_TOOLS_VERSION is IN. The old fence here claimed it
+# was comment-only alongside _NDK_BUNDLE_VERSION; that was half false —
+# global-stack-android-setup.sh's `_pkgs` array installs
+# "platform-tools;${GLOBAL_STACK_ANDROID_PLATFORM_TOOLS_VERSION}" as a live element.
+# _NDK_BUNDLE_VERSION genuinely is comment-only (the live array passes a bare
+# "ndk-bundle" with no version), so it stays OUT: Track 5 says commented-out
+# installs stay out, and including it would force a reinstall for a value nothing
+# reads.
+#
+# The SYSTEM_IMAGE_* three are included even while INSTALL_SYSTEM_IMAGES=false, when
+# they install nothing. That is deliberate: the cost of the spurious reinstall is
+# minutes, once, on a value that almost never moves, and the alternative is a second
+# code path whose only job is to be conditionally correct. Simplicity wins here.
+#
+# Order is fixed and the assignment is ONE LINE — startup-prologue.test.sh §27
+# extracts it with `grep -m1 '^GS_ANDROID_SDK_WANT='`, so an array-join or a
+# backslash continuation would silently truncate every behavioural probe. §47
+# DISCOVERS the consumed set from setup.sh and checks it against this line both
+# ways, so a thirteenth input cannot be added there and forgotten here.
+GS_ANDROID_SDK_WANT="sdk-build=${GLOBAL_STACK_ANDROID_SDK_BUILD};cmdline-tools=${GLOBAL_STACK_ANDROID_CMDLINE_TOOLS_VERSION};platform-tools=${GLOBAL_STACK_ANDROID_PLATFORM_TOOLS_VERSION};build-tools=${GLOBAL_STACK_ANDROID_BUILD_TOOLS_VERSION};ndk=${GLOBAL_STACK_ANDROID_NDK_VERSION};api1=${GLOBAL_STACK_ANDROID_API_LEVEL_1};api2=${GLOBAL_STACK_ANDROID_API_LEVEL_2};api3=${GLOBAL_STACK_ANDROID_API_LEVEL_3};sysimg=${GLOBAL_STACK_ANDROID_INSTALL_SYSTEM_IMAGES};sysimg-tag=${GLOBAL_STACK_ANDROID_SYSTEM_IMAGE_TAG};sysimg-ps-tag=${GLOBAL_STACK_ANDROID_SYSTEM_IMAGE_PLAYSTORE_TAG};sysimg-abi=${GLOBAL_STACK_ANDROID_SYSTEM_IMAGE_ABI}"
 export GS_ANDROID_SDK_WANT
 _android_gate="$(gs_version_gate "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/android.sdk" "${GS_ANDROID_SDK_WANT}" "android.sdk")"
 

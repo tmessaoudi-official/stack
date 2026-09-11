@@ -8,14 +8,6 @@ IFS=$'\n\t'
 # Row 20: prologue-exempt, so the version gate is sourced alone.
 source global-stack-base-version-gate.sh
 
-# Define reusable paths passed as arguments
-HTTP_COMMONS_PATH="${1}"
-HTTP_COMMON_MOD_SECURITY_VERSION_PATH="${2}"
-HTTP_COMMON_CORERULESET_VERSION_PATH="${3}"
-MODSECURITY_SOURCE_LIB_PATH="${4}"
-MODSECURITY_LIB_PATH="${5}"
-CORERULESET_PATH="${6}"
-
 # Function to handle errors and trap cleanup
 stackCatch() {
   local exit_code=$1
@@ -37,8 +29,26 @@ stackCatch() {
   fi
 }
 
+# Positional reads live BELOW stackCatch. Under `set -u` an argument-less
+# invocation makes `${1}` a fatal shell error, and the EXIT/ERR trap is what
+# turns that into an error token — but the trap BODY calls stackCatch, so a read
+# placed above the function definition dies with `stackCatch: command not found`
+# and writes nothing. Measured argless [row 35]: exit 1 with ZERO files in
+# tools/errors/, the unattributable death row 30 fixed in android-start.sh. This
+# family was missed by row 25, whose Files cell scoped it to the three
+# web-server trees, and by row 35's own filing, which named only the three
+# *-setup.sh — startup-prologue.test.sh §49 now enumerates the class instead.
+
 # Trap errors for cleanup or error reporting
 trap 'stackCatch $? ${LINENO} "${BASH_COMMAND}"' ERR EXIT
+
+# Define reusable paths passed as arguments
+HTTP_COMMONS_PATH="${1}"
+HTTP_COMMON_MOD_SECURITY_VERSION_PATH="${2}"
+HTTP_COMMON_CORERULESET_VERSION_PATH="${3}"
+MODSECURITY_SOURCE_LIB_PATH="${4}"
+MODSECURITY_LIB_PATH="${5}"
+CORERULESET_PATH="${6}"
 
 # Install ModSecurity if needed
 if [[ -n "${GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION}" ]] && \

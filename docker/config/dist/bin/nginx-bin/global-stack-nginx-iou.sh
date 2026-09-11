@@ -9,23 +9,6 @@ IFS=$'\n\t'
 # Row 20: prologue-exempt, so the version gate is sourced alone.
 source global-stack-base-version-gate.sh
 
-# Define reusable paths
-NGINX_PATH="${1}"
-HTTP_COMMONS_PATH="${2}"
-NGINX_VERSIONS_PATH="${3}"
-MODSECURITY_SOURCE_LIB_PATH="${4}"
-MODSECURITY_LIB_PATH="${5}"
-CORERULESET_PATH="${6}"
-CJOSE_SOURCE_PATH="${7}"
-CJOSE_PATH="${8}"
-LIBOAUTH2_SOURCE_PATH="${9}"
-LIBOAUTH2_PATH="${10}"
-NGINX_LIBOAUTH2_VERSION_PATH="${11}"
-NGINX_CJOSE_VERSION_PATH="${12}"
-MODSECURITY_NGINX_PATH="${NGINX_PATH}/mods/modsecurity-source"
-MOD_AUTH_OPENIDC_NGINX_SOURCE_PATH="${NGINX_PATH}/mods/mod_auth_openidc-source"
-MOD_AUTH_OPENIDC_NGINX_PATH="${NGINX_PATH}/mods/mod_auth_openidc"
-
 # Trap errors and handle cleanup or error reporting
 trap 'stackCatch $? ${LINENO} "${BASH_COMMAND}"' ERR EXIT
 
@@ -49,6 +32,32 @@ stackCatch() {
     exit 1
   fi
 }
+
+# Positional reads live BELOW stackCatch. Under `set -u` an argument-less
+# invocation makes `${1}` a fatal shell error, and the EXIT/ERR trap is what
+# turns that into an error token — but the trap BODY calls stackCatch, so a read
+# placed above the function definition dies with `stackCatch: command not found`
+# and writes nothing. Measured argless [row 35]: exit 1 with ZERO files in
+# tools/errors/, the unattributable death row 30 fixed in android-start.sh. This
+# family was missed by row 25, whose Files cell scoped it to the three
+# web-server trees, and by row 35's own filing, which named only the three
+# *-setup.sh — startup-prologue.test.sh §49 now enumerates the class instead.
+# Define reusable paths
+NGINX_PATH="${1}"
+HTTP_COMMONS_PATH="${2}"
+NGINX_VERSIONS_PATH="${3}"
+MODSECURITY_SOURCE_LIB_PATH="${4}"
+MODSECURITY_LIB_PATH="${5}"
+CORERULESET_PATH="${6}"
+CJOSE_SOURCE_PATH="${7}"
+CJOSE_PATH="${8}"
+LIBOAUTH2_SOURCE_PATH="${9}"
+LIBOAUTH2_PATH="${10}"
+NGINX_LIBOAUTH2_VERSION_PATH="${11}"
+NGINX_CJOSE_VERSION_PATH="${12}"
+MODSECURITY_NGINX_PATH="${NGINX_PATH}/mods/modsecurity-source"
+MOD_AUTH_OPENIDC_NGINX_SOURCE_PATH="${NGINX_PATH}/mods/mod_auth_openidc-source"
+MOD_AUTH_OPENIDC_NGINX_PATH="${NGINX_PATH}/mods/mod_auth_openidc"
 
 cd "${NGINX_PATH}"
 

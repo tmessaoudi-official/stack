@@ -5,7 +5,7 @@ set -xeEuo pipefail
 shopt -s extdebug
 IFS=$'\n\t'
 
-PATH="${GLOBAL_STACK_DOCKER_TOOLS_PATH}/caddy/bin${PATH}"
+PATH="${GLOBAL_STACK_DOCKER_TOOLS_PATH}/caddy/bin:${PATH}"
 export PATH
 
 sed -i '/# global-stack-setup-started/,/# global-stack-setup-finished/d' "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
