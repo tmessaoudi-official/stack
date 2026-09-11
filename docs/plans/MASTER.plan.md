@@ -818,6 +818,19 @@ outcome, Track 5 audit rulings) as it goes — this file is where rulings land. 
 never write an entry for a ruling that was not actually taken (forged-AGREED hazard, global
 Rule 17).
 
+- [2026-09-11 20:05] AGREED: rows 38 and 39 are TWO commits, not one, and neither is pushed —
+  the developer reviews the tree first. Row 38 (platform-tools single-instance install id) and
+  row 39 (`$HOME` permissions subtract, never assign) touch different files and are different
+  defect classes; one message for both would re-create exactly the narrative tangle row 38 spent
+  effort untangling. Developer ruling on the certification question: build the chown fix now and
+  commit nothing yet, so both changes are reviewed together as one tree.
+- [2026-09-11 20:05] AGREED: row 39's fix is `chmod ug-s,go-rwx`, and the `.docker/cli-plugins`
+  `a+x` arm is DELETED rather than joined by a second special case for `~/.android`. Rationale,
+  measured not assumed: the arm never fired (no container has that directory; docker's plugins
+  live in `/usr/libexec/docker/cli-plugins`), and under the subtract-only rule an executable
+  arriving at 0755 keeps owner-execute with no exception needed. A per-directory exception is
+  what let this class hide in one place — growing it would be the same mistake a third time.
+
 ## Planning-time verified state (2026-08-31/09-01)
 
 - Tree clean at `8486f62` [Verified: `git status --porcelain` empty].
@@ -1521,6 +1534,7 @@ class-3 var is absent from this accounting, and no gate site in B lacks a class-
 | 36 | P0 REGRESSION found by the developer's own restart, not by the backlog. `7e8c0b2` (2026-09-10 19:22, "drop `gem --debug`") parked its explanatory comment BETWEEN the continued arguments of `rbenv-start.sh`'s `global_stack_base_setup_packages` call. A `\` splices the next line on, so the command ended at that `#`: the call silently took FOUR arguments instead of five — `gem install` never passed, so no ruby gem could ever install — and the orphaned `--command='gem …'` line ran as its own command, exit **127**. It stayed hidden for a day because 03ruby3/03ruby4 had started at 12:21, seven hours BEFORE the commit; the first restart surfaced it and took SEVEN containers down via `depends_on` (03ruby3, 03ruby4, 02rbenv, 04android, 04serverless-framework, 05stable, 05edge). Comment moved above the call; new §50 DISCOVERS the class, narrowed to a comment continuing a LIVE line so the six genuine commented-out blocks stay green | S | done | 0bd182d | docker/config/dist/bin/rbenv-bin/global-stack-rbenv-start.sh bin/tests/startup-prologue.test.sh |
 | 37 | P0 STARTUP RACE, found by the same restart. `down` deletes `tools/elapsed`; on the next `up` every service appends to it, and several run as ROOT (01postgres18, 01mysql9, 01mariadb13, 01mongo7, 02dpage-pgadmin4) via their healthcheck's `healthcheck-elapsed.sh`. The first root appender CREATES the file `root:root 0644`. 00base runs as `developer` and is the ONLY service opening it with `>` (base-start.sh:54 -> print-success.sh:23, the "create" arm), so it is denied, dies, and EVERY service depends on 00base. `print-success.sh`'s `chmod o+w` cannot save it: it is line 24, one line AFTER the write that fails. Observed: 00base Exited(1), `/stack/tools/elapsed: Permission denied`, 7 containers blocked. Fix: `create-paths` pre-creates it as the HOST user at 0666 before any container starts, so root appenders find an existing file and ownership is never taken. 0666 not 0644 because seluser/sonarqube containers append too -- what the `chmod o+w` always intended. No `\|\| true` on the chmod: a failure there means the file is already root-owned and 00base will die anyway, so failing `up` loudly is the better failure. 3 checks added to makefile-posix (7 -> 10), all three sabotaged | S | done | 321de07 | Makefile bin/tests/makefile-posix.test.sh |
 | 38 | P0 found by the same restart, and the FIRST failure row 33's forced SDK reinstall actually executed. `platform-tools` is SINGLE-INSTANCE upstream and takes NO version, so `_pkgs`' `"platform-tools;${…_VERSION}"` answered `Package platform-tools/37.0.1 not found.` and EXITED 0 — nothing installed. Row 31 fixed only the LISTING half, adding a `"platform-tools;"*) _id="platform-tools"` exception — correct in itself, but existing only because the install id carried a version. **The shipped verify CAUGHT the defect and the SUITE did not**: on the first boot that ever ran this block it printed `FATAL: … these packages are absent: platform-tools` and exited 1 (2026-09-11 18:36), which is how this was found; meanwhile the §43 stub recorded whatever it was handed and re-applied that same mapping, so 43q–43t were green on a package that could never install — a stub mirroring the code's assumption tests nothing but the mirror. `adb` absence window = that one failed reinstall (18:36 → fix); before it the block had never run (warm-volume `skip`) and the pre-row-31 install was still on disk. Measured: all three single-instance ids (`platform-tools`, `ndk-bundle`, `emulator`) reject a version this way while multi-instance `build-tools;37.0.0` is accepted. Install id bare, exception deleted, stub made faithful, and the `.env` pin reinterpreted as an EXPECTED version (it is not requestable) asserted against the installed build with a WARN — which §47a/47c independently REQUIRE, since dropping the var from `setup.sh` reds both. New §43z/43z2 static class guard (an `ndk-bundle;<ver>` regression reds too) and §43aa–43ac on the assertion; 601 → 606 | S | doing | - | docker/config/dist/bin/android-bin/global-stack-android-{setup,start}.sh bin/tests/startup-prologue.test.sh CLAUDE.md |
+| 39 | P0 found while verifying row 38, and the reason row 38 needed a hand-deleted cache to go green. `base-bin/global-stack-base-chown-home.sh:50` ran `find "$HOME/" -type f -exec sudo chmod 600` from the ENTRYPOINT of every container, and a numeric `600` also strips the OWNER's execute bit -- so any tool caching an executable under `$HOME` is disarmed on the NEXT boot. Measured: `~/.android/bin/android-cli` (the launcher's 87 MB self-download, 0755) becomes `-rw-------` and the SDK reinstall dies `Failed to exec android binary: Permission denied (os error 13)`; second instance same day, serverless v4 caches `sf-core.js`, a bundled `esbuild` and `invoke.py` under `~/.serverless/releases/<ver>/` at 0755. The first draft of this row blamed `binary.js`'s `existsSync(binaryPath)` gate and was WRONG -- `binaryPath` is `<serverless>/node_modules/.bin/serverless-linux-amd64-<v>`, under `tools/`, which chown-home never touches. Measured instead: with all three release files at 0600 `serverless --version` still returns 4.42.0 (the Go launcher runs sf-core.js via `node`; read suffices), while the bundled `esbuild` is a native ELF that answers `Permission denied` at 0600 and prints `0.28.2` at 0755 -- so the break is real but confined to a bundling/deploy path, and is [Inferred], not exercised. ARMED, not always-firing: a normal boot never invokes `android` (`gs_version_gate` -> skip; `avdmanager` is a 5760-byte shell script calling `java` directly), so only a reinstall boot meets a stripped cache -- the same hiding pattern as row 31. Fixed with `chmod ug-s,go-rwx` (every group/other bit gone, setuid/setgid gone, owner untouched; can only PRESERVE an x, never add one), ssh verified satisfied against a real sshd (600/700 accepted, 640/660/604 rejected), and the `.docker/cli-plugins` `a+x` arm DELETED rather than joined by a second exception (it never fired; docker's plugins live in /usr/libexec). New §51, 606 -> 614. Certified by execution: `04android` restarted with the fixture in place, synced script line 89 shows `ug-s,go-rwx`, `android-cli` survived at `-rwx------`, `android --version` = 1.0.16261425, container healthy in 57s, 0 error tokens. | S | doing | - | docker/config/dist/bin/base-bin/global-stack-base-chown-home.sh bin/tests/startup-prologue.test.sh CLAUDE.md |
 <!-- /progress-block -->
 ### Blocked
 - Row 24 — the supervised bring-up (POSTPONED by the developer 2026-09-05; see the
@@ -1784,6 +1798,52 @@ terminal state and every unproven dimension named `UNCERTIFIED-BY-EXECUTION`.
   The WARN is deliberate and is NOT a swallowed error: there is no failure to absorb (the install
   succeeded), the pin is UNREQUESTABLE for a single-instance package, the only remedy is a human
   `.env` bump, and a FATAL would strand 04android plus 05stable/05edge/local.05 on documentation drift.
+- [2026-09-11 20:05] BUILT (row 39) + a CORRECTION to my own row-38 blast-radius claim.
+  Earlier in this session I reported the android CLI as the "sole confirmed casualty" of the
+  chown-home defect, on the strength of a sweep that looked only at `.serverless/binaries/`
+  (JSON, harmless). A full sweep of every container for owner-executable files under `$HOME`
+  found FOUR more in 04serverless-framework -- `sf-core.js`, a bundled `esbuild`, `invoke.py`
+  and `metadata.json`, all 0755. The first sweep ran before serverless had downloaded its
+  `releases/<ver>/` tree; the tree appeared at 18:36 and the sweep was never repeated. Lesson,
+  and it is the third time this session: a blast-radius sweep is a measurement of a moment, and
+  a container that installs on first use has a different $HOME an hour later.
+  The probe extracts ONE LINE, not the block, on the advisor's amendment, and that is the whole
+  difference between a real test and a green one: the block runs `sudo chown -R` first, the
+  kernel drops setuid on `chown(2)` of a regular file, so a 4755 fixture would have reached the
+  chmod already at 0755 and 51e (`ug-s`) could never have redded. Whole-block extraction would
+  have shipped a check that cannot fire -- the class this repo has now hit seven times.
+  Seven sabotages, all `cp -a` backups, all restores md5-verified byte-identical:
+  S1 revert to `chmod 600` -> 51b/51c/51e/51f red; S2 drop `ug-s` -> 51e ALONE red (the clause
+  that whole-block extraction would have made untestable); S3 drop `go-rwx` -> 51b/51c/51d/51e/51f
+  red; S4 re-add the cli-plugins arm -> 51a (`found 2`) + 51h (`found 3`) red, so the non-vacuity
+  guard doubles as the no-second-file-chmod guard; S5 duplicate the anchor line -> 51a red;
+  S6 restore the EXACT shipped pre-fix file from HEAD -> SIX failures / 614, which is the finding
+  in one line and the red-first proof this test would have caught the defect before it shipped;
+  S7 break the extraction anchor -> 5 red, so the probe cannot pass vacuously on an empty script.
+  shellcheck code set identical to HEAD (`SC2086`, pre-existing on the rsync line), shfmt hunk
+  count identical (1/1) -- zero new findings, zero formatting drift, the file's pre-existing
+  4-space indentation deliberately untouched.
+- [2026-09-11 20:40] CORRECTION (row 39), caught by the 6C advisor round, and it is the SAME class
+  I blocked row 38 on: I wrote the serverless half of the blast radius as [Verified] in four
+  durable places -- CLAUDE.md, this row, this log and the commit message -- claiming `binary.js`
+  gates re-download on `existsSync(binaryPath)` so a stripped cache "would neither re-download nor
+  run". I had marked `binaryPath` [Inferred] in my own reasoning and then shipped it as Verified
+  without resolving it. Resolved now, and the claim was WRONG: `binary.js:172-182` puts
+  `binaryPath` at `<installDirectory>/<name>-<version>` with `installDirectory` defaulting to
+  `join(__dirname,'node_modules','.bin')` -- i.e. `tools/serverless-framework/node_modules/
+  serverless/node_modules/.bin/serverless-linux-amd64-0.0.2`, under `tools/`, which chown-home
+  never touches (confirmed on disk at 0755). The falsifier then ran in the container: with
+  `sf-core.js`, `esbuild` and `invoke.py` all chmod'ed to 0600, `serverless --version` still
+  printed `4.42.0` -- the Go launcher runs sf-core.js through `node`, and a shebang script loaded
+  by an interpreter needs READ, not execute. What DOES break is narrower and real: the bundled
+  `esbuild` is a native ELF (`\177ELF`), which answers `Permission denied` at 0600 and prints
+  `0.28.2` at 0755, so only a bundling/deploy path that shells out to it fails -- and that end-to-
+  end break is [Inferred], because no deploy was run. All three files were restored to 0755 and
+  re-stat'ed. The lesson is not about serverless: reading a gate's CONDITION is not the same as
+  resolving its OPERAND, and a mechanism narrated from source is [Inferred] until the path is
+  resolved on disk. The fix itself is untouched by this -- the files are under `$HOME`, they were
+  being stripped, and `ug-s,go-rwx` stops it.
+
 ### Ambiguities resolved
 
 | Question | Ruling | Who |

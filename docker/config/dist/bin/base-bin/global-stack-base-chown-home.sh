@@ -46,15 +46,48 @@ if [[ "${GLOBAL_STACK_DOCKER_USER_CONFIG:-}" != ":" && "${GLOBAL_STACK_DOCKER_US
             # Set ownership for the user's home directory
             sudo chown -R "${GLOBAL_STACK_BASE_USERNAME}:${GLOBAL_STACK_BASE_GROUP}" "${GLOBAL_STACK_BASE_USER_HOME}/"
 
-            # Set permissions for files and directories
-            find "${GLOBAL_STACK_BASE_USER_HOME}/" -type f -exec sudo chmod 600 {} +
+            # Set permissions for files and directories.
+            #
+            # The file arm SUBTRACTS, it does not assign. A numeric `chmod 600` also
+            # removes the OWNER's execute bit, and this script runs from the entrypoint
+            # of every container -- so any executable a tool caches under $HOME is
+            # disarmed on the next boot. Measured [2026-09-11]: the `android` launcher
+            # downloads the real 87 MB CLI to ~/.android/bin/android-cli at 0755 and
+            # execs it; after one restart it is -rw------- and the reinstall dies with
+            # `Failed to exec android binary: Permission denied (os error 13)`. Same
+            # class, same day, second container: serverless v4 caches sf-core.js,
+            # esbuild and invoke.py under ~/.serverless/releases/<ver>/ at 0755.
+            #
+            # It hid because it is ARMED, not always-firing: a normal boot never runs
+            # `android` (gs_version_gate returns skip, and avdmanager is a shell script
+            # calling java directly), so only a reinstall boot -- an .env bump of any of
+            # the 12 pinned SDK inputs, RELOAD_ANDROID=true, make soft-restart -- meets
+            # a cache that the previous boot already stripped.
+            #
+            # `ug-s,go-rwx` expresses what was actually wanted: every group and other
+            # bit gone, setuid/setgid gone, the owner's bits untouched. It can only
+            # PRESERVE an x that was already there, never add one, so no file that is
+            # non-executable today becomes executable. Measured, all modes:
+            #   4755 -> -rwx------   0755 -> -rwx------   0777 -> -rwx------
+            #   2644 -> -rw-------   0644 -> -rw-------   0600 -> -rw-------
+            # ssh is the constraint that motivated 600 and it is satisfied: OpenSSH
+            # rejects a private key only on a group/other bit (`mode & 077`), so 0700
+            # is accepted exactly like 0600 [measured against a real sshd: 600 and 700
+            # accepted, 640/660/604 rejected "UNPROTECTED PRIVATE KEY FILE"].
+            #
+            # `ug-s` is not redundant belt-and-braces: `chmod 600` cleared setuid
+            # unconditionally, and while the `chown -R` above happens to clear it too
+            # (the kernel drops setuid on chown(2) of a regular file), relying on that
+            # would make an unconditional guarantee depend on statement order.
+            #
+            # A `.docker/cli-plugins` arm used to follow, re-adding `a+x` to one
+            # directory -- the same class, noticed once and patched in one place. It is
+            # deleted rather than joined by a second special case: it never fired (no
+            # container has that directory; docker's plugins live in
+            # /usr/libexec/docker/cli-plugins), and under the rule above a plugin
+            # arriving at 0755 keeps owner-execute with no exception needed.
+            find "${GLOBAL_STACK_BASE_USER_HOME}/" -type f -exec sudo chmod ug-s,go-rwx {} +
             find "${GLOBAL_STACK_BASE_USER_HOME}/" -type d -exec sudo chmod 700 {} +
-
-            # Make CLI plugins executable if the directory exists
-            cli_plugins_dir="${GLOBAL_STACK_BASE_USER_HOME}/.docker/cli-plugins/"
-            if [[ -d "${cli_plugins_dir}" ]]; then
-                find "${cli_plugins_dir}" -type f -exec sudo chmod a+x {} +
-            fi
 
             eval "$(ssh-agent -s)" 1> /dev/null 2> /dev/null
         fi

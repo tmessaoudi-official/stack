@@ -18,6 +18,14 @@ PROLOGUE="${DIST_BIN}/base-bin/global-stack-base-prologue.sh"
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "${TMP_DIR}"' EXIT
 
+# A pristine PATH, captured before any section runs. §22's sdkman probe sets
+# PATH="/usr/bin:/bin" inside a ( ) group, and a later probe that builds its own
+# PATH from "${PATH}" is then reading a value shellcheck cannot prove is the
+# original (SC2030/SC2031). Reading this snapshot instead is both quieter and
+# more honest: a probe wants the environment the SUITE started in, not whatever
+# an earlier section happened to leave behind.
+PATH0="${PATH}"
+
 # ─── colors ────────────────────────────────────────────────────────────────
 if [[ -t 1 ]]; then
   C_GREEN='\033[0;32m' C_RED='\033[0;31m' C_RESET='\033[0m' C_BOLD='\033[1m'
@@ -3669,6 +3677,87 @@ _a50_bad="$(find "${DIST_BIN}" "${SCRIPT_DIR}/.." -name '*.sh' -type f 2>/dev/nu
   done || true)"
 assert_pass "50b: no comment line continues a live continued line (offenders: ${_a50_bad:-none})" \
   test -z "${_a50_bad}"
+
+# ─── Section 51: $HOME permissions SUBTRACT, never assign (row 39) ─────────
+# global-stack-base-chown-home.sh runs from the entrypoint of EVERY container,
+# and its file arm used to be a numeric `chmod 600` — which also removes the
+# OWNER's execute bit. Any tool that caches an executable under $HOME is
+# therefore disarmed on the next boot. Measured [2026-09-11]: the `android`
+# launcher downloads the real CLI to ~/.android/bin/android-cli at 0755 and
+# execs it; one restart later it is -rw------- and the SDK reinstall dies with
+# `Failed to exec android binary: Permission denied (os error 13)`. Second
+# container, same class: serverless v4 caches sf-core.js, esbuild and invoke.py
+# under ~/.serverless/releases/<ver>/ at 0755.
+#
+# The probe extracts ONE LINE, not the block, and that is load-bearing. The
+# block runs `sudo chown -R` first, and the kernel drops setuid on chown(2) of a
+# regular file — so a 4755 fixture would reach the chmod already at 0755 and the
+# `ug-s` clause could never be redded. Whole-block extraction would have made
+# 51e a check that cannot fire.
+printf '\n%b── Section 51: $HOME permissions subtract, never assign%b\n' "${C_BOLD}" "${C_RESET}"
+
+_CHH="${DIST_BIN}/base-bin/global-stack-base-chown-home.sh"
+
+# Comment lines stripped before every discovery scan (the §19 rule): the block's
+# own prose quotes the `chmod 600` it replaced and names `.docker/cli-plugins`,
+# and neither may be allowed to decide what this section demands.
+_a51_n="$(grep -v '^[[:space:]]*#' "${_CHH}" | grep -cE -- '-type f -exec sudo chmod' || true)"
+assert_pass "51a: exactly one file-arm chmod line to extract (found ${_a51_n})" \
+  test "${_a51_n}" -eq 1
+
+# Runs the SHIPPED line against a fixture tree, with a `sudo` stub so the suite
+# never escalates. Echoes "<name>=<octal mode>" for each fixture.
+_chmod_probe() {
+  local d="${TMP_DIR}/chh" line f
+  rm -rf "${d}"
+  mkdir -p "${d}/home/sub" "${d}/bin"
+  printf '#!/bin/sh\necho hi\n' >"${d}/home/exec0755" && chmod 0755 "${d}/home/exec0755"
+  printf 'x' >"${d}/home/data0644" && chmod 0644 "${d}/home/data0644"
+  printf 'x' >"${d}/home/key0600" && chmod 0600 "${d}/home/key0600"
+  printf 'x' >"${d}/home/wide0777" && chmod 0777 "${d}/home/wide0777"
+  printf 'x' >"${d}/home/suid4755" && chmod 4755 "${d}/home/suid4755"
+  printf 'x' >"${d}/home/sub/nested0755" && chmod 0755 "${d}/home/sub/nested0755"
+  printf '#!/usr/bin/env bash\nexec "$@"\n' >"${d}/bin/sudo" && chmod 0755 "${d}/bin/sudo"
+
+  line="$(grep -v '^[[:space:]]*#' "${_CHH}" | grep -E -- '-type f -exec sudo chmod' | head -1)"
+  # No `|| true`: if the shipped line cannot run, this function aborts under the
+  # suite's `set -e`, the mode string is never printed, and all six assertions red
+  # with an empty output — which names the situation. Swallowing the status would
+  # instead report it as "the modes are wrong", blaming the chmod rule for a
+  # broken probe. The output redirect is NOT error suppression: this function's
+  # stdout IS the assertion input, so the find's own chatter must stay out of it.
+  PATH="${d}/bin:${PATH0}" \
+    GLOBAL_STACK_BASE_USER_HOME="${d}/home" \
+    bash -c "${line}" >/dev/null 2>&1
+
+  for f in exec0755 data0644 key0600 wide0777 suid4755 sub/nested0755; do
+    printf '%s=%s ' "$(basename "${f}")" "$(stat -c '%a' "${d}/home/${f}")"
+  done
+  printf '\n'
+}
+
+# One assertion per property, so a red names WHICH guarantee broke rather than
+# printing one long mismatched string (the §27f rule).
+assert_output_contains "51b: a cached executable keeps owner-execute" \
+  'exec0755=700' _chmod_probe
+assert_output_contains "51c: ...including one nested below \$HOME" \
+  'nested0755=700' _chmod_probe
+assert_output_contains "51d: an ordinary data file is still 0600, exactly as before" \
+  'data0644=600' _chmod_probe
+assert_output_contains "51e: setuid is cleared even though the owner's bits are kept" \
+  'suid4755=700' _chmod_probe
+assert_output_contains "51f: a world-open file loses every group and other bit" \
+  'wide0777=700' _chmod_probe
+assert_output_contains "51g: an already-0600 file is unchanged" \
+  'key0600=600' _chmod_probe
+
+# Keeps the deleted exception deleted. It re-added `a+x` to ONE directory —
+# this class, noticed once and patched in one place. A second special case for
+# ~/.android or ~/.serverless would be the same mistake a third time; the rule
+# above covers all of them, so there is nothing left for an exception to do.
+_a51_cli="$(grep -v '^[[:space:]]*#' "${_CHH}" | grep -c 'cli_plugins_dir' || true)"
+assert_pass "51h: no per-directory a+x exception has returned (found ${_a51_cli})" \
+  test "${_a51_cli}" -eq 0
 
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
