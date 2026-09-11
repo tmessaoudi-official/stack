@@ -6,6 +6,8 @@ services:
       args:
         BUILDKIT_INLINE_CACHE: 1
         GLOBAL_STACK_IMAGE_MONGOCLIENT_MONGOCLIENT_VERSION: ${GLOBAL_STACK_IMAGE_MONGOCLIENT_MONGOCLIENT_VERSION}
+        # Feeds the tzdata_source build stage -- this image cannot install tzdata itself.
+        GLOBAL_STACK_IMAGE_UBUNTU_VERSION: ${GLOBAL_STACK_IMAGE_UBUNTU_VERSION}
       context: ./
       dockerfile: ./docker/images/02mongoclient-mongoclient/Dockerfile
     depends_on:

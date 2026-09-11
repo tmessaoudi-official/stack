@@ -2564,10 +2564,35 @@ assert_pass "35b: oracle reconfigures tzdata non-interactively" \
   bash -c 'grep -q "dpkg-reconfigure tzdata" "$1" && grep -q "DEBIAN_FRONTEND" "$1"' _ "${_TZ_OR}/Dockerfile"
 assert_pass "35c: mongoclient still declares TZ" \
   grep -Eq '^\s*-\s*TZ=\$\{GLOBAL_STACK_TIMEZONE\}' "${_TZ_MO}/docker-compose.yaml"
-assert_pass "35c: mongoclient installs tzdata (in the RUN, not just a comment)" \
-  bash -c 'grep -A6 "apt-get install" "$1" | grep -Eq "^\\s*tzdata\\s*\\\\?\\s*$"' _ "${_TZ_MO}/Dockerfile"
-assert_pass "35c: mongoclient reconfigures tzdata non-interactively" \
-  bash -c 'grep -q "dpkg-reconfigure tzdata" "$1" && grep -q "DEBIAN_FRONTEND" "$1"' _ "${_TZ_MO}/Dockerfile"
+# mongoclient CANNOT install tzdata itself, so it is pinned differently from oracle. Its base
+# is Debian 8 jessie: the archived suites 404 on deb.debian.org so `apt-get update` exits 100,
+# AND the image was slimmed by deleting /usr/share/zoneinfo without telling dpkg -- which still
+# reports tzdata 2019c "install ok installed" owning 1902 files, making `apt-get install tzdata`
+# a SILENT no-op. The zone files therefore come from a pinned ubuntu build stage; pin the
+# MECHANISM THAT ACTUALLY SHIPS THEM, not the apt spelling that cannot work here.
+# Comment lines are stripped in §35c/§35e: both Dockerfiles now EXPLAIN the flag they must not
+# use, and a raw grep would match that prose (the self-referential-guard trap).
+assert_pass "35c: mongoclient's tzdata_source stage installs tzdata" \
+  bash -c 'grep -vE "^[[:space:]]*#" "$1" | grep -A6 "apt-get install" | grep -Eq "^[[:space:]]*tzdata[[:space:]]*.?[[:space:]]*$"' _ "${_TZ_MO}/Dockerfile"
+assert_pass "35c: mongoclient copies zoneinfo in from that stage" \
+  bash -c 'grep -vE "^[[:space:]]*#" "$1" | grep -qxF "COPY --from=tzdata_source /usr/share/zoneinfo /usr/share/zoneinfo"' _ "${_TZ_MO}/Dockerfile"
+assert_pass "35c: that stage is the PINNED ubuntu var, not a floating tag" \
+  bash -c 'grep -vE "^[[:space:]]*#" "$1" | grep -qxF "FROM ubuntu:\${GLOBAL_STACK_IMAGE_UBUNTU_VERSION} AS tzdata_source"' _ "${_TZ_MO}/Dockerfile"
+
+# ─── §35e: the two FOREIGN-BASE images predate --allow-releaseinfo-change ────
+# 1aa924f copied 00base's apt idiom into the only two images that do NOT descend from 00base.
+# Both reject the option outright -- apt 1.2.32 (Ubuntu 16.04 xenial) and apt 1.0.9.8.6
+# (Debian 8 jessie) vs the apt 1.9.3 that introduced it -- with
+#   E: Command line option --allow-releaseinfo-change is not understood [...]
+# exit 100, which stops the whole build. This is a static guard; §35c pins what replaced it.
+assert_pass "35e: oracle carries no --allow-releaseinfo-change (apt 1.2.32)" \
+  bash -c '! grep -vE "^[[:space:]]*#" "$1" | grep -q -- "--allow-releaseinfo-change"' _ "${_TZ_OR}/Dockerfile"
+assert_pass "35e: mongoclient carries no --allow-releaseinfo-change (apt 1.0.9.8.6)" \
+  bash -c '! grep -vE "^[[:space:]]*#" "$1" | grep -q -- "--allow-releaseinfo-change"' _ "${_TZ_MO}/Dockerfile"
+# Non-vacuity floor: the option is CORRECT on 00base's modern Ubuntu and must still be there.
+# If this reds, the comment-stripping grep above stopped matching and both checks are vacuous.
+assert_pass "35e: non-vacuity -- 00base DOES still use the option" \
+  bash -c 'grep -vE "^[[:space:]]*#" "$1" | grep -q -- "--allow-releaseinfo-change"' _ "${REPO_ROOT}/docker/images/00base/Dockerfile"
 assert_pass "35d: GLOBAL_STACK_TIMEZONE is defined in .env" \
   grep -Eq '^GLOBAL_STACK_TIMEZONE=.+' "${REPO_ROOT}/.env"
 
