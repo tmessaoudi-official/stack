@@ -136,7 +136,24 @@ mkdir-p:
 	mkdir -p ${GLOBAL_STACK_TARGET_DIR}
 touch:
 	touch ${GLOBAL_STACK_TARGET_FILE}
+# `tools/elapsed` is pre-created HERE, by the host user, before any container starts.
+# It is not cosmetic. `down` deletes it (see the `down` recipe), and on the next `up`
+# every service appends to it -- including containers that run as ROOT (01postgres18,
+# 01mysql9, 01mariadb13, 01mongo7, 02dpage-pgadmin4) via their healthcheck's
+# global-stack-base-healthcheck-elapsed.sh. Whichever root container appends first
+# CREATES the file as root:root 0644. 00base runs as `developer` and is the only
+# service that opens it with `>` (base-start.sh:54 -> print-success.sh:23, mode
+# "create"), so it is then denied, dies, and takes the whole stack with it -- every
+# service depends on 00base. print-success.sh does `chmod o+w`, but on line 24, one
+# line AFTER the write that fails. Observed 2026-09-11: 00base Exited(1),
+# "/stack/tools/elapsed: Permission denied", 7 containers blocked behind it.
+# Mode 0666, not 0644: the non-root, non-developer containers (seluser, sonarqube)
+# append to it too -- which is exactly what print-success.sh's `chmod o+w` intends.
+# No `|| true` here: if this chmod fails the file is already root-owned and 00base
+# WILL die later, so failing `up` loudly at this line is the better failure.
 create-paths::
+	touch tools/elapsed
+	chmod 0666 tools/elapsed
 	$(MAKE) GLOBAL_STACK_TARGET_DIR="tools var/images ${GLOBAL_STACK_AXLLENT_MAILPIT_MP_DATABASE} docker/data/dumps/dpage-pgadmin4 ./docker/registry/certs/ ./docker/registry/data/ ./docker/registry/registry/" mkdir-p --silent --ignore-errors --keep-going --warn-undefined-variables
 	$(MAKE) GLOBAL_STACK_TARGET_FILE="${GLOBAL_STACK_SHELL_HISTORY} tools/.gitkeep ./docker/registry/certs/.gitkeep ./docker/registry/data/.gitkeep ./docker/registry/registry/.gitkeep" touch --silent --ignore-errors --keep-going --warn-undefined-variables
 generate-buildx:

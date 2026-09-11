@@ -134,6 +134,37 @@ fresh_out="$(cd "${FRESH}" && timeout 60 make help 2>/dev/null)"
   || ko "fresh-clone: make help produced nothing — the stderr check is vacuous"
 rm -rf "${FRESH}"
 
+# ── tools/elapsed must be pre-created by the HOST, before any container ─────
+# `down` deletes tools/elapsed; on the next `up` every service appends to it,
+# and several run as ROOT (01postgres18, 01mysql9, 01mariadb13, 01mongo7,
+# 02dpage-pgadmin4) through their healthcheck's healthcheck-elapsed.sh. The
+# first root appender CREATES it root:root 0644. 00base runs as `developer`
+# and is the ONLY service that opens it with `>` (base-start.sh -> the "create"
+# arm of print-success.sh), so it is denied, dies, and every service depends on
+# 00base. print-success.sh's `chmod o+w` cannot save it: that line runs AFTER
+# the write that fails. Observed 2026-09-11 -- 00base Exited(1), 7 containers
+# blocked. Fix: create-paths touches it as the host user first.
+printf '\n%b── tools/elapsed pre-creation ──%b\n' "${C_BOLD}" "${C_RESET}"
+
+elapsed_recipe="$(cd "${REPO_ROOT}" && timeout 60 make -n create-paths 2>/dev/null || true)"
+if grep -qE '^[[:space:]]*touch .*tools/elapsed' <<<"${elapsed_recipe}"; then
+  ok "create-paths pre-creates tools/elapsed as the host user"
+else
+  ko "create-paths does NOT pre-create tools/elapsed — a root container will win the race and kill 00base"
+fi
+# 0666, not 0644: the non-root NON-developer containers (seluser, sonarqube)
+# append to it too, which is what print-success.sh's `chmod o+w` intends.
+if grep -qE '^[[:space:]]*chmod 0?666 .*tools/elapsed' <<<"${elapsed_recipe}"; then
+  ok "create-paths makes tools/elapsed world-writable (non-root, non-developer containers append)"
+else
+  ko "create-paths does not chmod tools/elapsed 0666 — foreign-uid containers cannot append"
+fi
+# Non-vacuity: a `make -n` that died early would make both checks pass silently
+# by matching nothing... so prove the recipe was actually produced.
+[[ -n "${elapsed_recipe}" ]] \
+  && ok "create-paths: non-vacuity — make -n produced a recipe to inspect" \
+  || ko "create-paths: make -n produced NOTHING; the two checks above are vacuous"
+
 # ── Summary ─────────────────────────────────────────────────────────────────
 TOTAL=$((PASS + FAIL))
 printf '\n'
