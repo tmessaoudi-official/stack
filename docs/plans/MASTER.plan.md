@@ -830,6 +830,17 @@ Rule 17).
   live in `/usr/libexec/docker/cli-plugins`), and under the subtract-only rule an executable
   arriving at 0755 keeps owner-execute with no exception needed. A per-directory exception is
   what let this class hide in one place — growing it would be the same mistake a third time.
+- [2026-09-11 21:10] AGREED (row 24): the supervised bring-up runs with
+  `GLOBAL_STACK_RELOAD_ANDROID=true` so it exercises rows 38 AND 39 in one pass, not row 39 alone.
+  The developer chose this over a plain cold `make up`. Reason it is not optional: row 39 rides
+  the entrypoint and any restart proves it, but row 38's install block sits behind
+  `gs_version_gate`, and `tools/versions/android.sdk` is present and current — so the gate returns
+  `skip` and the block never executes. A bring-up without the flag would report green while
+  leaving the row-38 fix entirely unexercised, which is the can-never-fire class this plan has now
+  hit seven times, arrived at from the testing side instead of the code side. Cost, stated up
+  front: `android-start.sh:119` `sudo rm -rf`s `ANDROID_HOME` first, so this is a full SDK
+  re-download. `.env.local` was backed up to `/tmp/env.local.bak.1789152647` before the flip, the
+  master `.env` stays `false`, and the flag is reset once the run is read.
 
 ## Planning-time verified state (2026-08-31/09-01)
 
