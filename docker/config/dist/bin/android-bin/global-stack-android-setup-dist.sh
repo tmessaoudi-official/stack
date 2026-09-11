@@ -46,25 +46,42 @@ if [ "${GLOBAL_STACK_ANDROID_INSTALL_SYSTEM_IMAGES}" = "true" ]; then
     printf 'system-images;android-%s;%s;%s' \
       "${1}" "${GLOBAL_STACK_ANDROID_SYSTEM_IMAGE_TAG}" "${GLOBAL_STACK_ANDROID_SYSTEM_IMAGE_ABI}"
   }
-  avdmanager create avd --force --name "global_stack_auto_pixel_7_pro_android_${GLOBAL_STACK_ANDROID_API_LEVEL_1}_google_apis" --package "$(_gs_avd_pkg "${GLOBAL_STACK_ANDROID_API_LEVEL_1}")" --device "pixel_7_pro"
-  avdmanager create avd --force --name "global_stack_auto_pixel_9_pro_android_${GLOBAL_STACK_ANDROID_API_LEVEL_2}_google_apis" --package "$(_gs_avd_pkg "${GLOBAL_STACK_ANDROID_API_LEVEL_2}")" --device "pixel_9_pro"
-  avdmanager create avd --force --name "global_stack_auto_pixel_9_pro_android_${GLOBAL_STACK_ANDROID_API_LEVEL_3}_google_apis" --package "$(_gs_avd_pkg "${GLOBAL_STACK_ANDROID_API_LEVEL_3}")" --device "pixel_9_pro"
+  # One (api level : pixel model) tuple per AVD -- the single source for the name, the
+  # package, the device and the config.ini rewrite. Each AVD's config.ini is written
+  # immediately after its own `avdmanager create`, so nothing has to be recovered
+  # afterwards.
+  #
+  # It used to be three literal creates followed by a glob over
+  # global_stack_auto_*.avd, which RECOVERED the level and the pixel model by
+  # reverse-parsing the config.ini PATH:
+  #     grep -oP '.*android_\K[^_]+(?=_google_apis)'
+  # That parse is load-bearing on the literal "_google_apis" in the AVD name -- and
+  # the name no longer describes the image, which is
+  # ${GLOBAL_STACK_ANDROID_SYSTEM_IMAGE_TAG} (google_apis_ps16k). It still returns the
+  # right answer today, lookahead and all, but only by accident of the tag sharing a
+  # prefix with the name. The names are deliberately NOT renamed here: setup-dist.sh
+  # runs on every start (global-stack-android-start.sh) and `avdmanager create --force`
+  # with a new name would create three NEW AVDs beside the three that exist.
+  for _avd in "${GLOBAL_STACK_ANDROID_API_LEVEL_1}:7" "${GLOBAL_STACK_ANDROID_API_LEVEL_2}:9" "${GLOBAL_STACK_ANDROID_API_LEVEL_3}:9"; do
+    android_version="${_avd%%:*}"
+    pixel_version="${_avd##*:}"
+    avd_name="global_stack_auto_pixel_${pixel_version}_pro_android_${android_version}_google_apis"
 
+    avdmanager create avd --force --name "${avd_name}" \
+      --package "$(_gs_avd_pkg "${android_version}")" --device "pixel_${pixel_version}_pro"
 
-  for CONFIG_FILE in "${ANDROID_SDK_HOME}"/.android/avd/global_stack_auto_*.avd/config.ini; do
-      cp -f ${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/conf/android-avd-conf/config-apis.ini ${CONFIG_FILE}
-      android_version=$(echo -e ${CONFIG_FILE} | grep -oP '.*android_\K[^_]+(?=_google_apis)')
-      pixel_version=$(echo -e ${CONFIG_FILE} | grep -oP '.*pixel_\K[^_]+(?=_pro)')
-      # {androidImageTag} and {androidImageAbi} are what stops this template from
-      # drifting away from the installer again -- see the comment above.
-      sed -i "s|{AvdId}|global_stack_auto_pixel_${pixel_version}_pro_android_${android_version}_google_apis|g; s|{AvdDisplayname}|global stack auto pixel ${pixel_version} pro android ${android_version} google apis|g; s|{deviceName}|pixel_${pixel_version}_pro|g; s|{androidSystemName}|android-${android_version}|g; s|{androidHome}|${ANDROID_HOME}|g; s|{skinName}|pixel_${pixel_version}_pro|g; s|{androidImageTag}|${GLOBAL_STACK_ANDROID_SYSTEM_IMAGE_TAG}|g; s|{androidImageAbi}|${GLOBAL_STACK_ANDROID_SYSTEM_IMAGE_ABI}|g" "${CONFIG_FILE}"
-      # The template must not leave an unsubstituted placeholder behind: an AVD with
-      # a literal {androidImageTag} in image.sysdir.1 fails exactly as silently as
-      # the wrong tag did. Fail loudly instead.
-      if grep -q '{[A-Za-z]*}' "${CONFIG_FILE}"; then
-        printf 'FATAL: unsubstituted placeholder left in %s: %s\n' \
-          "${CONFIG_FILE}" "$(grep -o '{[A-Za-z]*}' "${CONFIG_FILE}" | sort -u | tr '\n' ' ')" >&2
-        exit 1
-      fi
+    CONFIG_FILE="${ANDROID_SDK_HOME}/.android/avd/${avd_name}.avd/config.ini"
+    cp -f "${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/conf/android-avd-conf/config-apis.ini" "${CONFIG_FILE}"
+    # {androidImageTag} and {androidImageAbi} are what stops this template from
+    # drifting away from the installer again -- see the comment above.
+    sed -i "s|{AvdId}|${avd_name}|g; s|{AvdDisplayname}|global stack auto pixel ${pixel_version} pro android ${android_version} google apis|g; s|{deviceName}|pixel_${pixel_version}_pro|g; s|{androidSystemName}|android-${android_version}|g; s|{androidHome}|${ANDROID_HOME}|g; s|{skinName}|pixel_${pixel_version}_pro|g; s|{androidImageTag}|${GLOBAL_STACK_ANDROID_SYSTEM_IMAGE_TAG}|g; s|{androidImageAbi}|${GLOBAL_STACK_ANDROID_SYSTEM_IMAGE_ABI}|g" "${CONFIG_FILE}"
+    # The template must not leave an unsubstituted placeholder behind: an AVD with
+    # a literal {androidImageTag} in image.sysdir.1 fails exactly as silently as
+    # the wrong tag did. Fail loudly instead.
+    if grep -q '{[A-Za-z]*}' "${CONFIG_FILE}"; then
+      printf 'FATAL: unsubstituted placeholder left in %s: %s\n' \
+        "${CONFIG_FILE}" "$(grep -o '{[A-Za-z]*}' "${CONFIG_FILE}" | sort -u | tr '\n' ' ')" >&2
+      exit 1
+    fi
   done
 fi

@@ -3367,7 +3367,7 @@ t "t37e: fetch-extract — perl regex extracts highest match from body (Android 
     _gs_eu2_record_set \$idx identifier    'https://developer.android.com/studio'
     _gs_eu2_record_set \$idx fetch_extract 'commandlinetools-linux-([0-9]+)_latest\\.zip'
     _gs_eu2_record_set \$idx current_version '14742923'
-    _gs_eu2_record_set \$idx env_var       'GLOBAL_STACK_ANDROID_SDK_URL'
+    _gs_eu2_record_set \$idx env_var       'GLOBAL_STACK_ANDROID_SDK_BUILD'
     _gs_eu2_fetch_url \$idx
     val=\$(_gs_eu2_record_get \$idx proposed_version)
     [[ \"\$val\" == '14820900' ]] || { echo \"expected 14820900, got: '\$val'\"; echo FAIL; exit 0; }
@@ -3613,7 +3613,7 @@ section "38 — url fetcher integration"
 
 t "t38a: url type parsed and fetched — fetch-extract entry produces proposed_version" bash -c "
     f=\${TMP_DIR}/t38a.env
-    printf '# @todo env-update (fetch-extract:commandlinetools-linux-([0-9]+)_latest\\.zip) url:https://developer.android.com/studio 14742923\nGLOBAL_STACK_ANDROID_SDK_URL=14742923\n' > \"\$f\"
+    printf '# @todo env-update (fetch-extract:commandlinetools-linux-([0-9]+)_latest\\.zip) url:https://developer.android.com/studio 14742923\nGLOBAL_STACK_ANDROID_SDK_BUILD=14742923\n' > \"\$f\"
     out=\$(export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'; export _GS_EU2_CACHE_DIR=\"\${TMP_DIR}/t38a_cache\"; bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null)
     echo \"\$out\" | grep -qE 'AUTO|SKIP|HOLD' || { echo \"no decision output; got: \$out\"; echo FAIL; exit 0; }
     echo PASS

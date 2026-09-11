@@ -1301,8 +1301,11 @@ GLOBAL_STACK_GRADLE_VERSION=8.12.1
 > will be used instead."* and is a thin **shim over `android sdk`**, already emitting the new
 > slash-form package ids. The fetcher still resolves correctly through the shim — verified by
 > feeding stale pins via `--env-file` and getting `30.0.0 → 37.0.0`. The equivalent direct
-> call is `android sdk list --sdk="${ANDROID_HOME}"` (`--sdk_root=` → `--sdk=`), and
-> `android sdk list --all --beta` widens the listing. The container-side installer was
+> call is `android --sdk="${ANDROID_HOME}" sdk list`. **`--sdk` replaces `--sdk_root=` but
+> is a GLOBAL option: it goes BEFORE the subcommand.** Written after it — `android sdk list
+> --sdk=…` — the CLI answers `Unknown option: '--sdk=…'` and exits 2, for `sdk install` just
+> as for `sdk list` [measured against `android 1.0.15985488`, 2026-09-11]. Appending
+> `--all --beta` widens the listing. The container-side installer was
 > migrated off `sdkmanager` in `b2ae4d1`; this fetcher deliberately was not, because the shim
 > keeps working and the output parsing below is written against `sdkmanager`'s two formats.
 > Revisit if a future SDK release removes the shim.

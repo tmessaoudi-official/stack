@@ -611,6 +611,41 @@ labels) and post-push commit signing.
   rule at line 915-918 and would drop the documented stay-alive-on-error behaviour.
   Certification tier for this row: `advisor()` only.
 
+- [2026-09-11 10:12] AGREED (row 31): fix the `--sdk` P0 at the **full** scope the developer asked
+  for — the flag position at all three call sites, the `2>/dev/null || true` swallow, one array as
+  the source of truth for install AND verify, `.env`'s stale line-number anchors replaced by names,
+  the config.ini rewrite decoupled from the `_google_apis` reverse-parse, `${ANDROID_HOME}` quoted,
+  and `GLOBAL_STACK_ANDROID_SDK_URL` renamed to `..._SDK_BUILD` (it holds a build number).
+  Three things were offered and DECLINED, each for a stated reason: **renaming the AVDs** —
+  `setup-dist.sh` runs on every start and `avdmanager create --force` with a new name would create
+  three NEW AVDs beside the three that exist; **removing the dead `..._NDK_BUNDLE_VERSION`
+  plumbing** — working code, read by no script but outside this fix; **pinning rootAVD to a sha** —
+  the clone is consumed by nothing executable and gitlab is not one of the 12 fetcher types, so a
+  pin would never auto-update; quoting alone was chosen.
+  Two measured findings moved the fix away from the obvious one: a naive `;`→`/` single-array
+  transform FATALs on `platform-tools` (single-instance upstream, listed bare with its version in
+  column 2), and the existing `grep -qF` detects removal for 17 of 17 probed ids, so it is NOT
+  replaced with field matching. Certification tier for this row: `advisor()` only.
+- [2026-09-11 11:05] 6C FINDING (row 31, not a developer ruling — deliberately NOT labelled
+  `AGREED`, because no question was put and none was answered): the pre-completion check found two things the
+  evidence pass had missed, both now closed. **(1)** The `..._SDK_URL`→`..._SDK_BUILD` sweep was
+  run with `git grep`, which cannot see gitignored files — `docker/images/local.05php8-4-…-android-
+  n-flutter3-41-9/docker-compose.yaml:144` still plumbed the old name, so on this machine the
+  all-in-one image would have received `GLOBAL_STACK_ANDROID_SDK_URL=` blank and no `..._SDK_BUILD`,
+  killing `setup.sh:39` under `set -u`. `docker compose config -q` had NOT caught it twice over: it
+  warns and exits 0 on an unset variable, and a stale `GLOBAL_STACK_ANDROID_SDK_URL=15859902` export
+  in the session's own shell was masking the warning, because compose interpolation prefers the
+  shell over `--env-file`. Fixed in the gitignored file (backup kept, never staged) and re-validated
+  under `env -i` — zero warnings, all four android services resolve `BUILD=15859902`. The lesson
+  graduated to `CLAUDE.md` § Gotchas as a rider on the `git grep, not grep -rn` bullet, which until
+  now pointed only one way: `git grep` is the sweep for TRACKED files and is blind to exactly the
+  gitignored compose files that consume a plumbed var. **(2)** `setup-dist.sh`'s rewritten AVD loop had only
+  static grep coverage; §43u-43y now execute it. They are **regression guards, not red-first
+  proofs** — HEAD's glob-and-reverse-parse loop passes all five under a faithful stub, which is the
+  correct result: the rewrite removed a fragile dependency, it did not fix a live break. Three
+  sabotages red them. Also recorded-not-fixed as A10: `setup.sh`'s final `[[ -n "${GS_ANDROID_SDK_
+  WANT:-}" ]] && printf …` makes a STANDALONE run exit 1 (production always exports the var).
+
 The executor APPENDS its own dated `AGREED:` entries here (e.g. the F3 classification
 outcome, Track 5 audit rulings) as it goes — this file is where rulings land. Never backdate;
 never write an entry for a ruling that was not actually taken (forged-AGREED hazard, global
@@ -1310,7 +1345,8 @@ class-3 var is absent from this accounting, and no gate site in B lacks a class-
 | 27 | Sweep — CLAUDE.md corrections (141/1 claim, stale suite counts, LOCAL slot, exclusion list) | S | done | 3f94de3 | CLAUDE.md |
 | 28 | Sweep — settings.json ask-tier vs CLAUDE.md; RULED 2026-09-04 keep the `ask` trio, correct 8 doc claims (handover script run by the developer 2026-09-05) | S | done | 10ab7f6 | CLAUDE.md .claude/agents/reproducibility-reviewer.md .claude/agents/stack-infra-reviewer.md docs/BLAST-RADIUS.md |
 | 29 | Sweep — prune TODO.md (item 189 + zig drift done; consolidate its 5 container-test items with row 24) | S | done | cec239d | TODO.md |
-| 30 | E7 — normalize the 3 android stackCatch handlers to the post-row-25 shape (exit 1 reported, `_STACK_CAUGHT`, 141 exemption on start, error token written before `sleep infinity`, `message:`→`command:`); extend §19 discovery to the whole exempt family, shape-agnostic; fix the new-service scaffold | M | doing | - | docker/config/dist/bin/android-bin/*.sh bin/tests/startup-prologue.test.sh .claude/skills/new-service/SKILL.md |
+| 30 | E7 — normalize the 3 android stackCatch handlers to the post-row-25 shape (exit 1 reported, `_STACK_CAUGHT`, 141 exemption on start, error token written before `sleep infinity`, `message:`→`command:`); extend §19 discovery to the whole exempt family, shape-agnostic; fix the new-service scaffold | M | done | 36e03cd | docker/config/dist/bin/android-bin/*.sh bin/tests/startup-prologue.test.sh .claude/skills/new-service/SKILL.md |
+| 31 | P0 — `--sdk` is a GLOBAL option, not a subcommand option: `b2ae4d1` wrote `android sdk install --sdk=…` at all 3 call sites, which the CLI rejects with exit 2. Move it to `android --sdk=… sdk …`, drop the `2>/dev/null \|\| true` that turned that exit 2 into a FATAL blaming the package ids, make one array the source of truth for install AND verify (11 of 24 ids were verified while the comment claimed all), replace `.env`'s stale line-number anchors with names, decouple the config.ini rewrite from the `_google_apis` reverse-parse, quote `${ANDROID_HOME}`, rename `..._SDK_URL`→`..._SDK_BUILD` | M | doing | - | docker/config/dist/bin/android-bin/global-stack-android-setup*.sh .env docker/images/0{4android,5edge,5stable}/docker-compose.yaml bin/tests/startup-prologue.test.sh bin/tests/env-update.test.sh templates/tips/env-update.md |
 <!-- /progress-block -->
 ### Blocked
 - Row 24 — the supervised bring-up (POSTPONED by the developer 2026-09-05; see the

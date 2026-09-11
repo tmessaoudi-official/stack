@@ -2758,8 +2758,29 @@ assert_pass "43e: setup-dist.sh fails loudly on an unsubstituted placeholder" \
 # sdkmanager is deprecated and is now only a shim over `android sdk`.
 assert_fail "43f: the setup script no longer invokes the deprecated sdkmanager" \
   grep -Eq '(^|[^a-z-])sdkmanager --sdk_root' "${_ANDS}"
-assert_pass "43g: ...it uses android sdk install --sdk= instead" \
-  grep -q 'android sdk install --sdk=' "${_ANDS}"
+# `--sdk` is a GLOBAL option — `android --sdk=<path> sdk install …`. b2ae4d1 wrote it
+# AFTER the subcommand, where picocli rejects it outright (`Unknown option: '--sdk=…'`,
+# exit 2), so every install and the verify listing were dead code that had never run:
+# gs_version_gate was returning "skip" on a warm tools/ volume, and the marker predates
+# the migration by a day. Assert BOTH directions — the correct spelling present and the
+# broken one absent — because fixing one of the three call sites and leaving another
+# reads as green under a one-directional check.
+_ands_code="$(grep -v '^[[:space:]]*#' "${_ANDS}")"
+# Counted on the FIXED string including the variable, not on a regex: the FATAL text
+# this script prints for the operator spells out `android --sdk=<sdk root> sdk list`,
+# which is code, not a comment — a looser pattern counts that help string as a fourth
+# call site and the count then survives one real site being reverted. Found by
+# sabotage S1, which reddened 43g2 while leaving 43g green.
+assert_pass "43g: the setup script puts --sdk= in the GLOBAL position, at all 3 call sites" \
+  bash -c 'test "$(printf "%s\n" "$1" | grep -cF "android --sdk=\"\${ANDROID_HOME}\" sdk")" -ge 3' _ "${_ands_code}"
+assert_fail "43g2: ...and no subcommand-position --sdk= survives anywhere" \
+  bash -c 'printf "%s\n" "$1" | grep -Eq "android sdk (install|list).*--sdk="' _ "${_ands_code}"
+# The exit 2 above was invisible because the capture swallowed it twice over: the
+# listing came back empty, every grep missed, and the script reported "these packages
+# are absent" — blaming the package ids for a broken invocation. Measured on the real
+# binary, the correct form exits 0, so neither swallow has a failure mode behind it.
+assert_fail "43o: the verify listing is not swallowed by 2>/dev/null or || true" \
+  bash -c 'printf "%s\n" "$1" | grep -Eq "sdk list.*(2>/dev/null|\|\| true)"' _ "${_ands_code}"
 # The licence feeders caused "echo: write error: Broken pipe" on lines 30/32,
 # because line 6 ignores SIGPIPE so the write returns EPIPE instead of dying.
 # NOTE: these two must look at CODE only. The comment block in that script quotes
@@ -2788,6 +2809,208 @@ for _v in API_LEVEL_1 API_LEVEL_2 API_LEVEL_3 SYSTEM_IMAGE_TAG SYSTEM_IMAGE_PLAY
     grep -q "GLOBAL_STACK_ANDROID_${_v}=\${GLOBAL_STACK_ANDROID_${_v}}" \
     "${REPO_ROOT}/docker/images/04android/docker-compose.yaml"
 done
+
+# ── Behavioural: run the SHIPPED install+verify block against a stubbed `android` ──
+#
+# Four guarantees no grep reaches: the flag lands in the GLOBAL position, the verify
+# loop covers EVERY id the install asks for, the platform-tools exception matches the
+# real CLI, and a package that did not install is actually caught.
+#
+# The stub is a faithful model of `android 1.0.15985488` (the build the pinned
+# commandlinetools-linux-15859902_latest.zip yields), measured 2026-09-11:
+#   * a --sdk that is not in the global position is rejected with exit 2
+#   * `sdk list` prints the install id with ';' -> '/', EXCEPT platform-tools, which
+#     is single-instance upstream and is listed BARE with its version in column 2
+# Only that TRANSFORM RULE belongs to the test; the ids come from the script itself,
+# so the probe cannot pass by agreeing with itself. The rule is what catches the
+# obvious-but-wrong single-array refactor: a naive ';'->'/' of platform-tools;<ver>
+# yields platform-tools/<ver>, which never appears in a listing, so a CORRECT install
+# would report itself missing.
+_andv_probe() { # $1 = list id to omit ("" = omit none); echoes "<rc>|<absent-ids>"
+  local omit="${1}" d="${TMP_DIR}/andv" rc out
+  rm -rf "${d}"
+  mkdir -p "${d}/bin" "${d}/versions"
+  : >"${d}/asked"
+  cat >"${d}/bin/android" <<STUB
+#!/bin/bash
+D="${d}"
+OMIT="${omit}"
+case "\${1}" in
+  --version) echo "1.0.0-stub"; exit 0 ;;
+  --sdk=*) shift ;;
+  *) echo "Unknown option: '\${1}'" >&2; exit 2 ;;
+esac
+case "\${1}.\${2}" in
+  sdk.install) shift 2; printf '%s\n' "\$@" >>"\${D}/asked"; exit 0 ;;
+  sdk.list)
+    echo "Installed packages:"
+    while IFS= read -r p; do
+      case "\${p}" in
+        platform-tools\\;*) id="platform-tools" ;;
+        *) id="\${p//;//}" ;;
+      esac
+      [ "\${id}" = "\${OMIT}" ] && continue
+      printf '  %s  1.2.3  description\n' "\${id}"
+    done <"\${D}/asked"
+    exit 0 ;;
+esac
+exit 0
+STUB
+  chmod +x "${d}/bin/android"
+  {
+    printf '#!/bin/bash\nset -eEu -o pipefail\n'
+    sed -n '/^_pkgs=(/,$p' "${_ANDS}"
+  } >"${d}/run.sh"
+  # The stub PATH is composed HERE, not inside the command substitution below: a
+  # `${PATH}` read in a subshell pairs with an unrelated PATH assignment further up
+  # this file and wakes SC2031/SC2030 on both. `env` for the same reason — a bare
+  # `PATH=… cmd` prefix is itself a subshell modification.
+  # `printenv PATH`, not "${PATH}": a shell-variable READ of PATH anywhere in this file
+  # gets paired by shellcheck with the unrelated `PATH="/usr/bin:/bin"` fixture in the
+  # sdkman section (SC2030/SC2031) and reports a finding on both lines. PATH is
+  # exported, so reading it from the environment is the same value and tracks nothing.
+  local probe_path
+  probe_path="${d}/bin:$(printenv PATH)"
+  out="$(
+    env PATH="${probe_path}" \
+      ANDROID_HOME="${d}" \
+      GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS="${d}/versions" \
+      GS_ANDROID_SDK_WANT="probe" \
+      GLOBAL_STACK_ANDROID_INSTALL_SYSTEM_IMAGES=true \
+      GLOBAL_STACK_ANDROID_CMDLINE_TOOLS_VERSION=23.0 \
+      GLOBAL_STACK_ANDROID_PLATFORM_TOOLS_VERSION=37.0.1 \
+      GLOBAL_STACK_ANDROID_BUILD_TOOLS_VERSION=37.0.0 \
+      GLOBAL_STACK_ANDROID_NDK_VERSION=30.0.16248370 \
+      GLOBAL_STACK_ANDROID_API_LEVEL_1=37.0 \
+      GLOBAL_STACK_ANDROID_API_LEVEL_2=37.1 \
+      GLOBAL_STACK_ANDROID_API_LEVEL_3=37.2-beta1 \
+      GLOBAL_STACK_ANDROID_SYSTEM_IMAGE_TAG=google_apis_ps16k \
+      GLOBAL_STACK_ANDROID_SYSTEM_IMAGE_PLAYSTORE_TAG=google_apis_playstore_ps16k \
+      GLOBAL_STACK_ANDROID_SYSTEM_IMAGE_ABI=x86_64 \
+      bash "${d}/run.sh" 2>&1
+  )" && rc=0 || rc=$?
+  # Anchor on ^FATAL: — the extracted block re-enables `set -x`, so the xtrace line
+  # for that very printf is also in the stream and would be scraped alongside it.
+  printf '%s|%s' "${rc}" "$(printf '%s\n' "${out}" | sed -n 's/^FATAL:.*these packages are absent://p')"
+}
+
+# Non-vacuity: the extraction must actually find the package array. If setup.sh stops
+# opening with `_pkgs=(`, every probe below would run an EMPTY script and pass.
+assert_pass "43p: the install+verify block is extractable (the probes are not vacuous)" \
+  bash -c 'test "$(sed -n "/^_pkgs=(/,\$p" "$1" | wc -l)" -ge 30' _ "${_ANDS}"
+
+# A complete install must NOT report anything missing. This is the assertion that
+# catches the platform-tools transform, and — because the stub rejects a non-global
+# --sdk with exit 2 under set -e — it is also the behavioural proof of 43g.
+assert_output_contains "43q: a complete install verifies clean (no false FATAL)" \
+  '0|' _andv_probe ""
+# Each of the next three is an id the PRE-FIX loop never checked: a single-instance
+# package, an add-on, and a playstore-tag system image. Before the array became the
+# single source of truth the loop covered 11 of 24 ids while its own comment claimed
+# "every id we asked for".
+assert_output_contains "43r: a missing platform-tools is caught" \
+  '1| platform-tools' _andv_probe "platform-tools"
+assert_output_contains "43s: a missing add-on is caught (was uncovered pre-fix)" \
+  '1| add-ons/addon-google_apis-google-24' _andv_probe "add-ons/addon-google_apis-google-24"
+assert_output_contains "43t: a missing playstore system image is caught (was uncovered pre-fix)" \
+  '1| system-images/android-37.1/google_apis_playstore_ps16k/x86_64' \
+  _andv_probe "system-images/android-37.1/google_apis_playstore_ps16k/x86_64"
+
+# setup-dist.sh's AVD loop is EXECUTED here, not grepped. 43c/43e/43l are static and
+# were green both before and after the loop was rewritten from glob-and-reverse-parse
+# to tuple iteration, so none of them could have noticed a control-flow change. The
+# stub avdmanager only creates the directory the script then writes into — the names,
+# the levels, the pixel models and every substitution come from the script itself and
+# from the REAL template, so the probe cannot pass by agreeing with a fixture.
+_andd_probe() { # echoes "<rc>|<n config.ini>|<leftover placeholders>|<sysdirs>|<avd ids>"
+  local d="${TMP_DIR}/andd" rc out inis f all n
+  rm -rf "${d}"
+  mkdir -p "${d}/bin" "${d}/home/.android/avd"
+  cat >"${d}/bin/avdmanager" <<'STUB'
+#!/bin/bash
+# Models what the script depends on: --name names the .avd directory, and a real
+# `avdmanager create` leaves a config.ini inside it. That second half matters — the
+# loop this replaced globbed `*.avd/config.ini`, so a stub that created only the
+# directory would fail the OLD shape for a reason the real avdmanager never would,
+# and the probe's red-first claim would be an artefact of the stub.
+name=""
+while [ "$#" -gt 0 ]; do
+  case "${1}" in
+    --name)
+      name="${2}"
+      shift 2
+      ;;
+    *) shift ;;
+  esac
+done
+[ -n "${name}" ] || {
+  echo "stub avdmanager: create without --name" >&2
+  exit 1
+}
+mkdir -p "${ANDROID_SDK_HOME}/.android/avd/${name}.avd"
+: >"${ANDROID_SDK_HOME}/.android/avd/${name}.avd/config.ini"
+STUB
+  chmod +x "${d}/bin/avdmanager"
+  {
+    cat <<'PRE'
+#!/bin/bash
+set -eEu -o pipefail
+IFS=$'\n\t'
+PRE
+    sed -n '/^if \[ "\${GLOBAL_STACK_ANDROID_INSTALL_SYSTEM_IMAGES}"/,$p' "${_ANDD}"
+  } >"${d}/run.sh"
+  # `printenv PATH`, not "${PATH}" — same SC2030/SC2031 pairing as _andv_probe above.
+  local probe_path
+  probe_path="${d}/bin:$(printenv PATH)"
+  out="$(
+    env PATH="${probe_path}" \
+      ANDROID_HOME="${d}/sdk" \
+      ANDROID_SDK_HOME="${d}/home" \
+      GLOBAL_STACK_DOCKER_ROOT_DIST_PATH="${REPO_ROOT}/docker/config/dist" \
+      GLOBAL_STACK_ANDROID_INSTALL_SYSTEM_IMAGES=true \
+      GLOBAL_STACK_ANDROID_API_LEVEL_1=37.0 \
+      GLOBAL_STACK_ANDROID_API_LEVEL_2=37.1 \
+      GLOBAL_STACK_ANDROID_API_LEVEL_3=37.2-beta1 \
+      GLOBAL_STACK_ANDROID_SYSTEM_IMAGE_TAG=google_apis_ps16k \
+      GLOBAL_STACK_ANDROID_SYSTEM_IMAGE_ABI=x86_64 \
+      bash "${d}/run.sh" 2>&1
+  )" && rc=0 || rc=$?
+  inis="$(find "${d}/home/.android/avd" -name config.ini 2>/dev/null | sort)"
+  all="${d}/all.ini"
+  : >"${all}"
+  while IFS= read -r f; do
+    [ -n "${f}" ] && cat "${f}" >>"${all}"
+  done <<<"${inis}"
+  n="$(printf '%s\n' "${inis}" | grep -c . || true)"
+  printf '%s|%s|%s|%s|%s' \
+    "${rc}" "${n}" \
+    "$(grep -o '{[A-Za-z]*}' "${all}" | sort -u | tr '\n' ' ')" \
+    "$(sed -n 's/^image\.sysdir\.1=//p' "${all}" | tr '\n' ' ')" \
+    "$(sed -n 's/^AvdId=//p' "${all}" | tr '\n' ' ')"
+}
+
+# Non-vacuity: if the `if [ "${GLOBAL_STACK_ANDROID_INSTALL_SYSTEM_IMAGES}"` anchor
+# ever moves, the extraction yields nothing and every probe below runs an EMPTY
+# script — which exits 0 and would read as a pass.
+assert_pass "43u: the AVD block is extractable and really creates AVDs (43v-43x are not vacuous)" \
+  bash -c 'b="$(sed -n "/^if \[ \"\\\${GLOBAL_STACK_ANDROID_INSTALL_SYSTEM_IMAGES}\"/,\$p" "$1")"
+    [ "$(printf "%s\n" "${b}" | wc -l)" -ge 20 ] && printf "%s\n" "${b}" | grep -q "avdmanager create"' _ "${_ANDD}"
+
+# rc 0, three config.ini written, and NO placeholder left behind. The template carries
+# eight distinct placeholders (43d); a substitution dropped from the sed leaves one in
+# image.sysdir.1 and the script's own guard turns that into rc 1.
+assert_output_contains "43v: the AVD loop writes one substituted config.ini per AVD" \
+  '0|3||' _andd_probe
+# The discriminating level: 37.2-beta1 is the only pin whose value is not a bare X.Y,
+# and it is the one a reverse-parse out of the AVD path is most likely to mangle.
+assert_output_contains "43w: the beta API level reaches image.sysdir.1 intact" \
+  'system-images/android-37.2-beta1/google_apis_ps16k/x86_64/' _andd_probe
+# The tuple pairs a level with a pixel model. Nothing else in the loop pins that
+# pairing, so a transposed tuple would produce three plausible AVDs and the wrong ones.
+assert_output_contains "43x: level 1 is paired with pixel 7, not pixel 9" \
+  'global_stack_auto_pixel_7_pro_android_37.0_google_apis' _andd_probe
+assert_output_contains "43y: ...and the beta level with pixel 9" \
+  'global_stack_auto_pixel_9_pro_android_37.2-beta1_google_apis' _andd_probe
 
 # ─── Section 44: tools/elapsed — shape, docs, and the SECONDS clobber ──────
 #
@@ -2940,8 +3163,11 @@ fi
 _eu_note="$(grep -A14 -- 'sdkmanager --sdk_root' "${_EU_DOC}")"
 assert_output_contains "45b: env-update.md flags the sdkmanager invocation as deprecated" \
   'DEPRECATED upstream' printf '%s' "${_eu_note}"
+# Anchored on the GLOBAL-position spelling, not on the bare words `android sdk list`:
+# the note now quotes the WRONG position too, as the counter-example, so the bare form
+# would match the very thing the note warns against.
 assert_output_contains "45b2: ...and names the replacement command next to it" \
-  'android sdk list' printf '%s' "${_eu_note}"
+  'android --sdk=' printf '%s' "${_eu_note}"
 
 assert_fail "45c: no 'partitian' typo anywhere under templates/" \
   grep -rqi 'partitian' "${REPO_ROOT}/templates"
