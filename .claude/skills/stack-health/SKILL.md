@@ -11,7 +11,7 @@ Check the health status of the running stack by inspecting health markers and co
 1. **Success markers**: `ls tools/successes/ 2>/dev/null` — list healthy services
 2. **Error markers**: `ls tools/errors/ 2>/dev/null` — list failed services
 3. **Lock files**: `ls tools/locks/ 2>/dev/null` — list services with active locks
-4. **Elapsed times**: `ls tools/elapsed/ 2>/dev/null` — list services with timing data
+4. **Elapsed times**: `cat tools/elapsed 2>/dev/null` — one line per service that came up, plus any error lines. It is a single FILE, not a directory. Do not "fix" this to a directory listing: `ls` on it with a trailing slash exits 2 with "Not a directory", and with stderr swallowed that reports no timing data on every single run rather than failing visibly
 5. **Container status**: `docker compose --env-file .env.local ps --format "table {{.Name}}\t{{.Status}}\t{{.Health}}"` — show running containers
 6. **Version markers**: `ls tools/versions/ 2>/dev/null` — list installed version markers
 

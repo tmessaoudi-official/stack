@@ -2676,6 +2676,99 @@ for _v in API_LEVEL_1 API_LEVEL_2 API_LEVEL_3 SYSTEM_IMAGE_TAG SYSTEM_IMAGE_PLAY
     "${REPO_ROOT}/docker/images/04android/docker-compose.yaml"
 done
 
+# ─── Section 44: tools/elapsed — shape, docs, and the SECONDS clobber ──────
+#
+# `tools/elapsed` is a single REGULAR FILE, not a directory. Two artefacts said
+# otherwise and one of them was a check that could never fire:
+# `ls tools/elapsed/ 2>/dev/null` exits 2 with "Not a directory", the error is
+# swallowed, and /stack-health renders "no timing data" on every single run.
+#
+# The other half is `global-stack-base-print-success.sh`, which assigns to
+# SECONDS — a bash SPECIAL variable whose value INCREMENTS after assignment.
+# A static lint cannot catch it -- there is no rule for special-variable
+# clobber -- so 44b runs the script with a slow `date` on PATH and reads the
+# seconds back out of the file it wrote. That is the only guard there can be.
+# (This comment deliberately does NOT begin with the linter's own name: a
+# comment whose first word is that name is parsed as a DIRECTIVE, and an
+# unparseable one aborts analysis of this entire file -- silently.)
+printf '\n%b── Section 44: tools/elapsed — shape, docs, SECONDS clobber%b\n' "${C_BOLD}" "${C_RESET}"
+
+_PS_SH="${REPO_ROOT}/docker/config/dist/bin/base-bin/global-stack-base-print-success.sh"
+_SH_SKILL="${REPO_ROOT}/.claude/skills/stack-health/SKILL.md"
+_FL_TIP="${REPO_ROOT}/templates/tips/file-layout.md"
+_EL_SPEC="${REPO_ROOT}/docs/specs/elapsed-write.md"
+_ANDD_44="${REPO_ROOT}/docker/config/dist/bin/android-bin/global-stack-android-setup-dist.sh"
+
+# Non-vacuity: every file 44 asserts against must exist, or the greps below
+# would all "pass" by matching nothing.
+for _f in "${_PS_SH}" "${_SH_SKILL}" "${_FL_TIP}" "${_EL_SPEC}" "${_ANDD_44}"; do
+  assert_pass "44-guard: ${_f##*/} exists" test -f "${_f}"
+done
+
+# --- E5: the SECONDS clobber -------------------------------------------------
+assert_fail "44a: print-success.sh does not assign to the special variable SECONDS" \
+  grep -Eq '^[[:space:]]*SECONDS=' "${_PS_SH}"
+
+# 44b is BEHAVIOURAL. A stub `date` that sleeps 2s makes real time pass between
+# the assignment and the read, which is exactly the condition under which a
+# clobbered SECONDS drifts. DURATION=5 must be written as "5 seconds"; a
+# clobbered SECONDS writes 9.
+_ps_seconds_written() {
+  local _t
+  _t="$(mktemp -d)"
+  mkdir -p "${_t}/bin" "${_t}/tools/successes" "${_t}/tools/errors" "${_t}/tools/versions"
+  printf '#!/bin/sh\nsleep 2\nexec /usr/bin/env -u PATH /bin/date "$@"\n' > "${_t}/bin/date"
+  chmod +x "${_t}/bin/date"
+  cp "${_PS_SH}" "${_t}/bin/"
+  cp "${REPO_ROOT}/docker/config/dist/bin/base-bin/global-stack-base-prologue.sh" "${_t}/bin/"
+  cp "${REPO_ROOT}/docker/config/dist/bin/base-bin/global-stack-base-version-gate.sh" "${_t}/bin/" 2>/dev/null || true
+  env "GLOBAL_STACK_DOCKER_TOOLS_PATH=${_t}/tools" \
+    "GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES=${_t}/tools/successes" \
+    "GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS=${_t}/tools/errors" \
+    "GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS=${_t}/tools/versions" \
+    "PATH=${_t}/bin:/usr/bin:/bin" \
+    bash "${_t}/bin/global-stack-base-print-success.sh" 5 "gs-test" "create" >/dev/null 2>&1 || true
+  grep -oE '[0-9]+ seconds elapsed' "${_t}/tools/elapsed" 2>/dev/null | grep -oE '^[0-9]+' | tail -1
+  rm -rf "${_t}"
+}
+_ps_secs="$(_ps_seconds_written)"
+if [[ "${_ps_secs}" == "5" ]]; then
+  PASS=$((PASS + 1))
+  printf '  %b✓%b  %s\n' "${C_GREEN}" "${C_RESET}" \
+    "44b: print-success.sh writes DURATION%60 verbatim across a slow date (got 5)"
+else
+  FAIL=$((FAIL + 1))
+  FAILURES+=("44b: print-success.sh writes DURATION%60 verbatim across a slow date")
+  printf '  %b✗%b  %s (wrote %s, want 5 — SECONDS drifted)\n' "${C_RED}" "${C_RESET}" \
+    "44b: print-success.sh writes DURATION%60 verbatim across a slow date" "${_ps_secs:-<nothing>}"
+fi
+
+# --- E1/E2: tools/elapsed is a FILE, and the docs must say so ----------------
+assert_fail "44c: /stack-health does not list tools/elapsed as a directory" \
+  grep -q 'ls tools/elapsed/' "${_SH_SKILL}"
+assert_pass "44d: /stack-health reads tools/elapsed with a FILE reader" \
+  grep -q 'cat tools/elapsed' "${_SH_SKILL}"
+assert_pass "44d2: file-layout.md documents elapsed as a single file" \
+  grep -q 'a single FILE, not a directory' "${_FL_TIP}"
+assert_fail "44e: file-layout.md does not list elapsed/ among the marker DIRECTORIES" \
+  grep -q 'locks/ elapsed/' "${_FL_TIP}"
+
+# --- E4: the spec premise that produced the two-namespace split --------------
+# elapsed-write.md told the implementer to use the compose service name and
+# claimed that "matches the format used by Group ✓ containers". It does not:
+# 00base carries stack.service "00base" and writes "base". Leaving the claim in
+# place invites the next service to be relabelled to match a format nothing uses.
+# Anchored on the RULE's shape ("field), which matches the format"), not on the
+# bare phrase: the correction block below it QUOTES the removed wording, and a
+# grep for the phrase alone would match that quotation the moment the paragraph
+# reflows — passing or failing for a reason that has nothing to do with the rule.
+assert_fail "44f: the spec no longer claims service names match the Group ✓ format" \
+  grep -q 'field), which matches the format' "${_EL_SPEC}"
+
+# --- E6: the error line must name a script that exists -----------------------
+assert_fail "44g: the AVD script's error line names no nonexistent setup-dit.sh" \
+  grep -q 'global-stack-android-setup-dit\.sh' "${_ANDD_44}"
+
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
 if [[ "${FAIL}" -eq 0 ]]; then

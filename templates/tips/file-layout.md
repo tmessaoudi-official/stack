@@ -23,7 +23,8 @@ docker/config/root/                  # Root home (SSH keys, etc.) — bind-mount
 docker/registry/                     # Local TLS Docker registry config
 docker/buildkit/                     # Custom BuildKit image with local CA
 tools/                               # Shared volume (gitignored — lives on host)
-  successes/ errors/ locks/ elapsed/ # Health/coordination markers
+  successes/ errors/ locks/          # Health/coordination markers (directories)
+  elapsed                            # Timing + error log — a single FILE, not a directory
   versions/                          # Installed version markers (skip reinstall)
   .shellrc/                          # Runtime env exports (host sources these)
   bin/                               # Shared executables (mkcert, etc.)

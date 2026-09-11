@@ -269,7 +269,30 @@ needed. Verify the container's default shell (`sh`) is available for the healthc
 | `01axllent-mailpit` | `curl localhost:8025/api/v1/info` | `global-stack-base-healthcheck-elapsed.sh 01mailpit curl localhost:8025/api/v1/info` |
 
 **Service name tokens**: use the label value already defined in the compose labels (`stack.service`
-field), which matches the format used by Group ✓ containers (e.g. `01redis`, not `redis`).
+field) — e.g. `01redis`, not `redis`.
+
+> **Correction (2026-09-11).** This rule originally read "…which matches the format used by
+> Group ✓ containers". **It does not, and never did.** Group ✓ containers label their line by
+> hand in the `print-success.sh` call, using the RUNTIME name — `00base` carries
+> `stack.service: "00base"` and writes `base`; `01caddy` carries `stack.service: "01caddy"` and
+> writes `caddy`; `03java26-zulu` writes `sdkman (26.0.2-zulu)`. Group A was built to this rule
+> and Group ✓ never was, which is why `tools/elapsed` now holds two namespaces: 16 lines keyed by
+> compose service name and 27 keyed by runtime, 21 of which match neither the service name nor
+> the service's own success token (`java.26` ↔ `sdkman (26.0.2-zulu)`, `php.8.4` ↔
+> `phpbrew (8.4.25 - php-8.4.25)`, `ruby.3` ↔ `rbenv (3.4.10)`, …).
+>
+> The rule above still stands **for Group A** — those lines are keyed by service name today and
+> changing them would gain nothing. The Group ✓ labels are deliberately left alone: they carry
+> the resolved version, which the service name does not, and nothing reads this file
+> programmatically (verified — `make down` deletes it, three script families append to it, no
+> parser anywhere), so the split costs nothing but a moment's reading. **What is removed is the
+> false claim that the two formats agree**, so the next service added here is not relabelled to
+> match a convention that half the stack has never used.
+>
+> The table above is also stale on five rows: it abbreviates `02pgadmin4`, `02keycloak`,
+> `00it-tools`, `01mailpit` and `01localstack`. The implementation correctly used the full
+> `stack.service` values (`02dpage-pgadmin4`, `02keycloak-keycloak`, `00corentinth-it-tools`,
+> `01axllent-mailpit`, `01localstack-localstack`) — trust the compose files, not the table.
 
 **Quoting note for mysql/mariadb**: `-p${MYSQL_PASSWORD}` has no space before the password —
 pass it as a single argument. Verify quoting survives the `CMD-SHELL` → `sh -c` → `"$@"` chain.
