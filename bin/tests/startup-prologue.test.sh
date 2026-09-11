@@ -2769,6 +2769,70 @@ assert_fail "44f: the spec no longer claims service names match the Group ✓ fo
 assert_fail "44g: the AVD script's error line names no nonexistent setup-dit.sh" \
   grep -q 'global-stack-android-setup-dit\.sh' "${_ANDD_44}"
 
+# ─── Section 45: templates/tips reference docs track the tools ─────────────
+#
+# CLAUDE.md calls templates/tips/env-scan.md the "Full reference" for
+# bin/env-scan.sh. It was missing --reference and --yes: both wired in
+# core/args.sh, both advertised by the script's own --help, neither documented.
+# 45a derives its expectation from `env-scan.sh --help` at run time rather than
+# from a list kept here, so a flag added to the tool and not to the doc reds
+# this suite instead of quietly reopening the same gap.
+printf '\n%b── Section 45: templates/tips reference docs track the tools%b\n' "${C_BOLD}" "${C_RESET}"
+
+_ES_SH="${REPO_ROOT}/bin/env-scan.sh"
+_ES_DOC="${REPO_ROOT}/templates/tips/env-scan.md"
+_EU_DOC="${REPO_ROOT}/templates/tips/env-update.md"
+
+assert_pass "45-guard: env-scan.sh and both reference docs exist" \
+  test -f "${_ES_SH}" -a -f "${_ES_DOC}" -a -f "${_EU_DOC}"
+
+_es_opts=()
+while read -r _o; do
+  [[ -n "${_o}" ]] && _es_opts+=("${_o}")
+done < <(bash "${_ES_SH}" --help 2>/dev/null |
+  grep -oE '^[[:space:]]+--[a-z][a-z0-9-]*' | tr -d ' \t' | sort -u)
+
+# Non-vacuity: if --help returned nothing the loop below would pass by testing
+# nothing at all, which is the failure mode this whole suite exists to avoid.
+assert_pass "45-guard: env-scan --help advertises a plausible option count (>= 40)" \
+  test "${#_es_opts[@]}" -ge 40
+
+# Word-boundary match, not -F: a plain substring test would let a documented
+# --backup-keep satisfy an undocumented --backup.
+_es_undoc=""
+for _o in "${_es_opts[@]}"; do
+  if ! grep -qE -- "${_o}([^a-z0-9-]|$)" "${_ES_DOC}"; then
+    _es_undoc="${_es_undoc} ${_o}"
+  fi
+done
+if [[ -z "${_es_undoc}" ]]; then
+  PASS=$((PASS + 1))
+  printf '  %b✓%b  %s\n' "${C_GREEN}" "${C_RESET}" \
+    "45a: every option env-scan --help advertises (${#_es_opts[@]}) is in env-scan.md"
+else
+  FAIL=$((FAIL + 1))
+  FAILURES+=("45a: env-scan.md omits options the tool advertises")
+  printf '  %b✗%b  %s —%s\n' "${C_RED}" "${C_RESET}" \
+    "45a: env-scan.md omits options the tool advertises" "${_es_undoc}"
+fi
+
+# env-update.md describes the sdkmanager fetcher as running `sdkmanager --list`.
+# That binary is deprecated upstream and is now a shim over `android sdk`; the
+# fetcher still resolves correctly THROUGH the shim, so the doc needs a note,
+# not a rewrite. Assert the note is there, next to the invocation it qualifies.
+# Anchored on the note's ACTIONABLE substance (it must name the replacement
+# command), not on the word "deprecated": the note QUOTES upstream's own message,
+# which contains that word, so a grep for it alone stays green even when the note
+# is gutted -- confirmed by sabotage, which is the only way that shows up.
+_eu_note="$(grep -A14 -- 'sdkmanager --sdk_root' "${_EU_DOC}")"
+assert_output_contains "45b: env-update.md flags the sdkmanager invocation as deprecated" \
+  'DEPRECATED upstream' printf '%s' "${_eu_note}"
+assert_output_contains "45b2: ...and names the replacement command next to it" \
+  'android sdk list' printf '%s' "${_eu_note}"
+
+assert_fail "45c: no 'partitian' typo anywhere under templates/" \
+  grep -rqi 'partitian' "${REPO_ROOT}/templates"
+
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
 if [[ "${FAIL}" -eq 0 ]]; then

@@ -1296,6 +1296,17 @@ GLOBAL_STACK_GRADLE_VERSION=8.12.1
 2. Locates `sdkmanager` binary: PATH → `${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager` → `${ANDROID_HOME}/cmdline-tools/bin/sdkmanager` → `${ANDROID_HOME}/tools/bin/sdkmanager`.
 3. Runs `sdkmanager --sdk_root=... --list` and parses output.
 
+> **`sdkmanager` is DEPRECATED upstream (noted 2026-09-11) — this fetcher is NOT broken.**
+> The binary now prints *"The SDK Manager CLI tool (sdkmanager) is deprecated. Android CLI
+> will be used instead."* and is a thin **shim over `android sdk`**, already emitting the new
+> slash-form package ids. The fetcher still resolves correctly through the shim — verified by
+> feeding stale pins via `--env-file` and getting `30.0.0 → 37.0.0`. The equivalent direct
+> call is `android sdk list --sdk="${ANDROID_HOME}"` (`--sdk_root=` → `--sdk=`), and
+> `android sdk list --all --beta` widens the listing. The container-side installer was
+> migrated off `sdkmanager` in `b2ae4d1`; this fetcher deliberately was not, because the shim
+> keeps working and the output parsing below is written against `sdkmanager`'s two formats.
+> Revisit if a future SDK release removes the shim.
+
 **Always MANUAL.** The fetcher sets `manual=true` unconditionally. No `--apply` will ever write an sdkmanager variable. Reason: sdkmanager versions are platform/tool-dependent and require explicit human decision.
 
 **Output parsing:** Handles two formats from `sdkmanager --list`:

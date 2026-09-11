@@ -31,6 +31,7 @@ All options use `--key=value` form. Boolean options accept `true` or `false`.
 | `--destination-files=VALUE` | `.env.local` | Space-separated list of destination files to merge into |
 | `--dir=VALUE` | inferred from script path | Working directory; base for all relative paths |
 | `--sync-values=true\|false` | `true` | When `true`, overwrite destination values that differ from source |
+| `--yes` | `false` | Skip the interactive write-confirmation prompt on a TTY. **Not required in non-interactive mode** — with no TTY (Makefile, CI, a script) env-scan proceeds silently by default, which is the opposite of `env-update --apply`, where non-TTY *requires* `--yes`. Use it when running from a TTY context that should not prompt: inside another script that already asked the user, or via the `env-update --scan` cascade, which passes it |
 
 ### Output formatting
 
@@ -110,6 +111,7 @@ All options use `--key=value` form. Boolean options accept `true` or `false`.
 | `--dry-run` | `false` | Report what would change but suppress all filesystem writes (env file sync, Dockerfile propagation, and backups) |
 | `--no-fail` | `false` | Always exit 0, even when a Phase 6 propagation error occurs (source env file not found). Infrastructure errors (mktemp failure), backup failures, and usage errors remain fatal. Prints `[NO-FAIL] Phase 6 propagation error suppressed (exit code N) — continuing` to stderr when suppressing. |
 | `--version` | — | Print version string (`1.0.0`) and exit 0 |
+| `--reference[=SECTION]` | `all` | Print the tool's own comprehensive reference and exit 0. Runs **before any env file access**, so it works from any directory with no `.env` present. `SECTION` is one of `all`, `pipeline`, `flags`, `propagation`, `conflicts`, `scenarios`; an unknown section exits 1 and lists the valid ones |
 | `--help` | — | Show usage and exit 0 |
 
 ---
