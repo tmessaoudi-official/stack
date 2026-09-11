@@ -1084,28 +1084,67 @@ printf '\n%b── Section 19: web-server handlers report exit 1%b\n' "${C_BOLD}
 # defect survived the 2026-08-29 migration unnoticed. Any script in the three
 # web-server trees that defines its own stackCatch is now covered automatically, so
 # a new one cannot be invisible to this section.
-WEB_SERVER_SCRIPTS=()
+#
+# Row 30: the roots were STILL hardcoded to the three web-server trees, which is
+# the same defect one level up — the android handlers are members of the very same
+# prologue-exempt family (CLAUDE.md names them in the exclusion list), carried the
+# identical exit-1 blindness, and this section could not see them. `android-bin` is
+# now a discovery root, and every pattern below tolerates the POSIX `[ ... ]` form
+# the android scripts are written in as well as the web servers' `[[ ... ]]`:
+# extending the roots alone would have made 19a pass VACUOUSLY on a regex miss.
+EXEMPT_SCRIPTS=()
 while IFS= read -r -d '' _f; do
   grep -q '^stackCatch() {' "${_f}" || continue
-  WEB_SERVER_SCRIPTS+=("${_f#"${DIST_BIN}/"}")
+  EXEMPT_SCRIPTS+=("${_f#"${DIST_BIN}/"}")
 done < <(find "${DIST_BIN}/caddy-bin" "${DIST_BIN}/nginx-bin" "${DIST_BIN}/httpd-bin" \
-              -name '*.sh' -print0 | sort -z)
-printf '  (discovered %d web-server handlers)\n' "${#WEB_SERVER_SCRIPTS[@]}"
+              "${DIST_BIN}/android-bin" -name '*.sh' -print0 | sort -z)
+printf '  (discovered %d prologue-exempt handlers)\n' "${#EXEMPT_SCRIPTS[@]}"
+# Non-vacuity: 11 web-server + 3 android. A typo in a find root would otherwise
+# shrink the set silently and every assertion below would pass by not running.
+assert_pass "19-guard: discovery covers the whole exempt family (>= 14)" \
+  test "${#EXEMPT_SCRIPTS[@]}" -ge 14
 
-for _ws in "${WEB_SERVER_SCRIPTS[@]}"; do
+# Every STATIC check below reads the handler BODY with comment lines stripped, not
+# the whole file. Both directions have already bitten: an explanatory comment that
+# quotes the arm it says was removed would red 19a on a correctly-fixed file, and
+# android-start.sh's stale-token `rm -f` on line 19 sits OUTSIDE the handler yet
+# matches a naive token-write grep (it did, in the first inventory of row 30).
+_handler_body() { # $1 = script path
+  sed -n '/^stackCatch() {/,/^}/p' "${1}" | grep -v '^[[:space:]]*#'
+}
+
+for _ws in "${EXEMPT_SCRIPTS[@]}"; do
   _ws_path="${DIST_BIN}/${_ws}"
+  _ws_body="${TMP_DIR}/body-$(basename "${_ws}")"
+  _handler_body "${_ws_path}" >"${_ws_body}"
   # Anchor on the closing `]]`: a bare '-ne 1' also matches the '-ne 141'
   # SIGPIPE arm, which must SURVIVE — that pattern can never go green.
   # Row 25: the pattern now tolerates BOTH spellings, `$exit_code` and
   # `"${exit_code}"`. The old fixed-string form only matched the unquoted one, so
   # it silently passed over any handler written the other way — the same
   # can-never-fire defect as the hardcoded script list this section used to carry.
+  # Row 30: each pattern now carries a POSIX alternative (`!= "1" ]`) so an android
+  # handler cannot satisfy it by simply not matching.
   assert_fail "19a: $(basename "${_ws}") no longer exempts exit code 1" \
-    grep -qE '\$\{?exit_code\}?"? -ne 1 \]\]' "${_ws_path}"
+    grep -qE '(\$\{?exit_code\}?"? -ne 1 \]\]|!= "1" \])' "${_ws_body}"
+  # No closing-bracket anchor on THIS one. `-ne 141` is unambiguous on its own, and
+  # requiring the `]]` made the assertion sensitive to where the arm sits in the
+  # condition: sabotage S2 (row 30) appended an unrelated arm after it and reddened
+  # this check even though the exemption was still there — red for the wrong reason.
   assert_pass "19a: $(basename "${_ws}") keeps the 141 (SIGPIPE) exemption" \
-    grep -qE '\$\{?exit_code\}?"? -ne 141 \]\]' "${_ws_path}"
-  assert_pass "19b: $(basename "${_ws}") carries the _STACK_CAUGHT re-entry guard" \
-    grep -q '_STACK_CAUGHT' "${_ws_path}"
+    grep -qE '(-ne 141|!= "141")' "${_ws_body}"
+  # Row 30: the handler must write the error token ITSELF. android-start.sh did not,
+  # so a failure left tools/errors/ empty and the healthcheck could never go red —
+  # the container sat alive-and-silent behind the 24h start_period.
+  assert_pass "19b2: $(basename "${_ws}") writes errors/\${GLOBAL_STACK_ERROR_TOKEN}" \
+    grep -qE 'GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS\}/\$\{GLOBAL_STACK_ERROR_TOKEN' "${_ws_body}"
+  # Both halves, not the bare name: sabotage S5 (row 30) deleted the guard's READ
+  # and left the assignment behind, and a `grep -q _STACK_CAUGHT` stayed GREEN on a
+  # handler that no longer guards anything. The read is the half that does the work.
+  assert_pass "19b: $(basename "${_ws}") reads the _STACK_CAUGHT re-entry guard" \
+    grep -q '_STACK_CAUGHT:-' "${_ws_body}"
+  assert_pass "19b3: $(basename "${_ws}") sets _STACK_CAUGHT before reporting" \
+    grep -q '_STACK_CAUGHT=1' "${_ws_body}"
 done
 
 # BEHAVIOURAL — extract the SHIPPED handler by PATTERN (never line numbers,
@@ -1182,6 +1221,80 @@ else
   FAILURES+=("19g: error token records the failing line")
   printf '  %b✗%b  19g: error token missing or overwritten by the EXIT re-entry\n' "${C_RED}" "${C_RESET}"
 fi
+
+# BEHAVIOURAL, android (row 30). The web-server harness above cannot be reused on
+# these: android-start.sh's handler ends in `sleep infinity` — DELIBERATE, its own
+# lines 73-74 record that the container must stay reachable for
+# `make login-04android` — so _ws_reports would hang the suite forever, and its
+# `grep -c 'Error detected!'` does not even match android's "Error detected !!".
+# This probe reports what a failure actually LEAVES BEHIND: elapsed lines, error
+# token, and whether the process stayed alive. TERM vs KILL was measured before the
+# assertions were written — identical on the sleep path — so plain `timeout` here is
+# deterministic, not incidental.
+_andr_probe() { # $1 = script path, $2 = exit code; echoes "<lines>:<token>:<rc>"
+  local src="$1" code="$2" d="${TMP_DIR}/andr" h="${TMP_DIR}/andr-harness.sh" rc
+  rm -rf "${d}"
+  mkdir -p "${d}/errors"
+  {
+    printf '#!/bin/bash\nset -eE -o pipefail\n'
+    sed -n '/^stackCatch() {/,/^}/p' "${src}"
+    printf 'trap %s ERR EXIT\n' "'stackCatch \$? \${LINENO} \"\${BASH_COMMAND}\"'"
+    printf '(exit %s)\n' "${code}"
+  } >"${h}"
+  timeout 3 env GLOBAL_STACK_ERROR_TOKEN=andr-token \
+    GLOBAL_STACK_DOCKER_TOOLS_PATH="${d}" \
+    GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS="${d}/errors" \
+    bash "${h}" >/dev/null 2>&1
+  rc=$?
+  printf '%s:%s:%s' \
+    "$([[ -f "${d}/elapsed" ]] && wc -l <"${d}/elapsed" || echo 0)" \
+    "$([[ -f "${d}/errors/andr-token" ]] && echo token || echo NONE)" \
+    "${rc}"
+}
+_andr_start="${DIST_BIN}/android-bin/global-stack-android-start.sh"
+_andr_setup="${DIST_BIN}/android-bin/global-stack-android-setup.sh"
+
+# rc 124 = the timeout fired, i.e. the handler is still alive. That is the CONTRACT
+# for android-start.sh, not a defect: report, mark the container failed, stay up.
+_p="$(_andr_probe "${_andr_start}" 1)"
+assert_output_contains "19h: android-start exit 1 reports and writes the error token" \
+  '^1:token:' printf '%s' "${_p}"
+assert_output_contains "19i: android-start exit 1 stays ALIVE for login (sleep infinity)" \
+  ':124$' printf '%s' "${_p}"
+
+# 141 is SIGPIPE. Before row 30 this script was the only exempt handler that did not
+# exempt it, so a routine broken pipe parked the container in `sleep infinity`.
+_p="$(_andr_probe "${_andr_start}" 141)"
+assert_output_contains "19j: android-start exit 141 (SIGPIPE) stays exempt and does NOT hang" \
+  '^0:NONE:141$' printf '%s' "${_p}"
+
+_p="$(_andr_probe "${_andr_start}" 0)"
+assert_output_contains "19k: android-start clean exit writes nothing" \
+  '^0:NONE:0$' printf '%s' "${_p}"
+
+# android-setup.sh exits rather than sleeping, so its own `exit 1` re-enters through
+# the EXIT trap — exactly the case _STACK_CAUGHT exists for. One line, never two.
+_p="$(_andr_probe "${_andr_setup}" 1)"
+assert_output_contains "19l: android-setup exit 1 reports and writes the error token" \
+  '^1:token:' printf '%s' "${_p}"
+_p="$(_andr_probe "${_andr_setup}" 2)"
+assert_output_contains "19m: android-setup exit 2 reported exactly once (no EXIT re-entry)" \
+  '^1:token:' printf '%s' "${_p}"
+
+# The /new-service scaffold is where the NEXT exempt handler comes from, so a defect
+# left there re-enters the tree one service at a time. It shipped the same shape row
+# 25 removed: `exit 1` inside a handler armed on EXIT ERR, with no re-entry guard.
+# SCRIPT_DIR, not REPO_ROOT: the latter is not defined until §44, far below this.
+_NS_SKILL="${SCRIPT_DIR}/../../.claude/skills/new-service/SKILL.md"
+assert_pass "19-guard: the new-service skill exists" test -f "${_NS_SKILL}"
+assert_pass "19n: the scaffolded handler READS the _STACK_CAUGHT re-entry guard" \
+  grep -q '_STACK_CAUGHT:-' "${_NS_SKILL}"
+assert_pass "19n3: ...and sets it before reporting" \
+  grep -q '_STACK_CAUGHT=1' "${_NS_SKILL}"
+# Anchored on the canonical label, never on the word it replaced: the comment added
+# beside it names both, so grepping for the old word would match the fix itself.
+assert_pass "19n2: the scaffolded elapsed line uses the canonical '** command:' field" \
+  grep -qF 'Error - ** line: %s ** ** command: %s **' "${_NS_SKILL}"
 
 # ─── Section 20: rbenv version resolver (hunt F7) ──────────────────────────
 # global-stack-rbenv-find-latest.sh resolved the newest matching Ruby, then

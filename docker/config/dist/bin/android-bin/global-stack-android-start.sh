@@ -5,10 +5,37 @@ shopt -s extdebug
 IFS=$'\n\t'
 trap 'stackCatch ${?} ${LINENO} "${BASH_COMMAND}"' EXIT ERR PIPE SIGPIPE SIGHUP
 stackCatch() {
-  if [ "${1}" != "0" ] && [ "${1}" != "1" ]; then
-    # error handling goes here
+  local exit_code=${1}
+  local line_num=${2}
+  local command=${3}
+  # Re-entry guard, same name as the shared prologue's. The `sleep infinity` below
+  # normally makes a second entry impossible, but the trap on line 6 also catches
+  # SIGHUP — which interrupts that sleep and would re-enter with the trap's own line
+  # number, overwriting a precise error token with a useless one.
+  if [[ -n "${_STACK_CAUGHT:-}" ]]; then
+    return 0
+  fi
+  # Row 30: 141 (SIGPIPE) now joins the exemption that every other prologue-exempt
+  # handler already had — this was the only one without it, so a routine broken pipe
+  # parked the container in the sleep below forever. The code-1 arm that used to sit
+  # here is gone for the reason row 25 removed it from the 11 web-server handlers:
+  # it is the most common real failure, and exempting it produced total silence.
+  if [[ "${exit_code}" -ne 0 && "${exit_code}" -ne 141 ]]; then
+    _STACK_CAUGHT=1
     echo "Error detected !!"
-    echo -e "$(date '+%d-%m-%Y %H:%M:%S'): Error - ** line: ${2} ** ** message: ${3} ** global-stack-android-start.sh" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/elapsed"
+    echo -e "$(date '+%d-%m-%Y %H:%M:%S'): Error - ** line: ${line_num} ** ** command: ${command} ** global-stack-android-start.sh" >>"${GLOBAL_STACK_DOCKER_TOOLS_PATH}/elapsed"
+    # The token MUST be written BEFORE the sleep. 04android's healthcheck is
+    # `! test -f errors/android && test -f successes/android`, so without it a failed
+    # container sat alive, unhealthy and unattributable for the full 24h start_period.
+    # Spelled as an `if` rather than the web servers' `[[ … ]] && printf …`: here the
+    # next statement is a sleep, not `exit 1`, so an unset token would abort under
+    # `set -e` and skip the stay-alive entirely.
+    if [[ -n "${GLOBAL_STACK_ERROR_TOKEN:-}" ]]; then
+      printf 'line: %s\ncommand: %s\n' "${line_num}" "${command}" \
+        >"${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}/${GLOBAL_STACK_ERROR_TOKEN}"
+    fi
+    # DELIBERATE, see the note at the version gate below: this container stays up on
+    # failure so `make login-04android` can inspect it. Do NOT replace with `exit 1`.
     sleep infinity
   fi
 }

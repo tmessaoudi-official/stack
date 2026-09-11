@@ -6,11 +6,25 @@ IFS=$'\n\t'
 trap '' PIPE SIGPIPE SIGHUP
 trap 'stackCatch ${?} ${LINENO} "${BASH_COMMAND}"' EXIT ERR
 stackCatch() {
-  if [ "${1}" != "0" ] && [ "${1}" != "141" ] && [ "${1}" != "1" ]; then
-    # error handling goes here
+  local exit_code=${1}
+  local line_num=${2}
+  local command=${3}
+  # Re-entry guard: ERR fires first, then this handler's own `exit 1` comes back
+  # through the EXIT trap and would overwrite the error token with the trap's own
+  # line number. The code-1 arm removed below had been absorbing that re-entry by
+  # accident, at the cost of silencing the most common real failure code entirely —
+  # a failed AVD/dist setup wrote no token, no elapsed line and no message (row 30).
+  if [[ -n "${_STACK_CAUGHT:-}" ]]; then
+    return 0
+  fi
+  if [[ "${exit_code}" -ne 0 && "${exit_code}" -ne 141 ]]; then
+    _STACK_CAUGHT=1
     echo "Error detected !!"
-    echo -e "$(date '+%d-%m-%Y %H:%M:%S'): Error - ** line: ${2} ** ** message: ${3} ** global-stack-android-setup-dist.sh" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/elapsed"
-    [[ -n "${GLOBAL_STACK_ERROR_TOKEN:-}" ]] && printf 'line: %s\ncommand: %s\n' "${2}" "${3}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}/${GLOBAL_STACK_ERROR_TOKEN}"
+    echo -e "$(date '+%d-%m-%Y %H:%M:%S'): Error - ** line: ${line_num} ** ** command: ${command} ** global-stack-android-setup-dist.sh" >>"${GLOBAL_STACK_DOCKER_TOOLS_PATH}/elapsed"
+    if [[ -n "${GLOBAL_STACK_ERROR_TOKEN:-}" ]]; then
+      printf 'line: %s\ncommand: %s\n' "${line_num}" "${command}" \
+        >"${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}/${GLOBAL_STACK_ERROR_TOKEN}"
+    fi
     exit 1
   fi
 }

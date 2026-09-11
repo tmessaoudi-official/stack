@@ -603,6 +603,13 @@ labels) and post-push commit signing.
   or `conf/` lines changed (baseline `c9b4576`); the six `.env` pin bumps in that window
   (mailpit image, mise, claude-code, mcp-gitlab, biome, pnpm) are compose `image:` pulls or
   runtime installs the gate handles — none is a Dockerfile `ARG`.
+- [2026-09-11 12:10] AGREED (row 30): fix E7 at the **normalize-the-3-android-handlers** scope —
+  drop the `!= "1"` arm, add `_STACK_CAUGHT`, give `android-start.sh` the 141 exemption, write
+  `errors/${GLOBAL_STACK_ERROR_TOKEN}` BEFORE the deliberate `sleep infinity`, and align the elapsed
+  line to `command:`. The 11 web-server handlers are NOT unified — working code, outside this fix.
+  Sourcing the prologue into android was REJECTED: it contradicts the prologue-exemption collision
+  rule at line 915-918 and would drop the documented stay-alive-on-error behaviour.
+  Certification tier for this row: `advisor()` only.
 
 The executor APPENDS its own dated `AGREED:` entries here (e.g. the F3 classification
 outcome, Track 5 audit rulings) as it goes — this file is where rulings land. Never backdate;
@@ -1303,6 +1310,7 @@ class-3 var is absent from this accounting, and no gate site in B lacks a class-
 | 27 | Sweep — CLAUDE.md corrections (141/1 claim, stale suite counts, LOCAL slot, exclusion list) | S | done | 3f94de3 | CLAUDE.md |
 | 28 | Sweep — settings.json ask-tier vs CLAUDE.md; RULED 2026-09-04 keep the `ask` trio, correct 8 doc claims (handover script run by the developer 2026-09-05) | S | done | 10ab7f6 | CLAUDE.md .claude/agents/reproducibility-reviewer.md .claude/agents/stack-infra-reviewer.md docs/BLAST-RADIUS.md |
 | 29 | Sweep — prune TODO.md (item 189 + zig drift done; consolidate its 5 container-test items with row 24) | S | done | cec239d | TODO.md |
+| 30 | E7 — normalize the 3 android stackCatch handlers to the post-row-25 shape (exit 1 reported, `_STACK_CAUGHT`, 141 exemption on start, error token written before `sleep infinity`, `message:`→`command:`); extend §19 discovery to the whole exempt family, shape-agnostic; fix the new-service scaffold | M | doing | - | docker/config/dist/bin/android-bin/*.sh bin/tests/startup-prologue.test.sh .claude/skills/new-service/SKILL.md |
 <!-- /progress-block -->
 ### Blocked
 - Row 24 — the supervised bring-up (POSTPONED by the developer 2026-09-05; see the

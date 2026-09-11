@@ -211,9 +211,20 @@ VERSION_MARKER="${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/<RUNTIME>"
 MODE="${<RUNTIME_UPPER>_MODE:-setup}"
 
 stackCatch() {
+  # Re-entry guard: ERR fires first, then the `exit 1` below comes back through the
+  # EXIT trap and would report twice and overwrite the token with the trap's own
+  # line number. Row 25 removed this defect from the 11 web-server handlers and
+  # row 30 from the 3 android ones — do not scaffold it back in.
+  if [[ -n "${_STACK_CAUGHT:-}" ]]; then
+    return 0
+  fi
   if [[ "${1}" != "0" ]]; then
+    _STACK_CAUGHT=1
     echo "Error detected !!"
-    printf "$(date '+%d-%m-%Y %H:%M:%S'): Error - ** line: %s ** ** message: %s ** <RUNTIME>\n" "${2}" "${3}" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/elapsed"
+    # `command:`, not `message:` — global-stack-base-prologue.sh promises that greps
+    # on '** line:' / '** command:' keep matching, and docs/specs/elapsed-write.md:13
+    # pins this as the canonical error line.
+    printf "$(date '+%d-%m-%Y %H:%M:%S'): Error - ** line: %s ** ** command: %s ** <RUNTIME>\n" "${2}" "${3}" >> "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/elapsed"
     [[ -n "${GLOBAL_STACK_ERROR_TOKEN:-}" ]] && printf 'line: %s\ncommand: %s\n' "${2}" "${3}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}/${GLOBAL_STACK_ERROR_TOKEN}"
     exit 1
   fi
