@@ -6,7 +6,17 @@ IFS=$'\n\t'
 source global-stack-base-prologue.sh
 
 [ -s "${NVM_DIR}/nvm.sh" ] && \. "${NVM_DIR}/nvm.sh"  # This loads nvm
-[ -s "${NVM_DIR}/bash_completion" ] && \. "${NVM_DIR}/bash_completion"  # This loads nvm bash_completion
+# This loads nvm bash_completion.
+# An `if`, not `[ ... ] && ...`: everything below is commented out, so this is
+# the script's last executed statement and a false test would become the
+# script's own exit status. nvm-start.sh runs this as a bare statement inside
+# its `[[ ! -f versions/node.<label> ]]` install branch, under `set -xeEu` with
+# the prologue's ERR trap -- so that would abort the node install and write an
+# error token over a missing completion file. (A NAME, not a line number: row 31
+# shipped a comment citing `setup.sh:30` that a later edit turned into `}`.)
+if [ -s "${NVM_DIR}/bash_completion" ]; then
+  \. "${NVM_DIR}/bash_completion"
+fi
 
 # echo "**** Updating npm from $(npm -v) to latest"
 # echo 'y' | npm add --global --force npm@latest

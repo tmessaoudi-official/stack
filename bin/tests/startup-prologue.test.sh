@@ -2053,8 +2053,13 @@ _and_gated="$(grep -c '\[ "${_android_gate}" != "skip" \]' "${AND_START}" || tru
 assert_pass "27c: both android branches consult the gate" test "${_and_gated}" = "2"
 
 # Marker-last, and never written from a standalone setup run.
+# `> *"`, not `> "`: pinning the redirect's SPACING made this a trap -- shfmt
+# prefers `>"`, so a formatting-only pass over dist/bin would red a green test
+# for a change that alters nothing [measured, row 32]. The assertion still has
+# teeth: it needs a redirect, and a gutted write (`true "${GS_ANDROID_SDK_WANT}"`)
+# has none.
 assert_pass "27d: android-setup writes the composite marker" \
-  grep -q 'GS_ANDROID_SDK_WANT.*> "\${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/android.sdk"' "${AND_SETUP}"
+  grep -q 'GS_ANDROID_SDK_WANT.*> *"\${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/android.sdk"' "${AND_SETUP}"
 assert_pass "27d: and only when the compose-time value was exported" \
   grep -q '\[\[ -n "\${GS_ANDROID_SDK_WANT:-}" \]\]' "${AND_SETUP}"
 
@@ -3171,6 +3176,110 @@ assert_output_contains "45b2: ...and names the replacement command next to it" \
 
 assert_fail "45c: no 'partitian' typo anywhere under templates/" \
   grep -rqi 'partitian' "${REPO_ROOT}/templates"
+
+# ─── Section 46: no trailing test-led && short-circuit ─────────────────────
+#
+# A trailing `[[ cond ]] && cmd` makes the FALSE test the script's own exit
+# status: bash returns the status of the last command, and a short-circuited
+# AND-OR list whose left side failed returns 1. Measured in isolation -- var
+# unset -> 1, var set -> 0 -- so the script reports failure for having had
+# nothing to do.
+#
+# Where that status is consumed it is a real fault: nvm-start.sh:143 calls the
+# three node *-setup.sh as bare statements under `set -xeEu` with the prologue
+# ERR trap, so a false guard aborts the node install and writes an error token.
+# android-setup.sh's own instance is unreachable today ONLY because
+# android-start.sh:115 exports GS_ANDROID_SDK_WANT before its single call site
+# -- an accident of the caller, not a property of the script.
+#
+# Deliberately narrowed to a TEST-led `&&`. `phpbrew update --old || true` and
+# `dig +short "${1}" || echo ""` are legitimate last lines and are present in
+# this tree today; so is a real command's `&&`, where a failure SHOULD be the
+# status. Only a false TEST becoming the status is the defect. Flagging the
+# others would invite "fixing" working code.
+#
+# KNOWN HOLE, measured rather than assumed: the scan reads the last
+# non-comment line, so a backslash-continued `[[ cond ]] && \` + newline +
+# `cmd` hides the `&&` on the penultimate line and is NOT caught. No script in
+# this tree uses that shape; the sabotage record carries the measurement.
+printf '\n%b── Section 46: no trailing test-led && short-circuit%b\n' "${C_BOLD}" "${C_RESET}"
+
+_a10_offenders=""
+_a10_scanned=0
+while IFS= read -r -d '' _a10_f; do
+  _a10_scanned=$((_a10_scanned + 1))
+  _a10_last="$(grep -vE '^[[:space:]]*(#|$)' "${_a10_f}" | tail -1)"
+  if printf '%s' "${_a10_last}" | grep -qE '^[[:space:]]*\[\[?.*\]\]?[[:space:]]*&&'; then
+    _a10_offenders="${_a10_offenders} $(basename "${_a10_f}")"
+  fi
+done < <(find "${DIST_BIN}" -name '*.sh' -print0 2>/dev/null)
+
+# Non-vacuity: a typo in the find root yields an empty scan, zero offenders and
+# a green check -- the same can-never-fire defect §19 carried one level up. 103
+# scripts when this was written; the floor sits below that so ordinary growth
+# or removal does not red it, while a broken root does.
+assert_pass "46a: the scan actually reached the startup scripts (>= 90)" \
+  bash -c 'test "$1" -ge 90' _ "${_a10_scanned}"
+
+# Asserts the SET, not a count: a red prints the offending basenames, so a red
+# from a broken extraction cannot be mistaken for the defect itself.
+assert_output_contains "46b: no startup script ends on a test-led && short-circuit" \
+  '^NONE$' printf '%s\n' "${_a10_offenders:-NONE}"
+
+# The behavioural half. Running the whole script is not an option: it dies at
+# its `git clone` of rootAVD long before the last line -- which is exactly how
+# A10's first evidence came to name the wrong cause. The probe runs the guarded
+# write ALONE, extracted by ANCHOR rather than by position: an earlier draft
+# took the last executable line, which meant "the marker write" before the fix
+# and "fi" after it, and 46c caught that on the first green run.
+_a10_tail="$(sed -n '/^if \[\[ -n "\${GS_ANDROID_SDK_WANT:-}" \]\]; then$/,/^fi$/p' \
+  "${DIST_BIN}/android-bin/global-stack-android-setup.sh")"
+
+# GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS is set in an ordinary /stack shell and
+# tools/versions/android.sdk is a LIVE marker: inheriting it here would overwrite
+# it, gs_version_gate would then read a mismatch, and android-start.sh `sudo
+# rm -rf`s ANDROID_HOME before reinstalling. The probe pins the variable to its
+# own tmpdir and asserts the marker lands THERE.
+_a10_probe() {
+  local want="$1" d rc marker
+  d="$(mktemp -d)"
+  mkdir -p "${d}/versions"
+  {
+    printf '#!/bin/bash\nset -eEu -o pipefail\n'
+    printf 'GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS=%q\n' "${d}/versions"
+    if [ "${want}" = "set" ]; then
+      printf 'GS_ANDROID_SDK_WANT=%q\n' 'cmdline-tools=1;build-tools=2;ndk=3'
+    fi
+    printf '%s\n' "${_a10_tail}"
+  } >"${d}/probe.sh"
+  rc=0
+  bash "${d}/probe.sh" >/dev/null 2>&1 || rc=$?
+  marker=absent
+  if [ -f "${d}/versions/android.sdk" ]; then marker=present; fi
+  printf '%s|%s' "${rc}" "${marker}"
+  rm -rf "${d}"
+}
+
+assert_output_contains "46c: non-vacuity -- the extracted block IS the guarded marker write" \
+  'GS_ANDROID_SDK_WANT' printf '%s' "${_a10_tail}"
+assert_pass "46c2: ...and it is a complete if/fi block, not a fragment" \
+  bash -c 'b="$1"; case "${b}" in if*) ;; *) exit 1 ;; esac
+    printf "%s" "${b}" | tail -1 | grep -q "^fi$"' _ "${_a10_tail}"
+# The fence at setup.sh's tail wants the marker ABSENT standalone so the next
+# start reinstalls rather than trusting unverified state. That stays; only the
+# exit status changes.
+#
+# Grading these two honestly [measured, row 32]: 46e reds on an interior
+# mutation (`printf … > …/android.sdk` -> `true "${GS_ANDROID_SDK_WANT}"` gives
+# `0|present` -> `0|absent`). 46d does NOT and cannot red on the `&&` shape
+# returning -- reverting the `if` stops the anchor matching, the block extracts
+# empty, and an empty probe exits 0 writing nothing, which is exactly 46d's
+# expectation. 46b is the red-first proof of the class; 46c/46c2 catch the
+# empty extraction; 46d is a regression guard for the unset branch.
+assert_output_contains "46d: var UNSET -> exit 0, and no marker written" \
+  '^0|absent$' _a10_probe unset
+assert_output_contains "46e: var SET -> exit 0, marker written to the PROBE dir" \
+  '^0|present$' _a10_probe set
 
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'

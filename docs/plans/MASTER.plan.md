@@ -646,6 +646,27 @@ labels) and post-push commit signing.
   sabotages red them. Also recorded-not-fixed as A10: `setup.sh`'s final `[[ -n "${GS_ANDROID_SDK_
   WANT:-}" ]] && printf …` makes a STANDALONE run exit 1 (production always exports the var).
 
+- [2026-09-11 12:12] AGREED (row 32): fix A10 at the **whole-class** scope, not the one file it was
+  filed under. Two corrections came out of the pre-work investigation and both are recorded here
+  rather than quietly folded in. **(1)** A10's own evidence was wrong: a standalone
+  `global-stack-android-setup.sh` does exit 1, but from **line 32** -- `git clone` of rootAVD fails
+  with "destination path already exists and is not an empty directory" -- and execution never
+  reaches the final line at all. The exit code was right, the attributed cause was not. The
+  mechanism is nonetheless real, proven in isolation: a trailing `[[ cond ]] && cmd` returns the
+  FALSE test as the script's own status (var unset -> 1, var set -> 0). **(2)** The blast-radius
+  sweep found the same shape as the last executable line of three more scripts --
+  `node24/node26/nodeedge-setup.sh`, all ending `[ -s "${NVM_DIR}/bash_completion" ] && \. ...` --
+  and THOSE are the reachable half: `nvm-start.sh:143` calls them as a bare statement under
+  `set -xeEu` with the prologue ERR trap, so a false guard aborts the node install and writes an
+  error token. A10's android instance is by contrast unreachable today, because `start.sh:115`
+  exports `GS_ANDROID_SDK_WANT` before its only call site. Both halves are LATENT, neither is a
+  live break, and the developer chose to fix the class rather than the filed instance. Scope: the
+  `if` conversion in all four scripts (behaviour identical, only the exit status changes; the
+  comment at `setup.sh:143-148` deliberately wants the marker ABSENT standalone and the `if` keeps
+  that), the missing trailing newline on `setup.sh`, and a DISCOVERY-based assertion so the class
+  cannot return -- a hardcoded list of four would be the same can-never-fire defect §19 had.
+  Certification tier for both gates: `advisor()` only.
+
 The executor APPENDS its own dated `AGREED:` entries here (e.g. the F3 classification
 outcome, Track 5 audit rulings) as it goes — this file is where rulings land. Never backdate;
 never write an entry for a ruling that was not actually taken (forged-AGREED hazard, global
@@ -1347,6 +1368,7 @@ class-3 var is absent from this accounting, and no gate site in B lacks a class-
 | 29 | Sweep — prune TODO.md (item 189 + zig drift done; consolidate its 5 container-test items with row 24) | S | done | cec239d | TODO.md |
 | 30 | E7 — normalize the 3 android stackCatch handlers to the post-row-25 shape (exit 1 reported, `_STACK_CAUGHT`, 141 exemption on start, error token written before `sleep infinity`, `message:`→`command:`); extend §19 discovery to the whole exempt family, shape-agnostic; fix the new-service scaffold | M | done | 36e03cd | docker/config/dist/bin/android-bin/*.sh bin/tests/startup-prologue.test.sh .claude/skills/new-service/SKILL.md |
 | 31 | P0 — `--sdk` is a GLOBAL option, not a subcommand option: `b2ae4d1` wrote `android sdk install --sdk=…` at all 3 call sites, which the CLI rejects with exit 2. Move it to `android --sdk=… sdk …`, drop the `2>/dev/null \|\| true` that turned that exit 2 into a FATAL blaming the package ids, make one array the source of truth for install AND verify (11 of 24 ids were verified while the comment claimed all), replace `.env`'s stale line-number anchors with names, decouple the config.ini rewrite from the `_google_apis` reverse-parse, quote `${ANDROID_HOME}`, rename `..._SDK_URL`→`..._SDK_BUILD` | M | done | 76dadb1 | docker/config/dist/bin/android-bin/global-stack-android-setup*.sh .env docker/images/0{4android,5edge,5stable}/docker-compose.yaml bin/tests/startup-prologue.test.sh bin/tests/env-update.test.sh templates/tips/env-update.md |
+| 32 | A10 at whole-class scope — a trailing test-led `[[ cond ]] && cmd` returns the FALSE test as the SCRIPT's exit status. 4 sites: `android-setup.sh` (unreachable today — `start.sh:115` exports the var before its only call site) and `node24/node26/nodeedge-setup.sh` (reachable — `nvm-start.sh:143` calls them as bare statements under `set -xeEu` with the prologue ERR trap). Convert to `if`, behaviour identical; add §46, a DISCOVERY-based guard (a hardcoded list of 4 would be §19's can-never-fire defect again) narrowed to TEST-led `&&` so the legitimate `\|\| true` / `cmd &&` last lines stay green | M | doing | - | docker/config/dist/bin/android-bin/global-stack-android-setup.sh docker/config/dist/bin/node*-bin/global-stack-nvm-node*-setup.sh bin/tests/startup-prologue.test.sh |
 <!-- /progress-block -->
 ### Blocked
 - Row 24 — the supervised bring-up (POSTPONED by the developer 2026-09-05; see the

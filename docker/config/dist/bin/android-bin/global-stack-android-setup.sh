@@ -146,4 +146,10 @@ android --version > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/android.sdkmanag
 # Written last, so a failed sdkmanager run above cannot record success. Empty when
 # this script is run standalone: that leaves the marker absent, and the next start
 # reinstalls rather than trusting an unverified state.
-[[ -n "${GS_ANDROID_SDK_WANT:-}" ]] && printf '%s\n' "${GS_ANDROID_SDK_WANT}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/android.sdk"
+# An `if`, not `[[ ... ]] && ...`: this is the script's last statement, so a
+# short-circuited test returns 1 as the SCRIPT's own exit status -- reporting
+# failure for having had nothing to do. Measured: var unset -> 1, set -> 0.
+# The absent-marker behaviour above is unchanged; only the status is.
+if [[ -n "${GS_ANDROID_SDK_WANT:-}" ]]; then
+  printf '%s\n' "${GS_ANDROID_SDK_WANT}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/android.sdk"
+fi
