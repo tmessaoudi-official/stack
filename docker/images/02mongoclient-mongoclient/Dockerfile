@@ -26,7 +26,7 @@ USER root
 # the zone cannot be resolved, so the container runs UTC while printing the literal "Europe"
 # as the zone name -- but it needs a DIFFERENT cure, because apt cannot fix it here:
 #   1. This base is Debian 8 (jessie). Its apt is 1.0.9.8.6, which predates
-#      --allow-releaseinfo-change (apt 1.9.3) and rejects it outright, exit 100.
+#      --allow-releaseinfo-change (apt 1.5, 2017) and rejects it outright, exit 100.
 #   2. Dropping that option is not enough: jessie is archived, so every source in the image's
 #      sources.list 404s on deb.debian.org and `apt-get update` still exits 100.
 #   3. Even reaching archive.debian.org would not help: the image was slimmed by deleting

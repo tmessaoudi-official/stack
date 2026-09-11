@@ -20,7 +20,7 @@ SHELL ["/bin/bash", "-xeEu", "-o", "pipefail", "-c"]
 # apt packages are deliberately NOT pinned -- see .hadolint.yaml (DL3008 ignored).
 #
 # NO --allow-releaseinfo-change HERE. This base is Ubuntu 16.04 (xenial) with apt 1.2.32,
-# which predates that option (apt 1.9.3) and rejects it outright:
+# which predates that option (apt 1.5, 2017) and rejects it outright:
 #   E: Command line option --allow-releaseinfo-change is not understood [...]  (exit 100)
 # The option is valid only on 00base's modern Ubuntu -- do not copy the 00base apt idiom
 # into this file. xenial's archives are still served, so a plain `apt-get update` works.
