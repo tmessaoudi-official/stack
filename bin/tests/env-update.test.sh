@@ -13172,6 +13172,213 @@ t "t122l: (offset:0) on a non-sdkmanager type is accepted (0 is the default, not
     echo PASS
 "
 
+section "123 — (verify-asset:URL) artifact-existence gate"
+
+# Row 42. nodejs.org's nightly index.json ANNOUNCES a build before every platform
+# artifact is uploaded: v27.0.0-nightly20260912565f69f986 was .[0] while both its
+# linux-x64 and source tarballs returned 404 (its SHASUMS256.txt held 6 entries —
+# darwin-arm64, ppc64le, s390x — and none of them x64). So (fetch-json:max_by(.date).version)
+# pinned a version nvm cannot install, and 03nodeedge exited 4 six times over.
+# (stale-after:Nd) does not cover this: it guards a FROZEN index, not an INCOMPLETE one.
+#
+# (verify-asset:<url containing {version}>) makes the fetcher PROVE the artifact
+# exists before proposing. It requires (fetch-json:), whose expression must emit a
+# NEWEST-FIRST candidate list; the fetcher walks that list and takes the first
+# candidate whose asset returns 200. When none verifies it proposes NOTHING (SKIP)
+# rather than a broken pin. Without the flag the single-value path is untouched.
+
+_VA_LIBS="
+source '${_GS_EU2_LIB}/config/defaults.sh'
+source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+source '${_GS_EU2_LIB}/core/records.sh'
+source '${_GS_EU2_LIB}/core/semver.sh'
+source '${_GS_EU2_LIB}/core/channel.sh'
+source '${_GS_EU2_LIB}/core/tag_flags.sh'
+source '${_GS_EU2_LIB}/core/cache.sh'
+source '${_GS_EU2_LIB}/core/ubuntu.sh'
+source '${_GS_EU2_LIB}/http/curl.sh'
+source '${_GS_EU2_LIB}/fetchers/github.sh'
+source '${_GS_EU2_LIB}/fetchers/url.sh'
+"
+
+# Fixture builder. The index deliberately lists the three nightlies OUT of date
+# order, so a test that passes proves sort_by(.date)|reverse actually ordered them
+# rather than the array happening to arrive newest-first. In fixture mode
+# _gs_eu2_url_probe_http_check reads file PRESENCE as 200 and absence as 404, so
+# \"which assets are published\" is exactly \"which files this helper creates\".
+_VA_FIX="
+_va_fix() {
+    local d=\"\$1\"; shift
+    mkdir -p \"\$d\"
+    printf '%s' '[{\"version\":\"vC\",\"date\":\"2026-09-10\"},{\"version\":\"vA\",\"date\":\"2026-09-12\"},{\"version\":\"vB\",\"date\":\"2026-09-11\"}]' > \"\$d/n.test_index.json\"
+    local v
+    for v in \"\$@\"; do : > \"\$d/n.test_\${v}_node-\${v}-linux-x64.tar.xz\"; done
+}
+_va_rec() {
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'url'
+    _gs_eu2_record_set \$idx identifier 'https://n.test/index.json'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_T123'
+    _gs_eu2_record_set \$idx fetch_json \"\$1\"
+    [[ -n \"\${2:-}\" ]] && _gs_eu2_record_set \$idx verify_asset \"\$2\"
+    return 0
+}
+_VA_TPL='https://n.test/{version}/node-{version}-linux-x64.tar.xz'
+_VA_LIST='sort_by(.date)|reverse|.[].version'
+"
+
+# ── parse-time contract ──────────────────────────────────────────────────────
+
+t "t123a: (verify-asset:URL) is parsed and stored in the record" bash -c "
+    f=\${TMP_DIR}/t123a.env
+    printf '# @todo env-update (fetch-json:.[].version) (verify-asset:https://n.test/{version}/x.tar.xz) url:https://n.test/index.json v1\nGLOBAL_STACK_T123A=v1\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1); rc=\$?
+    [[ \$rc -eq 0 ]] || { echo \"exit \$rc; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'verify_asset: https://n.test/{version}/x.tar.xz' \
+        || { echo \"verify_asset not stored; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t123b: (verify-asset:) with an empty value is refused" bash -c "
+    f=\${TMP_DIR}/t123b.env
+    printf '# @todo env-update (fetch-json:.[].version) (verify-asset:) url:https://n.test/index.json v1\nGLOBAL_STACK_T123B=v1\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1); rc=\$?
+    [[ \$rc -ne 0 ]] || { echo 'expected non-zero exit for empty verify-asset'; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qi 'verify-asset' || { echo \"error must name the flag; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# The can-never-fire guard. Only Tier 2 walks candidates, so verify-asset on a
+# record without fetch-json would be silently inert — the exact shape b2290dc
+# refused for (offset:N) on the eleven fetchers that never read it.
+t "t123c: (verify-asset:) without (fetch-json:) is refused at parse time" bash -c "
+    f=\${TMP_DIR}/t123c.env
+    printf '# @todo env-update (verify-asset:https://n.test/{version}/x.tar.xz) url:https://n.test/index.json v1\nGLOBAL_STACK_T123C=v1\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1); rc=\$?
+    [[ \$rc -ne 0 ]] || { echo 'expected non-zero exit for verify-asset without fetch-json'; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qi 'fetch-json' || { echo \"error must name fetch-json; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t123c2: (verify-asset:) without a {version} placeholder is refused" bash -c "
+    f=\${TMP_DIR}/t123c2.env
+    printf '# @todo env-update (fetch-json:.[].version) (verify-asset:https://n.test/static.tar.xz) url:https://n.test/index.json v1\nGLOBAL_STACK_T123C2=v1\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1); rc=\$?
+    [[ \$rc -ne 0 ]] || { echo 'expected non-zero exit for verify-asset with no {version}'; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '{version}' || { echo \"error must name the placeholder; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ── fetch-time behaviour ─────────────────────────────────────────────────────
+
+# The regression that started this. vA is newest by date but unpublished; the
+# walk must step over it and land on vB, NOT propose vA and not skip to vC.
+t "t123d: the walk steps over an unpublished newest and proposes the newest PUBLISHED" bash -c "
+    ${_VA_LIBS}${_VA_FIX}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/va_cache_d
+    export _GS_EU2_HTTP_FIXTURE_DIR=\${TMP_DIR}/va_fix_d
+    _va_fix \"\$_GS_EU2_HTTP_FIXTURE_DIR\" vB vC
+    _va_rec \"\$_VA_LIST\" \"\$_VA_TPL\"
+    _gs_eu2_fetch_url \$idx 2>/dev/null
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$val\" == 'vB' ]] || { echo \"want vB (vA unpublished), got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t123e: when the newest IS published the walk stops there (no needless descent)" bash -c "
+    ${_VA_LIBS}${_VA_FIX}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/va_cache_e
+    export _GS_EU2_HTTP_FIXTURE_DIR=\${TMP_DIR}/va_fix_e
+    _va_fix \"\$_GS_EU2_HTTP_FIXTURE_DIR\" vA vB vC
+    _va_rec \"\$_VA_LIST\" \"\$_VA_TPL\"
+    _gs_eu2_fetch_url \$idx 2>/dev/null
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$val\" == 'vA' ]] || { echo \"want vA, got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# The whole point: a broken pin is never proposed. Empty proposal → decide.sh
+# classifies SKIP, which is a no-op on .env, which is what 03nodeedge needed.
+t "t123f: no candidate published → NO proposal and an error_message naming the flag" bash -c "
+    ${_VA_LIBS}${_VA_FIX}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/va_cache_f
+    export _GS_EU2_HTTP_FIXTURE_DIR=\${TMP_DIR}/va_fix_f
+    _va_fix \"\$_GS_EU2_HTTP_FIXTURE_DIR\"
+    _va_rec \"\$_VA_LIST\" \"\$_VA_TPL\"
+    _gs_eu2_fetch_url \$idx 2>/dev/null
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ -z \"\$val\" ]] || { echo \"expected no proposal, got: '\$val'\"; echo FAIL; exit 0; }
+    msg=\$(_gs_eu2_record_get \$idx error_message)
+    echo \"\$msg\" | grep -qi 'verify-asset' || { echo \"error_message must name the flag; got: '\$msg'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# Silence is the failure mode being fixed; a gate that quietly picks yesterday
+# teaches nobody that upstream is broken.
+t "t123g: each skipped candidate WARNs to stderr naming the version and the 404 URL" bash -c "
+    ${_VA_LIBS}${_VA_FIX}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/va_cache_g
+    export _GS_EU2_HTTP_FIXTURE_DIR=\${TMP_DIR}/va_fix_g
+    _va_fix \"\$_GS_EU2_HTTP_FIXTURE_DIR\" vB vC
+    _va_rec \"\$_VA_LIST\" \"\$_VA_TPL\"
+    err=\$(_gs_eu2_fetch_url \$idx 2>&1 >/dev/null)
+    echo \"\$err\" | grep -qF 'vA' || { echo \"WARN must name the skipped version; got: '\$err'\"; echo FAIL; exit 0; }
+    echo \"\$err\" | grep -qF 'node-vA-linux-x64.tar.xz' || { echo \"WARN must name the probed URL; got: '\$err'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# Backwards compatibility: every other fetch-json record in .env emits ONE value
+# and must keep behaving exactly as before, gate absent, no probing at all.
+t "t123h: without (verify-asset:) the single-value path is unchanged (no probing)" bash -c "
+    ${_VA_LIBS}${_VA_FIX}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/va_cache_h
+    export _GS_EU2_HTTP_FIXTURE_DIR=\${TMP_DIR}/va_fix_h
+    _va_fix \"\$_GS_EU2_HTTP_FIXTURE_DIR\"
+    _va_rec 'max_by(.date).version'
+    _gs_eu2_fetch_url \$idx 2>/dev/null
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$val\" == 'vA' ]] || { echo \"want vA with no gate (zero assets published), got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# Two records over the same URL differing ONLY by the flag must not share a cache
+# entry — the exact defect t33l pinned for (offset:N).
+t "t123i: verify-asset participates in the cache key" bash -c "
+    ${_VA_LIBS}${_VA_FIX}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/va_cache_i
+    export _GS_EU2_HTTP_FIXTURE_DIR=\${TMP_DIR}/va_fix_i
+    _va_fix \"\$_GS_EU2_HTTP_FIXTURE_DIR\" vB vC
+    _va_rec \"\$_VA_LIST\" \"\$_VA_TPL\"
+    _gs_eu2_fetch_url \$idx 2>/dev/null
+    gated=\$(_gs_eu2_record_get \$idx proposed_version)
+    # The second record MUST carry the same fetch_json and differ ONLY by the
+    # flag. An earlier draft varied both, so fetch_json alone already separated
+    # the keys and this case could not fire — dropping verify_asset from the key
+    # left it green. Caught by sabotage, which is the only thing that finds this.
+    _va_rec \"\$_VA_LIST\"
+    _gs_eu2_fetch_url \$idx 2>/dev/null
+    plain=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$gated\" == 'vB' ]] || { echo \"gated want vB, got: '\$gated'\"; echo FAIL; exit 0; }
+    # Ungated, same expression: the newline-strip concatenates the whole list.
+    # If the key were shared this would read back the cached 'vB' instead.
+    [[ \"\$plain\" == 'vAvBvC' ]] || { echo \"ungated want vAvBvC (a shared cache key would yield '\$gated'), got: '\$plain'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# Bounded cost: a long index must not become a long probe storm.
+t "t123j: the walk is capped and the cap is the reason it stops" bash -c "
+    ${_VA_LIBS}${_VA_FIX}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/va_cache_j
+    export _GS_EU2_HTTP_FIXTURE_DIR=\${TMP_DIR}/va_fix_j
+    export _GS_EU2_VERIFY_ASSET_MAX=2
+    _va_fix \"\$_GS_EU2_HTTP_FIXTURE_DIR\" vC
+    _va_rec \"\$_VA_LIST\" \"\$_VA_TPL\"
+    _gs_eu2_fetch_url \$idx 2>/dev/null
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ -z \"\$val\" ]] || { echo \"cap=2 must stop before vC (3rd); got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
 _flush_section
 
 

@@ -69,7 +69,7 @@ _gs_eu2_is_recognized_flag() {
       tag-filter | tag-exclude | tag-strip-prefix | tag-strip-suffix | \
       tag-channel-prefix | \
       tag-extract | tag-suffix | tag-replace | \
-      fetch-extract | fetch-json | \
+      fetch-extract | fetch-json | verify-asset | \
       url-probe | url-probe-depth | \
       version-prefix | watch-major | \
       replace | \
@@ -227,6 +227,22 @@ _gs_eu2_dispatch_flag() {
         exit 1
       fi
       ;;
+    verify-asset)
+      # Non-empty AND must carry the {version} placeholder: without it every
+      # candidate probes the same fixed URL, so the walk either accepts the
+      # newest unconditionally or rejects all of them — a gate that cannot
+      # discriminate is a can-never-fire check wearing a feature's clothes.
+      if [[ -z "${_val}" ]]; then
+        printf 'env-update: %s:%s: flag %q requires a non-empty value\n' \
+          "${_env_file}" "${_lnum}" "${_name}" >&2
+        exit 1
+      fi
+      if [[ "${_val}" != *'{version}'* ]]; then
+        printf 'env-update: %s:%s: (verify-asset:%s) has no {version} placeholder — the same URL would be probed for every candidate; put {version} where the version appears in the artifact URL\n' \
+          "${_env_file}" "${_lnum}" "$(_gs_eu2_shown_value "${_val}")" >&2
+        exit 1
+      fi
+      ;;
     stale-after)
       # Whole positive days only. "0d" is refused rather than read as "disabled"
       # or "always stale": a freshness contract that can never hold, or can never
@@ -306,6 +322,7 @@ _gs_eu2_dispatch_flag() {
     tag-suffix) _gs_eu2_record_set "${_idx}" tag_suffix "${_val}" ;;
     fetch-extract) _gs_eu2_record_set "${_idx}" fetch_extract "${_val}" ;;
     fetch-json) _gs_eu2_record_set "${_idx}" fetch_json "${_val}" ;;
+    verify-asset) _gs_eu2_record_set "${_idx}" verify_asset "${_val}" ;;
     url-probe) _gs_eu2_record_set "${_idx}" url_probe "${_val}" ;;
     url-probe-depth) _gs_eu2_record_set "${_idx}" url_probe_depth "${_val}" ;;
     # D2: version_prefix stored; applied during fetch/compare in Phase 3
@@ -637,6 +654,23 @@ _gs_eu2_parse_env_file() {
             "${_GS_EU2_OFFSET_TYPES}" != *" ${_x_type} "* ]]; then
             printf 'env-update: %s:%s: (offset:%s) is not honoured by the %s fetcher — only%sresolves the N-th newest version; drop the offset or pin the version directly\n' \
               "${_env_file}" "${_pending_lnum}" "${_x_offset}" "${_x_type}" "${_GS_EU2_OFFSET_TYPES}" >&2
+            exit 1
+          fi
+          # Third axis, same principle: the candidate walk that verify-asset
+          # gates lives ONLY in the url fetcher's Tier 2 (fetch-json). On any
+          # other shape the flag would parse, store, and never be read — so it
+          # is refused here rather than silently ignored.
+          local _x_verify _x_fjson
+          _x_verify="$(_gs_eu2_record_get "${_idx}" verify_asset)"
+          _x_fjson="$(_gs_eu2_record_get "${_idx}" fetch_json)"
+          if [[ -n "${_x_verify}" && -z "${_x_fjson}" ]]; then
+            printf 'env-update: %s:%s: (verify-asset:) is only read by the url fetcher'"'"'s fetch-json tier — add (fetch-json:<jq emitting candidates newest-first>) or drop the verify-asset\n' \
+              "${_env_file}" "${_pending_lnum}" >&2
+            exit 1
+          fi
+          if [[ -n "${_x_verify}" && "${_x_type}" != "url" ]]; then
+            printf 'env-update: %s:%s: (verify-asset:) is not honoured by the %s fetcher — only url: walks candidates and probes their artifacts; drop the verify-asset\n' \
+              "${_env_file}" "${_pending_lnum}" "${_x_type}" >&2
             exit 1
           fi
         fi

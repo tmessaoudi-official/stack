@@ -277,6 +277,15 @@ ANNOTATION FLAGS (parenthesised, space-separated, after the @todo keyword)
                       version schemes carrying their own date (…nightly20260825ab).
                       Catches an upstream frozen AT the current value, which the
                       downgrade guard cannot see. Immune to --force-auto.
+    (verify-asset:URL_TEMPLATE)
+                      Artifact-existence gate (url fetcher, fetch-json tier only).
+                      URL_TEMPLATE must contain {version}. The fetch-json expression
+                      must emit candidates NEWEST-FIRST; each is probed and the first
+                      returning 200 is proposed, the rest WARNed to stderr. None
+                      verifying means NO proposal (SKIP), never a broken pin. Catches
+                      an index that ANNOUNCES a build before its artifacts are
+                      uploaded, which stale-after cannot see. Walk capped by
+                      _GS_EU2_VERIFY_ASSET_MAX (default 10).
 
   GitHub-specific:
     (check-tags)      Merge tags API response with releases API (catches tag-only releases).

@@ -1,7 +1,7 @@
 #!/bin/bash
 # url.sh — URL fetcher — tiered strategy for arbitrary URL-based version sources.
 #
-# Exports:   _gs_eu2_fetch_url  _gs_eu2_url_probe_check  _gs_eu2_url_probe_http_check
+# Exports:   _gs_eu2_fetch_url  _gs_eu2_url_verify_walk  _gs_eu2_url_probe_check  _gs_eu2_url_probe_http_check
 # Sources:   core/records.sh  core/semver.sh  core/channel.sh  core/tag_flags.sh
 #            core/cache.sh  core/ubuntu.sh  http/curl.sh  fetchers/github.sh
 # Deps:      curl, jq, perl, grep, sort
@@ -84,12 +84,13 @@ _gs_eu2_url_fail_transport() {
 _gs_eu2_fetch_url() {
   local _idx="${1}"
 
-  local _identifier _channel _fetch_extract _fetch_json _urls
+  local _identifier _channel _fetch_extract _fetch_json _urls _verify_asset
   local _url_probe _url_probe_depth _version_prefix _no_cache
   _identifier="$(_gs_eu2_record_get "${_idx}" identifier)"
   _channel="$(_gs_eu2_record_get "${_idx}" channel)"
   _fetch_extract="$(_gs_eu2_record_get "${_idx}" fetch_extract)"
   _fetch_json="$(_gs_eu2_record_get "${_idx}" fetch_json)"
+  _verify_asset="$(_gs_eu2_record_get "${_idx}" verify_asset)"
   _urls="$(_gs_eu2_record_get "${_idx}" urls)"
   _url_probe="$(_gs_eu2_record_get "${_idx}" url_probe)"
   _url_probe_depth="$(_gs_eu2_record_get "${_idx}" url_probe_depth)"
@@ -100,7 +101,7 @@ _gs_eu2_fetch_url() {
   # values, and the tag flags via their fingerprint (two records for the same
   # URL differing only in (tag-filter) must not share a cache entry).
   local _cache_key
-  _cache_key="url:${_identifier}:${_fetch_extract:-}:${_fetch_json:-}:${_url_probe:+up}:${_channel}:$(_gs_eu2_tag_flags_fingerprint "${_idx}")"
+  _cache_key="url:${_identifier}:${_fetch_extract:-}:${_fetch_json:-}:${_url_probe:+up}:${_verify_asset:-}:${_channel}:$(_gs_eu2_tag_flags_fingerprint "${_idx}")"
 
   # Cache read
   _gs_eu2_cache_try_load "${_idx}" "${_cache_key}" && return 0
@@ -155,7 +156,16 @@ _gs_eu2_fetch_url() {
       # Discard the literal string "null" (jq output when key is JSON null).
       # Use exact-match only — substring replacement would corrupt versions like "null-rc1".
       [[ "${_proposed}" == "null" ]] && _proposed=""
-      _proposed="${_proposed//$'\n'/}"
+      if [[ -n "${_verify_asset}" ]]; then
+        # Gated mode: the jq expression emits a NEWEST-FIRST candidate list and
+        # each candidate must prove its artifact exists before being proposed.
+        # nodejs.org publishes a nightly's index entry before all of its platform
+        # tarballs, so .[0] is regularly a version that cannot be installed.
+        _proposed="$(_gs_eu2_url_verify_walk "${_proposed}" "${_verify_asset}" "${_identifier}")"
+      else
+        # Ungated mode, unchanged: the expression is expected to emit one value.
+        _proposed="${_proposed//$'\n'/}"
+      fi
     fi
 
     if [[ -n "${_proposed}" ]]; then
@@ -171,6 +181,12 @@ _gs_eu2_fetch_url() {
     # expression that was never wrong.
     if [[ "${_json_ok}" != "true" ]]; then
       _gs_eu2_url_fail_transport "${_idx}" "${_t2_sink}" "fetch-json" "${_identifier}"
+    elif [[ -n "${_verify_asset}" ]]; then
+      # Reachable index, candidates extracted, none with a published artifact.
+      # SKIP (not ERROR): upstream is healthy, this build just is not usable —
+      # proposing it anyway is what broke 03nodeedge.
+      _gs_eu2_record_set "${_idx}" error_message \
+        "url: no candidate from ${_identifier} has a published artifact ((verify-asset:${_verify_asset}) matched nothing) — leaving the pin unchanged"
     else
       _gs_eu2_record_set "${_idx}" error_message \
         "url: fetch-json jq path '${_fetch_json}' returned empty from ${_identifier}"
@@ -477,6 +493,54 @@ _gs_eu2_url_probe_check() {
   done
 
   # Nothing found
+  return 0
+}
+
+# _gs_eu2_url_verify_walk — take the newest candidate whose artifact is published.
+#
+# Args:    $1 candidates — newline-separated version list, NEWEST FIRST
+#          $2 template   — artifact URL containing the literal {version}
+#          $3 source_url — the index URL, for the WARN text only
+# Prints:  the first candidate whose artifact returns 200, or nothing
+# Returns: 0 always
+# Side fx: one HTTP probe per rejected candidate; WARNs each rejection to stderr
+#
+# Why a walk and not a plain reject: nightly channels cut a build a day, and the
+# newest is the one most likely to be mid-upload. Rejecting outright would stall
+# the pin for as long as the tip is broken; stepping down one entry keeps the
+# pin on the newest version that can actually be installed.
+#
+# The walk is capped (_GS_EU2_VERIFY_ASSET_MAX, default 10) so a long index
+# cannot turn one record into a probe storm. Hitting the cap yields nothing —
+# never a candidate that was not verified.
+#
+# Each rejection WARNs by design. A gate that silently drops to yesterday's build
+# teaches nobody that upstream is broken, which is the same silence this flag
+# exists to end.
+_gs_eu2_url_verify_walk() {
+  local _candidates="${1}" _template="${2}" _source="${3}"
+  local _max="${_GS_EU2_VERIFY_ASSET_MAX:-10}"
+  local _n=0 _cand _asset_url _code
+
+  while IFS= read -r _cand; do
+    [[ -z "${_cand}" || "${_cand}" == "null" ]] && continue
+    if ((_n >= _max)); then
+      printf 'WARN: verify-asset gave up after %s candidates from %s — no published artifact found\n' \
+        "${_max}" "${_source}" >&2
+      return 0
+    fi
+    ((++_n)) || true
+
+    _asset_url="${_template//\{version\}/${_cand}}"
+    _code="$(_gs_eu2_url_probe_http_check "${_asset_url}")"
+    if [[ "${_code}" == "200" ]]; then
+      printf '%s' "${_cand}"
+      return 0
+    fi
+    printf 'WARN: verify-asset skipping %s — artifact not published (HTTP %s): %s\n' \
+      "${_cand}" "${_code}" "${_asset_url}" >&2
+  done <<<"${_candidates}"
+
   return 0
 }
 

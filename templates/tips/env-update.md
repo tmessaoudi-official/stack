@@ -275,6 +275,7 @@ record, so it costs one cache generation and nothing after that.
 |------|-------------|------|---|
 | `(fetch-extract:PERL_REGEX)` | `fetch_extract` | Tier 1 | Fetch the URL body (the identifier is the URL), apply the Perl regex, collect all capture group 1 matches, sort `-V`, take highest. If the regex matches nothing, returns an error (not a fallback). |
 | `(fetch-json:JQ_PATH)` | `fetch_json` | Tier 2 | Fetch the URL as JSON, extract the value at the jq path. Example: `(fetch-json:.info.version)`. |
+| `(verify-asset:URL_TEMPLATE)` | `verify_asset` | Tier 2 | **Artifact-existence gate.** Probe `URL_TEMPLATE` — which must contain the literal `{version}` — for each candidate and propose only the first one that returns 200. Requires `(fetch-json:)`, whose expression must then emit a **newest-first list** rather than a single value. Each rejected candidate WARNs to stderr; when none verifies the record proposes nothing (SKIP), never a broken pin. Walk capped by `_GS_EU2_VERIFY_ASSET_MAX` (default 10). Refused at parse time without `{version}`, without `(fetch-json:)`, or on a non-`url` type. See "Announced but not published" below. |
 | `(url-probe:PATHS)` | `url_probe` | Tier 5 | Comma-separated path templates to probe. Templates support `{codename}` (Ubuntu codename like `noble`) and `{codename-version}` (Ubuntu version like `24.04`). The fetcher probes from newest Ubuntu codename to oldest, stopping at the first 2xx/3xx response. |
 | `(url-probe-depth:N)` | `url_probe_depth` | Tier 5 | Maximum number of codenames to probe backward. Default: 6. |
 
@@ -1349,6 +1350,14 @@ sorts with `sort -V`, takes the highest. If the regex matches nothing, returns a
 Triggered when `(fetch-json:JQ_PATH)` is set. Fetches the URL as JSON, extracts the value
 at the jq path. If the result is empty or null, returns an error (same non-fallback behavior).
 
+When `(verify-asset:URL_TEMPLATE)` is also set the tier switches to **gated mode**: the jq
+expression is read as a newest-first *candidate list*, and each candidate's artifact URL
+(`{version}` substituted) is probed until one returns 200. Only that candidate is proposed;
+if none verifies, nothing is. Without the flag the single-value path is untouched — the
+multi-line output of a list expression would be concatenated, which is why the two modes
+must not be mixed. `verify_asset` participates in the cache key, so a gated and an ungated
+record over the same URL cannot share an entry.
+
 **Tier 3 — GitHub redirect via `urls:` field:**
 Triggered when the `urls:` field contains at least one `github.com` URL. Extracts
 `owner/repo` from the URL, calls the GitHub Releases API then Tags API (3 pages max),
@@ -1375,14 +1384,30 @@ Two sub-modes:
   > live `index.json`:
   >
   > ```
-  > (channel:nightly) (fetch-json:max_by(.date).version) url:https://nodejs.org/download/nightly/index.json
+  > (channel:nightly) (fetch-json:sort_by(.date)|reverse|.[].version) (stale-after:14d)
+  > (verify-asset:https://nodejs.org/download/nightly/{version}/node-{version}-linux-x64.tar.xz)
+  > url:https://nodejs.org/download/nightly/index.json
   > ```
   >
-  > Three things worth keeping in mind if you touch this record:
+  > Four things worth keeping in mind if you touch this record:
   >
-  > - **Use `max_by(.date)`, never `.[0]`.** `index.json` is *mostly* newest-first, but it
-  >   has genuine ordering violations in its historical tail (observed at indices 133, 191,
-  >   210, 237), so `.[0]` is a latent version of the same class of bug.
+  > - **Order by `.date`, never by array position.** `index.json` is *mostly* newest-first,
+  >   but it has genuine ordering violations in its historical tail (observed at indices 133,
+  >   191, 210, 237), so `.[0]` is a latent version of the same class of bug. The expression
+  >   emits a *list* rather than `max_by(.date).version` because `(verify-asset:)` needs
+  >   candidates to walk — `sort_by(.date)|reverse|.[].version` is `max_by` generalised.
+  > - **Announced but not published — `(verify-asset:)`.** nodejs.org creates a nightly's
+  >   `index.json` entry and its `SHASUMS256.txt` *before* every platform tarball is uploaded,
+  >   so the newest entry is regularly a build that cannot be installed. On **2026-09-12**
+  >   `v27.0.0-nightly20260912565f69f986` was `.[0]` while its `SHASUMS256.txt` held six
+  >   entries — `darwin-arm64`, `linux-ppc64le`, `linux-s390x` — and **both**
+  >   `node-<v>-linux-x64.tar.xz` and the source `node-<v>.tar.xz` returned 404 (re-probed ten
+  >   minutes apart, SHASUMS unchanged; the previous nightly returned 200 for both). The bump
+  >   landed in `.env`, and on the next `make hard-restart` nvm found no binary, fell back to
+  >   source, 404'd again and returned **exit 4** — `03nodeedge` exhausted its `on-failure:5`
+  >   restart budget and took `05edge` with it. Note the `linux-x64` in the template is a
+  >   deliberate machine-bound literal: this stack is Linux-only, and the source tarball is a
+  >   poor probe because nvm only reaches for it *after* the binary is missing.
   > - **Keep `(channel:nightly)` even though Tier 2 ignores it.** It is what gates Tier 3
   >   (`url.sh`: `[[ -n "${_urls}" && "${_channel}" != "nightly" ]]`), so if `fetch-json` is
   >   ever removed the `urls:` GitHub field would otherwise start returning *stable* tags.
