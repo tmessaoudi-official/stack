@@ -881,6 +881,12 @@ Rule 17).
   seen live): a major crossing is `HOLD` under decide.sh rule 7 like every other record —
   `--force-hold` applies it. Naming: the unsuffixed `..._BUILD_TOOLS_VERSION` stays the latest
   (PATH and the start scripts point at it), `_PREV_1` / `_PREV_2` are the compat slots.
+- [2026-09-12 11:40] AGREED (row 41, major-crossing HOLD): keep decide.sh rule 7 unchanged and apply
+  the six android window records with `--force-hold --confirm="Confirm override"` when a new major
+  ships. Stated in the question: a plain `--apply` on platforms 38.0 / build-tools 38.0.0 leaves
+  slot 3 HOLD while slots 1-2 AUTO, i.e. `37.1 / 37.2 / 37.2` and a duplicate `platforms;android-37.2`
+  in `_pkgs` — the window only stays intact under `--force-hold`. The opt-in exemption flag and the
+  bring-up were offered and declined.
 
 ## Planning-time verified state (2026-08-31/09-01)
 
