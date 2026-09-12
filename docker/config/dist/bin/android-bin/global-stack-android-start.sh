@@ -110,7 +110,10 @@ source global-stack-base-version-gate.sh
 # ONLY thing that makes a bump of one of them reach the SDK: gs_version_gate
 # compares it, and the mismatch is what drives the wipe-and-reinstall below.
 #
-# ALL TWELVE, since row 33. It carried three (cmdline-tools, build-tools, ndk), so a
+# ALL FOURTEEN since row 41 — twelve at row 33, plus the two build-tools compat
+# slots (…_PREV_1 / …_PREV_2) that became .env vars when the window started
+# rolling via env-update (offset:N). Row 33 found it carrying THREE
+# (cmdline-tools, build-tools, ndk), so a
 # bump of any of the other nine was silently never applied — the gate said `skip`,
 # the SDK kept the old component, and nothing warned. The two that mattered most:
 # INSTALL_SYSTEM_IMAGES=true would have installed an emulator and six system images
@@ -141,7 +144,7 @@ source global-stack-base-version-gate.sh
 # backslash continuation would silently truncate every behavioural probe. §47
 # DISCOVERS the consumed set from setup.sh and checks it against this line both
 # ways, so a thirteenth input cannot be added there and forgotten here.
-GS_ANDROID_SDK_WANT="sdk-build=${GLOBAL_STACK_ANDROID_SDK_BUILD};cmdline-tools=${GLOBAL_STACK_ANDROID_CMDLINE_TOOLS_VERSION};platform-tools=${GLOBAL_STACK_ANDROID_PLATFORM_TOOLS_VERSION};build-tools=${GLOBAL_STACK_ANDROID_BUILD_TOOLS_VERSION};ndk=${GLOBAL_STACK_ANDROID_NDK_VERSION};api1=${GLOBAL_STACK_ANDROID_API_LEVEL_1};api2=${GLOBAL_STACK_ANDROID_API_LEVEL_2};api3=${GLOBAL_STACK_ANDROID_API_LEVEL_3};sysimg=${GLOBAL_STACK_ANDROID_INSTALL_SYSTEM_IMAGES};sysimg-tag=${GLOBAL_STACK_ANDROID_SYSTEM_IMAGE_TAG};sysimg-ps-tag=${GLOBAL_STACK_ANDROID_SYSTEM_IMAGE_PLAYSTORE_TAG};sysimg-abi=${GLOBAL_STACK_ANDROID_SYSTEM_IMAGE_ABI}"
+GS_ANDROID_SDK_WANT="sdk-build=${GLOBAL_STACK_ANDROID_SDK_BUILD};cmdline-tools=${GLOBAL_STACK_ANDROID_CMDLINE_TOOLS_VERSION};platform-tools=${GLOBAL_STACK_ANDROID_PLATFORM_TOOLS_VERSION};build-tools=${GLOBAL_STACK_ANDROID_BUILD_TOOLS_VERSION};build-tools-prev1=${GLOBAL_STACK_ANDROID_BUILD_TOOLS_VERSION_PREV_1};build-tools-prev2=${GLOBAL_STACK_ANDROID_BUILD_TOOLS_VERSION_PREV_2};ndk=${GLOBAL_STACK_ANDROID_NDK_VERSION};api1=${GLOBAL_STACK_ANDROID_API_LEVEL_1};api2=${GLOBAL_STACK_ANDROID_API_LEVEL_2};api3=${GLOBAL_STACK_ANDROID_API_LEVEL_3};sysimg=${GLOBAL_STACK_ANDROID_INSTALL_SYSTEM_IMAGES};sysimg-tag=${GLOBAL_STACK_ANDROID_SYSTEM_IMAGE_TAG};sysimg-ps-tag=${GLOBAL_STACK_ANDROID_SYSTEM_IMAGE_PLAYSTORE_TAG};sysimg-abi=${GLOBAL_STACK_ANDROID_SYSTEM_IMAGE_ABI}"
 export GS_ANDROID_SDK_WANT
 _android_gate="$(gs_version_gate "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/android.sdk" "${GS_ANDROID_SDK_WANT}" "android.sdk")"
 

@@ -2099,7 +2099,8 @@ assert_pass "27d: and only when the compose-time value was exported" \
 # (the no-fixture-leakage rule), and a value carrying the composite's own
 # separators would make a field boundary unreadable.
 #
-# All 12 are pinned EXPLICITLY. This is `env`, not `env -i` — PATH has to survive —
+# All 14 are pinned EXPLICITLY (12 at row 33; the two BUILD_TOOLS_VERSION_PREV_*
+# compat slots joined at row 41). This is `env`, not `env -i` — PATH has to survive —
 # so any input left unpinned would be inherited from the developer's shell, where
 # the /stack vars are commonly exported: green on this machine, red on a clean one.
 _and_env=(
@@ -2107,6 +2108,8 @@ _and_env=(
   GLOBAL_STACK_ANDROID_CMDLINE_TOOLS_VERSION=1.0
   GLOBAL_STACK_ANDROID_PLATFORM_TOOLS_VERSION=2.0
   GLOBAL_STACK_ANDROID_BUILD_TOOLS_VERSION=3.0
+  GLOBAL_STACK_ANDROID_BUILD_TOOLS_VERSION_PREV_1=3.1
+  GLOBAL_STACK_ANDROID_BUILD_TOOLS_VERSION_PREV_2=3.2
   GLOBAL_STACK_ANDROID_NDK_VERSION=4.0
   GLOBAL_STACK_ANDROID_API_LEVEL_1=5.0
   GLOBAL_STACK_ANDROID_API_LEVEL_2=6.0
@@ -2188,7 +2191,7 @@ for _e in "${_and_env[@]}"; do
     *) _want_missing="${_want_missing} ${_e#GLOBAL_STACK_ANDROID_}" ;;
   esac
 done
-assert_pass "27b2: derived composite carries all 12 synthetic values (missing:${_want_missing:- none})" \
+assert_pass "27b2: derived composite carries all 14 synthetic values (missing:${_want_missing:- none})" \
   test -z "${_want_missing}"
 
 assert_pass "27e: no marker → install" \
@@ -3050,10 +3053,12 @@ STUB
       GLOBAL_STACK_ANDROID_CMDLINE_TOOLS_VERSION=23.0 \
       GLOBAL_STACK_ANDROID_PLATFORM_TOOLS_VERSION=37.0.1 \
       GLOBAL_STACK_ANDROID_BUILD_TOOLS_VERSION=37.0.0 \
+      GLOBAL_STACK_ANDROID_BUILD_TOOLS_VERSION_PREV_1=36.1.0 \
+      GLOBAL_STACK_ANDROID_BUILD_TOOLS_VERSION_PREV_2=36.0.0 \
       GLOBAL_STACK_ANDROID_NDK_VERSION=30.0.16248370 \
       GLOBAL_STACK_ANDROID_API_LEVEL_1=37.0 \
       GLOBAL_STACK_ANDROID_API_LEVEL_2=37.1 \
-      GLOBAL_STACK_ANDROID_API_LEVEL_3=37.2-beta1 \
+      GLOBAL_STACK_ANDROID_API_LEVEL_3=37.2 \
       GLOBAL_STACK_ANDROID_SYSTEM_IMAGE_TAG=google_apis_ps16k \
       GLOBAL_STACK_ANDROID_SYSTEM_IMAGE_PLAYSTORE_TAG=google_apis_playstore_ps16k \
       GLOBAL_STACK_ANDROID_SYSTEM_IMAGE_ABI=x86_64 \
@@ -3366,22 +3371,23 @@ else
     "45a: env-scan.md omits options the tool advertises" "${_es_undoc}"
 fi
 
-# env-update.md describes the sdkmanager fetcher as running `sdkmanager --list`.
-# That binary is deprecated upstream and is now a shim over `android sdk`; the
-# fetcher still resolves correctly THROUGH the shim, so the doc needs a note,
-# not a rewrite. Assert the note is there, next to the invocation it qualifies.
-# Anchored on the note's ACTIONABLE substance (it must name the replacement
-# command), not on the word "deprecated": the note QUOTES upstream's own message,
-# which contains that word, so a grep for it alone stays green even when the note
-# is gutted -- confirmed by sabotage, which is the only way that shows up.
-_eu_note="$(grep -A14 -- 'sdkmanager --sdk_root' "${_EU_DOC}")"
-assert_output_contains "45b: env-update.md flags the sdkmanager invocation as deprecated" \
-  'DEPRECATED upstream' printf '%s' "${_eu_note}"
-# Anchored on the GLOBAL-position spelling, not on the bare words `android sdk list`:
-# the note now quotes the WRONG position too, as the counter-example, so the bare form
-# would match the very thing the note warns against.
-assert_output_contains "45b2: ...and names the replacement command next to it" \
-  'android --sdk=' printf '%s' "${_eu_note}"
+# env-update.md §7.9 documents the sdkmanager fetcher. Until row 41 it described a
+# `sdkmanager --list` invocation and this check pinned a "deprecated upstream" note
+# beside it (anchored on the replacement command, not the word "deprecated", which
+# upstream's own quoted message contains). Row 41 rewrote the fetcher to read
+# Google's repository XML — no binary, no invocation to flag — so the check pins
+# the new facts instead: the source URL and the offset-bearing cache key, which
+# is the guard against three same-identifier slots sharing one cache entry.
+# `|| true` on the anchor grep: it exits 1 when the
+# §7.9 heading is gone, and under this suite's `set -euo pipefail` an unguarded
+# miss killed the RUN at this line with no tally [measured 2026-09-12: the old
+# anchor did exactly that after the doc rewrite, and two sabotage runs read as
+# "not caught" until the 667-line log was opened — §47 had simply never run].
+_eu_note="$(grep -A40 -- '^### 7.9 sdkmanager' "${_EU_DOC}" || true)"
+assert_output_contains "45b: env-update.md §7.9 names the repository XML as the sdkmanager source" \
+  'repository2-3.xml' printf '%s' "${_eu_note}"
+assert_output_contains "45b2: ...and documents the offset-bearing cache key" \
+  'sdkmanager:component:channel:offN' printf '%s' "${_eu_note}"
 
 assert_fail "45c: no 'partitian' typo anywhere under templates/" \
   grep -rqi 'partitian' "${REPO_ROOT}/templates"
@@ -3523,11 +3529,11 @@ _a47_consumed="$(grep -v '^[[:space:]]*#' "${AND_SETUP}" \
 _a47_want="$(grep -m1 '^GS_ANDROID_SDK_WANT=' "${AND_START}" \
   | grep -oE 'GLOBAL_STACK_ANDROID_[A-Z0-9_]+' | sort -u || true)"
 
-# Non-vacuity floor: 12 as of row 33. Without it, a typo'd path or a strip that
+# Non-vacuity floor: 14 as of row 41 (12 at row 33). Without it, a typo'd path or a strip that
 # matched nothing would compare two EMPTY sets and report a clean pass.
 _a47_n="$(printf '%s\n' "${_a47_consumed}" | grep -c . || true)"
-assert_pass "47a: setup.sh consumes >= 12 android inputs (found ${_a47_n})" \
-  test "${_a47_n}" -ge 12
+assert_pass "47a: setup.sh consumes >= 14 android inputs (found ${_a47_n})" \
+  test "${_a47_n}" -ge 14
 
 _a47_uncovered="$(comm -23 <(printf '%s\n' "${_a47_consumed}") <(printf '%s\n' "${_a47_want}"))"
 _a47_u_disp="$(printf '%s' "${_a47_uncovered}" | tr '\n' ' ')"

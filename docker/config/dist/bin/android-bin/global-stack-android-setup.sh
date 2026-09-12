@@ -94,11 +94,17 @@ unzip "${ANDROID_HOME}/tools.zip" && rm "${ANDROID_HOME}/tools.zip"
 # hand-written list, which covered 11 of the 24 ids while its comment claimed "every
 # id we asked for". A second list drifts; an array cannot.
 #
-# @todo check-updates
+# The build-tools compat pair used to be LITERALS here ("build-tools;36.0.0"
+# "build-tools;36.1.0"), with a .env note asking whoever bumped the pin to move
+# the outgoing version down by hand. Row 41: all three are .env vars, and so are
+# the three platforms below, each tracked by env-update as latest / latest-1 /
+# latest-2 via (offset:N) on its annotation -- the window rolls on --apply and
+# this file needs no edit. Order is oldest first, matching the API-level slots.
 _pkgs=(
   "cmdline-tools;${GLOBAL_STACK_ANDROID_CMDLINE_TOOLS_VERSION}"
   "platform-tools"
-  "build-tools;36.0.0" "build-tools;36.1.0"
+  "build-tools;${GLOBAL_STACK_ANDROID_BUILD_TOOLS_VERSION_PREV_2}"
+  "build-tools;${GLOBAL_STACK_ANDROID_BUILD_TOOLS_VERSION_PREV_1}"
   "build-tools;${GLOBAL_STACK_ANDROID_BUILD_TOOLS_VERSION}"
   "ndk-bundle" "ndk;${GLOBAL_STACK_ANDROID_NDK_VERSION}"
   "platforms;android-${GLOBAL_STACK_ANDROID_API_LEVEL_1}"
