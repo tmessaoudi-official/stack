@@ -69,7 +69,7 @@ _gs_eu2_is_recognized_flag() {
       tag-filter | tag-exclude | tag-strip-prefix | tag-strip-suffix | \
       tag-channel-prefix | \
       tag-extract | tag-suffix | tag-replace | \
-      fetch-extract | fetch-json | verify-asset | \
+      fetch-extract | fetch-json | verify-asset | require-sibling | \
       url-probe | url-probe-depth | \
       version-prefix | watch-major | \
       replace | \
@@ -243,6 +243,48 @@ _gs_eu2_dispatch_flag() {
         exit 1
       fi
       ;;
+    require-sibling)
+      # Comma-separated URL|ID_TEMPLATE pairs. Every pair must name the XML it
+      # is looked up in: the tag -> sys-img document mapping is data Google
+      # publishes (google_apis_ps16k lives in sys-img/google_apis/), not a rule
+      # that can be derived from the id, and deriving it would encode a guess.
+      if [[ -z "${_val}" ]]; then
+        printf 'env-update: %s:%s: flag %q requires a non-empty value\n' \
+          "${_env_file}" "${_lnum}" "${_name}" >&2
+        exit 1
+      fi
+      # Given twice, the generic flag store keeps the LAST value only, so the
+      # earlier pair would vanish and the gate would check one companion while
+      # reading as though it checked both. Refusing the repeat is what makes the
+      # comma-list the single way to express more than one sibling.
+      if [[ -n "$(_gs_eu2_record_get "${_idx}" require_sibling)" ]]; then
+        printf 'env-update: %s:%s: (require-sibling:) given more than once — only the last would survive; list every companion in ONE flag, comma-separated\n' \
+          "${_env_file}" "${_lnum}" >&2
+        exit 1
+      fi
+      local _rs_pair _rs_tpl
+      local _rs_oldifs="${IFS}"
+      IFS=','
+      # shellcheck disable=SC2206  # deliberate split on the comma list
+      local _rs_pairs=(${_val})
+      IFS="${_rs_oldifs}"
+      for _rs_pair in "${_rs_pairs[@]}"; do
+        if [[ "${_rs_pair}" != *'|'* ]]; then
+          printf 'env-update: %s:%s: (require-sibling:) pair %q is not URL|ID_TEMPLATE — each companion needs the XML it is looked up in\n' \
+            "${_env_file}" "${_lnum}" "${_rs_pair}" >&2
+          exit 1
+        fi
+        _rs_tpl="${_rs_pair#*|}"
+        # Without the placeholder the same package id is looked up for every
+        # candidate, so the filter keeps all of them or none: a check that
+        # cannot discriminate, wearing a configured guarantee's clothes.
+        if [[ "${_rs_tpl}" != *'{version}'* ]]; then
+          printf 'env-update: %s:%s: (require-sibling:) template %q has no {version} placeholder — the same package would be looked up for every candidate; put {version} where the version appears in the companion id\n' \
+            "${_env_file}" "${_lnum}" "${_rs_tpl}" >&2
+          exit 1
+        fi
+      done
+      ;;
     stale-after)
       # Whole positive days only. "0d" is refused rather than read as "disabled"
       # or "always stale": a freshness contract that can never hold, or can never
@@ -323,6 +365,7 @@ _gs_eu2_dispatch_flag() {
     fetch-extract) _gs_eu2_record_set "${_idx}" fetch_extract "${_val}" ;;
     fetch-json) _gs_eu2_record_set "${_idx}" fetch_json "${_val}" ;;
     verify-asset) _gs_eu2_record_set "${_idx}" verify_asset "${_val}" ;;
+    require-sibling) _gs_eu2_record_set "${_idx}" require_sibling "${_val}" ;;
     url-probe) _gs_eu2_record_set "${_idx}" url_probe "${_val}" ;;
     url-probe-depth) _gs_eu2_record_set "${_idx}" url_probe_depth "${_val}" ;;
     # D2: version_prefix stored; applied during fetch/compare in Phase 3
@@ -670,6 +713,16 @@ _gs_eu2_parse_env_file() {
           fi
           if [[ -n "${_x_verify}" && "${_x_type}" != "url" ]]; then
             printf 'env-update: %s:%s: (verify-asset:) is not honoured by the %s fetcher — only url: walks candidates and probes their artifacts; drop the verify-asset\n' \
+              "${_env_file}" "${_pending_lnum}" "${_x_type}" >&2
+            exit 1
+          fi
+          # Same b2290dc shape: only the sdkmanager fetcher resolves companion
+          # packages out of a second repository document. Anywhere else the flag
+          # would parse, store and never be read.
+          local _x_sibling
+          _x_sibling="$(_gs_eu2_record_get "${_idx}" require_sibling)"
+          if [[ -n "${_x_sibling}" && "${_x_type}" != "sdkmanager" ]]; then
+            printf 'env-update: %s:%s: (require-sibling:) is not honoured by the %s fetcher — only sdkmanager: resolves companion packages from a second repository XML; drop the require-sibling\n' \
               "${_env_file}" "${_pending_lnum}" "${_x_type}" >&2
             exit 1
           fi

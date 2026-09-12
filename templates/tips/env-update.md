@@ -194,6 +194,7 @@ flags. Flags are **position-agnostic** — they can appear anywhere in the annot
 |------|-------------|---|
 | `(channel:VALUE)` | `channel` | Select versions from a specific release channel. Values: `stable` (default), `unstable` (any pre-release), `rc`, `beta`, `alpha`, `nightly`, or any comma-separated combination like `rc,beta`. |
 | `(offset:N)` | `offset` | **Rolling window — the N-th newest instead of the newest.** `0` = latest (the default, same as no flag), `1` = latest-1, `2` = latest-2 … counted over DISTINCT versions (a tag present as both `1.2.0` and `v1.2.0` is one step) on the **stable** list only: pair it with `(channel:unstable)`, `rc`, `nightly` or any other non-stable channel and the parser refuses the annotation — an rc list has no meaningful "previous" entry. Past the end of what upstream serves → no proposal and an `offset N reaches past the M distinct stable version(s)` message, never "the oldest one". Use it for a set of vars that must always cover the K latest releases: the android platforms and build-tools windows in `.env` are three records each on the same `TYPE:ID`, with `(offset:2)`, `(offset:1)` and none. **The offset is part of the cache key**, so the three do not collide. Honoured by **`sdkmanager` only**: every other fetcher calls the shared selector without the offset, so rather than let `(offset:1) dockerhub:…` resolve to latest and say nothing, the parser refuses a non-zero offset on any other type (`is not honoured by the X fetcher`); `(offset:0)` is accepted everywhere because it changes nothing. Adding a type means passing the third argument in its fetcher AND listing it in `_GS_EU2_OFFSET_TYPES` (parse.sh), in the same change. Note the ordinary decide.sh rules still apply on top: a proposal that crosses a major boundary is `HOLD` until `--force-hold` / `--force-auto`, exactly as for any other record. |
+| `(require-sibling:URL\|ID_TEMPLATE,…)` | `require_sibling` | **Companion-availability gate — `sdkmanager` only.** Comma-separated `URL|ID_TEMPLATE` pairs; every template must contain `{version}`. A candidate survives only when EVERY companion is **present AND `channel-0` AND not `obsolete="true"`** in its named document. Runs **before** channel selection, so `(offset:N)` counts qualifying versions only. **Fails closed** — an unreachable companion XML is `ERROR` with the pin unchanged, never an empty filter that passes everything. A repeated flag is refused at parse (the store is last-wins, so the first pair would vanish and the gate would check one companion while reading as though it checked two); list them all in one flag. Refused on any non-`sdkmanager` type, on a pair with no `|`, and on a template with no `{version}`. Part of the cache key. Row 43: `platforms;android-37.2` went stable while both its system images stayed on `channel-2`, and `android sdk install` is stable-only and exits 0 on "Package not found" — see §7.9. |
 | `(stale-after:Nd)` | `stale_after` | **Freshness contract.** Declares that this source's newest version should never be more than N whole days old, and raises `ERROR` when it is. Opt-in, and only meaningful for a version scheme that carries its own date (`…nightly20260825abc123`) — a stable pin sitting still for months is normal, not stale. See "Freshness contract" below. |
 
 **Freshness contract — `(stale-after:Nd)`:**
@@ -1296,7 +1297,8 @@ GLOBAL_STACK_GRADLE_VERSION=8.12.1
 **Strategy (row 41, 2026-09-12 — no local binary):**
 1. GET `https://dl.google.com/android/repository/repository2-3.xml` — the document `sdkmanager --list` / `android sdk list` download before printing anything (override: `_GS_EU2_SDKMANAGER_REPO_URL`; test seam: the ordinary `_GS_EU2_HTTP_FIXTURE_DIR`, fixture name `dl.google.com_android_repository_repository2-3.xml`). One GET per run — the HTTP layer memoises it across the 14 live records.
 2. Parse every `<remotePackage path="…">` whose path **is** the component (bare, single-instance ids: `platform-tools`, `ndk-bundle`, `emulator`) or **starts with** `component;` (versioned ids: `build-tools;37.0.0`, `ndk;30.0.…`, `platforms;android-37.2`). `obsolete="true"` packages are skipped, as `sdkmanager --list` skips them without `--include_obsolete`.
-3. Channel selection and `(offset:N)` → proposed.
+3. `(require-sibling:)` filter, when present — see below.
+4. Channel selection and `(offset:N)` → proposed.
 
 > **Why it moved off the binary.** The old fetcher shelled out to a `sdkmanager` found on the
 > `tools/` volume, so it resolved NOTHING on a machine with the stack down (`make hard-restart`
@@ -1316,9 +1318,47 @@ GLOBAL_STACK_GRADLE_VERSION=8.12.1
 
 **Channel:** honoured (`stable` default; `unstable` picks the highest rc/beta unless a stable has surpassed it). **`(offset:N)`:** honoured — see the flag table. **No major hint, no tag flags.**
 
+**`(require-sibling:URL|ID_TEMPLATE,…)` — companion availability (row 43, 2026-09-12).**
+A package can be STABLE while the packages that make it *usable* are not. `platforms;android-37.2`
+was promoted to `channel-0` while **both** of its system images — `google_apis_ps16k` and
+`google_apis_playstore_ps16k` — stayed on `channel-2` (dev). `android sdk install` is stable-only
+and **exits 0** on `Package not found`, so the rolling window rolled onto a level whose images
+could never install, both were silently skipped, and the verify loop in
+`global-stack-android-setup.sh` FATALed. Row 41 had anticipated a *tag rename*; the class that bit
+is **channel skew**. (The 37.2-*beta* images are `channel-0`, which is exactly why the previous
+`37.2-beta1` pin worked.)
+
+The flag takes comma-separated `URL|ID_TEMPLATE` pairs and keeps only those candidates whose every
+companion is **present AND `channel-0` AND not `obsolete="true"`** in the named document. Four
+properties are load-bearing:
+
+- **Each pair carries its own URL.** The tag → document mapping (`google_apis_ps16k` lives in
+  `sys-img/google_apis/sys-img2-3.xml`) is data Google publishes, not a rule derivable from the id;
+  deriving it would encode a guess.
+- **The filter runs BEFORE channel selection**, so `(offset:N)` counts qualifying versions only.
+  After it, offset 0 would land on the excluded level and the gate would have nothing left to do.
+- **It fails CLOSED.** An unreachable companion XML is `ERROR` with the pin unchanged — never an
+  empty package set, which a filter reads as "nothing to exclude" and then passes every candidate,
+  shipping the broken pin exactly when the check could not run.
+- **A repeat is refused at parse.** The generic flag store is last-wins, so a second
+  `(require-sibling:)` would silently discard the first and the gate would check one companion
+  while reading as though it checked two. List every companion in ONE flag.
+
+Each XML is fetched **once** per run, not once per candidate, and the spec is part of the cache key
+so a gated and an ungated record on the same identifier cannot share an entry. Refused at parse on
+any non-`sdkmanager` type, on a pair with no `|`, and on a template with no `{version}` — a fixed
+id would be present for every candidate or absent for every candidate, a filter that cannot
+discriminate. Covered by `env-update.test.sh` §124.
+
+> **What this means for the android window.** It now reads "the three latest levels that are FULLY
+> installable", which can trail Google's platform releases by weeks — and advances on its own the
+> moment the images are promoted. Note the rollback direction is *downward*, so `decide.sh` rule 5
+> makes every such correction a `SKIP`: `--apply` will not walk the window back, the values are
+> hand-edited and the gate's job is to stop the next `--apply` re-picking the broken level.
+
 **Not found vs. unreachable:** repository unreachable → `ERROR` (a dead upstream must fail `--check`, §119). Component absent from the repository → `error_message` only → `SKIP` via decide.sh; the three `(lock:)`ed system-images records (tag / playstore tag / abi) name things this document does not carry and must keep reading as lock + SKIP, not as a failed run.
 
-**Cache key:** `sdkmanager:component:channel:offN` — the offset is part of it, or three `sdkmanager:platforms` records would share one entry.
+**Cache key:** `sdkmanager:component:channel:offN[:require-sibling-spec]` — the offset is part of it, or three `sdkmanager:platforms` records would share one entry, and the `(require-sibling:)` spec is appended for the same reason one level up (a gated and an ungated record on the same identifier and offset legitimately resolve to different versions). The sibling segment is appended **only when set**, so an ungated record's key is byte-identical to the pre-row-43 one and no cached entry is invalidated — an unconditional segment leaves a trailing colon that misses every existing entry, which `env-update.test.sh` t33g reds.
 
 **Example annotations — the rolling windows in `.env`:**
 ```bash

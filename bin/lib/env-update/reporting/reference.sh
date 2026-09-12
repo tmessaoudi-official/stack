@@ -277,6 +277,16 @@ ANNOTATION FLAGS (parenthesised, space-separated, after the @todo keyword)
                       version schemes carrying their own date (…nightly20260825ab).
                       Catches an upstream frozen AT the current value, which the
                       downgrade guard cannot see. Immune to --force-auto.
+    (require-sibling:URL|ID_TEMPLATE,…)
+                      Companion-availability gate (sdkmanager fetcher only).
+                      Comma-separated URL|ID_TEMPLATE pairs; each template must
+                      contain {version}. A candidate survives only when EVERY
+                      companion is present, channel-0 and not obsolete in its
+                      named XML. Runs BEFORE channel selection, so (offset:N)
+                      counts qualifying versions only. Fails CLOSED: an
+                      unreachable companion XML is ERROR, never an empty filter.
+                      Catches a package promoted to stable ahead of its
+                      companions (platforms;android-37.2 vs its channel-2 images).
     (verify-asset:URL_TEMPLATE)
                       Artifact-existence gate (url fetcher, fetch-json tier only).
                       URL_TEMPLATE must contain {version}. The fetch-json expression

@@ -2,6 +2,7 @@
 # sdkmanager.sh — Android SDK component fetcher, read from Google's repository XML.
 #
 # Exports:   _gs_eu2_sdkmanager_get_repo  _gs_eu2_sdkmanager_parse_versions
+#            _gs_eu2_sdkmanager_stable_paths  _gs_eu2_sdkmanager_sibling_keep
 #            _gs_eu2_fetch_sdkmanager
 # Sources:   core/records.sh  core/semver.sh  core/channel.sh  core/cache.sh
 #            http/curl.sh
@@ -25,7 +26,26 @@
 #   2. Parse every <remotePackage path="…"> whose path IS the component (bare,
 #      single-instance ids: platform-tools, ndk-bundle, emulator) or STARTS WITH
 #      `component;` (versioned ids: build-tools;37.0.0, ndk;30.0.…, platforms;android-37.2).
-#   3. Channel selection + (offset:N) → proposed.
+#   3. (require-sibling:) filter, when present — see below.
+#   4. Channel selection + (offset:N) → proposed.
+#
+# (require-sibling:URL|ID_TEMPLATE,…) — row 43:
+#   A package can be STABLE while its companions are not. `platforms;android-37.2`
+#   reached channel-0 while both of its system images stayed on channel-2 (dev),
+#   and since `android sdk install` is stable-only and exits 0 on "Package not
+#   found", the window rolled onto a level whose images could never install: the
+#   verify loop in global-stack-android-setup.sh FATALed. Row 41 had anticipated a
+#   TAG RENAME; the class that bit is CHANNEL SKEW.
+#   Each pair names the XML the companion lives in, because the tag → document
+#   mapping (google_apis_ps16k → sys-img/google_apis/sys-img2-3.xml) is data
+#   Google publishes, not a rule derivable from the id. Each XML is fetched ONCE
+#   and every candidate tested against the resulting set in memory.
+#   The filter runs BEFORE channel selection so (offset:N) counts qualifying
+#   levels only — after it, offset 0 would land on 37.2 and the gate would have
+#   nothing left to do.
+#   It FAILS CLOSED: an unreachable companion XML is ERROR, never an empty
+#   package set, which a filter would read as "nothing to exclude" and pass every
+#   candidate — shipping the broken pin exactly when the check could not run.
 #
 # Version rendering:
 #   - versioned path → the part after `;`, verbatim (betas/rcs carry their suffix
@@ -145,6 +165,59 @@ _gs_eu2_sdkmanager_parse_versions() {
   ' | sort -uV
 }
 
+# _gs_eu2_sdkmanager_stable_paths — the INSTALLABLE package paths in a repo XML.
+#
+# Args:    $1 xml — repository XML body (main or sys-img)
+# Prints:  newline-separated path= values that are channel-0 and not obsolete
+# Returns: 0 always
+#
+# Qualifying means present AND channel-0 AND not obsolete="true" — presence alone
+# is exactly what let 37.2 through. A missing <channelRef> counts as stable, which
+# matches _gs_eu2_sdkmanager_parse_versions' own reading of the same attribute.
+_gs_eu2_sdkmanager_stable_paths() {
+  local _xml="${1}"
+  printf '%s\n' "${_xml}" | awk '
+    /<remotePackage / {
+      inpkg = 1; obsolete = ($0 ~ /obsolete="true"/); path = ""; cref = ""
+      if (match($0, /path="[^"]*"/)) path = substr($0, RSTART + 6, RLENGTH - 7)
+      next
+    }
+    inpkg && /<channelRef ref="/ { s = $0; sub(/.*<channelRef ref="/, "", s); sub(/".*/, "", s); cref = s; next }
+    inpkg && /<\/remotePackage>/ {
+      inpkg = 0
+      if (obsolete) next
+      if (cref != "" && cref != "channel-0") next
+      if (path == "") next
+      print path
+      next
+    }
+  '
+}
+
+# _gs_eu2_sdkmanager_sibling_keep — drop candidates whose companion is absent.
+#
+# Args:    $1 versions  — newline-separated candidate list
+#          $2 template  — companion id with a {version} placeholder
+#          $3 paths     — qualifying path set from _gs_eu2_sdkmanager_stable_paths
+# Prints:  the surviving candidates, newline-separated, order preserved
+# Returns: 0 always
+#
+# Pure by design: the HTTP call stays in the caller so a transport failure can be
+# told apart from "no candidate qualifies". Conflating them is how a fail-open
+# filter gets written.
+_gs_eu2_sdkmanager_sibling_keep() {
+  local _versions="${1}" _tpl="${2}" _paths="${3}"
+  local _v _need _out=""
+  while IFS= read -r _v; do
+    [[ -z "${_v}" ]] && continue
+    _need="${_tpl//\{version\}/${_v}}"
+    if printf '%s\n' "${_paths}" | grep -Fxq -- "${_need}"; then
+      _out+="${_v}"$'\n'
+    fi
+  done <<<"${_versions}"
+  printf '%s' "${_out}"
+}
+
 # _gs_eu2_fetch_sdkmanager — main entry point for the sdkmanager: fetcher type.
 #
 # Args:    $1 record_index — 0-based record index
@@ -156,16 +229,23 @@ _gs_eu2_sdkmanager_parse_versions() {
 _gs_eu2_fetch_sdkmanager() {
   local _idx="${1}"
 
-  local _identifier _channel _offset _no_cache
+  local _identifier _channel _offset _no_cache _require_sibling
   _identifier="$(_gs_eu2_record_get "${_idx}" identifier)"
   _channel="$(_gs_eu2_record_get "${_idx}" channel)"
   _offset="$(_gs_eu2_record_get "${_idx}" offset)"
   _offset="${_offset:-0}"
+  _require_sibling="$(_gs_eu2_record_get "${_idx}" require_sibling)"
   _no_cache="${_GS_EU2_CFG[no_cache]:-false}"
 
   # Cache key — the offset MUST be part of it: three sdkmanager:platforms records
   # differ only by offset, and a key without it hands all three the same value.
-  local _cache_key="sdkmanager:${_identifier}:${_channel}:off${_offset}"
+  # The sibling spec is in for the same reason one level up: a gated and an
+  # ungated record on the same identifier and offset legitimately resolve to
+  # DIFFERENT versions, and without it the second read returns the first's answer.
+  # Appended only when SET (:+ not :-), so an ungated record's key is byte-identical
+  # to the pre-row-43 one: an unconditional segment leaves a trailing colon that
+  # invalidates every cached entry on this type and reds t33g, which pins the shape.
+  local _cache_key="sdkmanager:${_identifier}:${_channel}:off${_offset}${_require_sibling:+:${_require_sibling}}"
 
   # Cache read
   _gs_eu2_cache_try_load "${_idx}" "${_cache_key}" "" "" && return 0
@@ -191,6 +271,40 @@ _gs_eu2_fetch_sdkmanager() {
   if [[ -z "$(printf '%s\n' "${_versions}" | grep -v '^$' || true)" ]]; then
     _gs_eu2_record_set "${_idx}" error_message "no versions found for sdkmanager:${_identifier} in the repository XML"
     return 0
+  fi
+
+  # (require-sibling:) — companion availability, BEFORE selection so the offset
+  # counts qualifying levels only.
+  if [[ -n "${_require_sibling}" ]]; then
+    local _rs_oldifs="${IFS}" _rs_pair _rs_url _rs_tpl _rs_body _rs_paths _rs_sink _rs_st
+    IFS=','
+    # shellcheck disable=SC2206  # deliberate split on the comma list
+    local _rs_pairs=(${_require_sibling})
+    IFS="${_rs_oldifs}"
+    for _rs_pair in "${_rs_pairs[@]}"; do
+      [[ -z "${_rs_pair}" ]] && continue
+      _rs_url="${_rs_pair%%|*}"
+      _rs_tpl="${_rs_pair#*|}"
+      _rs_sink="$(_gs_eu2_http_diag_new)" || _rs_sink=""
+      if ! _rs_body="$(_gs_eu2_http_get "${_rs_url}" "${_rs_sink}" 2>/dev/null)" || [[ -z "${_rs_body}" ]]; then
+        _rs_st=""
+        [[ -n "${_rs_sink}" ]] && _rs_st="$(_gs_eu2_http_diag_status "${_rs_sink}")"
+        _gs_eu2_http_diag_free "${_rs_sink}"
+        _gs_eu2_record_set "${_idx}" decision "ERROR"
+        _gs_eu2_record_set "${_idx}" error_message \
+          "sdkmanager: (require-sibling:) fetch failed for ${_rs_url}${_rs_st:+ (HTTP ${_rs_st})} — cannot prove companion availability, leaving the pin unchanged"
+        return 0
+      fi
+      _gs_eu2_http_diag_free "${_rs_sink}"
+      _rs_paths="$(_gs_eu2_sdkmanager_stable_paths "${_rs_body}")"
+      _versions="$(_gs_eu2_sdkmanager_sibling_keep "${_versions}" "${_rs_tpl}" "${_rs_paths}")"
+      [[ -z "${_versions}" ]] && break
+    done
+    if [[ -z "$(printf '%s\n' "${_versions}" | grep -v '^$' || true)" ]]; then
+      _gs_eu2_record_set "${_idx}" error_message \
+        "no version of sdkmanager:${_identifier} has all its (require-sibling:) companions published on the stable channel — leaving the pin unchanged"
+      return 0
+    fi
   fi
 
   # Channel selection (+ offset) → proposed

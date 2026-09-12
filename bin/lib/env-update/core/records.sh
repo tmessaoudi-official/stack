@@ -43,7 +43,7 @@ _gs_eu2_record_fields() {
     tag_filter tag_exclude tag_strip_prefix tag_strip_suffix \
     tag_channel_prefix \
     tag_extract tag_replace_from tag_replace_to tag_suffix \
-    fetch_extract fetch_json verify_asset \
+    fetch_extract fetch_json verify_asset require_sibling \
     url_probe url_probe_depth \
     git_repo depends_on urls \
     git_fallback_url git_fallback_sha \

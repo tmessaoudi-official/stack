@@ -3383,7 +3383,12 @@ fi
 # miss killed the RUN at this line with no tally [measured 2026-09-12: the old
 # anchor did exactly that after the doc rewrite, and two sabotage runs read as
 # "not caught" until the 667-line log was opened — §47 had simply never run].
-_eu_note="$(grep -A40 -- '^### 7.9 sdkmanager' "${_EU_DOC}" || true)"
+# Bounded by the NEXT heading, not by a line count. A fixed -A40 window made the
+# check depend on the section's LENGTH: row 43 added prose above the cache-key
+# line and pushed it out of view, redding a guard whose subject had not changed.
+# A window that ordinary growth can invalidate reports drift that is not there,
+# which is the mirror of the can-never-fire defect and costs the same trust.
+_eu_note="$(awk '/^### 7\.9 sdkmanager/{f=1} f&&/^### /&&!/7\.9 sdkmanager/{exit} f' "${_EU_DOC}" || true)"
 assert_output_contains "45b: env-update.md §7.9 names the repository XML as the sdkmanager source" \
   'repository2-3.xml' printf '%s' "${_eu_note}"
 assert_output_contains "45b2: ...and documents the offset-bearing cache key" \

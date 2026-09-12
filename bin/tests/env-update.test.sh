@@ -13382,6 +13382,337 @@ t "t123j: the walk is capped and the cap is the reason it stops" bash -c "
 _flush_section
 
 
+section "124 — (require-sibling:) system-image availability gate"
+
+# Row 43. `platforms;android-37.2` went STABLE (channel-0) while both of its
+# system images -- system-images;android-37.2;google_apis_ps16k;x86_64 and the
+# google_apis_playstore_ps16k twin -- stayed on channel-2 (dev). Verified against
+# Google's live XMLs 2026-09-12; the 37.2-BETA images are channel-0, which is
+# exactly why the previous 37.2-beta1 pin worked and the promotion broke it.
+#
+# `android sdk install` is stable-only and exits 0 on "Package not found", so the
+# rolling window rolled API_LEVEL_3 to 37.2, the two images were silently skipped,
+# and the verify loop in global-stack-android-setup.sh FATALed. Row 41 anticipated
+# a TAG RENAME; the class that actually bit is CHANNEL SKEW between a platform and
+# its images -- a package can be stable while its companions are not.
+#
+# (require-sibling:URL|ID_TEMPLATE,URL|ID_TEMPLATE) filters the candidate list
+# BEFORE channel selection, keeping only versions whose every listed companion is
+# present, channel-0 and not obsolete in the named XML. Filtering before selection
+# is what makes (offset:N) count qualifying levels only; filtering after would let
+# offset 0 land on 37.2 and leave the gate nothing to do.
+
+_RS_LIBS="
+source '${_GS_EU2_LIB}/config/defaults.sh'
+source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+source '${_GS_EU2_LIB}/core/records.sh'
+source '${_GS_EU2_LIB}/core/semver.sh'
+source '${_GS_EU2_LIB}/core/channel.sh'
+source '${_GS_EU2_LIB}/core/cache.sh'
+source '${_GS_EU2_LIB}/http/curl.sh'
+source '${_GS_EU2_LIB}/fetchers/sdkmanager.sh'
+"
+
+# Fixture builders. Each case writes its OWN sibling XMLs so every filter reason
+# (dev channel / absent from the second XML / obsolete) is a separate fixture and
+# a sabotage reds the test that names it -- row 41's obsolete-filter sabotage
+# passed first time precisely because nothing obsolete was in the shared fixture.
+# Triples are path:channel[:obsolete]. The remotePackage open and close tags MUST
+# be on separate lines: the parser's /<remotePackage / rule ends with `next`, so a
+# one-line package is never closed and never emitted.
+_RS_FIX="
+_rs_pkg() {
+    local _p=\"\$1\" _c=\"\$2\" _o=\"\${3:-}\" _oa=''
+    [[ \"\$_o\" == obsolete ]] && _oa=' obsolete=\"true\"'
+    printf '  <remotePackage%s path=\"%s\">\n    <channelRef ref=\"%s\"/>\n  </remotePackage>\n' \"\$_oa\" \"\$_p\" \"\$_c\"
+}
+_rs_xml() {
+    local _f=\"\$1\"; shift
+    printf '<?xml version=\"1.0\"?>\n<sdk>\n' > \"\$_f\"
+    local _t _p _c _o
+    for _t in \"\$@\"; do
+        IFS=: read -r _p _c _o <<<\"\$_t\"
+        _rs_pkg \"\$_p\" \"\$_c\" \"\${_o:-}\" >> \"\$_f\"
+    done
+    printf '</sdk>\n' >> \"\$_f\"
+}
+_rs_repo() {
+    _rs_xml \"\$1/sdk.test_repo.xml\" \
+        'platforms;android-37.2:channel-0' \
+        'platforms;android-37.1:channel-0' \
+        'platforms;android-37.0:channel-0' \
+        'platforms;android-36.1:channel-0' \
+        'platforms;android-36:channel-0'
+}
+_rs_rec() {
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type       'sdkmanager'
+    _gs_eu2_record_set \$idx identifier 'platforms'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_T124'
+    _gs_eu2_record_set \$idx offset     \"\${1:-0}\"
+    [[ -n \"\${2:-}\" ]] && _gs_eu2_record_set \$idx require_sibling \"\$2\"
+    return 0
+}
+_RS_GA='system-images;android-{version};google_apis_ps16k;x86_64'
+_RS_PS='system-images;android-{version};google_apis_playstore_ps16k;x86_64'
+_RS_SPEC=\"https://sysimg.test/ga.xml|\${_RS_GA},https://sysimg.test/ps.xml|\${_RS_PS}\"
+"
+
+# ── parse-time contract ──────────────────────────────────────────────────────
+
+t "t124a: (require-sibling:) is parsed and stored in the record" bash -c "
+    f=\${TMP_DIR}/t124a.env
+    printf '# @todo env-update (require-sibling:https://s.test/a.xml|system-images;android-{version};ga;x86_64) sdkmanager:platforms 37.0\nGLOBAL_STACK_T124A=37.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1); rc=\$?
+    [[ \$rc -eq 0 ]] || { echo \"exit \$rc; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'require_sibling: https://s.test/a.xml|system-images;android-{version};ga;x86_64' \
+        || { echo \"require_sibling not stored; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t124b: (require-sibling:) with an empty value is refused" bash -c "
+    f=\${TMP_DIR}/t124b.env
+    printf '# @todo env-update (require-sibling:) sdkmanager:platforms 37.0\nGLOBAL_STACK_T124B=37.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1); rc=\$?
+    [[ \$rc -ne 0 ]] || { echo 'expected non-zero exit for empty require-sibling'; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qi 'unknown flag' && { echo \"refused as UNKNOWN, not as empty -- vacuous; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qi 'non-empty' || { echo \"error must say the value is required; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# A pair is URL|TEMPLATE. Without the separator there is no way to tell which half
+# is which, and a silent guess would probe an invented URL.
+t "t124c: a (require-sibling:) pair with no | separator is refused" bash -c "
+    f=\${TMP_DIR}/t124c.env
+    printf '# @todo env-update (require-sibling:system-images;android-{version};ga;x86_64) sdkmanager:platforms 37.0\nGLOBAL_STACK_T124C=37.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1); rc=\$?
+    [[ \$rc -ne 0 ]] || { echo 'expected non-zero exit for a pair with no |'; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qi 'unknown flag' && { echo \"refused as UNKNOWN, not for the missing separator -- vacuous; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'URL|' || { echo \"error must show the URL|TEMPLATE shape; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# Same can-never-fire shape as (verify-asset:) without {version}: a fixed sibling
+# id is either present for every candidate or absent for every candidate, so the
+# filter keeps all of them or none -- never the discrimination it advertises.
+t "t124c2: a (require-sibling:) template with no {version} placeholder is refused" bash -c "
+    f=\${TMP_DIR}/t124c2.env
+    printf '# @todo env-update (require-sibling:https://s.test/a.xml|system-images;android-37.1;ga;x86_64) sdkmanager:platforms 37.0\nGLOBAL_STACK_T124C2=37.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1); rc=\$?
+    [[ \$rc -ne 0 ]] || { echo 'expected non-zero exit for a template with no {version}'; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF '{version}' || { echo \"error must name the placeholder; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# The tag-coverage trap. Two tags must BOTH be satisfied, and the generic flag
+# store is last-wins -- so a second (require-sibling:) would silently discard the
+# first and the gate would check one tag while reading as though it checked two.
+# Refusing the repeat is what makes the comma-list the only way to express it.
+t "t124d: a repeated (require-sibling:) is refused rather than silently last-wins" bash -c "
+    f=\${TMP_DIR}/t124d.env
+    printf '# @todo env-update (require-sibling:https://s.test/a.xml|si;{version};ga) (require-sibling:https://s.test/b.xml|si;{version};ps) sdkmanager:platforms 37.0\nGLOBAL_STACK_T124D=37.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1); rc=\$?
+    [[ \$rc -ne 0 ]] || { echo 'expected non-zero exit for a repeated require-sibling'; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qi 'unknown flag' && { echo \"refused as UNKNOWN, not as repeated -- vacuous; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qi 'more than once' || { echo \"error must say the flag was given twice; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# The b2290dc shape: only the sdkmanager fetcher reads this field, so accepting it
+# elsewhere would be an inert flag that reads as a configured guarantee.
+t "t124e: (require-sibling:) on a non-sdkmanager type is refused" bash -c "
+    f=\${TMP_DIR}/t124e.env
+    printf '# @todo env-update (require-sibling:https://s.test/a.xml|si;{version};ga) dockerhub:library/nginx 1.29\nGLOBAL_STACK_T124E=1.29\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1); rc=\$?
+    [[ \$rc -ne 0 ]] || { echo 'expected non-zero exit for require-sibling on dockerhub'; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qi 'unknown flag' && { echo \"refused as UNKNOWN, not for the wrong type -- vacuous; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qi 'dockerhub' || { echo \"error must name the offending type; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ── fetch-time behaviour ─────────────────────────────────────────────────────
+
+# The ungated baseline, and the red-first proof for every case below it: without
+# the flag the newest stable platform IS 37.2, the value that broke the boot.
+t "t124m: without the flag the sdkmanager path is unchanged (still proposes 37.2)" bash -c "
+    export _GS_EU2_SDKMANAGER_REPO_URL='https://sdk.test/repo.xml'
+    ${_RS_LIBS}${_RS_FIX}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/rs_cache_m
+    export _GS_EU2_HTTP_FIXTURE_DIR=\${TMP_DIR}/rs_fix_m
+    mkdir -p \"\$_GS_EU2_HTTP_FIXTURE_DIR\"; _rs_repo \"\$_GS_EU2_HTTP_FIXTURE_DIR\"
+    _rs_rec 0
+    _gs_eu2_fetch_sdkmanager \$idx 2>/dev/null
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$val\" == '37.2' ]] || { echo \"ungated must still propose 37.2, got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t124f: a level whose system images are on a non-stable channel is filtered out" bash -c "
+    export _GS_EU2_SDKMANAGER_REPO_URL='https://sdk.test/repo.xml'
+    ${_RS_LIBS}${_RS_FIX}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/rs_cache_f
+    export _GS_EU2_HTTP_FIXTURE_DIR=\${TMP_DIR}/rs_fix_f
+    d=\$_GS_EU2_HTTP_FIXTURE_DIR; mkdir -p \"\$d\"; _rs_repo \"\$d\"
+    _rs_xml \"\$d/sysimg.test_ga.xml\" \
+        'system-images;android-37.2;google_apis_ps16k;x86_64:channel-2' \
+        'system-images;android-37.1;google_apis_ps16k;x86_64:channel-0' \
+        'system-images;android-37.0;google_apis_ps16k;x86_64:channel-0' \
+        'system-images;android-36.1;google_apis_ps16k;x86_64:channel-0' \
+        'system-images;android-36;google_apis_ps16k;x86_64:channel-0'
+    _rs_xml \"\$d/sysimg.test_ps.xml\" \
+        'system-images;android-37.2;google_apis_playstore_ps16k;x86_64:channel-2' \
+        'system-images;android-37.1;google_apis_playstore_ps16k;x86_64:channel-0' \
+        'system-images;android-37.0;google_apis_playstore_ps16k;x86_64:channel-0' \
+        'system-images;android-36.1;google_apis_playstore_ps16k;x86_64:channel-0' \
+        'system-images;android-36;google_apis_playstore_ps16k;x86_64:channel-0'
+    _rs_rec 0 \"\$_RS_SPEC\"
+    _gs_eu2_fetch_sdkmanager \$idx 2>/dev/null
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$val\" == '37.1' ]] || { echo \"37.2 images are channel-2, want 37.1; got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# Filtering must happen BEFORE the offset walk. If it ran after, offset 2 would
+# count 37.2 as a slot and land one level too high.
+t "t124g: (offset:N) counts only the levels that survive the gate" bash -c "
+    export _GS_EU2_SDKMANAGER_REPO_URL='https://sdk.test/repo.xml'
+    ${_RS_LIBS}${_RS_FIX}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/rs_cache_g
+    export _GS_EU2_HTTP_FIXTURE_DIR=\${TMP_DIR}/rs_fix_g
+    d=\$_GS_EU2_HTTP_FIXTURE_DIR; mkdir -p \"\$d\"; _rs_repo \"\$d\"
+    for pair in 'ga:google_apis_ps16k' 'ps:google_apis_playstore_ps16k'; do
+        n=\${pair%%:*}; tag=\${pair#*:}
+        _rs_xml \"\$d/sysimg.test_\${n}.xml\" \
+            \"system-images;android-37.2;\${tag};x86_64:channel-2\" \
+            \"system-images;android-37.1;\${tag};x86_64:channel-0\" \
+            \"system-images;android-37.0;\${tag};x86_64:channel-0\" \
+            \"system-images;android-36.1;\${tag};x86_64:channel-0\" \
+            \"system-images;android-36;\${tag};x86_64:channel-0\"
+    done
+    for o in 0:37.1 1:37.0 2:36.1; do
+        _rs_rec \"\${o%%:*}\" \"\$_RS_SPEC\"
+        _gs_eu2_fetch_sdkmanager \$idx 2>/dev/null
+        val=\$(_gs_eu2_record_get \$idx proposed_version)
+        [[ \"\$val\" == \"\${o#*:}\" ]] || { echo \"offset \${o%%:*} want \${o#*:}, got '\$val'\"; echo FAIL; exit 0; }
+    done
+    echo PASS
+"
+
+# Both pairs must be walked. Here the FIRST sibling qualifies for 37.1 and only
+# the SECOND is missing -- a gate that stopped after one tag would keep 37.1 and
+# read as working. This is the case that makes the comma-list load-bearing.
+t "t124h: a level is dropped when only the SECOND sibling is missing" bash -c "
+    export _GS_EU2_SDKMANAGER_REPO_URL='https://sdk.test/repo.xml'
+    ${_RS_LIBS}${_RS_FIX}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/rs_cache_h
+    export _GS_EU2_HTTP_FIXTURE_DIR=\${TMP_DIR}/rs_fix_h
+    d=\$_GS_EU2_HTTP_FIXTURE_DIR; mkdir -p \"\$d\"; _rs_repo \"\$d\"
+    _rs_xml \"\$d/sysimg.test_ga.xml\" \
+        'system-images;android-37.2;google_apis_ps16k;x86_64:channel-0' \
+        'system-images;android-37.1;google_apis_ps16k;x86_64:channel-0' \
+        'system-images;android-37.0;google_apis_ps16k;x86_64:channel-0'
+    _rs_xml \"\$d/sysimg.test_ps.xml\" \
+        'system-images;android-37.0;google_apis_playstore_ps16k;x86_64:channel-0'
+    _rs_rec 0 \"\$_RS_SPEC\"
+    _gs_eu2_fetch_sdkmanager \$idx 2>/dev/null
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$val\" == '37.0' ]] || { echo \"only ps.xml carries 37.0, want 37.0; got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# Row 41's own lesson, applied deliberately: an obsolete package is served and
+# channel-0, so a presence-only check keeps it while sdkmanager will not install
+# it. The fixture carries an obsolete entry so this cannot pass vacuously.
+t "t124i: a channel-0 sibling marked obsolete=true does not qualify" bash -c "
+    export _GS_EU2_SDKMANAGER_REPO_URL='https://sdk.test/repo.xml'
+    ${_RS_LIBS}${_RS_FIX}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/rs_cache_i
+    export _GS_EU2_HTTP_FIXTURE_DIR=\${TMP_DIR}/rs_fix_i
+    d=\$_GS_EU2_HTTP_FIXTURE_DIR; mkdir -p \"\$d\"; _rs_repo \"\$d\"
+    for pair in 'ga:google_apis_ps16k' 'ps:google_apis_playstore_ps16k'; do
+        n=\${pair%%:*}; tag=\${pair#*:}
+        _rs_xml \"\$d/sysimg.test_\${n}.xml\" \
+            \"system-images;android-37.2;\${tag};x86_64:channel-2\" \
+            \"system-images;android-37.1;\${tag};x86_64:channel-0\" \
+            \"system-images;android-37.0;\${tag};x86_64:channel-0\" \
+            \"system-images;android-36.1;\${tag};x86_64:channel-0:obsolete\" \
+            \"system-images;android-36;\${tag};x86_64:channel-0\"
+    done
+    _rs_rec 2 \"\$_RS_SPEC\"
+    _gs_eu2_fetch_sdkmanager \$idx 2>/dev/null
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$val\" == '36' ]] || { echo \"36.1 images are obsolete, offset 2 want 36; got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# Fail CLOSED. An unreachable sibling XML yields an empty package set, and a
+# filter that treats \"no packages\" as \"nothing to exclude\" would pass every
+# candidate -- the can-never-fire shape with a network cause, and it would ship
+# the broken pin precisely when the check could not run.
+t "t124j: an unreachable sibling XML is ERROR, not an empty filter" bash -c "
+    export _GS_EU2_SDKMANAGER_REPO_URL='https://sdk.test/repo.xml'
+    ${_RS_LIBS}${_RS_FIX}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/rs_cache_j
+    export _GS_EU2_HTTP_FIXTURE_DIR=\${TMP_DIR}/rs_fix_j
+    d=\$_GS_EU2_HTTP_FIXTURE_DIR; mkdir -p \"\$d\"; _rs_repo \"\$d\"
+    _rs_xml \"\$d/sysimg.test_ga.xml\" 'system-images;android-37.2;google_apis_ps16k;x86_64:channel-0'
+    _rs_rec 0 \"\$_RS_SPEC\"
+    _gs_eu2_fetch_sdkmanager \$idx 2>/dev/null
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    dec=\$(_gs_eu2_record_get \$idx decision)
+    msg=\$(_gs_eu2_record_get \$idx error_message)
+    [[ -z \"\$val\" ]] || { echo \"unreachable sibling must propose nothing; got: '\$val'\"; echo FAIL; exit 0; }
+    [[ \"\$dec\" == 'ERROR' ]] || { echo \"want ERROR decision, got: '\$dec'\"; echo FAIL; exit 0; }
+    echo \"\$msg\" | grep -qi 'require-sibling' || { echo \"message must name the flag; got: \$msg\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t124k: when no level qualifies the pin is left unchanged with a reason" bash -c "
+    export _GS_EU2_SDKMANAGER_REPO_URL='https://sdk.test/repo.xml'
+    ${_RS_LIBS}${_RS_FIX}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/rs_cache_k
+    export _GS_EU2_HTTP_FIXTURE_DIR=\${TMP_DIR}/rs_fix_k
+    d=\$_GS_EU2_HTTP_FIXTURE_DIR; mkdir -p \"\$d\"; _rs_repo \"\$d\"
+    _rs_xml \"\$d/sysimg.test_ga.xml\" 'system-images;android-99;google_apis_ps16k;x86_64:channel-0'
+    _rs_xml \"\$d/sysimg.test_ps.xml\" 'system-images;android-99;google_apis_playstore_ps16k;x86_64:channel-0'
+    _rs_rec 0 \"\$_RS_SPEC\"
+    _gs_eu2_fetch_sdkmanager \$idx 2>/dev/null
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    msg=\$(_gs_eu2_record_get \$idx error_message)
+    [[ -z \"\$val\" ]] || { echo \"no level qualifies, want no proposal; got: '\$val'\"; echo FAIL; exit 0; }
+    echo \"\$msg\" | grep -qi 'require-sibling' || { echo \"message must name the flag; got: \$msg\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# The t33l / t123i lesson for the third time this session. The two records differ
+# ONLY by the sibling spec -- same identifier, channel and offset -- so if the key
+# omits the spec the second read returns the first's gated answer and the sabotage
+# reds here rather than passing on an unrelated difference.
+t "t124l: the cache key carries the sibling spec" bash -c "
+    export _GS_EU2_SDKMANAGER_REPO_URL='https://sdk.test/repo.xml'
+    ${_RS_LIBS}${_RS_FIX}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/rs_cache_l
+    export _GS_EU2_HTTP_FIXTURE_DIR=\${TMP_DIR}/rs_fix_l
+    d=\$_GS_EU2_HTTP_FIXTURE_DIR; mkdir -p \"\$d\"; _rs_repo \"\$d\"
+    for pair in 'ga:google_apis_ps16k' 'ps:google_apis_playstore_ps16k'; do
+        n=\${pair%%:*}; tag=\${pair#*:}
+        _rs_xml \"\$d/sysimg.test_\${n}.xml\" \
+            \"system-images;android-37.2;\${tag};x86_64:channel-2\" \
+            \"system-images;android-37.1;\${tag};x86_64:channel-0\"
+    done
+    _rs_rec 0 \"\$_RS_SPEC\"
+    _gs_eu2_fetch_sdkmanager \$idx 2>/dev/null
+    gated=\$(_gs_eu2_record_get \$idx proposed_version)
+    _rs_rec 0
+    _gs_eu2_fetch_sdkmanager \$idx 2>/dev/null
+    plain=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$gated\" == '37.1' ]] || { echo \"gated want 37.1, got '\$gated'\"; echo FAIL; exit 0; }
+    [[ \"\$plain\" == '37.2' ]] || { echo \"ungated read the gated cache entry: got '\$plain'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+_flush_section
+
 TOTAL=$(( PASS + FAIL ))
 BAR="━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
