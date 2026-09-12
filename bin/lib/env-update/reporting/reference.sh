@@ -331,7 +331,9 @@ ANNOTATION FLAGS (parenthesised, space-separated, after the @todo keyword)
                       detected. Default depth = 1 (major boundary).
     (offset:N)        Track the N-th newest DISTINCT stable version instead of the
                       newest: 0 = latest (default), 1 = latest-1, 2 = latest-2.
-                      Stable channel only (refused with any other (channel:…)).
+                      Stable channel only (refused with any other (channel:…)),
+                      and sdkmanager only (refused on any other TYPE — the
+                      other fetchers never read it, so it is not ignored quietly).
                       Past the end of the upstream list → no proposal. For a set
                       of vars that must always cover the K latest releases (the
                       android platforms / build-tools windows). Part of the cache key.

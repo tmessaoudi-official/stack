@@ -21,6 +21,13 @@
 [[ -n "${_GS_EU2_PARSE_SH_LOADED:-}" ]] && return 0
 readonly _GS_EU2_PARSE_SH_LOADED=1
 
+# Fetcher types whose fetch function passes the record's offset to
+# _gs_eu2_channel_select_best. Every other fetcher calls the selector with
+# two arguments and never reads the field, so (offset:N>0) on one of those
+# would resolve to latest and say nothing. Add a type here ONLY in the same
+# change that makes its fetcher pass the third argument.
+readonly _GS_EU2_OFFSET_TYPES=" sdkmanager "
+
 # shellcheck source=./records.sh
 source "$(dirname "${BASH_SOURCE[0]}")/records.sh"
 
@@ -614,13 +621,22 @@ _gs_eu2_parse_env_file() {
           # list is prereleases and "the previous rc" is not something anyone
           # pins. Refused loudly rather than ignored: a flag that silently does
           # nothing is a can-never-fire check wearing a feature's clothes.
-          local _x_offset _x_channel
+          local _x_offset _x_channel _x_type
           _x_offset="$(_gs_eu2_record_get "${_idx}" offset)"
           _x_channel="$(_gs_eu2_record_get "${_idx}" channel)"
+          _x_type="$(_gs_eu2_record_get "${_idx}" type)"
           if [[ -n "${_x_offset}" && "${_x_offset}" != "0" &&
             -n "${_x_channel}" && "${_x_channel}" != "stable" ]]; then
             printf 'env-update: %s:%s: (offset:%s) is only defined on the stable channel — it counts distinct STABLE versions from the newest; drop (channel:%s) or the offset\n' \
               "${_env_file}" "${_pending_lnum}" "${_x_offset}" "${_x_channel}" >&2
+            exit 1
+          fi
+          # Same principle, other axis: only the types in _GS_EU2_OFFSET_TYPES
+          # hand the offset to the selector. Refused rather than ignored.
+          if [[ -n "${_x_offset}" && "${_x_offset}" != "0" &&
+            "${_GS_EU2_OFFSET_TYPES}" != *" ${_x_type} "* ]]; then
+            printf 'env-update: %s:%s: (offset:%s) is not honoured by the %s fetcher — only%sresolves the N-th newest version; drop the offset or pin the version directly\n' \
+              "${_env_file}" "${_pending_lnum}" "${_x_offset}" "${_x_type}" "${_GS_EU2_OFFSET_TYPES}" >&2
             exit 1
           fi
         fi

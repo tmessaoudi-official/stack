@@ -13154,6 +13154,24 @@ t "t122j: six-record rolling window resolves every slot through --check" bash -c
     echo PASS
 "
 
+t "t122k: (offset:1) on a type other than sdkmanager is refused at parse time, naming the type" bash -c "
+    f=\${TMP_DIR}/t122k.env
+    printf '# @todo env-update (offset:1) dockerhub:_/postgres 17.0\nGLOBAL_STACK_T122K=17.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1); rc=\$?
+    [[ \$rc -ne 0 ]] || { echo 'expected non-zero exit for (offset:1) on dockerhub'; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -q 'dockerhub' || { echo \"error must name the offending type; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -q 'sdkmanager' || { echo \"error must name the type that honours the flag; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t122l: (offset:0) on a non-sdkmanager type is accepted (0 is the default, nothing to honour)" bash -c "
+    f=\${TMP_DIR}/t122l.env
+    printf '# @todo env-update (offset:0) dockerhub:_/postgres 17.0\nGLOBAL_STACK_T122L=17.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1); rc=\$?
+    [[ \$rc -eq 0 ]] || { echo \"exit \$rc; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
 _flush_section
 
 
