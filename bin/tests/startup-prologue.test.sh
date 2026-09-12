@@ -3790,6 +3790,64 @@ _a51_cli="$(grep -v '^[[:space:]]*#' "${_CHH}" | grep -c 'cli_plugins_dir' || tr
 assert_pass "51h: no per-directory a+x exception has returned (found ${_a51_cli})" \
   test "${_a51_cli}" -eq 0
 
+# ─── Section 52: every `cargo install` under rust-bin is --locked ──────────
+#
+# `cargo install` IGNORES the committed/packaged Cargo.lock by default and
+# re-resolves every dependency to the newest semver-compatible release at
+# install time. Pinning a --tag therefore pins only OUR source, never the
+# dependency set that tag was tested against, so any upstream break inside the
+# range takes the install down with it.
+#
+# Measured 2026-09-12: `cargo install --git .../cargo-outdated --tag v0.19.0`
+# with no --locked resolved `jiff 0.2.36` -- published 15:13 and YANKED the
+# same day, superseded by 0.2.37 at 15:39. That release's Cargo.toml include
+# list packages `/*.md`, which is PACKAGE-root relative, while src/lib.rs's
+# ungated `pub mod _documentation` does include_str!("../../../../CHANGELOG.md"),
+# three levels ABOVE the package root. The .crate archive carries 104 entries
+# and not one .md, so the published crate cannot compile at all: `couldn't read
+# .../CHANGELOG.md`, rustc exit 101. 02rust exhausted its on-failure:5 budget
+# and 03python3 + 05edge stayed in `created` behind it. v0.19.0's own
+# Cargo.lock pins jiff 0.2.23, which builds.
+#
+# Note the shape of the trap: 0.2.36 is yanked now, so an UNLOCKED install
+# today resolves 0.2.37 and succeeds. A green 02rust is therefore NOT evidence
+# that this is fixed -- only the resolved jiff version in the build log is.
+#
+# The convention was already established in this directory: nextest, zigbuild,
+# jujutsu and mergiraf all carry --locked and cargo-outdated was the single
+# omission, so this is an outlier restored to the local rule, not a new policy.
+# DISCOVERED rather than listed -- a sixth install site added without --locked
+# reds here instead of waiting for the next upstream break to find it.
+#
+# Comment lines are stripped first: cargo-nextest.sh explains its --force in a
+# comment that contains the literal `cargo install`, and counting that would
+# seat a permanently un-fixable offender in the corpus (the §19 shape).
+printf '\n%b── Section 52: every cargo install under rust-bin is --locked%b\n' "${C_BOLD}" "${C_RESET}"
+
+_a52_offenders=""
+_a52_scanned=0
+while IFS= read -r -d '' _a52_f; do
+  while IFS= read -r _a52_line; do
+    _a52_scanned=$((_a52_scanned + 1))
+    case "${_a52_line}" in
+    *--locked*) ;;
+    *) _a52_offenders="${_a52_offenders} $(basename "${_a52_f}")" ;;
+    esac
+  done < <(grep -v '^[[:space:]]*#' "${_a52_f}" | grep 'cargo install' || true)
+done < <(find "${DIST_BIN}/rust-bin" -name '*.sh' -print0 2>/dev/null)
+
+# Non-vacuity: a typo in the find root yields an empty scan, zero offenders and
+# a green check -- the can-never-fire defect §19 carried one level up. Five
+# install sites when this was written; the floor sits at five so removing one
+# is a deliberate act that reds rather than silently shrinking the guard.
+assert_pass "52a: the scan actually reached the rust install sites (>= 5)" \
+  bash -c 'test "$1" -ge 5' _ "${_a52_scanned}"
+
+# Asserts the SET, not a count, so a red names the offending script rather than
+# reporting a bare number that a broken extraction could also produce.
+assert_output_contains "52b: no cargo install under rust-bin omits --locked" \
+  '^NONE$' printf '%s\n' "${_a52_offenders:-NONE}"
+
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
 if [[ "${FAIL}" -eq 0 ]]; then

@@ -12,6 +12,6 @@ if [[ -n "${GLOBAL_STACK_CARGO_OUTDATED_VERSION}" ]] &&
     _outdated_force=""
     [[ "${_outdated_gate}" = "reinstall" ]] && _outdated_force="--force"
     # shellcheck disable=SC2086  # deliberate word-split: empty means "no flag"
-    cargo install --git https://github.com/kbknapp/cargo-outdated --tag ${GLOBAL_STACK_CARGO_OUTDATED_VERSION} --bin cargo-outdated ${_outdated_force}
+    cargo install --git https://github.com/kbknapp/cargo-outdated --tag ${GLOBAL_STACK_CARGO_OUTDATED_VERSION} --locked --bin cargo-outdated ${_outdated_force}
     printf '%s\n' "${GLOBAL_STACK_CARGO_OUTDATED_VERSION}" >"${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/rust.cargo-outdated"
 fi
