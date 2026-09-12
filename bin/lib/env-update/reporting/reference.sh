@@ -329,6 +329,12 @@ ANNOTATION FLAGS (parenthesised, space-separated, after the @todo keyword)
                       existing annotations.
     (watch-major[:N]) Emit a [WATCH] signal when a new major (or N-th level) is
                       detected. Default depth = 1 (major boundary).
+    (offset:N)        Track the N-th newest DISTINCT stable version instead of the
+                      newest: 0 = latest (default), 1 = latest-1, 2 = latest-2.
+                      Stable channel only (refused with any other (channel:…)).
+                      Past the end of the upstream list → no proposal. For a set
+                      of vars that must always cover the K latest releases (the
+                      android platforms / build-tools windows). Part of the cache key.
     (replace:TARGET=template)
                       When this var is AUTO-updated, also rewrite TARGET=<expanded>
                       in the same env file. Template tokens: {version} {major} {minor} {patch}.
@@ -436,11 +442,20 @@ PER-FETCHER DEEP-DIVE
                SDKMAN advertises some dists with build metadata (17.0.20+1.1-zulu) but
                its broker serves only the base form, so proposals are normalised to it.
 
-  sdkmanager:PACKAGE
-    API:       Parses sdkmanager --list output from Android SDK container.
-    Auth:      Requires running Android SDK container.
-    Limits:    No major_hint/range syntax. Package identifier is full Android SDK path.
-    Examples:  sdkmanager:build-tools;35.0.0
+  sdkmanager:COMPONENT
+    API:       GET https://dl.google.com/android/repository/repository2-3.xml
+               (the document `android sdk list` downloads) and parses every
+               <remotePackage path="…"> that IS the component (platform-tools,
+               ndk-bundle, emulator — version from <revision>) or starts with
+               COMPONENT; (build-tools;37.0.0, ndk;30.0.…, platforms;android-37.2
+               — version from the path; `android-` stripped for platforms).
+    Auth:      None. No local binary, no SDK container (row 41).
+    Limits:    No major_hint/range syntax, no tag flags. Honours (channel:) and
+               (offset:N). Extension SDKs (-extN), codenames and obsolete
+               packages never win. Unreachable repository → ERROR; component
+               absent from it → SKIP.
+    Examples:  sdkmanager:build-tools 37.0.0
+               (offset:1) sdkmanager:platforms 37.1
 
   url:URL
     4-tier resolution (tried in order until one succeeds):

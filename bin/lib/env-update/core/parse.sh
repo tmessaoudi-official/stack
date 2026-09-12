@@ -58,7 +58,7 @@ _gs_eu2_is_recognized_flag() {
   case "${_name}" in
     override | manual | hold | use-sha | prefer-specific | check-tags | \
       note | \
-      channel | skip | lock | stale-after | \
+      channel | skip | lock | stale-after | offset | \
       tag-filter | tag-exclude | tag-strip-prefix | tag-strip-suffix | \
       tag-channel-prefix | \
       tag-extract | tag-suffix | tag-replace | \
@@ -230,6 +230,16 @@ _gs_eu2_dispatch_flag() {
         exit 1
       fi
       ;;
+    offset)
+      # Row 41: the N-th newest DISTINCT stable version, 0 = latest (the default).
+      # Non-negative integer only; the stable-channel constraint is checked once
+      # all of the record's flags are in (order-agnostic — see the parse loop).
+      if [[ ! "${_val}" =~ ^(0|[1-9][0-9]*)$ ]]; then
+        printf 'env-update: %s:%s: malformed offset — expected a non-negative integer (0 = latest, 1 = latest-1, …), got %s\n' \
+          "${_env_file}" "${_lnum}" "$(_gs_eu2_shown_value "${_val}")" >&2
+        exit 1
+      fi
+      ;;
     tag-replace)
       if [[ -z "${_val}" || "${_val}" != *:* ]]; then
         printf 'env-update: %s:%s: flag tag-replace requires FROM:TO format\n' \
@@ -279,6 +289,7 @@ _gs_eu2_dispatch_flag() {
     skip) _gs_eu2_record_set "${_idx}" skip_reason "${_val}" ;;
     lock) _gs_eu2_record_set "${_idx}" lock_reason "${_val}" ;;
     stale-after) _gs_eu2_record_set "${_idx}" stale_after "${_val}" ;;
+    offset) _gs_eu2_record_set "${_idx}" offset "${_val}" ;;
     tag-filter) _gs_eu2_record_set "${_idx}" tag_filter "${_val}" ;;
     tag-exclude) _gs_eu2_record_set "${_idx}" tag_exclude "${_val}" ;;
     tag-strip-prefix) _gs_eu2_record_set "${_idx}" tag_strip_prefix "${_val}" ;;
@@ -596,6 +607,22 @@ _gs_eu2_parse_env_file() {
             _gs_eu2_dispatch_flag "${_frag}" "${_env_file}" "${_pending_lnum}" "${_idx}"
           done
           IFS="${_old_ifs}"
+
+          # Cross-flag check, after ALL flags are in (flags are position-agnostic,
+          # so neither one can validate against the other from inside dispatch).
+          # (offset:N>0) counts down the STABLE list; on unstable/rc/nightly the
+          # list is prereleases and "the previous rc" is not something anyone
+          # pins. Refused loudly rather than ignored: a flag that silently does
+          # nothing is a can-never-fire check wearing a feature's clothes.
+          local _x_offset _x_channel
+          _x_offset="$(_gs_eu2_record_get "${_idx}" offset)"
+          _x_channel="$(_gs_eu2_record_get "${_idx}" channel)"
+          if [[ -n "${_x_offset}" && "${_x_offset}" != "0" &&
+            -n "${_x_channel}" && "${_x_channel}" != "stable" ]]; then
+            printf 'env-update: %s:%s: (offset:%s) is only defined on the stable channel — it counts distinct STABLE versions from the newest; drop (channel:%s) or the offset\n' \
+              "${_env_file}" "${_pending_lnum}" "${_x_offset}" "${_x_channel}" >&2
+            exit 1
+          fi
         fi
 
         _state="IDLE"

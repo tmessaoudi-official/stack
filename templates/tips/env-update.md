@@ -47,7 +47,7 @@ fetcher types, classifies each update decision, and can apply AUTO decisions bac
 | `quay` | `org/image` | Yes | Yes | No | Paginated (100 tags/page); follows `has_additional` until exhausted |
 | `rubygems` | `gem-name` | Yes | Yes | No | CLI fast path via `gem search` when available; two-endpoint strategy |
 | `sdkman` | `candidate-name` | Yes | No | No | Java: distribution-aware selection; HTTP-first (no CLI) |
-| `sdkmanager` | `component-name` | No | No | No | Always MANUAL; requires `sdkmanager` binary |
+| `sdkmanager` | `component-name` | No | No | Yes (`channel`, `offset`) | Reads Google's repository XML over HTTP — no local binary; classified by decide.sh like any other type |
 | `url` | URL string | No | Yes (some tiers) | Varies | 5-tier strategy; most flexible fetcher |
 | `codeberg` | `owner/repo` | Yes | Yes | No | Gitea API; releases → tags fallback |
 | `ghcr` | `owner/image` | Yes | Yes | No for public (anonymous token); GITHUB_TOKEN for private | OCI distribution API; single request (n=1000 cap) |
@@ -193,6 +193,7 @@ flags. Flags are **position-agnostic** — they can appear anywhere in the annot
 | Flag | Record field | Description |
 |------|-------------|---|
 | `(channel:VALUE)` | `channel` | Select versions from a specific release channel. Values: `stable` (default), `unstable` (any pre-release), `rc`, `beta`, `alpha`, `nightly`, or any comma-separated combination like `rc,beta`. |
+| `(offset:N)` | `offset` | **Rolling window — the N-th newest instead of the newest.** `0` = latest (the default, same as no flag), `1` = latest-1, `2` = latest-2 … counted over DISTINCT versions (a tag present as both `1.2.0` and `v1.2.0` is one step) on the **stable** list only: pair it with `(channel:unstable)`, `rc`, `nightly` or any other non-stable channel and the parser refuses the annotation — an rc list has no meaningful "previous" entry. Past the end of what upstream serves → no proposal and an `offset N reaches past the M distinct stable version(s)` message, never "the oldest one". Use it for a set of vars that must always cover the K latest releases: the android platforms and build-tools windows in `.env` are three records each on the same `TYPE:ID`, with `(offset:2)`, `(offset:1)` and none. **The offset is part of the cache key**, so the three do not collide. Honoured by `sdkmanager` (row 41); the other fetchers accept the flag through the shared selector but have not been exercised with it. Note the ordinary decide.sh rules still apply on top: a proposal that crosses a major boundary is `HOLD` until `--force-hold` / `--force-auto`, exactly as for any other record. |
 | `(stale-after:Nd)` | `stale_after` | **Freshness contract.** Declares that this source's newest version should never be more than N whole days old, and raises `ERROR` when it is. Opt-in, and only meaningful for a version scheme that carries its own date (`…nightly20260825abc123`) — a stable pin sitting still for months is normal, not stale. See "Freshness contract" below. |
 
 **Freshness contract — `(stale-after:Nd)`:**
@@ -481,7 +482,7 @@ The boundary is deliberate, and the other side of it still yields `SKIP` + exit 
 | Stays `SKIP` | Why |
 |---|---|
 | a `fetch-extract` pattern or `fetch-json` jq path that matches nothing on a **200** | the upstream is reachable and its shape changed — `(stale-after:Nd)` is the guard for that |
-| `sdkman not installed`, `sdkmanager not found` | a missing local toolchain must never fail someone else's run |
+| `sdkman not installed` | a missing local toolchain must never fail someone else's run (`sdkmanager` no longer has this case — it reads Google's repository XML and needs no local toolchain, row 41) |
 | `url-probe` finding no accessible path | a probe expects most candidates to 404 and cannot distinguish that from a network outage |
 | tier 3 (`urls:` → GitHub) failing | a fallback chain by design: it tries the next `urls:` entry, then the directory listing |
 | `no versions matched filters` | the filters are the annotation author's own constraint |
@@ -1289,43 +1290,45 @@ GLOBAL_STACK_GRADLE_VERSION=8.12.1
 
 ### 7.9 sdkmanager
 
-**Identifier format:** Android SDK component name (e.g. `platform-tools`, `build-tools`, `ndk`).
+**Identifier format:** Android SDK component name (e.g. `platform-tools`, `build-tools`, `ndk`, `platforms`).
 
-**Strategy:**
-1. Checks `_GS_EU2_SDKMANAGER_CMD_FIXTURE` env var (test seam — cats that file).
-2. Locates `sdkmanager` binary: PATH → `${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager` → `${ANDROID_HOME}/cmdline-tools/bin/sdkmanager` → `${ANDROID_HOME}/tools/bin/sdkmanager`.
-3. Runs `sdkmanager --sdk_root=... --list` and parses output.
+**Strategy (row 41, 2026-09-12 — no local binary):**
+1. GET `https://dl.google.com/android/repository/repository2-3.xml` — the document `sdkmanager --list` / `android sdk list` download before printing anything (override: `_GS_EU2_SDKMANAGER_REPO_URL`; test seam: the ordinary `_GS_EU2_HTTP_FIXTURE_DIR`, fixture name `dl.google.com_android_repository_repository2-3.xml`). One GET per run — the HTTP layer memoises it across the 14 live records.
+2. Parse every `<remotePackage path="…">` whose path **is** the component (bare, single-instance ids: `platform-tools`, `ndk-bundle`, `emulator`) or **starts with** `component;` (versioned ids: `build-tools;37.0.0`, `ndk;30.0.…`, `platforms;android-37.2`). `obsolete="true"` packages are skipped, as `sdkmanager --list` skips them without `--include_obsolete`.
+3. Channel selection and `(offset:N)` → proposed.
 
-> **`sdkmanager` is DEPRECATED upstream (noted 2026-09-11) — this fetcher is NOT broken.**
-> The binary now prints *"The SDK Manager CLI tool (sdkmanager) is deprecated. Android CLI
-> will be used instead."* and is a thin **shim over `android sdk`**, already emitting the new
-> slash-form package ids. The fetcher still resolves correctly through the shim — verified by
-> feeding stale pins via `--env-file` and getting `30.0.0 → 37.0.0`. The equivalent direct
-> call is `android --sdk="${ANDROID_HOME}" sdk list`. **`--sdk` replaces `--sdk_root=` but
-> is a GLOBAL option: it goes BEFORE the subcommand.** Written after it — `android sdk list
-> --sdk=…` — the CLI answers `Unknown option: '--sdk=…'` and exits 2, for `sdk install` just
-> as for `sdk list` [measured against `android 1.0.15985488`, 2026-09-11]. Appending
-> `--all --beta` widens the listing. The container-side installer was
-> migrated off `sdkmanager` in `b2ae4d1`; this fetcher deliberately was not, because the shim
-> keeps working and the output parsing below is written against `sdkmanager`'s two formats.
-> Revisit if a future SDK release removes the shim.
+> **Why it moved off the binary.** The old fetcher shelled out to a `sdkmanager` found on the
+> `tools/` volume, so it resolved NOTHING on a machine with the stack down (`make hard-restart`
+> wipes `tools/`) and could not parse `platforms;android-<LEVEL>` at all — its regex wanted
+> `platforms;<digit>` — which is why the three API-level vars carried a `(lock:)` for a year
+> claiming the fetcher "returns the platform revision". The `sdkmanager` binary itself is
+> deprecated upstream (a shim over `android sdk`, whose `--sdk` is a GLOBAL option that goes
+> BEFORE the subcommand — see the setup script and the CLAUDE.md gotcha); none of that matters
+> to the fetcher any more.
 
-**Always MANUAL.** The fetcher sets `manual=true` unconditionally. No `--apply` will ever write an sdkmanager variable. Reason: sdkmanager versions are platform/tool-dependent and require explicit human decision.
+**Version rendering:**
+- versioned path → the part after `;`, verbatim (`build-tools;37.0.0-rc2` → `37.0.0-rc2`). For `platforms` the `android-` prefix is stripped so the value IS the API level (`platforms;android-37.2` → `37.2`), which is what `global-stack-android-setup.sh` re-prefixes. Extension SDKs (`android-36-ext18`) are a different product and are dropped; codenames (`android-CANARY`, `android-UpsideDownCake`) have no numeric shape and are dropped.
+- bare path → `<revision>` `major[.minor[.micro]]`, plus `-rcN` when `<preview>N` is set (Google's own convention for the versioned ids).
+- a package served in a **non-stable channel** (`channel-1` beta, `-2` dev, `-3` canary) with no prerelease marker of its own gets `-<channel name>` (`36.6.11-dev`) so the stable pick cannot land on it. Only the bare ids need this — a dev `emulator` carries a plain revision. The channel tag does **not** mark prereleases in general: `build-tools;37.0.0-rc2` sits in `channel-0`, so selection keys on the version *string*, not the channel.
 
-**Output parsing:** Handles two formats from `sdkmanager --list`:
-- `COMPONENT | VERSION | ...` (bare name, single version)
-- `COMPONENT;VERSION | VERSION | ...` (component;version pairs for tools like `build-tools` and `ndk`)
+**Classification is decide.sh's, like every other type** — the fetcher never sets `manual`. (The "Always MANUAL" this section used to claim had been false since the fetcher was written: test t33e/t46e pin the opposite.) A major crossing is `HOLD` per the ordinary rule 7 and needs `--force-hold`.
 
-**No major hint, no tag flags, no channel.**
+**Channel:** honoured (`stable` default; `unstable` picks the highest rc/beta unless a stable has surpassed it). **`(offset:N)`:** honoured — see the flag table. **No major hint, no tag flags.**
 
-**When not found:** Sets `error_message` and returns (no proposed version) → SKIP decision. Not ERROR — the binary may simply not be installed on this machine.
+**Not found vs. unreachable:** repository unreachable → `ERROR` (a dead upstream must fail `--check`, §119). Component absent from the repository → `error_message` only → `SKIP` via decide.sh; the three `(lock:)`ed system-images records (tag / playstore tag / abi) name things this document does not carry and must keep reading as lock + SKIP, not as a failed run.
 
-**Cache key:** `sdkmanager:component:channel`
+**Cache key:** `sdkmanager:component:channel:offN` — the offset is part of it, or three `sdkmanager:platforms` records would share one entry.
 
-**Example annotation:**
+**Example annotations — the rolling windows in `.env`:**
 ```bash
-# @todo env-update sdkmanager:platform-tools 35.0.2
-GLOBAL_STACK_ANDROID_PLATFORM_TOOLS_VERSION=35.0.2
+# @todo env-update (offset:2) sdkmanager:platforms 37.0
+GLOBAL_STACK_ANDROID_API_LEVEL_1=37.0
+# @todo env-update (offset:1) sdkmanager:platforms 37.1
+GLOBAL_STACK_ANDROID_API_LEVEL_2=37.1
+# @todo env-update sdkmanager:platforms 37.2
+GLOBAL_STACK_ANDROID_API_LEVEL_3=37.2
+# @todo env-update sdkmanager:platform-tools 37.0.1
+GLOBAL_STACK_ANDROID_PLATFORM_TOOLS_VERSION=37.0.1
 ```
 
 ---
@@ -1905,7 +1908,8 @@ These do not abort the tool — they set `decision=ERROR` and move to the next r
 | All tags filtered out (major-pin, tag-filter, etc.) and current version is pre-release | `no tags matched filters for TYPE:IDENTIFIER` |
 | Channel selection returned nothing and current version is pre-release | `channel selection returned nothing for TYPE:IDENTIFIER` |
 | sdkman not installed | `sdkman not installed (SDKMAN_DIR=PATH)` |
-| sdkmanager not found | `sdkmanager not found` |
+| sdkmanager: component absent from the repository XML | `no versions found for sdkmanager:COMPONENT in the repository XML` |
+| sdkmanager: `(offset:N)` past the end of the stable list | `offset N reaches past the M distinct stable version(s) upstream serves for sdkmanager:COMPONENT` |
 
 > **Note:** When the `github` fetcher hits a "no tags matched" or "channel selection returned nothing" condition and the current version is **stable** (not pre-release), it escalates to `ERROR` instead of `SKIP`. The reasoning: a stable current version proves stable releases exist — failing to find any is a fetcher failure, not a legitimate no-stable-releases scenario.
 | url: no tier matched | `url: no extraction strategy matched for URL` |

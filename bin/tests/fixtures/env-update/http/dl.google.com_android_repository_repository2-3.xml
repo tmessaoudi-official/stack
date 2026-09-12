@@ -1,0 +1,261 @@
+<?xml version="1.0" ?>
+<sdk:sdk-repository xmlns:common="http://schemas.android.com/repository/android/common/02" xmlns:sdk="http://schemas.android.com/sdk/android/repo/repository2/03" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <license id="android-sdk-license" type="text">fixture</license>
+  <channel id="channel-0">stable</channel>
+  <channel id="channel-1">beta</channel>
+  <channel id="channel-2">dev</channel>
+  <channel id="channel-3">canary</channel>
+  <!-- Trimmed excerpt of https://dl.google.com/android/repository/repository2-3.xml
+       (2026-09-12). Shapes kept: bare single-instance ids whose version lives ONLY in
+       <revision> (platform-tools, emulator, ndk-bundle), versioned ids whose version
+       lives in the path (build-tools, ndk, cmdline-tools), the platforms family with
+       its android- prefix, extension SDKs, codenames, a beta with a MISLEADING
+       <api-level>, an rc in the STABLE channel, and one bare id served in two
+       channels. -->
+  <remotePackage path="platform-tools">
+    <type-details xsi:type="sdk:genericDetailsType"/>
+    <revision>
+      <major>37</major>
+      <minor>0</minor>
+      <micro>1</micro>
+    </revision>
+    <display-name>Android SDK Platform-Tools</display-name>
+    <channelRef ref="channel-0"/>
+  </remotePackage>
+  <remotePackage path="emulator">
+    <type-details xsi:type="sdk:genericDetailsType"/>
+    <revision>
+      <major>36</major>
+      <minor>1</minor>
+      <micro>9</micro>
+    </revision>
+    <display-name>Android Emulator</display-name>
+    <channelRef ref="channel-0"/>
+  </remotePackage>
+  <remotePackage path="emulator">
+    <type-details xsi:type="sdk:genericDetailsType"/>
+    <revision>
+      <major>36</major>
+      <minor>6</minor>
+      <micro>11</micro>
+    </revision>
+    <display-name>Android Emulator</display-name>
+    <channelRef ref="channel-2"/>
+  </remotePackage>
+  <remotePackage path="ndk-bundle">
+    <type-details xsi:type="sdk:genericDetailsType"/>
+    <revision>
+      <major>22</major>
+      <minor>1</minor>
+      <micro>7171670</micro>
+    </revision>
+    <display-name>NDK</display-name>
+    <channelRef ref="channel-0"/>
+  </remotePackage>
+  <remotePackage path="ndk-bundle">
+    <type-details xsi:type="sdk:genericDetailsType"/>
+    <revision>
+      <major>23</major>
+      <minor>0</minor>
+      <micro>7344513</micro>
+      <preview>4</preview>
+    </revision>
+    <display-name>NDK</display-name>
+    <channelRef ref="channel-1"/>
+  </remotePackage>
+  <remotePackage path="cmdline-tools;23.0">
+    <type-details xsi:type="sdk:genericDetailsType"/>
+    <revision>
+      <major>23</major>
+      <minor>0</minor>
+    </revision>
+    <display-name>Android SDK Command-line Tools</display-name>
+    <channelRef ref="channel-0"/>
+  </remotePackage>
+  <remotePackage path="ndk;29.0.14206865">
+    <type-details xsi:type="sdk:genericDetailsType"/>
+    <revision>
+      <major>29</major>
+      <minor>0</minor>
+      <micro>14206865</micro>
+    </revision>
+    <display-name>NDK (Side by side) 29.0.14206865</display-name>
+    <channelRef ref="channel-0"/>
+  </remotePackage>
+  <remotePackage path="ndk;30.0.16248370">
+    <type-details xsi:type="sdk:genericDetailsType"/>
+    <revision>
+      <major>30</major>
+      <minor>0</minor>
+      <micro>16248370</micro>
+    </revision>
+    <display-name>NDK (Side by side) 30.0.16248370</display-name>
+    <channelRef ref="channel-0"/>
+  </remotePackage>
+  <remotePackage path="build-tools;35.0.1">
+    <type-details xsi:type="sdk:genericDetailsType"/>
+    <revision>
+      <major>35</major>
+      <minor>0</minor>
+      <micro>1</micro>
+    </revision>
+    <display-name>Android SDK Build-Tools 35.0.1</display-name>
+    <channelRef ref="channel-0"/>
+  </remotePackage>
+  <remotePackage path="build-tools;36.0.0">
+    <type-details xsi:type="sdk:genericDetailsType"/>
+    <revision>
+      <major>36</major>
+      <minor>0</minor>
+      <micro>0</micro>
+    </revision>
+    <display-name>Android SDK Build-Tools 36</display-name>
+    <channelRef ref="channel-0"/>
+  </remotePackage>
+  <remotePackage path="build-tools;36.1.0">
+    <type-details xsi:type="sdk:genericDetailsType"/>
+    <revision>
+      <major>36</major>
+      <minor>1</minor>
+      <micro>0</micro>
+    </revision>
+    <display-name>Android SDK Build-Tools 36.1</display-name>
+    <channelRef ref="channel-0"/>
+  </remotePackage>
+  <remotePackage path="build-tools;37.0.0">
+    <type-details xsi:type="sdk:genericDetailsType"/>
+    <revision>
+      <major>37</major>
+      <minor>0</minor>
+      <micro>0</micro>
+    </revision>
+    <display-name>Android SDK Build-Tools 37</display-name>
+    <channelRef ref="channel-0"/>
+  </remotePackage>
+  <remotePackage path="build-tools;37.0.0-rc1">
+    <type-details xsi:type="sdk:genericDetailsType"/>
+    <revision>
+      <major>37</major>
+      <minor>0</minor>
+      <micro>0</micro>
+      <preview>1</preview>
+    </revision>
+    <display-name>Android SDK Build-Tools 37-rc1</display-name>
+    <channelRef ref="channel-0"/>
+  </remotePackage>
+  <remotePackage path="build-tools;37.0.0-rc2">
+    <type-details xsi:type="sdk:genericDetailsType"/>
+    <revision>
+      <major>37</major>
+      <minor>0</minor>
+      <micro>0</micro>
+      <preview>2</preview>
+    </revision>
+    <display-name>Android SDK Build-Tools 37-rc2</display-name>
+    <channelRef ref="channel-0"/>
+  </remotePackage>
+  <remotePackage path="platforms;android-36">
+    <type-details xsi:type="sdk:platformDetailsType">
+      <api-level>36</api-level>
+    </type-details>
+    <revision>
+      <major>2</major>
+    </revision>
+    <display-name>Android SDK Platform 36</display-name>
+    <channelRef ref="channel-0"/>
+  </remotePackage>
+  <remotePackage path="platforms;android-36-ext18">
+    <type-details xsi:type="sdk:platformDetailsType">
+      <api-level>36</api-level>
+      <extension-level>18</extension-level>
+    </type-details>
+    <revision>
+      <major>1</major>
+    </revision>
+    <display-name>Android SDK Platform 36-ext18</display-name>
+    <channelRef ref="channel-0"/>
+  </remotePackage>
+  <remotePackage path="platforms;android-36.1">
+    <type-details xsi:type="sdk:platformDetailsType">
+      <api-level>36.1</api-level>
+    </type-details>
+    <revision>
+      <major>1</major>
+    </revision>
+    <display-name>Android SDK Platform 36.1</display-name>
+    <channelRef ref="channel-0"/>
+  </remotePackage>
+  <remotePackage path="platforms;android-37.0">
+    <type-details xsi:type="sdk:platformDetailsType">
+      <api-level>37.0</api-level>
+    </type-details>
+    <revision>
+      <major>2</major>
+    </revision>
+    <display-name>Android SDK Platform 37.0</display-name>
+    <channelRef ref="channel-0"/>
+  </remotePackage>
+  <remotePackage path="platforms;android-37.1">
+    <type-details xsi:type="sdk:platformDetailsType">
+      <api-level>37.1</api-level>
+    </type-details>
+    <revision>
+      <major>1</major>
+    </revision>
+    <display-name>Android SDK Platform 37.1</display-name>
+    <channelRef ref="channel-0"/>
+  </remotePackage>
+  <remotePackage path="platforms;android-37.2">
+    <type-details xsi:type="sdk:platformDetailsType">
+      <api-level>37.2</api-level>
+    </type-details>
+    <revision>
+      <major>1</major>
+    </revision>
+    <display-name>Android SDK Platform 37.2</display-name>
+    <channelRef ref="channel-0"/>
+  </remotePackage>
+  <remotePackage path="platforms;android-37.2-beta1">
+    <type-details xsi:type="sdk:platformDetailsType">
+      <api-level>37.1</api-level>
+      <codename>CinnamonBun</codename>
+    </type-details>
+    <revision>
+      <major>1</major>
+    </revision>
+    <display-name>Android SDK Platform 37.2-beta1</display-name>
+    <channelRef ref="channel-0"/>
+  </remotePackage>
+  <remotePackage obsolete="true" path="platforms;android-99">
+    <type-details xsi:type="sdk:platformDetailsType">
+      <api-level>99</api-level>
+    </type-details>
+    <revision>
+      <major>1</major>
+    </revision>
+    <display-name>Android SDK Platform 99 (obsolete — must never win; the attribute precedes path= on this line, as upstream writes it)</display-name>
+    <channelRef ref="channel-0"/>
+  </remotePackage>
+  <remotePackage path="platforms;android-CANARY">
+    <type-details xsi:type="sdk:platformDetailsType">
+      <api-level>37.2</api-level>
+      <codename>CANARY</codename>
+    </type-details>
+    <revision>
+      <major>1</major>
+    </revision>
+    <display-name>Android SDK Platform CANARY</display-name>
+    <channelRef ref="channel-3"/>
+  </remotePackage>
+  <remotePackage path="platforms;android-UpsideDownCake">
+    <type-details xsi:type="sdk:platformDetailsType">
+      <api-level>33</api-level>
+      <codename>UpsideDownCake</codename>
+    </type-details>
+    <revision>
+      <major>1</major>
+    </revision>
+    <display-name>Android SDK Platform UpsideDownCake</display-name>
+    <channelRef ref="channel-0"/>
+  </remotePackage>
+</sdk:sdk-repository>

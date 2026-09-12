@@ -2,7 +2,8 @@
 # channel.sh — stable/rc/beta/unstable channel selection and tag filtering.
 #
 # Exports:   _gs_eu2_version_matches_channel  _gs_eu2_filter_versions_by_channel
-#            _gs_eu2_channel_select_best
+#            _gs_eu2_channel_select_best  _gs_eu2_channel_nth_newest
+#            _gs_eu2_channel_count_stable
 # Sources:   core/semver.sh
 # Deps:      bash 4.3+ (associative array-free; portable)
 # Env:       none
@@ -62,12 +63,40 @@ _gs_eu2_filter_versions_by_channel() {
   done <<< "${_vers}"
 }
 
+# _gs_eu2_channel_count_stable — how many DISTINCT stable versions a list holds.
+#
+# Args:    $1 versions — newline-separated version strings
+# Prints:  the count (0 when none) — used to word the "offset past the end" error
+# Returns: 0 always
+_gs_eu2_channel_count_stable() {
+  local _all="${1}" _v
+  local _stables=()
+  while IFS= read -r _v; do
+    [[ -z "${_v}" ]] && continue
+    [[ "${_v}" =~ ^v?[0-9] ]] || continue
+    _gs_eu2_is_prerelease "${_v}" && continue
+    _stables+=("${_v}")
+  done <<< "${_all}"
+  if [[ ${#_stables[@]} -eq 0 ]]; then
+    printf '0\n'
+    return 0
+  fi
+  printf '%s\n' "${_stables[@]}" \
+    | awk 'NF { n=$0; sub(/^v/,"",n); print n }' | sort -uV | grep -c . || true
+}
+
 # _gs_eu2_channel_select_best — pick the best version from a list given a channel.
 #
 # Args:    $1 versions — newline-separated list of version strings
 #          $2 channel  — channel qualifier (empty/"stable" → best stable only)
+#          $3 offset   — (optional, default 0) the N-th newest DISTINCT version
+#                        instead of the newest: 0 = latest, 1 = latest-1, …
+#                        Honoured on the stable channel and the non-numeric
+#                        fallback only — parse.sh refuses (offset:N>0) with any
+#                        other (channel:…), so the prerelease branches never see it.
 # Reads:   nothing
-# Prints:  selected version string; nothing if list is empty or no match for channel
+# Prints:  selected version string; nothing if list is empty, no match for channel,
+#          or the offset reaches past the end of the list
 # Returns: 0 always
 #
 # Sort strategy: tags are sorted with awk (strip v-prefix) + sort -V to avoid
@@ -78,8 +107,31 @@ _gs_eu2_filter_versions_by_channel() {
 # Nightly: only tags containing "nightly" literally.
 # Other channels (rc, beta, …): highest tag matching qualifier; falls back to stable
 #   if no match, but always promotes to stable if stable surpassed the channel match.
+# _gs_eu2_channel_nth_newest — the N-th newest DISTINCT version of a list (row 41).
+#
+# Args:    $1 list — newline-separated version strings (already channel-filtered)
+#          $2 n    — 0 = newest, 1 = the one below it, … (default 0)
+# Prints:  the selected ORIGINAL string (v-prefix kept as written); nothing when
+#          the list holds n or fewer distinct versions — past the end is "no
+#          proposal", never "the oldest one", so a window that outruns upstream
+#          surfaces as an error in the fetcher instead of a silent wrong pin
+# Returns: 0 always
+_gs_eu2_channel_nth_newest() {
+  local _list="${1}" _n="${2:-0}"
+  [[ -z "${_list}" ]] && return 0
+  local _sorted _count
+  # v-stripped key in col 1 (see the sort note in _gs_eu2_channel_select_best),
+  # original string in col 2; -u on the KEY makes 1.2.0 and v1.2.0 one entry.
+  _sorted="$(printf '%s\n' "${_list}" \
+    | awk 'NF { n=$0; sub(/^v/,"",n); printf "%s\t%s\n", n, $0 }' \
+    | sort -t $'\t' -k1,1V -u)"
+  _count="$(printf '%s\n' "${_sorted}" | grep -c . || true)"
+  [[ "${_count}" -le "${_n}" ]] && return 0
+  printf '%s\n' "${_sorted}" | sed -n "$((_count - _n))p" | cut -f2-
+}
+
 _gs_eu2_channel_select_best() {
-  local _all="${1}" _chan="${2:-}"
+  local _all="${1}" _chan="${2:-}" _off="${3:-0}"
   [[ -z "${_all}" ]] && return 0
 
   local _stables=() _pres=() _v
@@ -111,13 +163,19 @@ _gs_eu2_channel_select_best() {
       _fb+=("${_v}")
     done <<< "${_all}"
     if [[ ${#_fb[@]} -gt 0 ]]; then
-      printf '%s\n' "$(printf '%s\n' "${_fb[@]}" | sort -V | tail -1)"
+      _gs_eu2_channel_nth_newest "$(printf '%s\n' "${_fb[@]}")" "${_off}"
     fi
     return 0
   fi
 
-  # Default/stable channel: never fall back to prerelease — return nothing if no stable exists
+  # Default/stable channel: never fall back to prerelease — return nothing if no stable exists.
+  # (offset:N) walks N distinct stable versions down from the newest; past the end → nothing.
   if [[ -z "${_chan}" || "${_chan}" == "stable" ]]; then
+    if [[ "${_off}" -gt 0 ]]; then
+      [[ ${#_stables[@]} -eq 0 ]] && return 0
+      _gs_eu2_channel_nth_newest "$(printf '%s\n' "${_stables[@]}")" "${_off}"
+      return 0
+    fi
     [[ -z "${_hs}" ]] && return 0
     printf '%s\n' "${_hs}"
     return 0

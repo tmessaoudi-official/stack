@@ -3058,6 +3058,11 @@ t "t32l: sdkman Java — preferred dist absent upstream SKIPs loudly, never swap
 # ═══════════════════════════════════════════════════════════════════════════
 section "33 — sdkmanager fetcher"
 
+# The fetcher reads Google's repository XML over HTTP (row 41) — it no longer
+# shells out to a local `sdkmanager` binary, which lived on the tools/ volume and
+# so could resolve nothing on a machine with the stack down. The fixture is a
+# trimmed excerpt of the real repository2-3.xml, served through the ordinary
+# _GS_EU2_HTTP_FIXTURE_DIR seam (URL → dl.google.com_android_repository_repository2-3.xml).
 _SDKMGR_LIBS="
 source '${_GS_EU2_LIB}/config/defaults.sh'
 source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
@@ -3068,80 +3073,68 @@ source '${_GS_EU2_LIB}/core/tag_flags.sh'
 source '${_GS_EU2_LIB}/core/cache.sh'
 source '${_GS_EU2_LIB}/http/curl.sh'
 source '${_GS_EU2_LIB}/fetchers/sdkmanager.sh'
-export _GS_EU2_SDKMANAGER_CMD_FIXTURE='${FIXTURES}/sdkmanager-list.txt'
+export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
 export _GS_EU2_CACHE_DIR=\${TMP_DIR}/sdkmgr_cache
-"
-
-t "t33a: happy path — platform-tools version from fixture" bash -c "
-    ${_SDKMGR_LIBS}
+_sdk_rec() { # \$1 identifier  \$2 current  [\$3 channel]  [\$4 offset]
     _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
     _gs_eu2_record_set \$idx type            'sdkmanager'
-    _gs_eu2_record_set \$idx identifier      'platform-tools'
-    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_PLATFORM_TOOLS_VERSION'
-    _gs_eu2_record_set \$idx current_version '37.0.0'
+    _gs_eu2_record_set \$idx identifier      \"\$1\"
+    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_T33'
+    _gs_eu2_record_set \$idx current_version \"\$2\"
+    [[ -n \"\${3:-}\" ]] && _gs_eu2_record_set \$idx channel \"\$3\"
+    [[ -n \"\${4:-}\" ]] && _gs_eu2_record_set \$idx offset  \"\$4\"
+    return 0
+}
+"
+
+t "t33a: bare id — platform-tools version comes from <revision>, exactly 37.0.1" bash -c "
+    ${_SDKMGR_LIBS}
+    _sdk_rec platform-tools 37.0.0
     _gs_eu2_fetch_sdkmanager \$idx
     val=\$(_gs_eu2_record_get \$idx proposed_version)
-    [[ -n \"\$val\" ]] || { echo 'proposed_version is empty'; echo FAIL; exit 0; }
+    [[ \"\$val\" == '37.0.1' ]] || { echo \"got: '\$val'\"; echo FAIL; exit 0; }
     echo PASS
 "
 
-t "t33b: sdkmanager not found — error_message set, no crash, proposed_version empty" bash -c "
+t "t33b: repository unreachable — decision ERROR, error_message set, proposed empty" bash -c "
     ${_SDKMGR_LIBS}
-    # Override fixture + cache dir to isolate from t33a's cached result
-    # Point ANDROID_HOME to a non-existent path so the binary search finds nothing
-    export _GS_EU2_SDKMANAGER_CMD_FIXTURE=''
+    export _GS_EU2_HTTP_FIXTURE_DIR=\${TMP_DIR}/sdkmgr_b_nofixtures
+    mkdir -p \"\$_GS_EU2_HTTP_FIXTURE_DIR\"
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/sdkmgr_b_cache
-    export PATH='/usr/bin:/bin'
-    export ANDROID_HOME='/tmp/no-such-android-sdk-xyzzy'
-    export GLOBAL_STACK_ANDROID_HOME='/tmp/no-such-android-sdk-xyzzy'
-    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
-    _gs_eu2_record_set \$idx type            'sdkmanager'
-    _gs_eu2_record_set \$idx identifier      'platform-tools'
-    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_PLATFORM_TOOLS_VERSION'
-    _gs_eu2_record_set \$idx current_version '37.0.0'
+    _sdk_rec platform-tools 37.0.0
     _gs_eu2_fetch_sdkmanager \$idx 2>/dev/null || true
     err=\$(_gs_eu2_record_get \$idx error_message)
+    dec=\$(_gs_eu2_record_get \$idx decision)
     proposed=\$(_gs_eu2_record_get \$idx proposed_version)
-    [[ -n \"\$err\" ]] || { echo 'expected error_message when sdkmanager not found'; echo FAIL; exit 0; }
+    [[ \"\$dec\" == 'ERROR' ]] || { echo \"decision '\$dec', want ERROR — a dead upstream must fail the run\"; echo FAIL; exit 0; }
+    [[ -n \"\$err\" ]] || { echo 'expected error_message on transport failure'; echo FAIL; exit 0; }
     [[ -z \"\$proposed\" ]] || { echo \"proposed_version should be empty: '\$proposed'\"; echo FAIL; exit 0; }
     echo PASS
 "
 
-t "t33c: CMD_FIXTURE seam — reads fixture file instead of running real sdkmanager" bash -c "
+t "t33c: build-tools stable — 37.0.0, not the rc2 that sits in the STABLE channel" bash -c "
     ${_SDKMGR_LIBS}
-    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
-    _gs_eu2_record_set \$idx type            'sdkmanager'
-    _gs_eu2_record_set \$idx identifier      'build-tools'
-    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_BUILD_TOOLS_VERSION'
-    _gs_eu2_record_set \$idx current_version '37.0.0-rc2'
+    _sdk_rec build-tools 36.1.0
     _gs_eu2_fetch_sdkmanager \$idx
     val=\$(_gs_eu2_record_get \$idx proposed_version)
-    # fixture has build-tools;37.0.0, ;37.0.0-rc1, ;37.0.0-rc2 — stable channel picks 37.0.0
-    [[ -n \"\$val\" ]] || { echo 'proposed_version is empty'; echo FAIL; exit 0; }
+    # build-tools;37.0.0-rc2 carries channelRef channel-0: the channel tag does NOT
+    # mark prereleases upstream, the version string does. Selection must key on it.
+    [[ \"\$val\" == '37.0.0' ]] || { echo \"got: '\$val'\"; echo FAIL; exit 0; }
     echo PASS
 "
 
-t "t33d: channel:unstable — build-tools picks rc version" bash -c "
+t "t33d: channel:unstable — stable 37.0.0 has surpassed 37.0.0-rc2, so stable wins" bash -c "
     ${_SDKMGR_LIBS}
-    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
-    _gs_eu2_record_set \$idx type            'sdkmanager'
-    _gs_eu2_record_set \$idx identifier      'build-tools'
-    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_BUILD_TOOLS_VERSION'
-    _gs_eu2_record_set \$idx current_version '37.0.0-rc2'
-    _gs_eu2_record_set \$idx channel         'unstable'
+    _sdk_rec build-tools 37.0.0-rc2 unstable
     _gs_eu2_fetch_sdkmanager \$idx
     val=\$(_gs_eu2_record_get \$idx proposed_version)
-    [[ -n \"\$val\" ]] || { echo 'proposed_version is empty for unstable channel'; echo FAIL; exit 0; }
+    [[ \"\$val\" == '37.0.0' ]] || { echo \"got: '\$val'\"; echo FAIL; exit 0; }
     echo PASS
 "
 
 t "t33e: sdkmanager does NOT set manual — decide.sh owns classification via version comparison" bash -c "
     ${_SDKMGR_LIBS}
-    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
-    _gs_eu2_record_set \$idx type            'sdkmanager'
-    _gs_eu2_record_set \$idx identifier      'platform-tools'
-    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_PLATFORM_TOOLS_VERSION'
-    _gs_eu2_record_set \$idx current_version '37.0.0'
+    _sdk_rec platform-tools 37.0.0
     _gs_eu2_fetch_sdkmanager \$idx
     manual=\$(_gs_eu2_record_get \$idx manual)
     dec=\$(_gs_eu2_record_get \$idx decision)
@@ -3151,27 +3144,20 @@ t "t33e: sdkmanager does NOT set manual — decide.sh owns classification via ve
     echo PASS
 "
 
-t "t33f: NDK component parsed from component;VERSION format" bash -c "
+t "t33f: versioned id — ndk;VERSION resolves from the path, exactly 30.0.16248370" bash -c "
     ${_SDKMGR_LIBS}
-    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
-    _gs_eu2_record_set \$idx type            'sdkmanager'
-    _gs_eu2_record_set \$idx identifier      'ndk'
-    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_NDK_VERSION'
-    _gs_eu2_record_set \$idx current_version '29.0.14206865'
+    _sdk_rec ndk 29.0.14206865
     _gs_eu2_fetch_sdkmanager \$idx
     val=\$(_gs_eu2_record_get \$idx proposed_version)
-    [[ -n \"\$val\" ]] || { echo 'NDK version not found in fixture'; echo FAIL; exit 0; }
+    [[ \"\$val\" == '30.0.16248370' ]] || { echo \"got: '\$val'\"; echo FAIL; exit 0; }
     echo PASS
 "
 
-t "t33g: cache hit skips cmd fixture (proposed_version from cache)" bash -c "
+t "t33g: cache hit — key carries the offset (sdkmanager:ID:CHANNEL:offN)" bash -c "
     ${_SDKMGR_LIBS}
-    _gs_eu2_cache_write 'sdkmanager:platform-tools:' '99.0.0-CACHED'
-    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
-    _gs_eu2_record_set \$idx type            'sdkmanager'
-    _gs_eu2_record_set \$idx identifier      'platform-tools'
-    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_PLATFORM_TOOLS_VERSION'
-    _gs_eu2_record_set \$idx current_version '37.0.0'
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/sdkmgr_g_cache
+    _gs_eu2_cache_write 'sdkmanager:platform-tools::off0' '99.0.0-CACHED'
+    _sdk_rec platform-tools 37.0.0
     _gs_eu2_fetch_sdkmanager \$idx
     val=\$(_gs_eu2_record_get \$idx proposed_version)
     [[ \"\$val\" == '99.0.0-CACHED' ]] || { echo \"cache not used: '\$val'\"; echo FAIL; exit 0; }
@@ -3186,11 +3172,7 @@ t "t33h: sdkmanager without (manual) annotation produces AUTO (not MANUAL) via f
     ${_SDKMGR_LIBS}
     source '${_GS_EU2_LIB}/core/decide.sh'
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/sdkmgr_h_cache
-    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
-    _gs_eu2_record_set \$idx type            'sdkmanager'
-    _gs_eu2_record_set \$idx identifier      'platform-tools'
-    _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_PLATFORM_TOOLS_VERSION'
-    _gs_eu2_record_set \$idx current_version '36.0.0'
+    _sdk_rec platform-tools 36.0.0
     # No (manual) annotation — manual field stays empty
     _gs_eu2_fetch_sdkmanager \$idx
     proposed=\$(_gs_eu2_record_get \$idx proposed_version)
@@ -3202,6 +3184,113 @@ t "t33h: sdkmanager without (manual) annotation produces AUTO (not MANUAL) via f
     gate=''; [[ \"\$override\" == 'true' || \"\$manual\" == 'true' ]] && gate='true'
     decision=\$(_gs_eu2_classify_decision '36.0.0' \"\$proposed\" \"\$gate\" \"\$major\")
     [[ \"\$decision\" != 'MANUAL' ]] || { echo \"got MANUAL without (manual) annotation — add (manual) to annotation instead\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ── Row 41: platforms + (offset:N) ─────────────────────────────────────────
+# `platforms;android-<LEVEL>` never matched the old `platforms;[0-9]` regex, which
+# is why the three API-level vars were (lock:)ed. The level is read out of the
+# path with the `android-` prefix stripped. Betas carry the suffix in the path,
+# codenames (CANARY, UpsideDownCake) have no numeric shape, and extension SDKs
+# (`36-ext18`) are a different product — none of them may win the stable pick.
+t "t33i: platforms — level from the path; beta, codename and -ext excluded → 37.2" bash -c "
+    ${_SDKMGR_LIBS}
+    _sdk_rec platforms 37.1
+    _gs_eu2_fetch_sdkmanager \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$val\" == '37.2' ]] || { echo \"got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t33j: platforms offsets 1..4 walk the distinct stable levels: 37.1 37.0 36.1 36" bash -c "
+    ${_SDKMGR_LIBS}
+    want=(37.1 37.0 36.1 36)
+    for off in 1 2 3 4; do
+        export _GS_EU2_CACHE_DIR=\${TMP_DIR}/sdkmgr_j_cache_\$off
+        _sdk_rec platforms 30 '' \"\$off\"
+        _gs_eu2_fetch_sdkmanager \$idx
+        val=\$(_gs_eu2_record_get \$idx proposed_version)
+        [[ \"\$val\" == \"\${want[off-1]}\" ]] || { echo \"offset \$off: got '\$val', want \${want[off-1]}\"; echo FAIL; exit 0; }
+    done
+    echo PASS
+"
+
+t "t33k: offset beyond the list — no proposal, error_message names the offset" bash -c "
+    ${_SDKMGR_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/sdkmgr_k_cache
+    _sdk_rec platforms 30 '' 9
+    _gs_eu2_fetch_sdkmanager \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    err=\$(_gs_eu2_record_get \$idx error_message)
+    [[ -z \"\$val\" ]] || { echo \"proposed should be empty: '\$val'\"; echo FAIL; exit 0; }
+    [[ \"\$err\" == *offset* ]] || { echo \"error_message should name the offset; got: '\$err'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# The single most likely silent bug in this feature: three sdkmanager:platforms
+# records with different offsets sharing ONE cache key, so all three resolve to
+# the same value. Same process, same cache dir, offsets 0 then 1.
+t "t33l: two records, same identifier, different offsets do NOT share a cache entry" bash -c "
+    ${_SDKMGR_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/sdkmgr_l_cache
+    _sdk_rec platforms 30 '' 0; a=\$idx
+    _gs_eu2_fetch_sdkmanager \$a
+    _sdk_rec platforms 30 '' 1; b=\$idx
+    _gs_eu2_fetch_sdkmanager \$b
+    va=\$(_gs_eu2_record_get \$a proposed_version)
+    vb=\$(_gs_eu2_record_get \$b proposed_version)
+    [[ \"\$va\" == '37.2' && \"\$vb\" == '37.1' ]] || { echo \"got offset0='\$va' offset1='\$vb'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# A bare id served in two channels: the version lives only in <revision>, so the
+# channel tag is the ONLY thing separating the dev build from the stable one.
+t "t33m: bare id in two channels — stable picks 36.1.9, unstable sees 36.6.11-dev" bash -c "
+    ${_SDKMGR_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/sdkmgr_m_cache
+    _sdk_rec emulator 36.0.0; a=\$idx
+    _gs_eu2_fetch_sdkmanager \$a
+    _sdk_rec emulator 36.0.0 unstable; b=\$idx
+    _gs_eu2_fetch_sdkmanager \$b
+    va=\$(_gs_eu2_record_get \$a proposed_version)
+    vb=\$(_gs_eu2_record_get \$b proposed_version)
+    [[ \"\$va\" == '36.1.9' ]]      || { echo \"stable got: '\$va'\"; echo FAIL; exit 0; }
+    [[ \"\$vb\" == '36.6.11-dev' ]] || { echo \"unstable got: '\$vb'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t33n: bare id with <preview> — ndk-bundle 23.0.7344513-rc4 excluded on stable → 22.1.7171670" bash -c "
+    ${_SDKMGR_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/sdkmgr_n_cache
+    _sdk_rec ndk-bundle 22.0.0
+    _gs_eu2_fetch_sdkmanager \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$val\" == '22.1.7171670' ]] || { echo \"got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# The three (lock:)ed system-images records (tag / playstore tag / abi) name
+# components the repository XML does not carry. They must stay SKIP — reachable
+# upstream, nothing matched — not ERROR, or every --check run fails on a lock.
+t "t33o: component absent from the repository — error_message set, decision NOT written" bash -c "
+    ${_SDKMGR_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/sdkmgr_o_cache
+    _sdk_rec system-images google_apis_ps16k
+    _gs_eu2_fetch_sdkmanager \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    err=\$(_gs_eu2_record_get \$idx error_message)
+    dec=\$(_gs_eu2_record_get \$idx decision)
+    [[ -z \"\$val\" ]] || { echo \"proposed should be empty: '\$val'\"; echo FAIL; exit 0; }
+    [[ \"\$err\" == *'no versions found'* ]] || { echo \"got error_message: '\$err'\"; echo FAIL; exit 0; }
+    [[ -z \"\$dec\" ]] || { echo \"decision must stay empty (SKIP via decide.sh); got: '\$dec'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# The binary seam is gone with the binary. A leftover export must not silently
+# re-route the fetcher.
+t "t33p: the retired _GS_EU2_SDKMANAGER_CMD_FIXTURE seam has no reader left" bash -c "
+    n=\$(grep -c 'SDKMANAGER_CMD_FIXTURE' '${_GS_EU2_LIB}/fetchers/sdkmanager.sh' || true)
+    [[ \"\$n\" -eq 0 ]] || { echo \"sdkmanager.sh still references the retired seam (\$n hits)\"; echo FAIL; exit 0; }
     echo PASS
 "
 
@@ -4166,7 +4255,7 @@ t "t46e: sdkmanager fetcher does NOT set manual field — decide.sh classifies v
     source '${_GS_EU2_LIB}/core/cache.sh'
     source '${_GS_EU2_LIB}/http/curl.sh'
     source '${_GS_EU2_LIB}/fetchers/sdkmanager.sh'
-    export _GS_EU2_SDKMANAGER_CMD_FIXTURE='${FIXTURES}/sdkmanager-list.txt'
+    export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t46e_cache
     _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
     _gs_eu2_record_set \$idx type            'sdkmanager'
@@ -12740,15 +12829,14 @@ t "t119h: boundary — jq path empty on a 200 stays SKIP + exit 0" bash -c "
     echo PASS
 "
 
-# t119i: sdkmanager — the binary is present but --list produced nothing.
-# The not-found branch precedes this one, so a fake sdkmanager on PATH is what
-# separates the two.
-t "t119i: sdkmanager empty --list is ERROR + exit 1" bash -c "
-    d=\${TMP_DIR}/t119i; mkdir -p \"\$d/bin\"
-    printf '#!/bin/bash\nexit 0\n' > \"\$d/bin/sdkmanager\"; chmod +x \"\$d/bin/sdkmanager\"
+# t119i: sdkmanager — the repository XML fetch fails (injected 503). Row 41
+# moved this fetcher off the local binary onto Google's repository XML, so the
+# transport failure is an HTTP one now, like url/sdkman.
+t "t119i: sdkmanager repository 503 is ERROR + exit 1" bash -c "
+    d=\${TMP_DIR}/t119i; mkdir -p \"\$d\"
     f=\$d/t.env
     printf '# @todo env-update sdkmanager:platform-tools 35.0.2\nGLOBAL_STACK_T119I=35.0.2\n' > \"\$f\"
-    out=\$(PATH=\"\$d/bin:\$PATH\" _GS_EU2_CACHE_DIR=\"\$d/c\" bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1); rc=\$?
+    out=\$(_GS_EU2_HTTP_INJECT_STATUS=503 _GS_EU2_CACHE_DIR=\"\$d/c\" bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1); rc=\$?
     echo \"\$out\" | grep -q '\[ERROR' || { echo \"no [ERROR] token; got: \$out\"; echo FAIL; exit 0; }
     [[ \$rc -eq 1 ]] || { echo \"exit \$rc, want 1\"; echo FAIL; exit 0; }
     echo PASS
@@ -12933,6 +13021,136 @@ t "t121d: a real malformed value is still shell-escaped" bash -c "
     printf '# @todo env-update (depends-on:a b) github:foo/bar 1.2.3\nGLOBAL_STACK_T121D_VERSION=1.2.3\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1 || true)
     echo \"\$out\" | grep -qF 'got a\\ b' || { echo \"expected %q-escaped backslash-space form, got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 122 — (offset:N) annotation flag: latest, latest-1, latest-2 …
+# ═══════════════════════════════════════════════════════════════════════════
+section "122 — (offset:N) annotation flag"
+
+# Row 41. A pin that must track "the N-th newest STABLE version" rather than the
+# newest — the android rolling window: three platforms and three build-tools
+# that always cover the three latest releases. Offsets count DISTINCT stable
+# versions from the top (0 = latest, the default). They are only defined on the
+# stable list — on `unstable` the list is rcs, and "the previous rc" is not a
+# thing anyone pins — so an offset paired with a non-stable channel is refused
+# at parse time rather than silently ignored.
+
+t "t122a: (offset:2) parsed and stored in the record" bash -c "
+    f=\${TMP_DIR}/t122a.env
+    printf '# @todo env-update (offset:2) sdkmanager:platforms 37.0\nGLOBAL_STACK_T122A=37.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1)
+    echo \"\$out\" | grep -qE 'offset: *2\$' || { echo \"offset field not found in dump; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t122b: (offset:x) is refused — not a non-negative integer" bash -c "
+    f=\${TMP_DIR}/t122b.env
+    printf '# @todo env-update (offset:x) sdkmanager:platforms 37.0\nGLOBAL_STACK_T122B=37.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1); rc=\$?
+    [[ \$rc -ne 0 ]] || { echo 'expected non-zero exit for offset:x'; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qi 'offset' || { echo \"error must name the flag; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t122c: (offset:-1) and (offset:) are refused" bash -c "
+    for v in '-1' ''; do
+        f=\${TMP_DIR}/t122c.env
+        printf '# @todo env-update (offset:%s) sdkmanager:platforms 37.0\nGLOBAL_STACK_T122C=37.0\n' \"\$v\" > \"\$f\"
+        out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1); rc=\$?
+        [[ \$rc -ne 0 ]] || { echo \"expected non-zero exit for offset:'\$v'\"; echo FAIL; exit 0; }
+    done
+    echo PASS
+"
+
+t "t122d: (offset:1) with (channel:unstable) is refused at parse time" bash -c "
+    f=\${TMP_DIR}/t122d.env
+    printf '# @todo env-update (channel:unstable) (offset:1) sdkmanager:build-tools 36.1.0\nGLOBAL_STACK_T122D=36.1.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1); rc=\$?
+    [[ \$rc -ne 0 ]] || { echo 'expected non-zero exit for offset + unstable channel'; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qi 'stable' || { echo \"error must say offsets are stable-only; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t122e: (offset:1) with (channel:stable), and (offset:0), are accepted" bash -c "
+    f=\${TMP_DIR}/t122e.env
+    printf '# @todo env-update (channel:stable) (offset:1) sdkmanager:build-tools 36.1.0\nGLOBAL_STACK_T122E1=36.1.0\n# @todo env-update (offset:0) sdkmanager:build-tools 37.0.0\nGLOBAL_STACK_T122E2=37.0.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1); rc=\$?
+    [[ \$rc -eq 0 ]] || { echo \"exit \$rc; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qE 'offset: *1\$' || { echo \"offset 1 not stored; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ── channel.sh: the selection primitive ──────────────────────────────────────
+_CH122_LIBS="
+source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
+source '${_GS_EU2_LIB}/core/semver.sh'
+source '${_GS_EU2_LIB}/core/channel.sh'
+"
+
+t "t122f: stable offset 1/2 walk down past prereleases; offset past the end is empty" bash -c "
+    ${_CH122_LIBS}
+    versions=\$'18.3\n18.4-rc1\n18.4\n18.5-beta1\nv18.2'
+    r0=\$(_gs_eu2_channel_select_best \"\$versions\" 'stable' 0)
+    r1=\$(_gs_eu2_channel_select_best \"\$versions\" 'stable' 1)
+    r2=\$(_gs_eu2_channel_select_best \"\$versions\" 'stable' 2)
+    r3=\$(_gs_eu2_channel_select_best \"\$versions\" 'stable' 3)
+    [[ \"\$r0\" == '18.4' ]]  || { echo \"offset 0 got: '\$r0'\"; echo FAIL; exit 0; }
+    [[ \"\$r1\" == '18.3' ]]  || { echo \"offset 1 got: '\$r1'\"; echo FAIL; exit 0; }
+    [[ \"\$r2\" == 'v18.2' ]] || { echo \"offset 2 got: '\$r2' (original tag string must survive)\"; echo FAIL; exit 0; }
+    [[ -z \"\$r3\" ]]         || { echo \"offset 3 got: '\$r3', want nothing\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t122g: offsets count DISTINCT versions — 1.2.0 and v1.2.0 are one step" bash -c "
+    ${_CH122_LIBS}
+    versions=\$'1.2.0\nv1.2.0\n1.1.0\n1.2.0'
+    r1=\$(_gs_eu2_channel_select_best \"\$versions\" 'stable' 1)
+    [[ \"\$r1\" == '1.1.0' ]] || { echo \"offset 1 got: '\$r1'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t122h: omitted third argument behaves exactly as before (offset 0)" bash -c "
+    ${_CH122_LIBS}
+    versions=\$'18.3\n18.4-rc1\n18.4'
+    r=\$(_gs_eu2_channel_select_best \"\$versions\" 'stable')
+    [[ \"\$r\" == '18.4' ]] || { echo \"got: '\$r'\"; echo FAIL; exit 0; }
+    r=\$(_gs_eu2_channel_select_best \"\$versions\" '')
+    [[ \"\$r\" == '18.4' ]] || { echo \"empty channel got: '\$r'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t122i: non-numeric fallback (codename tags) honours the offset too" bash -c "
+    ${_CH122_LIBS}
+    versions=\$'resolute-20260413\nresolute-20260301\nresolute-20260120'
+    r1=\$(_gs_eu2_channel_select_best \"\$versions\" 'stable' 1)
+    [[ \"\$r1\" == 'resolute-20260301' ]] || { echo \"offset 1 got: '\$r1'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ── end to end: the android rolling window through the real CLI ──────────────
+# Three platforms records with offsets 2/1/0 and three build-tools records with
+# the same, all pinned one step behind, must each propose their own slot of the
+# window. This is the row-41 contract in one run: 37.0/37.1/37.2 and
+# 36.0.0/36.1.0/37.0.0 against the fixture repository.
+t "t122j: six-record rolling window resolves every slot through --check" bash -c "
+    d=\${TMP_DIR}/t122j; mkdir -p \"\$d\"
+    f=\$d/t.env
+    {
+        printf '# @todo env-update (offset:2) sdkmanager:platforms 36.1\nGLOBAL_STACK_T122J_API_1=36.1\n'
+        printf '# @todo env-update (offset:1) sdkmanager:platforms 37.0\nGLOBAL_STACK_T122J_API_2=37.0\n'
+        printf '# @todo env-update sdkmanager:platforms 37.1\nGLOBAL_STACK_T122J_API_3=37.1\n'
+        printf '# @todo env-update (offset:2) sdkmanager:build-tools 35.0.1\nGLOBAL_STACK_T122J_BT_1=35.0.1\n'
+        printf '# @todo env-update (offset:1) sdkmanager:build-tools 36.0.0\nGLOBAL_STACK_T122J_BT_2=36.0.0\n'
+        printf '# @todo env-update sdkmanager:build-tools 36.1.0\nGLOBAL_STACK_T122J_BT_3=36.1.0\n'
+    } > \"\$f\"
+    out=\$(_GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http' _GS_EU2_CACHE_DIR=\"\$d/c\" bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1); rc=\$?
+    [[ \$rc -eq 0 ]] || { echo \"exit \$rc; got: \$out\"; echo FAIL; exit 0; }
+    for pair in 'API_1 36.1 → 37.0' 'API_2 37.0 → 37.1' 'API_3 37.1 → 37.2' 'BT_1 35.0.1 → 36.0.0' 'BT_2 36.0.0 → 36.1.0' 'BT_3 36.1.0 → 37.0.0'; do
+        var=\"GLOBAL_STACK_T122J_\${pair%% *}\"; arrow=\"\${pair#* }\"
+        echo \"\$out\" | grep -F \"\$var\" | grep -qF \"\$arrow\" || { echo \"\$var: expected '\$arrow'; got: \$(echo \"\$out\" | grep -F \"\$var\")\"; echo FAIL; exit 0; }
+    done
     echo PASS
 "
 
