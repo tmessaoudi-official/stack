@@ -157,7 +157,7 @@ PYTHON_VERSION="${GLOBAL_STACK_PYTHON3_VERSION_AS}"
 export PYTHON_VERSION
 PYENV_VERSION="${GLOBAL_STACK_PYTHON3_VERSION}"
 export PYENV_VERSION
-PHP_VERSION=${GLOBAL_STACK_PHPEDGE_VERSION}
+PHP_VERSION="${GLOBAL_STACK_PHPEDGE_VERSION}"
 export PHP_VERSION
 PHPBREW_PHP="${GLOBAL_STACK_PHPEDGE_VERSION_NAME}"
 export PHPBREW_PHP
@@ -190,20 +190,20 @@ export FLUTTER_ROOT
 FLUTTER_HOME=${GLOBAL_STACK_FLUTTER3_HOME}
 export FLUTTER_HOME
 
-PATH="${GLOBAL_STACK_DOCKER_WORKDIR}/phorj/target/release:${FVM_CACHE_PATH}/versions/${FLUTTER_VERSION:-}/bin:${RBENV_ROOT}/bin:${PYENV_ROOT}/bin:${GLOBAL_STACK_DOCKER_TOOLS_PATH}/bin:${COMPOSER_HOME}/vendor/bin:${COMPOSER_HOME}/source/bin:${SYMFONY_HOME}/bin:${PHPBREW_BIN}:${PHPBREW_SRC}/bin:${PHPBREW_PHP_PATH}/bin:${PHPBREW_PHP_PATH}/sbin:${PNPM_HOME}:${PNPM_HOME}/4/node_modules/.bin:${PNPM_HOME}/5/node_modules/.bin:${YARN_GLOBAL_FOLDER}/bin:${DENO_INSTALL}/bin:${BUN_INSTALL}/bin:${CARGO_HOME}/bin:${RUSTUP_HOME}/toolchains/stable-x86_64-unknown-linux-gnu/bin:${PUB_CACHE}/bin:${JAVA_HOME}/bin:${ANDROID_HOME}/cmdline-tools/bin:${ANDROID_HOME}/cmdline-tools/tools/bin:${ANDROID_HOME}/tools:${ANDROID_HOME}/tools/bin:${ANDROID_HOME}/platform-tools:${ANDROID_HOME}/build-tools/${GLOBAL_STACK_ANDROID_BUILD_TOOLS_VERSION}:${ANDROID_HOME}/cmdline-tools/${GLOBAL_STACK_ANDROID_CMDLINE_TOOLS_VERSION}/bin:${ANDROID_NDK_HOME}:${PATH}"
-if [ -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/ruby.${RUBY_VERSION}" ]; then
+PATH="${GLOBAL_STACK_DOCKER_WORKDIR}/phorj/target/release:${FVM_CACHE_PATH}/versions/${FLUTTER_VERSION:-}/bin:${RBENV_ROOT}/bin:${PYENV_ROOT}/bin:${GLOBAL_STACK_DOCKER_TOOLS_PATH}/bin:${COMPOSER_HOME}/vendor/bin:${COMPOSER_HOME}/source/bin:${SYMFONY_HOME}/bin:${PHPBREW_BIN}:${PHPBREW_SRC}/bin:${PHPBREW_PHP_PATH}/bin:${PHPBREW_PHP_PATH}/sbin:${PNPM_HOME}:${PNPM_HOME}/4/node_modules/.bin:${PNPM_HOME}/5/node_modules/.bin:${YARN_GLOBAL_FOLDER}/bin:${DENO_INSTALL}/bin:${BUN_INSTALL}/bin:${CARGO_HOME}/bin:${RUSTUP_HOME}/toolchains/stable-x86_64-unknown-linux-gnu/bin:${PUB_CACHE}/bin:${JAVA_HOME}/bin:${ANDROID_HOME}/cmdline-tools/bin:${ANDROID_HOME}/cmdline-tools/tools/bin:${ANDROID_HOME}/tools:${ANDROID_HOME}/tools/bin:${ANDROID_HOME}/platform-tools:${ANDROID_HOME}/build-tools/${GLOBAL_STACK_ANDROID_BUILD_TOOLS_VERSION}:${ANDROID_HOME}/cmdline-tools/${GLOBAL_STACK_ANDROID_CMDLINE_TOOLS_VERSION}/bin:${ANDROID_NDK_HOME}:${ANDROID_SDK_ROOT}/emulator:${PATH}"
+if [[ -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/ruby.${RUBY_VERSION}" ]]; then
 	PATH="${RBENV_ROOT}/versions/$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/ruby.${RUBY_VERSION}")/bin:${PATH}"
 fi
-if [ -d /opt/${GLOBAL_STACK_DOCKER_USER_ID}/sonar-scanner-cli/bin ]; then 
+if [[ -d /opt/${GLOBAL_STACK_DOCKER_USER_ID}/sonar-scanner-cli/bin ]]; then 
 	PATH="/opt/${GLOBAL_STACK_DOCKER_USER_ID}/sonar-scanner-cli/bin:${PATH}"
 fi
-if [ -d /opt/${GLOBAL_STACK_DOCKER_USER_ID}/task ]; then 
+if [[ -d /opt/${GLOBAL_STACK_DOCKER_USER_ID}/task ]]; then 
 	PATH="/opt/${GLOBAL_STACK_DOCKER_USER_ID}/task:${PATH}"
 fi
-if [ -d /opt/${GLOBAL_STACK_DOCKER_USER_ID}/bat ]; then 
+if [[ -d /opt/${GLOBAL_STACK_DOCKER_USER_ID}/bat ]]; then 
 	PATH="/opt/${GLOBAL_STACK_DOCKER_USER_ID}/bat:${PATH}"
 fi
-if [ -d "${GOROOT}"/bin ]; then 
+if [[ -d "${GOROOT}"/bin ]]; then 
 	PATH="${GOROOT}/bin:${PATH}"
 fi
 if [[ -d "${GLOBAL_STACK_ZIGPATH}" ]]; then 
@@ -253,7 +253,7 @@ if [[ "" != "$(command -v sdk)" ]]; then
 
 	source "${GLOBAL_STACK_DOCKER_ROOT_PATH}"/docker/config/dist/bin/base-bin/global-stack-base-setup-packages.sh
 	_gs_quiet global_stack_base_setup_packages \
-		--prefix='GLOBAL_STACK_JAVA' \
+		--prefix="GLOBAL_STACK_JAVA" \
 		--command='echo -e "**** Using ${PACKAGE_NAME} ${PACKAGE_VERSION}"' \
 		--command='sdk use ${PACKAGE_NAME} "${PACKAGE_VERSION}"'
 fi
@@ -263,9 +263,9 @@ if [[ -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}"/mise.shellrc ]]; then
 	eval "$(mise activate ${GLOBAL_STACK_SHELL})"
 fi
 
-[ -s "${PHPBREW_ROOT}"/bashrc ] && source "${PHPBREW_ROOT}"/bashrc
-[ -s "${NVM_DIR}/nvm.sh" ] && source "${NVM_DIR}/nvm.sh"  # This loads nvm
-[ -s "${NVM_DIR}/bash_completion" ] && source "${NVM_DIR}/bash_completion"  # This loads nvm bash_completion
+[[ -s "${PHPBREW_ROOT}"/bashrc ]] && source "${PHPBREW_ROOT}"/bashrc
+[[ -s "${NVM_DIR}/nvm.sh" ]] && source "${NVM_DIR}/nvm.sh"  # This loads nvm
+[[ -s "${NVM_DIR}/bash_completion" ]] && source "${NVM_DIR}/bash_completion"  # This loads nvm bash_completion
 if [[ "" != "$(command -v pyenv)" ]]; then
 	eval "$(pyenv init -)"
 	eval "$(pyenv init --path)"
