@@ -14,17 +14,17 @@ alias sublime_text='/opt/${GLOBAL_STACK_DOCKER_USER_ID}/sublime_text/sublime_tex
 
 # @todo change this if you have you stack in another folder
 if [[ -z "${GLOBAL_STACK_DOCKER_ROOT_PATH}" ]]; then
-	GLOBAL_STACK_DOCKER_ROOT_PATH=/stack
-	export GLOBAL_STACK_DOCKER_ROOT_PATH
+    GLOBAL_STACK_DOCKER_ROOT_PATH=/stack
+    export GLOBAL_STACK_DOCKER_ROOT_PATH
 fi
 
 if [[ -n "${GLOBAL_STACK_DOCKER_ROOT_PATH}" && -f "${GLOBAL_STACK_DOCKER_ROOT_PATH}"/.env.local ]]; then
-	_gs_src_exclude="^(COMPOSE_FILE|BUILDX_EXPERIMENTAL|BUILDKIT_PROGRESS|BUILDX_BUILDER|COMPOSE_PROJECT_NAME|COMPOSE_REMOVE_ORPHANS|COMPOSE_HTTP_TIMEOUT|GLOBAL_STACK_EXPOSED_VIRTUAL_HOSTS|COMPOSE_PATH_SEPARATOR|DOCKER_BUILDKIT|COMPOSE_DOCKER_CLI_BUILD|GLOBAL_STACK_COMPOSE_CLI|GLOBAL_STACK_HTTPS_CONTAINER_IPS|GLOBAL_STACK_HTTPS_LOCALHOST_IPS|GLOBAL_STACK_(.*)_COMMAND_SUFFIX|GLOBAL_STACK_(.*)_CLI_OPTIONS|GLOBAL_STACK_(.*)_CLI_VARIANTS|GLOBAL_STACK_ANDROID_SYSTEM_IMAGES|GLOBAL_STACK_ANDROID_PACKAGES|GLOBAL_STACK_LOCAL_POSTGRES(.*))="
-	_gs_src_envfile="${GLOBAL_STACK_DOCKER_ROOT_PATH}/.env.local"
-	eval "$(grep -vE "${_gs_src_exclude}" "${_gs_src_envfile}" | sed 's/^/export /')"
-	eval "$(grep -vE "${_gs_src_exclude}" "${_gs_src_envfile}" | sed 's/^/export /')"
-	eval "$(grep -vE "${_gs_src_exclude}" "${_gs_src_envfile}" | sed 's/^/export /')"
-	unset _gs_src_exclude _gs_src_envfile
+    _gs_src_exclude="^(COMPOSE_FILE|BUILDX_EXPERIMENTAL|BUILDKIT_PROGRESS|BUILDX_BUILDER|COMPOSE_PROJECT_NAME|COMPOSE_REMOVE_ORPHANS|COMPOSE_HTTP_TIMEOUT|GLOBAL_STACK_EXPOSED_VIRTUAL_HOSTS|COMPOSE_PATH_SEPARATOR|DOCKER_BUILDKIT|COMPOSE_DOCKER_CLI_BUILD|GLOBAL_STACK_COMPOSE_CLI|GLOBAL_STACK_HTTPS_CONTAINER_IPS|GLOBAL_STACK_HTTPS_LOCALHOST_IPS|GLOBAL_STACK_(.*)_COMMAND_SUFFIX|GLOBAL_STACK_(.*)_CLI_OPTIONS|GLOBAL_STACK_(.*)_CLI_VARIANTS|GLOBAL_STACK_ANDROID_SYSTEM_IMAGES|GLOBAL_STACK_ANDROID_PACKAGES|GLOBAL_STACK_LOCAL_POSTGRES(.*))="
+    _gs_src_envfile="${GLOBAL_STACK_DOCKER_ROOT_PATH}/.env.local"
+    eval "$(grep -vE "${_gs_src_exclude}" "${_gs_src_envfile}" | sed 's/^/export /')"
+    eval "$(grep -vE "${_gs_src_exclude}" "${_gs_src_envfile}" | sed 's/^/export /')"
+    eval "$(grep -vE "${_gs_src_exclude}" "${_gs_src_envfile}" | sed 's/^/export /')"
+    unset _gs_src_exclude _gs_src_envfile
 
     if [[ -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN}"/sdkman.installer.sh ]]; then
         chmod a+x "${GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN}"/sdkman.installer.sh > /dev/null 2>&1
@@ -35,24 +35,30 @@ if [[ -n "${GLOBAL_STACK_DOCKER_ROOT_PATH}" && -f "${GLOBAL_STACK_DOCKER_ROOT_PA
         source "${SDKMAN_DIR}/bin/sdkman-init.sh" > /dev/null 2>&1
     fi
     if [[ "" != "$(command -v pyenv)" ]]; then
-		eval "$(pyenv init -)"
-		eval "$(pyenv init --path)"
-	fi
-	if [[ "" != "$(command -v rbenv)" ]]; then
-		eval "$(rbenv init - ${GLOBAL_STACK_SHELL})"
-	fi
-	if [[ "" != "$(command -v nvm)" ]]; then
-		nvm use "${NODE_VERSION}"
-	fi
+        eval "$(pyenv init -)"
+        eval "$(pyenv init --path)"
+    fi
+    if [[ "" != "$(command -v rbenv)" ]]; then
+        eval "$(rbenv init - ${GLOBAL_STACK_SHELL})"
+    fi
+    if [[ "" != "$(command -v nvm)" ]]; then
+        nvm use "${NODE_VERSION}"
+    fi
     # tabtab source for yo package
     # uninstall by removing these lines or running `tabtab uninstall yo`
     # [[ -n "${NVM_DIR}" && -f ${NVM_DIR}/versions/node/${NVM_VERSION}/lib/node_modules/yo/node_modules/tabtab/.completions/yo.${GLOBAL_STACK_SHELL} ]] && . ${NVM_DIR}/versions/node/${NVM_VERSION}/lib/node_modules/yo/node_modules/tabtab/.completions/yo.${GLOBAL_STACK_SHELL}
-	if [[ "" != "$(command -v phpbrew)" ]]; then
-		phpbrew switch "${PHPBREW_PHP}"
-	fi
-	if [[ "" != "$(command -v task)" ]]; then
-		eval "$(task --completion ${GLOBAL_STACK_SHELL})"
-	fi
+    if [[ "" != "$(command -v phpbrew)" ]]; then
+        [ -s "${PHPBREW_ROOT}"/bashrc ] && source "${PHPBREW_ROOT}"/bashrc
+        phpbrew switch "${PHPBREW_PHP}"
+    fi
+    if [[ "" != "$(command -v task)" ]]; then
+        eval "$(task --completion ${GLOBAL_STACK_SHELL})"
+    fi
+fi
+
+# Load Angular CLI autocompletion.
+if [[ "" != "$(command -v ng)" ]]; then
+    source <(ng completion script)
 fi
 
 # >>> gs-claude-fullauto
@@ -68,6 +74,6 @@ fi
 # `claude -p` subprocesses, agent harnesses) never get the function: they keep the bare binary.
 # Record: ~/.claude/docs/plans/full-auto-mode.plan.md → ## Audit (rulings A–H, B-2).
 if [[ $- == *i* ]]; then
-	claude() { command claude --allow-dangerously-skip-permissions --permission-mode plan "$@"; }
+    claude() { command claude --allow-dangerously-skip-permissions --permission-mode plan "$@"; }
 fi
 # <<< gs-claude-fullauto
