@@ -79,6 +79,10 @@ present. S2's 05edge/05stable consumers: UNCERTIFIED-BY-EXECUTION until they res
 Correct `docs/container-sweep-2026-09-13.md` item #1 (recommendation 1 disproven); update memory
 `project_android_avdmanager_sdk_root.md`; MASTER row 47 → done with sha.
 
+## Status
+
+S1-S3 implemented in `a689c68` (2026-09-14): startup-prologue 637/637, red first (9), sabotage reds 43v-43y/54b/54e. Owed: host `/etc/profile.d/stack.sh` via `/tmp/fix-profile-android-path-20260914.sh`; live log verification after restarting 04android (and 05edge/05stable, UNCERTIFIED-BY-EXECUTION until they restart).
+
 ## Side effect disclosed
 
 A read-only `android --help` probe downloaded the CLI (87 MB) into container-local
