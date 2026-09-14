@@ -511,9 +511,7 @@ _gs_eu2_fetch_github() {
       local _cur_vg_cmp="${_cur_vg#v}" _proposed_cmp="${_proposed#v}"
       [[ -n "${_tcp}" ]] && _cur_vg_cmp="${_cur_vg_cmp#"${_tcp}"}"
       [[ -n "${_tcp}" ]] && _proposed_cmp="${_proposed_cmp#"${_tcp}"}"
-      local _oldest_vg
-      _oldest_vg="$(printf '%s\n%s\n' "${_cur_vg_cmp}" "${_proposed_cmp}" | sort -V | head -1)"
-      if [[ "${_oldest_vg}" == "${_proposed_cmp}" && "${_oldest_vg}" != "${_cur_vg_cmp}" ]]; then
+      if _gs_eu2_version_older "${_proposed_cmp}" "${_cur_vg_cmp}"; then
         local _gap_raw
         _gap_raw="$(_gs_eu2_github_fetch_tags_paginated "${_identifier}" "${_tok}" 10 2>/dev/null)"
         if [[ -n "$(printf '%s\n' "${_gap_raw}" | grep -v '^$' || true)" ]]; then
@@ -534,9 +532,7 @@ _gs_eu2_fetch_github() {
             local _gap_proposed
             _gap_proposed="$(_gs_eu2_channel_select_best "${_merged_filtered}" "${_channel}")"
             if [[ -n "${_gap_proposed}" ]]; then
-              local _oldest2
-              _oldest2="$(printf '%s\n%s\n' "${_proposed_cmp}" "${_gap_proposed#v}" | sort -V | head -1)"
-              if [[ "${_oldest2}" == "${_proposed_cmp}" && "${_oldest2}" != "${_gap_proposed#v}" ]]; then
+              if _gs_eu2_version_older "${_proposed_cmp}" "${_gap_proposed#v}"; then
                 # Conditional re-prepend for gap winner
                 if [[ -n "${_tcp}" ]] && \
                    printf '%s\n' "${_orig_tags}" | grep -qxF "${_tcp}${_gap_proposed}"; then

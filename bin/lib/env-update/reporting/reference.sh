@@ -321,7 +321,8 @@ ANNOTATION FLAGS (parenthesised, space-separated, after the @todo keyword)
 
   URL fetcher flags (url: type only):
     (fetch-extract:REGEX)   URL fetcher tier 1: fetch the identifier URL, apply
-                            perl regex (capture group 1), sort -V, take highest.
+                            perl regex (capture group 1), ranked version sort
+                            (pre-release tiers, see env-update.md), take highest.
                             For HTML pages with embedded version strings.
     (fetch-json:JQ_PATH)    URL fetcher tier 2: fetch URL as JSON, extract via jq
                             path (e.g., .version). Exact null-match guard: if jq
@@ -664,7 +665,7 @@ WORKED EXAMPLES
      # @todo env-update url:https://releases.example.com/VERSION (fetch-extract:version=([0-9.]+)) 1.2.3
      GLOBAL_STACK_EXAMPLE_VERSION=1.2.3
 
-     Behavior: fetches the URL, applies perl capture group 1, sort -V, highest wins.
+     Behavior: fetches the URL, applies perl capture group 1, ranked version sort, highest wins.
 
   8. Floating ref → RESOLVED
      # @todo env-update dockerhub:_/node:lts latest

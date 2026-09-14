@@ -367,11 +367,10 @@ _gs_eu2_compute_change_string() {
     local _cs_cur_cmp="${_cs_cur#v}" _cs_prop_cmp="${_cs_prop#v}"
     [[ -n "${_cs_tcp_disp}" ]] && _cs_cur_cmp="${_cs_cur_cmp#"${_cs_tcp_disp}"}"
     [[ -n "${_cs_tcp_disp}" ]] && _cs_prop_cmp="${_cs_prop_cmp#"${_cs_tcp_disp}"}"
-    local _cs_cv_norm _cs_pv_norm _cs_oldest
+    local _cs_cv_norm _cs_pv_norm
     _cs_cv_norm="$(perl -pe 's/(\d{8})[0-9a-fA-F]+$/$1/' <<< "${_cs_cur_cmp}")"
     _cs_pv_norm="$(perl -pe 's/(\d{8})[0-9a-fA-F]+$/$1/' <<< "${_cs_prop_cmp}")"
-    _cs_oldest="$(printf '%s\n%s\n' "${_cs_cv_norm}" "${_cs_pv_norm}" | sort -V | head -1)"
-    if [[ "${_cs_oldest}" == "${_cs_pv_norm}" && "${_cs_oldest}" != "${_cs_cv_norm}" ]]; then
+    if _gs_eu2_version_older "${_cs_pv_norm}" "${_cs_cv_norm}"; then
       local _cs_channel
       _cs_channel="$(_gs_eu2_record_get "${_cs_i}" channel)"
       _cs_err="would downgrade: current ${_cs_cur_cmp} → ${_cs_channel:-proposed} ${_cs_prop_cmp}"
@@ -457,9 +456,7 @@ _gs_eu2_should_hide_record() {
       _sh_wm_lpfx="$(_gs_eu2_version_prefix "${_sh_wm_lat}" "${_sh_wm_depth}")"
       if [[ -n "${_sh_wm_cpfx}" && -n "${_sh_wm_lpfx}" \
             && "${_sh_wm_cpfx}" != "${_sh_wm_lpfx}" ]]; then
-        local _sh_wm_hi
-        _sh_wm_hi="$(printf '%s\n%s\n' "${_sh_wm_cpfx}" "${_sh_wm_lpfx}" | sort -V | tail -1)"
-        [[ "${_sh_wm_hi}" == "${_sh_wm_lpfx}" ]] && return 1  # show
+        _gs_eu2_version_older "${_sh_wm_cpfx}" "${_sh_wm_lpfx}" && return 1  # show
       fi
     fi
   fi

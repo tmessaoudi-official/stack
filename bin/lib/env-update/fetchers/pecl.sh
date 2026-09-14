@@ -79,7 +79,7 @@ _gs_eu2_pecl_parse_stable() {
           [[ "${_stab,,}" == "stable" ]] && printf '%s\n' "${_ver}" || true
         fi
       done \
-    | sort -V | tail -1
+    | _gs_eu2_version_sort | tail -1
 }
 
 # _gs_eu2_pecl_get_latest_stable — return latest PECL version for an extension.

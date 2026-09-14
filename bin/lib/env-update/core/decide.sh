@@ -111,11 +111,13 @@ _gs_eu2_classify_decision() {
   fi
 
   if [[ "${_skip_sort_v}" == false && "${_cv}" != "${_pv}" ]]; then
-    local _cv_norm _pv_norm _oldest
+    local _cv_norm _pv_norm
     _cv_norm="$(perl -pe 's/(\d{8})[0-9a-fA-F]+$/$1/' <<< "${_cv}")"
     _pv_norm="$(perl -pe 's/(\d{8})[0-9a-fA-F]+$/$1/' <<< "${_pv}")"
-    _oldest="$(printf '%s\n%s\n' "${_cv_norm}" "${_pv_norm}" | sort -V | head -1)"
-    if [[ "${_oldest}" == "${_pv_norm}" && "${_oldest}" != "${_cv_norm}" ]]; then
+    # Ranked comparison (row 48): raw sort -V called 6.0.0-beta-3 -> 6.0.0-RC-2 a
+    # downgrade and RC-2 -> beta-3 an upgrade. Platform suffixes (-alpine3.23) are
+    # not pre-releases, so their order is unchanged.
+    if _gs_eu2_version_older "${_pv_norm}" "${_cv_norm}"; then
       echo "SKIP"; return 0
     fi
   fi

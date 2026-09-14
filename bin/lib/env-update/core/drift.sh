@@ -84,9 +84,7 @@ _gs_eu2_signal_watch() {
         _wm_lat_pfx="$(_gs_eu2_version_prefix "${_wm_latest}" "${_wm_depth_r}")"
         if [[ -n "${_wm_cur_pfx}" && -n "${_wm_lat_pfx}" && \
               "${_wm_cur_pfx}" != "${_wm_lat_pfx}" ]]; then
-          local _wm_higher
-          _wm_higher="$(printf '%s\n%s\n' "${_wm_cur_pfx}" "${_wm_lat_pfx}" | sort -V | tail -1)"
-          if [[ "${_wm_higher}" == "${_wm_lat_pfx}" ]]; then
+          if _gs_eu2_version_older "${_wm_cur_pfx}" "${_wm_lat_pfx}"; then
             printf "%10s↳ ${_GS_EU2_C_DIMCYAN}[WATCH]${_GS_EU2_C_R} New generation available: %s (depth %s: %s → %s)\n" \
               "" "${_wm_latest}" "${_wm_depth_r}" "${_wm_cur_pfx}" "${_wm_lat_pfx}"
             (( ++_n_watch )) || true
@@ -256,9 +254,7 @@ _gs_eu2_signal_drift() {
         local _drift_dir_msg=""
         if [[ "${_drift_actual}" =~ ^v?[0-9][0-9.]*$ && \
               "${_drift_ann_ver}" =~ ^v?[0-9][0-9.]*$ ]]; then
-          local _drift_oldest
-          _drift_oldest="$(printf '%s\n%s\n' "${_drift_actual}" "${_drift_ann_ver}" | sort -V | head -1)"
-          if [[ "${_drift_oldest}" == "${_drift_actual}" && "${_drift_actual}" != "${_drift_ann_ver}" ]]; then
+          if _gs_eu2_version_older "${_drift_actual}" "${_drift_ann_ver}"; then
             _drift_dir_msg=" — re-run --apply or update annotation"
           else
             _drift_dir_msg=" — VAR is ahead of annotation (downgrade risk: run --apply only if intentional)"

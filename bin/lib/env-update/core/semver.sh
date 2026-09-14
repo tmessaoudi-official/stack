@@ -4,13 +4,16 @@
 # Exports:   _gs_eu2_is_prerelease  _gs_eu2_is_unversioned
 #            _gs_eu2_semver_compare  _gs_eu2_semver_delta
 #            _gs_eu2_version_prefix  _gs_eu2_version_tag_suffix
+#            _gs_eu2_version_keys  _gs_eu2_version_sort  _gs_eu2_version_older
 # Sources:   config/prerelease_markers.sh
-# Deps:      sort (GNU coreutils — for sort -V), sed, grep
-# Env:       _GS_EU2_PRERELEASE_REGEX (from prerelease_markers.sh)
+# Deps:      sort -V (uutils or GNU coreutils — both order '~' first), perl, sed, grep
+# Env:       _GS_EU2_PRERELEASE_REGEX, _GS_EU2_PRERELEASE_MARKERS,
+#            _GS_EU2_PRERELEASE_RANKS (from prerelease_markers.sh)
 #
 # All functions are pure (no side effects, no globals written).
-# sort -V is used for ordering — callers strip v-prefixes before sorting to
-# avoid the mixed v-prefix/no-prefix ordering bug (v0.3.0 after 1.0.0 in ASCII).
+# Ordering goes through _gs_eu2_version_sort / _gs_eu2_version_older, never a raw
+# `sort -V`: raw sort -V is byte-wise (RC-2 before beta-3) and misorders mixed
+# v-prefix/no-prefix inputs (v0.3.0 after 1.0.0). Row 48.
 
 [[ -n "${_GS_EU2_SEMVER_SH_LOADED:-}" ]] && return 0
 readonly _GS_EU2_SEMVER_SH_LOADED=1
@@ -24,9 +27,84 @@ source "$(dirname "${BASH_SOURCE[0]}")/../config/prerelease_markers.sh"
 # Prints:  nothing
 # Returns: 0 if the version contains a prerelease marker; 1 otherwise
 # Note:    matching is against _GS_EU2_PRERELEASE_REGEX from prerelease_markers.sh
+# Note:    a git sha (7-40 hex, bare or after '@') is never a pre-release: the PEP 440
+#          markers [0-9]a[0-9] / [0-9]b[0-9] match inside hex (5836579db73ac959b9f…),
+#          which classified 5 of the 6 (use-sha) pins as pre-releases (row 48).
 _gs_eu2_is_prerelease() {
   local _v="${1,,}"
+  [[ "${_v}" =~ (^|@)[0-9a-f]{7,40}$ ]] && return 1
   [[ "${_v}" =~ (${_GS_EU2_PRERELEASE_REGEX}) ]]
+}
+
+# _gs_eu2_version_keys — emit a ranked sort key for every version on stdin.
+#
+# Reads:   newline-separated version strings on stdin (empty lines dropped)
+# Prints:  "KEY<TAB>ORIGINAL" per line, input order
+# Returns: 0 always
+#
+# Raw `sort -V` compares bytes, so 6.0.0-RC-2 (R = 0x52) sorted before 6.0.0-beta-3
+# (b = 0x62), and lowercasing alone ranks snapshot above rc (row 48). A PRE-RELEASE
+# (same test as _gs_eu2_is_prerelease) with a numeric base gets the key
+#   base~<tier><lowercased suffix, date+sha tail cut to the date>
+# and `sort -V` orders '~' before end-of-string, so every pre-release sorts below its
+# own stable base, by tier, then by the rest of the suffix (rc-2 < rc-10). Every
+# OTHER string keeps key == input minus a leading 'v', so its order is exactly the
+# previous `sort -V` order — t126a pins that. One perl pass; the marker table
+# reaches perl through %ENV (never an interpolated regex, never `awk -v`, which
+# collapses the '\.' in the fragments; mawk also lacks the {7,40} interval).
+_gs_eu2_version_keys() {
+  GS_EU2_PR_MARKERS="$(printf '%s\n' "${_GS_EU2_PRERELEASE_MARKERS[@]}")" \
+  GS_EU2_PR_RANKS="${_GS_EU2_PRERELEASE_RANKS[*]}" \
+    perl -ne '
+      BEGIN {
+        @q = map { qr/$_/ } split /\n/, $ENV{GS_EU2_PR_MARKERS};
+        @r = split / /, $ENV{GS_EU2_PR_RANKS};
+      }
+      chomp;
+      next if $_ eq "";
+      my $o = $_;
+      (my $key = $o) =~ s/^v//;
+      my $l = lc $key;
+      if ($l !~ /(^|@)[0-9a-f]{7,40}$/ && $l =~ /^([0-9]+(?:\.[0-9]+)*)[-._]?(.+)$/) {
+        my ($base, $suf) = ($1, $2);
+        my $rank;
+        for my $i (0 .. $#q) {
+          $rank = $r[$i] if $l =~ $q[$i] && (!defined $rank || $r[$i] < $rank);
+        }
+        if (defined $rank) {
+          $suf =~ s/(\d{8})[0-9a-f]+$/$1/;
+          $key = "$base~$rank$suf";
+        }
+      }
+      print "$key\t$o\n";
+    '
+}
+
+# _gs_eu2_version_sort — sort versions ascending with pre-release ranking.
+#
+# Args:    $1 — optional "-u": keep one entry per distinct KEY (1.2.0 == v1.2.0,
+#          1.3.0-RC1 == 1.3.0-rc1)
+# Reads:   newline-separated version strings on stdin
+# Prints:  the ORIGINAL strings, oldest first
+# Returns: 0 always
+_gs_eu2_version_sort() {
+  local _u=()
+  [[ "${1:-}" == "-u" ]] && _u=(-u)
+  _gs_eu2_version_keys | sort -t $'\t' -k1,1V "${_u[@]}" | cut -f2-
+}
+
+# _gs_eu2_version_older — is $1 strictly older than $2 under the ranked order?
+#
+# Args:    $1 a, $2 b — version strings
+# Returns: 0 when a sorts strictly before b; 1 when equal or newer
+_gs_eu2_version_older() {
+  [[ "${1}" == "${2}" ]] && return 1
+  local _keys _ka _kb
+  _keys="$(printf '%s\n%s\n' "${1}" "${2}" | _gs_eu2_version_keys | cut -f1)"
+  _ka="${_keys%%$'\n'*}"
+  _kb="${_keys#*$'\n'}"
+  [[ "${_ka}" == "${_kb}" ]] && return 1
+  [[ "$(printf '%s\n%s\n' "${_ka}" "${_kb}" | sort -V | head -1)" == "${_ka}" ]]
 }
 
 # _gs_eu2_is_unversioned — test whether a version string is a floating alias.
@@ -80,9 +158,8 @@ _gs_eu2_semver_compare() {
     fi
   fi
 
-  local _first
-  _first="$(printf '%s\n%s\n' "${_a}" "${_b}" | sort -V | head -1)"
-  if [[ "${_first}" == "${_a}" ]]; then echo "older"; else echo "newer"; fi
+  # Ranked, not raw `sort -V`: RC-2 must outrank beta-3 (row 48).
+  if _gs_eu2_version_older "${_a}" "${_b}"; then echo "older"; else echo "newer"; fi
 }
 
 # _gs_eu2_version_tag_suffix — extract the variant tag suffix from a version string.

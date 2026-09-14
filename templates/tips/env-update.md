@@ -223,6 +223,7 @@ closes that gap by judging the date the version string itself carries.
 - `stable` (empty or explicit): picks the highest non-prerelease version. Never falls back to pre-releases.
 - `unstable`: picks the highest pre-release version. Falls back to stable if no pre-release exists. **Promotion guard**: if the highest stable has surpassed the highest pre-release (e.g. stable=3.1.1 vs prerelease=3.0.0-rc4), the stable version is returned instead — it is not a downgrade.
 - `rc`, `beta`, `alpha`: picks the highest version matching that channel keyword. Falls back to the highest pre-release if no exact match, then stable if the stable has surpassed the channel version.
+- "Highest" is the ranked order of § "Version ordering": markers compare by tier (build streams < alpha < beta < milestone < rc), case-blind — `6.0.0-RC-2` outranks `6.0.0-beta-3`.
 - `nightly`: for the `url` fetcher's Tier 4, treats the identifier as a directory listing of nightly build directories.
 - `(skip:REASON)` — forces a SKIP decision immediately. The fetcher does **not** run; no network request is made. The reason string is stored in `skip_reason` and appears in `--check` output as `skip flag: REASON`. Useful for temporarily pausing a variable without removing its annotation.
 - `(lock:REASON)` — **annotation-tracking lock.** The fetcher **does** run and `proposed_version` is populated, but the decision is forced to `LOCK` (never AUTO/HOLD/MANUAL). On `--apply`, **only the annotation comment version token is updated** — the `VAR=` line is not touched. The reason string is displayed in `--check` output. Use when a variable must stay at a fixed value permanently but you still want the annotation to track what the latest upstream is. **Immune to `--force-auto`** — the lock gate fires after the force-auto HOLD→AUTO upgrade, so `--force-auto` cannot override it. **Does not override ERROR** — fetch failures still surface. **Compatible with `(manual)`** — when both are present, LOCK wins silently; `(manual)` is redundant and ignored. Requires a non-empty reason (same validation as `skip`).
@@ -737,7 +738,7 @@ but if `decision` is `AUTO` or empty, `decide.sh` makes the final call.
    current == proposed?           → SKIP  (up to date — fires before manual/override)
    proposed is prerelease AND
      current is stable?           → SKIP  (prerelease guard — "proposed is prerelease")
-   proposed sorts before current? → SKIP  (downgrade protection, via sort -V)
+   proposed sorts before current? → SKIP  (downgrade protection, ranked — § Version ordering)
    override=true OR manual=true?  → MANUAL  (only reached for genuine forward version changes)
    semver_delta = major?
      major_hint empty?            → HOLD  (major jump, no pin — requires review)
@@ -770,35 +771,65 @@ annotation reads `(proposed is prerelease — pin manually when stable ships)`.
 
 ### Downgrade protection
 
-Before the manual/override and semver delta check, the engine uses `sort -V` to compare
-`current` and `proposed` (stripping any leading `v`). If `proposed` sorts before `current`,
-the decision is `SKIP`. This prevents accidentally "downgrading" a variable when the
-registry returns an older tag that passes the filter. The downgrade check applies even to
-`(manual)` and `(override)` entries — a fetcher returning an older version is always wrong.
+Before the manual/override and semver delta check, the engine compares `current` and
+`proposed` with the ranked comparison `_gs_eu2_version_older` (see § "Version ordering").
+If `proposed` sorts before `current`, the decision is `SKIP`. This prevents accidentally
+"downgrading" a variable when the registry returns an older tag that passes the filter. The
+downgrade check applies even to `(manual)` and `(override)` entries — a fetcher returning an
+older version is always wrong.
 
 **RC→stable promotion exception**: when `current` is a prerelease (e.g. `37.0.0-rc2`) and
-`proposed` is the stable release of the same base version (`37.0.0`), the `sort -V` check
-is skipped — GNU `sort -V` puts the bare base before any suffixed variant and would
-otherwise misclassify the promotion as a downgrade. Platform suffixes like `-alpine3.23`
-are not treated as prerelease markers and are unaffected by this exception.
+`proposed` is the stable release of the same base version (`37.0.0`), the downgrade check is
+skipped. Raw `sort -V` puts the bare base before any suffixed variant; the ranked key already
+orders a stable above its own pre-releases, and the explicit guard stays as defence in depth.
+Platform suffixes like `-alpine3.23` are not prerelease markers and are unaffected.
 
-### Mixed v-prefix sort behavior
+### Version ordering
 
-`channel.sh` uses `sort -V` to select the highest version from a candidate pool. GNU
-`sort -V` misorders pools containing both `v`-prefixed and non-prefixed versions: the `v`
-character has a higher ASCII value than any digit, so `v0.3.0` sorts *after* `1.0.0-alpha`
-(numerically `0.3.0 < 1.0.0`). The fix: strip the leading `v` for the sort key via `awk`
-(preserving the original tag string), then recover the original from the second column.
+Every ordering decision in env-update — channel selection, `(offset:N)`, downgrade protection,
+`[WATCH]`, drift direction, the pecl/url/sdkman pools — goes through three helpers in
+`core/semver.sh`. **Never add a raw `sort -V` for a version decision.** Raw `sort -V` has two
+defects, both measured on uutils coreutils 0.8.0 (the default `/bin/sort` here) and GNU 9.7:
 
-```bash
-# Fixed sort — preserves original tag string, sorts by stripped key
-printf '%s\n' "${versions[@]}" \
-  | awk '{n=$0; sub(/^v/,"",n); printf "%s\t%s\n",n,$0}' \
-  | sort -V -k1,1 | tail -1 | cut -f2-
-```
+1. **Mixed `v`-prefix**: `v` sorts above every digit, so `v0.3.0` came after `1.0.0-alpha`.
+2. **Byte-wise markers (row 48)**: `R` (0x52) < `b` (0x62), so `6.0.0-RC-2` sorted *below*
+   `6.0.0-beta-3`. Groovy's `(channel:unstable)` pin never advanced, and the downgrade guard
+   read beta→RC as a downgrade and RC→beta as an upgrade. Lowercasing alone is not a fix: it
+   ranks `snapshot` above `rc` and `canary`/`dev`/`ea` above `beta`.
 
-This applies to all `_hs` / `_hp` calculations in `channel.sh` as well as the specific-
-channel sort path.
+| Helper | Use |
+|---|---|
+| `_gs_eu2_version_keys` | stdin → `KEY<TAB>ORIGINAL` (one perl pass) |
+| `_gs_eu2_version_sort [-u]` | stdin → originals, oldest first (`-u`: one per distinct key) |
+| `_gs_eu2_version_older A B` | 0 when A is strictly older than B |
+
+**The key.** A string `_gs_eu2_is_prerelease` flags, with a numeric base, gets
+`base~<tier><lowercased suffix>` (a `YYYYMMDD<hex>` tail is cut to the date). `sort -V` orders
+`~` before end-of-string on both uutils and GNU, so a pre-release sorts below its own stable,
+then by tier, then by the rest of its suffix (`rc-2 < rc-10`). **Every other string keeps
+key == input minus a leading `v`** — stable versions, `-alpine3.23`, `-zulu`, dates, git shas
+order exactly as raw `sort -V` ordered them (`env-update.test.sh` t126a pins this).
+
+| Tier | Markers |
+|---|---|
+| 0 — build streams | `dev` `snapshot` `nightly` `canary` `edge` `experimental` `insiders` `next` |
+| 1 — alpha | `alpha`, PEP 440 `2.0a1` |
+| 2 — beta | `beta`, PEP 440 `3.9.0b1`, `-b.`, `preview`, `pre`, `ea` |
+| 3 — milestone | `milestone`, `-m1` |
+| 4 — release candidate | `rc`, `-cr1`, `-rc.` |
+| stable | no marker — above every tier |
+
+- **Several markers in one string** (`1.0.0-rc1-snapshot`): the LOWEST tier wins.
+- **A marker inside an unknown suffix** is still found: `13.0.1-resolute-rc` is tier 4.
+- The tiers live in `_GS_EU2_PRERELEASE_RANKS` (`config/prerelease_markers.sh`), index-parallel
+  to `_GS_EU2_PRERELEASE_MARKERS`; adding a marker without a rank reds t126n.
+- `ea` at tier 2 is inert for Java: `_gs_eu2_sdkman_select_java` drops ea/rc/beta/alpha first.
+- **A git sha is never a pre-release**: `(^|@)[0-9a-f]{7,40}$` returns false before the marker
+  regex, because `[0-9]a[0-9]`/`[0-9]b[0-9]` match inside hex — 5 of the 6 `(use-sha)` pins
+  classified as pre-releases until row 48.
+- Two raw sorts remain on purpose: `_gs_eu2_sdkman_select_java`'s `sort -t- -k1,1V` keys on the
+  numeric field only, after pre-releases are dropped; `_gs_eu2_androidsdk_parse_versions`'
+  `sort -uV` feeds `_gs_eu2_channel_select_best`, which re-sorts.
 
 ### Major hint enforcement (C3 rule)
 
@@ -844,7 +875,8 @@ Not supported: pecl, androidsdk (those types have no major_hint filtering at all
 
 **`_gs_eu2_semver_compare`** — strips `v` prefix, checks for pre-release suffix (`-alpha`,
 `-rc1`, etc.). If both have the same base version but one has a pre-release suffix, the
-pre-release is "older" (`1.0.0-rc1 < 1.0.0`). Falls back to `sort -V` for the final call.
+pre-release is "older" (`1.0.0-rc1 < 1.0.0`). Otherwise decides with `_gs_eu2_version_older`
+(§ "Version ordering"), so `6.0.0-RC-2` is newer than `6.0.0-beta-3`.
 
 **`_gs_eu2_semver_delta`** — returns `major`, `minor`, `patch`, or `unknown`:
 - Strips `v` prefix, normalizes `_` to `.`.
@@ -1093,11 +1125,11 @@ GLOBAL_STACK_SERVERLESS_VERSION=3.38.0
 
 **Optional `(git:owner/repo)` flag:** When present, also fetches the HEAD commit SHA from the GitHub repository for the extension. The HEAD SHA is preferred over a tagged SHA because users running PHP master install extensions directly from PECL sources — the freshest commit is what works with unreleased PHP versions.
 
-**Strategy:** Queries the PECL REST XML API (`https://pecl.php.net/rest/r/{ext}/allreleases.xml`). Parses `<v>VERSION</v><s>stable|beta|…</s>` pairs. Keeps accepted stability entries (see `channel` flag below). Sorts with `sort -V`, takes the highest. When `(git:owner/repo)` is set, additionally fetches:
+**Strategy:** Queries the PECL REST XML API (`https://pecl.php.net/rest/r/{ext}/allreleases.xml`). Parses `<v>VERSION</v><s>stable|beta|…</s>` pairs. Keeps accepted stability entries (see `channel` flag below). Sorts with `_gs_eu2_version_sort` (ranked), takes the highest. When `(git:owner/repo)` is set, additionally fetches:
 - HEAD SHA via `https://api.github.com/repos/{owner}/{repo}/commits` — stored as `proposed_sha`
 - HEAD commit date via commits API — stored as `proposed_sha_date`
 
-**`(channel:unstable)` flag:** When set, the stability filter is widened to accept all four PECL stability levels: `stable`, `beta`, `alpha`, `devel`. The highest-versioned release among all accepted levels wins (via `sort -V`). Without the flag (or with `channel:stable`), only `stable` entries are accepted.
+**`(channel:unstable)` flag:** When set, the stability filter is widened to accept all four PECL stability levels: `stable`, `beta`, `alpha`, `devel`. The highest-versioned release among all accepted levels wins (ranked — § "Version ordering"). Without the flag (or with `channel:stable`), only `stable` entries are accepted.
 
 > **Promotion check is always stable-only.** `_gs_eu2_pecl_check_promotion` (which detects when a PECL maintainer cuts a stable release for a SHA-tracked extension) always queries for stable releases regardless of `channel`. This ensures stable promotion hints are not suppressed for extensions using `channel:unstable`.
 
@@ -1390,7 +1422,7 @@ GLOBAL_STACK_ANDROID_PLATFORM_TOOLS_VERSION=37.0.1
 **Tier 1 — `fetch-extract` (Perl regex):**
 Triggered when `(fetch-extract:REGEX)` is set. Fetches the URL body, applies the Perl regex
 with `perl -ne "if (/REGEX/) { print \"$1\n\" }"`, collects all capture group 1 matches,
-sorts with `sort -V`, takes the highest. If the regex matches nothing, returns an error
+sorts with `_gs_eu2_version_sort` (ranked), takes the highest. If the regex matches nothing, returns an error
 (not a fallback to the next tier — `fetch-extract` is the declared strategy).
 
 **Tier 2 — `fetch-json` (jq path):**
@@ -1416,8 +1448,9 @@ eventually falls through.
 Two sub-modes:
 
 - **`channel:nightly`** — fetches the identifier URL, parses `href="..."` attributes
-  looking for versioned directory entries (containing at least one digit), sorts them with
-  `sort -V`, takes the highest. If nothing found, returns an error.
+  looking for versioned directory entries (containing at least one digit), cuts a
+  `YYYYMMDD<hex>` tail to the date, ranks them (§ "Version ordering"), takes the highest.
+  If nothing found, returns an error.
 
   > **An HTML directory index is a scraped implementation detail, not an API — prefer a
   > machine-readable endpoint when the source offers one.** `GLOBAL_STACK_NODEEDGE_VERSION`

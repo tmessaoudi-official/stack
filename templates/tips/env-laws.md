@@ -85,16 +85,23 @@ the fetcher is asked for prerelease, and the classifier signals "review before a
 
 ### Law 3 — Downgrade → SKIP, always
 
-If the proposed version sorts before the current version (via `sort -V`), the result is
-**SKIP**. No flag or annotation can override this — downgrade protection fires before
-the `(manual)`/`(override)` gate (step 6) and before the HOLD gate (step 7).
+If the proposed version sorts before the current version (via the ranked comparison
+`_gs_eu2_version_older`), the result is **SKIP**. No flag or annotation can override this —
+downgrade protection fires before the `(manual)`/`(override)` gate (step 6) and before
+the HOLD gate (step 7).
 
-**Source**: `bin/lib/env-update/core/decide.sh` step 5 (downgrade check using `sort -V`
-with perl normalization for date-based SHAs).
+**Source**: `bin/lib/env-update/core/decide.sh` step 5 (ranked downgrade check with perl
+normalization for date-based SHAs).
+
+**Pre-release ranking (row 48)**: raw `sort -V` compares bytes, so `6.0.0-RC-2` (R = 0x52)
+used to sort BEFORE `6.0.0-beta-3` (b = 0x62) — beta→RC was SKIPped as a downgrade and
+RC→beta proposed as an upgrade. Markers now rank in tiers (build streams < alpha < beta <
+milestone < rc < stable); see `templates/tips/env-update.md` § "Version ordering".
 
 **Exception**: RC→stable promotion (e.g. current=`18.0.0-rc2`, proposed=`18.0.0`) is
-detected and the `sort -V` check is skipped for that pair only — this is a forward
-promotion, not a downgrade.
+detected and the downgrade check is skipped for that pair only — this is a forward
+promotion, not a downgrade. (The ranked key already orders a stable above its own
+pre-releases; the explicit guard stays as defence in depth.)
 
 ---
 

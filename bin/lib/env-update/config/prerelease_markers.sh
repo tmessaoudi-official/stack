@@ -54,3 +54,27 @@ readonly _GS_EU2_PRERELEASE_MARKERS
 
 _GS_EU2_PRERELEASE_REGEX="$( IFS='|'; echo "${_GS_EU2_PRERELEASE_MARKERS[*]}" )"
 readonly _GS_EU2_PRERELEASE_REGEX
+
+# _GS_EU2_PRERELEASE_RANKS — the tier of each marker, INDEX-PARALLEL to
+# _GS_EU2_PRERELEASE_MARKERS (row 48). Consumed by _gs_eu2_version_keys: a
+# pre-release of the same numeric base sorts by tier, then by the rest of its
+# suffix. When one string matches several markers, the LOWEST tier wins.
+#
+#   0  build streams   dev snapshot nightly canary edge experimental insiders next
+#   1  alpha           alpha  2.0a1
+#   2  beta            beta  3.9.0b1  -b.  preview  pre  ea
+#   3  milestone       milestone  -m1
+#   4  release cand.   rc  -cr1  -rc.
+#
+# Adding a marker means adding its rank HERE at the same index — env-update.test.sh
+# t126n reds when the two arrays differ in length.
+_GS_EU2_PRERELEASE_RANKS=(
+  1 2 4 2
+  2 0
+  0 0 0 0 0 0
+  0 0
+  1 2
+  3 3 4 2
+  0 2 4
+)
+readonly _GS_EU2_PRERELEASE_RANKS

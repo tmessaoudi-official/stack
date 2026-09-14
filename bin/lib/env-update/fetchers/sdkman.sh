@@ -67,7 +67,7 @@ _gs_eu2_sdkman_extract_versions() {
   _versions="$(printf '%s' "${_raw}" \
     | grep -oE '[0-9]+\.[0-9]+[.0-9]*(-[a-zA-Z0-9_]+)*' \
     | grep -v '^[[:space:]]*$' \
-    | sort -V \
+    | _gs_eu2_version_sort \
     | uniq \
     2>/dev/null || true)"
   if [[ -n "${_major}" ]]; then

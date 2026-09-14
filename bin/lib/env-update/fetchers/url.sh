@@ -119,7 +119,7 @@ _gs_eu2_fetch_url() {
       _fetch_ok=true
       _proposed="$(printf '%s' "${_body}" | \
         perl -ne "if (/${_fetch_extract}/) { print \"\$1\n\" }" 2>/dev/null | \
-        sort -V | tail -1 || true)"
+        _gs_eu2_version_sort | tail -1 || true)"
     fi
 
     if [[ -n "${_proposed}" ]]; then
@@ -273,16 +273,22 @@ _gs_eu2_fetch_url() {
         grep -E '[0-9]' | \
         grep -v '^$' || true)"
 
-      _proposed="$(printf '%s\n' "${_entries}" | \
+      # Normalize: strip hex SHA that follows a YYYYMMDD date. Applies to any
+      # channel format (nightly, canary, dev, ...) — only the date+sha suffix
+      # causes sort -V to mis-order entries. Non-matching entries pass through
+      # unchanged. The normalized form is then ranked (row 48) and the original
+      # directory name recovered from column 2.
+      local _norm
+      _norm="$(printf '%s\n' "${_entries}" | \
         perl -ne '
-          # Normalize sort key: strip hex SHA that follows a YYYYMMDD date.
-          # Applies to any channel format (nightly, canary, dev, ...) — the
-          # channel name is irrelevant; only the date+sha suffix causes sort-V
-          # to mis-order entries. Non-matching entries pass through unchanged.
-          chomp; $orig = $_;
+          chomp; next if $_ eq ""; $orig = $_;
           (my $key = $orig) =~ s/(\d{8})[0-9a-fA-F]+$/$1/;
           print "$key\t$orig\n";
-        ' | sort -V -k1,1 | tail -1 | cut -f2 || true)"
+        ' || true)"
+      _proposed="$(paste \
+        <(printf '%s\n' "${_norm}" | cut -f1 | _gs_eu2_version_keys | cut -f1) \
+        <(printf '%s\n' "${_norm}" | cut -f2) \
+        | sort -t $'\t' -k1,1V | tail -1 | cut -f2 || true)"
       _proposed="${_proposed%/}"
     fi
 

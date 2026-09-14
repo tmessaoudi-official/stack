@@ -771,8 +771,8 @@ t "t12d: unstable channel picks highest pre-release" bash -c "
     source '${_GS_EU2_LIB}/core/channel.sh'
     versions=\$'18.3\n18.4\n18.5-rc1\n18.5-beta2'
     result=\$(_gs_eu2_channel_select_best \"\$versions\" 'unstable')
-    # highest pre-release by sort -V
-    [[ \"\$result\" == '18.5-rc1' || \"\$result\" == '18.5-beta2' ]] || { echo \"got: \$result\"; echo FAIL; exit 0; }
+    # rc outranks beta (row 48) -- this used to accept EITHER, so it could never red
+    [[ \"\$result\" == '18.5-rc1' ]] || { echo \"got: \$result\"; echo FAIL; exit 0; }
     echo PASS
 "
 
@@ -13771,6 +13771,149 @@ t "t125e: the repo .env carries zero sdkmanager: and >= 13 androidsdk: annotatio
     [[ \$n_new -ge 13 ]] || { echo \"expected >= 13 androidsdk: annotations, found \$n_new\"; echo FAIL; exit 0; }
     out=\$(bash '${ENV_UPDATE_V2}' --dump --filter=ANDROID --env-file='${REPO_ROOT}/.env' 2>&1); rc=\$?
     [[ \$rc -eq 0 ]] || { echo \"--dump of the repo .env exited \$rc: \${out:0:300}\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 126 — pre-release ranking: shared version-sort key
+# ═══════════════════════════════════════════════════════════════════════════
+section "126 — pre-release ranking: shared version-sort key"
+
+# Row 48. `sort -V` compares raw bytes, so 6.0.0-RC-2 (R = 0x52) sorted BEFORE
+# 6.0.0-beta-3 (b = 0x62) and groovy's (channel:unstable) pin never advanced —
+# on uutils AND GNU sort alike. Lowercasing is not the fix: it ranks snapshot
+# above rc and canary/dev/ea above beta. Markers rank in explicit tiers and the
+# sort KEY carries the tier: `base~<tier><suffix>`, because sort -V orders '~'
+# before end-of-string. A string the classifier does not flag keeps key == input,
+# which is the whole regression argument — t126a pins it.
+_t126_src="source '${_GS_EU2_LIB}/config/prerelease_markers.sh'; source '${_GS_EU2_LIB}/core/semver.sh'"
+_t126_tiers_in=$'1.0.0\n1.0.0-rc-10\n1.0.0-beta-3\n1.0.0-RC-1\n1.0.0-snapshot\n1.0.0-milestone-1\n1.0.0-rc-2\n1.0.0-alpha-1\n0.9.0'
+_t126_tiers_want=$'0.9.0\n1.0.0-snapshot\n1.0.0-alpha-1\n1.0.0-beta-3\n1.0.0-milestone-1\n1.0.0-RC-1\n1.0.0-rc-2\n1.0.0-rc-10\n1.0.0'
+
+t "t126a: a non-prerelease string's key is the input itself (v stripped) -- its order is today's" bash -c "
+    ${_t126_src}
+    corpus=\$'1.2.3\n18.3-alpine3.23\n21.0.7-zulu\n2026.4.1-developer\n25.0.1+9-LTS\n20260913\n1.0.0-20260913abc\n1.0.0-20260913def\nresolute-20260413\nv1.2.0\nba4124974830222da7f12a091cf11ddf4d49363f\n5836579db73ac959b9f743e09d8763c41c7cfcef\ngithub.com/php/php-src@ae62043aa340871abfeea8568565d23d8b42f35a'
+    got=\$(printf '%s\n' \"\$corpus\" | _gs_eu2_version_keys) || { echo 'keys helper failed'; echo FAIL; exit 0; }
+    [[ \$(printf '%s\n' \"\$got\" | grep -c .) -eq 13 ]] || { echo \"expected 13 key rows, got: \$got\"; echo FAIL; exit 0; }
+    bad=\$(printf '%s\n' \"\$got\" | awk -F'\t' '{o=\$2; sub(/^v/,\"\",o); if (\$1 != o) print \$2\" -> \"\$1}')
+    [[ -z \"\$bad\" ]] || { echo \"key != input: \$bad\"; echo FAIL; exit 0; }
+    want=\$(printf '%s\n' \"\$corpus\" | awk '{n=\$0; sub(/^v/,\"\",n); print n\"\t\"\$0}' | sort -t\$'\t' -k1,1V | cut -f2-)
+    have=\$(printf '%s\n' \"\$corpus\" | _gs_eu2_version_sort)
+    [[ \"\$have\" == \"\$want\" ]] || { echo \"order changed:\"; echo \"\$have\" | tr '\n' ' '; echo; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t126b: tiers order snapshot < alpha < beta < milestone < rc < stable, case-blind, rc-2 < rc-10" bash -c "
+    ${_t126_src}
+    have=\$(printf '%s\n' '${_t126_tiers_in}' | _gs_eu2_version_sort)
+    [[ \"\$have\" == '${_t126_tiers_want}' ]] || { echo \"got: \$(echo \"\$have\" | tr '\n' ' ')\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t126c: (channel:unstable) on groovy's real list proposes 6.0.0-RC-2, not beta-3" bash -c "
+    ${_t126_src}
+    source '${_GS_EU2_LIB}/core/channel.sh'
+    versions=\$'5.1.2\n6.0.0-RC-1\n6.0.0-RC-2\n6.0.0-beta-2\n6.0.0-beta-3'
+    result=\$(_gs_eu2_channel_select_best \"\$versions\" 'unstable')
+    [[ \"\$result\" == '6.0.0-RC-2' ]] || { echo \"got: \$result\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t126d: classify_decision beta-3 -> RC-2 is not a downgrade SKIP" bash -c "
+    source '${_GS_EU2_LIB}/core/decide.sh'
+    result=\$(_gs_eu2_classify_decision '6.0.0-beta-3' '6.0.0-RC-2' '' '' '' '' 'unstable')
+    [[ \"\$result\" != 'SKIP' ]] || { echo \"got SKIP (treated as downgrade)\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# The guard must still fire where it should: the fix may not dissolve downgrade
+# protection for a real downgrade, pre-release or platform-suffixed.
+t "t126e: classify_decision still SKIPs a real downgrade (RC-2 -> beta-3, alpine 18.3 -> 18.2)" bash -c "
+    source '${_GS_EU2_LIB}/core/decide.sh'
+    r1=\$(_gs_eu2_classify_decision '6.0.0-RC-2' '6.0.0-beta-3' '' '' '' '' 'unstable')
+    r2=\$(_gs_eu2_classify_decision '18.3-alpine3.23' '18.2-alpine3.23' '' '' '' '' '')
+    [[ \"\$r1\" == 'SKIP' && \"\$r2\" == 'SKIP' ]] || { echo \"got r1=\$r1 r2=\$r2\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t126f: semver_compare ranks RC-2 newer than beta-3, both directions" bash -c "
+    ${_t126_src}
+    a=\$(_gs_eu2_semver_compare '6.0.0-RC-2' '6.0.0-beta-3')
+    b=\$(_gs_eu2_semver_compare '6.0.0-beta-3' '6.0.0-RC-2')
+    [[ \"\$a\" == 'newer' && \"\$b\" == 'older' ]] || { echo \"got a=\$a b=\$b\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t126g: several markers in one string -> the LOWEST tier wins (rc1-snapshot < beta1)" bash -c "
+    ${_t126_src}
+    _gs_eu2_version_older '1.0.0-rc1-snapshot' '1.0.0-beta1' || { echo 'rc1-snapshot not older than beta1'; echo FAIL; exit 0; }
+    _gs_eu2_version_older '1.0.0-beta1' '1.0.0-rc1-snapshot' && { echo 'beta1 older than rc1-snapshot'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# Raw sort -V reads the date+sha run as ONE number, so a sha that starts with
+# digits (20260912999…) outranks the next day's nightly (20260913abc…).
+t "t126h: nightly date+sha compares by DATE, not by the digits the sha happens to start with" bash -c "
+    ${_t126_src}
+    _gs_eu2_version_older '27.0.0-nightly20260912999abc' '27.0.0-nightly20260913abc999' || { echo '0912 not older than 0913'; echo FAIL; exit 0; }
+    _gs_eu2_version_older '27.0.0-nightly20260913abc999' '27.0.0-nightly20260912999abc' && { echo '0913 older than 0912'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t126i: a marker inside an unknown suffix is found (resolute-beta < resolute-rc < resolute)" bash -c "
+    ${_t126_src}
+    _gs_eu2_version_older '13.0.1-resolute-beta' '13.0.1-resolute-rc' || { echo 'resolute-beta not older than resolute-rc'; echo FAIL; exit 0; }
+    _gs_eu2_version_older '13.0.1-resolute-rc' '13.0.1-resolute' || { echo 'resolute-rc not older than resolute'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t126j: stable outranks its own rc, and v-prefixed originals come back as written" bash -c "
+    ${_t126_src}
+    have=\$(printf 'v1.0.0-rc1\n1.0.0\nv0.9.0\n' | _gs_eu2_version_sort | tr '\n' ' ')
+    [[ \"\$have\" == 'v0.9.0 v1.0.0-rc1 1.0.0 ' ]] || { echo \"got: \$have\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t126k: -u collapses v-prefix and case duplicates on the KEY" bash -c "
+    ${_t126_src}
+    n=\$(printf '1.2.0\nv1.2.0\n1.3.0-RC1\n1.3.0-rc1\n' | _gs_eu2_version_sort -u | grep -c .)
+    [[ \"\$n\" -eq 2 ]] || { echo \"expected 2 distinct, got \$n\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# /bin/sort is uutils on the developer's box; a clean Ubuntu clone may run GNU.
+# The KEYS are the design, so certify them against GNU sort directly.
+if command -v gnusort >/dev/null 2>&1; then
+  t "t126l: the emitted keys order identically under GNU sort (gnusort)" bash -c "
+    ${_t126_src}
+    have=\$(printf '%s\n' '${_t126_tiers_in}' | _gs_eu2_version_keys | gnusort -t\$'\t' -k1,1V | cut -f2-)
+    [[ \"\$have\" == '${_t126_tiers_want}' ]] || { echo \"got: \$(echo \"\$have\" | tr '\n' ' ')\"; echo FAIL; exit 0; }
+    echo PASS
+"
+elif [[ "${SECTION_ACTIVE:-true}" == "true" ]]; then
+  _pass "t126l: SKIP -- gnusort absent, GNU certification of the keys NOT run"
+fi
+
+# `[0-9]a[0-9]` / `[0-9]b[0-9]` (PEP 440 2.0a1 / 3.9.0b1) also match INSIDE a git
+# sha: 5 of the 6 (use-sha) pins classified as pre-releases.
+t "t126m: a git sha (bare or @-prefixed) is not a pre-release; PEP 440 a/b still are" bash -c "
+    ${_t126_src}
+    for s in ba4124974830222da7f12a091cf11ddf4d49363f ebbcd3d153df21eaee3395413de515a30b48ef05 \
+             5836579db73ac959b9f743e09d8763c41c7cfcef d96bcc586a76b02937beef94dea0f3676fb52257 \
+             github.com/php/php-src@ae62043aa340871abfeea8568565d23d8b42f35a; do
+      _gs_eu2_is_prerelease \"\$s\" && { echo \"sha classified pre-release: \$s\"; echo FAIL; exit 0; }
+    done
+    for p in 1.0.0-beta1 3.9.0b1 2.0a1 6.0.0-RC-2; do
+      _gs_eu2_is_prerelease \"\$p\" || { echo \"lost pre-release: \$p\"; echo FAIL; exit 0; }
+    done
+    echo PASS
+"
+
+t "t126n: every pre-release marker has a tier (0-4) -- a new marker cannot sort unranked" bash -c "
+    ${_t126_src}
+    declare -p _GS_EU2_PRERELEASE_RANKS >/dev/null 2>&1 || { echo '_GS_EU2_PRERELEASE_RANKS undefined'; echo FAIL; exit 0; }
+    [[ \${#_GS_EU2_PRERELEASE_RANKS[@]} -eq \${#_GS_EU2_PRERELEASE_MARKERS[@]} ]] || { echo \"\${#_GS_EU2_PRERELEASE_RANKS[@]} ranks for \${#_GS_EU2_PRERELEASE_MARKERS[@]} markers\"; echo FAIL; exit 0; }
+    for r in \"\${_GS_EU2_PRERELEASE_RANKS[@]}\"; do [[ \"\$r\" =~ ^[0-4]\$ ]] || { echo \"bad rank: \$r\"; echo FAIL; exit 0; }; done
     echo PASS
 "
 
