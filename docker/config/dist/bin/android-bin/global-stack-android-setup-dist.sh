@@ -62,12 +62,22 @@ if [ "${GLOBAL_STACK_ANDROID_INSTALL_SYSTEM_IMAGES}" = "true" ]; then
   # prefix with the name. The names are deliberately NOT renamed here: setup-dist.sh
   # runs on every start (global-stack-android-start.sh) and `avdmanager create --force`
   # with a new name would create three NEW AVDs beside the three that exist.
+  # The VERSIONED avdmanager, by path. cmdline-tools also exists unversioned in
+  # cmdline-tools/bin (the bootstrap zip), whose launcher derives the SDK root as
+  # APP_HOME/../.. = the whole tools/ tree -- a bare `avdmanager` that resolved there
+  # printed ~380 package.xml / devices.xml warnings per boot (row 47). avdmanager has
+  # no flag to override the root (--sdk_root is rejected), so the path is the fix.
+  _gs_avdmanager="${ANDROID_HOME}/cmdline-tools/${GLOBAL_STACK_ANDROID_CMDLINE_TOOLS_VERSION}/bin/avdmanager"
+  if [ ! -x "${_gs_avdmanager}" ]; then
+    printf 'FATAL: avdmanager not executable at %s\n' "${_gs_avdmanager}" >&2
+    exit 1
+  fi
   for _avd in "${GLOBAL_STACK_ANDROID_API_LEVEL_1}:7" "${GLOBAL_STACK_ANDROID_API_LEVEL_2}:9" "${GLOBAL_STACK_ANDROID_API_LEVEL_3}:9"; do
     android_version="${_avd%%:*}"
     pixel_version="${_avd##*:}"
     avd_name="global_stack_auto_pixel_${pixel_version}_pro_android_${android_version}_google_apis"
 
-    avdmanager create avd --force --name "${avd_name}" \
+    "${_gs_avdmanager}" create avd --force --name "${avd_name}" \
       --package "$(_gs_avd_pkg "${android_version}")" --device "pixel_${pixel_version}_pro"
 
     CONFIG_FILE="${ANDROID_SDK_HOME}/.android/avd/${avd_name}.avd/config.ini"

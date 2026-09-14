@@ -155,6 +155,17 @@ Two candidate fixes, in preference order:
 
 I would take (1), and optionally (2) as belt-and-braces.
 
+> **Correction (2026-09-14, row 47 of `docs/plans/MASTER.plan.md`): recommendation (1) does not work.**
+> `avdmanager` has no usable SDK-root option — `--sdk_root` is rejected both as a global flag and
+> after the verb, and `ANDROID_SDK_ROOT` in the environment alone still produced the warnings
+> [Verified 2026-09-14 in the running `04android`]. What shipped instead: `setup-dist.sh` calls the
+> VERSIONED binary by path, `${ANDROID_HOME}/cmdline-tools/${GLOBAL_STACK_ANDROID_CMDLINE_TOOLS_VERSION}/bin/avdmanager`
+> (a real `create avd` from it printed 0 warning lines), with a named FATAL when it is missing; plus
+> (2) at all five android PATH sites (both `android-start.sh` lines, both `alltogether-start.sh`
+> lines, `templates/shell/profile.sh`), which also dropped three dead legacy entries. The unversioned
+> `cmdline-tools/bin` stays on PATH, after the versioned one: a reinstall's bare `android` needs it
+> before `<ver>` exists. `startup-prologue.test.sh` §43u–43y and §54 pin both halves.
+
 **Do not** "fix" this by deleting `cmdline-tools/bin`. It is recreated by the unzip on every reinstall — deleting it is a change that undoes itself.
 
 **Verification if fixed:** count `inconsistent location` in the `04android` log after one restart. Expect 0, not 69.

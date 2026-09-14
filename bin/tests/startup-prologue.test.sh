@@ -3141,11 +3141,23 @@ assert_output_contains "43ac: ...but does not fail the install (WARN, not FATAL)
 # stub avdmanager only creates the directory the script then writes into — the names,
 # the levels, the pixel models and every substitution come from the script itself and
 # from the REAL template, so the probe cannot pass by agreeing with a fixture.
+#
+# Row 47: the real avdmanager is the VERSIONED one, cmdline-tools/<ver>/bin. The
+# unversioned bootstrap copy in cmdline-tools/bin derives its SDK root as
+# APP_HOME/../.. = /stack/tools and printed ~380 package.xml/devices.xml warnings per
+# boot. So the stub lives at the versioned path and a DECOY that exits 99 sits first on
+# PATH, modelling the bootstrap copy: a script that calls a bare `avdmanager` reaches the
+# decoy and 43v reds. The version is pinned here (this is `env`, not `env -i`, so an
+# unpinned value would be inherited from the developer's shell).
+# $1 = "nostub" leaves the versioned binary absent (43u2).
 _andd_probe() { # echoes "<rc>|<n config.ini>|<leftover placeholders>|<sysdirs>|<avd ids>"
-  local d="${TMP_DIR}/andd" rc out inis f all n
+  local d="${TMP_DIR}/andd" rc out inis f all n vbin
   rm -rf "${d}"
-  mkdir -p "${d}/bin" "${d}/home/.android/avd"
-  cat >"${d}/bin/avdmanager" <<'STUB'
+  vbin="${d}/sdk/cmdline-tools/9.9/bin"
+  mkdir -p "${d}/bin" "${d}/home/.android/avd" "${vbin}"
+  printf '#!/bin/bash\necho "decoy: unversioned avdmanager reached" >&2\nexit 99\n' >"${d}/bin/avdmanager"
+  chmod +x "${d}/bin/avdmanager"
+  cat >"${vbin}/avdmanager" <<'STUB'
 #!/bin/bash
 # Models what the script depends on: --name names the .avd directory, and a real
 # `avdmanager create` leaves a config.ini inside it. That second half matters — the
@@ -3169,7 +3181,8 @@ done
 mkdir -p "${ANDROID_SDK_HOME}/.android/avd/${name}.avd"
 : >"${ANDROID_SDK_HOME}/.android/avd/${name}.avd/config.ini"
 STUB
-  chmod +x "${d}/bin/avdmanager"
+  chmod +x "${vbin}/avdmanager"
+  [ "${1:-}" = "nostub" ] && rm -f "${vbin}/avdmanager"
   {
     cat <<'PRE'
 #!/bin/bash
@@ -3187,6 +3200,7 @@ PRE
       ANDROID_SDK_HOME="${d}/home" \
       GLOBAL_STACK_DOCKER_ROOT_DIST_PATH="${REPO_ROOT}/docker/config/dist" \
       GLOBAL_STACK_ANDROID_INSTALL_SYSTEM_IMAGES=true \
+      GLOBAL_STACK_ANDROID_CMDLINE_TOOLS_VERSION=9.9 \
       GLOBAL_STACK_ANDROID_API_LEVEL_1=37.0 \
       GLOBAL_STACK_ANDROID_API_LEVEL_2=37.1 \
       GLOBAL_STACK_ANDROID_API_LEVEL_3=37.2-beta1 \
@@ -3201,6 +3215,7 @@ PRE
     [ -n "${f}" ] && cat "${f}" >>"${all}"
   done <<<"${inis}"
   n="$(printf '%s\n' "${inis}" | grep -c . || true)"
+  [ "${1:-}" = "nostub" ] && printf '%s\n' "${out}"
   printf '%s|%s|%s|%s|%s' \
     "${rc}" "${n}" \
     "$(grep -o '{[A-Za-z]*}' "${all}" | sort -u | tr '\n' ' ')" \
@@ -3213,7 +3228,13 @@ PRE
 # script — which exits 0 and would read as a pass.
 assert_pass "43u: the AVD block is extractable and really creates AVDs (43v-43x are not vacuous)" \
   bash -c 'b="$(sed -n "/^if \[ \"\\\${GLOBAL_STACK_ANDROID_INSTALL_SYSTEM_IMAGES}\"/,\$p" "$1")"
-    [ "$(printf "%s\n" "${b}" | wc -l)" -ge 20 ] && printf "%s\n" "${b}" | grep -q "avdmanager create"' _ "${_ANDD}"
+    [ "$(printf "%s\n" "${b}" | wc -l)" -ge 20 ] && printf "%s\n" "${b}" | grep -q "create avd --force"' _ "${_ANDD}"
+# A missing versioned avdmanager must fail LOUDLY and by name, before any AVD is
+# touched -- not fall back to whatever `avdmanager` PATH happens to offer.
+assert_output_contains "43u2: a missing versioned avdmanager is a named FATAL, rc 1, no AVD written" \
+  'FATAL: avdmanager not executable at .*/cmdline-tools/9\.9/bin/avdmanager' _andd_probe nostub
+assert_output_contains "43u3: ...and it exits 1 with zero config.ini" \
+  '^1|0|' _andd_probe nostub
 
 # rc 0, three config.ini written, and NO placeholder left behind. The template carries
 # eight distinct placeholders (43d); a substitution dropped from the sed leaves one in
@@ -3907,6 +3928,76 @@ assert_pass "53f: the gate conditions and the wipe read android.cli (>= 3, found
   test "${_a53_gate_new}" -ge 3
 assert_pass "53g: setup.sh records the CLI version into android.cli" \
   grep -qE '^android --version > "\$\{GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS\}/android\.cli"$' "${AND_SETUP}"
+
+# ─── Section 54: android PATH order, dead entries, licence guard ─────────
+printf '\n%b── Section 54: android PATH order + sdkmanager licence guard (row 47)%b\n' "${C_BOLD}" "${C_RESET}"
+
+# Row 47. Two copies of cmdline-tools exist: the unversioned bootstrap in
+# cmdline-tools/bin (its launcher resolves the SDK root to /stack/tools) and the
+# versioned cmdline-tools/<ver>/bin (resolves it correctly). Whichever comes first on
+# PATH answers a bare avdmanager/sdkmanager, so the VERSIONED one must come first.
+# The unversioned one stays: a reinstall's bare `android` needs it before <ver> exists.
+# The sites are DISCOVERED (anchored PATH=, the §48 shape, comments stripped) across
+# dist/bin AND the host template, never listed.
+_a54_lines="$({
+  find "${DIST_BIN}" -name '*.sh' -type f -print0 | xargs -0 grep -HnE '(^|[^A-Za-z0-9_])PATH=.*cmdline-tools' || true
+  grep -HnE '(^|[^A-Za-z0-9_])PATH=.*cmdline-tools' "${REPO_ROOT}/templates/shell/profile.sh" || true
+} | grep -vE '^[^:]+:[0-9]+:[[:space:]]*#' || true)"
+_a54_n=0
+_a54_order=""
+_a54_dead=""
+while IFS= read -r _l; do
+  [ -n "${_l}" ] || continue
+  _a54_n=$((_a54_n + 1))
+  _f="${_l%%:*}"
+  _r="${_l#*:}"
+  _where="$(basename "${_f}"):${_r%%:*}"
+  IFS=':' read -r -a _els <<<"${_r#*:}"
+  _vi=-1
+  _ui=-1
+  for _i in "${!_els[@]}"; do
+    # shellcheck disable=SC2016 # literal ${...} text, matched verbatim
+    case "${_els[${_i}]}" in
+      '${ANDROID_HOME}/cmdline-tools/${GLOBAL_STACK_ANDROID_CMDLINE_TOOLS_VERSION}/bin') _vi=${_i} ;;
+      '${ANDROID_HOME}/cmdline-tools/bin') _ui=${_i} ;;
+      '${ANDROID_HOME}/cmdline-tools/tools/bin' | '${ANDROID_HOME}/tools' | '${ANDROID_HOME}/tools/bin') _a54_dead+="${_where} " ;;
+    esac
+  done
+  if [ "${_vi}" -lt 0 ] || { [ "${_ui}" -ge 0 ] && [ "${_ui}" -lt "${_vi}" ]; }; then
+    _a54_order+="${_where} "
+  fi
+done <<<"${_a54_lines}"
+# Non-vacuity: 4 dist/bin lines (android-start x2, alltogether-start x2) + profile.sh.
+assert_pass "54a: android PATH sites discovered (>= 5, found ${_a54_n})" test "${_a54_n}" -ge 5
+assert_pass "54b: versioned cmdline-tools precedes the unversioned one everywhere (offenders: ${_a54_order:-none})" \
+  test -z "${_a54_order}"
+assert_pass "54c: no dead legacy SDK entries on PATH (offenders: ${_a54_dead:-none})" \
+  test -z "${_a54_dead}"
+
+# `flutter doctor --android-licenses` shells out to the deprecated sdkmanager and
+# prints two deprecation lines. It runs only when no licence is on disk yet. Exactly
+# one live call, and the shipped line itself is EXECUTED against a stub flutter.
+_a54_lic="$(grep -v '^[[:space:]]*#' "${AND_START}" | grep -e '--android-licenses' || true)"
+assert_pass "54d: exactly one live --android-licenses line in start.sh" \
+  test "$(printf '%s\n' "${_a54_lic}" | grep -c . || true)" -eq 1
+_a54_probe() { # $1 = with|without licence file; echoes called|skipped
+  local _d
+  _d="$(mktemp -d)"
+  mkdir -p "${_d}/bin" "${_d}/sdk"
+  printf '#!/bin/bash\n: >"%s/called"\n' "${_d}" >"${_d}/bin/flutter"
+  chmod +x "${_d}/bin/flutter"
+  if [ "$1" = with ]; then
+    mkdir -p "${_d}/sdk/licenses"
+    printf 'x\n' >"${_d}/sdk/licenses/android-sdk-license"
+  fi
+  env PATH="${_d}/bin:$(printenv PATH)" ANDROID_HOME="${_d}/sdk" bash -eE -o pipefail -c "${_a54_lic}" >/dev/null 2>&1 || true
+  if [ -e "${_d}/called" ]; then echo called; else echo skipped; fi
+  rm -rf "${_d}"
+}
+assert_output_contains "54e: a licence already on disk -> flutter doctor --android-licenses is NOT run" \
+  '^skipped$' _a54_probe with
+assert_output_contains "54f: no licence on disk (fresh install) -> it still runs" \
+  '^called$' _a54_probe without
 
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
