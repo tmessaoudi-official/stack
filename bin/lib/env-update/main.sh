@@ -175,7 +175,7 @@ _gs_eu2_classify_record() {
       _cr_eff_override="" _cr_eff_manual=""
     fi
     # (tag-channel-prefix): pre-strip the channel prefix from _cur and _prop so that
-    # decide.sh's internal sort -V downgrade check compares pure semver strings.
+    # decide.sh's internal ranked downgrade check compares pure semver strings.
     # The round-trip prefix is display/storage-only; classify_decision must not see it.
     local _cr_cur_cls="${_cr_cur}" _cr_prop_cls="${_cr_prop}"
     local _cr_tcp_cls

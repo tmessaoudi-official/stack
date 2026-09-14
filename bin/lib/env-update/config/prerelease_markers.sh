@@ -67,7 +67,8 @@ readonly _GS_EU2_PRERELEASE_REGEX
 #   4  release cand.   rc  -cr1  -rc.
 #
 # Adding a marker means adding its rank HERE at the same index — env-update.test.sh
-# t126n reds when the two arrays differ in length.
+# t126n reds when the two arrays differ in length, and t126o/t126p red until the new
+# marker has a row in their expected-tier tables (keyed by marker, not position).
 _GS_EU2_PRERELEASE_RANKS=(
   1 2 4 2
   2 0

@@ -97,6 +97,9 @@ _gs_eu2_version_sort() {
 #
 # Args:    $1 a, $2 b — version strings
 # Returns: 0 when a sorts strictly before b; 1 when equal or newer
+# Note:    "equal" means equal KEYS, not equal strings: 1.3.0-RC1 and 1.3.0-rc1 (or
+#          1.2.0 and v1.2.0) are neither older than the other. Deliberate — they are
+#          the same version, which is also why `_gs_eu2_version_sort -u` collapses them.
 _gs_eu2_version_older() {
   [[ "${1}" == "${2}" ]] && return 1
   local _keys _ka _kb
@@ -131,7 +134,10 @@ _gs_eu2_is_unversioned() {
 #          "equal"  if ver_a == ver_b (after stripping v-prefix and channel prefix)
 # Returns: 0 always
 #
-# Pre-release handling: 1.0.0-rc1 < 1.0.0 (pre-release sorts before stable).
+# Pre-release handling: 1.0.0-rc1 < 1.0.0 (pre-release sorts before stable), and
+# markers rank by tier via _gs_eu2_version_older (6.0.0-beta-3 < 6.0.0-RC-2).
+# A case/v-prefix variant pair with equal keys (1.3.0-RC1 / 1.3.0-rc1) prints
+# "newer" in BOTH directions — the pair is one version; callers test "older".
 # v-prefix is stripped before comparison; $3 is backward-compatible (omit → no-op).
 _gs_eu2_semver_compare() {
   local _tcp="${3:-}"
@@ -286,7 +292,7 @@ _gs_eu2_semver_delta() {
   # (YYYYMMDD, YYYYMM, or similar monotonic date stamps), treat any forward
   # increment as "patch" — these are not semantic major versions.
   # By the time we reach semver_delta, decide.sh has already verified _b >= _a
-  # via sort -V, so if both components are date-stamps we know it is a forward
+  # via _gs_eu2_version_older, so if both components are date-stamps we know it is a forward
   # increment and "patch" is correct.
   if [[ "${_am}" =~ ^[0-9]{6,}$ && "${_bm}" =~ ^[0-9]{6,}$ ]]; then
     echo "patch"; return

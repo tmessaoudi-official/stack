@@ -98,8 +98,9 @@ _gs_eu2_channel_count_stable() {
 #          or the offset reaches past the end of the list
 # Returns: 0 always
 #
-# Sort strategy: tags are sorted with awk (strip v-prefix) + sort -V to avoid
-# mixed v-prefix/no-prefix ordering bugs (v0.3.0 sorts after 1.0.0 in plain sort -V).
+# Sort strategy: tags are sorted with _gs_eu2_version_sort, whose key strips the
+# v-prefix (v0.3.0 sorts after 1.0.0 in plain sort -V) and ranks pre-release
+# markers by tier (6.0.0-RC-2 sorts below 6.0.0-beta-3 in plain sort -V) — row 48.
 #
 # Stable channel: never falls back to prerelease.
 # Unstable: returns highest prerelease, but promotes to stable if stable has surpassed it.
@@ -149,7 +150,7 @@ _gs_eu2_channel_select_best() {
     | _gs_eu2_version_sort | tail -1)" || true
 
   # Non-numeric fallback: handle letter-starting tags (e.g. ubuntu codename "resolute-20260413").
-  # When no numeric/v-prefixed tags survive the loop, sort all non-unversioned tags with sort -V.
+  # When no numeric/v-prefixed tags survive the loop, sort all non-unversioned tags with the ranked sort.
   if [[ ${#_stables[@]} -eq 0 && ${#_pres[@]} -eq 0 ]]; then
     local _fb=()
     while IFS= read -r _v; do

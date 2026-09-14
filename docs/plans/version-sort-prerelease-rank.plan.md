@@ -29,13 +29,13 @@ red-first tests; five sabotages restored byte-identically.
 <!-- progress-block v1 -->
 | # | Step | Size | State | Evidence | Files |
 |---|------|------|-------|----------|-------|
-| 1 | Baseline full-.env run captured | S | done | - | var/claude/version-sort/** |
-| 2 | Red-first tests (tiers, identity, GNU keys, groovy, SHA, t12d) | M | done | - | bin/tests/env-update.test.sh |
-| 3 | Shared key helpers + classifier guard | M | done | - | bin/lib/env-update/core/semver.sh bin/lib/env-update/config/prerelease_markers.sh |
-| 4 | Convert sort -V sites | M | done | - | bin/lib/env-update/** |
-| 5 | Green suite + sabotage | S | doing | - | bin/tests/env-update.test.sh |
-| 6 | After run + diff | S | done | - | var/claude/version-sort/** |
-| 7 | Docs + memory | S | doing | - | templates/tips/env-update.md templates/tips/env-laws.md bin/lib/env-update/reporting/reference.sh CLAUDE.md |
+| 1 | Baseline full-.env run captured | S | done | f20cdfe | var/claude/version-sort/** |
+| 2 | Red-first tests (tiers, identity, GNU keys, groovy, SHA, t12d) | M | done | f20cdfe | bin/tests/env-update.test.sh |
+| 3 | Shared key helpers + classifier guard | M | done | f20cdfe | bin/lib/env-update/core/semver.sh bin/lib/env-update/config/prerelease_markers.sh |
+| 4 | Convert sort -V sites | M | done | f20cdfe | bin/lib/env-update/** |
+| 5 | Green suite + sabotage | S | done | f20cdfe | bin/tests/env-update.test.sh |
+| 6 | After run + diff | S | done | f20cdfe | var/claude/version-sort/** |
+| 7 | Docs + memory | S | done | f20cdfe | templates/tips/env-update.md templates/tips/env-laws.md bin/lib/env-update/reporting/reference.sh CLAUDE.md |
 <!-- /progress-block -->
 ### Blocked
 ### Needs input

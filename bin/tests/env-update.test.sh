@@ -13917,6 +13917,81 @@ t "t126n: every pre-release marker has a tier (0-4) -- a new marker cannot sort 
     echo PASS
 "
 
+# t126n only proves the COUNT and the range. The tiers are an index-parallel array,
+# so a wrong digit at any position would pass it. This table is keyed by the
+# marker FRAGMENT itself: a rank at the wrong index, or a marker added without
+# a row here, reds. It also catches a shadowed marker (-rc\. is always matched
+# together with rc[0-9.]*, so no sample version could ever expose its rank).
+_t126o_rank_table() (
+  # shellcheck source=/dev/null
+  source "${_GS_EU2_LIB}/config/prerelease_markers.sh"
+  local -A want=(
+    ['alpha[0-9.]*']=1 ['beta[0-9.]*']=2 ['rc[0-9.]*']=4 ['preview']=2
+    ['(^|[^a-zA-Z])pre([^a-zA-Z]|$)']=2 ['(^|[^a-zA-Z])next([^a-zA-Z]|$)']=0
+    ['nightly']=0 ['edge']=0 ['canary']=0 ['snapshot']=0 ['experimental']=0 ['insiders']=0
+    ['\.dev']=0 ['-dev([0-9.]|$)']=0
+    ['[0-9]a[0-9]']=1 ['[0-9]b[0-9]']=2
+    ['milestone']=3 ['[.-]m[0-9]']=3 ['-cr[0-9]']=4 ['-ea']=2
+    ['-next\.']=0 ['-b\.']=2 ['-rc\.']=4
+  )
+  [[ ${#want[@]} -eq ${#_GS_EU2_PRERELEASE_MARKERS[@]} ]] \
+    || { echo "table has ${#want[@]} markers, config has ${#_GS_EU2_PRERELEASE_MARKERS[@]}"; echo FAIL; exit 0; }
+  local i m
+  for i in "${!_GS_EU2_PRERELEASE_MARKERS[@]}"; do
+    m="${_GS_EU2_PRERELEASE_MARKERS[$i]}"
+    [[ -n "${want[$m]+x}" ]] || { echo "marker has no expected tier: ${m}"; echo FAIL; exit 0; }
+    [[ "${_GS_EU2_PRERELEASE_RANKS[$i]}" == "${want[$m]}" ]] \
+      || { echo "marker ${m} (index ${i}) ranked ${_GS_EU2_PRERELEASE_RANKS[$i]}, expected ${want[$m]}"; echo FAIL; exit 0; }
+  done
+  echo PASS
+)
+t "t126o: every marker carries its RULED tier, keyed by the marker itself (not by position)" _t126o_rank_table
+
+# End to end: one version per marker through the real key builder. The rank
+# in the key is the LOWEST tier the string matches, so the expected digit is
+# that minimum (1.0.0-next.3 matches next AND -next\. — both tier 0).
+_t126p_samples() (
+  # shellcheck source=/dev/null
+  source "${_GS_EU2_LIB}/config/prerelease_markers.sh"
+  # shellcheck source=/dev/null
+  source "${_GS_EU2_LIB}/core/semver.sh"
+  local v want key got
+  while read -r v want; do
+    [[ -z "${v}" ]] && continue
+    key="$(printf '%s\n' "${v}" | _gs_eu2_version_keys | cut -f1)"
+    [[ "${key}" == *"~"* ]] || { echo "${v}: not ranked as a pre-release (key ${key})"; echo FAIL; exit 0; }
+    got="${key#*~}"
+    got="${got:0:1}"
+    [[ "${got}" == "${want}" ]] || { echo "${v}: tier ${got}, expected ${want} (key ${key})"; echo FAIL; exit 0; }
+  done <<'ROWS'
+1.0.0-alpha1 1
+1.0.0-beta1 2
+1.0.0-rc1 4
+1.0.0-preview 2
+1.0.0-pre.1 2
+1.0.0-next 0
+1.0.0-nightly20260913 0
+1.0.0-edge 0
+1.0.0-canary.1 0
+1.0.0-SNAPSHOT 0
+1.0.0-experimental 0
+1.0.0-insiders 0
+1.0.0.dev1 0
+1.0.0-dev 0
+2.0a1 1
+3.9.0b1 2
+1.0.0-milestone1 3
+1.0.0-M2 3
+1.0.0-cr1 4
+1.0.0-ea 2
+1.0.0-next.3 0
+1.0.0-b.2 2
+1.0.0-rc.2 4
+ROWS
+  echo PASS
+)
+t "t126p: one version per marker lands in the expected tier through _gs_eu2_version_keys" _t126p_samples
+
 _flush_section
 
 TOTAL=$(( PASS + FAIL ))

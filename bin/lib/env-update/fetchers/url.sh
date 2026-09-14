@@ -110,7 +110,7 @@ _gs_eu2_fetch_url() {
 
   # ────────────────────────────────────────────────────────────────────────
   # Tier 1 — fetch-extract
-  # Fetch URL body; run perl regex, capture group 1; sort -V; take highest.
+  # Fetch URL body; run perl regex, capture group 1; ranked version sort; take highest.
   # ────────────────────────────────────────────────────────────────────────
   if [[ -n "${_fetch_extract}" ]]; then
     local _body _fetch_ok=false _t1_sink

@@ -3,7 +3,7 @@
 #
 # Exports:   _gs_eu2_classify_decision  _gs_eu2_classify_sha_decision
 # Sources:   core/semver.sh
-# Deps:      sort (GNU coreutils — for sort -V in downgrade detection)
+# Deps:      perl (date+sha normalisation); ordering via _gs_eu2_version_older (semver.sh)
 # Env:       none
 #
 # Decision ladder (applied in this order — first match wins):
@@ -88,19 +88,21 @@ _gs_eu2_classify_decision() {
     # unstable_mode=full: bypass this gate entirely, continue to step 5+
   fi
 
-  # Downgrade protection: if proposed sorts before current via sort -V, skip.
-  # Use sort -V directly (not semver_compare) to avoid misclassifying platform
-  # suffixes like -alpine3.23 as pre-release markers.
+  # Downgrade protection: if proposed sorts before current, skip.
+  # Use _gs_eu2_version_older directly (not semver_compare's same-base prerelease
+  # branch) so platform suffixes like -alpine3.23 are never treated as pre-release
+  # markers — the ranked key leaves non-prereleases exactly in raw sort -V order.
   # NOTE: runs BEFORE the manual/override check so that downgrades are suppressed
   # even for manual entries — a fetcher returning an older version is always wrong,
   # regardless of annotation flags.
   local _cv="${_cur#v}" _pv="${_prop#v}"
 
-  # RC→stable promotion guard: sort -V puts the bare base version (37.0.0) BEFORE
-  # any suffixed variant (37.0.0-rc2), which falsely triggers downgrade protection.
-  # When current is a prerelease AND proposed is stable (no prerelease marker), and
-  # both share the same numeric base, this is a forward promotion — skip the sort -V
-  # check entirely.  Platform suffixes (e.g. -alpine3.23) are NOT detected as
+  # RC→stable promotion guard: raw sort -V puts the bare base version (37.0.0) BEFORE
+  # any suffixed variant (37.0.0-rc2), which falsely triggered downgrade protection.
+  # The ranked key (row 48) already orders 37.0.0~4rc2 < 37.0.0, so this guard is now
+  # redundant for marked pre-releases; kept because it is behaviour-neutral and costs
+  # nothing. When current is a prerelease AND proposed is stable, and both share the
+  # same numeric base, this is a forward promotion — skip the ordering check entirely.  Platform suffixes (e.g. -alpine3.23) are NOT detected as
   # prerelease by _gs_eu2_is_prerelease, so they are unaffected by this guard.
   local _skip_sort_v=false
   if _gs_eu2_is_prerelease "${_cv}" && ! _gs_eu2_is_prerelease "${_pv}"; then
