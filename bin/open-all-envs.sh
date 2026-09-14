@@ -25,8 +25,8 @@ _GS_EU_MD_DOT_ENV="${_GS_EU_MD_ROOT}/.env"
 
 # Types to skip when opening links (space-separated)
 # Add a type here if you check it manually (e.g. npm via 'npm --global outdated')
-# sdkmanager has no browser URL — always skip it here
-_GS_EU_MD_OPEN_SKIP_TYPES="npm sdkmanager pypi sdkman"
+# androidsdk has no browser URL — always skip it here
+_GS_EU_MD_OPEN_SKIP_TYPES="npm androidsdk pypi sdkman"
 
 # How many Ubuntu versions back to probe for url-probe annotations (newest first, only opens valid URLs)
 _GS_EU_MD_URL_PROBE_BACK=9
@@ -122,9 +122,9 @@ while read -r line; do
   elif [[ "${line}" =~ sdkman:([a-zA-Z0-9_-]+) ]]; then
     _type="sdkman"
     url="https://sdkman.io/sdks#${BASH_REMATCH[1]}"
-  # sdkmanager: — no browser URL (use terminal: sdkmanager --sdk_root="${ANDROID_HOME}" --list)
-  elif [[ "${line}" =~ sdkmanager:([a-zA-Z0-9_.-]+) ]]; then
-    _type="sdkmanager"
+  # androidsdk: — no browser URL (use terminal: android --sdk="${ANDROID_HOME}" sdk list --all)
+  elif [[ "${line}" =~ androidsdk:([a-zA-Z0-9_.-]+) ]]; then
+    _type="androidsdk"
     # no url — handled via terminal command above
   # rubygems:package
   elif [[ "${line}" =~ rubygems:([a-zA-Z0-9_-]+) ]]; then
@@ -216,7 +216,9 @@ fi
 for _GS_EU_MD_NODE_VERSION in $(compgen -v | grep -E '^GLOBAL_STACK_NODE([0-9]+|EDGE|[0-9]+_[0-9]+)_VERSION$'); do echo ""; echo "Node ${_GS_EU_MD_NODE_VERSION}: ${!_GS_EU_MD_NODE_VERSION}"; nvm use "${!_GS_EU_MD_NODE_VERSION}"; npm --global outdated; done
 (cd /stack/tools/serverless-framework && npm outdated)
 for _GS_EU_MD_PYTHON_VERSION in $(compgen -v | grep -E '^GLOBAL_STACK_PYTHON([0-9]+|EDGE|[0-9]+_[0-9]+)_VERSION$'); do echo ""; echo "Python ${_GS_EU_MD_PYTHON_VERSION}: ${!_GS_EU_MD_PYTHON_VERSION}"; /stack/tools/pyenv/versions/"${!_GS_EU_MD_PYTHON_VERSION}"/bin/pip"${!_GS_EU_MD_PYTHON_VERSION%.*}" list --outdated; done
-sdkmanager --sdk_root="${ANDROID_HOME}" --list
+# sdkmanager is deprecated (a shim over `android sdk`). --sdk is a GLOBAL option:
+# written after the subcommand the CLI rejects it -- "Unknown option", exit 2.
+android --sdk="${ANDROID_HOME}" sdk list --all
 
 # The block below steers sdkman's healthcheck by rewriting ~/.sdkman/etc/config.
 # That file belongs to the developer, not to this script: it used to be clobbered

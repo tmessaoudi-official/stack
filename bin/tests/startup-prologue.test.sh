@@ -2027,7 +2027,7 @@ done
 # ─── Section 27: android SDK component gate (row 19) ──────────────────────
 printf '\n%b── Section 27: android SDK component gate%b\n' "${C_BOLD}" "${C_RESET}"
 
-# Row 19. android.sdkmanager holds the sdkmanager BINARY's own version, so it could
+# Row 19. android.sdkmanager (android.cli since row 46) held the CLI BINARY's own version, so it could
 # never detect an SDK component bump — the GLOBAL_STACK_ANDROID_* pins were never
 # compared to anything. A composite marker now carries the inputs the live install
 # actually consumes. Row 33 widened that from 3 to all 12: §47 below derives the set
@@ -3124,7 +3124,7 @@ assert_pass "43z2: ...and all three are really installed bare (43z is not vacuou
 # A single-instance pin is an EXPECTED version, not a requestable one -- upstream
 # serves what it serves. So the verify asserts it and WARNs; it does not FATAL, and
 # that is not a swallowed error: the only remedy for a real mismatch is an `.env`
-# bump (the pin is env-update-tracked, `@todo env-update sdkmanager:platform-tools`),
+# bump (the pin is env-update-tracked, `@todo env-update androidsdk:platform-tools`),
 # and failing hard would block 04android plus the three consumers behind it on what
 # is documentation drift, not a broken SDK.
 assert_output_contains "43aa: a matching platform-tools version raises no warning" \
@@ -3371,7 +3371,7 @@ else
     "45a: env-scan.md omits options the tool advertises" "${_es_undoc}"
 fi
 
-# env-update.md §7.9 documents the sdkmanager fetcher. Until row 41 it described a
+# env-update.md §7.9 documents the androidsdk fetcher. Until row 41 it described a
 # `sdkmanager --list` invocation and this check pinned a "deprecated upstream" note
 # beside it (anchored on the replacement command, not the word "deprecated", which
 # upstream's own quoted message contains). Row 41 rewrote the fetcher to read
@@ -3388,11 +3388,11 @@ fi
 # line and pushed it out of view, redding a guard whose subject had not changed.
 # A window that ordinary growth can invalidate reports drift that is not there,
 # which is the mirror of the can-never-fire defect and costs the same trust.
-_eu_note="$(awk '/^### 7\.9 sdkmanager/{f=1} f&&/^### /&&!/7\.9 sdkmanager/{exit} f' "${_EU_DOC}" || true)"
-assert_output_contains "45b: env-update.md §7.9 names the repository XML as the sdkmanager source" \
+_eu_note="$(awk '/^### 7\.9 androidsdk/{f=1} f&&/^### /&&!/7\.9 androidsdk/{exit} f' "${_EU_DOC}" || true)"
+assert_output_contains "45b: env-update.md §7.9 names the repository XML as the androidsdk source" \
   'repository2-3.xml' printf '%s' "${_eu_note}"
 assert_output_contains "45b2: ...and documents the offset-bearing cache key" \
-  'sdkmanager:component:channel:offN' printf '%s' "${_eu_note}"
+  'androidsdk:component:channel:offN' printf '%s' "${_eu_note}"
 
 assert_fail "45c: no 'partitian' typo anywhere under templates/" \
   grep -rqi 'partitian' "${REPO_ROOT}/templates"
@@ -3852,6 +3852,61 @@ assert_pass "52a: the scan actually reached the rust install sites (>= 5)" \
 # reporting a bare number that a broken extraction could also produce.
 assert_output_contains "52b: no cargo install under rust-bin omits --locked" \
   '^NONE$' printf '%s\n' "${_a52_offenders:-NONE}"
+
+# ─── Section 53: android.sdkmanager -> android.cli marker, migrated ───────
+printf '\n%b── Section 53: android CLI marker rename (row 46)%b\n' "${C_BOLD}" "${C_RESET}"
+
+# Row 46. The marker that records `android --version` was still named after the
+# deprecated sdkmanager. It is only an existence flag, but a bare rename is NOT
+# safe: start.sh treats an ABSENT marker as "never installed" and answers with
+# `sudo rm -rf "${ANDROID_HOME}"` plus a 15-minute SDK reinstall. So start.sh
+# carries a migration that moves the old file into place BEFORE the gate reads it.
+# The block is extracted by its sentinel comments, never by line numbers.
+_a53_block="$(awk '/^# >>> android-marker-migration/{f=1; next} /^# <<< android-marker-migration/{f=0} f' "${AND_START}" || true)"
+
+# Non-vacuity: an anchor that stops matching yields an empty script, which exits
+# 0 and would make every probe below read as a pass.
+assert_pass "53a: start.sh carries the marker migration block (and it really moves the file)" \
+  bash -c 'grep -q "mv " <<<"$1" && grep -q "android\.sdkmanager" <<<"$1" && grep -q "android\.cli" <<<"$1"' _ "${_a53_block}"
+
+# Runs the SHIPPED block against a tmpdir. The VERSIONS pin is load-bearing: the
+# variable is set in an ordinary /stack shell, and a probe inheriting it would move
+# the live tools/versions marker (the §46 lesson).
+_a53_probe() {
+  local _d _rc=0
+  _d="$(mktemp -d)"
+  case "$1" in
+    old) printf 'old-build\n' >"${_d}/android.sdkmanager" ;;
+    both)
+      printf 'old-build\n' >"${_d}/android.sdkmanager"
+      printf 'new-build\n' >"${_d}/android.cli"
+      ;;
+  esac
+  GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS="${_d}" bash -eu -c "${_a53_block}" >/dev/null 2>&1 || _rc=$?
+  printf 'rc=%s old=%s new=%s\n' "${_rc}" \
+    "$(cat "${_d}/android.sdkmanager" 2>/dev/null || echo -)" \
+    "$(cat "${_d}/android.cli" 2>/dev/null || echo -)"
+  rm -rf "${_d}"
+}
+assert_output_contains "53b: an old marker is MOVED to android.cli, content intact (no reinstall)" \
+  '^rc=0 old=- new=old-build$' _a53_probe old
+assert_output_contains "53c: no marker stays no marker (a fresh volume still installs)" \
+  '^rc=0 old=- new=-$' _a53_probe none
+assert_output_contains "53d: a newer android.cli is never overwritten; the stale old one goes" \
+  '^rc=0 old=- new=new-build$' _a53_probe both
+
+# Outside the migration block, and outside comments, nothing may still read or
+# write the old name -- a gate left on android.sdkmanager would see the moved
+# file as absent and wipe the SDK on every boot.
+_a53_live_old="$(awk '/^# >>> android-marker-migration/{f=1} /^# <<< android-marker-migration/{f=0; next} !f' "${AND_START}" "${AND_SETUP}" \
+  | grep -v '^[[:space:]]*#' | grep -c 'android\.sdkmanager' || true)"
+assert_pass "53e: no live android.sdkmanager reference outside the migration (found ${_a53_live_old})" \
+  test "${_a53_live_old}" -eq 0
+_a53_gate_new="$(grep -v '^[[:space:]]*#' "${AND_START}" | grep -c 'VERSIONS}/android\.cli' || true)"
+assert_pass "53f: the gate conditions and the wipe read android.cli (>= 3, found ${_a53_gate_new})" \
+  test "${_a53_gate_new}" -ge 3
+assert_pass "53g: setup.sh records the CLI version into android.cli" \
+  grep -qE '^android --version > "\$\{GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS\}/android\.cli"$' "${AND_SETUP}"
 
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'

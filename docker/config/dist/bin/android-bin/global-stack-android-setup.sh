@@ -174,7 +174,7 @@ fi
 # WARN, deliberately NOT fatal, and this is not a swallowed error -- there is no
 # failure here to absorb. The install succeeded; the pin is simply describing a build
 # upstream has moved past. The only remedy is a human `.env` bump (the pin is
-# env-update-tracked: `@todo env-update sdkmanager:platform-tools`), and exiting 1
+# env-update-tracked: `@todo env-update androidsdk:platform-tools`), and exiting 1
 # would strand 04android plus 05stable/05edge/local.05 behind documentation drift.
 #
 # Fires once per INSTALL, not once per boot: the gate keys on the pin, so after a
@@ -189,11 +189,11 @@ if [ "${_ptv_got}" != "${GLOBAL_STACK_ANDROID_PLATFORM_TOOLS_VERSION}" ]; then
 fi
 
 # rm -rf ${ANDROID_HOME}/licenses
-android --version > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/android.sdkmanager"
+android --version > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/android.cli"
 # Row 19: the component-pin marker the gate in global-stack-android-start.sh reads.
 # Composed THERE and exported, deliberately not recomputed here — two copies of the
 # same string would drift and every boot would then look like a version change.
-# Written last, so a failed sdkmanager run above cannot record success. Empty when
+# Written last, so a failed android sdk run above cannot record success. Empty when
 # this script is run standalone: that leaves the marker absent, and the next start
 # reinstalls rather than trusting an unverified state.
 # An `if`, not `[[ ... ]] && ...`: this is the script's last statement, so a

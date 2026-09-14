@@ -26,7 +26,7 @@ readonly _GS_EU2_PARSE_SH_LOADED=1
 # two arguments and never reads the field, so (offset:N>0) on one of those
 # would resolve to latest and say nothing. Add a type here ONLY in the same
 # change that makes its fetcher pass the third argument.
-readonly _GS_EU2_OFFSET_TYPES=" sdkmanager "
+readonly _GS_EU2_OFFSET_TYPES=" androidsdk "
 
 # shellcheck source=./records.sh
 source "$(dirname "${BASH_SOURCE[0]}")/records.sh"
@@ -504,6 +504,16 @@ _gs_eu2_parse_env_file() {
       fi
 
       _pending_type="${_type_token%%:*}"
+      # Row 46: `sdkmanager` is deprecated upstream (a shim over `android sdk`) and
+      # the type was renamed with it. Dispatch is dynamic, so a leftover sdkmanager:
+      # would reach no fetcher and SKIP without a word. Refused HERE, before any
+      # flag check, so the retired name is the error that wins -- (offset:1) was
+      # legal on it, and a later refusal would be preceded by the offset one.
+      if [[ "${_pending_type}" == "sdkmanager" ]]; then
+        printf 'env-update: %s:%s: the sdkmanager: type is retired (the Android SDK CLI is "android sdk" now) — rename the annotation type to androidsdk: (same identifier, same flags)\n' \
+          "${_env_file}" "${_line_number}" >&2
+        exit 1
+      fi
       local _type_rest="${_type_token#*:}"
       _pending_identifier="${_type_rest}"
       _pending_major_hint=""
@@ -716,13 +726,13 @@ _gs_eu2_parse_env_file() {
               "${_env_file}" "${_pending_lnum}" "${_x_type}" >&2
             exit 1
           fi
-          # Same b2290dc shape: only the sdkmanager fetcher resolves companion
+          # Same b2290dc shape: only the androidsdk fetcher resolves companion
           # packages out of a second repository document. Anywhere else the flag
           # would parse, store and never be read.
           local _x_sibling
           _x_sibling="$(_gs_eu2_record_get "${_idx}" require_sibling)"
-          if [[ -n "${_x_sibling}" && "${_x_type}" != "sdkmanager" ]]; then
-            printf 'env-update: %s:%s: (require-sibling:) is not honoured by the %s fetcher — only sdkmanager: resolves companion packages from a second repository XML; drop the require-sibling\n' \
+          if [[ -n "${_x_sibling}" && "${_x_type}" != "androidsdk" ]]; then
+            printf 'env-update: %s:%s: (require-sibling:) is not honoured by the %s fetcher — only androidsdk: resolves companion packages from a second repository XML; drop the require-sibling\n' \
               "${_env_file}" "${_pending_lnum}" "${_x_type}" >&2
             exit 1
           fi

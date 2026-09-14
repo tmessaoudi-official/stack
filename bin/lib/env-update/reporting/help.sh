@@ -188,9 +188,9 @@ Summary line format (shown after --check):
   are unaffected.
 
 Fetcher types: dockerhub, github, ghcr, npm, pecl, pypi, quay, rubygems,
-sdkman, sdkmanager, url, codeberg.
+sdkman, androidsdk, url, codeberg.
 pecl supports an optional (git:owner/repo) flag for HEAD SHA tracking.
-pecl and sdkmanager do not support major_hint filtering; range syntax is
+pecl and androidsdk do not support major_hint filtering; range syntax is
 unsupported for those types.
 
 Major range annotation: TYPE:IDENTIFIER:LOW-HIGH (e.g. npm:@types/node:25-26)

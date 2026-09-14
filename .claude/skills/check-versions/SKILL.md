@@ -8,7 +8,7 @@ user-invocable: true
 Run the automated version checker in preview mode to find outdated dependencies.
 
 `env-update.sh` covers all fetcher types (dockerhub, github, ghcr, npm, pecl,
-pypi, quay, rubygems, sdkman, sdkmanager, url, codeberg). No legacy fallback needed.
+pypi, quay, rubygems, sdkman, androidsdk, url, codeberg). No legacy fallback needed.
 
 ## Step 1 — v2 check (all types)
 

@@ -104,7 +104,7 @@ set -E
 # caller does not — so the gate was an unbound command waiting to happen.
 source global-stack-base-version-gate.sh
 
-# The android.sdkmanager marker holds the sdkmanager BINARY's own version, which is
+# The android.cli marker (android.sdkmanager until row 46) holds the CLI BINARY's own version, which is
 # not any of the .env pins — so it could never detect an SDK component bump. This
 # composite marker carries the inputs the install actually consumes, and it is the
 # ONLY thing that makes a bump of one of them reach the SDK: gs_version_gate
@@ -146,15 +146,32 @@ source global-stack-base-version-gate.sh
 # ways, so a thirteenth input cannot be added there and forgotten here.
 GS_ANDROID_SDK_WANT="sdk-build=${GLOBAL_STACK_ANDROID_SDK_BUILD};cmdline-tools=${GLOBAL_STACK_ANDROID_CMDLINE_TOOLS_VERSION};platform-tools=${GLOBAL_STACK_ANDROID_PLATFORM_TOOLS_VERSION};build-tools=${GLOBAL_STACK_ANDROID_BUILD_TOOLS_VERSION};build-tools-prev1=${GLOBAL_STACK_ANDROID_BUILD_TOOLS_VERSION_PREV_1};build-tools-prev2=${GLOBAL_STACK_ANDROID_BUILD_TOOLS_VERSION_PREV_2};ndk=${GLOBAL_STACK_ANDROID_NDK_VERSION};api1=${GLOBAL_STACK_ANDROID_API_LEVEL_1};api2=${GLOBAL_STACK_ANDROID_API_LEVEL_2};api3=${GLOBAL_STACK_ANDROID_API_LEVEL_3};sysimg=${GLOBAL_STACK_ANDROID_INSTALL_SYSTEM_IMAGES};sysimg-tag=${GLOBAL_STACK_ANDROID_SYSTEM_IMAGE_TAG};sysimg-ps-tag=${GLOBAL_STACK_ANDROID_SYSTEM_IMAGE_PLAYSTORE_TAG};sysimg-abi=${GLOBAL_STACK_ANDROID_SYSTEM_IMAGE_ABI}"
 export GS_ANDROID_SDK_WANT
+# >>> android-marker-migration
+# Row 46: the marker recording `android --version` was named after the deprecated
+# sdkmanager and is android.cli now. It is only an existence flag, but the gate
+# below reads an ABSENT marker as "never installed" and answers with
+# `sudo rm -rf "${ANDROID_HOME}"` and a full SDK reinstall -- so a bare rename
+# would wipe a working SDK on the first boot after it. Move the old file into
+# place first. Both present cannot come from a normal boot; android.cli then wins
+# and the stale name goes. Only 04android runs this script, so nothing races the mv.
+# startup-prologue.test.sh section 53 runs this block against a tmpdir.
+if [ -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/android.sdkmanager" ]; then
+  if [ -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/android.cli" ]; then
+    rm -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/android.sdkmanager"
+  else
+    mv "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/android.sdkmanager" "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/android.cli"
+  fi
+fi
+# <<< android-marker-migration
 _android_gate="$(gs_version_gate "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/android.sdk" "${GS_ANDROID_SDK_WANT}" "android.sdk")"
 
-if [ "${_android_gate}" != "skip" ] || [ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/android.sdkmanager" ] || [ "${GLOBAL_STACK_RELOAD_ANDROID}" = "true" ]; then
-  sudo rm -rf "${ANDROID_HOME}" "${ANDROID_SDK_HOME}" "${ANDROID_SDK_ROOT}" "${GRADLE_USER_HOME}" "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/android.sdkmanager" "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/android.sdk"
+if [ "${_android_gate}" != "skip" ] || [ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/android.cli" ] || [ "${GLOBAL_STACK_RELOAD_ANDROID}" = "true" ]; then
+  sudo rm -rf "${ANDROID_HOME}" "${ANDROID_SDK_HOME}" "${ANDROID_SDK_ROOT}" "${GRADLE_USER_HOME}" "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/android.cli" "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/android.sdk"
 fi
 
 mkdir -p "${ANDROID_HOME}" "${ANDROID_SDK_HOME}/.android" "${ANDROID_SDK_ROOT}" "${GRADLE_USER_HOME}"
 
-if [ "${_android_gate}" != "skip" ] || [ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/android.sdkmanager" ] || [ "${GLOBAL_STACK_RELOAD_ANDROID}" = "true" ]; then
+if [ "${_android_gate}" != "skip" ] || [ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/android.cli" ] || [ "${GLOBAL_STACK_RELOAD_ANDROID}" = "true" ]; then
   global-stack-android-setup.sh
 fi
 

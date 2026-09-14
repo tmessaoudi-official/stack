@@ -3054,9 +3054,9 @@ t "t32l: sdkman Java — preferred dist absent upstream SKIPs loudly, never swap
 "
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Section 33 — sdkmanager fetcher
+# Section 33 — androidsdk fetcher
 # ═══════════════════════════════════════════════════════════════════════════
-section "33 — sdkmanager fetcher"
+section "33 — androidsdk fetcher"
 
 # The fetcher reads Google's repository XML over HTTP (row 41) — it no longer
 # shells out to a local `sdkmanager` binary, which lived on the tools/ volume and
@@ -3072,12 +3072,12 @@ source '${_GS_EU2_LIB}/core/channel.sh'
 source '${_GS_EU2_LIB}/core/tag_flags.sh'
 source '${_GS_EU2_LIB}/core/cache.sh'
 source '${_GS_EU2_LIB}/http/curl.sh'
-source '${_GS_EU2_LIB}/fetchers/sdkmanager.sh'
+source '${_GS_EU2_LIB}/fetchers/androidsdk.sh'
 export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
 export _GS_EU2_CACHE_DIR=\${TMP_DIR}/sdkmgr_cache
 _sdk_rec() { # \$1 identifier  \$2 current  [\$3 channel]  [\$4 offset]
     _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
-    _gs_eu2_record_set \$idx type            'sdkmanager'
+    _gs_eu2_record_set \$idx type            'androidsdk'
     _gs_eu2_record_set \$idx identifier      \"\$1\"
     _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_T33'
     _gs_eu2_record_set \$idx current_version \"\$2\"
@@ -3090,7 +3090,7 @@ _sdk_rec() { # \$1 identifier  \$2 current  [\$3 channel]  [\$4 offset]
 t "t33a: bare id — platform-tools version comes from <revision>, exactly 37.0.1" bash -c "
     ${_SDKMGR_LIBS}
     _sdk_rec platform-tools 37.0.0
-    _gs_eu2_fetch_sdkmanager \$idx
+    _gs_eu2_fetch_androidsdk \$idx
     val=\$(_gs_eu2_record_get \$idx proposed_version)
     [[ \"\$val\" == '37.0.1' ]] || { echo \"got: '\$val'\"; echo FAIL; exit 0; }
     echo PASS
@@ -3102,7 +3102,7 @@ t "t33b: repository unreachable — decision ERROR, error_message set, proposed 
     mkdir -p \"\$_GS_EU2_HTTP_FIXTURE_DIR\"
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/sdkmgr_b_cache
     _sdk_rec platform-tools 37.0.0
-    _gs_eu2_fetch_sdkmanager \$idx 2>/dev/null || true
+    _gs_eu2_fetch_androidsdk \$idx 2>/dev/null || true
     err=\$(_gs_eu2_record_get \$idx error_message)
     dec=\$(_gs_eu2_record_get \$idx decision)
     proposed=\$(_gs_eu2_record_get \$idx proposed_version)
@@ -3115,7 +3115,7 @@ t "t33b: repository unreachable — decision ERROR, error_message set, proposed 
 t "t33c: build-tools stable — 37.0.0, not the rc2 that sits in the STABLE channel" bash -c "
     ${_SDKMGR_LIBS}
     _sdk_rec build-tools 36.1.0
-    _gs_eu2_fetch_sdkmanager \$idx
+    _gs_eu2_fetch_androidsdk \$idx
     val=\$(_gs_eu2_record_get \$idx proposed_version)
     # build-tools;37.0.0-rc2 carries channelRef channel-0: the channel tag does NOT
     # mark prereleases upstream, the version string does. Selection must key on it.
@@ -3126,19 +3126,19 @@ t "t33c: build-tools stable — 37.0.0, not the rc2 that sits in the STABLE chan
 t "t33d: channel:unstable — stable 37.0.0 has surpassed 37.0.0-rc2, so stable wins" bash -c "
     ${_SDKMGR_LIBS}
     _sdk_rec build-tools 37.0.0-rc2 unstable
-    _gs_eu2_fetch_sdkmanager \$idx
+    _gs_eu2_fetch_androidsdk \$idx
     val=\$(_gs_eu2_record_get \$idx proposed_version)
     [[ \"\$val\" == '37.0.0' ]] || { echo \"got: '\$val'\"; echo FAIL; exit 0; }
     echo PASS
 "
 
-t "t33e: sdkmanager does NOT set manual — decide.sh owns classification via version comparison" bash -c "
+t "t33e: androidsdk does NOT set manual — decide.sh owns classification via version comparison" bash -c "
     ${_SDKMGR_LIBS}
     _sdk_rec platform-tools 37.0.0
-    _gs_eu2_fetch_sdkmanager \$idx
+    _gs_eu2_fetch_androidsdk \$idx
     manual=\$(_gs_eu2_record_get \$idx manual)
     dec=\$(_gs_eu2_record_get \$idx decision)
-    [[ -z \"\$manual\" ]] || { echo \"sdkmanager must NOT set manual; got: '\$manual'\"; echo FAIL; exit 0; }
+    [[ -z \"\$manual\" ]] || { echo \"androidsdk must NOT set manual; got: '\$manual'\"; echo FAIL; exit 0; }
     # Fetcher must NOT write decision (that is decide.sh's job)
     [[ -z \"\$dec\" ]] || { echo \"fetcher must not write decision; got: '\$dec'\"; echo FAIL; exit 0; }
     echo PASS
@@ -3147,34 +3147,34 @@ t "t33e: sdkmanager does NOT set manual — decide.sh owns classification via ve
 t "t33f: versioned id — ndk;VERSION resolves from the path, exactly 30.0.16248370" bash -c "
     ${_SDKMGR_LIBS}
     _sdk_rec ndk 29.0.14206865
-    _gs_eu2_fetch_sdkmanager \$idx
+    _gs_eu2_fetch_androidsdk \$idx
     val=\$(_gs_eu2_record_get \$idx proposed_version)
     [[ \"\$val\" == '30.0.16248370' ]] || { echo \"got: '\$val'\"; echo FAIL; exit 0; }
     echo PASS
 "
 
-t "t33g: cache hit — key carries the offset (sdkmanager:ID:CHANNEL:offN)" bash -c "
+t "t33g: cache hit — key carries the offset (androidsdk:ID:CHANNEL:offN)" bash -c "
     ${_SDKMGR_LIBS}
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/sdkmgr_g_cache
-    _gs_eu2_cache_write 'sdkmanager:platform-tools::off0' '99.0.0-CACHED'
+    _gs_eu2_cache_write 'androidsdk:platform-tools::off0' '99.0.0-CACHED'
     _sdk_rec platform-tools 37.0.0
-    _gs_eu2_fetch_sdkmanager \$idx
+    _gs_eu2_fetch_androidsdk \$idx
     val=\$(_gs_eu2_record_get \$idx proposed_version)
     [[ \"\$val\" == '99.0.0-CACHED' ]] || { echo \"cache not used: '\$val'\"; echo FAIL; exit 0; }
     echo PASS
 "
 
-# t33h: sdkmanager classification contract — (manual) annotation is required for MANUAL
+# t33h: androidsdk classification contract — (manual) annotation is required for MANUAL
 # decision; without it the full pipeline produces AUTO (not MANUAL). This makes the
 # design explicit: the fetcher is responsible for proposed_version only; classification
 # is owned by decide.sh via the annotation-set manual field.
-t "t33h: sdkmanager without (manual) annotation produces AUTO (not MANUAL) via full pipeline" bash -c "
+t "t33h: androidsdk without (manual) annotation produces AUTO (not MANUAL) via full pipeline" bash -c "
     ${_SDKMGR_LIBS}
     source '${_GS_EU2_LIB}/core/decide.sh'
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/sdkmgr_h_cache
     _sdk_rec platform-tools 36.0.0
     # No (manual) annotation — manual field stays empty
-    _gs_eu2_fetch_sdkmanager \$idx
+    _gs_eu2_fetch_androidsdk \$idx
     proposed=\$(_gs_eu2_record_get \$idx proposed_version)
     manual=\$(_gs_eu2_record_get \$idx manual)
     override=\$(_gs_eu2_record_get \$idx override)
@@ -3196,7 +3196,7 @@ t "t33h: sdkmanager without (manual) annotation produces AUTO (not MANUAL) via f
 t "t33i: platforms — level from the path; beta, codename and -ext excluded → 37.2" bash -c "
     ${_SDKMGR_LIBS}
     _sdk_rec platforms 37.1
-    _gs_eu2_fetch_sdkmanager \$idx
+    _gs_eu2_fetch_androidsdk \$idx
     val=\$(_gs_eu2_record_get \$idx proposed_version)
     [[ \"\$val\" == '37.2' ]] || { echo \"got: '\$val'\"; echo FAIL; exit 0; }
     echo PASS
@@ -3208,7 +3208,7 @@ t "t33j: platforms offsets 1..4 walk the distinct stable levels: 37.1 37.0 36.1 
     for off in 1 2 3 4; do
         export _GS_EU2_CACHE_DIR=\${TMP_DIR}/sdkmgr_j_cache_\$off
         _sdk_rec platforms 30 '' \"\$off\"
-        _gs_eu2_fetch_sdkmanager \$idx
+        _gs_eu2_fetch_androidsdk \$idx
         val=\$(_gs_eu2_record_get \$idx proposed_version)
         [[ \"\$val\" == \"\${want[off-1]}\" ]] || { echo \"offset \$off: got '\$val', want \${want[off-1]}\"; echo FAIL; exit 0; }
     done
@@ -3219,7 +3219,7 @@ t "t33k: offset beyond the list — no proposal, error_message names the offset"
     ${_SDKMGR_LIBS}
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/sdkmgr_k_cache
     _sdk_rec platforms 30 '' 9
-    _gs_eu2_fetch_sdkmanager \$idx
+    _gs_eu2_fetch_androidsdk \$idx
     val=\$(_gs_eu2_record_get \$idx proposed_version)
     err=\$(_gs_eu2_record_get \$idx error_message)
     [[ -z \"\$val\" ]] || { echo \"proposed should be empty: '\$val'\"; echo FAIL; exit 0; }
@@ -3227,16 +3227,16 @@ t "t33k: offset beyond the list — no proposal, error_message names the offset"
     echo PASS
 "
 
-# The single most likely silent bug in this feature: three sdkmanager:platforms
+# The single most likely silent bug in this feature: three androidsdk:platforms
 # records with different offsets sharing ONE cache key, so all three resolve to
 # the same value. Same process, same cache dir, offsets 0 then 1.
 t "t33l: two records, same identifier, different offsets do NOT share a cache entry" bash -c "
     ${_SDKMGR_LIBS}
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/sdkmgr_l_cache
     _sdk_rec platforms 30 '' 0; a=\$idx
-    _gs_eu2_fetch_sdkmanager \$a
+    _gs_eu2_fetch_androidsdk \$a
     _sdk_rec platforms 30 '' 1; b=\$idx
-    _gs_eu2_fetch_sdkmanager \$b
+    _gs_eu2_fetch_androidsdk \$b
     va=\$(_gs_eu2_record_get \$a proposed_version)
     vb=\$(_gs_eu2_record_get \$b proposed_version)
     [[ \"\$va\" == '37.2' && \"\$vb\" == '37.1' ]] || { echo \"got offset0='\$va' offset1='\$vb'\"; echo FAIL; exit 0; }
@@ -3249,9 +3249,9 @@ t "t33m: bare id in two channels — stable picks 36.1.9, unstable sees 36.6.11-
     ${_SDKMGR_LIBS}
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/sdkmgr_m_cache
     _sdk_rec emulator 36.0.0; a=\$idx
-    _gs_eu2_fetch_sdkmanager \$a
+    _gs_eu2_fetch_androidsdk \$a
     _sdk_rec emulator 36.0.0 unstable; b=\$idx
-    _gs_eu2_fetch_sdkmanager \$b
+    _gs_eu2_fetch_androidsdk \$b
     va=\$(_gs_eu2_record_get \$a proposed_version)
     vb=\$(_gs_eu2_record_get \$b proposed_version)
     [[ \"\$va\" == '36.1.9' ]]      || { echo \"stable got: '\$va'\"; echo FAIL; exit 0; }
@@ -3263,7 +3263,7 @@ t "t33n: bare id with <preview> — ndk-bundle 23.0.7344513-rc4 excluded on stab
     ${_SDKMGR_LIBS}
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/sdkmgr_n_cache
     _sdk_rec ndk-bundle 22.0.0
-    _gs_eu2_fetch_sdkmanager \$idx
+    _gs_eu2_fetch_androidsdk \$idx
     val=\$(_gs_eu2_record_get \$idx proposed_version)
     [[ \"\$val\" == '22.1.7171670' ]] || { echo \"got: '\$val'\"; echo FAIL; exit 0; }
     echo PASS
@@ -3276,7 +3276,7 @@ t "t33o: component absent from the repository — error_message set, decision NO
     ${_SDKMGR_LIBS}
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/sdkmgr_o_cache
     _sdk_rec system-images google_apis_ps16k
-    _gs_eu2_fetch_sdkmanager \$idx
+    _gs_eu2_fetch_androidsdk \$idx
     val=\$(_gs_eu2_record_get \$idx proposed_version)
     err=\$(_gs_eu2_record_get \$idx error_message)
     dec=\$(_gs_eu2_record_get \$idx decision)
@@ -3289,8 +3289,8 @@ t "t33o: component absent from the repository — error_message set, decision NO
 # The binary seam is gone with the binary. A leftover export must not silently
 # re-route the fetcher.
 t "t33p: the retired _GS_EU2_SDKMANAGER_CMD_FIXTURE seam has no reader left" bash -c "
-    n=\$(grep -c 'SDKMANAGER_CMD_FIXTURE' '${_GS_EU2_LIB}/fetchers/sdkmanager.sh' || true)
-    [[ \"\$n\" -eq 0 ]] || { echo \"sdkmanager.sh still references the retired seam (\$n hits)\"; echo FAIL; exit 0; }
+    n=\$(grep -c 'SDKMANAGER_CMD_FIXTURE' '${_GS_EU2_LIB}/fetchers/androidsdk.sh' || true)
+    [[ \"\$n\" -eq 0 ]] || { echo \"androidsdk.sh still references the retired seam (\$n hits)\"; echo FAIL; exit 0; }
     echo PASS
 "
 
@@ -4245,7 +4245,7 @@ t "t46d: display — (override) at same version shows '(up to date — override)
     echo PASS
 "
 
-t "t46e: sdkmanager fetcher does NOT set manual field — decide.sh classifies via versions" bash -c "
+t "t46e: androidsdk fetcher does NOT set manual field — decide.sh classifies via versions" bash -c "
     source '${_GS_EU2_LIB}/config/defaults.sh'
     source '${_GS_EU2_LIB}/config/prerelease_markers.sh'
     source '${_GS_EU2_LIB}/core/records.sh'
@@ -4254,17 +4254,17 @@ t "t46e: sdkmanager fetcher does NOT set manual field — decide.sh classifies v
     source '${_GS_EU2_LIB}/core/tag_flags.sh'
     source '${_GS_EU2_LIB}/core/cache.sh'
     source '${_GS_EU2_LIB}/http/curl.sh'
-    source '${_GS_EU2_LIB}/fetchers/sdkmanager.sh'
+    source '${_GS_EU2_LIB}/fetchers/androidsdk.sh'
     export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t46e_cache
     _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
-    _gs_eu2_record_set \$idx type            'sdkmanager'
+    _gs_eu2_record_set \$idx type            'androidsdk'
     _gs_eu2_record_set \$idx identifier      'ndk'
     _gs_eu2_record_set \$idx env_var         'GLOBAL_STACK_ANDROID_NDK_VERSION'
     _gs_eu2_record_set \$idx current_version '29.0.14206865'
-    _gs_eu2_fetch_sdkmanager \$idx
+    _gs_eu2_fetch_androidsdk \$idx
     manual=\$(_gs_eu2_record_get \$idx manual)
-    [[ -z \"\$manual\" ]] || { echo \"sdkmanager must NOT set manual; got: '\$manual'\"; echo FAIL; exit 0; }
+    [[ -z \"\$manual\" ]] || { echo \"androidsdk must NOT set manual; got: '\$manual'\"; echo FAIL; exit 0; }
     echo PASS
 "
 
@@ -4274,7 +4274,7 @@ section "47 — (note:TEXT) annotation flag"
 
 t "t47a: note flag parsed and stored in record field" bash -c "
     f=\${TMP_DIR}/t47a.env
-    printf '# @todo env-update (note:also update setup.sh compat list) sdkmanager:build-tools 36.1.0\nGLOBAL_STACK_ANDROID_BUILD_TOOLS_VERSION=36.1.0\n' > \"\$f\"
+    printf '# @todo env-update (note:also update setup.sh compat list) androidsdk:build-tools 36.1.0\nGLOBAL_STACK_ANDROID_BUILD_TOOLS_VERSION=36.1.0\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1)
     echo \"\$out\" | grep -qF 'note: also update setup.sh compat list' || { echo \"note field not found in dump; got: \$out\"; echo FAIL; exit 0; }
     echo PASS
@@ -10925,7 +10925,7 @@ t "t103l: dispatch wiring — ghcr: type is handled by _gs_eu2_dispatch_fetcher"
     source '${_GS_EU2_LIB}/fetchers/pypi.sh'
     source '${_GS_EU2_LIB}/fetchers/rubygems.sh'
     source '${_GS_EU2_LIB}/fetchers/sdkman.sh'
-    source '${_GS_EU2_LIB}/fetchers/sdkmanager.sh'
+    source '${_GS_EU2_LIB}/fetchers/androidsdk.sh'
     source '${_GS_EU2_LIB}/fetchers/pecl.sh'
     source '${_GS_EU2_LIB}/fetchers/url.sh'
     source '${_GS_EU2_LIB}/fetchers/ghcr.sh'
@@ -12712,10 +12712,10 @@ t "t118d: no control character can reach the file (end-to-end --apply)" bash -c 
 _flush_section
 
 # ═══════════════════════════════════════════════════════════════════════════
-section "119 — a transport failure is an ERROR, not a SKIP (url/sdkman/sdkmanager)"
+section "119 — a transport failure is an ERROR, not a SKIP (url/sdkman/androidsdk)"
 # ═══════════════════════════════════════════════════════════════════════════
 # 10 of the 12 fetchers set decision \"ERROR\" on a hard transport failure. url,
-# sdkman and sdkmanager set it ZERO times: they wrote only error_message, and
+# sdkman and androidsdk set it ZERO times: they wrote only error_message, and
 # decide.sh classifies an empty proposed_version as SKIP. So --check exited 0
 # no matter what happened upstream, and /check-versions in cron or CI was
 # structurally incapable of failing for those 33 live records.
@@ -12829,13 +12829,13 @@ t "t119h: boundary — jq path empty on a 200 stays SKIP + exit 0" bash -c "
     echo PASS
 "
 
-# t119i: sdkmanager — the repository XML fetch fails (injected 503). Row 41
+# t119i: androidsdk — the repository XML fetch fails (injected 503). Row 41
 # moved this fetcher off the local binary onto Google's repository XML, so the
 # transport failure is an HTTP one now, like url/sdkman.
-t "t119i: sdkmanager repository 503 is ERROR + exit 1" bash -c "
+t "t119i: androidsdk repository 503 is ERROR + exit 1" bash -c "
     d=\${TMP_DIR}/t119i; mkdir -p \"\$d\"
     f=\$d/t.env
-    printf '# @todo env-update sdkmanager:platform-tools 35.0.2\nGLOBAL_STACK_T119I=35.0.2\n' > \"\$f\"
+    printf '# @todo env-update androidsdk:platform-tools 35.0.2\nGLOBAL_STACK_T119I=35.0.2\n' > \"\$f\"
     out=\$(_GS_EU2_HTTP_INJECT_STATUS=503 _GS_EU2_CACHE_DIR=\"\$d/c\" bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1); rc=\$?
     echo \"\$out\" | grep -q '\[ERROR' || { echo \"no [ERROR] token; got: \$out\"; echo FAIL; exit 0; }
     [[ \$rc -eq 1 ]] || { echo \"exit \$rc, want 1\"; echo FAIL; exit 0; }
@@ -13039,7 +13039,7 @@ section "122 — (offset:N) annotation flag"
 
 t "t122a: (offset:2) parsed and stored in the record" bash -c "
     f=\${TMP_DIR}/t122a.env
-    printf '# @todo env-update (offset:2) sdkmanager:platforms 37.0\nGLOBAL_STACK_T122A=37.0\n' > \"\$f\"
+    printf '# @todo env-update (offset:2) androidsdk:platforms 37.0\nGLOBAL_STACK_T122A=37.0\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1)
     echo \"\$out\" | grep -qE 'offset: *2\$' || { echo \"offset field not found in dump; got: \$out\"; echo FAIL; exit 0; }
     echo PASS
@@ -13047,7 +13047,7 @@ t "t122a: (offset:2) parsed and stored in the record" bash -c "
 
 t "t122b: (offset:x) is refused — not a non-negative integer" bash -c "
     f=\${TMP_DIR}/t122b.env
-    printf '# @todo env-update (offset:x) sdkmanager:platforms 37.0\nGLOBAL_STACK_T122B=37.0\n' > \"\$f\"
+    printf '# @todo env-update (offset:x) androidsdk:platforms 37.0\nGLOBAL_STACK_T122B=37.0\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1); rc=\$?
     [[ \$rc -ne 0 ]] || { echo 'expected non-zero exit for offset:x'; echo FAIL; exit 0; }
     echo \"\$out\" | grep -qi 'offset' || { echo \"error must name the flag; got: \$out\"; echo FAIL; exit 0; }
@@ -13057,7 +13057,7 @@ t "t122b: (offset:x) is refused — not a non-negative integer" bash -c "
 t "t122c: (offset:-1) and (offset:) are refused" bash -c "
     for v in '-1' ''; do
         f=\${TMP_DIR}/t122c.env
-        printf '# @todo env-update (offset:%s) sdkmanager:platforms 37.0\nGLOBAL_STACK_T122C=37.0\n' \"\$v\" > \"\$f\"
+        printf '# @todo env-update (offset:%s) androidsdk:platforms 37.0\nGLOBAL_STACK_T122C=37.0\n' \"\$v\" > \"\$f\"
         out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1); rc=\$?
         [[ \$rc -ne 0 ]] || { echo \"expected non-zero exit for offset:'\$v'\"; echo FAIL; exit 0; }
     done
@@ -13066,7 +13066,7 @@ t "t122c: (offset:-1) and (offset:) are refused" bash -c "
 
 t "t122d: (offset:1) with (channel:unstable) is refused at parse time" bash -c "
     f=\${TMP_DIR}/t122d.env
-    printf '# @todo env-update (channel:unstable) (offset:1) sdkmanager:build-tools 36.1.0\nGLOBAL_STACK_T122D=36.1.0\n' > \"\$f\"
+    printf '# @todo env-update (channel:unstable) (offset:1) androidsdk:build-tools 36.1.0\nGLOBAL_STACK_T122D=36.1.0\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1); rc=\$?
     [[ \$rc -ne 0 ]] || { echo 'expected non-zero exit for offset + unstable channel'; echo FAIL; exit 0; }
     echo \"\$out\" | grep -qi 'stable' || { echo \"error must say offsets are stable-only; got: \$out\"; echo FAIL; exit 0; }
@@ -13075,7 +13075,7 @@ t "t122d: (offset:1) with (channel:unstable) is refused at parse time" bash -c "
 
 t "t122e: (offset:1) with (channel:stable), and (offset:0), are accepted" bash -c "
     f=\${TMP_DIR}/t122e.env
-    printf '# @todo env-update (channel:stable) (offset:1) sdkmanager:build-tools 36.1.0\nGLOBAL_STACK_T122E1=36.1.0\n# @todo env-update (offset:0) sdkmanager:build-tools 37.0.0\nGLOBAL_STACK_T122E2=37.0.0\n' > \"\$f\"
+    printf '# @todo env-update (channel:stable) (offset:1) androidsdk:build-tools 36.1.0\nGLOBAL_STACK_T122E1=36.1.0\n# @todo env-update (offset:0) androidsdk:build-tools 37.0.0\nGLOBAL_STACK_T122E2=37.0.0\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1); rc=\$?
     [[ \$rc -eq 0 ]] || { echo \"exit \$rc; got: \$out\"; echo FAIL; exit 0; }
     echo \"\$out\" | grep -qE 'offset: *1\$' || { echo \"offset 1 not stored; got: \$out\"; echo FAIL; exit 0; }
@@ -13138,12 +13138,12 @@ t "t122j: six-record rolling window resolves every slot through --check" bash -c
     d=\${TMP_DIR}/t122j; mkdir -p \"\$d\"
     f=\$d/t.env
     {
-        printf '# @todo env-update (offset:2) sdkmanager:platforms 36.1\nGLOBAL_STACK_T122J_API_1=36.1\n'
-        printf '# @todo env-update (offset:1) sdkmanager:platforms 37.0\nGLOBAL_STACK_T122J_API_2=37.0\n'
-        printf '# @todo env-update sdkmanager:platforms 37.1\nGLOBAL_STACK_T122J_API_3=37.1\n'
-        printf '# @todo env-update (offset:2) sdkmanager:build-tools 35.0.1\nGLOBAL_STACK_T122J_BT_1=35.0.1\n'
-        printf '# @todo env-update (offset:1) sdkmanager:build-tools 36.0.0\nGLOBAL_STACK_T122J_BT_2=36.0.0\n'
-        printf '# @todo env-update sdkmanager:build-tools 36.1.0\nGLOBAL_STACK_T122J_BT_3=36.1.0\n'
+        printf '# @todo env-update (offset:2) androidsdk:platforms 36.1\nGLOBAL_STACK_T122J_API_1=36.1\n'
+        printf '# @todo env-update (offset:1) androidsdk:platforms 37.0\nGLOBAL_STACK_T122J_API_2=37.0\n'
+        printf '# @todo env-update androidsdk:platforms 37.1\nGLOBAL_STACK_T122J_API_3=37.1\n'
+        printf '# @todo env-update (offset:2) androidsdk:build-tools 35.0.1\nGLOBAL_STACK_T122J_BT_1=35.0.1\n'
+        printf '# @todo env-update (offset:1) androidsdk:build-tools 36.0.0\nGLOBAL_STACK_T122J_BT_2=36.0.0\n'
+        printf '# @todo env-update androidsdk:build-tools 36.1.0\nGLOBAL_STACK_T122J_BT_3=36.1.0\n'
     } > \"\$f\"
     out=\$(_GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http' _GS_EU2_CACHE_DIR=\"\$d/c\" bash '${ENV_UPDATE_V2}' --check --env-file=\"\$f\" 2>&1); rc=\$?
     [[ \$rc -eq 0 ]] || { echo \"exit \$rc; got: \$out\"; echo FAIL; exit 0; }
@@ -13154,17 +13154,17 @@ t "t122j: six-record rolling window resolves every slot through --check" bash -c
     echo PASS
 "
 
-t "t122k: (offset:1) on a type other than sdkmanager is refused at parse time, naming the type" bash -c "
+t "t122k: (offset:1) on a type other than androidsdk is refused at parse time, naming the type" bash -c "
     f=\${TMP_DIR}/t122k.env
     printf '# @todo env-update (offset:1) dockerhub:_/postgres 17.0\nGLOBAL_STACK_T122K=17.0\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1); rc=\$?
     [[ \$rc -ne 0 ]] || { echo 'expected non-zero exit for (offset:1) on dockerhub'; echo FAIL; exit 0; }
     echo \"\$out\" | grep -q 'dockerhub' || { echo \"error must name the offending type; got: \$out\"; echo FAIL; exit 0; }
-    echo \"\$out\" | grep -q 'sdkmanager' || { echo \"error must name the type that honours the flag; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -q 'androidsdk' || { echo \"error must name the type that honours the flag; got: \$out\"; echo FAIL; exit 0; }
     echo PASS
 "
 
-t "t122l: (offset:0) on a non-sdkmanager type is accepted (0 is the default, nothing to honour)" bash -c "
+t "t122l: (offset:0) on a non-androidsdk type is accepted (0 is the default, nothing to honour)" bash -c "
     f=\${TMP_DIR}/t122l.env
     printf '# @todo env-update (offset:0) dockerhub:_/postgres 17.0\nGLOBAL_STACK_T122L=17.0\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1); rc=\$?
@@ -13410,7 +13410,7 @@ source '${_GS_EU2_LIB}/core/semver.sh'
 source '${_GS_EU2_LIB}/core/channel.sh'
 source '${_GS_EU2_LIB}/core/cache.sh'
 source '${_GS_EU2_LIB}/http/curl.sh'
-source '${_GS_EU2_LIB}/fetchers/sdkmanager.sh'
+source '${_GS_EU2_LIB}/fetchers/androidsdk.sh'
 "
 
 # Fixture builders. Each case writes its OWN sibling XMLs so every filter reason
@@ -13446,7 +13446,7 @@ _rs_repo() {
 }
 _rs_rec() {
     _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
-    _gs_eu2_record_set \$idx type       'sdkmanager'
+    _gs_eu2_record_set \$idx type       'androidsdk'
     _gs_eu2_record_set \$idx identifier 'platforms'
     _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_T124'
     _gs_eu2_record_set \$idx offset     \"\${1:-0}\"
@@ -13462,7 +13462,7 @@ _RS_SPEC=\"https://sysimg.test/ga.xml|\${_RS_GA},https://sysimg.test/ps.xml|\${_
 
 t "t124a: (require-sibling:) is parsed and stored in the record" bash -c "
     f=\${TMP_DIR}/t124a.env
-    printf '# @todo env-update (require-sibling:https://s.test/a.xml|system-images;android-{version};ga;x86_64) sdkmanager:platforms 37.0\nGLOBAL_STACK_T124A=37.0\n' > \"\$f\"
+    printf '# @todo env-update (require-sibling:https://s.test/a.xml|system-images;android-{version};ga;x86_64) androidsdk:platforms 37.0\nGLOBAL_STACK_T124A=37.0\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1); rc=\$?
     [[ \$rc -eq 0 ]] || { echo \"exit \$rc; got: \$out\"; echo FAIL; exit 0; }
     echo \"\$out\" | grep -qF 'require_sibling: https://s.test/a.xml|system-images;android-{version};ga;x86_64' \
@@ -13472,7 +13472,7 @@ t "t124a: (require-sibling:) is parsed and stored in the record" bash -c "
 
 t "t124b: (require-sibling:) with an empty value is refused" bash -c "
     f=\${TMP_DIR}/t124b.env
-    printf '# @todo env-update (require-sibling:) sdkmanager:platforms 37.0\nGLOBAL_STACK_T124B=37.0\n' > \"\$f\"
+    printf '# @todo env-update (require-sibling:) androidsdk:platforms 37.0\nGLOBAL_STACK_T124B=37.0\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1); rc=\$?
     [[ \$rc -ne 0 ]] || { echo 'expected non-zero exit for empty require-sibling'; echo FAIL; exit 0; }
     echo \"\$out\" | grep -qi 'unknown flag' && { echo \"refused as UNKNOWN, not as empty -- vacuous; got: \$out\"; echo FAIL; exit 0; }
@@ -13484,7 +13484,7 @@ t "t124b: (require-sibling:) with an empty value is refused" bash -c "
 # is which, and a silent guess would probe an invented URL.
 t "t124c: a (require-sibling:) pair with no | separator is refused" bash -c "
     f=\${TMP_DIR}/t124c.env
-    printf '# @todo env-update (require-sibling:system-images;android-{version};ga;x86_64) sdkmanager:platforms 37.0\nGLOBAL_STACK_T124C=37.0\n' > \"\$f\"
+    printf '# @todo env-update (require-sibling:system-images;android-{version};ga;x86_64) androidsdk:platforms 37.0\nGLOBAL_STACK_T124C=37.0\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1); rc=\$?
     [[ \$rc -ne 0 ]] || { echo 'expected non-zero exit for a pair with no |'; echo FAIL; exit 0; }
     echo \"\$out\" | grep -qi 'unknown flag' && { echo \"refused as UNKNOWN, not for the missing separator -- vacuous; got: \$out\"; echo FAIL; exit 0; }
@@ -13497,7 +13497,7 @@ t "t124c: a (require-sibling:) pair with no | separator is refused" bash -c "
 # filter keeps all of them or none -- never the discrimination it advertises.
 t "t124c2: a (require-sibling:) template with no {version} placeholder is refused" bash -c "
     f=\${TMP_DIR}/t124c2.env
-    printf '# @todo env-update (require-sibling:https://s.test/a.xml|system-images;android-37.1;ga;x86_64) sdkmanager:platforms 37.0\nGLOBAL_STACK_T124C2=37.0\n' > \"\$f\"
+    printf '# @todo env-update (require-sibling:https://s.test/a.xml|system-images;android-37.1;ga;x86_64) androidsdk:platforms 37.0\nGLOBAL_STACK_T124C2=37.0\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1); rc=\$?
     [[ \$rc -ne 0 ]] || { echo 'expected non-zero exit for a template with no {version}'; echo FAIL; exit 0; }
     echo \"\$out\" | grep -qF '{version}' || { echo \"error must name the placeholder; got: \$out\"; echo FAIL; exit 0; }
@@ -13510,7 +13510,7 @@ t "t124c2: a (require-sibling:) template with no {version} placeholder is refuse
 # Refusing the repeat is what makes the comma-list the only way to express it.
 t "t124d: a repeated (require-sibling:) is refused rather than silently last-wins" bash -c "
     f=\${TMP_DIR}/t124d.env
-    printf '# @todo env-update (require-sibling:https://s.test/a.xml|si;{version};ga) (require-sibling:https://s.test/b.xml|si;{version};ps) sdkmanager:platforms 37.0\nGLOBAL_STACK_T124D=37.0\n' > \"\$f\"
+    printf '# @todo env-update (require-sibling:https://s.test/a.xml|si;{version};ga) (require-sibling:https://s.test/b.xml|si;{version};ps) androidsdk:platforms 37.0\nGLOBAL_STACK_T124D=37.0\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1); rc=\$?
     [[ \$rc -ne 0 ]] || { echo 'expected non-zero exit for a repeated require-sibling'; echo FAIL; exit 0; }
     echo \"\$out\" | grep -qi 'unknown flag' && { echo \"refused as UNKNOWN, not as repeated -- vacuous; got: \$out\"; echo FAIL; exit 0; }
@@ -13518,9 +13518,9 @@ t "t124d: a repeated (require-sibling:) is refused rather than silently last-win
     echo PASS
 "
 
-# The b2290dc shape: only the sdkmanager fetcher reads this field, so accepting it
+# The b2290dc shape: only the androidsdk fetcher reads this field, so accepting it
 # elsewhere would be an inert flag that reads as a configured guarantee.
-t "t124e: (require-sibling:) on a non-sdkmanager type is refused" bash -c "
+t "t124e: (require-sibling:) on a non-androidsdk type is refused" bash -c "
     f=\${TMP_DIR}/t124e.env
     printf '# @todo env-update (require-sibling:https://s.test/a.xml|si;{version};ga) dockerhub:library/nginx 1.29\nGLOBAL_STACK_T124E=1.29\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1); rc=\$?
@@ -13534,21 +13534,21 @@ t "t124e: (require-sibling:) on a non-sdkmanager type is refused" bash -c "
 
 # The ungated baseline, and the red-first proof for every case below it: without
 # the flag the newest stable platform IS 37.2, the value that broke the boot.
-t "t124m: without the flag the sdkmanager path is unchanged (still proposes 37.2)" bash -c "
-    export _GS_EU2_SDKMANAGER_REPO_URL='https://sdk.test/repo.xml'
+t "t124m: without the flag the androidsdk path is unchanged (still proposes 37.2)" bash -c "
+    export _GS_EU2_ANDROIDSDK_REPO_URL='https://sdk.test/repo.xml'
     ${_RS_LIBS}${_RS_FIX}
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/rs_cache_m
     export _GS_EU2_HTTP_FIXTURE_DIR=\${TMP_DIR}/rs_fix_m
     mkdir -p \"\$_GS_EU2_HTTP_FIXTURE_DIR\"; _rs_repo \"\$_GS_EU2_HTTP_FIXTURE_DIR\"
     _rs_rec 0
-    _gs_eu2_fetch_sdkmanager \$idx 2>/dev/null
+    _gs_eu2_fetch_androidsdk \$idx 2>/dev/null
     val=\$(_gs_eu2_record_get \$idx proposed_version)
     [[ \"\$val\" == '37.2' ]] || { echo \"ungated must still propose 37.2, got: '\$val'\"; echo FAIL; exit 0; }
     echo PASS
 "
 
 t "t124f: a level whose system images are on a non-stable channel is filtered out" bash -c "
-    export _GS_EU2_SDKMANAGER_REPO_URL='https://sdk.test/repo.xml'
+    export _GS_EU2_ANDROIDSDK_REPO_URL='https://sdk.test/repo.xml'
     ${_RS_LIBS}${_RS_FIX}
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/rs_cache_f
     export _GS_EU2_HTTP_FIXTURE_DIR=\${TMP_DIR}/rs_fix_f
@@ -13566,7 +13566,7 @@ t "t124f: a level whose system images are on a non-stable channel is filtered ou
         'system-images;android-36.1;google_apis_playstore_ps16k;x86_64:channel-0' \
         'system-images;android-36;google_apis_playstore_ps16k;x86_64:channel-0'
     _rs_rec 0 \"\$_RS_SPEC\"
-    _gs_eu2_fetch_sdkmanager \$idx 2>/dev/null
+    _gs_eu2_fetch_androidsdk \$idx 2>/dev/null
     val=\$(_gs_eu2_record_get \$idx proposed_version)
     [[ \"\$val\" == '37.1' ]] || { echo \"37.2 images are channel-2, want 37.1; got: '\$val'\"; echo FAIL; exit 0; }
     echo PASS
@@ -13575,7 +13575,7 @@ t "t124f: a level whose system images are on a non-stable channel is filtered ou
 # Filtering must happen BEFORE the offset walk. If it ran after, offset 2 would
 # count 37.2 as a slot and land one level too high.
 t "t124g: (offset:N) counts only the levels that survive the gate" bash -c "
-    export _GS_EU2_SDKMANAGER_REPO_URL='https://sdk.test/repo.xml'
+    export _GS_EU2_ANDROIDSDK_REPO_URL='https://sdk.test/repo.xml'
     ${_RS_LIBS}${_RS_FIX}
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/rs_cache_g
     export _GS_EU2_HTTP_FIXTURE_DIR=\${TMP_DIR}/rs_fix_g
@@ -13591,7 +13591,7 @@ t "t124g: (offset:N) counts only the levels that survive the gate" bash -c "
     done
     for o in 0:37.1 1:37.0 2:36.1; do
         _rs_rec \"\${o%%:*}\" \"\$_RS_SPEC\"
-        _gs_eu2_fetch_sdkmanager \$idx 2>/dev/null
+        _gs_eu2_fetch_androidsdk \$idx 2>/dev/null
         val=\$(_gs_eu2_record_get \$idx proposed_version)
         [[ \"\$val\" == \"\${o#*:}\" ]] || { echo \"offset \${o%%:*} want \${o#*:}, got '\$val'\"; echo FAIL; exit 0; }
     done
@@ -13602,7 +13602,7 @@ t "t124g: (offset:N) counts only the levels that survive the gate" bash -c "
 # the SECOND is missing -- a gate that stopped after one tag would keep 37.1 and
 # read as working. This is the case that makes the comma-list load-bearing.
 t "t124h: a level is dropped when only the SECOND sibling is missing" bash -c "
-    export _GS_EU2_SDKMANAGER_REPO_URL='https://sdk.test/repo.xml'
+    export _GS_EU2_ANDROIDSDK_REPO_URL='https://sdk.test/repo.xml'
     ${_RS_LIBS}${_RS_FIX}
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/rs_cache_h
     export _GS_EU2_HTTP_FIXTURE_DIR=\${TMP_DIR}/rs_fix_h
@@ -13614,17 +13614,17 @@ t "t124h: a level is dropped when only the SECOND sibling is missing" bash -c "
     _rs_xml \"\$d/sysimg.test_ps.xml\" \
         'system-images;android-37.0;google_apis_playstore_ps16k;x86_64:channel-0'
     _rs_rec 0 \"\$_RS_SPEC\"
-    _gs_eu2_fetch_sdkmanager \$idx 2>/dev/null
+    _gs_eu2_fetch_androidsdk \$idx 2>/dev/null
     val=\$(_gs_eu2_record_get \$idx proposed_version)
     [[ \"\$val\" == '37.0' ]] || { echo \"only ps.xml carries 37.0, want 37.0; got: '\$val'\"; echo FAIL; exit 0; }
     echo PASS
 "
 
 # Row 41's own lesson, applied deliberately: an obsolete package is served and
-# channel-0, so a presence-only check keeps it while sdkmanager will not install
+# channel-0, so a presence-only check keeps it while android sdk will not install
 # it. The fixture carries an obsolete entry so this cannot pass vacuously.
 t "t124i: a channel-0 sibling marked obsolete=true does not qualify" bash -c "
-    export _GS_EU2_SDKMANAGER_REPO_URL='https://sdk.test/repo.xml'
+    export _GS_EU2_ANDROIDSDK_REPO_URL='https://sdk.test/repo.xml'
     ${_RS_LIBS}${_RS_FIX}
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/rs_cache_i
     export _GS_EU2_HTTP_FIXTURE_DIR=\${TMP_DIR}/rs_fix_i
@@ -13639,7 +13639,7 @@ t "t124i: a channel-0 sibling marked obsolete=true does not qualify" bash -c "
             \"system-images;android-36;\${tag};x86_64:channel-0\"
     done
     _rs_rec 2 \"\$_RS_SPEC\"
-    _gs_eu2_fetch_sdkmanager \$idx 2>/dev/null
+    _gs_eu2_fetch_androidsdk \$idx 2>/dev/null
     val=\$(_gs_eu2_record_get \$idx proposed_version)
     [[ \"\$val\" == '36' ]] || { echo \"36.1 images are obsolete, offset 2 want 36; got: '\$val'\"; echo FAIL; exit 0; }
     echo PASS
@@ -13650,14 +13650,14 @@ t "t124i: a channel-0 sibling marked obsolete=true does not qualify" bash -c "
 # candidate -- the can-never-fire shape with a network cause, and it would ship
 # the broken pin precisely when the check could not run.
 t "t124j: an unreachable sibling XML is ERROR, not an empty filter" bash -c "
-    export _GS_EU2_SDKMANAGER_REPO_URL='https://sdk.test/repo.xml'
+    export _GS_EU2_ANDROIDSDK_REPO_URL='https://sdk.test/repo.xml'
     ${_RS_LIBS}${_RS_FIX}
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/rs_cache_j
     export _GS_EU2_HTTP_FIXTURE_DIR=\${TMP_DIR}/rs_fix_j
     d=\$_GS_EU2_HTTP_FIXTURE_DIR; mkdir -p \"\$d\"; _rs_repo \"\$d\"
     _rs_xml \"\$d/sysimg.test_ga.xml\" 'system-images;android-37.2;google_apis_ps16k;x86_64:channel-0'
     _rs_rec 0 \"\$_RS_SPEC\"
-    _gs_eu2_fetch_sdkmanager \$idx 2>/dev/null
+    _gs_eu2_fetch_androidsdk \$idx 2>/dev/null
     val=\$(_gs_eu2_record_get \$idx proposed_version)
     dec=\$(_gs_eu2_record_get \$idx decision)
     msg=\$(_gs_eu2_record_get \$idx error_message)
@@ -13668,7 +13668,7 @@ t "t124j: an unreachable sibling XML is ERROR, not an empty filter" bash -c "
 "
 
 t "t124k: when no level qualifies the pin is left unchanged with a reason" bash -c "
-    export _GS_EU2_SDKMANAGER_REPO_URL='https://sdk.test/repo.xml'
+    export _GS_EU2_ANDROIDSDK_REPO_URL='https://sdk.test/repo.xml'
     ${_RS_LIBS}${_RS_FIX}
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/rs_cache_k
     export _GS_EU2_HTTP_FIXTURE_DIR=\${TMP_DIR}/rs_fix_k
@@ -13676,7 +13676,7 @@ t "t124k: when no level qualifies the pin is left unchanged with a reason" bash 
     _rs_xml \"\$d/sysimg.test_ga.xml\" 'system-images;android-99;google_apis_ps16k;x86_64:channel-0'
     _rs_xml \"\$d/sysimg.test_ps.xml\" 'system-images;android-99;google_apis_playstore_ps16k;x86_64:channel-0'
     _rs_rec 0 \"\$_RS_SPEC\"
-    _gs_eu2_fetch_sdkmanager \$idx 2>/dev/null
+    _gs_eu2_fetch_androidsdk \$idx 2>/dev/null
     val=\$(_gs_eu2_record_get \$idx proposed_version)
     msg=\$(_gs_eu2_record_get \$idx error_message)
     [[ -z \"\$val\" ]] || { echo \"no level qualifies, want no proposal; got: '\$val'\"; echo FAIL; exit 0; }
@@ -13689,7 +13689,7 @@ t "t124k: when no level qualifies the pin is left unchanged with a reason" bash 
 # omits the spec the second read returns the first's gated answer and the sabotage
 # reds here rather than passing on an unrelated difference.
 t "t124l: the cache key carries the sibling spec" bash -c "
-    export _GS_EU2_SDKMANAGER_REPO_URL='https://sdk.test/repo.xml'
+    export _GS_EU2_ANDROIDSDK_REPO_URL='https://sdk.test/repo.xml'
     ${_RS_LIBS}${_RS_FIX}
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/rs_cache_l
     export _GS_EU2_HTTP_FIXTURE_DIR=\${TMP_DIR}/rs_fix_l
@@ -13701,13 +13701,76 @@ t "t124l: the cache key carries the sibling spec" bash -c "
             \"system-images;android-37.1;\${tag};x86_64:channel-0\"
     done
     _rs_rec 0 \"\$_RS_SPEC\"
-    _gs_eu2_fetch_sdkmanager \$idx 2>/dev/null
+    _gs_eu2_fetch_androidsdk \$idx 2>/dev/null
     gated=\$(_gs_eu2_record_get \$idx proposed_version)
     _rs_rec 0
-    _gs_eu2_fetch_sdkmanager \$idx 2>/dev/null
+    _gs_eu2_fetch_androidsdk \$idx 2>/dev/null
     plain=\$(_gs_eu2_record_get \$idx proposed_version)
     [[ \"\$gated\" == '37.1' ]] || { echo \"gated want 37.1, got '\$gated'\"; echo FAIL; exit 0; }
     [[ \"\$plain\" == '37.2' ]] || { echo \"ungated read the gated cache entry: got '\$plain'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+section "125 — androidsdk: replaces the retired sdkmanager: type"
+
+# Row 46. `sdkmanager` is deprecated upstream -- a shim that prints "Use Android
+# CLI instead" over `android sdk` -- and 04android already calls `android sdk`
+# directly, so the annotation type followed it. The rename has one silent failure
+# mode worth a test of its own: dispatch is DYNAMIC (_gs_eu2_fetch_<type>) and a
+# type with no function becomes decision=SKIP, so a leftover `sdkmanager:` would
+# quietly stop tracking the android pins. It is refused at parse time instead.
+t "t125a: a sdkmanager: annotation is refused at parse time, naming androidsdk:" bash -c "
+    f=\${TMP_DIR}/t125a.env
+    printf '# @todo env-update sdkmanager:build-tools 37.0.0\nGLOBAL_STACK_T125A=37.0.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1); rc=\$?
+    [[ \$rc -ne 0 ]] || { echo \"expected non-zero exit for sdkmanager:; got rc=0: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -q 'androidsdk:' || { echo \"error must name the replacement type; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -q 't125a.env:1' || { echo \"error must name file:line; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# A flag in front must not change which error wins: before the rename (offset:1)
+# on sdkmanager: was legal, so a refusal wired in after the flag checks would let
+# the retired type through on exactly the six rolling-window records.
+t "t125b: ...also when a flag precedes it (the rolling-window shape)" bash -c "
+    f=\${TMP_DIR}/t125b.env
+    printf '# @todo env-update (offset:1) sdkmanager:platforms 37.0\nGLOBAL_STACK_T125B=37.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1); rc=\$?
+    [[ \$rc -ne 0 ]] || { echo \"expected non-zero exit; got rc=0: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -q 'androidsdk:' || { echo \"refused for the wrong reason; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t125c: dispatch resolves _gs_eu2_fetch_androidsdk; no sdkmanager fetcher is left" bash -c "
+    source '${_GS_EU2_LIB}/main.sh'
+    declare -F _gs_eu2_fetch_androidsdk >/dev/null || { echo 'no _gs_eu2_fetch_androidsdk defined'; echo FAIL; exit 0; }
+    declare -F _gs_eu2_fetch_sdkmanager >/dev/null && { echo '_gs_eu2_fetch_sdkmanager is still defined'; echo FAIL; exit 0; }
+    [[ -e '${_GS_EU2_LIB}/fetchers/sdkmanager.sh' ]] && { echo 'fetchers/sdkmanager.sh still exists'; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# (offset:N) and (require-sibling:) are refused on every type but the one whose
+# fetcher reads them; both allow-lists must name the NEW type or the rename turns
+# the rolling window into a parse error.
+t "t125d: (offset:) and (require-sibling:) are accepted on androidsdk:" bash -c "
+    f=\${TMP_DIR}/t125d.env
+    printf '# @todo env-update (offset:1) (require-sibling:https://s.test/a.xml|si;android-{version};ga) androidsdk:platforms 37.0\nGLOBAL_STACK_T125D=37.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1); rc=\$?
+    [[ \$rc -eq 0 ]] || { echo \"exit \$rc; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -q 'androidsdk' || { echo \"dump does not show the record's type; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# The repository's own .env: no retired type left, and the android block really
+# migrated (13 records when this was written -- the floor makes a sweep that
+# matched nothing red instead of passing on an empty count).
+t "t125e: the repo .env carries zero sdkmanager: and >= 13 androidsdk: annotations, and parses" bash -c "
+    n_old=\$(grep -cE '@todo.*env-update.*[[:space:]]sdkmanager:' '${REPO_ROOT}/.env' || true)
+    n_new=\$(grep -cE '@todo.*env-update.*[[:space:]]androidsdk:' '${REPO_ROOT}/.env' || true)
+    [[ \$n_old -eq 0 ]] || { echo \"\$n_old sdkmanager: annotation(s) left in .env\"; echo FAIL; exit 0; }
+    [[ \$n_new -ge 13 ]] || { echo \"expected >= 13 androidsdk: annotations, found \$n_new\"; echo FAIL; exit 0; }
+    out=\$(bash '${ENV_UPDATE_V2}' --dump --filter=ANDROID --env-file='${REPO_ROOT}/.env' 2>&1); rc=\$?
+    [[ \$rc -eq 0 ]] || { echo \"--dump of the repo .env exited \$rc: \${out:0:300}\"; echo FAIL; exit 0; }
     echo PASS
 "
 

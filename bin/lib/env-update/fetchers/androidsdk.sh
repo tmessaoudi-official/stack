@@ -1,14 +1,20 @@
 #!/bin/bash
-# sdkmanager.sh — Android SDK component fetcher, read from Google's repository XML.
+# androidsdk.sh — Android SDK component fetcher, read from Google's repository XML.
 #
-# Exports:   _gs_eu2_sdkmanager_get_repo  _gs_eu2_sdkmanager_parse_versions
-#            _gs_eu2_sdkmanager_stable_paths  _gs_eu2_sdkmanager_sibling_keep
-#            _gs_eu2_fetch_sdkmanager
+# Row 46: this was sdkmanager.sh and the `sdkmanager:` type. Upstream deprecated
+# that CLI in favour of `android sdk` and 04android already calls the new one, so
+# the type followed. The fetch path is unchanged -- it never needed the binary
+# (row 41). parse.sh refuses a leftover `sdkmanager:`: dispatch is dynamic, and
+# a type with no fetcher would otherwise SKIP silently.
+#
+# Exports:   _gs_eu2_androidsdk_get_repo  _gs_eu2_androidsdk_parse_versions
+#            _gs_eu2_androidsdk_stable_paths  _gs_eu2_androidsdk_sibling_keep
+#            _gs_eu2_fetch_androidsdk
 # Sources:   core/records.sh  core/semver.sh  core/channel.sh  core/cache.sh
 #            http/curl.sh
 # Deps:      awk, sort -V
 # Env:       _GS_EU2_CFG[no_cache]
-#            _GS_EU2_SDKMANAGER_REPO_URL (override; default below)
+#            _GS_EU2_ANDROIDSDK_REPO_URL (override; default below)
 #            _GS_EU2_HTTP_FIXTURE_DIR (test seam, via http/curl.sh — fixture name
 #              dl.google.com_android_repository_repository2-3.xml)
 #
@@ -72,8 +78,8 @@
 #     document does not carry (tags/abi live in the sys-img XMLs); they must keep
 #     reading as SKIP + lock reason, not as a failed run.
 
-[[ -n "${_GS_EU2_SDKMANAGER_SH_LOADED:-}" ]] && return 0
-readonly _GS_EU2_SDKMANAGER_SH_LOADED=1
+[[ -n "${_GS_EU2_ANDROIDSDK_SH_LOADED:-}" ]] && return 0
+readonly _GS_EU2_ANDROIDSDK_SH_LOADED=1
 
 # shellcheck source=../core/records.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../core/records.sh"
@@ -86,24 +92,24 @@ source "$(dirname "${BASH_SOURCE[0]}")/../core/cache.sh"
 # shellcheck source=../http/curl.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../http/curl.sh"
 
-: "${_GS_EU2_SDKMANAGER_REPO_URL:=https://dl.google.com/android/repository/repository2-3.xml}"
+: "${_GS_EU2_ANDROIDSDK_REPO_URL:=https://dl.google.com/android/repository/repository2-3.xml}"
 
-# _gs_eu2_sdkmanager_get_repo — return the repository XML body.
+# _gs_eu2_androidsdk_get_repo — return the repository XML body.
 #
 # Args:    $1 sink — (optional) HTTP diagnostic sink from _gs_eu2_http_diag_new
 # Prints:  raw XML
 # Returns: 0 on success; 1 on transport failure or an empty body
 # Side fx: one HTTP GET (memoised by http/curl.sh, so the 11 live records share it)
-_gs_eu2_sdkmanager_get_repo() {
+_gs_eu2_androidsdk_get_repo() {
   local _sink="${1:-}" _body
-  if ! _body="$(_gs_eu2_http_get "${_GS_EU2_SDKMANAGER_REPO_URL}" "${_sink}" 2>/dev/null)"; then
+  if ! _body="$(_gs_eu2_http_get "${_GS_EU2_ANDROIDSDK_REPO_URL}" "${_sink}" 2>/dev/null)"; then
     return 1
   fi
   [[ -z "${_body}" ]] && return 1
   printf '%s\n' "${_body}"
 }
 
-# _gs_eu2_sdkmanager_parse_versions — extract version strings for a component.
+# _gs_eu2_androidsdk_parse_versions — extract version strings for a component.
 #
 # Args:    $1 xml       — repository XML body
 #          $2 component — component name (e.g. "platform-tools", "build-tools",
@@ -116,10 +122,10 @@ _gs_eu2_sdkmanager_get_repo() {
 # fields are read ONLY inside <revision>…</revision> — a <dependency> block
 # carries a <min-revision><major> of its own that would otherwise overwrite them.
 # The component reaches awk through ENVIRON, not -v: -v processes escapes.
-_gs_eu2_sdkmanager_parse_versions() {
+_gs_eu2_androidsdk_parse_versions() {
   local _xml="${1}" _component="${2}"
-  printf '%s\n' "${_xml}" | _GS_EU2_SDKM_COMP="${_component}" awk '
-    BEGIN { comp = ENVIRON["_GS_EU2_SDKM_COMP"] }
+  printf '%s\n' "${_xml}" | _GS_EU2_ASDK_COMP="${_component}" awk '
+    BEGIN { comp = ENVIRON["_GS_EU2_ASDK_COMP"] }
     /<channel id="channel-[0-9]+">/ {
       s = $0; sub(/.*<channel id="/, "", s); id = s; sub(/".*/, "", id)
       name = s; sub(/^[^>]*>/, "", name); sub(/<.*/, "", name)
@@ -165,7 +171,7 @@ _gs_eu2_sdkmanager_parse_versions() {
   ' | sort -uV
 }
 
-# _gs_eu2_sdkmanager_stable_paths — the INSTALLABLE package paths in a repo XML.
+# _gs_eu2_androidsdk_stable_paths — the INSTALLABLE package paths in a repo XML.
 #
 # Args:    $1 xml — repository XML body (main or sys-img)
 # Prints:  newline-separated path= values that are channel-0 and not obsolete
@@ -173,8 +179,8 @@ _gs_eu2_sdkmanager_parse_versions() {
 #
 # Qualifying means present AND channel-0 AND not obsolete="true" — presence alone
 # is exactly what let 37.2 through. A missing <channelRef> counts as stable, which
-# matches _gs_eu2_sdkmanager_parse_versions' own reading of the same attribute.
-_gs_eu2_sdkmanager_stable_paths() {
+# matches _gs_eu2_androidsdk_parse_versions' own reading of the same attribute.
+_gs_eu2_androidsdk_stable_paths() {
   local _xml="${1}"
   printf '%s\n' "${_xml}" | awk '
     /<remotePackage / {
@@ -194,18 +200,18 @@ _gs_eu2_sdkmanager_stable_paths() {
   '
 }
 
-# _gs_eu2_sdkmanager_sibling_keep — drop candidates whose companion is absent.
+# _gs_eu2_androidsdk_sibling_keep — drop candidates whose companion is absent.
 #
 # Args:    $1 versions  — newline-separated candidate list
 #          $2 template  — companion id with a {version} placeholder
-#          $3 paths     — qualifying path set from _gs_eu2_sdkmanager_stable_paths
+#          $3 paths     — qualifying path set from _gs_eu2_androidsdk_stable_paths
 # Prints:  the surviving candidates, newline-separated, order preserved
 # Returns: 0 always
 #
 # Pure by design: the HTTP call stays in the caller so a transport failure can be
 # told apart from "no candidate qualifies". Conflating them is how a fail-open
 # filter gets written.
-_gs_eu2_sdkmanager_sibling_keep() {
+_gs_eu2_androidsdk_sibling_keep() {
   local _versions="${1}" _tpl="${2}" _paths="${3}"
   local _v _need _out=""
   while IFS= read -r _v; do
@@ -218,7 +224,7 @@ _gs_eu2_sdkmanager_sibling_keep() {
   printf '%s' "${_out}"
 }
 
-# _gs_eu2_fetch_sdkmanager — main entry point for the sdkmanager: fetcher type.
+# _gs_eu2_fetch_androidsdk — main entry point for the androidsdk: fetcher type.
 #
 # Args:    $1 record_index — 0-based record index
 # Reads:   record fields: identifier, channel, offset
@@ -226,7 +232,7 @@ _gs_eu2_sdkmanager_sibling_keep() {
 #          (decision only on a transport failure — otherwise owned by decide.sh)
 # Prints:  nothing
 # Returns: 0 always
-_gs_eu2_fetch_sdkmanager() {
+_gs_eu2_fetch_androidsdk() {
   local _idx="${1}"
 
   local _identifier _channel _offset _no_cache _require_sibling
@@ -237,7 +243,7 @@ _gs_eu2_fetch_sdkmanager() {
   _require_sibling="$(_gs_eu2_record_get "${_idx}" require_sibling)"
   _no_cache="${_GS_EU2_CFG[no_cache]:-false}"
 
-  # Cache key — the offset MUST be part of it: three sdkmanager:platforms records
+  # Cache key — the offset MUST be part of it: three androidsdk:platforms records
   # differ only by offset, and a key without it hands all three the same value.
   # The sibling spec is in for the same reason one level up: a gated and an
   # ungated record on the same identifier and offset legitimately resolve to
@@ -245,7 +251,7 @@ _gs_eu2_fetch_sdkmanager() {
   # Appended only when SET (:+ not :-), so an ungated record's key is byte-identical
   # to the pre-row-43 one: an unconditional segment leaves a trailing colon that
   # invalidates every cached entry on this type and reds t33g, which pins the shape.
-  local _cache_key="sdkmanager:${_identifier}:${_channel}:off${_offset}${_require_sibling:+:${_require_sibling}}"
+  local _cache_key="androidsdk:${_identifier}:${_channel}:off${_offset}${_require_sibling:+:${_require_sibling}}"
 
   # Cache read
   _gs_eu2_cache_try_load "${_idx}" "${_cache_key}" "" "" && return 0
@@ -253,23 +259,23 @@ _gs_eu2_fetch_sdkmanager() {
   # Repository XML
   local _sink _xml
   _sink="$(_gs_eu2_http_diag_new)" || _sink=""
-  if ! _xml="$(_gs_eu2_sdkmanager_get_repo "${_sink}")"; then
+  if ! _xml="$(_gs_eu2_androidsdk_get_repo "${_sink}")"; then
     local _st=""
     [[ -n "${_sink}" ]] && _st="$(_gs_eu2_http_diag_status "${_sink}")"
     _gs_eu2_http_diag_free "${_sink}"
     _gs_eu2_record_set "${_idx}" decision "ERROR"
     _gs_eu2_record_set "${_idx}" error_message \
-      "sdkmanager: repository fetch failed for ${_GS_EU2_SDKMANAGER_REPO_URL}${_st:+ (HTTP ${_st})}"
+      "androidsdk: repository fetch failed for ${_GS_EU2_ANDROIDSDK_REPO_URL}${_st:+ (HTTP ${_st})}"
     return 0
   fi
   _gs_eu2_http_diag_free "${_sink}"
 
   # Parse versions for this component
   local _versions
-  _versions="$(_gs_eu2_sdkmanager_parse_versions "${_xml}" "${_identifier}")"
+  _versions="$(_gs_eu2_androidsdk_parse_versions "${_xml}" "${_identifier}")"
 
   if [[ -z "$(printf '%s\n' "${_versions}" | grep -v '^$' || true)" ]]; then
-    _gs_eu2_record_set "${_idx}" error_message "no versions found for sdkmanager:${_identifier} in the repository XML"
+    _gs_eu2_record_set "${_idx}" error_message "no versions found for androidsdk:${_identifier} in the repository XML"
     return 0
   fi
 
@@ -292,17 +298,17 @@ _gs_eu2_fetch_sdkmanager() {
         _gs_eu2_http_diag_free "${_rs_sink}"
         _gs_eu2_record_set "${_idx}" decision "ERROR"
         _gs_eu2_record_set "${_idx}" error_message \
-          "sdkmanager: (require-sibling:) fetch failed for ${_rs_url}${_rs_st:+ (HTTP ${_rs_st})} — cannot prove companion availability, leaving the pin unchanged"
+          "androidsdk: (require-sibling:) fetch failed for ${_rs_url}${_rs_st:+ (HTTP ${_rs_st})} — cannot prove companion availability, leaving the pin unchanged"
         return 0
       fi
       _gs_eu2_http_diag_free "${_rs_sink}"
-      _rs_paths="$(_gs_eu2_sdkmanager_stable_paths "${_rs_body}")"
-      _versions="$(_gs_eu2_sdkmanager_sibling_keep "${_versions}" "${_rs_tpl}" "${_rs_paths}")"
+      _rs_paths="$(_gs_eu2_androidsdk_stable_paths "${_rs_body}")"
+      _versions="$(_gs_eu2_androidsdk_sibling_keep "${_versions}" "${_rs_tpl}" "${_rs_paths}")"
       [[ -z "${_versions}" ]] && break
     done
     if [[ -z "$(printf '%s\n' "${_versions}" | grep -v '^$' || true)" ]]; then
       _gs_eu2_record_set "${_idx}" error_message \
-        "no version of sdkmanager:${_identifier} has all its (require-sibling:) companions published on the stable channel — leaving the pin unchanged"
+        "no version of androidsdk:${_identifier} has all its (require-sibling:) companions published on the stable channel — leaving the pin unchanged"
       return 0
     fi
   fi
@@ -316,9 +322,9 @@ _gs_eu2_fetch_sdkmanager() {
       local _n_stable
       _n_stable="$(_gs_eu2_channel_count_stable "${_versions}")"
       _gs_eu2_record_set "${_idx}" error_message \
-        "offset ${_offset} reaches past the ${_n_stable} distinct stable version(s) upstream serves for sdkmanager:${_identifier}"
+        "offset ${_offset} reaches past the ${_n_stable} distinct stable version(s) upstream serves for androidsdk:${_identifier}"
     else
-      _gs_eu2_record_set "${_idx}" error_message "channel selection returned nothing for sdkmanager:${_identifier}"
+      _gs_eu2_record_set "${_idx}" error_message "channel selection returned nothing for androidsdk:${_identifier}"
     fi
     return 0
   fi

@@ -95,8 +95,8 @@ FETCHER TYPES
   sdkman:CANDIDATE
     SDKMAN! (Java, Gradle, Maven, Kotlin…). E.g. sdkman:java, sdkman:gradle.
 
-  sdkmanager:PACKAGE
-    Android SDK manager packages (e.g. sdkmanager:build-tools).
+  androidsdk:PACKAGE
+    Android SDK packages, as `android sdk` installs them (e.g. androidsdk:build-tools).
     Does not support major_hint or range syntax.
 
   url:URL
@@ -278,7 +278,7 @@ ANNOTATION FLAGS (parenthesised, space-separated, after the @todo keyword)
                       Catches an upstream frozen AT the current value, which the
                       downgrade guard cannot see. Immune to --force-auto.
     (require-sibling:URL|ID_TEMPLATE,…)
-                      Companion-availability gate (sdkmanager fetcher only).
+                      Companion-availability gate (androidsdk fetcher only).
                       Comma-separated URL|ID_TEMPLATE pairs; each template must
                       contain {version}. A candidate survives only when EVERY
                       companion is present, channel-0 and not obsolete in its
@@ -351,7 +351,7 @@ ANNOTATION FLAGS (parenthesised, space-separated, after the @todo keyword)
     (offset:N)        Track the N-th newest DISTINCT stable version instead of the
                       newest: 0 = latest (default), 1 = latest-1, 2 = latest-2.
                       Stable channel only (refused with any other (channel:…)),
-                      and sdkmanager only (refused on any other TYPE — the
+                      and androidsdk only (refused on any other TYPE — the
                       other fetchers never read it, so it is not ignored quietly).
                       Past the end of the upstream list → no proposal. For a set
                       of vars that must always cover the K latest releases (the
@@ -463,7 +463,7 @@ PER-FETCHER DEEP-DIVE
                SDKMAN advertises some dists with build metadata (17.0.20+1.1-zulu) but
                its broker serves only the base form, so proposals are normalised to it.
 
-  sdkmanager:COMPONENT
+  androidsdk:COMPONENT
     API:       GET https://dl.google.com/android/repository/repository2-3.xml
                (the document `android sdk list` downloads) and parses every
                <remotePackage path="…"> that IS the component (platform-tools,
@@ -475,8 +475,8 @@ PER-FETCHER DEEP-DIVE
                (offset:N). Extension SDKs (-extN), codenames and obsolete
                packages never win. Unreachable repository → ERROR; component
                absent from it → SKIP.
-    Examples:  sdkmanager:build-tools 37.0.0
-               (offset:1) sdkmanager:platforms 37.1
+    Examples:  androidsdk:build-tools 37.0.0
+               (offset:1) androidsdk:platforms 37.1
 
   url:URL
     4-tier resolution (tried in order until one succeeds):

@@ -11,7 +11,7 @@ bin/lib/env-update/                  # Modular env-update library
   config/   defaults, prerelease_markers
   core/     apply, args, cache, channel, decide, drift, git, parallel, parse, passes, records, semver, tag_flags, ubuntu
   reporting/ dump, help, profile, reference, summary, tally
-  fetchers/ codeberg, dockerhub, ghcr, github, npm, pecl, pypi, quay, rubygems, sdkman, sdkmanager, url
+  fetchers/ codeberg, dockerhub, ghcr, github, npm, pecl, pypi, quay, rubygems, sdkman, androidsdk, url
 bin/lib/env-scan/                    # Modular env-scan library
 bin/tests/env-scan.test.sh           # Test suite (custom harness)
 bin/tests/env-update.test.sh         # Test suite (749+ tests, 112 sections)

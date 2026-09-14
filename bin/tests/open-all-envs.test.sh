@@ -98,9 +98,29 @@ make_sandbox() {
 printf '%s\n' "\${@: -1}" >>"${SBX}/opened.log"
 EOF
   # Probe/list commands the script really invokes — no-ops in the sandbox.
-  for _c in curl npm sdkmanager pip; do
+  for _c in curl npm pip; do
     printf '#!/usr/bin/env bash\nexit 0\n' >"${SBX}/stub/${_c}"
   done
+  # The deprecated sdkmanager must never be reached: record it if it is.
+  cat >"${SBX}/stub/sdkmanager" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >>"${SBX}/sdkmanager.log"
+EOF
+  # Models the REAL android CLI rather than the script's belief about it: `--sdk`
+  # is a GLOBAL option, and written after the subcommand it is rejected with
+  # "Unknown option", exit 2 [measured against android 1.0.15985488, b2ae4d1].
+  # A stub that accepted any order would pass the very bug it exists to catch.
+  cat >"${SBX}/stub/android" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >>"${SBX}/android.log"
+for ((_i = 2; _i <= \$#; _i++)); do
+  if [[ "\${!_i}" == --sdk* ]]; then
+    echo "Unknown option: '\${!_i}'" >&2
+    exit 2
+  fi
+done
+exit 0
+EOF
   chmod +x "${SBX}"/stub/*
   : >"${SBX}/opened.log"
 
@@ -125,6 +145,7 @@ run_sut() {
   RUN_OUT="$(cd "${1}" && env -i \
     ${RUN_EXTRA_ENV[@]+"${RUN_EXTRA_ENV[@]}"} \
     HOME="${SBX}/home" \
+    ANDROID_HOME="${SBX}/android" \
     PATH="${SBX}/stub:/usr/local/bin:/usr/bin:/bin" \
     _GS_EU_MD_PROFILE_SH="${SBX}/profile.sh" \
     bash "${SBX}/bin/open-all-envs.sh" 2>&1)"
@@ -272,6 +293,49 @@ if [[ -n "${_bak_path}" && -f "${_bak_path}" ]]; then
 else
   ko "the WARN promised a backup at '${_bak_path}' and it is not there"
 fi
+
+# ── Row 46: the SDK listing goes through `android sdk`, never sdkmanager ────
+printf '\n  %b7. the android SDK listing uses `android sdk list`%b\n' "${C_BOLD}" "${C_RESET}"
+
+make_sandbox "${ENV_WITH_LINKS}"
+run_sut "${SBX}/foreign"
+
+[[ -s "${SBX}/android.log" ]] \
+  && ok "the SDK listing invokes the android CLI" \
+  || ko "android was never invoked (rc=${RUN_RC}); output: $(tr '\n' '|' <<<"${RUN_OUT}")"
+
+grep -qxF -- "--sdk=${SBX}/android sdk list --all" "${SBX}/android.log" 2>/dev/null \
+  && ok "called as android --sdk=\$ANDROID_HOME sdk list --all (global option first)" \
+  || ko "unexpected android invocation: $(tr '\n' '|' 2>/dev/null <"${SBX}/android.log")"
+
+[[ ! -e "${SBX}/sdkmanager.log" ]] \
+  && ok "the deprecated sdkmanager is never called" \
+  || ko "sdkmanager was called: $(tr '\n' '|' <"${SBX}/sdkmanager.log")"
+
+! grep -q 'Unknown option' <<<"${RUN_OUT}" \
+  && ok "no CLI option rejected during the run" \
+  || ko "the android CLI rejected an option: $(grep 'Unknown option' <<<"${RUN_OUT}")"
+
+# An androidsdk: record has no browser page. If the type is not recognised the
+# line falls through to the legacy raw-URL branch, which opens whatever URL the
+# annotation happens to carry — for the rolling window, the sys-img XML inside
+# its (require-sibling:) flag.
+printf '\n  %b8. androidsdk: annotations open no tab%b\n' "${C_BOLD}" "${C_RESET}"
+
+make_sandbox 'GLOBAL_STACK_FOO_VERSION=1.0
+# @todo env-update github:foo/bar 1.0
+# @todo env-update (require-sibling:https://dl.google.com/android/repository/sys-img/google_apis/sys-img2-3.xml|system-images;android-{version};google_apis_ps16k;x86_64) androidsdk:platforms 37.1
+GLOBAL_STACK_ANDROID_API_LEVEL_3=37.1
+'
+run_sut "${SBX}/foreign"
+
+grep -qxF 'https://github.com/foo/bar/releases' "${SBX}/opened.log" \
+  && ok "the neighbouring github link still opens (non-vacuity)" \
+  || ko "github link missing (rc=${RUN_RC}): $(tr '\n' '|' <"${SBX}/opened.log")"
+
+! grep -q 'dl.google.com' "${SBX}/opened.log" \
+  && ok "nothing from the androidsdk: line was opened" \
+  || ko "opened a URL out of the androidsdk: annotation: $(grep 'dl.google.com' "${SBX}/opened.log")"
 
 # ── The doc block is the same bytes as the script ──────────────────────────
 printf '\n  %b6. templates/tips/open-many-links.md stays in sync%b\n' "${C_BOLD}" "${C_RESET}"

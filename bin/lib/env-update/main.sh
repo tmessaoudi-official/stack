@@ -51,8 +51,8 @@ source "$(dirname "${BASH_SOURCE[0]}")/fetchers/pypi.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/fetchers/rubygems.sh"
 # shellcheck source=./fetchers/sdkman.sh
 source "$(dirname "${BASH_SOURCE[0]}")/fetchers/sdkman.sh"
-# shellcheck source=./fetchers/sdkmanager.sh
-source "$(dirname "${BASH_SOURCE[0]}")/fetchers/sdkmanager.sh"
+# shellcheck source=./fetchers/androidsdk.sh
+source "$(dirname "${BASH_SOURCE[0]}")/fetchers/androidsdk.sh"
 # shellcheck source=./fetchers/pecl.sh
 source "$(dirname "${BASH_SOURCE[0]}")/fetchers/pecl.sh"
 # shellcheck source=./fetchers/url.sh

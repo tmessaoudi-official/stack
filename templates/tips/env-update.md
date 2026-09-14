@@ -23,7 +23,7 @@ fetcher types, classifies each update decision, and can apply AUTO decisions bac
    - [quay](#76-quay)
    - [rubygems](#77-rubygems)
    - [sdkman](#78-sdkman)
-   - [sdkmanager](#79-sdkmanager)
+   - [androidsdk](#79-androidsdk)
    - [url](#710-url)
    - [codeberg](#711-codeberg)
    - [ghcr](#712-ghcr)
@@ -47,7 +47,7 @@ fetcher types, classifies each update decision, and can apply AUTO decisions bac
 | `quay` | `org/image` | Yes | Yes | No | Paginated (100 tags/page); follows `has_additional` until exhausted |
 | `rubygems` | `gem-name` | Yes | Yes | No | CLI fast path via `gem search` when available; two-endpoint strategy |
 | `sdkman` | `candidate-name` | Yes | No | No | Java: distribution-aware selection; HTTP-first (no CLI) |
-| `sdkmanager` | `component-name` | No | No | Yes (`channel`, `offset`) | Reads Google's repository XML over HTTP — no local binary; classified by decide.sh like any other type |
+| `androidsdk` | `component-name` | No | No | Yes (`channel`, `offset`) | Reads Google's repository XML over HTTP — no local binary; classified by decide.sh like any other type |
 | `url` | URL string | No | Yes (some tiers) | Varies | 5-tier strategy; most flexible fetcher |
 | `codeberg` | `owner/repo` | Yes | Yes | No | Gitea API; releases → tags fallback |
 | `ghcr` | `owner/image` | Yes | Yes | No for public (anonymous token); GITHUB_TOKEN for private | OCI distribution API; single request (n=1000 cap) |
@@ -74,7 +74,7 @@ VAR_NAME=current_value
 **`TYPE:IDENTIFIER[:MAJOR_HINT]`** — required; must appear exactly once.
 
 - `TYPE` — lowercase fetcher name: `dockerhub`, `github`, `ghcr`, `npm`, `pecl`, `pypi`,
-  `quay`, `rubygems`, `sdkman`, `sdkmanager`, `url`, `codeberg`.
+  `quay`, `rubygems`, `sdkman`, `androidsdk`, `url`, `codeberg`.
 - `IDENTIFIER` — the resource to fetch. Format varies by fetcher type (see Section 7).
 - `:MAJOR_HINT` — optional numeric suffix. Accepts dotted values like `8.2` (the D1 fix).
   The parser checks that the last colon-separated segment matches `^[0-9]+(\.[0-9]+)*$`.
@@ -186,15 +186,15 @@ flags. Flags are **position-agnostic** — they can appear anywhere in the annot
 
 | Flag | Record field | Description |
 |------|-------------|-------------|
-| `(watch-major)` / `(watch-major:N)` | `watch_major_depth: N` | **Informational only — no effect on decision.** After fetching, prints a `↳ [WATCH] New generation available: X.Y.Z (depth N: A → B)` sub-line when the latest available version has a higher major-version prefix than the pinned version. Depth controls how many dot-separated components to compare: depth 1 compares major only (`25` vs `26`); depth 2 compares major.minor (`8.4` vs `8.5`). Defaults to depth 1 when no `:N` is given. **Not suppressed by `--no-notes`** — WATCH is a signal, not an annotation note; it fires regardless of output verbosity flags. Use for variables pinned to a specific major (e.g. Java 25, PHP 8.4) to get passive notice when a new generation ships without disrupting the pinned version. **Fetcher support:** `dockerhub`, `github`, `quay`, `npm`, `pypi`, `rubygems`, `codeberg`, `sdkman` all populate `latest_unconstrained` (the unconstrained best version, pre-major-pin) so WATCH fires correctly. For fetchers without major-pin support (`pecl`, `sdkmanager`, `url`), the flag falls back to comparing `proposed_version` — WATCH fires only when the proposal itself has a higher major, which is semantically correct. **Channel-aware:** the unconstrained scan honors the record's `(channel:…)`, so with `(channel:unstable)` a new major that currently exists *only* as a prerelease (e.g. `13.0.1-…-rc` with no stable `13.x` yet) fires WATCH; on the default `stable` channel a prerelease-only new major stays silent until a stable tag ships. |
+| `(watch-major)` / `(watch-major:N)` | `watch_major_depth: N` | **Informational only — no effect on decision.** After fetching, prints a `↳ [WATCH] New generation available: X.Y.Z (depth N: A → B)` sub-line when the latest available version has a higher major-version prefix than the pinned version. Depth controls how many dot-separated components to compare: depth 1 compares major only (`25` vs `26`); depth 2 compares major.minor (`8.4` vs `8.5`). Defaults to depth 1 when no `:N` is given. **Not suppressed by `--no-notes`** — WATCH is a signal, not an annotation note; it fires regardless of output verbosity flags. Use for variables pinned to a specific major (e.g. Java 25, PHP 8.4) to get passive notice when a new generation ships without disrupting the pinned version. **Fetcher support:** `dockerhub`, `github`, `quay`, `npm`, `pypi`, `rubygems`, `codeberg`, `sdkman` all populate `latest_unconstrained` (the unconstrained best version, pre-major-pin) so WATCH fires correctly. For fetchers without major-pin support (`pecl`, `androidsdk`, `url`), the flag falls back to comparing `proposed_version` — WATCH fires only when the proposal itself has a higher major, which is semantically correct. **Channel-aware:** the unconstrained scan honors the record's `(channel:…)`, so with `(channel:unstable)` a new major that currently exists *only* as a prerelease (e.g. `13.0.1-…-rc` with no stable `13.x` yet) fires WATCH; on the default `stable` channel a prerelease-only new major stays silent until a stable tag ships. |
 
 ### Valued flags — channel
 
 | Flag | Record field | Description |
 |------|-------------|---|
 | `(channel:VALUE)` | `channel` | Select versions from a specific release channel. Values: `stable` (default), `unstable` (any pre-release), `rc`, `beta`, `alpha`, `nightly`, or any comma-separated combination like `rc,beta`. |
-| `(offset:N)` | `offset` | **Rolling window — the N-th newest instead of the newest.** `0` = latest (the default, same as no flag), `1` = latest-1, `2` = latest-2 … counted over DISTINCT versions (a tag present as both `1.2.0` and `v1.2.0` is one step) on the **stable** list only: pair it with `(channel:unstable)`, `rc`, `nightly` or any other non-stable channel and the parser refuses the annotation — an rc list has no meaningful "previous" entry. Past the end of what upstream serves → no proposal and an `offset N reaches past the M distinct stable version(s)` message, never "the oldest one". Use it for a set of vars that must always cover the K latest releases: the android platforms and build-tools windows in `.env` are three records each on the same `TYPE:ID`, with `(offset:2)`, `(offset:1)` and none. **The offset is part of the cache key**, so the three do not collide. Honoured by **`sdkmanager` only**: every other fetcher calls the shared selector without the offset, so rather than let `(offset:1) dockerhub:…` resolve to latest and say nothing, the parser refuses a non-zero offset on any other type (`is not honoured by the X fetcher`); `(offset:0)` is accepted everywhere because it changes nothing. Adding a type means passing the third argument in its fetcher AND listing it in `_GS_EU2_OFFSET_TYPES` (parse.sh), in the same change. Note the ordinary decide.sh rules still apply on top: a proposal that crosses a major boundary is `HOLD` until `--force-hold` / `--force-auto`, exactly as for any other record. |
-| `(require-sibling:URL\|ID_TEMPLATE,…)` | `require_sibling` | **Companion-availability gate — `sdkmanager` only.** Comma-separated `URL|ID_TEMPLATE` pairs; every template must contain `{version}`. A candidate survives only when EVERY companion is **present AND `channel-0` AND not `obsolete="true"`** in its named document. Runs **before** channel selection, so `(offset:N)` counts qualifying versions only. **Fails closed** — an unreachable companion XML is `ERROR` with the pin unchanged, never an empty filter that passes everything. A repeated flag is refused at parse (the store is last-wins, so the first pair would vanish and the gate would check one companion while reading as though it checked two); list them all in one flag. Refused on any non-`sdkmanager` type, on a pair with no `|`, and on a template with no `{version}`. Part of the cache key. Row 43: `platforms;android-37.2` went stable while both its system images stayed on `channel-2`, and `android sdk install` is stable-only and exits 0 on "Package not found" — see §7.9. |
+| `(offset:N)` | `offset` | **Rolling window — the N-th newest instead of the newest.** `0` = latest (the default, same as no flag), `1` = latest-1, `2` = latest-2 … counted over DISTINCT versions (a tag present as both `1.2.0` and `v1.2.0` is one step) on the **stable** list only: pair it with `(channel:unstable)`, `rc`, `nightly` or any other non-stable channel and the parser refuses the annotation — an rc list has no meaningful "previous" entry. Past the end of what upstream serves → no proposal and an `offset N reaches past the M distinct stable version(s)` message, never "the oldest one". Use it for a set of vars that must always cover the K latest releases: the android platforms and build-tools windows in `.env` are three records each on the same `TYPE:ID`, with `(offset:2)`, `(offset:1)` and none. **The offset is part of the cache key**, so the three do not collide. Honoured by **`androidsdk` only**: every other fetcher calls the shared selector without the offset, so rather than let `(offset:1) dockerhub:…` resolve to latest and say nothing, the parser refuses a non-zero offset on any other type (`is not honoured by the X fetcher`); `(offset:0)` is accepted everywhere because it changes nothing. Adding a type means passing the third argument in its fetcher AND listing it in `_GS_EU2_OFFSET_TYPES` (parse.sh), in the same change. Note the ordinary decide.sh rules still apply on top: a proposal that crosses a major boundary is `HOLD` until `--force-hold` / `--force-auto`, exactly as for any other record. |
+| `(require-sibling:URL\|ID_TEMPLATE,…)` | `require_sibling` | **Companion-availability gate — `androidsdk` only.** Comma-separated `URL|ID_TEMPLATE` pairs; every template must contain `{version}`. A candidate survives only when EVERY companion is **present AND `channel-0` AND not `obsolete="true"`** in its named document. Runs **before** channel selection, so `(offset:N)` counts qualifying versions only. **Fails closed** — an unreachable companion XML is `ERROR` with the pin unchanged, never an empty filter that passes everything. A repeated flag is refused at parse (the store is last-wins, so the first pair would vanish and the gate would check one companion while reading as though it checked two); list them all in one flag. Refused on any non-`androidsdk` type, on a pair with no `|`, and on a template with no `{version}`. Part of the cache key. Row 43: `platforms;android-37.2` went stable while both its system images stayed on `channel-2`, and `android sdk install` is stable-only and exits 0 on "Package not found" — see §7.9. |
 | `(stale-after:Nd)` | `stale_after` | **Freshness contract.** Declares that this source's newest version should never be more than N whole days old, and raises `ERROR` when it is. Opt-in, and only meaningful for a version scheme that carries its own date (`…nightly20260825abc123`) — a stable pin sitting still for months is normal, not stale. See "Freshness contract" below. |
 
 **Freshness contract — `(stale-after:Nd)`:**
@@ -251,7 +251,7 @@ record, so it costs one cache generation and nothing after that.
 
 | Flag | Record field | Applies to | Description |
 |------|-------------|------|---|
-| `(tag-filter:REGEX)` | `tag_filter` | All except `sdkman`, `sdkmanager`, `url`(tiers 1-2) | Keep only tags matching ERE regex. Applied to the raw tag name. |
+| `(tag-filter:REGEX)` | `tag_filter` | All except `sdkman`, `androidsdk`, `url`(tiers 1-2) | Keep only tags matching ERE regex. Applied to the raw tag name. |
 | `(tag-exclude:REGEX)` | `tag_exclude` | Same | Drop tags matching ERE regex. Runs after `tag-filter`. |
 | `(tag-strip-prefix:STR)` | `tag_strip_prefix` | All tag-based fetchers | Strip a literal string prefix from each tag. For example, strip `v` from `v3.2.1` → `3.2.1`. See also `version-prefix` to restore it after comparison. |
 | `(tag-strip-suffix:STR)` | `tag_strip_suffix` | All tag-based fetchers | Strip a literal string suffix from each tag. For example, strip `-alpine3.23` from `18.3-alpine3.23` → `18.3`. |
@@ -476,7 +476,7 @@ The `+resolve N` and `N depends-on-warn` signals are omitted from the line when 
 **Every one of the 12 fetcher types escalates a hard transport failure to `ERROR`** — and therefore
 to exit 1, unless `--no-fail` is passed. This is what makes `--check` usable as a cron or CI gate:
 a dead upstream fails the run rather than reading as "nothing to do". Until 2026-08-29 `url:`,
-`sdkman:` and `sdkmanager:` set only `error_message` and left the decision empty, which `decide.sh`
+`sdkman:` and `androidsdk:` set only `error_message` and left the decision empty, which `decide.sh`
 classifies as `SKIP` — so 33 live records could never fail a run however dead their upstream was.
 
 The boundary is deliberate, and the other side of it still yields `SKIP` + exit 0:
@@ -484,7 +484,7 @@ The boundary is deliberate, and the other side of it still yields `SKIP` + exit 
 | Stays `SKIP` | Why |
 |---|---|
 | a `fetch-extract` pattern or `fetch-json` jq path that matches nothing on a **200** | the upstream is reachable and its shape changed — `(stale-after:Nd)` is the guard for that |
-| `sdkman not installed` | a missing local toolchain must never fail someone else's run (`sdkmanager` no longer has this case — it reads Google's repository XML and needs no local toolchain, row 41) |
+| `sdkman not installed` | a missing local toolchain must never fail someone else's run (`androidsdk` no longer has this case — it reads Google's repository XML and needs no local toolchain, row 41) |
 | `url-probe` finding no accessible path | a probe expects most candidates to 404 and cannot distinguish that from a network outage |
 | tier 3 (`urls:` → GitHub) failing | a fallback chain by design: it tries the next `urls:` entry, then the directory listing |
 | `no versions matched filters` | the filters are the annotation author's own constraint |
@@ -579,7 +579,7 @@ than showing a placeholder.
 |-----|--------------|
 | `[AUTO  ]` | The fetcher found a newer version within the same major (or within the major_hint pin), and no `override` or `manual` flag is set. Safe to apply automatically. |
 | `[HOLD  ]` | A newer version exists but it crosses a major version boundary, or the proposed version escapes the major_hint pin. Requires human review before upgrading. Reason label explains which case triggered. |
-| `[MANUAL]` | The annotation has `(override)` or `(manual)` flag, OR the fetcher (e.g. `sdkmanager`) explicitly sets `manual=true`. The proposed version is shown but will never be auto-applied. |
+| `[MANUAL]` | The annotation has `(override)` or `(manual)` flag, OR the fetcher (e.g. `androidsdk`) explicitly sets `manual=true`. The proposed version is shown but will never be auto-applied. |
 | `[LOCK  ]` | The annotation has `(lock:REASON)`. The fetcher ran and `proposed_version` is populated, but the variable is locked — `--apply` updates only the annotation version token; the `VAR=` line is never touched. Immune to `--force-auto`. Does not fire when the fetcher returned ERROR or a skip-gate `(skip:)` was active. |
 | `[SKIP  ]` | The variable is already at the latest version (`current == proposed`), or the fetcher returned no viable candidates, or the current version is a floating reference (`latest`, `nightly`, etc.), or the proposed would downgrade the current version, or the proposed is a prerelease while the current is stable. Also used when a fetcher sets `error_message` but no `decision`. |
 | `[ERROR ]` | Network failure, HTTP error (4xx/5xx), rate limiting after 3 retries, or a parse failure in the API response. The fetch was attempted and definitively failed. |
@@ -838,7 +838,7 @@ Behaviour:
    (if `latest_unconstrained` is set). No `[FALLBACK]` sub-line in that case.
 
 Supported fetcher types: npm, dockerhub, github, codeberg, quay, pypi, rubygems.
-Not supported: pecl, sdkmanager (those types have no major_hint filtering at all).
+Not supported: pecl, androidsdk (those types have no major_hint filtering at all).
 
 ### Semver comparison details (`core/semver.sh`)
 
@@ -1290,13 +1290,13 @@ GLOBAL_STACK_GRADLE_VERSION=8.12.1
 
 ---
 
-### 7.9 sdkmanager
+### 7.9 androidsdk
 
 **Identifier format:** Android SDK component name (e.g. `platform-tools`, `build-tools`, `ndk`, `platforms`).
 
 **Strategy (row 41, 2026-09-12 — no local binary):**
-1. GET `https://dl.google.com/android/repository/repository2-3.xml` — the document `sdkmanager --list` / `android sdk list` download before printing anything (override: `_GS_EU2_SDKMANAGER_REPO_URL`; test seam: the ordinary `_GS_EU2_HTTP_FIXTURE_DIR`, fixture name `dl.google.com_android_repository_repository2-3.xml`). One GET per run — the HTTP layer memoises it across the 14 live records.
-2. Parse every `<remotePackage path="…">` whose path **is** the component (bare, single-instance ids: `platform-tools`, `ndk-bundle`, `emulator`) or **starts with** `component;` (versioned ids: `build-tools;37.0.0`, `ndk;30.0.…`, `platforms;android-37.2`). `obsolete="true"` packages are skipped, as `sdkmanager --list` skips them without `--include_obsolete`.
+1. GET `https://dl.google.com/android/repository/repository2-3.xml` — the document `android sdk list` downloads before printing anything (override: `_GS_EU2_ANDROIDSDK_REPO_URL`; test seam: the ordinary `_GS_EU2_HTTP_FIXTURE_DIR`, fixture name `dl.google.com_android_repository_repository2-3.xml`). One GET per run — the HTTP layer memoises it across the 14 live records.
+2. Parse every `<remotePackage path="…">` whose path **is** the component (bare, single-instance ids: `platform-tools`, `ndk-bundle`, `emulator`) or **starts with** `component;` (versioned ids: `build-tools;37.0.0`, `ndk;30.0.…`, `platforms;android-37.2`). `obsolete="true"` packages are skipped, as the deprecated `sdkmanager --list` skipped them without `--include_obsolete`.
 3. `(require-sibling:)` filter, when present — see below.
 4. Channel selection and `(offset:N)` → proposed.
 
@@ -1308,6 +1308,13 @@ GLOBAL_STACK_GRADLE_VERSION=8.12.1
 > deprecated upstream (a shim over `android sdk`, whose `--sdk` is a GLOBAL option that goes
 > BEFORE the subcommand — see the setup script and the CLAUDE.md gotcha); none of that matters
 > to the fetcher any more.
+>
+> **Why the type is `androidsdk:` and not `sdkmanager:` (row 46).** Upstream deprecated
+> `sdkmanager` in favour of `android sdk`, and `04android` already calls the new CLI, so the
+> annotation type followed. The fetch path did not change — only the token, the function
+> names, the `_GS_EU2_ANDROIDSDK_REPO_URL` override and the cache-key prefix. A leftover
+> `sdkmanager:` annotation is **refused at parse time** (exit 1, naming `androidsdk:`):
+> dispatch is dynamic, so without the refusal it would reach no fetcher and SKIP silently.
 
 **Version rendering:**
 - versioned path → the part after `;`, verbatim (`build-tools;37.0.0-rc2` → `37.0.0-rc2`). For `platforms` the `android-` prefix is stripped so the value IS the API level (`platforms;android-37.2` → `37.2`), which is what `global-stack-android-setup.sh` re-prefixes. Extension SDKs (`android-36-ext18`) are a different product and are dropped; codenames (`android-CANARY`, `android-UpsideDownCake`) have no numeric shape and are dropped.
@@ -1346,7 +1353,7 @@ properties are load-bearing:
 
 Each XML is fetched **once** per run, not once per candidate, and the spec is part of the cache key
 so a gated and an ungated record on the same identifier cannot share an entry. Refused at parse on
-any non-`sdkmanager` type, on a pair with no `|`, and on a template with no `{version}` — a fixed
+any non-`androidsdk` type, on a pair with no `|`, and on a template with no `{version}` — a fixed
 id would be present for every candidate or absent for every candidate, a filter that cannot
 discriminate. Covered by `env-update.test.sh` §124.
 
@@ -1358,17 +1365,17 @@ discriminate. Covered by `env-update.test.sh` §124.
 
 **Not found vs. unreachable:** repository unreachable → `ERROR` (a dead upstream must fail `--check`, §119). Component absent from the repository → `error_message` only → `SKIP` via decide.sh; the three `(lock:)`ed system-images records (tag / playstore tag / abi) name things this document does not carry and must keep reading as lock + SKIP, not as a failed run.
 
-**Cache key:** `sdkmanager:component:channel:offN[:require-sibling-spec]` — the offset is part of it, or three `sdkmanager:platforms` records would share one entry, and the `(require-sibling:)` spec is appended for the same reason one level up (a gated and an ungated record on the same identifier and offset legitimately resolve to different versions). The sibling segment is appended **only when set**, so an ungated record's key is byte-identical to the pre-row-43 one and no cached entry is invalidated — an unconditional segment leaves a trailing colon that misses every existing entry, which `env-update.test.sh` t33g reds.
+**Cache key:** `androidsdk:component:channel:offN[:require-sibling-spec]` — the offset is part of it, or three `androidsdk:platforms` records would share one entry, and the `(require-sibling:)` spec is appended for the same reason one level up (a gated and an ungated record on the same identifier and offset legitimately resolve to different versions). The sibling segment is appended **only when set**, so an ungated record's key is byte-identical to the pre-row-43 one and no cached entry is invalidated — an unconditional segment leaves a trailing colon that misses every existing entry, which `env-update.test.sh` t33g reds.
 
 **Example annotations — the rolling windows in `.env`:**
 ```bash
-# @todo env-update (offset:2) sdkmanager:platforms 37.0
+# @todo env-update (offset:2) androidsdk:platforms 37.0
 GLOBAL_STACK_ANDROID_API_LEVEL_1=37.0
-# @todo env-update (offset:1) sdkmanager:platforms 37.1
+# @todo env-update (offset:1) androidsdk:platforms 37.1
 GLOBAL_STACK_ANDROID_API_LEVEL_2=37.1
-# @todo env-update sdkmanager:platforms 37.2
+# @todo env-update androidsdk:platforms 37.2
 GLOBAL_STACK_ANDROID_API_LEVEL_3=37.2
-# @todo env-update sdkmanager:platform-tools 37.0.1
+# @todo env-update androidsdk:platform-tools 37.0.1
 GLOBAL_STACK_ANDROID_PLATFORM_TOOLS_VERSION=37.0.1
 ```
 
@@ -1623,7 +1630,7 @@ Characters replaced: `:`, `/`, `@`, and space → `_`. The result is a flat file
 | codeberg | `codeberg:owner/repo:major_hint:channel` |
 | ghcr | `ghcr:owner/image:major_hint:channel` |
 | sdkman | `sdkman:candidate:major_hint:channel` |
-| sdkmanager | `sdkmanager:component:channel` |
+| androidsdk | `androidsdk:component:channel` |
 | url | `url:URL:fe_flag:fj_flag:up_flag:channel` |
 | pecl (stable) | `pecl2:stable:ext_name` |
 | pecl (date) | `pecl2:date:ext_name:version` |
@@ -1973,9 +1980,10 @@ These do not abort the tool — they set `decision=ERROR` and move to the next r
 | All tags filtered out (major-pin, tag-filter, etc.) and current version is pre-release | `no tags matched filters for TYPE:IDENTIFIER` |
 | Channel selection returned nothing and current version is pre-release | `channel selection returned nothing for TYPE:IDENTIFIER` |
 | sdkman not installed | `sdkman not installed (SDKMAN_DIR=PATH)` |
-| sdkmanager: component absent from the repository XML | `no versions found for sdkmanager:COMPONENT in the repository XML` |
-| sdkmanager: `(offset:N)` past the end of the stable list | `offset N reaches past the M distinct stable version(s) upstream serves for sdkmanager:COMPONENT` |
-| parse: `(offset:N>0)` on a type whose fetcher ignores it | `(offset:N) is not honoured by the TYPE fetcher — only sdkmanager resolves the N-th newest version; drop the offset or pin the version directly` (exit 1 before any fetch) |
+| androidsdk: component absent from the repository XML | `no versions found for androidsdk:COMPONENT in the repository XML` |
+| androidsdk: `(offset:N)` past the end of the stable list | `offset N reaches past the M distinct stable version(s) upstream serves for androidsdk:COMPONENT` |
+| parse: `(offset:N>0)` on a type whose fetcher ignores it | `(offset:N) is not honoured by the TYPE fetcher — only androidsdk resolves the N-th newest version; drop the offset or pin the version directly` (exit 1 before any fetch) |
+| parse: the retired `sdkmanager:` type | `the sdkmanager: type is retired (the Android SDK CLI is "android sdk" now) — rename the annotation type to androidsdk: (same identifier, same flags)` (exit 1 before any fetch) |
 
 > **Note:** When the `github` fetcher hits a "no tags matched" or "channel selection returned nothing" condition and the current version is **stable** (not pre-release), it escalates to `ERROR` instead of `SKIP`. The reasoning: a stable current version proves stable releases exist — failing to find any is a fetcher failure, not a legitimate no-stable-releases scenario.
 | url: no tier matched | `url: no extraction strategy matched for URL` |
