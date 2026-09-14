@@ -5,8 +5,11 @@ are some warnings/deprecations ! not urgent ! can you take a look and present me
 them ! no implementation yet !!"* — MASTER.plan.md row 47. Plan only; nothing below is implemented.
 
 ## Decisions Log
-- [2026-09-14 12:30] PROPOSED (not ruled): S1 explicit versioned `avdmanager`, S2 PATH reorder +
-  dead-entry removal, S3 guarded licence call. S4/S5/S6 await a developer ruling.
+- [2026-09-14 12:30] PROPOSED: S1 explicit versioned `avdmanager`, S2 PATH reorder +
+  dead-entry removal, S3 guarded licence call (implementation not yet authorised).
+- [2026-09-14 12:40] AGREED (S4): leave "Emulator version unknown" as is — no libpulse0, no KVM group.
+- [2026-09-14 12:40] AGREED (S5): keep the Flutter telemetry banner — no FLUTTER_SUPPRESS_ANALYTICS.
+- [2026-09-14 12:40] AGREED (S6): runtime fix only (S1-S3) — bootstrap unzip layout unchanged.
 
 ## Findings (04android boot log, 7,493 lines; a warm boot — the reinstall branch did not run)
 
@@ -36,12 +39,12 @@ them ! no implementation yet !!"* — MASTER.plan.md row 47. Plan only; nothing 
   `[ -n "$(ls -A "${ANDROID_HOME}/licenses" 2>/dev/null)" ] || flutter doctor --android-licenses`.
   Not a deletion: F6 means a future CLI might stop writing the licence on a fresh install, and
   `flutter doctor -v` under `set -e` would then error the container.
-- **S4 (F3) — ruling needed.** Recommended: leave as is — the emulator binary is for the HOST
+- **S4 (F3) — RULED: leave as is (no step).** Recommended: leave as is — the emulator binary is for the HOST
   (host-container binding); `libpulse0` only fixes a headless version probe, and KVM access needs
   the host gid 992 baked into the image (machine-bound). Alternative: add `libpulse0` to
   04android (+ local.05) Dockerfile and `group_add` the kvm gid.
-- **S5 (F5) — ruling needed.** `FLUTTER_SUPPRESS_ANALYTICS=true` in 04android's compose environment.
-- **S6 — ruling needed, reinstall-only.** Unzip the bootstrap to `cmdline-tools/latest/` (Google's
+- **S5 (F5) — RULED: keep the banner (no step).** `FLUTTER_SUPPRESS_ANALYTICS=true` in 04android's compose environment.
+- **S6 — RULED: out of scope (runtime fix only).** Unzip the bootstrap to `cmdline-tools/latest/` (Google's
   documented layout; root derives correctly and Flutter looks there first) so the unversioned tree
   never exists on a new install. Existing trees keep S1+S2.
 
