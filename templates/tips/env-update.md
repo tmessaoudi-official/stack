@@ -822,7 +822,7 @@ order exactly as raw `sort -V` ordered them (`env-update.test.sh` t126a pins thi
 - **Several markers in one string** (`1.0.0-rc1-snapshot`): the LOWEST tier wins.
 - **A marker inside an unknown suffix** is still found: `13.0.1-resolute-rc` is tier 4.
 - The tiers live in `_GS_EU2_PRERELEASE_RANKS` (`config/prerelease_markers.sh`), index-parallel
-  to `_GS_EU2_PRERELEASE_MARKERS`; adding a marker without a rank reds t126n.
+  to `_GS_EU2_PRERELEASE_MARKERS`; adding a marker without a rank reds t126n, and a rank that differs from the ruled tier (or a marker missing from their tables) reds t126o/t126p.
 - `ea` at tier 2 is inert for Java: `_gs_eu2_sdkman_select_java` drops ea/rc/beta/alpha first.
 - **A git sha is never a pre-release**: `(^|@)[0-9a-f]{7,40}$` returns false before the marker
   regex, because `[0-9]a[0-9]`/`[0-9]b[0-9]` match inside hex — 5 of the 6 `(use-sha)` pins
