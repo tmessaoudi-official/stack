@@ -1,6 +1,6 @@
 # shellcheck disable=SC2148
 ARG GLOBAL_STACK_IMAGE_MONGOCLIENT_MONGOCLIENT_VERSION=4.0.1
-ARG GLOBAL_STACK_IMAGE_UBUNTU_VERSION=resolute-20260901
+ARG GLOBAL_STACK_IMAGE_UBUNTU_VERSION=resolute-20260912
 
 # Timezone data source. This base image CANNOT install tzdata itself -- see the note on the
 # COPY below -- so the zone files come from the same pinned Ubuntu that 00base builds on.
