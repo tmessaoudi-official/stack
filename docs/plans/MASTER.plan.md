@@ -1709,7 +1709,7 @@ class-3 var is absent from this accounting, and no gate site in B lacks a class-
   Always `md5sum -c` the restore.
 
 ### Known issues
-- (CLOSED 2026-09-23 — no longer reproduces: `bash bin/tests/startup-prologue.test.sh` at `9644ac0` → `ALL PASSED ✓ 637 / 637`, exit 0; the commit that cleared it was not identified.) (2026-09-12, row 41) `startup-prologue.test.sh` §31a/31b/31c (4 assertions, the serverless nested-grep probes) FAIL on this machine at HEAD `986cfea` as well as after row 41 — verified by running a copy of the HEAD suite; not touched by row 41. Cause not investigated; the suite's tally is 616/620 until it is.
+- (CLOSED 2026-09-23 — no longer reproduces: `bash bin/tests/startup-prologue.test.sh` at `9644ac0` → `ALL PASSED ✓ 637 / 637`, exit 0; all four §31a/31b/31c assertions listed ✓ in that run; no commit in `986cfea..9644ac0` touching the suite or `serverless-bin/` targets §31, so the original failure was possibly environment-dependent rather than fixed.) (2026-09-12, row 41) `startup-prologue.test.sh` §31a/31b/31c (4 assertions, the serverless nested-grep probes) FAIL on this machine at HEAD `986cfea` as well as after row 41 — verified by running a copy of the HEAD suite; not touched by row 41. Cause not investigated; the suite's tally is 616/620 until it is.
 - (CLOSED 2026-09-05.) `bin/tests/env-update.test.sh` ran to completion on an idle box:
   `ALL PASSED ✓ 844 / 844`, exit 0, 426 s, 118 distinct sections (highest number 121). The
   ninth UNCERTIFIED-BY-EXECUTION dimension is closed; row 24's bring-up covers the other
