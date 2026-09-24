@@ -120,8 +120,21 @@ is tested in BOTH directions.
   1.28.2 / 1.29.1, marker equal each time, setting `disable`, rustc 1.98.1 kept, the unchanged boot made no
   download, no error token. NOT certified by execution: a real `rustup toolchain install` of a NEW RUST pin
   through the shipped script (the toolchain was pre-installed; the path is covered by §58g's stub only).
+- 6C follow-up (advisor, folded into step 8's commit): the gate read only the marker, which the OLD code wrote
+  from the PIN before installing — intent, not the binary. It now also compares `rustup --version` (none when
+  `${CARGO_HOME}/bin/rustup` is not executable): marker current + binary stale → reinstall (§58k, red first).
+  Live read-only check 2026-09-24: `tools/cargo/bin/rustup` = 1.29.1 = marker (latent, not live);
+  `tools/rustup/settings.toml` has no auto_self_update key (= default enable) — the every-boot disable fixes it.
+  `tools/bin/rustup.installer.sh` on the live tree is the OLD sed-patched download; harmless (re-fetched
+  before every use) — it is not what ships.
 
 ### Step 8 — host claude: container-only pin (S) — REVISED by ruling 15:05 (keep auto-update)
+- AS BUILT (2026-09-24): `.env` note above the claude `@todo` annotation (annotation still adjacent; env-update
+  `--check --dry-run --filter` still parses the record) and a comment at `global-unu.sh` `_gs_semver_lt`.
+  §59 = the no-ordered-comparison guard over `dist/bin`, `docker/images`, `templates/shell` (`*.sh`,
+  `Dockerfile*`, comment lines stripped). Inventory taken first: exactly TWO ordered sites exist — the host
+  claude gate and 00base sonar-scanner `-ge 6`, which picks the archive NAME by major (6+ has an arch suffix),
+  not whether to install — so both are exempt by name, and they are the non-vacuity floor (59a).
 - Keep the host gate upgrade-only; comment it and `.env`'s annotation as "container pin; host follows
   Claude Code auto-update". The no-ordered-comparison guard exempts exactly this one site by name.
 - (original text below, superseded)
@@ -135,7 +148,9 @@ is tested in BOTH directions.
 - go / zig / hurl overlay extract is NOT in this tranche — it carries a design fork (Needs input).
 
 ### Step 9 — docs (S)
-- CLAUDE.md "Managers … reinstall the manager only". (The `rbenv-iou.sh` row-21 comment was corrected in step
+- CLAUDE.md "Managers … reinstall the manager only", AND the startup-prologue suite's "~19 s" run time
+  (measured 161 s at load 22-24 on 2026-09-24 — the number is load-dependent, yet CLAUDE.md uses it as the
+  tell that `--section` did not filter). (The `rbenv-iou.sh` row-21 comment was corrected in step
   6, 3af3d55.) CLAUDE.md is classifier-blocked → handed over as a `! bash /tmp/…sh` script. Other refuted claims stay listed below
   as follow-ups (not this tranche).
 
@@ -157,8 +172,8 @@ Live verification on the running stack: bump `PYENV_VERSION` one tag up then bac
 | 4 | Pass 2: every non-apt install site honours its pin; anything unpinned; host surface | L | done | - | var/claude/** |
 | 5 | A2 phpbrew tools reachable every boot (11/12 pins) | S | done | 0f96073 | docker/config/dist/bin/phpbrew-bin/**, bin/tests/startup-prologue.test.sh |
 | 6 | A1 pyenv/rbenv upgrade+downgrade, plugin reachability, fail-fast + delete-after-install | M | done | 3af3d55 | docker/config/dist/bin/pyenv-bin/**, docker/config/dist/bin/rbenv-bin/**, bin/tests/startup-prologue.test.sh |
-| 7 | rustup-init honours pin both ways, reachable, marker from installed binary | M | doing | - | docker/config/dist/bin/rust-bin/**, bin/tests/startup-prologue.test.sh |
-| 8 | Host claude = container-only pin (comment + .env note) + no-ordered-comparison guard | S | todo | - | templates/shell/global-unu.sh, .env, bin/tests/startup-prologue.test.sh |
+| 7 | rustup-init honours pin both ways, reachable, marker from installed binary | M | done | da33555 | docker/config/dist/bin/rust-bin/**, bin/tests/startup-prologue.test.sh |
+| 8 | Host claude = container-only pin (comment + .env note) + no-ordered-comparison guard | S | done | 9157a89 | templates/shell/global-unu.sh, .env, bin/tests/startup-prologue.test.sh, docker/config/dist/bin/rust-bin/** |
 | 9 | Docs: CLAUDE.md manager-reinstall claim (hand-off) | S | todo | - | CLAUDE.md |
 <!-- /progress-block -->
 ### Blocked

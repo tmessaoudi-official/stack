@@ -500,6 +500,11 @@ if eval "${env_file_exists}"; then
 		fi
 	fi
 
+	# The ONLY ordered (upgrade-only) version comparison in any install path, and it is
+	# deliberate: the host keeps Claude Code's own auto-update (ruling 2026-09-24 15:05),
+	# so GLOBAL_STACK_CLAUDE_CODE_VERSION is a floor here and an exact pin only in the
+	# containers. Every other gate is equality-based and so installs the pin in either
+	# direction; startup-prologue.test.sh §59 exempts this site by name.
 	_gs_semver_lt() {
 		local v1="${1#v}" v2="${2#v}"
 		[[ "$v1" == "$v2" ]] && return 1

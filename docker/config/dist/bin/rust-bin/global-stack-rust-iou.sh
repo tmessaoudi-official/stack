@@ -21,9 +21,17 @@ set -xeE -o pipefail
 # EITHER direction and keeps installed toolchains [measured 2026-09-24, scratch
 # homes: 1.29.1 -> 1.28.2 -> 1.29.1, rustc 1.98.1 still active]. The marker is
 # written from the INSTALLED binary, only after it matches the pin.
+# The marker alone is not trusted: before this change it was written from the PIN
+# before anything installed, so on an existing install it records intent. The
+# installed binary is compared too (none = not installed); a present binary whose
+# --version fails is a real error and aborts here, loud.
 _rustup_gate="$(gs_version_gate "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/rust-init" "${GLOBAL_STACK_RUSTUP_INIT_VERSION}" "rust-init")"
-if [ "${_rustup_gate}" != "skip" ] || [ ! -x "${CARGO_HOME}/bin/rustup" ]; then
-  echo -e "\nInstalling rustup ${GLOBAL_STACK_RUSTUP_INIT_VERSION} (gate: ${_rustup_gate})"
+_rustup_have=none
+if [ -x "${CARGO_HOME}/bin/rustup" ]; then
+  _rustup_have="$(rustup --version | awk 'NR == 1 { print $2 }')"
+fi
+if [ "${_rustup_gate}" != "skip" ] || [ "${_rustup_have}" != "${GLOBAL_STACK_RUSTUP_INIT_VERSION}" ]; then
+  echo -e "\nInstalling rustup ${GLOBAL_STACK_RUSTUP_INIT_VERSION} (gate: ${_rustup_gate}, installed: ${_rustup_have})"
 
   rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN}/rustup.installer.sh"
   curl --connect-timeout 30 --max-time 300 -fsSL -o "${GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN}/rustup.installer.sh" "https://raw.githubusercontent.com/rust-lang/rustup/${GLOBAL_STACK_RUSTUP_INIT_VERSION}/rustup-init.sh"

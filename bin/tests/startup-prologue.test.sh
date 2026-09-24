@@ -4359,6 +4359,12 @@ assert_pass "58d: rustup-init pin moved back -> installed rustup moves DOWN to t
 _o="$(_p58_run 1.29.1 1.29.1 1.29.1 1.98.1 honour)"
 assert_fail "58e: rustup-init current and rustup present -> no download, no installer run (got: ${_o})" \
   grep -Eq 'curl|installer' <<<"$(_p58_field calls "${_o}")"
+# The marker is not trusted on its own: the pre-fix code wrote it from the PIN before
+# installing anything, so on a live install it records intent, not the binary. Marker
+# current + installed rustup stale must still reinstall.
+_o="$(_p58_run 1.29.1 1.29.1 1.28.2 1.98.1 honour)"
+assert_pass "58k: marker says the pin but the installed rustup differs -> reinstall to the pin (got: ${_o})" \
+  test "$(_p58_field rustup "${_o}")/$(_p58_field rc "${_o}")" = "1.29.1/0"
 # An installer that ignores the knob (upstream renames it) must fail loud, not record the pin.
 _o="$(_p58_run 1.29.1 1.28.2 1.28.2 1.98.1 ignore)"
 assert_pass "58f: installed rustup != pin after the install -> non-zero and the pin is NOT recorded (got: ${_o})" \
@@ -4395,6 +4401,40 @@ _p58_reach() { # → "iou" when iou ran with the rust marker current
 }
 assert_pass "58j: rust marker current (a rustup-init-only bump) -> rust-iou.sh still runs" \
   test "$(_p58_reach)" = "iou"
+
+# ─── Section 59: no ordered version comparison decides an install (tranche 1 step 8) ──
+# Ruling 2026-09-24 14:35: a pin can move up OR down, and every reinstall path installs
+# exactly the pin. An equality gate (gs_version_gate, `!=`) does that by construction;
+# an ordered one (`sort -V`, a semver-lt helper, `-lt/-gt/-le/-ge` on a version) makes
+# a rollback a silent no-op. Two sites are exempt BY NAME, each for a stated reason:
+#   - templates/shell/global-unu.sh `_gs_semver_lt` (host Claude Code): upgrade-only on
+#     purpose — the host keeps Claude Code's auto-update (ruling 15:05);
+#   - 00base install-tools.sh sonar-scanner `-ge 6`: picks the ARCHIVE NAME by major
+#     (6+ carries an arch suffix), never whether to install — correct in both directions.
+# The exemptions double as the non-vacuity floor: if the scan stops finding THEM, the
+# pattern or a root broke and "no offenders" would mean nothing.
+printf '\n%b── Section 59: no ordered version comparison decides an install%b\n' "${C_BOLD}" "${C_RESET}"
+
+_P59_ROOTS=("${DIST_BIN}" "${SCRIPT_DIR}/../../docker/images" "${SCRIPT_DIR}/../../templates/shell")
+_p59_hits="$(
+  grep -rnE --include='*.sh' --include='Dockerfile*' \
+    '_gs_semver_lt|sort -V|version_compare|compare-versions|-(lt|gt|le|ge) ' "${_P59_ROOTS[@]}" 2>/dev/null |
+    grep -vE '^[^:]+:[0-9]+:[[:space:]]*#' |
+    awk -F: '
+      /_gs_semver_lt|sort -V|version_compare|compare-versions/ { print; next }
+      { line = $0; sub(/^[^:]+:[0-9]+:/, "", line); if (line ~ /VERSION/) print }' || true
+)"
+_p59_semver="$(grep -c 'templates/shell/global-unu\.sh:.*_gs_semver_lt' <<<"${_p59_hits}" || true)"
+_p59_sonar="$(grep -c 'global-stack-base-install-tools\.sh:.*SONAR_SCANNER_CLI_VERSION' <<<"${_p59_hits}" || true)"
+assert_pass "59a: the scan finds both named exemptions (non-vacuity: semver-lt ${_p59_semver} >= 2, sonar ${_p59_sonar} >= 1)" \
+  bash -c '(( $1 >= 2 && $2 >= 1 ))' _ "${_p59_semver}" "${_p59_sonar}"
+_p59_off="$(
+  grep -vE 'templates/shell/global-unu\.sh:[0-9]+:.*(_gs_semver_lt|sort -V \| head -1\)" == "\$v1")' <<<"${_p59_hits}" |
+    grep -vE 'global-stack-base-install-tools\.sh:[0-9]+:.*SONAR_SCANNER_CLI_VERSION' |
+    grep -v '^$' | sed -E 's|^.*/(docker/[^:]+\|templates/[^:]+):([0-9]+):.*|\1:\2|' | tr '\n' ' ' || true
+)"
+assert_pass "59b: no other ordered version comparison in an install path (offenders: ${_p59_off:-none})" \
+  test -z "${_p59_off}"
 
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
