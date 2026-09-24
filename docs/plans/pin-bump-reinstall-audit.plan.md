@@ -178,7 +178,7 @@ Live verification on the running stack: bump `PYENV_VERSION` one tag up then bac
 | 6 | A1 pyenv/rbenv upgrade+downgrade, plugin reachability, fail-fast + delete-after-install | M | done | 3af3d55 | docker/config/dist/bin/pyenv-bin/**, docker/config/dist/bin/rbenv-bin/**, bin/tests/startup-prologue.test.sh |
 | 7 | rustup-init honours pin both ways, reachable, marker from installed binary | M | done | da33555 | docker/config/dist/bin/rust-bin/**, bin/tests/startup-prologue.test.sh |
 | 8 | Host claude = container-only pin (comment + .env note) + no-ordered-comparison guard | S | done | 90e25db | templates/shell/global-unu.sh, .env, bin/tests/startup-prologue.test.sh, docker/config/dist/bin/rust-bin/** |
-| 9 | Docs: CLAUDE.md manager-reinstall claim (hand-off) | S | doing | - | CLAUDE.md, bin/tests/startup-prologue.test.sh |
+| 9 | Docs: CLAUDE.md manager-reinstall claim (hand-off) | S | done | 81c3dcc | CLAUDE.md, bin/tests/startup-prologue.test.sh |
 <!-- /progress-block -->
 ### Blocked
 ### Needs input
