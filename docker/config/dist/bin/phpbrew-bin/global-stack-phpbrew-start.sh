@@ -145,8 +145,9 @@ if [ "${PHPBREW_MODE}" = "setup" ]; then
     global-stack-phpbrew-php-install-version.sh
     _php_new="${PHP_VERSION_NAME}"
     # Delete-after-install: only now, with the new php proven on disk, drop the old
-    # php + build dirs and its frankenphp binary (unless another label still records
-    # that php) and every pkg.* marker — the PECL loop below then rebuilds the exts.
+    # php + build dirs and its frankenphp binaries — any frankenphp pin, since both pins
+    # can move in one boot — (unless another label still records that php) and every
+    # pkg.* marker; the PECL loop below then rebuilds the exts.
     if [ "${_php_gate}" = "reinstall" ]; then
       if [ ! -x "${PHPBREW_ROOT}/php/${_php_new}/bin/php" ]; then
         printf 'FATAL: php %s is not installed after the install step; keeping %s\n' "${_php_new}" "${_php_old}" >&2
@@ -156,7 +157,7 @@ if [ "${PHPBREW_MODE}" = "setup" ]; then
         && [ "$(gs_version_in_use "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}" php "${PHP_VERSION_AS}" "${_php_old}")" = "free" ]; then
         printf '\nCleaning old php version dir %s\n' "${_php_old}"
         rm -rf "${PHPBREW_ROOT}/php/${_php_old}" "${PHPBREW_ROOT}/build/${_php_old}" \
-          "${PHPBREW_BIN}/frankenphp-${GLOBAL_STACK_FRANKENPHP_VERSION}-${_php_old}"
+          "${PHPBREW_BIN}/frankenphp-"*"-${_php_old}"
       fi
       rm -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/php.${PHP_VERSION_AS}.pkg."* || true
     fi

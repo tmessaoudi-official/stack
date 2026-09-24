@@ -203,12 +203,15 @@ then drop the old dir and wipe `pkg.*`; the marker is written where it is today 
   install < cleanup < package loop (static order); every `! -f marker` trigger also fires on reinstall.
 
 - AS BUILT (step 11): the four gates decide only (`_<rt>_old=""`, set on reinstall). nvm `:116,:140`,
-  php `:142,:181,:188` and fvm `:93` triggers gained `|| gate == reinstall`. A cleanup block after each
+  php `:143,:182,:189` and fvm `:93` triggers gained `|| gate == reinstall`. A cleanup block after each
   install proves the new binary with `-x` (`versions/node/$(nvm version)/bin/node`, `php/<name>/bin/php`,
   `candidates/java/<v>/bin/java`, `fvm/cache/versions/<v>/bin/flutter`), then drops the old dir unless
   `gs_version_in_use` (new, in `base-version-gate.sh`, stdout `shared|free`, always returns 0) finds
   another label recording it, then wipes pkg.* (not fvm: no package loop). php also drops the old php's
-  `build/` dir and its `frankenphp-<v>-<old name>` binary (clean-wipe ruling). §60: 34 checks; sabotage
+  `build/` dir and every `frankenphp-*-<old name>` binary (clean-wipe ruling; the glob covers a frankenphp pin
+  bumped in the same boot — 60i). A boot that fails AFTER the cleanup (e.g. in `nvm use`) keeps the old marker, so
+  the next boot re-enters `reinstall`, the installer no-ops, `-x` passes, the old-dir `rm` is a no-op and pkg.*
+  re-wipes: the retry converges [Inferred from the code path; not executed]. §60: 34 checks; sabotage
   S1–S7 each caught, each restored byte-identical. 6C sweep: the only marker-CONTENT readers in dist/bin are
   the four consumers above (`git grep` for `cat`/`<` of a runtime marker: 11 hits, 4 files) — none inside a runtime
   script or its sub-scripts, so keeping the old marker until the final write changes no read. 60j (nvm resolves via `nvm version`) is a STATIC check —

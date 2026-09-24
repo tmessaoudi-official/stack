@@ -4578,25 +4578,28 @@ for _row in "${_P60_TABLE[@]}"; do
     bash -c '(( $1 == $2 && $3 == 0 ))' _ "${_n_trig}" "${_ntrig}" "${_n_miss}"
 done
 
-# php: the frankenphp binary is built per php name, so the old one goes with the old php.
-_p60_franken() { # → "old=<0|1> new=<0|1>"
+# php: the frankenphp binary is built per php name, so the old one goes with the old php —
+# including one built by an OLDER frankenphp pin (both pins bumped in the same boot).
+_p60_franken() { # → "old=<0|1> oldfv=<0|1> new=<0|1>"
   local d
   d="$(mktemp -d)"
   mkdir -p "${d}/versions" "${d}/bin"
   _p60_mkver "${d}/root" 'php/<v>/bin/php' php-8.4.1
   _p60_mkver "${d}/root" 'php/<v>/bin/php' php-8.4.2
   : >"${d}/bin/frankenphp-1.0.0-php-8.4.1"
+  : >"${d}/bin/frankenphp-0.9.0-php-8.4.1"
   : >"${d}/bin/frankenphp-1.0.0-php-8.4.2"
   { printf '#!/bin/bash\nset -eE -o pipefail\nsource "%s"\n' "${_P60_VG}"; _p60_block "${DIST_BIN}/phpbrew-bin/global-stack-phpbrew-start.sh" _php 2; } >"${d}/c.sh"
   env -i PATH="/usr/bin:/bin" GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS="${d}/versions" PHPBREW_ROOT="${d}/root" \
     PHPBREW_BIN="${d}/bin" GLOBAL_STACK_FRANKENPHP_VERSION=1.0.0 PHP_VERSION_AS=8.4 PHP_VERSION_NAME=php-8.4.2 \
     _php_gate=reinstall _php_old=php-8.4.1 _php_new=php-8.4.2 bash "${d}/c.sh" >/dev/null 2>&1 || true
-  printf 'old=%s new=%s' "$([[ -e "${d}/bin/frankenphp-1.0.0-php-8.4.1" ]] && echo 1 || echo 0)" \
+  printf 'old=%s oldfv=%s new=%s' "$([[ -e "${d}/bin/frankenphp-1.0.0-php-8.4.1" ]] && echo 1 || echo 0)" \
+    "$([[ -e "${d}/bin/frankenphp-0.9.0-php-8.4.1" ]] && echo 1 || echo 0)" \
     "$([[ -e "${d}/bin/frankenphp-1.0.0-php-8.4.2" ]] && echo 1 || echo 0)"
   rm -rf "${d}"
 }
-assert_pass "60i: php cleanup drops the old php's frankenphp binary, keeps the new one's" \
-  test "$(_p60_franken)" = "old=0 new=1"
+assert_pass "60i: php cleanup drops the old php's frankenphp binaries (any frankenphp pin), keeps the new one's" \
+  test "$(_p60_franken)" = "old=0 oldfv=0 new=1"
 
 # nvm resolves the installed version the way the marker write does (`nvm version`), so a
 # partial pin proves the directory nvm actually installed, not a literal `v24`.
