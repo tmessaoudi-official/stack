@@ -135,6 +135,10 @@ is tested in BOTH directions.
   `Dockerfile*`, comment lines stripped). Inventory taken first: exactly TWO ordered sites exist — the host
   claude gate and 00base sonar-scanner `-ge 6`, which picks the archive NAME by major (6+ has an arch suffix),
   not whether to install — so both are exempt by name, and they are the non-vacuity floor (59a).
+  Step 9 widened the pattern to a string `<`/`>` inside `[[ ]]` (the inventory's fourth shape; zero hits,
+  sabotage `[[ "${NODE_VERSION:-}" < "v1" ]]` in nvm-start reds 59b naming `nvm-start.sh:7`).
+  Row 8's sha: a commit cannot carry its own sha (an amend changes it — `9157a89` was recorded and is
+  dangling); row N's sha lands in step N+1's commit.
 - Keep the host gate upgrade-only; comment it and `.env`'s annotation as "container pin; host follows
   Claude Code auto-update". The no-ordered-comparison guard exempts exactly this one site by name.
 - (original text below, superseded)
@@ -173,8 +177,8 @@ Live verification on the running stack: bump `PYENV_VERSION` one tag up then bac
 | 5 | A2 phpbrew tools reachable every boot (11/12 pins) | S | done | 0f96073 | docker/config/dist/bin/phpbrew-bin/**, bin/tests/startup-prologue.test.sh |
 | 6 | A1 pyenv/rbenv upgrade+downgrade, plugin reachability, fail-fast + delete-after-install | M | done | 3af3d55 | docker/config/dist/bin/pyenv-bin/**, docker/config/dist/bin/rbenv-bin/**, bin/tests/startup-prologue.test.sh |
 | 7 | rustup-init honours pin both ways, reachable, marker from installed binary | M | done | da33555 | docker/config/dist/bin/rust-bin/**, bin/tests/startup-prologue.test.sh |
-| 8 | Host claude = container-only pin (comment + .env note) + no-ordered-comparison guard | S | done | 9157a89 | templates/shell/global-unu.sh, .env, bin/tests/startup-prologue.test.sh, docker/config/dist/bin/rust-bin/** |
-| 9 | Docs: CLAUDE.md manager-reinstall claim (hand-off) | S | todo | - | CLAUDE.md |
+| 8 | Host claude = container-only pin (comment + .env note) + no-ordered-comparison guard | S | done | 90e25db | templates/shell/global-unu.sh, .env, bin/tests/startup-prologue.test.sh, docker/config/dist/bin/rust-bin/** |
+| 9 | Docs: CLAUDE.md manager-reinstall claim (hand-off) | S | doing | - | CLAUDE.md, bin/tests/startup-prologue.test.sh |
 <!-- /progress-block -->
 ### Blocked
 ### Needs input

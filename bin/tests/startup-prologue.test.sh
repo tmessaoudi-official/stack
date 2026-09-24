@@ -4406,7 +4406,7 @@ assert_pass "58j: rust marker current (a rustup-init-only bump) -> rust-iou.sh s
 # Ruling 2026-09-24 14:35: a pin can move up OR down, and every reinstall path installs
 # exactly the pin. An equality gate (gs_version_gate, `!=`) does that by construction;
 # an ordered one (`sort -V`, a semver-lt helper, `-lt/-gt/-le/-ge` on a version) makes
-# a rollback a silent no-op. Two sites are exempt BY NAME, each for a stated reason:
+# a rollback a silent no-op (a string `<`/`>` inside `[[ ]]` on a version counts too). Two sites are exempt BY NAME, each for a stated reason:
 #   - templates/shell/global-unu.sh `_gs_semver_lt` (host Claude Code): upgrade-only on
 #     purpose — the host keeps Claude Code's auto-update (ruling 15:05);
 #   - 00base install-tools.sh sonar-scanner `-ge 6`: picks the ARCHIVE NAME by major
@@ -4418,7 +4418,7 @@ printf '\n%b── Section 59: no ordered version comparison decides an install%
 _P59_ROOTS=("${DIST_BIN}" "${SCRIPT_DIR}/../../docker/images" "${SCRIPT_DIR}/../../templates/shell")
 _p59_hits="$(
   grep -rnE --include='*.sh' --include='Dockerfile*' \
-    '_gs_semver_lt|sort -V|version_compare|compare-versions|-(lt|gt|le|ge) ' "${_P59_ROOTS[@]}" 2>/dev/null |
+    '_gs_semver_lt|sort -V|version_compare|compare-versions|-(lt|gt|le|ge) |\[\[ [^]]* (<|>) ' "${_P59_ROOTS[@]}" 2>/dev/null |
     grep -vE '^[^:]+:[0-9]+:[[:space:]]*#' |
     awk -F: '
       /_gs_semver_lt|sort -V|version_compare|compare-versions/ { print; next }
