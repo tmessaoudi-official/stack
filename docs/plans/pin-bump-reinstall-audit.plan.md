@@ -10,6 +10,8 @@ version and its usage ! no implementation yet !"* — AUDIT ONLY; nothing below 
 - [2026-09-24 10:45] AGREED: image-level pins PASS when a bump reaches the container via a normal rebuild target (make rebuild / down-n-rebuild*) — no hard-restart, no volume wipe, no manual marker delete.
 - [2026-09-24 10:45] AGREED: evidence = static trace + behavioural probes of the SHIPPED gate logic against a tmpdir marker (GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS pinned to a tmpdir, never live tools/); no container touched.
 - [2026-09-24 10:45] AGREED: certification tier for this audit's 3C and 6C = advisor() only.
+- [2026-09-24 12:40] AGREED: second pass (audit only) = every NON-apt install site in the repo — discover anything unpinned (hardcoded / floating) AND prove each .env-pinned installer actually installs the pinned version; apt installs of any kind are out of scope.
+- [2026-09-24 12:55] AGREED: pass-2 certification tier for 3C and 6C = advisor() only.
 
 ## Formal Plan
 <!-- written at Phase 4 -->
@@ -21,6 +23,7 @@ version and its usage ! no implementation yet !"* — AUDIT ONLY; nothing below 
 | 1 | Inventory A (254 annotated pins + aliases) and B (every consumer) | M | done | - | .env |
 | 2 | Per-pin reinstall-on-bump trace + gate probes | L | done | - | docker/config/dist/bin/** |
 | 3 | Findings report, graded per var | M | done | - | var/claude/** |
+| 4 | Pass 2: every non-apt install site honours its pin; anything unpinned; host surface | L | done | - | var/claude/** |
 <!-- /progress-block -->
 ### Blocked
 ### Needs input
