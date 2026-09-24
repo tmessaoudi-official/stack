@@ -211,7 +211,9 @@ then drop the old dir and wipe `pkg.*`; the marker is written where it is today 
   `build/` dir and every `frankenphp-*-<old name>` binary (clean-wipe ruling; the glob covers a frankenphp pin
   bumped in the same boot — 60i). A boot that fails AFTER the cleanup (e.g. in `nvm use`) keeps the old marker, so
   the next boot re-enters `reinstall`, the installer no-ops, `-x` passes, the old-dir `rm` is a no-op and pkg.*
-  re-wipes: the retry converges [Inferred from the code path; not executed]. §60: 34 checks; sabotage
+  re-wipes: the retry converges [Inferred from the code path; not executed].
+  Proof paths `bin/node`, `bin/php`, `bin/java`, `bin/flutter` exist and are executable on the live tree
+  [Verified: `[ -x ]` builtin, not rtk `ls`]. Certifying run: 719/719 at `902f08f`, sabotage S1–S8. §60: 34 checks; sabotage
   S1–S7 each caught, each restored byte-identical. 6C sweep: the only marker-CONTENT readers in dist/bin are
   the four consumers above (`git grep` for `cat`/`<` of a runtime marker: 11 hits, 4 files) — none inside a runtime
   script or its sub-scripts, so keeping the old marker until the final write changes no read. 60j (nvm resolves via `nvm version`) is a STATIC check —
@@ -295,7 +297,7 @@ escape hatches keeping pkg markers; the `source X && cmd` class.
 | 8 | Host claude = container-only pin (comment + .env note) + no-ordered-comparison guard | S | done | 90e25db | templates/shell/global-unu.sh, .env, bin/tests/startup-prologue.test.sh, docker/config/dist/bin/rust-bin/** |
 | 9 | Docs: CLAUDE.md manager-reinstall claim (hand-off) | S | done | 81c3dcc | CLAUDE.md, bin/tests/startup-prologue.test.sh |
 | 10 | Tranche 2: plan the delete-before-install sites (nvm/phpbrew/sdkman/fvm/android/rbenv-plugins), composer bootstrap, env-update downgrade policy | M | done | 1906f6c | docs/plans/** |
-| 11 | Runtimes nvm/php/java/flutter delete-after-install (php.edge exempt) | M | done | 80415c0 | docker/config/dist/bin/base-bin/**, docker/config/dist/bin/nvm-bin/**, docker/config/dist/bin/phpbrew-bin/**, docker/config/dist/bin/sdkman-bin/**, docker/config/dist/bin/fvm-bin/**, bin/tests/startup-prologue.test.sh |
+| 11 | Runtimes nvm/php/java/flutter delete-after-install (php.edge exempt) | M | done | 902f08f | docker/config/dist/bin/base-bin/**, docker/config/dist/bin/nvm-bin/**, docker/config/dist/bin/phpbrew-bin/**, docker/config/dist/bin/sdkman-bin/**, docker/config/dist/bin/fvm-bin/**, bin/tests/startup-prologue.test.sh |
 | 12 | Package slots: cleanup only after the new install succeeded | M | todo | - | docker/config/dist/bin/base-bin/**, bin/tests/startup-prologue.test.sh |
 | 13 | rbenv plugins reuse step 6's in-place tag move | S | todo | - | docker/config/dist/bin/rbenv-bin/**, bin/tests/startup-prologue.test.sh |
 | 14 | go/zig/hurl staged extract-verify-swap, GOPATH carried across | M | todo | - | docker/images/00base/**, bin/tests/startup-prologue.test.sh |
@@ -316,6 +318,11 @@ escape hatches keeping pkg markers; the `source X && cmd` class.
   On a repeat, capture `_andv_probe`'s raw `${out}` (the xtrace of every `android sdk install` the stub got)
   to a file BEFORE it is parsed — `1| ndk-bundle|none` cannot say whether ndk-bundle ever reached the stub.
 ### Known issues
+- `RELOAD_PHP=true` (`phpbrew-start.sh:43`) removes `frankenphp-${GLOBAL_STACK_FRANKENPHP_VERSION}-<php name>` by the
+  CURRENT frankenphp pin, so a frankenphp binary built under an older pin is orphaned. Same class step 11 fixed in
+  the pin-bump cleanup (`902f08f`); this one is pre-existing and not a pin-bump path. Logged, not fixed.
+- `/new-service` (`.claude/skills/new-service/SKILL.md`) scaffolds a startup script with NO version gate at all
+  (`grep -c gs_version_gate` → 0), so a service created from it never reinstalls on a pin bump. Step 17 material.
 - `RELOAD_NODE` / `RELOAD_JAVA` / `RELOAD_FLUTTER=true` remove the version marker only. The gate then says
   `install`, the installer finds the version already on disk and no-ops, so these RELOAD flags do NOT
   reinstall anything (the php and `RELOAD_FVM` flags do wipe). Found at step 11 3C; not fixed (it is not a
