@@ -18,9 +18,13 @@ version and its usage ! no implementation yet !"* — AUDIT ONLY; nothing below 
 ## Formal Plan
 <!-- written at Phase 4 — tranche 1, PROPOSED 2026-09-24, NOT yet approved -->
 
-### Invariant (ruling 14:35)
-`marker != pin` ⇒ install EXACTLY the pin, whether the pin moved up or down. A failed install never deletes
-the working version and never writes a satisfied marker. Every step below is tested in BOTH directions.
+### Invariant (ruling 14:35) — target, and what this tranche delivers
+Target, everywhere: `marker != pin` ⇒ install EXACTLY the pin, up or down; a failed install never deletes
+the working version and never writes a satisfied marker. **This tranche brings pyenv, rbenv, the phpbrew tools,
+rustup and the host claude gate into compliance.** The same delete-before-install shape still exists at
+`nvm-start.sh:72`, `phpbrew-start.sh:62`, `sdkman-start.sh:78`, `fvm-start.sh:28,43`, `android-start.sh:169`
+(the row-42 nvm nightly-404 incident is this class) — tranche 2, listed under Known issues. Every step below
+is tested in BOTH directions.
 
 ### Step 5 — A2 phpbrew tools (S) · `phpbrew-bin/global-stack-phpbrew-start.sh:124-131`
 - Hoist `global-stack-phpbrew-install-tools.sh` out of the phpbrew-mismatch block: it runs on every
@@ -45,12 +49,16 @@ the working version and never writes a satisfied marker. Every step below is tes
 - 6b call `rbenv-iou.sh` (and `pyenv-iou.sh`, for symmetry) on EVERY install-mode boot; the checkout guard
   inside makes the steady state network-free, and the ruby-build/gemset gates (`rbenv-iou.sh:20-38`) become
   reachable — fixes RBENV_RUBY_BUILD / RBENV_GEMSET.
-- 6c fail fast BEFORE any delete: in `pyenv-start.sh:68-76` / `rbenv-start.sh:64-73`, if `_resolved` is not in
-  `pyenv install --list` / `rbenv install --list-all` → error token, exit 1, message naming the manager pin
-  to bump; the working interpreter stays.
-- 6d delete AFTER install: move `rm -rf versions/${_old}` to after the successful install + marker write
-  (`pyenv-start.sh:~156`, `rbenv-start.sh:~182`), so a failed build (network, compiler) also leaves the old
-  interpreter. Old may be newer or older — same code.
+- 6c fail fast at the resolver: `find-latest.sh` (pyenv `:14-16`, rbenv twin) falls back to the RAW pin when
+  the version is neither installed nor listed — that fallback is the defect. Make it print nothing and exit 1;
+  the caller (`pyenv-start.sh:66` / `rbenv-start.sh:63`) dies under `set -e` → error token, message naming the
+  manager pin to bump, nothing touched. §22 stubs find-latest and does not assert the fallback [Verified:
+  read §22] → unaffected.
+- 6d on `reinstall`, touch NOTHING until the install succeeds: today `pyenv-start.sh:69-75` / `rbenv-start.sh:65-72`
+  delete the old dir, the `pkg.*` markers and the runtime marker before building. New order: decide → install
+  the pin → then delete old dir, wipe `pkg.*`, write the marker (`pyenv-start.sh:~156`, `rbenv-start.sh:~182`).
+  A failed build leaves old interpreter + old marker + old pkg markers, so the next boot retries `reinstall`
+  (not `install` — which would be the C1 no-packages shape). Old may be newer or older — same code.
 - Ordering is already safe: 03python3/03ruby* wait for `successes/pyenv|rbenv`, which 02 clears at boot and
   writes after iou [Verified: `pyenv-start.sh:23,41-43,141`].
 - Tests §56 (red today): stub `git` on PATH, `.git` present; pin above / below / equal to installed →
@@ -64,12 +72,15 @@ the working version and never writes a satisfied marker. Every step below is tes
 ### Step 7 — rustup-init (M) · `rust-bin/global-stack-rust-iou.sh`, `global-stack-rust-start.sh:42-46`
 - 7a delete the `sed` (`:25`, verified no-op); run the installer with `RUSTUP_VERSION` exported to the pin
   (the installer's own knob, `rustup-init-1.29.1.sh:98-104`).
-- 7b rust-init marker != pin alone → re-run the installer over the existing install
+- 7b rust-init marker != pin (alone or with RUST) → run the installer ONCE over the existing install
   (`-y --no-modify-path --default-toolchain none`, toolchains kept) to replace rustup, up or down
-  [Unverified — certify below].
+  [Unverified — the one unobserved assumption of this plan; certify below]. The RUST section (`:30-36`)
+  then uses `rustup toolchain install ${RUST} && rustup default ${RUST}` instead of re-running the installer,
+  so a first boot runs the installer exactly once (the test asserts one invocation).
 - 7c `rustup set auto-self-update disable` after install, so no later rustup command moves it.
-- 7d write the `rust-init` marker AFTER install, from `rustup --version`; != pin → error token, exit 1
-  (today it is written at `:27`, before anything installs).
+- 7d write the `rust-init` marker AFTER install, from `rustup --version | awk '{print $2}'` (output shape
+  `rustup 1.29.1 (d95a37b6a 2026-08-13)` [Verified: ran it]); != pin → error token, exit 1 (today it is written
+  at `:27`, before anything installs).
 - 7e reachability: call `rust-iou.sh` on every boot (both of its sections already self-compare), instead of
   only on a RUST_VERSION mismatch.
 - Test §58 (red today): static — no `sed -i` on `rustup.installer.sh`; behavioural — stub installer records
@@ -77,15 +88,15 @@ the working version and never writes a satisfied marker. Every step below is tes
 - Certification by execution during implementation: tmp `CARGO_HOME`/`RUSTUP_HOME`, real installer, install
   1.29.1 → re-run with 1.28.2 → `rustup --version` = 1.28.2 → back to 1.29.1 (network; tmp dirs only).
 
-### Step 8 — both-directions sweep (S) — per ruling 14:35
+### Step 8 — host claude gate (S) — per ruling 14:35
 - Repo-wide grep: exactly ONE ordered (upgrade-only) comparison exists in any install path — host claude,
   `templates/shell/global-unu.sh:503-517` (`_gs_semver_lt`). Change it to `!=` (install the pin either way).
-- go / zig / hurl extract over the previous tree (`install-go.sh:19`, `install-zig.sh:13`,
-  `install-hurl.sh:17`): wipe the target before extract (GOPATH lives inside GOROOT, `.env:350-351` — move
-  or preserve it first), so a downgrade cannot leave newer files behind.
-- Every other gate is equality-based (`gs_version_gate`, `!=`) → already bidirectional [Verified: grep].
-- Tests: static guard — no ordered comparison in install paths (discovered, `>= N` floor); behavioural
-  wipe-before-extract probe for go with a tmpdir root.
+  Every other gate is equality-based (`gs_version_gate`, `!=`) → already bidirectional [Verified: grep].
+- Holding the pin on the host ALSO needs Claude Code's own `autoUpdates` off (`~/.claude/settings.json` —
+  classifier-blocked → handed to you as a command); otherwise the gate installs the pin and the app moves it
+  again afterwards. Your call (Needs input).
+- Test: static guard — no ordered comparison in install paths (discovered, non-vacuity floor).
+- go / zig / hurl overlay extract is NOT in this tranche — it carries a design fork (Needs input).
 
 ### Step 9 — docs (S)
 - CLAUDE.md "Managers … reinstall the manager only" and the `rbenv-iou.sh:15-19` row-21 comment. CLAUDE.md
@@ -118,6 +129,12 @@ Live verification on the running stack: bump `PYENV_VERSION` one tag up then bac
 ### Needs input
 - Which of A1–A7 / B / C to fix, in what order (no implementation authorised yet).
 - Approval of the tranche-1 Formal Plan (steps 5–9).
+- go / zig / hurl (`install-go.sh:19`, `install-zig.sh:13`, `install-hurl.sh:17`) extract a new version OVER the
+  previous tree, so stale files survive a bump in either direction. Fork: (a) versioned install dirs + a
+  `current` symlink, or (b) wipe before extract — but GOPATH lives INSIDE GOROOT (`.env:350-351`), so (b) also
+  destroys every `go install`ed binary and the module cache on each go bump unless GOPATH moves out
+  (an `.env` + shellrc change).
+- Host claude: turn Claude Code `autoUpdates` off so the host holds the pin (step 8)?
 - env-update proposal policy: `decide.sh` rule 5 makes any DOWNWARD correction a `SKIP` (a downgrade is a
   hand-edit today). Delivery (steps 5–8) handles downgrades either way; whether env-update should also
   PROPOSE them is a separate policy call.
@@ -153,5 +170,10 @@ Result at HEAD 7b45087 — 254 pins: 168 clean (125 runtime-gated, 39 via `make 
   Host surface `templates/shell/global-unu.sh` (~16 tools from the same pins) is delivered only by a manual
   run or `make hard-restart`; the host copy `~/.local/bin/global-unu.sh` is hand-copied, no deploy step.
   Disk→code sweep: every `tools/*` tree and `tools/bin/*` binary maps to a known site — no orphan.
+- TRANCHE 2 (per ruling 14:35, not yet planned): delete-before-install at `nvm-start.sh:72`,
+  `phpbrew-start.sh:62`, `sdkman-start.sh:78`, `fvm-start.sh:28,43`, `android-start.sh:169`; slot-package
+  DOWNGRADES (`--cleanup-command` for sdkman `sdk uninstall` / gem uninstall) are decision-bidirectional via
+  `gs_version_gate` but the install side was never tested downward in either pass (e.g. `sdk uninstall` of the
+  current default may refuse).
 - D doc claims refuted: CLAUDE.md android launcher "yields 1.0.15985488"; CLAUDE.md frankenphp gotcha, RELOAD "full unconditional reinstall", "manager-only
   reinstall"; `rbenv-iou.sh:15-19` comment; MASTER.plan.md:1487 MCP "dead"; `.env:277` MODSECURITY_LIB note.
