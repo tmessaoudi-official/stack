@@ -49,20 +49,18 @@ if [ "${PHPBREW_MODE}" = "setup" ]; then
 
   # Version-mismatch gate: compare against $PHP_VERSION_NAME (the value the marker
   # actually stores — the phpbrew install dirname, e.g. php-8.4.23). On mismatch,
-  # warn + clean the old php + build dirs and package markers, then drop the marker
-  # so the install/setup blocks below rebuild the new version. php.edge is inert
-  # here (marker=php-master==$PHP_VERSION_NAME → skip); its SHA drift is handled by
-  # the checkpoint-7 sidecar. set -eE safe (helper returns 0, WARN on stderr).
+  # warn and DECIDE — nothing is deleted here. The install/setup triggers below also
+  # fire on "reinstall", and the old php + build dirs, its frankenphp binary and the
+  # pkg.* markers are dropped only after the new php is on disk (the cleanup block
+  # after the install; pin-audit tranche 2, startup-prologue.test.sh §60). php.edge is
+  # inert here (marker=php-master==$PHP_VERSION_NAME → skip); its SHA drift is handled
+  # by the checkpoint-7 sidecar below, which stays wipe-then-build. set -eE safe
+  # (helper returns 0, WARN on stderr).
   _php_marker="${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/php.${PHP_VERSION_AS}"
   _php_gate="$(gs_version_gate "${_php_marker}" "${PHP_VERSION_NAME}" "php.${PHP_VERSION_AS}")"
+  _php_old=""
   if [ "${_php_gate}" = "reinstall" ]; then
     _php_old="$(cat "${_php_marker}" 2>/dev/null || true)"
-    if [ -n "${_php_old}" ] && [ "${_php_old}" != "${PHP_VERSION_NAME}" ]; then
-      printf '\nCleaning old php version dir %s\n' "${_php_old}"
-      rm -rf "${PHPBREW_ROOT}/php/${_php_old}" "${PHPBREW_ROOT}/build/${_php_old}"
-    fi
-    rm -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/php.${PHP_VERSION_AS}.pkg."* || true
-    rm -f "${_php_marker}"
   fi
 
   # php.edge SHA drift gate (checkpoint 7). The main php.edge marker is invariant
@@ -78,6 +76,9 @@ if [ "${PHPBREW_MODE}" = "setup" ]; then
   #     the rebuild keeps the sidecar truthful. Idempotent: `make down` does NOT clear
   #     versions/, so the sidecar persists and "install" fires exactly once per
   #     enablement/RELOAD — never a per-boot loop.
+  # The ONE runtime site that stays wipe-then-build (pin-audit tranche 2): edge always
+  # builds into the same php-master prefix, which phpbrew bakes into the binaries
+  # (php-config --prefix), so a new build cannot be staged beside the old one.
   # Per the agreed strategy we do NOT depend on phpbrew's replace-vs-skip behaviour —
   # REMOVE the php.edge marker AND clean the php-master build/install dirs (mirroring the
   # RELOAD path) so the install branch below does a certain fresh build. set -eE safe
@@ -139,9 +140,26 @@ if [ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew" ] || \
 fi
 
 if [ "${PHPBREW_MODE}" = "setup" ]; then
-  if [ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/php.${PHP_VERSION_AS}" ]; then
+  if [ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/php.${PHP_VERSION_AS}" ] || [ "${_php_gate}" = "reinstall" ]; then
     echo -e "\n**** global-stack-phpbrew-php-install-version.sh"
     global-stack-phpbrew-php-install-version.sh
+    _php_new="${PHP_VERSION_NAME}"
+    # Delete-after-install: only now, with the new php proven on disk, drop the old
+    # php + build dirs and its frankenphp binary (unless another label still records
+    # that php) and every pkg.* marker — the PECL loop below then rebuilds the exts.
+    if [ "${_php_gate}" = "reinstall" ]; then
+      if [ ! -x "${PHPBREW_ROOT}/php/${_php_new}/bin/php" ]; then
+        printf 'FATAL: php %s is not installed after the install step; keeping %s\n' "${_php_new}" "${_php_old}" >&2
+        exit 1
+      fi
+      if [ -n "${_php_old}" ] && [ "${_php_old}" != "${_php_new}" ] \
+        && [ "$(gs_version_in_use "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}" php "${PHP_VERSION_AS}" "${_php_old}")" = "free" ]; then
+        printf '\nCleaning old php version dir %s\n' "${_php_old}"
+        rm -rf "${PHPBREW_ROOT}/php/${_php_old}" "${PHPBREW_ROOT}/build/${_php_old}" \
+          "${PHPBREW_BIN}/frankenphp-${GLOBAL_STACK_FRANKENPHP_VERSION}-${_php_old}"
+      fi
+      rm -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/php.${PHP_VERSION_AS}.pkg."* || true
+    fi
   fi
 
   echo -e "\n*** Activating php version ${PHP_VERSION_NAME}"
@@ -150,8 +168,8 @@ if [ "${PHPBREW_MODE}" = "setup" ]; then
   # PECL ext loop runs EVERY boot after activation, gated per-package by slot
   # markers (--marker-prefix), so a package-only bump is detected even when the
   # php runtime marker is unchanged; unchanged exts skip cheaply. On a runtime
-  # bump the checkpoint-2 gate wiped php.<AS>.pkg.* (php.edge.pkg.* for edge —
-  # never the php.edge.build sidecar).
+  # bump the post-install cleanup above wiped php.<AS>.pkg.* (for edge, the edge
+  # branch wiped php.edge.pkg.* — never the php.edge.build sidecar).
   echo -e "\n**** stack-phpbrew-setup-packages.sh"
   source /usr/local/bin/global-stack-base-setup-packages.sh
   source "/home/${GLOBAL_STACK_DOCKER_USER_ID}/.phpbrew.shellrc"
@@ -161,14 +179,14 @@ if [ "${PHPBREW_MODE}" = "setup" ]; then
     --command='echo -e "**** Installing/Updating ${PACKAGE_NAME} ${PACKAGE_VERSION} ${PACKAGE_COMMAND_SUFFIX}"' \
     --command='phpbrew --debug --verbose --profile ext install ${PACKAGE_NAME} ${PACKAGE_VERSION} ${PACKAGE_COMMAND_SUFFIX}'
 
-  if [ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/php.${PHP_VERSION_AS}" ]; then
+  if [ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/php.${PHP_VERSION_AS}" ] || [ "${_php_gate}" = "reinstall" ]; then
     source "/home/${GLOBAL_STACK_DOCKER_USER_ID}/.phpbrew.shellrc" && mkdir -p "${PHPBREW_ROOT}/php/${PHPBREW_PHP}/var/db"
     source "/home/${GLOBAL_STACK_DOCKER_USER_ID}/.phpbrew.shellrc" && printf '[PHP]\ndate.timezone = %s\n' "${GLOBAL_STACK_TIMEZONE}" > "${PHPBREW_ROOT}/php/${PHPBREW_PHP}/var/db/tzone.ini"
   fi
 
   global-stack-phpbrew-copy-dist-conf.sh
 
-  if [ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/php.${PHP_VERSION_AS}" ]; then
+  if [ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/php.${PHP_VERSION_AS}" ] || [ "${_php_gate}" = "reinstall" ]; then
     echo -e "\n**** global-stack-phpbrew-php${PHP_VERSION_AS}-setup-version.sh"
     source "/home/${GLOBAL_STACK_DOCKER_USER_ID}/.phpbrew.shellrc" && global-stack-phpbrew-php${PHP_VERSION_AS}-setup-version.sh
   fi

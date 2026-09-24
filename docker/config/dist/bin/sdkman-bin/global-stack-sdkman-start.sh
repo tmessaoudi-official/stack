@@ -61,22 +61,19 @@ if [[ "${SDKMAN_MODE}" = "setup" ]]; then
   fi
 
   # Version-mismatch gate: compare against $JAVA_VERSION (the raw value the marker
-  # stores — sdkman uses prebuilt binaries, no resolver). On mismatch, warn +
-  # clean the old java candidate dir and package markers, then drop the marker so
-  # the setup block below reinstalls the new JDK. sdkman package candidates
+  # stores — sdkman uses prebuilt binaries, no resolver). On mismatch, warn and
+  # DECIDE — nothing is deleted here. `sdk install java` below runs every boot, and
+  # the old candidate dir and pkg.* markers are dropped only after the new JDK is on
+  # disk (the cleanup block after it; pin-audit tranche 2, startup-prologue.test.sh
+  # §60), so a JDK that cannot be downloaded leaves the working one. sdkman package candidates
   # (maven/gradle/…) are JDK-independent, so re-`sdk use` on the fresh markers is
   # harmless/idempotent. set -eE safe (helper returns 0, WARN on stderr).
   _java_label="${JAVA_VERSION_AS:-${JAVA_VERSION:-}}"
   _java_marker="${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/java.${_java_label}"
   _java_gate="$(gs_version_gate "${_java_marker}" "${JAVA_VERSION:-}" "java.${_java_label}")"
+  _java_old=""
   if [[ "${_java_gate}" == "reinstall" ]]; then
     _java_old="$(cat "${_java_marker}" 2>/dev/null || true)"
-    if [[ -n "${_java_old}" && "${_java_old}" != "${JAVA_VERSION:-}" ]]; then
-      printf '\nCleaning old java candidate dir %s\n' "${_java_old}"
-      rm -rf "${SDKMAN_DIR}/candidates/java/${_java_old}"
-    fi
-    rm -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/java.${_java_label}.pkg."* || true
-    rm -f "${_java_marker}"
   fi
 fi
 
@@ -162,6 +159,23 @@ if [[ "${SDKMAN_MODE}" = "setup" ]]; then
   source /home/"${GLOBAL_STACK_DOCKER_USER_ID}"/${GLOBAL_STACK_SHELL_RC_TARGET} && sdk install java "${JAVA_VERSION}"
   set -E
   [[ -d "${SDKMAN_DIR}/candidates/java/${JAVA_VERSION}" ]] || { printf 'Error: java %s directory missing after sdk install\n' "${JAVA_VERSION}"; exit 2; }
+  _java_new="${JAVA_VERSION}"
+  # Delete-after-install. The install above is `source <rc> && sdk install`, where a
+  # failed `source` skips the install without tripping set -e, so the new JDK's binary
+  # is proven here before the old candidate dir (unless another label still records
+  # it) and every pkg.* marker go.
+  if [[ "${_java_gate}" == "reinstall" ]]; then
+    if [[ ! -x "${SDKMAN_DIR}/candidates/java/${_java_new}/bin/java" ]]; then
+      printf 'FATAL: java %s is not installed after the install step; keeping %s\n' "${_java_new}" "${_java_old}" >&2
+      exit 1
+    fi
+    if [[ -n "${_java_old}" && "${_java_old}" != "${_java_new}" ]] \
+      && [[ "$(gs_version_in_use "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}" java "${_java_label}" "${_java_old}")" == "free" ]]; then
+      printf '\nCleaning old java candidate dir %s\n' "${_java_old}"
+      rm -rf "${SDKMAN_DIR}/candidates/java/${_java_old}"
+    fi
+    rm -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/java.${_java_label}.pkg."* || true
+  fi
   echo "sdk use java '${JAVA_VERSION}'" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 
   source /usr/local/bin/global-stack-base-setup-packages.sh
@@ -172,7 +186,7 @@ if [[ "${SDKMAN_MODE}" = "setup" ]]; then
   # marker is unchanged (the former dual-branch only installed when the runtime
   # marker was absent). Slot-keyed markers keep the maven/gradle/groovy/spark
   # multi-slot cases distinct. sdkman candidates are JDK-independent, so a java
-  # runtime bump (ckpt-2 gate wiped java.<AS>.pkg.*) just re-installs them
+  # runtime bump (the post-install cleanup wiped java.<AS>.pkg.*) just re-installs them
   # idempotently. --cleanup-command uninstalls the OLD version on a bump
   # (candidates accumulate). set +E: sdk commands return non-zero benignly.
   set +E

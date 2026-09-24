@@ -47,9 +47,11 @@ if [[ "${NVM_MODE}" = "setup" ]]; then
   fi
 
   # Version-mismatch gate: if the recorded node version differs from the pinned
-  # NODE_VERSION, warn + clean the old version dir and this runtime's package
-  # markers, then drop the version marker so the install/setup blocks below
-  # reinstall and repopulate the new version. Compare against the raw pin: the
+  # NODE_VERSION, warn and DECIDE — nothing is deleted here. The install/setup
+  # triggers below also fire on "reinstall", and the old version dir and pkg.*
+  # markers are dropped only after the new node is on disk (the cleanup block after
+  # `nvm install`; pin-audit tranche 2, startup-prologue.test.sh §60), so a pin that
+  # cannot be installed leaves the working one in place. Compare against the raw pin: the
   # marker stores $(nvm version "$NODE_VERSION") == the raw value for fully-
   # qualified pins (verified on-disk incl. nightly). set -eE safe: helper returns
   # 0 and emits the decision on stdout (WARN on stderr).
@@ -65,14 +67,9 @@ if [[ "${NVM_MODE}" = "setup" ]]; then
   # bin/tests/startup-prologue.test.sh §22f.
   _node_marker="${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/node.${_node_version_label}"
   _node_gate="$(gs_version_gate "${_node_marker}" "${NODE_VERSION:-}" "node.${_node_version_label}")"
+  _node_old=""
   if [[ "${_node_gate}" == "reinstall" ]]; then
     _node_old="$(cat "${_node_marker}" 2>/dev/null || true)"
-    if [[ -n "${_node_old}" && "${_node_old}" != "${NODE_VERSION:-}" ]]; then
-      printf '\nCleaning old node version dir %s\n' "${_node_old}"
-      rm -rf "${NVM_DIR}/versions/node/${_node_old}"
-    fi
-    rm -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/node.${_node_version_label}.pkg."* || true
-    rm -f "${_node_marker}"
   fi
 
   if [[ "true" = "${GLOBAL_STACK_USE_LOCKS}" ]]; then
@@ -113,12 +110,32 @@ echo "[ -s \"${NVM_DIR}/nvm.sh\" ] && \. \"${NVM_DIR}/nvm.sh\"" >> "/home/${GLOB
 echo "[ -s \"${NVM_DIR}/bash_completion\" ] && \. \"${NVM_DIR}/bash_completion\"" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"  # This loads nvm bash_completion
 
 if [[ "${NVM_MODE}" = "setup" ]]; then
-  if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/node.${_node_version_label}" ]]; then
+  if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/node.${_node_version_label}" ]] || [[ "${_node_gate}" == "reinstall" ]]; then
     printf '\nInstalling node version %s\n' "${_node_version_label}"
     # Self-heal a corrupt/partial cached download: nvm reuses .cache/src/node-<VER> on
     # every retry and cannot recover (empty expected checksum), so a download corrupted
     # under concurrent-rebuild load loops forever. Purge this version's cache + retry once.
     gs_install_retry_purge "${NVM_DIR}/.cache/src/node-${NODE_VERSION:-}" nvm install "${NODE_VERSION:-}"
+    # Resolved the way the marker write below resolves it, so a partial pin proves the
+    # directory nvm actually installed. `nvm version` prints N/A and returns 3 when the
+    # version is not installed (nvm.sh nvm_version); `|| true` lets the check below name
+    # that as a FATAL instead of an anonymous ERR-trap abort.
+    _node_new="$(nvm version "${NODE_VERSION:-}" || true)"
+    # Delete-after-install: only now, with the new node proven on disk, drop the old
+    # version dir (unless another label still records it) and every pkg.* marker — the
+    # package loop below then repopulates globals on the new node.
+    if [[ "${_node_gate}" == "reinstall" ]]; then
+      if [[ ! -x "${NVM_DIR}/versions/node/${_node_new}/bin/node" ]]; then
+        printf 'FATAL: node %s is not installed after the install step; keeping %s\n' "${NODE_VERSION:-}" "${_node_old}" >&2
+        exit 1
+      fi
+      if [[ -n "${_node_old}" && "${_node_old}" != "${_node_new}" ]] \
+        && [[ "$(gs_version_in_use "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}" node "${_node_version_label}" "${_node_old}")" == "free" ]]; then
+        printf '\nCleaning old node version dir %s\n' "${_node_old}"
+        rm -rf "${NVM_DIR}/versions/node/${_node_old}"
+      fi
+      rm -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/node.${_node_version_label}.pkg."* || true
+    fi
   fi
 
   echo "nvm use ${NODE_VERSION:-}" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
@@ -128,7 +145,7 @@ if [[ "${NVM_MODE}" = "setup" ]]; then
   # Package loop runs EVERY boot (after `nvm use`, so node is on PATH), gated
   # per-package by slot markers (--marker-prefix). A package-only version bump is
   # therefore detected even when the node runtime marker is unchanged; unchanged
-  # packages skip cheaply. On a runtime bump the checkpoint-2 gate wiped
+  # packages skip cheaply. On a runtime bump the post-install cleanup above wiped
   # node.<AS>.pkg.*, so this repopulates globals on the freshly installed runtime.
   source /usr/local/bin/global-stack-base-setup-packages.sh
   global_stack_base_setup_packages \
@@ -137,7 +154,7 @@ if [[ "${NVM_MODE}" = "setup" ]]; then
     --command='echo -e "**** Installing/Updating ${PACKAGE_NAME} ${PACKAGE_VERSION} ${PACKAGE_COMMAND_SUFFIX}"' \
     --command='echo "y" | npm add --global --force ${PACKAGE_NAME}@${PACKAGE_VERSION} ${PACKAGE_COMMAND_SUFFIX}'
 
-  if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/node.${_node_version_label}" ]]; then
+  if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/node.${_node_version_label}" ]] || [[ "${_node_gate}" == "reinstall" ]]; then
     printf '\nSetting up node %s\n' "${NODE_VERSION:-}"
 
     global-stack-nvm-node${NODE_VERSION_AS}-setup.sh

@@ -62,3 +62,28 @@ gs_version_gate() {
   printf 'reinstall\n'
   return 0
 }
+
+# gs_version_in_use <versions_dir> <runtime> <own_label> <value>
+#
+# Emits `shared` on STDOUT when a version marker of <runtime> for a label OTHER than
+# <own_label> records <value>, else `free`. A runtime's labels can share one install
+# tree (fvm keeps flutter.3 and flutter.3.41.9 under one versions/ dir), so a cleanup
+# must not drop an old version that another container still runs. pkg.* slot markers
+# and the php.edge.build sidecar are not version markers and never count.
+#
+# Same ERR-trap contract as gs_version_gate: the answer is on STDOUT and every path
+# returns 0, so a bare call cannot fire the caller's handler.
+gs_version_in_use() {
+  local _gviu_dir="${1:-}" _gviu_rt="${2:-}" _gviu_own="${3:-}" _gviu_value="${4:-}" _gviu_m
+  for _gviu_m in "${_gviu_dir}/${_gviu_rt}."*; do
+    case "${_gviu_m}" in
+      "${_gviu_dir}/${_gviu_rt}.${_gviu_own}" | *.pkg.* | *.build) continue ;;
+    esac
+    if [[ -f "${_gviu_m}" && "$(cat "${_gviu_m}")" == "${_gviu_value}" ]]; then
+      printf 'shared\n'
+      return 0
+    fi
+  done
+  printf 'free\n'
+  return 0
+}

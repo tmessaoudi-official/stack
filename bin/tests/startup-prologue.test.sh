@@ -4436,6 +4436,171 @@ _p59_off="$(
 assert_pass "59b: no other ordered version comparison in an install path (offenders: ${_p59_off:-none})" \
   test -z "${_p59_off}"
 
+# ─── Section 60: runtimes delete the old version only after the new one installed (tranche 2 step 11) ──
+# pin-audit tranche 2. The nvm / phpbrew / sdkman / fvm gates deleted the old version dir,
+# every pkg.* marker and the version marker BEFORE the install ran, so a pin the upstream
+# could not deliver (a 404, a failed build) left the runtime gone. Same shape as §57: the
+# gate only decides, every setup-mode install trigger also fires on `reinstall`, and a
+# cleanup block right after the install proves the new binary is on disk (FATAL, exit 1
+# otherwise — the prologue's EXIT trap writes the error token) before it drops the old
+# version and wipes pkg.*. A version another label still records is kept (fvm's flutter.3
+# and flutter.3.41.9 share one versions/ dir), which gs_version_in_use decides.
+# php.edge is NOT covered: it always builds into php-master (see the edge branch).
+printf '\n%b── Section 60: runtimes delete-after-install (tranche 2 step 11)%b\n' "${C_BOLD}" "${C_RESET}"
+
+# rt | script | var | label | root var | dir template (<v> = version) | old | new | install anchor (grep -F) | after anchor (grep -F) | trigger count | pkg.* left after cleanup (flutter has no package loop, so nothing to wipe)
+_P60_TABLE=(
+  'node|nvm-bin/global-stack-nvm-start.sh|_node|24|NVM_DIR|versions/node/<v>/bin/node|v24.1.0|v24.2.0|gs_install_retry_purge "${NVM_DIR}/.cache/src/node-|source /usr/local/bin/global-stack-base-setup-packages.sh|2|0'
+  'php|phpbrew-bin/global-stack-phpbrew-start.sh|_php|8.4|PHPBREW_ROOT|php/<v>/bin/php|php-8.4.1|php-8.4.2|    global-stack-phpbrew-php-install-version.sh|source /usr/local/bin/global-stack-base-setup-packages.sh|3|0'
+  'java|sdkman-bin/global-stack-sdkman-start.sh|_java|21|SDKMAN_DIR|candidates/java/<v>/bin/java|21.0.1-zulu|21.0.2-zulu|sdk install java "${JAVA_VERSION}"|source /usr/local/bin/global-stack-base-setup-packages.sh|0|0'
+  'flutter|fvm-bin/global-stack-fvm-start.sh|_flutter|3|FVM_CACHE_PATH|versions/<v>/bin/flutter|3.1.0|3.2.0|fvm install "${FLUTTER_VERSION:-}"|echo "${FLUTTER_VERSION:-}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/flutter.|1|1'
+)
+_P60_VG="${DIST_BIN}/base-bin/global-stack-base-version-gate.sh"
+
+# The n-th `if [[ "${<var>_gate}" == "reinstall" ]]; then` (either bracket style) through
+# the `fi` at the same indentation. n=1 is the gate, n=2 the post-install cleanup.
+_p60_block() { # $1 = script, $2 = var, $3 = n
+  awk -v want="$3" -v pat="^ *if \\[\\[? \"\\\\\$\\{$2_gate\\}\" ==? \"reinstall\" \\]\\]?; then\$" '
+    n < want && $0 ~ pat { n++; if (n == want) { match($0, /^ */); ind = substr($0, 1, RLENGTH); on = 1 } }
+    on { print; if ($0 == ind "fi") exit }' "$1"
+}
+_p60_gate_block() { # $1 = script, $2 = var: from `<var>_marker=` to the first 2-space `fi`
+  sed -n "/^  $2_marker=/,/^  fi\$/p" "$1"
+}
+_p60_env() { # $1 = rt, $2 = label → the label/pin variables every block reads
+  case "$1" in
+    node) printf '%s\n' "_node_version_label=$2" ;;
+    php) printf '%s\n' "PHP_VERSION_AS=$2" ;;
+    java) printf '%s\n' "_java_label=$2" ;;
+    flutter) printf '%s\n' "_flutter_label=$2" ;;
+  esac
+}
+_p60_pin() { # $1 = rt, $2 = value → the pin variable the gate compares
+  case "$1" in
+    node) printf 'NODE_VERSION=%s' "$2" ;;
+    php) printf 'PHP_VERSION_NAME=%s' "$2" ;;
+    java) printf 'JAVA_VERSION=%s' "$2" ;;
+    flutter) printf 'FLUTTER_VERSION=%s' "$2" ;;
+  esac
+}
+_p60_mkver() { # $1 = root, $2 = dir template, $3 = version → an installed version (executable binary)
+  local b="$1/${2//<v>/$3}"
+  mkdir -p "${b%/*}"
+  printf '#!/bin/sh\n' >"${b}"
+  chmod +x "${b}"
+}
+_p60_verdir() { # $1 = root, $2 = dir template, $3 = version → the version's top dir
+  local rel="${2//<v>/$3}"
+  printf '%s/%s' "$1" "${rel%%/bin/*}"
+}
+
+# Gate: on a real reinstall decision it must DECIDE, not delete.
+_p60_gate() { # table row → "dir=<0|1> pkg=<0|1> marker=<content>"
+  local rt script var label rootv tpl old new d
+  IFS='|' read -r rt script var label rootv tpl old new _ _ _ _ <<<"$1"
+  d="$(mktemp -d)"
+  mkdir -p "${d}/versions"
+  _p60_mkver "${d}/root" "${tpl}" "${old}"
+  printf '%s\n' "${old}" >"${d}/versions/${rt}.${label}"
+  : >"${d}/versions/${rt}.${label}.pkg.1"
+  {
+    printf '#!/bin/bash\nset -eE -o pipefail\nsource global-stack-base-prologue.sh\n'
+    _p60_gate_block "${DIST_BIN}/${script}" "${var}"
+  } >"${d}/gate.sh"
+  env PATH="${DIST_BIN}/base-bin:${PATH}" GLOBAL_STACK_ERROR_TOKEN=p60-token \
+    GLOBAL_STACK_DOCKER_TOOLS_PATH="${d}" GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS="${d}" \
+    GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS="${d}/versions" "${rootv}=${d}/root" \
+    "$(_p60_env "${rt}" "${label}")" "$(_p60_pin "${rt}" "${new}")" \
+    bash "${d}/gate.sh" >/dev/null 2>&1 || true
+  printf 'dir=%s pkg=%s marker=%s' \
+    "$([[ -d "$(_p60_verdir "${d}/root" "${tpl}" "${old}")" ]] && echo 1 || echo 0)" \
+    "$([[ -f "${d}/versions/${rt}.${label}.pkg.1" ]] && echo 1 || echo 0)" \
+    "$(cat "${d}/versions/${rt}.${label}" 2>/dev/null || echo none)"
+  rm -rf "${d}"
+}
+
+# Cleanup: $2 = installed | absent | shared (another label's marker records the old version).
+# The own marker and a pkg marker both hold the OLD value in every case: neither may count
+# as "another label still uses it", or the old version could never be dropped.
+_p60_cleanup() { # table row, scenario → "rc=<0|1> old=<0|1> new=<0|1> pkg=<0|1>"
+  local rt script var label rootv tpl old new d rc=0
+  IFS='|' read -r rt script var label rootv tpl old new _ _ _ _ <<<"$1"
+  d="$(mktemp -d)"
+  mkdir -p "${d}/versions" "${d}/bin"
+  _p60_mkver "${d}/root" "${tpl}" "${old}"
+  [[ "$2" != absent ]] && _p60_mkver "${d}/root" "${tpl}" "${new}"
+  printf '%s\n' "${old}" >"${d}/versions/${rt}.${label}"
+  printf '%s\n' "${old}" >"${d}/versions/${rt}.${label}.pkg.1"
+  [[ "$2" == shared ]] && printf '%s\n' "${old}" >"${d}/versions/${rt}.${label}.9"
+  { printf '#!/bin/bash\nset -eE -o pipefail\nsource "%s"\n' "${_P60_VG}"; _p60_block "${DIST_BIN}/${script}" "${var}" 2; } >"${d}/c.sh"
+  env -i PATH="/usr/bin:/bin" GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS="${d}/versions" \
+    "${rootv}=${d}/root" PHPBREW_BIN="${d}/bin" GLOBAL_STACK_FRANKENPHP_VERSION=1.0.0 \
+    "$(_p60_env "${rt}" "${label}")" "$(_p60_pin "${rt}" "${new}")" \
+    "${var}_gate=reinstall" "${var}_old=${old}" "${var}_new=${new}" \
+    bash "${d}/c.sh" >/dev/null 2>&1 || rc=1
+  printf 'rc=%s old=%s new=%s pkg=%s' "${rc}" \
+    "$([[ -d "$(_p60_verdir "${d}/root" "${tpl}" "${old}")" ]] && echo 1 || echo 0)" \
+    "$([[ -d "$(_p60_verdir "${d}/root" "${tpl}" "${new}")" ]] && echo 1 || echo 0)" \
+    "$([[ -f "${d}/versions/${rt}.${label}.pkg.1" ]] && echo 1 || echo 0)"
+  rm -rf "${d}"
+}
+
+for _row in "${_P60_TABLE[@]}"; do
+  IFS='|' read -r _rt _script _var _label _rootv _tpl _old _new _inst _after _ntrig _pkgleft <<<"${_row}"
+  _src="${DIST_BIN}/${_script}"
+  # A gate block that stops matching deletes nothing and would read as "decides only".
+  assert_pass "60a: ${_rt} gate block extracted (non-vacuity: it calls gs_version_gate)" \
+    grep -q 'gs_version_gate' <<<"$(_p60_gate_block "${_src}" "${_var}")"
+  assert_pass "60b: ${_rt} gate on a reinstall decision leaves old dir, pkg markers and marker in place" \
+    test "$(_p60_gate "${_row}")" = "dir=1 pkg=1 marker=${_old}"
+  assert_pass "60c: ${_rt} post-install cleanup block exists (non-vacuity)" \
+    grep -q 'rm -rf' <<<"$(_p60_block "${_src}" "${_var}" 2)"
+  assert_pass "60d: ${_rt} cleanup after a successful install drops the OLD dir and pkg markers, keeps the new" \
+    test "$(_p60_cleanup "${_row}" installed)" = "rc=0 old=0 new=1 pkg=${_pkgleft}"
+  assert_pass "60e: ${_rt} new binary absent at cleanup -> non-zero, old dir and pkg markers kept" \
+    test "$(_p60_cleanup "${_row}" absent)" = "rc=1 old=1 new=0 pkg=1"
+  assert_pass "60f: ${_rt} old version still recorded by another label -> old dir kept, pkg wiped" \
+    test "$(_p60_cleanup "${_row}" shared)" = "rc=0 old=1 new=1 pkg=${_pkgleft}"
+  # `|| true` on the lookups: a missing line must red 60g, not abort the run under pipefail.
+  _l_inst="$(grep -nF "${_inst}" "${_src}" | head -n1 | cut -d: -f1 || true)"
+  _l_clean="$(grep -nE "^ *if \[\[? \"\\\$\{${_var}_gate\}\" ==? \"reinstall\" \]\]?; then\$" "${_src}" | sed -n 2p | cut -d: -f1 || true)"
+  _l_after="$(grep -nF "${_after}" "${_src}" | head -n1 | cut -d: -f1 || true)"
+  assert_pass "60g: ${_rt} order is install < cleanup < ${_after:0:40}" \
+    bash -c '[[ -n "$1" && -n "$2" && -n "$3" ]] && (( $1 < $2 && $2 < $3 ))' _ "${_l_inst}" "${_l_clean}" "${_l_after}"
+  # Every setup-mode `! -f <rt>.<label>` trigger must also fire on reinstall, because the
+  # marker is no longer deleted up front. java installs unconditionally (0 triggers).
+  _trig_re="^  if \[\[? ! -f \"\\\$\{GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS\}/${_rt}\."
+  _n_trig="$(grep -cE "${_trig_re}" "${_src}" || true)"
+  _n_miss="$(grep -E "${_trig_re}" "${_src}" | grep -vcE "${_var}_gate\}\" ==? \"reinstall\"" || true)"
+  assert_pass "60h: ${_rt} setup-mode install triggers also fire on reinstall (${_n_trig} found, want ${_ntrig}, ${_n_miss} missing)" \
+    bash -c '(( $1 == $2 && $3 == 0 ))' _ "${_n_trig}" "${_ntrig}" "${_n_miss}"
+done
+
+# php: the frankenphp binary is built per php name, so the old one goes with the old php.
+_p60_franken() { # → "old=<0|1> new=<0|1>"
+  local d
+  d="$(mktemp -d)"
+  mkdir -p "${d}/versions" "${d}/bin"
+  _p60_mkver "${d}/root" 'php/<v>/bin/php' php-8.4.1
+  _p60_mkver "${d}/root" 'php/<v>/bin/php' php-8.4.2
+  : >"${d}/bin/frankenphp-1.0.0-php-8.4.1"
+  : >"${d}/bin/frankenphp-1.0.0-php-8.4.2"
+  { printf '#!/bin/bash\nset -eE -o pipefail\nsource "%s"\n' "${_P60_VG}"; _p60_block "${DIST_BIN}/phpbrew-bin/global-stack-phpbrew-start.sh" _php 2; } >"${d}/c.sh"
+  env -i PATH="/usr/bin:/bin" GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS="${d}/versions" PHPBREW_ROOT="${d}/root" \
+    PHPBREW_BIN="${d}/bin" GLOBAL_STACK_FRANKENPHP_VERSION=1.0.0 PHP_VERSION_AS=8.4 PHP_VERSION_NAME=php-8.4.2 \
+    _php_gate=reinstall _php_old=php-8.4.1 _php_new=php-8.4.2 bash "${d}/c.sh" >/dev/null 2>&1 || true
+  printf 'old=%s new=%s' "$([[ -e "${d}/bin/frankenphp-1.0.0-php-8.4.1" ]] && echo 1 || echo 0)" \
+    "$([[ -e "${d}/bin/frankenphp-1.0.0-php-8.4.2" ]] && echo 1 || echo 0)"
+  rm -rf "${d}"
+}
+assert_pass "60i: php cleanup drops the old php's frankenphp binary, keeps the new one's" \
+  test "$(_p60_franken)" = "old=0 new=1"
+
+# nvm resolves the installed version the way the marker write does (`nvm version`), so a
+# partial pin proves the directory nvm actually installed, not a literal `v24`.
+assert_pass "60j: nvm cleanup compares the nvm-resolved version, not the raw pin" \
+  grep -qE '^    _node_new="\$\(nvm version "\$\{NODE_VERSION:-\}"' "${DIST_BIN}/nvm-bin/global-stack-nvm-start.sh"
+
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
 if [[ "${FAIL}" -eq 0 ]]; then

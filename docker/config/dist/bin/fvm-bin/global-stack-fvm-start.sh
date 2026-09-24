@@ -44,20 +44,18 @@ if [[ "${FVM_MODE}" = "setup" ]]; then
   fi
 
   # Version-mismatch gate: compare against $FLUTTER_VERSION (the raw value the
-  # marker stores — no resolver). On mismatch, warn + clean the old fvm version
-  # dir, then drop the marker so the setup block below reinstalls the new SDK.
-  # flutter has no package loop → no per-package markers to invalidate. set -eE
-  # safe (helper returns 0, WARN on stderr).
+  # marker stores — no resolver). On mismatch, warn and DECIDE — nothing is deleted
+  # here. The install trigger below also fires on "reinstall", and the old fvm
+  # version dir is dropped only after the new SDK is on disk (the cleanup block after
+  # `fvm install`; pin-audit tranche 2, startup-prologue.test.sh §60). flutter has no
+  # package loop → no per-package markers to invalidate. set -eE safe (helper returns
+  # 0, WARN on stderr).
   _flutter_label="${FLUTTER_VERSION_AS:-${FLUTTER_VERSION:-}}"
   _flutter_marker="${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/flutter.${_flutter_label}"
   _flutter_gate="$(gs_version_gate "${_flutter_marker}" "${FLUTTER_VERSION:-}" "flutter.${_flutter_label}")"
+  _flutter_old=""
   if [[ "${_flutter_gate}" == "reinstall" ]]; then
     _flutter_old="$(cat "${_flutter_marker}" 2>/dev/null || true)"
-    if [[ -n "${_flutter_old}" && "${_flutter_old}" != "${FLUTTER_VERSION:-}" ]]; then
-      printf '\nCleaning old flutter version dir %s\n' "${_flutter_old}"
-      rm -rf "${FVM_CACHE_PATH}/versions/${_flutter_old}"
-    fi
-    rm -f "${_flutter_marker}"
   fi
 
   if [[ "true" = "${GLOBAL_STACK_USE_LOCKS}" ]]; then
@@ -90,9 +88,24 @@ if [[ "${FVM_MODE}" = "install" ]]; then
 fi
 
 if [[ "${FVM_MODE}" = "setup" ]]; then
-  if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/flutter.${FLUTTER_VERSION_AS:-${FLUTTER_VERSION:-}}" ]]; then
+  if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/flutter.${FLUTTER_VERSION_AS:-${FLUTTER_VERSION:-}}" ]] || [[ "${_flutter_gate}" == "reinstall" ]]; then
     printf '\nInstalling flutter version %s\n' "${FLUTTER_VERSION_AS:-${FLUTTER_VERSION:-}}"
     fvm install "${FLUTTER_VERSION:-}"
+    _flutter_new="${FLUTTER_VERSION:-}"
+    # Delete-after-install: only now, with the new SDK proven on disk, drop the old
+    # version dir — unless another label still records it (flutter.3 and
+    # flutter.3.41.9 share this versions/ dir).
+    if [[ "${_flutter_gate}" == "reinstall" ]]; then
+      if [[ ! -x "${FVM_CACHE_PATH}/versions/${_flutter_new}/bin/flutter" ]]; then
+        printf 'FATAL: flutter %s is not installed after the install step; keeping %s\n' "${_flutter_new}" "${_flutter_old}" >&2
+        exit 1
+      fi
+      if [[ -n "${_flutter_old}" && "${_flutter_old}" != "${_flutter_new}" ]] \
+        && [[ "$(gs_version_in_use "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}" flutter "${_flutter_label}" "${_flutter_old}")" == "free" ]]; then
+        printf '\nCleaning old flutter version dir %s\n' "${_flutter_old}"
+        rm -rf "${FVM_CACHE_PATH}/versions/${_flutter_old}"
+      fi
+    fi
   fi
 
   # echo "fvm use ${FLUTTER_VERSION:-}" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"

@@ -187,8 +187,10 @@ then drop the old dir and wipe `pkg.*`; the marker is written where it is today 
 - `php.edge` is the one EXCEPTION and stays wipe-then-build: it always installs to `php-master`, and phpbrew
   bakes that prefix into the built binaries (`php-config --prefix`), so it cannot be built beside itself
   [Inferred from how phpbrew configures `--prefix`; not probed]. Documented at the site.
-- `RELOAD_*=true` paths (nvm, php `:43`, java `:60`, fvm `:28,:43`) stay wipe-first: they are the explicit
-  nuclear option. `sdkman-start.sh:162` is `source <rc> && sdk install java …` (the `source && cmd` class) —
+- `RELOAD_*=true` paths are untouched. Correction (advisor 3C, step 11): only php `:43` and fvm `:28`
+  (`RELOAD_FVM`) actually wipe a runtime dir; `RELOAD_NODE` (nvm `:46`), `RELOAD_JAVA` (`:60`) and
+  `RELOAD_FLUTTER` (fvm `:43`) remove markers only, so the gate returns `install`, not `reinstall`, and
+  `nvm install` / `sdk install` / `fvm install` no-op on the existing dir — see Known issues. `sdkman-start.sh:162` is `source <rc> && sdk install java …` (the `source && cmd` class) —
   the on-disk proof before cleanup covers it; named at the site. `gs_install_retry_purge` returns the second
   attempt's status, so a double failure aborts under `set -e` before the cleanup [Verified: read
   `base-prologue.sh`]. nvm's raw-pin gate (§22f) is left as it is — only its delete lines move.
@@ -199,6 +201,16 @@ then drop the old dir and wipe `pkg.*`; the marker is written where it is today 
 - Test §60 (red first), per runtime: gate on a reinstall leaves old dir + pkg markers + marker; the cleanup
   block drops old / keeps new when the new dir exists and refuses (non-zero, old kept) when it does not;
   install < cleanup < package loop (static order); every `! -f marker` trigger also fires on reinstall.
+
+- AS BUILT (step 11): the four gates decide only (`_<rt>_old=""`, set on reinstall). nvm `:116,:140`,
+  php `:142,:181,:188` and fvm `:93` triggers gained `|| gate == reinstall`. A cleanup block after each
+  install proves the new binary with `-x` (`versions/node/$(nvm version)/bin/node`, `php/<name>/bin/php`,
+  `candidates/java/<v>/bin/java`, `fvm/cache/versions/<v>/bin/flutter`), then drops the old dir unless
+  `gs_version_in_use` (new, in `base-version-gate.sh`, stdout `shared|free`, always returns 0) finds
+  another label recording it, then wipes pkg.* (not fvm: no package loop). php also drops the old php's
+  `build/` dir and its `frankenphp-<v>-<old name>` binary (clean-wipe ruling). §60: 34 checks; sabotage
+  S1–S7 each caught, each restored byte-identical. 60j (nvm resolves via `nvm version`) is a STATIC check —
+  no behavioural test of a partial node pin.
 
 ### Step 12 — package slots: cleanup of the OLD version only after the NEW installed (S)
 - `base-setup-packages.sh:112-117` evals `--cleanup-command` (gem uninstall / sdk uninstall of the old
@@ -278,7 +290,7 @@ escape hatches keeping pkg markers; the `source X && cmd` class.
 | 8 | Host claude = container-only pin (comment + .env note) + no-ordered-comparison guard | S | done | 90e25db | templates/shell/global-unu.sh, .env, bin/tests/startup-prologue.test.sh, docker/config/dist/bin/rust-bin/** |
 | 9 | Docs: CLAUDE.md manager-reinstall claim (hand-off) | S | done | 81c3dcc | CLAUDE.md, bin/tests/startup-prologue.test.sh |
 | 10 | Tranche 2: plan the delete-before-install sites (nvm/phpbrew/sdkman/fvm/android/rbenv-plugins), composer bootstrap, env-update downgrade policy | M | done | 1906f6c | docs/plans/** |
-| 11 | Runtimes nvm/php/java/flutter delete-after-install (php.edge exempt) | M | todo | - | docker/config/dist/bin/nvm-bin/**, docker/config/dist/bin/phpbrew-bin/**, docker/config/dist/bin/sdkman-bin/**, docker/config/dist/bin/fvm-bin/**, bin/tests/startup-prologue.test.sh |
+| 11 | Runtimes nvm/php/java/flutter delete-after-install (php.edge exempt) | M | done | - | docker/config/dist/bin/nvm-bin/**, docker/config/dist/bin/phpbrew-bin/**, docker/config/dist/bin/sdkman-bin/**, docker/config/dist/bin/fvm-bin/**, bin/tests/startup-prologue.test.sh |
 | 12 | Package slots: cleanup only after the new install succeeded | M | todo | - | docker/config/dist/bin/base-bin/**, bin/tests/startup-prologue.test.sh |
 | 13 | rbenv plugins reuse step 6's in-place tag move | S | todo | - | docker/config/dist/bin/rbenv-bin/**, bin/tests/startup-prologue.test.sh |
 | 14 | go/zig/hurl staged extract-verify-swap, GOPATH carried across | M | todo | - | docker/images/00base/**, bin/tests/startup-prologue.test.sh |
@@ -299,6 +311,14 @@ escape hatches keeping pkg markers; the `source X && cmd` class.
   On a repeat, capture `_andv_probe`'s raw `${out}` (the xtrace of every `android sdk install` the stub got)
   to a file BEFORE it is parsed — `1| ndk-bundle|none` cannot say whether ndk-bundle ever reached the stub.
 ### Known issues
+- `RELOAD_NODE` / `RELOAD_JAVA` / `RELOAD_FLUTTER=true` remove the version marker only. The gate then says
+  `install`, the installer finds the version already on disk and no-ops, so these RELOAD flags do NOT
+  reinstall anything (the php and `RELOAD_FVM` flags do wipe). Found at step 11 3C; not fixed (it is not a
+  pin-bump path). Needs a ruling if RELOAD should mean a real wipe for these three.
+- A consumer container that is ALREADY running when its runtime reinstalls keeps a PATH baked at its own
+  boot and loses the old version dir under it. Starting consumers are safe: they wait on
+  `successes/<rt>.<AS>`, which the runtime removes before its gate runs [Verified: alltogether `:19-28`,
+  phpmyadmin `:13-15`, serverless `:18-25`, android `:58-62`]. Same as before tranche 2.
 - `source <file> && <cmd>` (20 lines in 5 files of dist/bin, 2026-09-24): if `source` fails, neither `set -e`
   nor the ERR trap fires (only the final member of an && list does) — `<cmd>` is silently skipped and the script
   continues. pyenv/rbenv's post-install cleanup now proves the install on disk (§57h); the other sites are
