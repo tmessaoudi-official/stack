@@ -278,17 +278,11 @@ escape hatches keeping pkg markers; the `source X && cmd` class.
 <!-- /progress-block -->
 ### Blocked
 ### Needs input
-- Which of A1–A7 / B / C to fix, in what order (no implementation authorised yet).
-- Approval of the tranche-1 Formal Plan (steps 5–9).
-- go / zig / hurl (`install-go.sh:19`, `install-zig.sh:13`, `install-hurl.sh:17`) extract a new version OVER the
-  previous tree, so stale files survive a bump in either direction. Fork: (a) versioned install dirs + a
-  `current` symlink, or (b) wipe before extract — but GOPATH lives INSIDE GOROOT (`.env:350-351`), so (b) also
-  destroys every `go install`ed binary and the module cache on each go bump unless GOPATH moves out
-  (an `.env` + shellrc change).
-- Host claude: turn Claude Code `autoUpdates` off so the host holds the pin (step 8)?
-- env-update proposal policy: `decide.sh` rule 5 makes any DOWNWARD correction a `SKIP` (a downgrade is a
-  hand-edit today). Delivery (steps 5–8) handles downgrades either way; whether env-update should also
-  PROPOSE them is a separate policy call.
+- Approval of the tranche-2 Formal Plan (steps 11–17).
+- Step 14: GOPATH on a go bump — preserve (staged swap moves `home`) / full wipe / move GOPATH out of GOROOT.
+- Step 16: android — (a) stop wiping `GRADLE_USER_HOME` / (a)+(b) staged `ANDROID_HOME.new` swap / leave.
+- Resolved and moved to the Decisions Log: A1–A7/B/C ordering and tranche-1 approval (steps 5–9 landed),
+  host claude (keep auto-update), env-update downgrade policy (rule 5 stays SKIP, 23:40).
 ### Needs research
 ### Fragile
 - [2026-09-24 22:13] startup-prologue.test.sh 43q (android verify probe) went red ONCE in a full run —
