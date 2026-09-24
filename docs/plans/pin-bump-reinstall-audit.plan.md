@@ -179,6 +179,7 @@ Live verification on the running stack: bump `PYENV_VERSION` one tag up then bac
 | 7 | rustup-init honours pin both ways, reachable, marker from installed binary | M | done | da33555 | docker/config/dist/bin/rust-bin/**, bin/tests/startup-prologue.test.sh |
 | 8 | Host claude = container-only pin (comment + .env note) + no-ordered-comparison guard | S | done | 90e25db | templates/shell/global-unu.sh, .env, bin/tests/startup-prologue.test.sh, docker/config/dist/bin/rust-bin/** |
 | 9 | Docs: CLAUDE.md manager-reinstall claim (hand-off) | S | done | 81c3dcc | CLAUDE.md, bin/tests/startup-prologue.test.sh |
+| 10 | Tranche 2: plan the delete-before-install sites (nvm/phpbrew/sdkman/fvm/android/rbenv-plugins), composer bootstrap, env-update downgrade policy | M | todo | - | - |
 <!-- /progress-block -->
 ### Blocked
 ### Needs input
@@ -202,6 +203,13 @@ Live verification on the running stack: bump `PYENV_VERSION` one tag up then bac
   On a repeat, capture `_andv_probe`'s raw `${out}` (the xtrace of every `android sdk install` the stub got)
   to a file BEFORE it is parsed — `1| ndk-bundle|none` cannot say whether ndk-bundle ever reached the stub.
 ### Known issues
+- `source <file> && <cmd>` (20 lines in 5 files of dist/bin, 2026-09-24): if `source` fails, neither `set -e`
+  nor the ERR trap fires (only the final member of an && list does) — `<cmd>` is silently skipped and the script
+  continues. pyenv/rbenv's post-install cleanup now proves the install on disk (§57h); the other sites are
+  unaudited. Narrow trigger (a shellrc missing while its manager's success marker exists), silent when it fires.
+- Tranche-1 milestone live read (2026-09-24, read-only): pyenv at v2.8.6 = tag = marker; rbenv at v1.3.2 = tag =
+  marker; ruby-build v20260917 and gemset v0.5.102 checked out = markers = pins; rustup 1.29.1 = marker. So the
+  first boots after tranche 1 make no network call; `02rust` only writes `auto_self_update = "disable"`.
 Full report (gitignored): `var/claude/pin-audit/REPORT.md`; per-pin file:line evidence in `var/claude/pin-audit/raw/G*.md`.
 Result at HEAD 7b45087 — 254 pins: 168 clean (125 runtime-gated, 39 via `make down-n-rebuild*`, 4 via pull),
 33 NOT-HANDLED, 26 PARTIAL, 20 EMPTY, 5 dead, 2 info-only.
