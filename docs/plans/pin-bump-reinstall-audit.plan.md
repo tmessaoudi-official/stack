@@ -50,5 +50,15 @@ Result at HEAD 7b45087 — 254 pins: 168 clean (125 runtime-gated, 39 via `make 
   go/zig overlay extract; phpbrew ext exit-0 (inferred).
 - C escape hatches: `RELOAD_NODE24` / deleted node marker keeps pkg markers → no npm globals (verified by
   execution); `RELOAD_PHP8_x` keeps ext markers.
-- D doc claims refuted: CLAUDE.md frankenphp gotcha, RELOAD "full unconditional reinstall", "manager-only
+- PASS 2 (`var/claude/pin-audit/pass2/REPORT.md`) — install-site honours-pin + unpinned discovery:
+  rustup-init PIN-IGNORED (`rust-iou.sh:25` sed matches nothing in the 1.29.1 installer — verified by
+  execution; fix = export `RUSTUP_VERSION`); android launcher pinned but the real CLI floats to Google's
+  latest; host claude 2.1.281 vs pin 2.1.276 (upgrade-only gate + autoUpdates); serverless `^` ranges with no
+  tracked lockfile; `phpbrew-iou.sh:24` `composer update` discards phpbrew's lockfile; phpbrew pin locked to
+  2.2.0 by the vendored overlay guard (`:16-19`, exit 1); `SDKMAN_NATIVE_VERSION` 0.7.34 has no pin;
+  phpMyAdmin pinned to `master` = frozen at first install; awscli/rootAVD/docker-reclaim/mise `usage` float.
+  Host surface `templates/shell/global-unu.sh` (~16 tools from the same pins) is delivered only by a manual
+  run or `make hard-restart`; the host copy `~/.local/bin/global-unu.sh` is hand-copied, no deploy step.
+  Disk→code sweep: every `tools/*` tree and `tools/bin/*` binary maps to a known site — no orphan.
+- D doc claims refuted: CLAUDE.md android launcher "yields 1.0.15985488"; CLAUDE.md frankenphp gotcha, RELOAD "full unconditional reinstall", "manager-only
   reinstall"; `rbenv-iou.sh:15-19` comment; MASTER.plan.md:1487 MCP "dead"; `.env:277` MODSECURITY_LIB note.
