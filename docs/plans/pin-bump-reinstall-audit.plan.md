@@ -19,6 +19,9 @@ version and its usage ! no implementation yet !"* — AUDIT ONLY; nothing below 
 - [2026-09-24 14:10] AGREED: next = a fix PLAN (no code until approved) for pass-1 A1 (pyenv/rbenv managers + ruby-build/gemset reachability), pass-1 A2 (phpbrew tools + phpbrew), and rustup-init (pin-ignored sed + unreachable gate).
 - [2026-09-24 23:40] AGREED: tranche 2 scope = ALL items (delete-before-install at nvm/phpbrew/sdkman/fvm/android + rbenv plugins, the floating composer bootstrap, package-slot downgrades); investigate, plan, hard stop for approval before implementing.
 - [2026-09-24 23:40] AGREED: env-update decide.sh rule 5 stays — a downward upstream move is SKIP; rollbacks are a deliberate hand edit of .env, which the install side honours both ways.
+- [2026-09-24 23:55] AGREED: tranche 2 approved as steps 11–17, step by step, test-first, tier asked at every gate.
+- [2026-09-24 23:55] AGREED: step 14 — a go bump's staged swap moves `go/home` (GOPATH) into the new tree; GOPATH is preserved, not wiped.
+- [2026-09-24 23:55] AGREED: step 16 — option (a) only: keep the clean full SDK wipe, stop wiping `GRADLE_USER_HOME`.
 
 ## Formal Plan
 <!-- written at Phase 4 — tranche 1, APPROVED 2026-09-24 15:05 (steps 5-9; step 8 revised) -->
@@ -168,7 +171,7 @@ construction (6c/6d/7d) a failing boot leaves the previous version installed and
 Live verification on the running stack: bump `PYENV_VERSION` one tag up then back on 02pyenv alone; bump
 `COMPOSER_VERSION` alone; bump `RUSTUP_INIT_VERSION` down then up. Each is asked for individually.
 
-## Formal Plan — tranche 2 (PROPOSED 2026-09-24, awaiting approval)
+## Formal Plan — tranche 2 (APPROVED 2026-09-24 23:55)
 Principle, from rulings 14:35 + 15:05: a reinstall installs exactly the pin in either direction, never
 overlays the old tree, and never deletes the working version until the new one is PROVEN on disk.
 Tranche 1's §57 shape is the template: the gate only decides; the install trigger also fires on
@@ -274,13 +277,17 @@ escape hatches keeping pkg markers; the `source X && cmd` class.
 | 7 | rustup-init honours pin both ways, reachable, marker from installed binary | M | done | da33555 | docker/config/dist/bin/rust-bin/**, bin/tests/startup-prologue.test.sh |
 | 8 | Host claude = container-only pin (comment + .env note) + no-ordered-comparison guard | S | done | 90e25db | templates/shell/global-unu.sh, .env, bin/tests/startup-prologue.test.sh, docker/config/dist/bin/rust-bin/** |
 | 9 | Docs: CLAUDE.md manager-reinstall claim (hand-off) | S | done | 81c3dcc | CLAUDE.md, bin/tests/startup-prologue.test.sh |
-| 10 | Tranche 2: plan the delete-before-install sites (nvm/phpbrew/sdkman/fvm/android/rbenv-plugins), composer bootstrap, env-update downgrade policy | M | doing | - | docs/plans/** |
+| 10 | Tranche 2: plan the delete-before-install sites (nvm/phpbrew/sdkman/fvm/android/rbenv-plugins), composer bootstrap, env-update downgrade policy | M | done | 1906f6c | docs/plans/** |
+| 11 | Runtimes nvm/php/java/flutter delete-after-install (php.edge exempt) | M | todo | - | docker/config/dist/bin/nvm-bin/**, docker/config/dist/bin/phpbrew-bin/**, docker/config/dist/bin/sdkman-bin/**, docker/config/dist/bin/fvm-bin/**, bin/tests/startup-prologue.test.sh |
+| 12 | Package slots: cleanup only after the new install succeeded | M | todo | - | docker/config/dist/bin/base-bin/**, bin/tests/startup-prologue.test.sh |
+| 13 | rbenv plugins reuse step 6's in-place tag move | S | todo | - | docker/config/dist/bin/rbenv-bin/**, bin/tests/startup-prologue.test.sh |
+| 14 | go/zig/hurl staged extract-verify-swap, GOPATH carried across | M | todo | - | docker/images/00base/**, bin/tests/startup-prologue.test.sh |
+| 15 | composer bootstrap pinned + verified | S | todo | - | docker/config/dist/bin/phpbrew-bin/**, bin/tests/startup-prologue.test.sh |
+| 16 | android: stop wiping GRADLE_USER_HOME | S | todo | - | docker/config/dist/bin/android-bin/**, bin/tests/startup-prologue.test.sh |
+| 17 | Docs: CLAUDE.md tranche 2 (hand-off) | S | todo | - | CLAUDE.md |
 <!-- /progress-block -->
 ### Blocked
 ### Needs input
-- Approval of the tranche-2 Formal Plan (steps 11–17).
-- Step 14: GOPATH on a go bump — preserve (staged swap moves `home`) / full wipe / move GOPATH out of GOROOT.
-- Step 16: android — (a) stop wiping `GRADLE_USER_HOME` / (a)+(b) staged `ANDROID_HOME.new` swap / leave.
 - Resolved and moved to the Decisions Log: A1–A7/B/C ordering and tranche-1 approval (steps 5–9 landed),
   host claude (keep auto-update), env-update downgrade policy (rule 5 stays SKIP, 23:40).
 ### Needs research
