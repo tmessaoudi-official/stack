@@ -903,6 +903,30 @@ Rule 17).
   reintroduce it, at the cost of a new check plus tests. WARN-and-skip in the startup script, and
   installing system images from the dev channel, were offered and declined (the latter with my
   recommendation against it, since it opts every image into dev builds).
+- [2026-09-24 10:19] AGREED (milestone certification tier): `advisor()` only at the plan's closing
+  boundary — "Use only advisor for now". The three-lens milestone panel was offered as the
+  recommendation and declined; the plan closes advisor-certified, not panel-certified.
+- [2026-09-24 10:19] AGREED (plan disposition): KEEP this file, marked closed — it remains the only
+  home of the fragile register and the open `UNCERTIFIED-BY-EXECUTION` dimensions under `### Blocked`.
+  Graduate-then-delete and delete-now were offered and declined.
+- [2026-09-24 10:19] AGREED (`.claude/settings.json`): leave the working-tree change that empties the
+  three `env-update --apply*` `ask` entries UNCOMMITTED — it is permission-swap-project's armed state
+  (sentinel `~/.claude/projects/-stack/state/permission-profile-project-added.json` present), not a
+  reversal of the row 28 ruling. Restoring now and a new drop-the-trio ruling were offered and declined.
+- [2026-09-24 10:19] CLOSED: 48/48 rows done, re-verified at `75d0112`. All 13 `bin/tests/*.test.sh`
+  suites `ALL PASSED` (startup-prologue 637, env-update 910 as five `--section` batches
+  162+174+210+177+187, env-scan 186, check-image-versions 30, git-strip-coauthored 27, open-all-envs
+  22, claude-fullauto-shell 20, compose-env-plumbing 15, check-bake-targets 12, env-guard 12,
+  profile-shell 12, makefile-posix 10, wait-healthy 9); Done-when 2 (`gs_version_gate()` ×1, no
+  exempt script sources the prologue), 5 (0 `@todo fix pin versions`) and 9 (ahead 0) re-run. Done-when
+  4 PARTLY observed: `tools/composer/vendor/composer/installed.json` holds `laravel/installer`
+  v5.32.0 = the `.env` pin, marker written by a live boot 2026-09-18 — but the pin has never been
+  bumped since `0e71e5b`, so "after a bump, no other marker changes" is `UNCERTIFIED-BY-EXECUTION`.
+  Done-when 3 and 8 rest on this file's own records and were not re-audited today. Row 41's SDK
+  reinstall and row 46's marker migration both ran on the 2026-09-18 boot [Inferred: `android.sdk`
+  and `android.cli` mtimes, `android.sdkmanager` absent; boot log not read]. Still
+  `UNCERTIFIED-BY-EXECUTION`: lock-serialized tier-03 install, a web-server handler writing its
+  error token, consumer fail-fast behind a failed web server (see `### Blocked`).
 
 ## Planning-time verified state (2026-08-31/09-01)
 
