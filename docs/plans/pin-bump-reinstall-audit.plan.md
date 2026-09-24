@@ -17,6 +17,8 @@ version and its usage ! no implementation yet !"* — AUDIT ONLY; nothing below 
 - [2026-09-24 15:05] AGREED: host Claude Code keeps auto-update → `GLOBAL_STACK_CLAUDE_CODE_VERSION` is a CONTAINER-only pin; step 8 becomes: document that, keep the host gate upgrade-only as the single named exemption of the no-ordered-comparison guard.
 - [2026-09-24 15:05] AGREED (developer: "if we need to reinstall it needs to be clean with a wipe ! no dirty reinstall !"): a reinstall must never overlay a new version on the old tree — go/zig/hurl (tranche 2) get wipe-then-install.
 - [2026-09-24 14:10] AGREED: next = a fix PLAN (no code until approved) for pass-1 A1 (pyenv/rbenv managers + ruby-build/gemset reachability), pass-1 A2 (phpbrew tools + phpbrew), and rustup-init (pin-ignored sed + unreachable gate).
+- [2026-09-24 23:40] AGREED: tranche 2 scope = ALL items (delete-before-install at nvm/phpbrew/sdkman/fvm/android + rbenv plugins, the floating composer bootstrap, package-slot downgrades); investigate, plan, hard stop for approval before implementing.
+- [2026-09-24 23:40] AGREED: env-update decide.sh rule 5 stays — a downward upstream move is SKIP; rollbacks are a deliberate hand edit of .env, which the install side honours both ways.
 
 ## Formal Plan
 <!-- written at Phase 4 — tranche 1, APPROVED 2026-09-24 15:05 (steps 5-9; step 8 revised) -->
@@ -166,6 +168,99 @@ construction (6c/6d/7d) a failing boot leaves the previous version installed and
 Live verification on the running stack: bump `PYENV_VERSION` one tag up then back on 02pyenv alone; bump
 `COMPOSER_VERSION` alone; bump `RUSTUP_INIT_VERSION` down then up. Each is asked for individually.
 
+## Formal Plan — tranche 2 (PROPOSED 2026-09-24, awaiting approval)
+Principle, from rulings 14:35 + 15:05: a reinstall installs exactly the pin in either direction, never
+overlays the old tree, and never deletes the working version until the new one is PROVEN on disk.
+Tranche 1's §57 shape is the template: the gate only decides; the install trigger also fires on
+`reinstall`; after the install, prove the new version exists (else FATAL — the EXIT trap writes the token),
+then drop the old dir and wipe `pkg.*`; the marker is written where it is today (last).
+
+### Step 11 — runtimes: nvm node, phpbrew php, sdkman java, fvm flutter (M)
+- Gates today delete first: `nvm-start.sh:68-76`, `phpbrew-start.sh:58-66`, `sdkman-start.sh:72-80`,
+  `fvm-start.sh:54-61` [Verified: read]. Install sites: nvm `:121` (`gs_install_retry_purge … nvm install`),
+  php `:144`, java `:162`, flutter `:95`; triggers `! -f marker` at nvm `:116,140`, php `:142,164,171`,
+  flutter `:93`, java (to read) [Verified: grep]. All four keep versions SIDE BY SIDE (`versions/node/<v>`,
+  `php/<name>`, `candidates/java/<v>`, `fvm versions/<v>`), so install-new-then-drop-old is possible.
+- `php.edge` is the one EXCEPTION and stays wipe-then-build: it always installs to `php-master`, and phpbrew
+  bakes that prefix into the built binaries (`php-config --prefix`), so it cannot be built beside itself
+  [Inferred from how phpbrew configures `--prefix`; not probed]. Documented at the site.
+- `RELOAD_*=true` paths (nvm, php `:43`, java `:60`, fvm `:28,:43`) stay wipe-first: they are the explicit
+  nuclear option. `sdkman-start.sh:162` is `source <rc> && sdk install java …` (the `source && cmd` class) —
+  the on-disk proof before cleanup covers it; named at the site. `gs_install_retry_purge` returns the second
+  attempt's status, so a double failure aborts under `set -e` before the cleanup [Verified: read
+  `base-prologue.sh`]. nvm's raw-pin gate (§22f) is left as it is — only its delete lines move.
+- Marker CONTENT readers: alltogether/phpmyadmin/serverless/android build PATH from `php.<AS>`/node markers
+  [Verified: grep]; they wait for the runtime's success marker, written after the final marker write, so they
+  read the NEW value. Within each start script, any read of the marker between gate and final write is
+  checked during implementation (pyenv `:159` had that shape).
+- Test §60 (red first), per runtime: gate on a reinstall leaves old dir + pkg markers + marker; the cleanup
+  block drops old / keeps new when the new dir exists and refuses (non-zero, old kept) when it does not;
+  install < cleanup < package loop (static order); every `! -f marker` trigger also fires on reinstall.
+
+### Step 12 — package slots: cleanup of the OLD version only after the NEW installed (S)
+- `base-setup-packages.sh:112-117` evals `--cleanup-command` (gem uninstall / sdk uninstall of the old
+  version) BEFORE the install commands `:122-133` [Verified: read]. Move it into the success branch
+  (`:139-144`): non-tolerant callers after the commands; tolerant callers only when `_cmd_ok=1` and the
+  `--success-check` passes — then the marker. A failed install keeps the old gem/candidate.
+- Test §61 (red first): stub commands; success → order `install` then `cleanup:<old>` then marker = new;
+  failed install (non-tolerant aborts / tolerant `_cmd_ok=0`) → no cleanup, marker still old; a pin moved
+  DOWN (marker 2.0, pin 1.0) → install 1.0 then cleanup 2.0.
+- sdkman may refuse to uninstall the version that is still the default; if a probe shows it, `sdk default
+  <new>` precedes the cleanup. UNCERTIFIED until probed.
+- Certification: real `pip install pkg==<lower>` and `npm add -g pkg@<lower>` downgrades in scratch dirs
+  (the two slot commands with no cleanup) [Unverified until run]; `sdk uninstall` of the version that was
+  the default before the new install — probed with a real sdkman in a scratch `SDKMAN_DIR` if the download
+  is reasonable, otherwise named UNCERTIFIED.
+
+### Step 13 — rbenv plugins: reuse step 6's in-place move (S)
+- `rbenv-iou.sh` ruby-build/gemset arms `rm -rf plugins/<p>` then `git clone` [Verified: read]. The plugins
+  are git clones at tags — the same object as rbenv itself — so they get step 6's certified block: `.git`
+  absent → clone; present → `rev-parse HEAD` vs `refs/tags/<pin>^{commit}`, fetch + `checkout --force` only
+  when they differ. No `.new` state, no second shape. (advisor 3C round 1)
+- Test §62 on §56's real-git fixture, plugin arms: pin up / down → at the tag; current → no fetch; unknown
+  tag → fails, plugin dir intact.
+
+### Step 14 — go / zig / hurl: staged extract, verify, swap (M)
+- Today each extracts OVER its tree (`install-go.sh:19`, `install-zig.sh:13`, `install-hurl.sh:17`)
+  [Verified: read] — stale files survive, both directions. New, per the 15:05 clean-wipe ruling: extract into
+  `<dir>.new`, check the binary's `version` output names the pin, then remove the old tree and `mv` the new
+  one into place; marker last. A failed download/extract leaves the old tool working.
+- go: GOPATH is `go/home`, INSIDE GOROOT (`.env:350-351`) [Verified]. RULING NEEDED (it amends 15:05's
+  "wipe"): (i) staged swap MOVES `home` into the new tree — `go install`ed binaries + module cache survive,
+  no `.env` change; (ii) full wipe including GOPATH on every go bump; (iii) move GOPATH out of GOROOT
+  (`.env` + shellrc + consumers).
+- The `rm -rf <dir>` → `mv <dir>.new <dir>` swap is a sub-second window in which `tools/<tool>` is absent for
+  anything with it on PATH (host included) — accepted. `sudo` on tar/chmod/chown applies to the `.new` tree.
+- Test §63: stub `curl` serving fake tarballs whose binary prints its version; up / down / failed download /
+  GOPATH survives / leftover `.new` cleared. Certification: real go, zig, hurl downloads into scratch dirs,
+  up then down.
+
+### Step 15 — composer bootstrap pinned (S)
+- `phpbrew-install-tools.sh:24-25` runs `composer-setup.php` with no `--version` → latest [Verified: pass 2
+  raw B_piped.md:24]. Add `--version="${COMPOSER_LATEST}"` (the installer's documented flag) and check
+  `composer --version` = pin before building the clone (pin is a bare `2.10.3`, taken verbatim [Verified]). Optional, same step: verify the installer's SHA-384
+  against `composer.github.io/installer.sig` (security, not pin correctness).
+- Test §64 (red first): stub `php` recording the setup args; missing/ignored `--version` reds.
+
+### Step 16 — android SDK (M/L) — DESIGN FORK, needs a ruling
+- Any change to the 14 SDK inputs wipes `ANDROID_HOME`, `ANDROID_SDK_HOME`, `ANDROID_SDK_ROOT` AND
+  `GRADLE_USER_HOME` before a 15+ min multi-GB install (`android-start.sh:168-176`) [Verified: read]. A failed
+  install leaves no SDK (the container stays up in `sleep infinity`, unhealthy with an error token).
+  Two independent axes: (a) stop wiping `GRADLE_USER_HOME` (Gradle's build cache, unrelated to any SDK pin)
+  — cheap; (b) staged install into `${ANDROID_HOME}.new` + verify + swap, so the old SDK stays usable until
+  the new one is proven — costs a second full SDK on disk during the install. The AVDs under
+  `ANDROID_SDK_HOME` are recreated by `setup-dist.sh` every boot, so (b) leaves them to that step rather
+  than staging them [Inferred from §43's `_andd_probe`; to confirm]. Choices: (a) alone / (a)+(b) / leave.
+
+### Step 17 — docs (S)
+CLAUDE.md hand-off (runtimes now delete-after-install; staged go/zig/hurl; the php.edge exception), memory.
+
+### Not in tranche 2 (still open from the audits)
+A3 FRANKENPHP launch skip; A4 caddy plugin pins; A5 nginx/httpd modules; A6 `make rebuild` not pushing;
+A7 SDKMAN installer hardcoding 5.23.0; PARTIAL: fvm unplumbed var, nvm raw-pin (latent), yarn patch,
+groovy/spark depends_on; B `|| echo` / `curl -L` without `-f` in 00base, phpbrew ext exit-0; C RELOAD_*
+escape hatches keeping pkg markers; the `source X && cmd` class.
+
 ## Status
 <!-- progress-block v1 -->
 | # | Step | Size | State | Evidence | Files |
@@ -179,7 +274,7 @@ Live verification on the running stack: bump `PYENV_VERSION` one tag up then bac
 | 7 | rustup-init honours pin both ways, reachable, marker from installed binary | M | done | da33555 | docker/config/dist/bin/rust-bin/**, bin/tests/startup-prologue.test.sh |
 | 8 | Host claude = container-only pin (comment + .env note) + no-ordered-comparison guard | S | done | 90e25db | templates/shell/global-unu.sh, .env, bin/tests/startup-prologue.test.sh, docker/config/dist/bin/rust-bin/** |
 | 9 | Docs: CLAUDE.md manager-reinstall claim (hand-off) | S | done | 81c3dcc | CLAUDE.md, bin/tests/startup-prologue.test.sh |
-| 10 | Tranche 2: plan the delete-before-install sites (nvm/phpbrew/sdkman/fvm/android/rbenv-plugins), composer bootstrap, env-update downgrade policy | M | todo | - | - |
+| 10 | Tranche 2: plan the delete-before-install sites (nvm/phpbrew/sdkman/fvm/android/rbenv-plugins), composer bootstrap, env-update downgrade policy | M | doing | - | docs/plans/** |
 <!-- /progress-block -->
 ### Blocked
 ### Needs input
