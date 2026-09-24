@@ -121,7 +121,7 @@ mkdir -p "${COMPOSER_HOME}" "${COMPOSER_HOME}/bin" "${COMPOSER_SOURCE}" "${SYMFO
 # decision stays with the existing content-compare below (behavior unchanged);
 # `|| true` satisfies the set -eE ERR-trap invariant for a discard-decision call.
 gs_version_gate "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew" "${GLOBAL_STACK_PHPBREW_VERSION}" "phpbrew" >/dev/null || true
-# install-tools.sh runs on EVERY install-mode boot: each of its 12 tools carries
+# install-tools.sh runs on EVERY install-mode boot: each of its 11 tools carries
 # its own equality gate (skip is network-free), so a composer/castor/mago/… pin
 # bumped alone — up or down — reaches its gate. It used to sit inside the
 # phpbrew-version check below and was never reached on a tool-only bump

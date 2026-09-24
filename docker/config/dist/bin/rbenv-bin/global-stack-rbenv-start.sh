@@ -56,20 +56,23 @@ if [[ "${RBENV_MODE}" = "setup" ]]; then
   # find-latest short-circuits to the pin when the version dir already exists.
   # Consequence worth knowing: a partial pin now re-resolves every boot, so an
   # rbenv upgrade shipping newer definitions triggers a real reinstall-with-WARN
-  # — which is the point of the gate. set -eE safe (find-latest falls back to
-  # the raw pin; the gate returns 0, WARN on stderr).
+  # — which is the point of the gate. An unresolvable pin is FATAL here, by design:
+  # find-latest exits 1 with no output, so this assignment trips set -eE and the
+  # prologue writes the error token before anything is touched (§57). The gate
+  # itself returns 0, WARN on stderr.
   _ruby_label="${RUBY_VERSION_AS:-${RUBY_VERSION:-}}"
   _ruby_marker="${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/ruby.${_ruby_label}"
   _ruby_resolved="$(global-stack-rbenv-find-latest.sh "${RUBY_VERSION:-}")"
   _ruby_gate="$(gs_version_gate "${_ruby_marker}" "${_ruby_resolved}" "ruby.${_ruby_label}")"
+  # Decide here, delete nothing. On a reinstall the old interpreter, its pkg.* markers
+  # and the version marker all stay until the NEW one has installed — the cleanup sits
+  # right after the install below — so a failed install (unknown definition, network,
+  # compile error) leaves the working version in place, in either direction (pin-audit
+  # A1, startup-prologue.test.sh §57). The install triggers below fire on
+  # "${_ruby_gate}" == "reinstall" because the marker is no longer removed up front.
+  _ruby_old=""
   if [[ "${_ruby_gate}" == "reinstall" ]]; then
     _ruby_old="$(cat "${_ruby_marker}" 2>/dev/null || true)"
-    if [[ -n "${_ruby_old}" && "${_ruby_old}" != "${_ruby_resolved}" ]]; then
-      printf '\nCleaning old ruby version dir %s\n' "${_ruby_old}"
-      rm -rf "${RBENV_ROOT}/versions/${_ruby_old}"
-    fi
-    rm -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/ruby.${_ruby_label}.pkg."* || true
-    rm -f "${_ruby_marker}"
   fi
 
   if [[ "true" = "${GLOBAL_STACK_USE_LOCKS}" ]]; then
@@ -85,17 +88,18 @@ printf '\n******** Starting rbenv %s %s ********\n' "${RBENV_MODE}" "${RUBY_VERS
 mkdir -p "${RBENV_ROOT}"
 
 if [[ "${RBENV_MODE}" = "install" ]]; then
-  # ckpt4: version-drift WARN only (single source: gs_version_gate). Reinstall
-  # decision stays with the existing content-compare below (behavior unchanged).
+  # ckpt4: version-drift WARN only (single source: gs_version_gate). The
+  # install-tools + marker decision stays with the content-compare further below.
   # Expected uses the same `#v` strip the compare uses (marker stores `rbenv
   # --version` == pin without the leading v — loop-proof). One probe for both
   # guarded blocks so the WARN fires exactly once. `|| true` per ERR-trap invariant.
   gs_version_gate "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/rbenv" "${GLOBAL_STACK_RBENV_VERSION#v}" "rbenv" >/dev/null || true
-  if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/rbenv" ]] || \
-     [[ "$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/rbenv" 2>/dev/null)" != "${GLOBAL_STACK_RBENV_VERSION#v}" ]] || \
-     [[ "true" = "${GLOBAL_STACK_RELOAD_RBENV}" ]]; then
-    global-stack-rbenv-iou.sh
-  fi
+  # iou runs on EVERY install-mode boot: it is itself idempotent (network only when the
+  # checkout is not at the pin's tag) and it carries the gates this marker check used
+  # to hide — the checkout move in either direction, and the ruby-build/gemset plugin gates
+  # (pin-audit A1, startup-prologue.test.sh §56). The marker check below still decides
+  # whether install-tools runs and the marker is rewritten from `rbenv --version`.
+  global-stack-rbenv-iou.sh
 fi
 
 if [[ "${RBENV_MODE}" = "install" ]]; then
@@ -137,16 +141,34 @@ if [[ "${RBENV_MODE}" = "setup" ]]; then
   # would silently reinstate the raw-vs-resolved mismatch this fix removed.
   export RBENV_VERSION="${_ruby_resolved}"
 
-  if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/ruby.${RUBY_VERSION_AS:-${RUBY_VERSION:-}}" || "true" = "${GLOBAL_STACK_RELOAD_RUBY}" ]]; then
+  if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/ruby.${RUBY_VERSION_AS:-${RUBY_VERSION:-}}" || "true" = "${GLOBAL_STACK_RELOAD_RUBY}" || "${_ruby_gate}" == "reinstall" ]]; then
     source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/rbenv.shellrc" && rbenv install --verbose --skip-existing --keep "${RBENV_VERSION}"
     source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/rbenv.shellrc" && eval "$(rbenv init - --no-rehash ${GLOBAL_STACK_SHELL})" && global-stack-rbenv-ruby${RUBY_VERSION_AS}-setup-version.sh
+    # The new ruby is installed (set -e: a failed install never reaches this line), so
+    # only NOW drop the old version dir and every pkg.* marker — the package loop
+    # below then repopulates packages on the new interpreter, and the marker is
+    # rewritten after it. §57 pins this order.
+    if [[ "${_ruby_gate}" == "reinstall" ]]; then
+      # `source <shellrc> && <install>` does NOT trip set -e when `source` fails (only
+      # the final member of an && list does), so prove the new version is on disk
+      # before dropping the old one. The prologue's EXIT trap writes the error token.
+      if [[ ! -d "${RBENV_ROOT}/versions/${_ruby_resolved}" ]]; then
+        printf 'FATAL: ruby %s is not installed after the install step; keeping %s\n' "${_ruby_resolved}" "${_ruby_old}" >&2
+        exit 1
+      fi
+      if [[ -n "${_ruby_old}" && "${_ruby_old}" != "${_ruby_resolved}" ]]; then
+        printf '\nCleaning old ruby version dir %s\n' "${_ruby_old}"
+        rm -rf "${RBENV_ROOT}/versions/${_ruby_old}"
+      fi
+      rm -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/ruby.${_ruby_label}.pkg."* || true
+    fi
   fi
 
   # Package loop runs EVERY boot (ruby installed above / already present, rbenv
   # activated here, RBENV_VERSION resolved at :121), gated per-package by slot
   # markers, so a package-only bump is detected even when the ruby runtime marker
-  # is unchanged; unchanged gems skip cheaply. On a runtime bump the checkpoint-2
-  # gate wiped ruby.<AS>.pkg.*, repopulating gems on the fresh interpreter. gems
+  # is unchanged; unchanged gems skip cheaply. On a runtime bump the post-install
+  # cleanup above wiped ruby.<AS>.pkg.*, repopulating gems on the fresh interpreter. gems
   # accumulate, so --cleanup-command uninstalls the OLD version on a bump.
   # (setup-version.sh is a no-op, so relocating this past it is safe.)
   source /usr/local/bin/global-stack-base-setup-packages.sh
@@ -173,7 +195,7 @@ if [[ "${RBENV_MODE}" = "setup" ]]; then
     --command='echo -e "**** Installing/Updating ${PACKAGE_NAME} ${PACKAGE_VERSION} ${PACKAGE_COMMAND_SUFFIX}"' \
     --command='gem --backtrace install ${PACKAGE_NAME}:${PACKAGE_VERSION} ${PACKAGE_COMMAND_SUFFIX}'
 
-  if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/ruby.${RUBY_VERSION_AS:-${RUBY_VERSION:-}}" || "true" = "${GLOBAL_STACK_RELOAD_RUBY}" ]]; then
+  if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/ruby.${RUBY_VERSION_AS:-${RUBY_VERSION:-}}" || "true" = "${GLOBAL_STACK_RELOAD_RUBY}" || "${_ruby_gate}" == "reinstall" ]]; then
     source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/rbenv.shellrc" && eval "$(rbenv init - --no-rehash ${GLOBAL_STACK_SHELL})" && rbenv shell && rbenv local "${RBENV_VERSION}" && global-stack-rbenv-ruby${RUBY_VERSION_AS}-setup-version.sh
   fi
 

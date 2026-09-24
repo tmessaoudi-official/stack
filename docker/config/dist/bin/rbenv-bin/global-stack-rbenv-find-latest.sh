@@ -10,8 +10,16 @@ if [ -n "${1}" ]; then
   fi
 fi
 
+# No match is a hard error, not a fallback. This used to echo the raw pin, so a pin
+# newer than this ruby-build's definitions reached the gate as a "new version" and the
+# start script deleted the working ruby before `rbenv install` failed on it (pin-audit
+# A1, startup-prologue.test.sh §57). Exiting non-zero with nothing on stdout fails the
+# caller's assignment under set -eE: the prologue writes the error token and the
+# installed ruby is left alone. Remedy: bump GLOBAL_STACK_RBENV_RUBY_BUILD_VERSION.
 if [[ "" = "${RBENV_CURRENT_RUBY_VERSION}" ]]; then
-  RBENV_CURRENT_RUBY_VERSION="${RUBY_VERSION}"
+  printf 'FATAL: no installed ruby and no ruby-build definition matches "%s" - bump GLOBAL_STACK_RBENV_RUBY_BUILD_VERSION or fix the pin\n' \
+    "${1:-}" >&2
+  exit 1
 fi
 
 echo "${RBENV_CURRENT_RUBY_VERSION}"

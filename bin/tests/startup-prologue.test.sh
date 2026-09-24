@@ -1571,8 +1571,10 @@ _gate_decision() {
   chmod +x "${stub_dir}/global-stack-${rt}-find-latest.sh"
   {
     printf '#!/bin/bash\nset -eE -o pipefail\nsource global-stack-base-prologue.sh\n'
-    sed -n "/^  ${var}_label=/,/^    rm -f \"\${${var}_marker}\"\$/p" "${src}"
-    printf '  fi\n'
+    # Ends at the gate's own closing `  fi` (2-space indent: the first one after the
+    # label line). It used to end on the in-block `rm -f "${marker}"`, which tranche 1
+    # step 6 moved to after the install — see §57.
+    sed -n "/^  ${var}_label=/,/^  fi\$/p" "${src}"
     printf 'printf "DECISION=%%s\\n" "${%s_gate}"\n' "${var}"
   } >"${h}"
   # The gate labels the marker with the _AS value, so the file is python.3 / ruby.3.
@@ -4035,6 +4037,224 @@ assert_fail "55c: phpbrew current -> iou.sh is NOT run (the phpbrew pin is locke
   bash -c 'grep -q iou <<<"$1"' _ "$(_p55_run 2.2.0 2.2.0)"
 assert_output_contains "55d: phpbrew mismatch -> install-tools.sh runs BEFORE iou.sh (iou needs composer)" \
   '^global-stack-phpbrew-install-tools global-stack-phpbrew-iou $' _p55_run 9.9.9 2.2.0
+
+# ─── Section 56: pyenv/rbenv follow their pin both ways (tranche 1 step 6) ──
+# pin-audit A1. `*-iou.sh` cloned only when `${ROOT}/.git` was absent, and was itself
+# called only on a manager-marker mismatch — so a PYENV/RBENV bump, up or down, never
+# moved the checkout (the marker then recorded `--version`, i.e. the OLD tag, and the
+# mismatch repeated every boot), and the rbenv plugin gates inside iou (row 21) were
+# unreachable whenever rbenv itself was current. Two halves: reachability (the start
+# script calls iou on EVERY install-mode boot) and behaviour against REAL git (iou
+# moves an existing clone to the pin's tag in either direction, and touches the
+# network only when the checkout is not already at that tag).
+printf '\n%b── Section 56: pyenv/rbenv managers follow their pin both ways (pin-audit A1)%b\n' "${C_BOLD}" "${C_RESET}"
+
+_p56_region() { # $1 = pyenv|rbenv → the shipped install-mode manager block (gate line .. before the closing fi)
+  P56_ANCHOR="gs_version_gate \"\${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/$1\"" awk '
+    index($0, ENVIRON["P56_ANCHOR"]) { f = 1 }
+    f && /^fi$/ { exit }
+    f { print }' "${DIST_BIN}/$1-bin/global-stack-$1-start.sh"
+}
+_p56_run() { # $1 = pyenv|rbenv, $2 = pin, $3 = manager marker → "iou" when iou ran, else "none"
+  local up d
+  up="$(tr '[:lower:]' '[:upper:]' <<<"$1")"
+  d="$(mktemp -d)"
+  mkdir -p "${d}/bin" "${d}/versions"
+  printf '%s\n' "$3" >"${d}/versions/$1"
+  printf '#!/bin/sh\necho iou >>"%s/calls"\n' "${d}" >"${d}/bin/global-stack-$1-iou.sh"
+  chmod +x "${d}/bin/global-stack-$1-iou.sh"
+  env -i PATH="${d}/bin:/usr/bin:/bin" GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS="${d}/versions" \
+    "GLOBAL_STACK_${up}_VERSION=$2" "GLOBAL_STACK_RELOAD_${up}=false" "${up}_MODE=install" \
+    bash -c "set -eE; source '${DIST_BIN}/base-bin/global-stack-base-version-gate.sh'; $(_p56_region "$1")" >/dev/null 2>&1 || true
+  if [[ -f "${d}/calls" ]]; then tr -d '\n' <"${d}/calls"; else echo none; fi
+  rm -rf "${d}"
+}
+for _rt in pyenv rbenv; do
+  assert_pass "56a: ${_rt} extracted install-mode manager block calls ${_rt}-iou.sh (non-vacuity)" \
+    grep -q "global-stack-${_rt}-iou.sh" <<<"$(_p56_region "${_rt}")"
+  assert_pass "56b: ${_rt} marker current (a plugin/tag state to reconcile) -> iou.sh still runs" \
+    test "$(_p56_run "${_rt}" v1.3.0 1.3.0)" = "iou"
+  assert_pass "56c: ${_rt} marker stale -> iou.sh runs" \
+    test "$(_p56_run "${_rt}" v1.3.0 1.2.0)" = "iou"
+done
+
+# ── behaviour: the shipped iou against a real upstream repo ──
+_P56="${TMP_DIR}/p56"
+mkdir -p "${_P56}/errors" "${_P56}/versions"
+(
+  export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
+  g() { git -c user.name=t -c user.email=t@t -c init.defaultBranch=master -c commit.gpgsign=false -c tag.gpgsign=false "$@"; }
+  g init -q "${_P56}/upstream"
+  printf '/versions\n/plugins\n' >"${_P56}/upstream/.gitignore"
+  printf 'one\n' >"${_P56}/upstream/f"
+  g -C "${_P56}/upstream" add -A && g -C "${_P56}/upstream" commit -qm one
+  g -C "${_P56}/upstream" tag -a v1.0.0 -m v1.0.0
+  printf 'two\n' >"${_P56}/upstream/f"
+  g -C "${_P56}/upstream" commit -qam two
+  g -C "${_P56}/upstream" tag -a v1.1.0 -m v1.1.0
+) >/dev/null 2>&1
+_P56_C1="$(git -C "${_P56}/upstream" rev-parse 'v1.0.0^{commit}' 2>/dev/null || true)"
+_P56_C2="$(git -C "${_P56}/upstream" rev-parse 'v1.1.0^{commit}' 2>/dev/null || true)"
+assert_pass "56d: upstream fixture has two distinct tagged commits (non-vacuity)" \
+  bash -c '[[ -n "$1" && -n "$2" && "$1" != "$2" ]]' _ "${_P56_C1}" "${_P56_C2}"
+
+_p56_clone() { # $1 = dest, $2 = tag to start at; an ignored versions/ tree stands in for installed runtimes
+  rm -rf "$1"
+  GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 git -c advice.detachedHead=false clone -q --branch "$2" "${_P56}/upstream" "$1" >/dev/null 2>&1
+  mkdir -p "$1/versions/3.14.7" "$1/plugins/ruby-build"
+  : >"$1/versions/3.14.7/keep"
+}
+_p56_iou() { # $1 = pyenv|rbenv, $2 = root, $3 = pin → echoes "<rc> <HEAD>"
+  local up rc=0
+  up="$(tr '[:lower:]' '[:upper:]' <<<"$1")"
+  env -i PATH="${DIST_BIN}/base-bin:/usr/bin:/bin" HOME="${_P56}" \
+    GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 \
+    GLOBAL_STACK_ERROR_TOKEN=p56-token GLOBAL_STACK_DOCKER_TOOLS_PATH="${_P56}" \
+    GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS="${_P56}/errors" \
+    GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS="${_P56}/versions" \
+    "${up}_ROOT=$2" "GLOBAL_STACK_${up}_VERSION=$3" \
+    GLOBAL_STACK_RBENV_RUBY_BUILD_VERSION= GLOBAL_STACK_RBENV_GEMSET_VERSION= \
+    bash "${DIST_BIN}/$1-bin/global-stack-$1-iou.sh" >/dev/null 2>&1 || rc=$?
+  printf '%s %s' "${rc}" "$(git -C "$2" rev-parse HEAD 2>/dev/null || echo none)"
+}
+for _rt in pyenv rbenv; do
+  _r="${_P56}/${_rt}-root"
+  _p56_clone "${_r}" v1.0.0
+  assert_pass "56e: ${_rt} existing clone at v1.0.0, pin bumped to v1.1.0 -> checkout moves UP" \
+    test "$(_p56_iou "${_rt}" "${_r}" v1.1.0)" = "0 ${_P56_C2}"
+  assert_pass "56f: ${_rt} ignored versions/ tree survives the move (installed runtimes kept)" \
+    test -f "${_r}/versions/3.14.7/keep"
+  _p56_clone "${_r}" v1.1.0
+  assert_pass "56g: ${_rt} existing clone at v1.1.0, pin moved back to v1.0.0 -> checkout moves DOWN" \
+    test "$(_p56_iou "${_rt}" "${_r}" v1.0.0)" = "0 ${_P56_C1}"
+  _p56_clone "${_r}" v1.1.0
+  git -C "${_r}" remote set-url origin "${_P56}/no-such-remote"
+  assert_pass "56h: ${_rt} checkout already at the pin -> no fetch (origin unreachable, still rc 0)" \
+    test "$(_p56_iou "${_rt}" "${_r}" v1.1.0)" = "0 ${_P56_C2}"
+  _p56_clone "${_r}" v1.0.0
+  _o="$(_p56_iou "${_rt}" "${_r}" v9.9.9)"
+  assert_pass "56i: ${_rt} pin with no such tag upstream -> fails loud, checkout left at v1.0.0" \
+    bash -c '[[ "${1%% *}" != 0 && "${1#* }" == "$2" ]]' _ "${_o}" "${_P56_C1}"
+done
+
+# ─── Section 57: resolver fails fast; nothing deleted until the new install succeeds ──
+# pin-audit A1, second half. find-latest fell back to the RAW pin when the manager knew
+# no matching definition, and the gate then deleted the working interpreter, every pkg
+# marker and the version marker BEFORE `pyenv install` / `rbenv install` ran — so a pin
+# the manager could not build left the runtime gone. The resolver now exits non-zero
+# with no output (the prologue's ERR trap writes the error token, the old runtime is
+# untouched), and the reinstall deletes the old version dir and wipes pkg.* only after
+# the new interpreter installed; the marker is rewritten by the existing write below.
+printf '\n%b── Section 57: resolver fail-fast + delete-after-install (pin-audit A1)%b\n' "${C_BOLD}" "${C_RESET}"
+
+_p57_find() { # $1 = pyenv|rbenv, $2 = pin (no versions/<pin> dir) → echoes "<rc>:<stdout>"
+  local rc=0 out root="${TMP_DIR}/p57-find-root"
+  rm -rf "${root}"
+  mkdir -p "${root}/versions"
+  if [[ "$1" == pyenv ]]; then
+    out="$(env -i PATH="${TMP_DIR}/rb/bin:/usr/bin:/bin" PYENV_ROOT="${root}" PYTHON_VERSION="$2" \
+      GLOBAL_STACK_PYTHON_STABLE=true bash "${_py_find}" "$2" 2>/dev/null)" || rc=$?
+  else
+    out="$(env -i PATH="${TMP_DIR}/rb/bin:/usr/bin:/bin" RBENV_ROOT="${root}" RUBY_VERSION="$2" \
+      bash "${_rb_find}" "$2" 2>/dev/null)" || rc=$?
+  fi
+  printf '%s:%s' "${rc}" "${out}"
+}
+# §20's stubs list 3.14.5-3.14.7 (pyenv) and 3.4.8-3.4.10 (rbenv); these pins match none.
+assert_pass "57a: pyenv resolver, pin unknown to the definitions -> non-zero exit, no output" \
+  bash -c '[[ "${1%%:*}" != 0 && -z "${1#*:}" ]]' _ "$(_p57_find pyenv 3.15)"
+assert_pass "57b: rbenv resolver, pin unknown to the definitions -> non-zero exit, no output" \
+  bash -c '[[ "${1%%:*}" != 0 && -z "${1#*:}" ]]' _ "$(_p57_find rbenv 3.5)"
+
+# The gate block alone, on a real reinstall decision (marker 3.14.7 → resolved 3.14.8):
+# it must DECIDE, not delete.
+_p57_gate() { # $1 = pyenv|rbenv → "dir=<0|1> pkg=<0|1> marker=<content>" after the gate block ran
+  local rt="$1" var root src d
+  if [[ "${rt}" == pyenv ]]; then var=_python root=PYENV_ROOT; else var=_ruby root=RBENV_ROOT; fi
+  src="${DIST_BIN}/${rt}-bin/global-stack-${rt}-start.sh"
+  d="$(mktemp -d)"
+  mkdir -p "${d}/bin" "${d}/versions" "${d}/root/versions/3.14.7"
+  printf '#!/bin/bash\necho 3.14.8\n' >"${d}/bin/global-stack-${rt}-find-latest.sh"
+  chmod +x "${d}/bin/global-stack-${rt}-find-latest.sh"
+  local lbl
+  [[ "${rt}" == pyenv ]] && lbl=python.3 || lbl=ruby.3
+  printf '3.14.7\n' >"${d}/versions/${lbl}"
+  : >"${d}/versions/${lbl}.pkg.1"
+  {
+    printf '#!/bin/bash\nset -eE -o pipefail\nsource global-stack-base-prologue.sh\n'
+    sed -n "/^  ${var}_label=/,/^  fi\$/p" "${src}"
+  } >"${d}/gate.sh"
+  env PATH="${d}/bin:${DIST_BIN}/base-bin:${PATH}" GLOBAL_STACK_ERROR_TOKEN=p57-token \
+    GLOBAL_STACK_DOCKER_TOOLS_PATH="${d}" GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS="${d}" \
+    GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS="${d}/versions" "${root}=${d}/root" \
+    PYTHON_VERSION=3.14.8 PYTHON_VERSION_AS=3 RUBY_VERSION=3.14.8 RUBY_VERSION_AS=3 \
+    bash "${d}/gate.sh" >/dev/null 2>&1 || true
+  printf 'dir=%s pkg=%s marker=%s' \
+    "$([[ -d "${d}/root/versions/3.14.7" ]] && echo 1 || echo 0)" \
+    "$([[ -f "${d}/versions/${lbl}.pkg.1" ]] && echo 1 || echo 0)" \
+    "$(cat "${d}/versions/${lbl}" 2>/dev/null || echo none)"
+  rm -rf "${d}"
+}
+for _rt in pyenv rbenv; do
+  assert_pass "57c: ${_rt} gate on a reinstall decision leaves old dir, pkg markers and marker in place" \
+    test "$(_p57_gate "${_rt}")" = "dir=1 pkg=1 marker=3.14.7"
+done
+
+# The post-install cleanup: extracted by its own `if` (4-space indent, inside the install branch).
+_p57_cleanup_block() { # $1 = pyenv|rbenv
+  local var
+  [[ "$1" == pyenv ]] && var=_python || var=_ruby
+  sed -n "/^    if \[\[ \"\\\${${var}_gate}\" == \"reinstall\" \]\]; then\$/,/^    fi\$/p" \
+    "${DIST_BIN}/$1-bin/global-stack-$1-start.sh"
+}
+_p57_cleanup() { # $1 = pyenv|rbenv, $2 = "installed" | "absent" (the new version dir) → "rc=<0|1> old=<0|1> new=<0|1> pkg=<0|1>"
+  local rt="$1" var root lbl d rc=0
+  if [[ "${rt}" == pyenv ]]; then var=_python root=PYENV_ROOT lbl=python.3; else var=_ruby root=RBENV_ROOT lbl=ruby.3; fi
+  d="$(mktemp -d)"
+  mkdir -p "${d}/versions" "${d}/root/versions/3.14.7"
+  [[ "$2" == installed ]] && mkdir -p "${d}/root/versions/3.14.8"
+  : >"${d}/versions/${lbl}.pkg.1"
+  { printf '#!/bin/bash\nset -eE -o pipefail\n'; _p57_cleanup_block "${rt}"; } >"${d}/c.sh"
+  env -i PATH="/usr/bin:/bin" GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS="${d}/versions" "${root}=${d}/root" \
+    "${var}_gate=reinstall" "${var}_old=3.14.7" "${var}_resolved=3.14.8" "${var}_label=3" \
+    bash "${d}/c.sh" >/dev/null 2>&1 || rc=1
+  printf 'rc=%s old=%s new=%s pkg=%s' "${rc}" \
+    "$([[ -d "${d}/root/versions/3.14.7" ]] && echo 1 || echo 0)" \
+    "$([[ -d "${d}/root/versions/3.14.8" ]] && echo 1 || echo 0)" \
+    "$([[ -f "${d}/versions/${lbl}.pkg.1" ]] && echo 1 || echo 0)"
+  rm -rf "${d}"
+}
+for _rt in pyenv rbenv; do
+  if [[ "${_rt}" == pyenv ]]; then
+    _inst='global-stack-pyenv-python${PYTHON_VERSION_AS}-install-version.sh'
+  else
+    _inst='rbenv install --verbose --skip-existing --keep'
+  fi
+  _src="${DIST_BIN}/${_rt}-bin/global-stack-${_rt}-start.sh"
+  assert_pass "57d: ${_rt} post-install cleanup block exists (non-vacuity)" \
+    grep -q 'rm -rf' <<<"$(_p57_cleanup_block "${_rt}")"
+  assert_pass "57e: ${_rt} cleanup after a successful install drops the OLD dir and pkg markers, keeps the new" \
+    test "$(_p57_cleanup "${_rt}" installed)" = "rc=0 old=0 new=1 pkg=0"
+  # `source <shellrc> && <install>`: set -e does not fire on a failing NON-final member
+  # of an && list, so a failed `source` skips the install and falls through. The
+  # cleanup must refuse to drop the old version when the new one is not on disk.
+  assert_pass "57h: ${_rt} new version dir absent at cleanup -> non-zero, old dir and pkg markers kept" \
+    test "$(_p57_cleanup "${_rt}" absent)" = "rc=1 old=1 new=0 pkg=1"
+  # Order is the guarantee: under set -e a failed install aborts before the cleanup line.
+  _l_inst="$(grep -nF "${_inst}" "${_src}" | head -n1 | cut -d: -f1 || true)"
+  _l_clean="$(grep -nE "^    if \[\[ \"\\\$\{_(python|ruby)_gate\}\" == \"reinstall\" \]\]; then\$" "${_src}" | head -n1 | cut -d: -f1 || true)"
+  # `|| true` on the three lookups: a line that is not there must red 57f, not abort
+  # the run under set -euo pipefail (a missing tally line reads as "not caught").
+  _l_pkgs="$(grep -nF 'source /usr/local/bin/global-stack-base-setup-packages.sh' "${_src}" | head -n1 | cut -d: -f1 || true)"
+  assert_pass "57f: ${_rt} order is install < cleanup < package loop" \
+    bash -c '[[ -n "$1" && -n "$2" && -n "$3" ]] && (( $1 < $2 && $2 < $3 ))' _ "${_l_inst}" "${_l_clean}" "${_l_pkgs}"
+  # Every runtime-marker-absent trigger in setup mode must also fire on a reinstall
+  # decision, because the marker is no longer deleted up front.
+  _n_trig="$(grep -cE '^  if \[\[ ! -f "\$\{GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS\}/(python|ruby)\.' "${_src}" || true)"
+  _n_miss="$(grep -E '^  if \[\[ ! -f "\$\{GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS\}/(python|ruby)\.' "${_src}" | grep -vc '_gate}" == "reinstall"' || true)"
+  assert_pass "57g: ${_rt} every setup-mode install trigger also fires on reinstall (${_n_trig} found, >= 2)" \
+    bash -c '(( $1 >= 2 && $2 == 0 ))' _ "${_n_trig}" "${_n_miss}"
+done
 
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'

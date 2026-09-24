@@ -71,6 +71,21 @@ is tested in BOTH directions.
   gate) and §29 (rbenv plugin gates) must still match AND extract non-empty after the edit.
 - Certification by execution during implementation: tmp `PYENV_ROOT` really cloned at v2.8.5, shipped iou
   run with pin v2.8.6 then back to v2.8.5 → `pyenv --version` follows both ways (network; tmp dir only).
+- AS BUILT (2026-09-24): three deviations, each for a measured reason.
+  (1) 6a decides by commit, not `--version`: `rev-parse -q --verify refs/tags/<pin>^{commit}` vs `HEAD` — local,
+  exact, direction-free; fetch only when they differ or the tag is unknown locally.
+  (2) §56 uses a REAL local upstream repo (two annotated tags), not a `git` stub — a stub would model the
+  script's belief about git. The iou gets a real `.git`, and 56h points `origin` at a nonexistent path to prove
+  the steady state does not fetch.
+  (3) 6d's cleanup also refuses (`exit 1`, EXIT trap writes the token) when `versions/<resolved>` is absent:
+  `source <shellrc> && <install>` does not trip `set -e` when `source` fails (non-final `&&` member), so
+  install success is PROVEN on disk, not inferred from reaching the line (§57h, red first).
+  §22's extraction now ends on the gate's own `  fi` (its old anchor, the in-block `rm -f marker`, moved).
+  Certified by execution against github.com (scratch dirs only): pyenv v2.8.5→v2.8.6→v2.8.5 and rbenv
+  v1.3.1→v1.3.2→v1.3.1 through the shipped iou; `--version` equals the pin each time; ignored `versions/` +
+  `plugins/` survive (`git status` clean with both present); pin current with origin unreachable → rc 0, no fetch.
+  NOT certified by execution: a real python/ruby compile on reinstall (the install + cleanup order is
+  asserted statically and the cleanup behaviourally, never with a real `pyenv install`).
 
 ### Step 7 — rustup-init (M) · `rust-bin/global-stack-rust-iou.sh`, `global-stack-rust-start.sh:42-46`
 - 7a delete the `sed` (`:25`, verified no-op); run the installer with `RUSTUP_VERSION` exported to the pin
@@ -125,8 +140,8 @@ Live verification on the running stack: bump `PYENV_VERSION` one tag up then bac
 | 2 | Per-pin reinstall-on-bump trace + gate probes | L | done | - | docker/config/dist/bin/** |
 | 3 | Findings report, graded per var | M | done | - | var/claude/** |
 | 4 | Pass 2: every non-apt install site honours its pin; anything unpinned; host surface | L | done | - | var/claude/** |
-| 5 | A2 phpbrew tools reachable every boot (11/12 pins) | S | doing | - | docker/config/dist/bin/phpbrew-bin/**, bin/tests/startup-prologue.test.sh |
-| 6 | A1 pyenv/rbenv upgrade+downgrade, plugin reachability, fail-fast + delete-after-install | M | todo | - | docker/config/dist/bin/pyenv-bin/**, docker/config/dist/bin/rbenv-bin/** |
+| 5 | A2 phpbrew tools reachable every boot (11/12 pins) | S | done | 0f96073 | docker/config/dist/bin/phpbrew-bin/**, bin/tests/startup-prologue.test.sh |
+| 6 | A1 pyenv/rbenv upgrade+downgrade, plugin reachability, fail-fast + delete-after-install | M | doing | - | docker/config/dist/bin/pyenv-bin/**, docker/config/dist/bin/rbenv-bin/**, bin/tests/startup-prologue.test.sh |
 | 7 | rustup-init honours pin both ways, reachable, marker from installed binary | M | todo | - | docker/config/dist/bin/rust-bin/** |
 | 8 | Host claude = container-only pin (comment + .env note) + no-ordered-comparison guard | S | todo | - | templates/shell/global-unu.sh, .env, bin/tests/startup-prologue.test.sh |
 | 9 | Docs: manager-reinstall claim + row-21 comment | S | todo | - | CLAUDE.md, docker/config/dist/bin/rbenv-bin/** |
@@ -146,6 +161,10 @@ Live verification on the running stack: bump `PYENV_VERSION` one tag up then bac
   PROPOSE them is a separate policy call.
 ### Needs research
 ### Fragile
+- [2026-09-24 22:13] startup-prologue.test.sh 43q (android verify probe) went red ONCE in a full run —
+  `1| ndk-bundle|none` — then green in the immediate rerun (672/672) and 20/20 in an isolated loop of the
+  shipped `_andv_probe`. Not caused by tranche 1: no android file touched, §43 runs before §55-§57. No OOM in the
+  kernel log; load average ~22-24 at the time. Cause UNKNOWN — watch for a repeat before calling it a flake.
 ### Known issues
 Full report (gitignored): `var/claude/pin-audit/REPORT.md`; per-pin file:line evidence in `var/claude/pin-audit/raw/G*.md`.
 Result at HEAD 7b45087 — 254 pins: 168 clean (125 runtime-gated, 39 via `make down-n-rebuild*`, 4 via pull),
@@ -180,6 +199,9 @@ Result at HEAD 7b45087 — 254 pins: 168 clean (125 runtime-gated, 39 via `make 
   `phpbrew-start.sh:62`, `sdkman-start.sh:78`, `fvm-start.sh:28,43`, `android-start.sh:169`; slot-package
   DOWNGRADES (`--cleanup-command` for sdkman `sdk uninstall` / gem uninstall) are decision-bidirectional via
   `gs_version_gate` but the install side was never tested downward in either pass (e.g. `sdk uninstall` of the
-  current default may refuse).
+  current default may refuse). Also: `phpbrew-install-tools.sh:24-25` bootstraps composer with
+  `composer-setup.php` and NO `--version` → `${COMPOSER_HOME}/bin/composer` floats to latest (it builds the
+  pinned clone at `:30` and runs `phpbrew-iou.sh:24`; live 2.10.3 equals the pin only by coincidence;
+  no installer checksum) — recorded in `pass2/raw/B_piped.md:24` but missing from pass-2 REPORT.md.
 - D doc claims refuted: CLAUDE.md android launcher "yields 1.0.15985488"; CLAUDE.md frankenphp gotcha, RELOAD "full unconditional reinstall", "manager-only
   reinstall"; `rbenv-iou.sh:15-19` comment; MASTER.plan.md:1487 MCP "dead"; `.env:277` MODSECURITY_LIB note.
