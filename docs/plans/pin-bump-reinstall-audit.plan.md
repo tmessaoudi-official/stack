@@ -13,10 +13,13 @@ version and its usage ! no implementation yet !"* — AUDIT ONLY; nothing below 
 - [2026-09-24 12:40] AGREED: second pass (audit only) = every NON-apt install site in the repo — discover anything unpinned (hardcoded / floating) AND prove each .env-pinned installer actually installs the pinned version; apt installs of any kind are out of scope.
 - [2026-09-24 12:55] AGREED: pass-2 certification tier for 3C and 6C = advisor() only.
 - [2026-09-24 14:35] AGREED (developer, verbatim intent: "versions could be bumped or move back … that should be the logic everywhere"): every reinstall path must install EXACTLY the pinned version in BOTH directions (upgrade and downgrade) — marker != pin ⇒ install pin, never an upgrade-only comparison; applies to every var, and any fix or verdict that assumed upgrade-only must be reconsidered.
+- [2026-09-24 15:05] AGREED: tranche-1 Formal Plan steps 5–9 approved (code + temp-dir tests; live bumps still asked separately).
+- [2026-09-24 15:05] AGREED: host Claude Code keeps auto-update → `GLOBAL_STACK_CLAUDE_CODE_VERSION` is a CONTAINER-only pin; step 8 becomes: document that, keep the host gate upgrade-only as the single named exemption of the no-ordered-comparison guard.
+- [2026-09-24 15:05] AGREED (developer: "if we need to reinstall it needs to be clean with a wipe ! no dirty reinstall !"): a reinstall must never overlay a new version on the old tree — go/zig/hurl (tranche 2) get wipe-then-install.
 - [2026-09-24 14:10] AGREED: next = a fix PLAN (no code until approved) for pass-1 A1 (pyenv/rbenv managers + ruby-build/gemset reachability), pass-1 A2 (phpbrew tools + phpbrew), and rustup-init (pin-ignored sed + unreachable gate).
 
 ## Formal Plan
-<!-- written at Phase 4 — tranche 1, PROPOSED 2026-09-24, NOT yet approved -->
+<!-- written at Phase 4 — tranche 1, APPROVED 2026-09-24 15:05 (steps 5-9; step 8 revised) -->
 
 ### Invariant (ruling 14:35) — target, and what this tranche delivers
 Target, everywhere: `marker != pin` ⇒ install EXACTLY the pin, up or down; a failed install never deletes
@@ -88,7 +91,10 @@ is tested in BOTH directions.
 - Certification by execution during implementation: tmp `CARGO_HOME`/`RUSTUP_HOME`, real installer, install
   1.29.1 → re-run with 1.28.2 → `rustup --version` = 1.28.2 → back to 1.29.1 (network; tmp dirs only).
 
-### Step 8 — host claude gate (S) — per ruling 14:35
+### Step 8 — host claude: container-only pin (S) — REVISED by ruling 15:05 (keep auto-update)
+- Keep the host gate upgrade-only; comment it and `.env`'s annotation as "container pin; host follows
+  Claude Code auto-update". The no-ordered-comparison guard exempts exactly this one site by name.
+- (original text below, superseded)
 - Repo-wide grep: exactly ONE ordered (upgrade-only) comparison exists in any install path — host claude,
   `templates/shell/global-unu.sh:503-517` (`_gs_semver_lt`). Change it to `!=` (install the pin either way).
   Every other gate is equality-based (`gs_version_gate`, `!=`) → already bidirectional [Verified: grep].
@@ -119,10 +125,10 @@ Live verification on the running stack: bump `PYENV_VERSION` one tag up then bac
 | 2 | Per-pin reinstall-on-bump trace + gate probes | L | done | - | docker/config/dist/bin/** |
 | 3 | Findings report, graded per var | M | done | - | var/claude/** |
 | 4 | Pass 2: every non-apt install site honours its pin; anything unpinned; host surface | L | done | - | var/claude/** |
-| 5 | A2 phpbrew tools reachable every boot (11/12 pins) | S | todo | - | docker/config/dist/bin/phpbrew-bin/** |
+| 5 | A2 phpbrew tools reachable every boot (11/12 pins) | S | doing | - | docker/config/dist/bin/phpbrew-bin/**, bin/tests/startup-prologue.test.sh |
 | 6 | A1 pyenv/rbenv upgrade+downgrade, plugin reachability, fail-fast + delete-after-install | M | todo | - | docker/config/dist/bin/pyenv-bin/**, docker/config/dist/bin/rbenv-bin/** |
 | 7 | rustup-init honours pin both ways, reachable, marker from installed binary | M | todo | - | docker/config/dist/bin/rust-bin/** |
-| 8 | Both-directions sweep: host claude gate, go/zig/hurl wipe-before-extract | S | todo | - | templates/shell/global-unu.sh, docker/config/dist/bin/base-bin/** |
+| 8 | Host claude = container-only pin (comment + .env note) + no-ordered-comparison guard | S | todo | - | templates/shell/global-unu.sh, .env, bin/tests/startup-prologue.test.sh |
 | 9 | Docs: manager-reinstall claim + row-21 comment | S | todo | - | CLAUDE.md, docker/config/dist/bin/rbenv-bin/** |
 <!-- /progress-block -->
 ### Blocked

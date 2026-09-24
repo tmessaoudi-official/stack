@@ -3999,6 +3999,43 @@ assert_output_contains "54e: a licence already on disk -> flutter doctor --andro
 assert_output_contains "54f: no licence on disk (fresh install) -> it still runs" \
   '^called$' _a54_probe without
 
+# ─── Section 55: phpbrew tool pins reach their gates (tranche 1 step 5) ──
+printf '\n%b── Section 55: phpbrew install-tools.sh runs on every install-mode boot (pin-audit A2)%b\n' "${C_BOLD}" "${C_RESET}"
+# install-tools.sh holds 12 correct per-tool gates (composer, laravel, symfony,
+# mago, castor, …) but its only caller sat INSIDE the phpbrew-version check, so a
+# bump of any tool pin alone never reached them. The unit under test is the CALL
+# SITE's reachability, not the tool gates (those are equality-based and skip
+# without network). The region runs from the phpbrew gate line to the setup
+# block, an anchor pair that brackets the call both before and after the fix.
+_P55_START="${DIST_BIN}/phpbrew-bin/global-stack-phpbrew-start.sh"
+_p55_region="$(awk '
+  index($0, "gs_version_gate \"${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew\"") == 1 { f = 1 }
+  f && /^if \[ "\$\{PHPBREW_MODE\}" = "setup" \]; then$/ { exit }
+  f { print }' "${_P55_START}")"
+assert_pass "55a: extracted install-mode region calls both install-tools.sh and iou.sh (non-vacuity)" \
+  bash -c 'grep -q "global-stack-phpbrew-install-tools.sh" <<<"$1" && grep -q "global-stack-phpbrew-iou.sh" <<<"$1"' _ "${_p55_region}"
+_p55_run() { # $1 = phpbrew pin, $2 = phpbrew marker content → echoes the ordered calls
+  local _d
+  _d="$(mktemp -d)"
+  mkdir -p "${_d}/bin" "${_d}/versions"
+  printf '%s\n' "$2" >"${_d}/versions/phpbrew"
+  for _s in global-stack-phpbrew-install-tools.sh global-stack-phpbrew-iou.sh; do
+    printf '#!/bin/sh\necho %s >>"%s/calls"\n' "${_s%.sh}" "${_d}" >"${_d}/bin/${_s}"
+    chmod +x "${_d}/bin/${_s}"
+  done
+  env -i PATH="${_d}/bin:/usr/bin:/bin" GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS="${_d}/versions" \
+    GLOBAL_STACK_PHPBREW_VERSION="$1" GLOBAL_STACK_RELOAD_PHPBREW=false PHPBREW_MODE=install \
+    bash -c "set -eE; source '${DIST_BIN}/base-bin/global-stack-base-version-gate.sh'; $(printf '%s' "${_p55_region}")" >/dev/null 2>&1 || true
+  if [[ -f "${_d}/calls" ]]; then tr '\n' ' ' <"${_d}/calls"; else echo none; fi
+  rm -rf "${_d}"
+}
+assert_output_contains "55b: phpbrew current (a tool pin bumped alone) -> install-tools.sh still runs" \
+  'global-stack-phpbrew-install-tools' _p55_run 2.2.0 2.2.0
+assert_fail "55c: phpbrew current -> iou.sh is NOT run (the phpbrew pin is locked to 2.2.0 by design)" \
+  bash -c 'grep -q iou <<<"$1"' _ "$(_p55_run 2.2.0 2.2.0)"
+assert_output_contains "55d: phpbrew mismatch -> install-tools.sh runs BEFORE iou.sh (iou needs composer)" \
+  '^global-stack-phpbrew-install-tools global-stack-phpbrew-iou $' _p55_run 9.9.9 2.2.0
+
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
 if [[ "${FAIL}" -eq 0 ]]; then

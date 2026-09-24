@@ -121,11 +121,19 @@ mkdir -p "${COMPOSER_HOME}" "${COMPOSER_HOME}/bin" "${COMPOSER_SOURCE}" "${SYMFO
 # decision stays with the existing content-compare below (behavior unchanged);
 # `|| true` satisfies the set -eE ERR-trap invariant for a discard-decision call.
 gs_version_gate "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew" "${GLOBAL_STACK_PHPBREW_VERSION}" "phpbrew" >/dev/null || true
+# install-tools.sh runs on EVERY install-mode boot: each of its 12 tools carries
+# its own equality gate (skip is network-free), so a composer/castor/mago/… pin
+# bumped alone — up or down — reaches its gate. It used to sit inside the
+# phpbrew-version check below and was never reached on a tool-only bump
+# (pin-audit A2, startup-prologue.test.sh §55). It stays BEFORE iou.sh, whose
+# `composer update` needs composer.
+if [ "${PHPBREW_MODE}" = "install" ]; then
+  global-stack-phpbrew-install-tools.sh
+fi
 if [ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew" ] || \
    [ "$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew" 2>/dev/null)" != "${GLOBAL_STACK_PHPBREW_VERSION}" ] || \
    [ "${GLOBAL_STACK_RELOAD_PHPBREW}" = "true" ]; then
   if [ "${PHPBREW_MODE}" = "install" ]; then
-    global-stack-phpbrew-install-tools.sh
     global-stack-phpbrew-iou.sh
   fi
 fi
