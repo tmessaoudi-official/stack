@@ -4256,6 +4256,146 @@ for _rt in pyenv rbenv; do
     bash -c '(( $1 >= 2 && $2 == 0 ))' _ "${_n_trig}" "${_n_miss}"
 done
 
+# ─── Section 58: rustup-init honours its pin both ways (tranche 1 step 7) ──
+# pin-audit pass 2. rust-iou.sh sed-patched the downloaded installer's URL to pin
+# rustup-init; at tag 1.29.1 upstream builds that URL from a RUSTUP_VERSION env var
+# over three lines, so the sed matched nothing and rustup floated to latest while
+# the rust-init marker (written BEFORE any install, from the pin) claimed the pin.
+# And the whole script ran only on a RUST mismatch, so a RUSTUP_INIT bump alone was
+# never reached. The stubs below model what was MEASURED against the real installers
+# (2026-09-24, scratch homes): the installer installs rustup at $RUSTUP_VERSION when
+# set (1.28.2 and 1.29.1 scripts both honour it) and at latest otherwise; re-running
+# it replaces rustup in EITHER direction; `rustup toolchain install` with
+# auto-self-update left enabled self-updates rustup to latest (observed 1.28.2 ->
+# 1.29.1: "info: downloading self-update"); the setting persists in settings.toml.
+printf '\n%b── Section 58: rustup-init honours its pin both ways (pin-audit pass 2)%b\n' "${C_BOLD}" "${C_RESET}"
+
+_P58="${TMP_DIR}/p58"
+mkdir -p "${_P58}/tpl"
+cat >"${_P58}/tpl/curl" <<'STUB'
+#!/bin/bash
+echo curl >>"${P58_LOG}"
+while [ $# -gt 0 ]; do
+  if [ "$1" = -o ]; then cp "${P58_TPL}/installer" "$2"; shift; fi
+  shift
+done
+STUB
+cat >"${_P58}/tpl/installer" <<'STUB'
+#!/bin/bash
+echo "installer:${RUSTUP_VERSION:-unset}" >>"${P58_LOG}"
+v=9.9.9
+if [ "${P58_MODE}" = honour ] && [ -n "${RUSTUP_VERSION:-}" ]; then v="${RUSTUP_VERSION}"; fi
+mkdir -p "${CARGO_HOME}/bin" "${RUSTUP_HOME}"
+cp "${P58_TPL}/rustup" "${CARGO_HOME}/bin/rustup"
+chmod +x "${CARGO_HOME}/bin/rustup"
+printf '%s\n' "${v}" >"${CARGO_HOME}/bin/.ver"
+: >"${CARGO_HOME}/env"
+STUB
+cat >"${_P58}/tpl/rustup" <<'STUB'
+#!/bin/bash
+case "$1 $2" in
+  "--version "*) echo "rustup $(cat "${CARGO_HOME}/bin/.ver") (stub 2026-01-01)"; exit 0 ;;
+  "set auto-self-update") echo "$3" >"${RUSTUP_HOME}/auto_self_update"; echo "asu:$3" >>"${P58_LOG}"; exit 0 ;;
+  "toolchain install")
+    echo "toolchain:$3" >>"${P58_LOG}"
+    [ "$(cat "${RUSTUP_HOME}/auto_self_update" 2>/dev/null)" = disable ] || echo 9.9.9 >"${CARGO_HOME}/bin/.ver"
+    exit 0 ;;
+  "default "*) echo "default:$2" >>"${P58_LOG}"; exit 0 ;;
+esac
+echo "rustup:$*" >>"${P58_LOG}"
+STUB
+chmod +x "${_P58}/tpl/"*
+
+# _p58_run <rustup pin> <rust-init marker|""> <installed rustup|""> <rust marker|""> <honour|ignore>
+#   → "rc=<n> rustup=<ver|none> init=<marker|none> rust=<marker|none> calls=<a,b,...>"
+_p58_run() {
+  local d rc=0
+  d="$(mktemp -d)"
+  mkdir -p "${d}/bin" "${d}/tools" "${d}/versions" "${d}/errors" "${d}/cargo" "${d}/rustup"
+  cp "${_P58}/tpl/curl" "${d}/bin/curl"
+  [[ -n "$2" ]] && printf '%s\n' "$2" >"${d}/versions/rust-init"
+  [[ -n "$4" ]] && printf '%s\n' "$4" >"${d}/versions/rust"
+  if [[ -n "$3" ]]; then
+    mkdir -p "${d}/cargo/bin"
+    cp "${_P58}/tpl/rustup" "${d}/cargo/bin/rustup"
+    printf '%s\n' "$3" >"${d}/cargo/bin/.ver"
+  fi
+  : >"${d}/log"
+  env -i PATH="${d}/bin:${d}/tools:${d}/cargo/bin:${DIST_BIN}/base-bin:/usr/bin:/bin" HOME="${d}" \
+    P58_LOG="${d}/log" P58_TPL="${_P58}/tpl" P58_MODE="$5" \
+    CARGO_HOME="${d}/cargo" RUSTUP_HOME="${d}/rustup" \
+    GLOBAL_STACK_ERROR_TOKEN=p58-token GLOBAL_STACK_DOCKER_TOOLS_PATH="${d}" \
+    GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS="${d}/errors" GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN="${d}/tools" \
+    GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS="${d}/versions" \
+    GLOBAL_STACK_RUSTUP_INIT_VERSION="$1" GLOBAL_STACK_RUST_VERSION=1.98.1 \
+    bash "${DIST_BIN}/rust-bin/global-stack-rust-iou.sh" >/dev/null 2>&1 || rc=$?
+  printf 'rc=%s rustup=%s init=%s rust=%s calls=%s' "${rc}" \
+    "$(cat "${d}/cargo/bin/.ver" 2>/dev/null || echo none)" \
+    "$(cat "${d}/versions/rust-init" 2>/dev/null || echo none)" \
+    "$(cat "${d}/versions/rust" 2>/dev/null || echo none)" \
+    "$(paste -sd, "${d}/log")"
+  rm -rf "${d}"
+}
+_p58_field() { # $1 = field name, $2 = _p58_run output
+  local f
+  for f in $2; do [[ "${f%%=*}" == "$1" ]] && { printf '%s' "${f#*=}"; return 0; }; done
+  return 0
+}
+
+assert_fail "58a: rust-iou.sh no longer sed-patches the downloaded installer" \
+  grep -q 'sed -i' "${DIST_BIN}/rust-bin/global-stack-rust-iou.sh"
+
+# RUSTUP_INIT bumped ALONE (rust current, rustup 1.28.2 installed and recorded).
+_o="$(_p58_run 1.29.1 1.28.2 1.28.2 1.98.1 honour)"
+assert_pass "58b: rustup-init pin bumped alone -> installed rustup moves UP to the pin (got: ${_o})" \
+  test "$(_p58_field rustup "${_o}")/$(_p58_field init "${_o}")/$(_p58_field rc "${_o}")" = "1.29.1/1.29.1/0"
+assert_pass "58c: ... and the installer was handed the pin through RUSTUP_VERSION" \
+  grep -q 'installer:1.29.1' <<<"$(_p58_field calls "${_o}")"
+# Rolled back.
+_o="$(_p58_run 1.28.2 1.29.1 1.29.1 1.98.1 honour)"
+assert_pass "58d: rustup-init pin moved back -> installed rustup moves DOWN to the pin (got: ${_o})" \
+  test "$(_p58_field rustup "${_o}")/$(_p58_field init "${_o}")/$(_p58_field rc "${_o}")" = "1.28.2/1.28.2/0"
+# Steady state: no network.
+_o="$(_p58_run 1.29.1 1.29.1 1.29.1 1.98.1 honour)"
+assert_fail "58e: rustup-init current and rustup present -> no download, no installer run (got: ${_o})" \
+  grep -Eq 'curl|installer' <<<"$(_p58_field calls "${_o}")"
+# An installer that ignores the knob (upstream renames it) must fail loud, not record the pin.
+_o="$(_p58_run 1.29.1 1.28.2 1.28.2 1.98.1 ignore)"
+assert_pass "58f: installed rustup != pin after the install -> non-zero and the pin is NOT recorded (got: ${_o})" \
+  bash -c '[[ "$1" != 0 && "$2" != "1.29.1" ]]' _ "$(_p58_field rc "${_o}")" "$(_p58_field init "${_o}")"
+# Fresh install (no markers, no rustup): toolchain installed, and rustup still at the pin
+# afterwards — i.e. auto-self-update was disabled BEFORE the toolchain install.
+_o="$(_p58_run 1.29.1 "" "" "" honour)"
+assert_pass "58g: fresh install -> rustup at the pin, toolchain 1.98.1 installed + default, rust marker written (got: ${_o})" \
+  test "$(_p58_field rustup "${_o}")/$(_p58_field rust "${_o}")/$(_p58_field rc "${_o}")" = "1.29.1/1.98.1/0"
+assert_pass "58h: ... auto-self-update disabled before the toolchain install" \
+  bash -c 'c="$1"; [[ "${c}" == *asu:disable*toolchain:1.98.1* && "${c}" == *default:1.98.1* ]]' _ "$(_p58_field calls "${_o}")"
+
+# Reachability: rust-start.sh calls iou on every boot, not only on a RUST mismatch.
+_p58_region() {
+  awk '
+    index($0, "mkdir -p \"${RUSTUP_HOME}\" \"${CARGO_HOME}\"") == 1 { f = 1; next }
+    f && index($0, "source \"${CARGO_HOME}/env\"") == 1 { exit }
+    f { print }' "${DIST_BIN}/rust-bin/global-stack-rust-start.sh"
+}
+assert_pass "58i: extracted rust-start region calls rust-iou.sh (non-vacuity)" \
+  grep -q 'global-stack-rust-iou.sh' <<<"$(_p58_region)"
+_p58_reach() { # → "iou" when iou ran with the rust marker current
+  local d
+  d="$(mktemp -d)"
+  mkdir -p "${d}/bin" "${d}/versions"
+  printf '1.98.1\n' >"${d}/versions/rust"
+  printf '#!/bin/sh\necho iou >>"%s/calls"\n' "${d}" >"${d}/bin/global-stack-rust-iou.sh"
+  chmod +x "${d}/bin/global-stack-rust-iou.sh"
+  env -i PATH="${d}/bin:/usr/bin:/bin" GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS="${d}/versions" \
+    GLOBAL_STACK_RUST_VERSION=1.98.1 GLOBAL_STACK_RELOAD_RUST=false \
+    bash -c "set -eE; $(_p58_region)" >/dev/null 2>&1 || true
+  if [[ -f "${d}/calls" ]]; then tr -d '\n' <"${d}/calls"; else echo none; fi
+  rm -rf "${d}"
+}
+assert_pass "58j: rust marker current (a rustup-init-only bump) -> rust-iou.sh still runs" \
+  test "$(_p58_reach)" = "iou"
+
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
 if [[ "${FAIL}" -eq 0 ]]; then

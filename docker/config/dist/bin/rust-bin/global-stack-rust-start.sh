@@ -25,9 +25,9 @@ echo "# global-stack-setup-started" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${G
 echo "PATH=${RUSTUP_HOME}/bin:${RUSTUP_HOME}/toolchains/stable-x86_64-unknown-linux-gnu/bin:${CARGO_HOME}/bin:${PATH}" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 echo "export PATH" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"
 
-# ckpt4: version-drift WARN only (single source: gs_version_gate). Reinstall
-# decision stays with the two existing content-compares below (behavior
-# unchanged). One probe here so the WARN fires exactly once across both blocks;
+# ckpt4: version-drift WARN only (single source: gs_version_gate). The wipe
+# decision stays with the content-compare below. One probe here so the WARN
+# fires exactly once;
 # `|| true` satisfies the set -eE ERR-trap invariant for a discard-decision call.
 gs_version_gate "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/rust" "${GLOBAL_STACK_RUST_VERSION}" "rust" >/dev/null || true
 
@@ -39,11 +39,12 @@ fi
 
 mkdir -p "${RUSTUP_HOME}" "${CARGO_HOME}"
 
-if [ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/rust" ] || \
-   [ "$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/rust" 2>/dev/null)" != "${GLOBAL_STACK_RUST_VERSION}" ] || \
-   [ "true" = "${GLOBAL_STACK_RELOAD_RUST}" ]; then
-  global-stack-rust-iou.sh
-fi
+# iou runs on EVERY boot: it carries its own equality gates (rustup-init and the
+# toolchain), is network-free when both are current, and is the only place a
+# GLOBAL_STACK_RUSTUP_INIT_VERSION bump — up or down — can land. Behind the RUST
+# check it was unreachable on a rustup-only bump (pin-audit pass 2, §58). A RUST
+# change or RELOAD still wipes both homes above, so that path stays a clean reinstall.
+global-stack-rust-iou.sh
 
 source "${CARGO_HOME}/env"
 

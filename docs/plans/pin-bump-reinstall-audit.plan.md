@@ -105,6 +105,21 @@ is tested in BOTH directions.
   env/args; rust-init up / down / equal → invoked with `RUSTUP_VERSION=<pin>` / same / not invoked.
 - Certification by execution during implementation: tmp `CARGO_HOME`/`RUSTUP_HOME`, real installer, install
   1.29.1 → re-run with 1.28.2 → `rustup --version` = 1.28.2 → back to 1.29.1 (network; tmp dirs only).
+- AS BUILT (2026-09-24). The 7b assumption was probed BEFORE §58 was written and is now [Verified]: both the
+  1.28.2 and 1.29.1 `rustup-init.sh` honour `RUSTUP_VERSION`; re-running replaces rustup 1.29.1 → 1.28.2 →
+  1.29.1; an installed toolchain (rustc 1.98.1) survives; `settings.toml` (auto-self-update) survives.
+  NEW measured fact that makes 7c load-bearing: with auto-self-update at its default, `rustup toolchain
+  install` self-updated rustup 1.28.2 → 1.29.1 ("info: downloading self-update") — past the pin with no
+  `.env` change. So the disable runs on EVERY boot before any toolchain command (also fixes live installs
+  made before this change, whose setting is still `enable`), and §58's stub rustup models that self-update.
+  Deviations: `--profile default` kept and `--no-modify-path` NOT added (the old call modified the path;
+  unchanged behaviour); the gate is `gs_version_gate` on `rust-init` plus a `-x ${CARGO_HOME}/bin/rustup`
+  floor. A RUST change still wipes both homes first (clean reinstall, per the 14:35 ruling).
+  Certified by execution (scratch homes, real installers, SHIPPED rust-iou.sh, auto-self-update pre-set to
+  `enable` to model a live install): pin 1.29.1 → 1.28.2 → 1.28.2 → 1.29.1 gives rustup 1.29.1 / 1.28.2 /
+  1.28.2 / 1.29.1, marker equal each time, setting `disable`, rustc 1.98.1 kept, the unchanged boot made no
+  download, no error token. NOT certified by execution: a real `rustup toolchain install` of a NEW RUST pin
+  through the shipped script (the toolchain was pre-installed; the path is covered by §58g's stub only).
 
 ### Step 8 — host claude: container-only pin (S) — REVISED by ruling 15:05 (keep auto-update)
 - Keep the host gate upgrade-only; comment it and `.env`'s annotation as "container pin; host follows
@@ -120,8 +135,8 @@ is tested in BOTH directions.
 - go / zig / hurl overlay extract is NOT in this tranche — it carries a design fork (Needs input).
 
 ### Step 9 — docs (S)
-- CLAUDE.md "Managers … reinstall the manager only" and the `rbenv-iou.sh:15-19` row-21 comment. CLAUDE.md
-  is classifier-blocked → handed over as a `! bash /tmp/…sh` script. Other refuted claims stay listed below
+- CLAUDE.md "Managers … reinstall the manager only". (The `rbenv-iou.sh` row-21 comment was corrected in step
+  6, 3af3d55.) CLAUDE.md is classifier-blocked → handed over as a `! bash /tmp/…sh` script. Other refuted claims stay listed below
   as follow-ups (not this tranche).
 
 ### Rollback
@@ -141,10 +156,10 @@ Live verification on the running stack: bump `PYENV_VERSION` one tag up then bac
 | 3 | Findings report, graded per var | M | done | - | var/claude/** |
 | 4 | Pass 2: every non-apt install site honours its pin; anything unpinned; host surface | L | done | - | var/claude/** |
 | 5 | A2 phpbrew tools reachable every boot (11/12 pins) | S | done | 0f96073 | docker/config/dist/bin/phpbrew-bin/**, bin/tests/startup-prologue.test.sh |
-| 6 | A1 pyenv/rbenv upgrade+downgrade, plugin reachability, fail-fast + delete-after-install | M | doing | - | docker/config/dist/bin/pyenv-bin/**, docker/config/dist/bin/rbenv-bin/**, bin/tests/startup-prologue.test.sh |
-| 7 | rustup-init honours pin both ways, reachable, marker from installed binary | M | todo | - | docker/config/dist/bin/rust-bin/** |
+| 6 | A1 pyenv/rbenv upgrade+downgrade, plugin reachability, fail-fast + delete-after-install | M | done | 3af3d55 | docker/config/dist/bin/pyenv-bin/**, docker/config/dist/bin/rbenv-bin/**, bin/tests/startup-prologue.test.sh |
+| 7 | rustup-init honours pin both ways, reachable, marker from installed binary | M | doing | - | docker/config/dist/bin/rust-bin/**, bin/tests/startup-prologue.test.sh |
 | 8 | Host claude = container-only pin (comment + .env note) + no-ordered-comparison guard | S | todo | - | templates/shell/global-unu.sh, .env, bin/tests/startup-prologue.test.sh |
-| 9 | Docs: manager-reinstall claim + row-21 comment | S | todo | - | CLAUDE.md, docker/config/dist/bin/rbenv-bin/** |
+| 9 | Docs: CLAUDE.md manager-reinstall claim (hand-off) | S | todo | - | CLAUDE.md |
 <!-- /progress-block -->
 ### Blocked
 ### Needs input
@@ -165,6 +180,8 @@ Live verification on the running stack: bump `PYENV_VERSION` one tag up then bac
   `1| ndk-bundle|none` — then green in the immediate rerun (672/672) and 20/20 in an isolated loop of the
   shipped `_andv_probe`. Not caused by tranche 1: no android file touched, §43 runs before §55-§57. No OOM in the
   kernel log; load average ~22-24 at the time. Cause UNKNOWN — watch for a repeat before calling it a flake.
+  On a repeat, capture `_andv_probe`'s raw `${out}` (the xtrace of every `android sdk install` the stub got)
+  to a file BEFORE it is parsed — `1| ndk-bundle|none` cannot say whether ndk-bundle ever reached the stub.
 ### Known issues
 Full report (gitignored): `var/claude/pin-audit/REPORT.md`; per-pin file:line evidence in `var/claude/pin-audit/raw/G*.md`.
 Result at HEAD 7b45087 — 254 pins: 168 clean (125 runtime-gated, 39 via `make down-n-rebuild*`, 4 via pull),
@@ -199,7 +216,9 @@ Result at HEAD 7b45087 — 254 pins: 168 clean (125 runtime-gated, 39 via `make 
   `phpbrew-start.sh:62`, `sdkman-start.sh:78`, `fvm-start.sh:28,43`, `android-start.sh:169`; slot-package
   DOWNGRADES (`--cleanup-command` for sdkman `sdk uninstall` / gem uninstall) are decision-bidirectional via
   `gs_version_gate` but the install side was never tested downward in either pass (e.g. `sdk uninstall` of the
-  current default may refuse). Also: `phpbrew-install-tools.sh:24-25` bootstraps composer with
+  current default may refuse). rbenv plugins (`rbenv-iou.sh` ruby-build/gemset arms) `rm -rf plugins/<p>`
+  then `git clone` — same delete-before-install shape, REACHABLE since step 6 on every plugin bump: a failed
+  clone leaves ruby-build gone until the next boot retries (loud — no marker write — not silent). Also: `phpbrew-install-tools.sh:24-25` bootstraps composer with
   `composer-setup.php` and NO `--version` → `${COMPOSER_HOME}/bin/composer` floats to latest (it builds the
   pinned clone at `:30` and runs `phpbrew-iou.sh:24`; live 2.10.3 equals the pin only by coincidence;
   no installer checksum) — recorded in `pass2/raw/B_piped.md:24` but missing from pass-2 REPORT.md.
