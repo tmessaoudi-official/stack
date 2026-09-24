@@ -4459,6 +4459,8 @@ _P60_VG="${DIST_BIN}/base-bin/global-stack-base-version-gate.sh"
 
 # The n-th `if [[ "${<var>_gate}" == "reinstall" ]]; then` (either bracket style) through
 # the `fi` at the same indentation. n=1 is the gate, n=2 the post-install cleanup.
+# The regex goes through `awk -v` (which processes escapes); the doubled backslashes are
+# deliberate, and S2/S6 (mutations INSIDE block 2, both caught) prove it lands on block 2.
 _p60_block() { # $1 = script, $2 = var, $3 = n
   awk -v want="$3" -v pat="^ *if \\[\\[? \"\\\\\$\\{$2_gate\\}\" ==? \"reinstall\" \\]\\]?; then\$" '
     n < want && $0 ~ pat { n++; if (n == want) { match($0, /^ */); ind = substr($0, 1, RLENGTH); on = 1 } }

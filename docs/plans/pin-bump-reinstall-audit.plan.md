@@ -209,7 +209,9 @@ then drop the old dir and wipe `pkg.*`; the marker is written where it is today 
   `gs_version_in_use` (new, in `base-version-gate.sh`, stdout `shared|free`, always returns 0) finds
   another label recording it, then wipes pkg.* (not fvm: no package loop). php also drops the old php's
   `build/` dir and its `frankenphp-<v>-<old name>` binary (clean-wipe ruling). §60: 34 checks; sabotage
-  S1–S7 each caught, each restored byte-identical. 60j (nvm resolves via `nvm version`) is a STATIC check —
+  S1–S7 each caught, each restored byte-identical. 6C sweep: the only marker-CONTENT readers in dist/bin are
+  the four consumers above (`git grep` for `cat`/`<` of a runtime marker: 11 hits, 4 files) — none inside a runtime
+  script or its sub-scripts, so keeping the old marker until the final write changes no read. 60j (nvm resolves via `nvm version`) is a STATIC check —
   no behavioural test of a partial node pin.
 
 ### Step 12 — package slots: cleanup of the OLD version only after the NEW installed (S)
@@ -290,7 +292,7 @@ escape hatches keeping pkg markers; the `source X && cmd` class.
 | 8 | Host claude = container-only pin (comment + .env note) + no-ordered-comparison guard | S | done | 90e25db | templates/shell/global-unu.sh, .env, bin/tests/startup-prologue.test.sh, docker/config/dist/bin/rust-bin/** |
 | 9 | Docs: CLAUDE.md manager-reinstall claim (hand-off) | S | done | 81c3dcc | CLAUDE.md, bin/tests/startup-prologue.test.sh |
 | 10 | Tranche 2: plan the delete-before-install sites (nvm/phpbrew/sdkman/fvm/android/rbenv-plugins), composer bootstrap, env-update downgrade policy | M | done | 1906f6c | docs/plans/** |
-| 11 | Runtimes nvm/php/java/flutter delete-after-install (php.edge exempt) | M | done | - | docker/config/dist/bin/nvm-bin/**, docker/config/dist/bin/phpbrew-bin/**, docker/config/dist/bin/sdkman-bin/**, docker/config/dist/bin/fvm-bin/**, bin/tests/startup-prologue.test.sh |
+| 11 | Runtimes nvm/php/java/flutter delete-after-install (php.edge exempt) | M | done | 80415c0 | docker/config/dist/bin/base-bin/**, docker/config/dist/bin/nvm-bin/**, docker/config/dist/bin/phpbrew-bin/**, docker/config/dist/bin/sdkman-bin/**, docker/config/dist/bin/fvm-bin/**, bin/tests/startup-prologue.test.sh |
 | 12 | Package slots: cleanup only after the new install succeeded | M | todo | - | docker/config/dist/bin/base-bin/**, bin/tests/startup-prologue.test.sh |
 | 13 | rbenv plugins reuse step 6's in-place tag move | S | todo | - | docker/config/dist/bin/rbenv-bin/**, bin/tests/startup-prologue.test.sh |
 | 14 | go/zig/hurl staged extract-verify-swap, GOPATH carried across | M | todo | - | docker/images/00base/**, bin/tests/startup-prologue.test.sh |
