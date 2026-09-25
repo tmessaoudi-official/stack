@@ -40,9 +40,10 @@ global_stack_base_setup_packages() {
                 MARKER_PREFIX="$(echo "${__CURRENT_ARG__}" | sed 's/^--[a-zA-Z0-9_-]\+=//')"
                 ;;
             --cleanup-command=*)
-                # Optional template eval'd (with PACKAGE_OLD_VERSION in scope) before
-                # a slot reinstall — used only by accumulate-type managers (sdkman
-                # `sdk uninstall`, ruby `gem uninstall`) to remove the old version.
+                # Optional template eval'd (with PACKAGE_OLD_VERSION in scope) AFTER a
+                # successful slot reinstall, right before the marker write — used only by
+                # accumulate-type managers (sdkman `sdk uninstall`, ruby `gem uninstall`)
+                # to remove the old version. A failed install keeps the old one.
                 CLEANUP_COMMAND="$(echo "${__CURRENT_ARG__}" | sed 's/^--[a-zA-Z0-9_-]\+=//')"
                 ;;
             --tolerant)
@@ -97,9 +98,12 @@ global_stack_base_setup_packages() {
             # the INSTALL_PACKAGE SLOT (e.g. maven_vx1), NOT the package name, so
             # multiple slots sharing a name get DISTINCT markers and never
             # flip-flop-reinstall. absent → install; equal → skip; differ → warn +
-            # optional cleanup(OLD) + reinstall. set -eE safe: gs_version_gate
-            # returns 0 (WARN on stderr); the cleanup eval is || true.
-            local _slot="" _pkg_marker="" _pkg_decision="install"
+            # reinstall, then optional cleanup(OLD) only once the install succeeded
+            # (pin-audit tranche 2, startup-prologue.test.sh §61). set -eE safe:
+            # gs_version_gate returns 0 (WARN on stderr); the cleanup eval is || true.
+            # PACKAGE_OLD_VERSION is reset per slot so a first-install slot never
+            # inherits the previous slot's old version.
+            local _slot="" _pkg_marker="" _pkg_decision="install" PACKAGE_OLD_VERSION=""
             if [[ -n "${MARKER_PREFIX}" ]]; then
                 _slot="${VARIABLE_NAME#"${PREFIX}"_INSTALL_PACKAGE_}"
                 _slot="${_slot%_VERSION}"
@@ -109,13 +113,8 @@ global_stack_base_setup_packages() {
                 if [[ "${_pkg_decision}" = "skip" ]]; then
                     continue
                 fi
-                if [[ "${_pkg_decision}" = "reinstall" && -n "${CLEANUP_COMMAND}" ]]; then
-                    local PACKAGE_OLD_VERSION
+                if [[ "${_pkg_decision}" = "reinstall" ]]; then
                     PACKAGE_OLD_VERSION="$(cat "${_pkg_marker}" 2>/dev/null || true)"
-                    if [[ -n "${PACKAGE_OLD_VERSION}" && "${PACKAGE_OLD_VERSION}" != "${PACKAGE_VERSION}" ]]; then
-                        # Caller cleanup template (PACKAGE_OLD_VERSION in scope); non-fatal.
-                        eval "${CLEANUP_COMMAND}" </dev/null || true
-                    fi
                 fi
             fi
             local _cmd_ok=1
@@ -131,15 +130,24 @@ global_stack_base_setup_packages() {
                     eval "${COMMANDS[${INDEX}]}" </dev/null
                 fi
             done
-            # Record the installed version only after a SUCCESSFUL install, so a
-            # failed one does NOT leave a satisfied marker (which would skip the
-            # slot forever — silently). Non-tolerant: reaching here means set -e did
-            # not abort → success. Tolerant: all commands exited 0 AND (if given)
-            # the --success-check predicate passes.
+            # Only after a SUCCESSFUL install: drop the old version, then record the
+            # new one. A failed install therefore keeps the old version AND does not
+            # leave a satisfied marker (which would skip the slot forever — silently).
+            # Non-tolerant: reaching here means set -e did not abort → success.
+            # Tolerant: all commands exited 0 AND (if given) the --success-check
+            # predicate passes.
             if [[ -n "${_pkg_marker}" ]]; then
+                local _pkg_ok=0
                 if [[ -z "${TOLERANT}" ]]; then
-                    echo "${PACKAGE_VERSION}" > "${_pkg_marker}"
+                    _pkg_ok=1
                 elif [[ "${_cmd_ok}" = "1" ]] && { [[ -z "${SUCCESS_CHECK}" ]] || eval "${SUCCESS_CHECK}"; }; then
+                    _pkg_ok=1
+                fi
+                if [[ "${_pkg_ok}" = "1" ]]; then
+                    if [[ -n "${CLEANUP_COMMAND}" && -n "${PACKAGE_OLD_VERSION}" && "${PACKAGE_OLD_VERSION}" != "${PACKAGE_VERSION}" ]]; then
+                        # Caller cleanup template (PACKAGE_OLD_VERSION in scope); non-fatal.
+                        eval "${CLEANUP_COMMAND}" </dev/null || true
+                    fi
                     echo "${PACKAGE_VERSION}" > "${_pkg_marker}"
                 fi
             fi

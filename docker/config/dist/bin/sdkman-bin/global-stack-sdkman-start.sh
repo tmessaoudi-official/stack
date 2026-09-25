@@ -188,7 +188,11 @@ if [[ "${SDKMAN_MODE}" = "setup" ]]; then
   # multi-slot cases distinct. sdkman candidates are JDK-independent, so a java
   # runtime bump (the post-install cleanup wiped java.<AS>.pkg.*) just re-installs them
   # idempotently. --cleanup-command uninstalls the OLD version on a bump
-  # (candidates accumulate). set +E: sdk commands return non-zero benignly.
+  # (candidates accumulate), and only once the new one passed --success-check
+  # (startup-prologue.test.sh §61). The vendored `sdk uninstall` deselects rather than
+  # refuses when the old version is still `current` (conf/sdkman/src/sdkman-uninstall.sh),
+  # and `sdk install` under sdkman_auto_answer has already made the new one current.
+  # set +E: sdk commands return non-zero benignly.
   set +E
   global_stack_base_setup_packages \
     --prefix='SDKMAN' \

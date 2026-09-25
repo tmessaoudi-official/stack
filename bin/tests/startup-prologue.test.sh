@@ -4606,6 +4606,62 @@ assert_pass "60i: php cleanup drops the old php's frankenphp binaries (any frank
 assert_pass "60j: nvm cleanup compares the nvm-resolved version, not the raw pin" \
   grep -qE '^    _node_new="\$\(nvm version "\$\{NODE_VERSION:-\}"' "${DIST_BIN}/nvm-bin/global-stack-nvm-start.sh"
 
+# ─── Section 61: a package slot drops its OLD version only after the NEW one installed (tranche 2 step 12) ──
+# pin-audit tranche 2. base-setup-packages.sh ran --cleanup-command (`gem uninstall` /
+# `sdk uninstall` of the old version) BEFORE the install commands, so a gem or sdkman
+# candidate that failed to install left the slot with neither version. The cleanup now
+# runs in the success branch, right before the marker write: non-tolerant callers after
+# the commands (set -e aborts first on a failure), tolerant callers only when every
+# command exited 0 and --success-check passed. Both directions: a pin moved DOWN
+# installs the lower version, then drops the higher one. Runs the REAL engine.
+printf '\n%b── Section 61: package slots delete-after-install (tranche 2 step 12)%b\n' "${C_BOLD}" "${C_RESET}"
+
+_P61_ENGINE="${DIST_BIN}/base-bin/global-stack-base-setup-packages.sh"
+# $1 = tolerant (0|1), $2 = slot A marker (or none), $3 = slot A pin,
+# $4 = ok | cmdfail | checkfail, $5 = with-b (slot B, first install) or ""
+# → "rc=<0|1> log=<entries joined by ,> marker=<slot A marker content>"
+_p61_run() {
+  local d rc=0 extra=() log
+  d="$(mktemp -d)"
+  mkdir -p "${d}/versions"
+  [[ "$2" != none ]] && printf '%s\n' "$2" >"${d}/versions/rt.1.pkg.a"
+  [[ "$1" == 1 ]] && extra+=(--tolerant)
+  [[ "$4" == checkfail ]] && extra+=('--success-check=false')
+  [[ "$4" == cmdfail ]] && extra+=('--command=false')
+  {
+    printf '#!/bin/bash\nset -eE -o pipefail\nsource %q\nsource %q\n' "${_P60_VG}" "${_P61_ENGINE}"
+    printf 'P61_INSTALL_PACKAGE_A_VERSION=%q\nP61_CONFIG_PACKAGE_A_NAME=pkga\n' "$3"
+    [[ "$5" == with-b ]] && printf 'P61_INSTALL_PACKAGE_B_VERSION=3.0\nP61_CONFIG_PACKAGE_B_NAME=pkgb\n'
+    printf 'global_stack_base_setup_packages --prefix=P61 --marker-prefix=rt.1'
+    printf ' %q' "--cleanup-command=printf 'cleanup:%s:%s\n' \"\${PACKAGE_NAME}\" \"\${PACKAGE_OLD_VERSION}\" >>\"\${P61_LOG}\"" \
+      "--command=printf 'install:%s:%s\n' \"\${PACKAGE_NAME}\" \"\${PACKAGE_VERSION}\" >>\"\${P61_LOG}\"" "${extra[@]}"
+    printf '\n'
+  } >"${d}/run.sh"
+  env -i PATH=/usr/bin:/bin GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS="${d}/versions" P61_LOG="${d}/log" \
+    bash "${d}/run.sh" >/dev/null 2>&1 || rc=1
+  log="$(if [[ -f "${d}/log" ]]; then paste -sd, "${d}/log"; else echo none; fi)"
+  printf 'rc=%s log=%s marker=%s' "${rc}" "${log}" "$(cat "${d}/versions/rt.1.pkg.a" 2>/dev/null || echo none)"
+  rm -rf "${d}"
+}
+assert_pass "61a: non-tolerant bump -> install new, THEN clean up old, marker = new" \
+  test "$(_p61_run 0 1.0 2.0 ok '')" = "rc=0 log=install:pkga:2.0,cleanup:pkga:1.0 marker=2.0"
+assert_pass "61b: pin moved DOWN -> install the lower version, then clean up the higher one" \
+  test "$(_p61_run 0 2.0 1.0 ok '')" = "rc=0 log=install:pkga:1.0,cleanup:pkga:2.0 marker=1.0"
+assert_pass "61c: non-tolerant install fails -> aborts, old version NOT cleaned up, marker still old" \
+  test "$(_p61_run 0 1.0 2.0 cmdfail '')" = "rc=1 log=install:pkga:2.0 marker=1.0"
+assert_pass "61d: tolerant, a command fails -> no cleanup, marker still old" \
+  test "$(_p61_run 1 1.0 2.0 cmdfail '')" = "rc=0 log=install:pkga:2.0 marker=1.0"
+assert_pass "61e: tolerant, commands pass but --success-check fails -> no cleanup, marker still old" \
+  test "$(_p61_run 1 1.0 2.0 checkfail '')" = "rc=0 log=install:pkga:2.0 marker=1.0"
+assert_pass "61f: tolerant success -> install new, then clean up old, marker = new" \
+  test "$(_p61_run 1 1.0 2.0 ok '')" = "rc=0 log=install:pkga:2.0,cleanup:pkga:1.0 marker=2.0"
+assert_pass "61g: first install (no marker) -> no cleanup" \
+  test "$(_p61_run 0 none 2.0 ok '')" = "rc=0 log=install:pkga:2.0 marker=2.0"
+# Slot A reinstalls, slot B (sorted after A) is a first install: B must not inherit A's
+# PACKAGE_OLD_VERSION and fire a cleanup of its own.
+assert_pass "61h: a first-install slot after a reinstalled one fires no cleanup of its own" \
+  test "$(_p61_run 0 1.0 2.0 ok with-b)" = "rc=0 log=install:pkga:2.0,cleanup:pkga:1.0,install:pkgb:3.0 marker=2.0"
+
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
 if [[ "${FAIL}" -eq 0 ]]; then

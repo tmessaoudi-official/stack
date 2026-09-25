@@ -227,12 +227,24 @@ then drop the old dir and wipe `pkg.*`; the marker is written where it is today 
 - Test §61 (red first): stub commands; success → order `install` then `cleanup:<old>` then marker = new;
   failed install (non-tolerant aborts / tolerant `_cmd_ok=0`) → no cleanup, marker still old; a pin moved
   DOWN (marker 2.0, pin 1.0) → install 1.0 then cleanup 2.0.
-- sdkman may refuse to uninstall the version that is still the default; if a probe shows it, `sdk default
-  <new>` precedes the cleanup. UNCERTIFIED until probed.
+- sdkman does NOT refuse: the vendored `sdk uninstall` deselects (unlinks the per-home `current`) and removes
+  (`conf/sdkman/src/sdkman-uninstall.sh:33-45`), and `sdk install` under `sdkman_auto_answer=true` has already
+  linked the new version as current (`sdkman-install.sh:39-47`, link written at `sdkman-path-helpers.sh:88`)
+  [Verified: read]. No `sdk default` step needed.
 - Certification: real `pip install pkg==<lower>` and `npm add -g pkg@<lower>` downgrades in scratch dirs
   (the two slot commands with no cleanup) [Unverified until run]; `sdk uninstall` of the version that was
   the default before the new install — probed with a real sdkman in a scratch `SDKMAN_DIR` if the download
   is reasonable, otherwise named UNCERTIFIED.
+
+- AS BUILT (step 12): `PACKAGE_OLD_VERSION` is captured on reinstall before the commands and reset per slot;
+  the cleanup eval moved into the success branch (`_pkg_ok`: non-tolerant = reached; tolerant = `_cmd_ok` and
+  `--success-check`), right before the marker write. rubygems keeps an executable another installed version
+  provides (`Uninstaller#remove_executables`, both ruby 3.4.10 and 4.0.7 on the volume) [Verified: read], so
+  `gem uninstall -x` after the install cannot drop the new version's stub. §61: 8 checks (61g green before and
+  after — it pins first-install; 61h red before only on order, it pins the per-slot reset). Sabotage T1–T4
+  each caught, restored byte-identical. Suite 727/727. Real downgrades in scratch: `pip install six==1.16.0`
+  over 1.17.0 → 1.16.0, one dist-info; `npm add -g --force is-number@6.0.0` over 7.0.0 → 6.0.0 [Verified].
+  Step 11's "S1–S8" means S1–S7 plus the frankenphp glob revert.
 
 ### Step 13 — rbenv plugins: reuse step 6's in-place move (S)
 - `rbenv-iou.sh` ruby-build/gemset arms `rm -rf plugins/<p>` then `git clone` [Verified: read]. The plugins
@@ -298,7 +310,7 @@ escape hatches keeping pkg markers; the `source X && cmd` class.
 | 9 | Docs: CLAUDE.md manager-reinstall claim (hand-off) | S | done | 81c3dcc | CLAUDE.md, bin/tests/startup-prologue.test.sh |
 | 10 | Tranche 2: plan the delete-before-install sites (nvm/phpbrew/sdkman/fvm/android/rbenv-plugins), composer bootstrap, env-update downgrade policy | M | done | 1906f6c | docs/plans/** |
 | 11 | Runtimes nvm/php/java/flutter delete-after-install (php.edge exempt) | M | done | 902f08f | docker/config/dist/bin/base-bin/**, docker/config/dist/bin/nvm-bin/**, docker/config/dist/bin/phpbrew-bin/**, docker/config/dist/bin/sdkman-bin/**, docker/config/dist/bin/fvm-bin/**, bin/tests/startup-prologue.test.sh |
-| 12 | Package slots: cleanup only after the new install succeeded | M | todo | - | docker/config/dist/bin/base-bin/**, bin/tests/startup-prologue.test.sh |
+| 12 | Package slots: cleanup only after the new install succeeded | M | done | - | docker/config/dist/bin/base-bin/**, docker/config/dist/bin/rbenv-bin/**, docker/config/dist/bin/sdkman-bin/**, bin/tests/startup-prologue.test.sh |
 | 13 | rbenv plugins reuse step 6's in-place tag move | S | todo | - | docker/config/dist/bin/rbenv-bin/**, bin/tests/startup-prologue.test.sh |
 | 14 | go/zig/hurl staged extract-verify-swap, GOPATH carried across | M | todo | - | docker/images/00base/**, bin/tests/startup-prologue.test.sh |
 | 15 | composer bootstrap pinned + verified | S | todo | - | docker/config/dist/bin/phpbrew-bin/**, bin/tests/startup-prologue.test.sh |

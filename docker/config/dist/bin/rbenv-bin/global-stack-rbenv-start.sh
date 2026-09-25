@@ -169,7 +169,10 @@ if [[ "${RBENV_MODE}" = "setup" ]]; then
   # markers, so a package-only bump is detected even when the ruby runtime marker
   # is unchanged; unchanged gems skip cheaply. On a runtime bump the post-install
   # cleanup above wiped ruby.<AS>.pkg.*, repopulating gems on the fresh interpreter. gems
-  # accumulate, so --cleanup-command uninstalls the OLD version on a bump.
+  # accumulate, so --cleanup-command uninstalls the OLD version on a bump — after the
+  # new one installed (startup-prologue.test.sh §61). `-x` is safe in that order:
+  # rubygems' Uninstaller#remove_executables keeps any executable another installed
+  # version of the gem still provides.
   # (setup-version.sh is a no-op, so relocating this past it is safe.)
   source /usr/local/bin/global-stack-base-setup-packages.sh
   source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/rbenv.shellrc"
