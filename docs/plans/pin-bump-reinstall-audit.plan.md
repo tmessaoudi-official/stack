@@ -29,6 +29,7 @@ version and its usage ! no implementation yet !"* — AUDIT ONLY; nothing below 
 - [2026-09-25 10:07] AGREED: go's GOPATH (`go/home`) is renamed to the sibling `tools/go.gopath-aside` for the duration of a go reinstall — the one named exception to "nothing next to the old tree"; restored on any failure, restored at the next start when GOPATH is absent, FATAL when both exist, never deleted.
 - [2026-09-25 10:18] AGREED: hurl stays at `/stack/tools/hurl/bin` (host PATH unchanged) — the image only COMPILES it; boot copies it into tools/ like mkcert (confirms 09:58 after the developer asked).
 - [2026-09-25 11:47] AGREED: an 00base image with NO compiled hurl (any image built before step 14c) makes install-hurl.sh WARN (naming `rebuild 00base`) and leave tools/hurl untouched instead of FATAL — the boot must not fail over an unused tool during the transition; the rebuild then repairs hurl on its own. An image whose compiled hurl does not match the pin stays FATAL.
+- [2026-09-25 12:08] AGREED: step 15 covers ALL 11 tools in `phpbrew-install-tools.sh`, not only the composer bootstrap: temp-dir download with `curl -f`, upstream checksum where published, the tool's own version check against the pin, THEN replace, marker last; pinned release assets replace the piped mago/castor installers; composer builds in a temp dir with a pinned, SHA-384-checked bootstrap before the old one is wiped.
 
 ## Formal Plan
 <!-- written at Phase 4 — tranche 1, APPROVED 2026-09-24 15:05 (steps 5-9; step 8 revised) -->
@@ -353,14 +354,49 @@ then drop the old dir and wipe `pkg.*`; the marker is written where it is today 
   libs, repaired a copy of the live broken tools/hurl (completions/ and man/ gone), ran a request file,
   hurlfmt works, the second boot is a no-op; the pre-14c image path WARNs with rc 0; the same binary runs on
   the host (Ubuntu 26.04) [Verified: ran]. Step 14 commits: 14a `5360b17`, follow-up `84cd38f`, 14b
-  `008b841`, 14c (this commit; its sha lands with step 15).
+  `008b841`, 14c `8bae406`.
 
-### Step 15 — composer bootstrap pinned (S)
-- `phpbrew-install-tools.sh:24-25` runs `composer-setup.php` with no `--version` → latest [Verified: pass 2
-  raw B_piped.md:24]. Add `--version="${COMPOSER_LATEST}"` (the installer's documented flag) and check
-  `composer --version` = pin before building the clone (pin is a bare `2.10.3`, taken verbatim [Verified]). Optional, same step: verify the installer's SHA-384
-  against `composer.github.io/installer.sig` (security, not pin correctness).
-- Test §64 (red first): stub `php` recording the setup args; missing/ignored `--version` reds.
+### Step 15 — all 11 phpbrew tools: check first, then replace (L) — REVISED by ruling 2026-09-25 (scope)
+- `phpbrew-install-tools.sh` [Verified: read]: composer `rm -rf`s its source + phar BEFORE cloning and bootstraps
+  with an UNPINNED `composer-setup.php`; fabpot `curl -LsS -o <installed binary>` without `-f` (a 404 overwrites
+  the working binary with HTML, marker written); deployer/symfony `curl -LO` without `-f`; mago/castor pipe a
+  remote installer into `bash`; zephir/phalcon/pickle/pie download with `-f` then `mv` (safe, unchecked).
+- Measured facts [Verified 2026-09-25]: checksums published for composer (`getcomposer.org/download/<v>/
+  composer.phar.sha256sum`), symfony-cli and fabpot (`checksums.txt`, `<sha>  <name>`); none for the rest.
+  Version lines: `Composer version <v> `, `Laravel Installer <v>`, `Deployer <v>`, `Symfony CLI version <v> `,
+  `(PIE) <v>`, `mago <v>`, `castor v<v>`, `Local PHP Security Checker <v>,`. zephir/phalcon/pickle CANNOT run
+  under the 02phpbrew system php 8.5.4 (no mbstring etc.; the phpbrew-built php does not exist yet on a first
+  install), so their check is PHP's own Phar open (signature-verified; rejects a truncated file and an HTML 404
+  page — both measured). mago: tarball `mago-<v>-x86_64-unknown-linux-gnu/mago`; castor: static
+  `castor.linux-amd64`. The prologue owns EXIT/ERR/SIGPIPE traps: no own EXIT trap, no `grep -q` in pipes.
+- Shape (every tool): download into one `mktemp -d` with `curl -f`; checksum where published; version check
+  where runnable (the version must be followed by a non-[0-9.] char), else the Phar open; THEN replace
+  (`install -m 0755`), marker last. composer: pinned `composer.phar` + its sha256 replaces composer-setup.php;
+  the source clone, overlay rsync and `composer install` happen in the temp dir and are version-checked
+  BEFORE the old source/phar are removed. laravel: unchanged install, version-checked before the marker.
+- Commits: 15a composer + laravel (§66), 15b the five phars (§67), 15c symfony/mago/castor/fabpot (§68).
+  Each red first, sabotage, real downloads in a throwaway 02phpbrew container with a scratch tools/.
+- AS BUILT (15a): one `mktemp -d` for the whole script (`_pt_dl`, removed on the last line; a FATAL leaves it
+  in container /tmp, since the prologue owns EXIT) and two helpers: `_pt_names <output> <prefix> <version>`
+  (the version must not continue with a digit or a dot) and `_pt_fatal`. composer: the pinned `composer.phar`
+  and its `.sha256sum` downloaded, checksum and `--version` checked; the tag cloned into the temp dir, the
+  overlay rsynced, `composer install`ed with the checked phar, the built source's `--version` checked; only
+  THEN `rm -rf` the old source + phar, `mv -T` the source in, `install -m 0755` the phar. `COMPOSER_HOME/vendor`
+  (laravel) and the cache are never touched. Every fallible step (both downloads, the clone, the install, the
+  two version checks) sits inside an `if` with a named FATAL: a bare failure reaches the prologue's generic
+  handler first (measured: the unwrapped download exited 22 with no reason given). laravel: the exact
+  require line is unchanged; `vendor/bin/laravel --version` must name the pin before the marker. The stray
+  tab on the old clone line is gone. §66: 15 checks (a fixture repo with six tags via `insteadOf`, stub
+  curl/php/sudo), 10 red first with the old code's reasons (`composer-setup.php` reached, source wiped before
+  a clone that then failed, `1.4.00` accepted for laravel). 66i first went red on the new code's own COMMENT
+  naming composer-setup.php; comment lines are now stripped (the §19 shape). Sabotage S1-S7 each caught and
+  restored byte-identical. S4 as first written was not a valid mutation (its `\` continuation made every
+  laravel check fail) and was redone; S6 (drop the built-source version check) first SURVIVED, so the fixture
+  gained tag 1.7.0 whose source reports 1.7.1. Suite 807/807. REAL, in a throwaway 02phpbrew container with a
+  scratch tools/: fresh 2.10.2 + laravel v5.31.0 → 2.10.3 + v5.32.0 → bad pin 2.99.99 (named FATAL; old
+  source/phar/markers and a planted sentinel untouched) → no-op → 2.10.2 + v5.31.0. Source, phar and laravel
+  report the pin every time, the overlay file matches, a planted stale file is gone after each reinstall, no
+  temp dir left on success [Verified: ran]. zephir … fabpot are untouched in 15a (15b/15c).
 
 ### Step 16 — android SDK (M/L) — DESIGN FORK, needs a ruling
 - Any change to the 14 SDK inputs wipes `ANDROID_HOME`, `ANDROID_SDK_HOME`, `ANDROID_SDK_ROOT` AND
@@ -398,8 +434,8 @@ escape hatches keeping pkg markers; the `source X && cmd` class.
 | 11 | Runtimes nvm/php/java/flutter delete-after-install (php.edge exempt) | M | done | 902f08f | docker/config/dist/bin/base-bin/**, docker/config/dist/bin/nvm-bin/**, docker/config/dist/bin/phpbrew-bin/**, docker/config/dist/bin/sdkman-bin/**, docker/config/dist/bin/fvm-bin/**, bin/tests/startup-prologue.test.sh |
 | 12 | Package slots: cleanup only after the new install succeeded | M | done | f5075ed | docker/config/dist/bin/base-bin/**, docker/config/dist/bin/rbenv-bin/**, docker/config/dist/bin/sdkman-bin/**, bin/tests/startup-prologue.test.sh |
 | 13 | rbenv plugins reuse step 6's in-place tag move | S | done | 46e80a7 | docker/config/dist/bin/rbenv-bin/**, bin/tests/startup-prologue.test.sh |
-| 14 | go/zig/mise/hurl: check first, then wipe and install fresh (14a/14b/14c) | L | done | - | docker/config/dist/bin/base-bin/**, docker/images/00base/**, bin/tests/startup-prologue.test.sh |
-| 15 | composer bootstrap pinned + verified | S | todo | - | docker/config/dist/bin/phpbrew-bin/**, bin/tests/startup-prologue.test.sh |
+| 14 | go/zig/mise/hurl: check first, then wipe and install fresh (14a/14b/14c) | L | done | 8bae406 | docker/config/dist/bin/base-bin/**, docker/images/00base/**, bin/tests/startup-prologue.test.sh |
+| 15 | all 11 phpbrew tools: check first, then replace (15a/15b/15c) | L | doing | - | docker/config/dist/bin/phpbrew-bin/**, bin/tests/startup-prologue.test.sh |
 | 16 | android: stop wiping GRADLE_USER_HOME | S | todo | - | docker/config/dist/bin/android-bin/**, bin/tests/startup-prologue.test.sh |
 | 17 | Docs: CLAUDE.md tranche 2 (hand-off) | S | todo | - | CLAUDE.md |
 <!-- /progress-block -->
@@ -416,8 +452,8 @@ escape hatches keeping pkg markers; the `source X && cmd` class.
   On a repeat, capture `_andv_probe`'s raw `${out}` (the xtrace of every `android sdk install` the stub got)
   to a file BEFORE it is parsed — `1| ndk-bundle|none` cannot say whether ndk-bundle ever reached the stub.
 ### Known issues
-- mise deletes `MISE_DATA_DIR`/`STATE`/`CONFIG`/`CACHE` BEFORE `curl https://mise.run | sh` (`install-mise.sh:18-21`) — a failed download leaves mise wiped. Being fixed in step 14 (ruling 2026-09-25 09:58). [Verified: read]
-- hurl 8.0.1 cannot run in 00base: `libxml2.so.2 => not found` (26.04 ships libxml2.so.16), and upstream publishes no other Linux x86_64 build [Verified: ldd + release assets in a throwaway container]. Being fixed in step 14 (ruling 2026-09-25 09:58).
+- mise deletes `MISE_DATA_DIR`/`STATE`/`CONFIG`/`CACHE` BEFORE `curl https://mise.run | sh` (`install-mise.sh:18-21`) — a failed download leaves mise wiped. FIXED in 14b (`008b841`): checked before the wipe (ruling 2026-09-25 09:58). [Verified: read]
+- hurl 8.0.1 cannot run in 00base: `libxml2.so.2 => not found` (26.04 ships libxml2.so.16), and upstream publishes no other Linux x86_64 build [Verified: ldd + release assets in a throwaway container]. Being fixed in step 14 (ruling 2026-09-25 09:58). FIXED in 14c (`8bae406`): the live `tools/hurl` stays broken until 00base is rebuilt; until then every 00base boot WARNs (ruling 11:47) and the developer rebuilds later (ruling 2026-09-25).
 - `RELOAD_PHP=true` (`phpbrew-start.sh:43`) removes `frankenphp-${GLOBAL_STACK_FRANKENPHP_VERSION}-<php name>` by the
   CURRENT frankenphp pin, so a frankenphp binary built under an older pin is orphaned. Same class step 11 fixed in
   the pin-bump cleanup (`902f08f`); this one is pre-existing and not a pin-bump path. Logged, not fixed.

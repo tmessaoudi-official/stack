@@ -5,6 +5,31 @@ shopt -s extdebug
 IFS=$'\n\t'
 source global-stack-base-prologue.sh
 
+# Pin-audit tranche 2 step 15 (ruling 2026-09-25; startup-prologue.test.sh §66-§68).
+# Every tool below is downloaded into this temp dir and checked — published checksum
+# where there is one, the tool's own version output where it can run — BEFORE the
+# installed copy is replaced; the marker stays last. The prologue owns the EXIT trap,
+# so the dir is removed at the end of the script and a FATAL leaves it in the
+# container's /tmp. Every fallible check sits inside its `if`: a bare failing
+# capture would fire the prologue's ERR trap before the FATAL could say why.
+_pt_dl="$(mktemp -d)"
+
+# _pt_names <output> <text right before the version> <version>: true when the output
+# names exactly that version — the version must not continue with a digit or a dot,
+# so 1.4.0 never accepts 1.4.00.
+_pt_names() {
+    local _pt_rest
+    [[ "$1" == *"$2$3"* ]] || return 1
+    _pt_rest="${1#*"$2$3"}"
+    [[ ! "${_pt_rest}" =~ ^[0-9.] ]]
+}
+
+# _pt_fatal <message>: the reason on stderr, then exit 1 (the prologue writes the token).
+_pt_fatal() {
+    printf 'FATAL: %s\n' "$1" >&2
+    exit 1
+}
+
 COMPOSER_PHAR_FILE="${COMPOSER_SOURCE}/bin/composer"
 # COMPOSER_LATEST="$(curl --silent https://api.github.com/repos/composer/composer/releases | grep '"name": "[0-9vV]' | sed 's/"name"\: "//g' | sed 's/",//g' | awk '!/RC/ && !/[a-zA-Z]/' | sort --version-sort --field-separator=. | tail -n1 | sed 's/    //g')"
 COMPOSER_LATEST=${GLOBAL_STACK_COMPOSER_VERSION}
@@ -17,18 +42,41 @@ if [ "${_composer_gate}" = "skip" ] && [ -f "${COMPOSER_PHAR_FILE}" ]; then
     echo -e "\n${COMPOSER_PHAR_FILE} already installed (${COMPOSER_LATEST})."
 else
     echo -e "\nInstalling ${COMPOSER_PHAR_FILE}."
+    # Step 15a: this used to remove the source and the bootstrap phar FIRST, and the
+    # bootstrap came from composer-setup.php with no --version (i.e. latest). Now the
+    # pinned composer.phar is checked against its published sha256 and its version,
+    # the source is cloned at the tag, overlaid and `composer install`ed in the temp
+    # dir and version-checked, and only then do the old source and phar go. Only
+    # source/ and bin/composer are replaced: COMPOSER_HOME/vendor (laravel) and the
+    # cache stay. The temp dir is container /tmp, so the final move is a copy.
+    _pt_c="${_pt_dl}/composer"
+    mkdir -p "${_pt_c}"
+    if ! curl --connect-timeout 30 --max-time 300 -fsSL -o "${_pt_c}/composer.phar" "https://getcomposer.org/download/${COMPOSER_LATEST}/composer.phar" || ! curl --connect-timeout 30 --max-time 60 -fsSL -o "${_pt_c}/composer.phar.sha256sum" "https://getcomposer.org/download/${COMPOSER_LATEST}/composer.phar.sha256sum"; then
+        _pt_fatal "composer ${COMPOSER_LATEST} could not be downloaded from getcomposer.org - composer left as it was"
+    fi
+    if ! (cd "${_pt_c}" && sha256sum -c --quiet composer.phar.sha256sum >/dev/null 2>&1); then
+        _pt_fatal "composer.phar ${COMPOSER_LATEST} does not match its published sha256 - composer left as it was"
+    fi
+    if ! _pt_got="$(php "${_pt_c}/composer.phar" --version --no-ansi 2>/dev/null)" || ! _pt_names "${_pt_got}" "Composer version " "${COMPOSER_LATEST}"; then
+        _pt_fatal "the downloaded composer.phar is not ${COMPOSER_LATEST} - composer left as it was"
+    fi
+    if ! git clone --progress --verbose --branch "${COMPOSER_LATEST}" https://github.com/composer/composer.git --depth 1 "${_pt_c}/source"; then
+        _pt_fatal "composer tag ${COMPOSER_LATEST} could not be cloned - composer left as it was"
+    fi
+    rsync -rav "${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/conf/phpbrew-composer/source/" "${_pt_c}/source"
+    if ! (cd "${_pt_c}/source" && php "${_pt_c}/composer.phar" install); then
+        _pt_fatal "composer install failed in the ${COMPOSER_LATEST} source - composer left as it was"
+    fi
+    chmod a+x "${_pt_c}/source/bin/composer"
+    if ! _pt_got="$(php "${_pt_c}/source/bin/composer" --version --no-ansi 2>/dev/null)" || ! _pt_names "${_pt_got}" "Composer version " "${COMPOSER_LATEST}"; then
+        _pt_fatal "the composer built from source is not ${COMPOSER_LATEST} - composer left as it was"
+    fi
+
+    # Checked: from here on the old source and phar go.
     rm -rf "${COMPOSER_SOURCE}" "${COMPOSER_HOME}/bin/composer"
-    mkdir -p "${COMPOSER_SOURCE}"
-	git clone --progress --verbose --branch "${COMPOSER_LATEST}" https://github.com/composer/composer.git --depth 1 "${COMPOSER_SOURCE}"
-    chmod a+x "${COMPOSER_SOURCE}/bin/composer"
-    php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
-    php composer-setup.php --install-dir="${COMPOSER_HOME}/bin" --filename=composer
-    rm composer-setup.php 2> /dev/null
-    chmod a+x "${COMPOSER_HOME}/bin/composer"
-
-    rsync -rav ${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/conf/phpbrew-composer/source/ "${COMPOSER_SOURCE}"
-    cd "${COMPOSER_SOURCE}" && php "${COMPOSER_HOME}/bin/composer" install
-
+    mkdir -p "$(dirname "${COMPOSER_SOURCE}")" "${COMPOSER_HOME}/bin"
+    mv -T "${_pt_c}/source" "${COMPOSER_SOURCE}"
+    install -m 0755 "${_pt_c}/composer.phar" "${COMPOSER_HOME}/bin/composer"
     git -C "${COMPOSER_SOURCE}" config core.fileMode false
     printf '%s\n' "${COMPOSER_LATEST}" >"${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew.composer"
 fi
@@ -47,6 +95,10 @@ if [ "${_laravel_gate}" = "skip" ] && composer global show laravel/installer >/d
 else
     echo -e "\n*** Composer -- installing laravel/installer ${GLOBAL_STACK_LARAVEL_INSTALLER_VERSION}."
     composer global require --ignore-platform-reqs "laravel/installer:${GLOBAL_STACK_LARAVEL_INSTALLER_VERSION}"
+    if ! _pt_got="$(php "${COMPOSER_HOME}/vendor/bin/laravel" --version --no-ansi 2>/dev/null)" \
+        || ! _pt_names "${_pt_got}" "Laravel Installer " "${GLOBAL_STACK_LARAVEL_INSTALLER_VERSION#v}"; then
+        _pt_fatal "laravel/installer does not report ${GLOBAL_STACK_LARAVEL_INSTALLER_VERSION} - marker not written"
+    fi
     printf '%s\n' "${GLOBAL_STACK_LARAVEL_INSTALLER_VERSION}" >"${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew.laravel-installer"
 fi
 
@@ -191,3 +243,5 @@ fi
 
 mkdir -p ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/frankenphp
 sudo chmod -R a+rwx ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/frankenphp
+
+rm -rf "${_pt_dl}"

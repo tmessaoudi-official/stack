@@ -5177,6 +5177,184 @@ assert_pass "65l: the stage's Rust pins reach the build (compose build args)" \
 assert_fail "65m: no host shell template puts HURLPATH itself (not its bin/) on PATH" \
   grep -rqE 'PATH="?\$\{GLOBAL_STACK_HURLPATH\}:' "${SCRIPT_DIR}/../../templates/shell"
 
+# ─── Section 66: composer is built and checked BEFORE the old one goes (tranche 2 step 15a) ──
+# phpbrew-install-tools.sh removed composer's source and bootstrap phar FIRST and then
+# cloned, so a clone or install that failed left no composer at all; and the bootstrap
+# came from composer-setup.php with no --version, i.e. whatever composer was latest.
+# Now (ruling 2026-09-25): the pinned composer.phar is downloaded with its published
+# sha256 and version-checked; the source is cloned at the tag, overlaid and
+# `composer install`ed in a temp dir and version-checked; only then are the old source
+# and phar replaced. laravel/installer is version-checked before its marker. The whole
+# SHIPPED script runs (prologue included) with the other nine tools held current.
+# Formats measured 2026-09-25: `Composer version 2.10.3 2026-08-27 13:34:23`,
+# `Laravel Installer 5.32.0`, `<sha>  composer.phar`.
+printf '\n%b── Section 66: composer built and checked first, then replaced (tranche 2 step 15a)%b\n' "${C_BOLD}" "${C_RESET}"
+
+_P66="${TMP_DIR}/p66"
+mkdir -p "${_P66}/stub" "${_P66}/up/dl" "${_P66}/gh/composer" "${_P66}/overlay/src" "${_P66}/work"
+: >"${_P66}/overlay/src/overlay-applied"
+cat >"${_P66}/stub/curl" <<'EOF'
+#!/bin/bash
+out="" url=""
+while (($#)); do
+  case "$1" in
+    --connect-timeout | --max-time) shift ;;
+    -o) out="$2"; shift ;;
+    http*) url="$1" ;;
+  esac
+  shift
+done
+printf '%s\n' "${url}" >>"${P66}/curl.log"
+case "${url}" in
+  https://getcomposer.org/download/*) f="${P66}/up/dl/${url#https://getcomposer.org/download/}" ;;
+  *) exit 22 ;;
+esac
+[[ -f "${f}" && -n "${out}" ]] || exit 22
+cp "${f}" "${out}"
+EOF
+# php runs a fixture "phar" (a bash script) as the real php would run the real phar.
+printf '#!/bin/bash\nif [[ -f "$1" ]]; then exec bash "$@"; fi\nexit 1\n' >"${_P66}/stub/php"
+printf '#!/bin/bash\nexec "$@"\n' >"${_P66}/stub/sudo"
+chmod +x "${_P66}/stub/curl" "${_P66}/stub/php" "${_P66}/stub/sudo"
+
+_p66_phar() { # $1 = tag, $2 = version printed, $3 = ok|failinstall → the bootstrap composer.phar for that tag
+  mkdir -p "${_P66}/up/dl/$1"
+  cat >"${_P66}/up/dl/$1/composer.phar" <<EOF
+#!/bin/bash
+case "\$1" in
+  --version) echo "Composer version $2 2026-08-27 13:34:23" ;;
+  install) [[ "$3" == ok ]] || exit 1; mkdir -p vendor && echo '<?php' >vendor/autoload.php ;;
+esac
+EOF
+  (cd "${_P66}/up/dl/$1" && sha256sum composer.phar >composer.phar.sha256sum)
+}
+# The composer source repo: bin/composer answers --version and the two `global` verbs
+# the script uses; `global require` installs a laravel that prints its version (1.4.0
+# prints 1.4.00, to be refused).
+(
+  export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
+  g() { git -c user.name=t -c user.email=t@t -c init.defaultBranch=main -c commit.gpgsign=false -c tag.gpgsign=false "$@"; }
+  r="${_P66}/src-repo"
+  g init -q "${r}" && mkdir -p "${r}/bin"
+  for v in 1.0.0 1.1.0 1.2.0 1.4.0 1.5.0 1.7.0; do
+    pv="${v}"; [[ "${v}" == 1.7.0 ]] && pv=1.7.1
+    cat >"${r}/bin/composer" <<EOF
+#!/bin/bash
+case "\$1" in
+  --version) echo "Composer version ${pv} 2026-08-27 13:34:23" ;;
+  global)
+    case "\$2" in
+      require)
+        lv="\${4#laravel/installer:}"; lv="\${lv#v}"; [[ "\${lv}" == 1.4.0 ]] && lv=1.4.00
+        mkdir -p "\${COMPOSER_HOME}/vendor/bin"
+        printf '#!/bin/bash\necho "Laravel Installer %s"\n' "\${lv}" >"\${COMPOSER_HOME}/vendor/bin/laravel"
+        chmod +x "\${COMPOSER_HOME}/vendor/bin/laravel" ;;
+      show) [[ -f "\${COMPOSER_HOME}/vendor/bin/laravel" ]] ;;
+    esac ;;
+esac
+EOF
+    chmod +x "${r}/bin/composer"
+    g -C "${r}" add -A && g -C "${r}" commit -qm "${v}" && g -C "${r}" tag "${v}"
+  done
+  g clone -q --bare "${r}" "${_P66}/gh/composer/composer.git"
+) >/dev/null 2>&1
+# 1.0.0/1.1.0 good; 1.2.0 phar published with a wrong sha256; 1.3.0 phar fine but no
+# such tag to clone; 1.4.0 phar reports 1.4.00; 1.5.0 `composer install` fails; 1.7.0
+# phar is right but the source at that tag builds a composer reporting 1.7.1.
+_p66_phar 1.0.0 1.0.0 ok
+_p66_phar 1.1.0 1.1.0 ok
+_p66_phar 1.2.0 1.2.0 ok
+_p66_phar 1.3.0 1.3.0 ok
+_p66_phar 1.4.0 1.4.00 ok
+_p66_phar 1.5.0 1.5.0 failinstall
+_p66_phar 1.7.0 1.7.0 ok
+printf '%064d  composer.phar\n' 0 >"${_P66}/up/dl/1.2.0/composer.phar.sha256sum"
+assert_pass "66a: fixture — repo tags, real sha256sum format, the redirect reaches the repo (non-vacuity)" \
+  bash -c 'cd "$1/up/dl/1.1.0" && grep -qE "^[0-9a-f]{64}  composer\.phar$" composer.phar.sha256sum && sha256sum -c --quiet composer.phar.sha256sum \
+    && GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0="url.$1/gh/.insteadOf" GIT_CONFIG_VALUE_0=https://github.com/ \
+       git ls-remote --tags https://github.com/composer/composer.git | grep -c "refs/tags/1\.[0-9]\.0$" | grep -qx 6' _ "${_P66}"
+
+_P66_OTHERS='ZEPHIR_LANG:zephir:bin/zephir PHALCON_DEVTOOLS:phalcon:bin/phalcon DEPLOYER:deployer:bin/dep SYMFONY_CLI:symfony-cli:symfony/bin/symfony PICKLE:pickle:bin/pickle PIE:pie:bin/pie MAGO:mago:bin/mago CASTOR:castor:bin/castor FABPOT_LOCAL_PHP_SECURITY_CHECKER:fabpot-local-php-security-checker:bin/fabpot-local-php-security-checker'
+_p66_prep() { # $1 = installed composer tag|none, $2 = composer marker|none, $3 = installed laravel version|none, $4 = laravel marker|none
+  local t="${_P66}/tools" o
+  rm -rf "${t}" "${_P66}/curl.log"
+  mkdir -p "${t}/versions" "${t}/errors" "${t}/bin" "${t}/symfony/bin" "${t}/composer/bin"
+  for o in ${_P66_OTHERS}; do
+    : >"${t}/${o##*:}"
+    o="${o#*:}"
+    printf 'n1\n' >"${t}/versions/phpbrew.${o%%:*}"
+  done
+  if [[ "$1" != none ]]; then
+    GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 git -c advice.detachedHead=false clone -q --branch "$1" "${_P66}/src-repo" "${t}/composer/source" >/dev/null 2>&1
+    mkdir -p "${t}/composer/source/vendor"
+    : >"${t}/composer/source/stale-from-$1"
+    cp "${_P66}/up/dl/$1/composer.phar" "${t}/composer/bin/composer"
+  fi
+  [[ "$2" == none ]] || printf '%s\n' "$2" >"${t}/versions/phpbrew.composer"
+  if [[ "$3" != none ]]; then
+    mkdir -p "${t}/composer/vendor/bin"
+    printf '#!/bin/bash\necho "Laravel Installer %s"\n' "$3" >"${t}/composer/vendor/bin/laravel"
+    chmod +x "${t}/composer/vendor/bin/laravel"
+  fi
+  [[ "$4" == none ]] || printf '%s\n' "$4" >"${t}/versions/phpbrew.laravel-installer"
+}
+_p66_run() { # $1 = composer pin, $2 = laravel pin → state string
+  local rc=0 t="${_P66}/tools" src phar lar
+  (cd "${_P66}/work" && env -i HOME="${_P66}" P66="${_P66}" \
+    PATH="${_P66}/stub:${t}/composer/source/bin:${DIST_BIN}/base-bin:/usr/bin:/bin" \
+    GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_COUNT=1 \
+    "GIT_CONFIG_KEY_0=url.${_P66}/gh/.insteadOf" GIT_CONFIG_VALUE_0=https://github.com/ \
+    GLOBAL_STACK_ERROR_TOKEN=p66-token GLOBAL_STACK_DOCKER_TOOLS_PATH="${t}" \
+    GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS="${t}/errors" GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS="${t}/versions" \
+    GLOBAL_STACK_DOCKER_ROOT_DIST_PATH="${_P66}/dist" \
+    PHPBREW_BIN="${t}/bin" SYMFONY_HOME="${t}/symfony" COMPOSER_HOME="${t}/composer" COMPOSER_SOURCE="${t}/composer/source" \
+    GLOBAL_STACK_COMPOSER_VERSION="$1" GLOBAL_STACK_LARAVEL_INSTALLER_VERSION="$2" \
+    GLOBAL_STACK_ZEPHIR_LANG_VERSION=n1 GLOBAL_STACK_PHALCON_DEVTOOLS_VERSION=n1 GLOBAL_STACK_DEPLOYER_VERSION=n1 \
+    GLOBAL_STACK_SYMFONY_CLI_VERSION=n1 GLOBAL_STACK_PICKLE_VERSION=n1 GLOBAL_STACK_PIE_VERSION=n1 \
+    GLOBAL_STACK_MAGO_VERSION=n1 GLOBAL_STACK_CASTOR_VERSION=n1 GLOBAL_STACK_FABPOT_LOCAL_PHP_SECURITY_CHECKER_VERSION=n1 \
+    bash "${DIST_BIN}/phpbrew-bin/global-stack-phpbrew-install-tools.sh") >"${_P66}/last.log" 2>&1 || rc=fail
+  src="$({ bash "${t}/composer/source/bin/composer" --version 2>/dev/null || true; } | awk '{ print $3 }')"
+  phar="$({ bash "${t}/composer/bin/composer" --version 2>/dev/null || true; } | awk '{ print $3 }')"
+  lar="$({ bash "${t}/composer/vendor/bin/laravel" 2>/dev/null || true; } | awk '{ print $3 }')"
+  printf 'rc=%s src=%s phar=%s marker=%s stale=%s overlay=%s vendor=%s laravel=%s lmarker=%s' "${rc}" \
+    "${src:-none}" "${phar:-none}" "$(cat "${t}/versions/phpbrew.composer" 2>/dev/null || echo none)" \
+    "$(if compgen -G "${t}/composer/source/stale-from-*" >/dev/null; then echo yes; else echo no; fi)" \
+    "$(if [[ -e "${t}/composer/source/src/overlay-applied" ]]; then echo yes; else echo no; fi)" \
+    "$(if [[ -e "${t}/composer/source/vendor" ]]; then echo yes; else echo no; fi)" \
+    "${lar:-none}" "$(cat "${t}/versions/phpbrew.laravel-installer" 2>/dev/null || echo none)"
+}
+mkdir -p "${_P66}/dist/conf/phpbrew-composer"
+cp -r "${_P66}/overlay" "${_P66}/dist/conf/phpbrew-composer/source"
+
+_p66_prep none none none none
+assert_pass "66b: first install -> pinned phar + source built at the tag, overlay applied, laravel at its pin" \
+  test "$(_p66_run 1.1.0 v1.1.0)" = "rc=0 src=1.1.0 phar=1.1.0 marker=1.1.0 stale=no overlay=yes vendor=yes laravel=1.1.0 lmarker=v1.1.0"
+_p66_prep 1.0.0 1.0.0 1.0.0 v1.0.0
+assert_pass "66c: composer 1.0.0 -> pin 1.1.0: new source and phar, old source gone, laravel kept" \
+  test "$(_p66_run 1.1.0 v1.0.0)" = "rc=0 src=1.1.0 phar=1.1.0 marker=1.1.0 stale=no overlay=yes vendor=yes laravel=1.0.0 lmarker=v1.0.0"
+_p66_prep 1.1.0 1.1.0 1.0.0 v1.0.0
+assert_pass "66d: composer 1.1.0 -> pin moved back to 1.0.0" \
+  test "$(_p66_run 1.0.0 v1.0.0)" = "rc=0 src=1.0.0 phar=1.0.0 marker=1.0.0 stale=no overlay=yes vendor=yes laravel=1.0.0 lmarker=v1.0.0"
+for _c in '1.2.0:phar fails its published sha256' '1.3.0:no such tag to clone' '1.4.0:phar reports 1.4.00' '1.5.0:composer install fails' '1.6.0:phar not published' '1.7.0:source builds 1.7.1'; do
+  _p66_prep 1.0.0 1.0.0 1.0.0 v1.0.0
+  _o="$(_p66_run "${_c%%:*}" v1.0.0)"
+  assert_pass "66e: composer pin ${_c%%:*} (${_c#*:}) -> FATAL, old source, phar and marker untouched" \
+    bash -c '[[ "$1" == "rc=fail src=1.0.0 phar=1.0.0 marker=1.0.0 stale=yes overlay=no vendor=yes laravel=1.0.0 lmarker=v1.0.0" ]] && grep -q "^FATAL: .*composer left as it was" "$2/last.log"' _ "${_o}" "${_P66}"
+done
+_p66_prep 1.1.0 1.1.0 1.0.0 v1.0.0
+assert_pass "66f: laravel v1.0.0 -> pin v1.1.0: installed and checked, marker written" \
+  test "$(_p66_run 1.1.0 v1.1.0)" = "rc=0 src=1.1.0 phar=1.1.0 marker=1.1.0 stale=yes overlay=no vendor=yes laravel=1.1.0 lmarker=v1.1.0"
+_p66_prep 1.1.0 1.1.0 1.0.0 v1.0.0
+assert_pass "66g: laravel pin v1.4.0 installs something reporting 1.4.00 -> FATAL, marker not written" \
+  bash -c '[[ "$1" == rc=fail\ *\ laravel=1.4.00\ lmarker=v1.0.0 ]]' _ "$(_p66_run 1.1.0 v1.4.0)"
+_p66_prep 1.1.0 1.1.0 1.1.0 v1.1.0
+_o="$(_p66_run 1.1.0 v1.1.0)"
+assert_pass "66h: everything current -> nothing downloaded, nothing touched" \
+  bash -c '[[ "$1" == "rc=0 src=1.1.0 phar=1.1.0 marker=1.1.0 stale=yes overlay=no vendor=yes laravel=1.1.0 lmarker=v1.1.0" && ! -s "$2/curl.log" ]]' _ "${_o}" "${_P66}"
+# Comment lines stripped (the §19 shape): the rewrite's own comment names what it replaced.
+assert_fail "66i: composer-setup.php (the unpinned bootstrap) is gone from executable lines" \
+  bash -c 'grep -vE "^[[:space:]]*#" "$1" | grep -q "composer-setup\.php"' _ "${PHPBREW_TOOLS}"
+
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
 if [[ "${FAIL}" -eq 0 ]]; then
