@@ -321,7 +321,19 @@ then drop the old dir and wipe `pkg.*`; the marker is written where it is today 
   is now dropped (emptiness tested first — a bare `rmdir` would abort under `set -e` before the FATAL could say
   why) and the aside restored; FATAL only when GOPATH has content. 63j3 red first; SA1 (no drop) caught, SA2
   (drop without the emptiness test) first SURVIVED — rc and dirs are identical, only the message is lost — so
-  63j2 now also requires the FATAL text.
+  63j2 now also requires the FATAL text. Commit `84cd38f`.
+- AS BUILT (14b): the pinned `mise-<v>-linux-x64` + `SHASUMS256.txt` (assets named `./<asset>`, so the check
+  runs inside the temp dir) replace `curl https://mise.run | sh`; the checksum and `--version` (printed WITHOUT
+  the `v`, matched as `<v> ` with the space) are checked BEFORE the wipe, and that pre-wipe `--version` runs
+  with every `MISE_*_DIR` in the temp dir — `--version` migrates whatever data dir it is given [Verified: the
+  `migrate` WARN in the probe]. Then wipe, `install -m 0755` (removes and copies in one step, nothing next to
+  the old binary), installed copy re-checked, `mise use -g usage`, marker last. `usage` is the one step still
+  reaching the network after the wipe; its failure stays FATAL because a mise without `usage` is broken and a
+  marker would lie — the next boot retries (64h). §64: 11 checks, 9 red first (the old code wiped the data and
+  then failed on the piped installer: `data=none` on every pin, even a bad one). Sabotage M1–M5 each caught,
+  restored byte-identical. Suite 780/780. Real downloads in a throwaway 00base container: v2026.9.10 →
+  v2026.9.11 → v2026.9.10, stale data gone each time, real `usage` installed, current pin untouched, no temp
+  dir left [Verified: ran].
 
 ### Step 15 — composer bootstrap pinned (S)
 - `phpbrew-install-tools.sh:24-25` runs `composer-setup.php` with no `--version` → latest [Verified: pass 2

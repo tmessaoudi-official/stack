@@ -4958,6 +4958,129 @@ _o="$(P63_FAIL_CHOWN=1 _p63_run go 1.1.0)"
 assert_pass "63m: go failure while GOPATH is aside (chown fails) -> GOPATH restored by the EXIT trap, marker kept" \
   bash -c '[[ "$1" == rc=fail\ *\ marker=1.0.0\ *\ gopath=600\ aside=no ]]' _ "${_o}"
 
+# ─── Section 64: mise is checked BEFORE its data is wiped (tranche 2 step 14b) ──
+# install-mise.sh removed mise's four data dirs and THEN piped https://mise.run into sh,
+# so a failed download left mise with no data, and a remote script ran unchecked. Now
+# (ruling 2026-09-25 09:58) the pinned release binary and the release's SHASUMS256.txt
+# land in a temp dir; the checksum and `--version` are checked first — with every
+# MISE_*_DIR pointed into the temp dir, because `--version` migrates whatever data dir
+# it is given — and only then are the data dirs wiped, the binary installed, the
+# installed copy checked, `mise use -g usage` run, and the marker written. A `usage`
+# failure stays fatal (64h): a mise without `usage` is broken, so a marker would lie.
+# The fixture mirrors the real release: SHASUMS256.txt names assets as
+# `<sha>  ./mise-<v>-linux-x64`, and `--version` prints `<v without the leading v> linux-x64 (<date>)`
+# [measured on v2026.9.11, 2026-09-25].
+printf '\n%b── Section 64: mise checked first, then data wiped and installed (tranche 2 step 14b)%b\n' "${C_BOLD}" "${C_RESET}"
+
+_P64="${TMP_DIR}/p64"
+mkdir -p "${_P64}/stub" "${_P64}/up" "${_P64}/work"
+cat >"${_P64}/stub/curl" <<'EOF'
+#!/bin/bash
+out="" dash_o=0 url=""
+while (($#)); do
+  case "$1" in
+    --connect-timeout | --max-time) shift ;;
+    -o) out="$2"; shift ;;
+    --*) ;;
+    -*) [[ "$1" == *O* ]] && dash_o=1 ;;
+    http*) url="$1" ;;
+  esac
+  shift
+done
+printf '%s\n' "${url}" >>"${P64}/curl.log"
+case "${url}" in
+  https://github.com/jdx/mise/releases/download/*) f="${P64}/up/${url#https://github.com/jdx/mise/releases/download/}" ;;
+  *) exit 22 ;;
+esac
+[[ -f "${f}" ]] || exit 22
+if [[ -n "${out}" ]]; then cp "${f}" "${out}"; elif ((dash_o)); then cp "${f}" "./${url##*/}"; else cat "${f}"; fi
+EOF
+chmod +x "${_P64}/stub/curl"
+
+_p64_mk() { # $1 = tag (v1.0.0), $2 = version the binary prints (without v)
+  local d="${_P64}/up/$1" a="mise-$1-linux-x64"
+  mkdir -p "${d}"
+  cat >"${d}/${a}" <<EOF
+#!/bin/bash
+case "\$1" in
+  --version) printf '%s\n' "\${MISE_DATA_DIR}" >>"\${P64}/version-data-dirs"; echo "$2 linux-x64 (2026-09-18)" ;;
+  use) printf '%s\n' "\$*" >>"\${P64}/use.log"; [[ -z "\${P64_FAIL_USE:-}" ]] || exit 1; mkdir -p "\${MISE_DATA_DIR}/installs/usage" ;;
+esac
+EOF
+  chmod +x "${d}/${a}"
+  (cd "${d}" && sha256sum "./${a}" >SHASUMS256.txt)
+}
+# v1.0.0/v1.1.0 good; v1.2.0 published with a wrong checksum; v1.4.0 reports 1.4.00;
+# v1.5.0 not published.
+_p64_mk v1.0.0 1.0.0
+_p64_mk v1.1.0 1.1.0
+_p64_mk v1.2.0 1.2.0
+_p64_mk v1.4.0 1.4.00
+printf '%064d  ./mise-v1.2.0-linux-x64\n' 0 >"${_P64}/up/v1.2.0/SHASUMS256.txt"
+assert_pass "64a: fixture SHASUMS256.txt uses the real './<asset>' naming and verifies (non-vacuity)" \
+  bash -c 'cd "$1/up/v1.1.0" && grep -qE "^[0-9a-f]{64}  \./mise-v1\.1\.0-linux-x64$" SHASUMS256.txt && sha256sum -c --quiet SHASUMS256.txt' _ "${_P64}"
+
+_p64_prep() { # $1 = installed tag|none (binary + a stale data file + marker)
+  rm -rf "${_P64}/tools" "${_P64}/version-data-dirs" "${_P64}/use.log"
+  mkdir -p "${_P64}/tools/bin" "${_P64}/tools/versions" "${_P64}/tools/shellrc"
+  if [[ "$1" != none ]]; then
+    cp "${_P64}/up/$1/mise-$1-linux-x64" "${_P64}/tools/bin/mise"
+    mkdir -p "${_P64}/tools/mise/share/installs/stale-from-$1" "${_P64}/tools/mise/state" "${_P64}/tools/mise/config" "${_P64}/tools/mise/cache"
+    printf '%s\n' "$1" >"${_P64}/tools/versions/base.mise"
+  fi
+}
+_p64_run() { # $1 = pin → "rc=<0|fail> ver=<v|none> marker=<m|none> data=<share/installs entries|none>"
+  local rc=0 t="${_P64}/tools" ver data
+  rm -f "${_P64}/curl.log"
+  (cd "${_P64}/work" && env -i HOME="${_P64}" P64="${_P64}" P64_FAIL_USE="${P64_FAIL_USE:-}" \
+    PATH="${_P64}/stub:${t}/bin:${DIST_BIN}/base-bin:/usr/bin:/bin" \
+    GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS="${t}/versions" GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC="${t}/shellrc" \
+    GLOBAL_STACK_MISE_VERSION="$1" GLOBAL_STACK_BASE_INSTALL_TOOLS=true \
+    MISE_VERSION="$1" MISE_DEBUG=0 MISE_QUIET=1 MISE_INSTALL_PATH="${t}/bin/mise" \
+    MISE_DATA_DIR="${t}/mise/share" MISE_STATE_DIR="${t}/mise/state" \
+    MISE_CONFIG_DIR="${t}/mise/config" MISE_CACHE_DIR="${t}/mise/cache" \
+    bash "${DIST_BIN}/base-bin/global-stack-base-install-mise.sh") >"${_P64}/last.log" 2>&1 || rc=fail
+  # A missing binary or installs/ dir is a state to report, not a suite error.
+  ver="$({ "${t}/bin/mise" --version 2>/dev/null || true; } | awk '{ print $1 }')"
+  data="$({ find "${t}/mise/share/installs" -mindepth 1 -maxdepth 1 -printf '%f\n' 2>/dev/null || true; } | sort | paste -sd, -)"
+  printf 'rc=%s ver=%s marker=%s data=%s' "${rc}" "${ver:-none}" \
+    "$(cat "${t}/versions/base.mise" 2>/dev/null || echo none)" "${data:-none}"
+}
+_p64_curls() { if [[ -f "${_P64}/curl.log" ]]; then wc -l <"${_P64}/curl.log" | tr -d ' '; else echo 0; fi; }
+
+_p64_prep none
+assert_pass "64b: first install -> the pinned binary, usage installed, marker written" \
+  test "$(_p64_run v1.1.0)" = "rc=0 ver=1.1.0 marker=v1.1.0 data=usage"
+_p64_prep v1.0.0
+assert_pass "64c: v1.0.0 -> pin v1.1.0: new binary, data wiped then usage reinstalled" \
+  test "$(_p64_run v1.1.0)" = "rc=0 ver=1.1.0 marker=v1.1.0 data=usage"
+_p64_prep v1.1.0
+assert_pass "64d: v1.1.0 -> pin moved back to v1.0.0: old binary, data wiped then usage reinstalled" \
+  test "$(_p64_run v1.0.0)" = "rc=0 ver=1.0.0 marker=v1.0.0 data=usage"
+_p64_prep v1.0.0
+assert_pass "64e: checksum mismatch -> FATAL, old binary, data and marker untouched" \
+  test "$(_p64_run v1.2.0)" = "rc=fail ver=1.0.0 marker=v1.0.0 data=stale-from-v1.0.0"
+_p64_prep v1.0.0
+assert_pass "64f: downloaded binary reports 1.4.00 for pin v1.4.0 -> FATAL, old binary, data and marker untouched" \
+  test "$(_p64_run v1.4.0)" = "rc=fail ver=1.0.0 marker=v1.0.0 data=stale-from-v1.0.0"
+_p64_prep v1.0.0
+assert_pass "64g: pin not published (download fails) -> FATAL, old binary, data and marker untouched" \
+  test "$(_p64_run v1.5.0)" = "rc=fail ver=1.0.0 marker=v1.0.0 data=stale-from-v1.0.0"
+_p64_prep v1.0.0
+_o="$(P64_FAIL_USE=1 _p64_run v1.1.0)"
+assert_pass "64h: \`mise use -g usage\` fails -> FATAL, marker NOT written (a mise without usage is broken)" \
+  test "${_o}" = "rc=fail ver=1.1.0 marker=v1.0.0 data=none"
+_p64_prep v1.0.0
+_p64_run v1.1.0 >/dev/null || true
+assert_pass "64i: the pre-wipe --version check never touches the live data dir" \
+  bash -c '[[ -s "$1/version-data-dirs" ]] && ! grep -qxF "$1/tools/mise/share" <(head -1 "$1/version-data-dirs")' _ "${_P64}"
+_p64_prep v1.1.0
+_o="$(_p64_run v1.1.0)"
+assert_pass "64j: current -> nothing downloaded, nothing touched" \
+  bash -c '[[ "$1" == "rc=0 ver=1.1.0 marker=v1.1.0 data=stale-from-v1.1.0" && "$2" == 0 ]]' _ "${_o}" "$(_p64_curls)"
+assert_fail "64k: no remote script is piped into a shell" \
+  grep -qE '\|[[:space:]]*(ba)?sh\b' "${DIST_BIN}/base-bin/global-stack-base-install-mise.sh"
+
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
 if [[ "${FAIL}" -eq 0 ]]; then
