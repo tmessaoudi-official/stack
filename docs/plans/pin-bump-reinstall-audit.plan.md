@@ -397,6 +397,16 @@ then drop the old dir and wipe `pkg.*`; the marker is written where it is today 
   source/phar/markers and a planted sentinel untouched) → no-op → 2.10.2 + v5.31.0. Source, phar and laravel
   report the pin every time, the overlay file matches, a planted stale file is gone after each reinstall, no
   temp dir left on success [Verified: ran]. zephir … fabpot are untouched in 15a (15b/15c).
+- AS BUILT (15a follow-up, found at 6C): the script now `cd`s into its temp dir. The later blocks
+  download with `curl -O` into the cwd and run `rm -rf zephir.pha*` (phalcon/pickle/pie likewise) there on
+  EVERY boot; the cwd is compose's `working_dir` `/stack/projects` [Verified: `compose config` →
+  `working_dir=/stack/projects`], so a developer file matching the glob was deleted. The old composer block's
+  bare `cd` into its source moved that onto composer's tree on reinstall boots; `a40d2e7` (subshell `cd` only)
+  left every boot in the projects dir. 66j (a projects-like cwd holding `zephir.phar-notes`, composer
+  reinstall + zephir bump) was red first for that reason (`proj=[]`); S8 (drop the `cd`) caught and restored.
+  Suite 808/808. REAL: `-w /stack/projects` over a scratch projects dir with the planted file, composer
+  2.10.2 → 2.10.3 plus a real zephir 1.4.0 download (3.3 MB phar installed, marker 1.4.0); the planted file
+  survived, nothing was added, no temp dir left [Verified: ran].
 
 ### Step 16 — android SDK (M/L) — DESIGN FORK, needs a ruling
 - Any change to the 14 SDK inputs wipes `ANDROID_HOME`, `ANDROID_SDK_HOME`, `ANDROID_SDK_ROOT` AND

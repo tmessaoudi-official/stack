@@ -13,6 +13,12 @@ source global-stack-base-prologue.sh
 # container's /tmp. Every fallible check sits inside its `if`: a bare failing
 # capture would fire the prologue's ERR trap before the FATAL could say why.
 _pt_dl="$(mktemp -d)"
+# The blocks below download with `curl -O` into the CURRENT directory and then run
+# `rm -rf zephir.pha*` (and phalcon/pickle/pie) there on EVERY boot. The cwd is compose's
+# `working_dir`, /stack/projects: the developer's own projects, where such a glob can
+# delete a file of theirs (or, after the old composer block's bare `cd`, composer's
+# source tree). Working in the temp dir keeps every download and every glob out of both.
+cd "${_pt_dl}"
 
 # _pt_names <output> <text right before the version> <version>: true when the output
 # names exactly that version — the version must not continue with a digit or a dot,

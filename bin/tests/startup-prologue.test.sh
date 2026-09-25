@@ -5195,11 +5195,13 @@ mkdir -p "${_P66}/stub" "${_P66}/up/dl" "${_P66}/gh/composer" "${_P66}/overlay/s
 : >"${_P66}/overlay/src/overlay-applied"
 cat >"${_P66}/stub/curl" <<'EOF'
 #!/bin/bash
-out="" url=""
+out="" url="" remote=0
 while (($#)); do
   case "$1" in
     --connect-timeout | --max-time) shift ;;
     -o) out="$2"; shift ;;
+    --*) ;;
+    -*O*) remote=1 ;;
     http*) url="$1" ;;
   esac
   shift
@@ -5207,8 +5209,11 @@ done
 printf '%s\n' "${url}" >>"${P66}/curl.log"
 case "${url}" in
   https://getcomposer.org/download/*) f="${P66}/up/dl/${url#https://getcomposer.org/download/}" ;;
+  https://github.com/zephir-lang/zephir/releases/download/*/zephir.phar) f="${P66}/up/zephir.phar" ;;
   *) exit 22 ;;
 esac
+# -O writes the remote name into the CURRENT directory, as the real curl does.
+((remote)) && out="${url##*/}"
 [[ -f "${f}" && -n "${out}" ]] || exit 22
 cp "${f}" "${out}"
 EOF
@@ -5300,7 +5305,7 @@ _p66_prep() { # $1 = installed composer tag|none, $2 = composer marker|none, $3 
 }
 _p66_run() { # $1 = composer pin, $2 = laravel pin → state string
   local rc=0 t="${_P66}/tools" src phar lar
-  (cd "${_P66}/work" && env -i HOME="${_P66}" P66="${_P66}" \
+  (cd "${_P66_CWD:-${_P66}/work}" && env -i HOME="${_P66}" P66="${_P66}" \
     PATH="${_P66}/stub:${t}/composer/source/bin:${DIST_BIN}/base-bin:/usr/bin:/bin" \
     GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_COUNT=1 \
     "GIT_CONFIG_KEY_0=url.${_P66}/gh/.insteadOf" GIT_CONFIG_VALUE_0=https://github.com/ \
@@ -5309,7 +5314,7 @@ _p66_run() { # $1 = composer pin, $2 = laravel pin → state string
     GLOBAL_STACK_DOCKER_ROOT_DIST_PATH="${_P66}/dist" \
     PHPBREW_BIN="${t}/bin" SYMFONY_HOME="${t}/symfony" COMPOSER_HOME="${t}/composer" COMPOSER_SOURCE="${t}/composer/source" \
     GLOBAL_STACK_COMPOSER_VERSION="$1" GLOBAL_STACK_LARAVEL_INSTALLER_VERSION="$2" \
-    GLOBAL_STACK_ZEPHIR_LANG_VERSION=n1 GLOBAL_STACK_PHALCON_DEVTOOLS_VERSION=n1 GLOBAL_STACK_DEPLOYER_VERSION=n1 \
+    GLOBAL_STACK_ZEPHIR_LANG_VERSION="${_P66_ZEPHIR:-n1}" GLOBAL_STACK_PHALCON_DEVTOOLS_VERSION=n1 GLOBAL_STACK_DEPLOYER_VERSION=n1 \
     GLOBAL_STACK_SYMFONY_CLI_VERSION=n1 GLOBAL_STACK_PICKLE_VERSION=n1 GLOBAL_STACK_PIE_VERSION=n1 \
     GLOBAL_STACK_MAGO_VERSION=n1 GLOBAL_STACK_CASTOR_VERSION=n1 GLOBAL_STACK_FABPOT_LOCAL_PHP_SECURITY_CHECKER_VERSION=n1 \
     bash "${DIST_BIN}/phpbrew-bin/global-stack-phpbrew-install-tools.sh") >"${_P66}/last.log" 2>&1 || rc=fail
@@ -5351,6 +5356,18 @@ _p66_prep 1.1.0 1.1.0 1.1.0 v1.1.0
 _o="$(_p66_run 1.1.0 v1.1.0)"
 assert_pass "66h: everything current -> nothing downloaded, nothing touched" \
   bash -c '[[ "$1" == "rc=0 src=1.1.0 phar=1.1.0 marker=1.1.0 stale=yes overlay=no vendor=yes laravel=1.1.0 lmarker=v1.1.0" && ! -s "$2/curl.log" ]]' _ "${_o}" "${_P66}"
+# The script's cwd is compose's working_dir, /stack/projects: the developer's projects.
+# The later blocks download with `curl -O` into the cwd and run `rm -rf zephir.pha*` (and
+# phalcon/pickle/pie) there on every boot, so a developer file matching the glob was
+# deleted. The model: a projects-like cwd holding such a file, composer reinstalling AND
+# zephir bumped; the file must survive and nothing may be written beside it.
+printf 'zephir-fixture\n' >"${_P66}/up/zephir.phar"
+mkdir -p "${_P66}/proj"
+printf 'mine\n' >"${_P66}/proj/zephir.phar-notes"
+_p66_prep 1.0.0 1.0.0 1.1.0 v1.1.0
+_o="$(_P66_CWD="${_P66}/proj" _P66_ZEPHIR=n2 _p66_run 1.1.0 v1.1.0)"
+assert_pass "66j: cwd = the projects dir, composer reinstall + zephir bump -> both installed, the developer's zephir.phar-notes survives, nothing added" \
+  bash -c '[[ "$1" == rc=0\ src=1.1.0\ phar=1.1.0\ marker=1.1.0\ * && "$(cat "$2/tools/versions/phpbrew.zephir")" == n2 && "$(cat "$2/tools/bin/zephir")" == zephir-fixture && "$(ls -A "$2/proj")" == zephir.phar-notes ]]' _ "${_o}" "${_P66}"
 # Comment lines stripped (the §19 shape): the rewrite's own comment names what it replaced.
 assert_fail "66i: composer-setup.php (the unpinned bootstrap) is gone from executable lines" \
   bash -c 'grep -vE "^[[:space:]]*#" "$1" | grep -q "composer-setup\.php"' _ "${PHPBREW_TOOLS}"
