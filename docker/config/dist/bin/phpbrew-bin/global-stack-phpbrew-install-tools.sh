@@ -13,11 +13,11 @@ source global-stack-base-prologue.sh
 # container's /tmp. Every fallible check sits inside its `if`: a bare failing
 # capture would fire the prologue's ERR trap before the FATAL could say why.
 _pt_dl="$(mktemp -d)"
-# The blocks below download with `curl -O` into the CURRENT directory and then run
-# `rm -rf zephir.pha*` (and phalcon/pickle/pie) there on EVERY boot. The cwd is compose's
-# `working_dir`, /stack/projects: the developer's own projects, where such a glob can
-# delete a file of theirs (or, after the old composer block's bare `cd`, composer's
-# source tree). Working in the temp dir keeps every download and every glob out of both.
+# symfony still downloads with `curl -O` into the CURRENT directory (the phar blocks did
+# too, and ran `rm -rf zephir.pha*`-style globs there on EVERY boot until step 15b). The
+# cwd is compose's `working_dir`, /stack/projects: the developer's own projects, where
+# such a glob deleted a file of theirs (or, after the old composer block's bare `cd`,
+# composer's source tree). Working in the temp dir keeps every download out of both.
 cd "${_pt_dl}"
 
 # _pt_names <output> <text right before the version> <version>: true when the output
@@ -34,6 +34,37 @@ _pt_names() {
 _pt_fatal() {
     printf 'FATAL: %s\n' "$1" >&2
     exit 1
+}
+
+# _pt_phar <tool> <url>: download to ${_pt_dl}/<tool>.phar and open it as a Phar. With
+# phar.require_hash on (the image's default) the open verifies the archive's signature,
+# so a truncated file, an HTML error page and a single corrupted byte are all refused
+# [measured in the 02phpbrew image, 2026-09-25]. PHP opens only a *.phar name, hence -o.
+# None of these tools publishes a checksum, so this is their integrity check.
+_pt_phar() {
+    if ! curl --connect-timeout 30 --max-time 300 -fsSL -o "${_pt_dl}/$1.phar" "$2"; then
+        _pt_fatal "$1 could not be downloaded from $2 - $1 left as it was"
+    fi
+    if ! php -r 'try { new Phar($argv[1]); } catch (Throwable $e) { exit(1); }' "${_pt_dl}/$1.phar" >/dev/null 2>&1; then
+        _pt_fatal "$1 from $2 is not an intact phar - $1 left as it was"
+    fi
+}
+
+# _pt_runs <file> <text right before the version> <version>: the file runs under php and
+# names exactly that version. Only deployer and pie can run under the image's php;
+# zephir, phalcon and pickle need mbstring, so their version is pinned by URL alone.
+_pt_runs() {
+    local _pt_v
+    _pt_v="$(php "$1" --version --no-ansi 2>/dev/null)" && _pt_names "${_pt_v}" "$2" "$3"
+}
+
+# _pt_place <tool> <installed path>: replace the installed copy with the checked download
+# and compare the two, so an interrupted copy cannot leave a marker behind.
+_pt_place() {
+    install -m 0755 "${_pt_dl}/$1.phar" "$2"
+    if ! cmp -s "${_pt_dl}/$1.phar" "$2"; then
+        _pt_fatal "the installed $1 differs from the checked download - marker not written"
+    fi
 }
 
 COMPOSER_PHAR_FILE="${COMPOSER_SOURCE}/bin/composer"
@@ -116,12 +147,10 @@ if [ "${_zephir_gate}" = "skip" ] && [ -f "${ZEPHIR_LANG_PHAR_FILE}" ]; then
     echo -e "\n${ZEPHIR_LANG_PHAR_FILE} already installed (${ZEPHIR_LANG_LATEST})."
 else
     echo -e "\nInstalling ${ZEPHIR_LANG_PHAR_FILE}."
-    curl --connect-timeout 30 --max-time 300 -fsSLO "https://github.com/zephir-lang/zephir/releases/download/${ZEPHIR_LANG_LATEST}/zephir.phar"
-    mv zephir.phar "${ZEPHIR_LANG_PHAR_FILE}"
-    chmod a+x "${ZEPHIR_LANG_PHAR_FILE}"
+    _pt_phar zephir "https://github.com/zephir-lang/zephir/releases/download/${ZEPHIR_LANG_LATEST}/zephir.phar"
+    _pt_place zephir "${ZEPHIR_LANG_PHAR_FILE}"
     printf '%s\n' "${ZEPHIR_LANG_LATEST}" >"${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew.zephir"
 fi
-rm -rf zephir.pha*
 
 PHALCON_DEVTOOLS_PHAR_FILE="${PHPBREW_BIN}/phalcon"
 # PHALCON_DEVTOOLS_LATEST=$(curl --silent https://api.github.com/repos/phalcon/phalcon-devtools/releases/latest | jq .name -r)
@@ -131,12 +160,10 @@ if [ "${_phalcon_gate}" = "skip" ] && [ -f "${PHALCON_DEVTOOLS_PHAR_FILE}" ]; th
     echo -e "\n${PHALCON_DEVTOOLS_PHAR_FILE} already installed (${PHALCON_DEVTOOLS_LATEST})."
 else
     echo -e "\nInstalling ${PHALCON_DEVTOOLS_PHAR_FILE}."
-    curl --connect-timeout 30 --max-time 300 -fsSLO "https://github.com/phalcon/phalcon-devtools/releases/download/${PHALCON_DEVTOOLS_LATEST}/phalcon.phar"
-    mv phalcon.phar "${PHALCON_DEVTOOLS_PHAR_FILE}"
-    chmod a+x "${PHALCON_DEVTOOLS_PHAR_FILE}"
+    _pt_phar phalcon "https://github.com/phalcon/phalcon-devtools/releases/download/${PHALCON_DEVTOOLS_LATEST}/phalcon.phar"
+    _pt_place phalcon "${PHALCON_DEVTOOLS_PHAR_FILE}"
     printf '%s\n' "${PHALCON_DEVTOOLS_LATEST}" >"${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew.phalcon"
 fi
-rm -rf phalcon.pha*
 
 DEPLOYER_PHAR_FILE="${PHPBREW_BIN}/dep"
 # Was the write-only-marker shape: it WROTE phpbrew.deployer but the guard only
@@ -147,9 +174,11 @@ if [ "${_deployer_gate}" = "skip" ] && [ -f "${DEPLOYER_PHAR_FILE}" ]; then
     echo -e "\n${DEPLOYER_PHAR_FILE} already installed (${GLOBAL_STACK_DEPLOYER_VERSION})."
 else
     echo -e "\nInstalling ${DEPLOYER_PHAR_FILE}."
-    curl --connect-timeout 30 --max-time 300 -LO https://github.com/deployphp/deployer/releases/download/${GLOBAL_STACK_DEPLOYER_VERSION}/deployer.phar
-    mv deployer.phar "${DEPLOYER_PHAR_FILE}" 2> /dev/null
-    chmod a+x "${DEPLOYER_PHAR_FILE}" 2> /dev/null
+    _pt_phar deployer "https://github.com/deployphp/deployer/releases/download/${GLOBAL_STACK_DEPLOYER_VERSION}/deployer.phar"
+    if ! _pt_runs "${_pt_dl}/deployer.phar" "Deployer " "${GLOBAL_STACK_DEPLOYER_VERSION#v}"; then
+        _pt_fatal "the downloaded deployer is not ${GLOBAL_STACK_DEPLOYER_VERSION} - deployer left as it was"
+    fi
+    _pt_place deployer "${DEPLOYER_PHAR_FILE}"
     printf '%s\n' "${GLOBAL_STACK_DEPLOYER_VERSION}" >"${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew.deployer"
 fi
 
@@ -189,12 +218,10 @@ if [ "${_pickle_gate}" = "skip" ] && [ -f "${PICKLE_PHAR_FILE}" ]; then
     echo -e "\n${PICKLE_PHAR_FILE} already installed (${PICKLE_LATEST})."
 else
     echo -e "\nInstalling ${PICKLE_PHAR_FILE}."
-    curl --connect-timeout 30 --max-time 300 -fsSLO "https://github.com/FriendsOfPHP/pickle/releases/download/${PICKLE_LATEST}/pickle.phar"
-    mv pickle.phar "${PICKLE_PHAR_FILE}"
-    chmod a+x "${PICKLE_PHAR_FILE}"
+    _pt_phar pickle "https://github.com/FriendsOfPHP/pickle/releases/download/${PICKLE_LATEST}/pickle.phar"
+    _pt_place pickle "${PICKLE_PHAR_FILE}"
     printf '%s\n' "${PICKLE_LATEST}" >"${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew.pickle"
 fi
-rm -rf pickle.pha*
 
 PIE_PHAR_FILE="${PHPBREW_BIN}/pie"
 PIE_LATEST=${GLOBAL_STACK_PIE_VERSION}
@@ -203,12 +230,13 @@ if [ "${_pie_gate}" = "skip" ] && [ -f "${PIE_PHAR_FILE}" ]; then
     echo -e "\n${PIE_PHAR_FILE} already installed (${PIE_LATEST})."
 else
     echo -e "\nInstalling ${PIE_PHAR_FILE}."
-    curl --connect-timeout 30 --max-time 300 -fsSLO "https://github.com/php/pie/releases/download/${PIE_LATEST}/pie.phar"
-    mv pie.phar "${PIE_PHAR_FILE}"
-    chmod a+x "${PIE_PHAR_FILE}"
+    _pt_phar pie "https://github.com/php/pie/releases/download/${PIE_LATEST}/pie.phar"
+    if ! _pt_runs "${_pt_dl}/pie.phar" "(PIE) " "${PIE_LATEST#v}"; then
+        _pt_fatal "the downloaded pie is not ${PIE_LATEST} - pie left as it was"
+    fi
+    _pt_place pie "${PIE_PHAR_FILE}"
     printf '%s\n' "${PIE_LATEST}" >"${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew.pie"
 fi
-rm -rf pie.pha*
 
 MAGO_PHAR_FILE="${PHPBREW_BIN}/mago"
 MAGO_LATEST=${GLOBAL_STACK_MAGO_VERSION}

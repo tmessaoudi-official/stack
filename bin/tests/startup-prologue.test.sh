@@ -1852,11 +1852,10 @@ printf '\n%b── Section 25: phpbrew-install-tools gates%b\n' "${C_BOLD}" "${C
 # The eleventh, laravel/installer, was unpinned and followed by a blanket
 # `composer global update --with-all-dependencies` that would move any pin back.
 #
-# COVERAGE HONESTY: one tool (zephir) is covered behaviourally below; the other
-# ten are covered STRUCTURALLY by the marker-last invariant. Behavioural cover for
-# all eleven would need stubs for composer, git, php, rsync and tar. The
-# structural invariant is what the marker-first defect violated, so it is the one
-# that matters — but it is a weaker guarantee than §24's per-tool execution.
+# COVERAGE HONESTY: seven of the eleven are covered behaviourally in §66 (composer,
+# laravel) and §67 (zephir, phalcon, deployer, pickle, pie); the other four (symfony,
+# mago, castor, fabpot — step 15c) only STRUCTURALLY, by the marker-last invariant
+# below, which is what the marker-first defect violated.
 PHPBREW_TOOLS="${DIST_BIN}/phpbrew-bin/global-stack-phpbrew-install-tools.sh"
 
 assert_pass "25a: phpbrew-install-tools passes bash -n" bash -n "${PHPBREW_TOOLS}"
@@ -1902,46 +1901,11 @@ assert_pass "25f: 02phpbrew compose passes it into the container" \
   grep -q 'GLOBAL_STACK_LARAVEL_INSTALLER_VERSION=\${GLOBAL_STACK_LARAVEL_INSTALLER_VERSION}' \
   "${REPO_ROOT}/docker/images/02phpbrew/docker-compose.yaml"
 
-# ── behavioural: zephir, the simplest curl→mv→chmod shape ──
-_zephir_run() {
-  local marker_body="$1" pin="$2" phar_present="$3" curl_fail="${4:-0}"
-  local root="${TMP_DIR}/pbtools"
-  rm -rf "${root}"; mkdir -p "${root}/vers" "${root}/bin" "${root}/stub" "${root}/run"
-  {
-    printf '#!/bin/bash\n'
-    printf '[ "${CURL_FAIL:-0}" = "1" ] && exit 22\n'
-    printf 'touch zephir.phar\n'
-  } >"${root}/stub/curl"
-  chmod +x "${root}/stub/curl"
-  # every other block must be a no-op: give them matching markers and files
-  for t in composer laravel-installer phalcon deployer symfony-cli pickle pie mago castor \
-           fabpot-local-php-security-checker; do
-    printf 'noop\n' >"${root}/vers/phpbrew.${t}"
-  done
-  [[ -n "${marker_body}" ]] && printf '%s\n' "${marker_body}" >"${root}/vers/phpbrew.zephir"
-  [[ "${phar_present}" == "1" ]] && touch "${root}/bin/zephir"
-  # run ONLY the zephir block: extract it by its anchors, never by line number
-  awk '/^ZEPHIR_LANG_PHAR_FILE=/,/^rm -rf zephir\.pha\*/' "${PHPBREW_TOOLS}" >"${root}/run/block.sh"
-  ( cd "${root}/run" && env \
-      PATH="${root}/stub:${DIST_BIN}/base-bin:${PATH}" \
-      CURL_FAIL="${curl_fail}" \
-      PHPBREW_BIN="${root}/bin" \
-      GLOBAL_STACK_ZEPHIR_LANG_VERSION="${pin}" \
-      GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS="${root}/vers" \
-      bash -c 'set -e; source global-stack-base-version-gate.sh; source ./block.sh' ) >/dev/null 2>&1 || true
-  local after="<none>"
-  [[ -f "${root}/vers/phpbrew.zephir" ]] && after="$(cat "${root}/vers/phpbrew.zephir")"
-  printf '%s' "${after}"
-}
-
-assert_pass "25g: zephir first install writes the marker" \
-  test "$(_zephir_run "" 1.0.0 0)" = "1.0.0"
-assert_pass "25g: zephir marker matching the pin → skip" \
-  test "$(_zephir_run 1.0.0 1.0.0 1)" = "1.0.0"
-assert_pass "25g: zephir pin bumped → reinstall, marker updated" \
-  test "$(_zephir_run 1.0.0 1.0.1 1)" = "1.0.1"
-assert_pass "25h: zephir failed download leaves no satisfied marker" \
-  test "$(_zephir_run "" 1.0.0 0 1)" = "<none>"
+# Behavioural cover moved to §66 (composer, laravel) and §67 (zephir, phalcon, deployer,
+# pickle, pie): pin tranche 2 step 15. The zephir-only 25g/25h it replaces extracted the
+# block by its `rm -rf zephir.pha*` anchor, which step 15b deleted with the other globs;
+# each of their four properties (first install, skip, bump, failed download → no marker)
+# is asserted there for all five tools.
 
 # ─── Section 26: rust tool version gates (row 18) ─────────────────────────
 printf '\n%b── Section 26: rust install-tool gates%b\n' "${C_BOLD}" "${C_RESET}"
@@ -5195,30 +5159,75 @@ mkdir -p "${_P66}/stub" "${_P66}/up/dl" "${_P66}/gh/composer" "${_P66}/overlay/s
 : >"${_P66}/overlay/src/overlay-applied"
 cat >"${_P66}/stub/curl" <<'EOF'
 #!/bin/bash
-out="" url="" remote=0
+out="" url="" remote=0 fail=0
 while (($#)); do
   case "$1" in
     --connect-timeout | --max-time) shift ;;
     -o) out="$2"; shift ;;
     --*) ;;
-    -*O*) remote=1 ;;
+    -*)
+      [[ "$1" == *O* ]] && remote=1
+      [[ "$1" == *f* ]] && fail=1 ;;
     http*) url="$1" ;;
   esac
   shift
 done
 printf '%s\n' "${url}" >>"${P66}/curl.log"
+f=""
 case "${url}" in
   https://getcomposer.org/download/*) f="${P66}/up/dl/${url#https://getcomposer.org/download/}" ;;
-  https://github.com/zephir-lang/zephir/releases/download/*/zephir.phar) f="${P66}/up/zephir.phar" ;;
-  *) exit 22 ;;
+  https://github.com/*/releases/download/*)
+    r="${url#https://github.com/*/}"
+    f="${P66}/up/gh/${r%%/*}/${r#*/releases/download/}" ;;
 esac
 # -O writes the remote name into the CURRENT directory, as the real curl does.
 ((remote)) && out="${url##*/}"
-[[ -f "${f}" && -n "${out}" ]] || exit 22
+[[ -n "${out}" ]] || exit 2
+if [[ -z "${f}" || ! -f "${f}" ]]; then
+  # Not published. With -f curl fails (22); WITHOUT it the 404 page lands as the output
+  # file and curl exits 0 - deployer's old `curl -LO` did exactly that.
+  ((fail)) && exit 22
+  printf '<html>404 Not Found</html>\n' >"${out}"
+  exit 0
+fi
 cp "${f}" "${out}"
 EOF
 # php runs a fixture "phar" (a bash script) as the real php would run the real phar.
-printf '#!/bin/bash\nif [[ -f "$1" ]]; then exec bash "$@"; fi\nexit 1\n' >"${_P66}/stub/php"
+# `php -r '<new Phar …>' <file>` is the script's Phar open; it models what PHP 8.5.4 did
+# in the 02phpbrew image [measured 2026-09-25]: a file opens only when it is named
+# *.phar, carries __HALT_COMPILER(); and ends with the GBMB signature magic. A truncated
+# file, an HTML page and a copy without the .phar name were all refused.
+cat >"${_P66}/stub/php" <<'EOF'
+#!/bin/bash
+if [[ "$1" == -r ]]; then
+  [[ "$2" == *"new Phar"* && "$3" == *.phar && -f "$3" ]] || exit 1
+  grep -q '__HALT_COMPILER();' "$3" && [[ "$(tail -c 4 "$3")" == GBMB ]]
+  exit $?
+fi
+if [[ -f "$1" ]]; then exec bash "$@"; fi
+exit 1
+EOF
+# _p66_gh <repo> <tag> <file> ok|html|trunc [<version line>]: a GitHub release asset.
+# ok = a "phar" that opens; with a version line it answers --version like deployer/pie,
+# without one it cannot run under the image's php, like zephir/phalcon/pickle.
+_p66_gh() {
+  local d="${_P66}/up/gh/$1/$2"
+  mkdir -p "${d}"
+  if [[ "$4" == html ]]; then
+    printf '<html>Not Found</html>\n' >"${d}/$3"
+    return 0
+  fi
+  {
+    printf '#!/bin/bash\n# id=%s@%s\n' "$1" "$2"
+    if [[ -n "${5:-}" ]]; then
+      printf 'if [[ "$1" == --version ]]; then echo "%s"; fi\nexit 0\n' "$5"
+    else
+      printf 'echo "Box Requirements Checker"\nexit 1\n'
+    fi
+    printf '# __HALT_COMPILER(); ?>\n'
+    [[ "$4" == trunc ]] || printf 'GBMB'
+  } >"${d}/$3"
+}
 printf '#!/bin/bash\nexec "$@"\n' >"${_P66}/stub/sudo"
 chmod +x "${_P66}/stub/curl" "${_P66}/stub/php" "${_P66}/stub/sudo"
 
@@ -5306,7 +5315,7 @@ _p66_prep() { # $1 = installed composer tag|none, $2 = composer marker|none, $3 
 _p66_run() { # $1 = composer pin, $2 = laravel pin → state string
   local rc=0 t="${_P66}/tools" src phar lar
   (cd "${_P66_CWD:-${_P66}/work}" && env -i HOME="${_P66}" P66="${_P66}" \
-    PATH="${_P66}/stub:${t}/composer/source/bin:${DIST_BIN}/base-bin:/usr/bin:/bin" \
+    PATH="${_P66_PATH_PRE:-}${_P66}/stub:${t}/composer/source/bin:${DIST_BIN}/base-bin:/usr/bin:/bin" \
     GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_COUNT=1 \
     "GIT_CONFIG_KEY_0=url.${_P66}/gh/.insteadOf" GIT_CONFIG_VALUE_0=https://github.com/ \
     GLOBAL_STACK_ERROR_TOKEN=p66-token GLOBAL_STACK_DOCKER_TOOLS_PATH="${t}" \
@@ -5314,8 +5323,9 @@ _p66_run() { # $1 = composer pin, $2 = laravel pin → state string
     GLOBAL_STACK_DOCKER_ROOT_DIST_PATH="${_P66}/dist" \
     PHPBREW_BIN="${t}/bin" SYMFONY_HOME="${t}/symfony" COMPOSER_HOME="${t}/composer" COMPOSER_SOURCE="${t}/composer/source" \
     GLOBAL_STACK_COMPOSER_VERSION="$1" GLOBAL_STACK_LARAVEL_INSTALLER_VERSION="$2" \
-    GLOBAL_STACK_ZEPHIR_LANG_VERSION="${_P66_ZEPHIR:-n1}" GLOBAL_STACK_PHALCON_DEVTOOLS_VERSION=n1 GLOBAL_STACK_DEPLOYER_VERSION=n1 \
-    GLOBAL_STACK_SYMFONY_CLI_VERSION=n1 GLOBAL_STACK_PICKLE_VERSION=n1 GLOBAL_STACK_PIE_VERSION=n1 \
+    GLOBAL_STACK_ZEPHIR_LANG_VERSION="${_P66_ZEPHIR:-n1}" GLOBAL_STACK_PHALCON_DEVTOOLS_VERSION="${_P66_PHALCON:-n1}" \
+    GLOBAL_STACK_DEPLOYER_VERSION="${_P66_DEPLOYER:-n1}" GLOBAL_STACK_SYMFONY_CLI_VERSION=n1 \
+    GLOBAL_STACK_PICKLE_VERSION="${_P66_PICKLE:-n1}" GLOBAL_STACK_PIE_VERSION="${_P66_PIE:-n1}" \
     GLOBAL_STACK_MAGO_VERSION=n1 GLOBAL_STACK_CASTOR_VERSION=n1 GLOBAL_STACK_FABPOT_LOCAL_PHP_SECURITY_CHECKER_VERSION=n1 \
     bash "${DIST_BIN}/phpbrew-bin/global-stack-phpbrew-install-tools.sh") >"${_P66}/last.log" 2>&1 || rc=fail
   src="$({ bash "${t}/composer/source/bin/composer" --version 2>/dev/null || true; } | awk '{ print $3 }')"
@@ -5361,16 +5371,114 @@ assert_pass "66h: everything current -> nothing downloaded, nothing touched" \
 # phalcon/pickle/pie) there on every boot, so a developer file matching the glob was
 # deleted. The model: a projects-like cwd holding such a file, composer reinstalling AND
 # zephir bumped; the file must survive and nothing may be written beside it.
-printf 'zephir-fixture\n' >"${_P66}/up/zephir.phar"
+_p66_gh zephir n2 zephir.phar ok
 mkdir -p "${_P66}/proj"
 printf 'mine\n' >"${_P66}/proj/zephir.phar-notes"
 _p66_prep 1.0.0 1.0.0 1.1.0 v1.1.0
 _o="$(_P66_CWD="${_P66}/proj" _P66_ZEPHIR=n2 _p66_run 1.1.0 v1.1.0)"
 assert_pass "66j: cwd = the projects dir, composer reinstall + zephir bump -> both installed, the developer's zephir.phar-notes survives, nothing added" \
-  bash -c '[[ "$1" == rc=0\ src=1.1.0\ phar=1.1.0\ marker=1.1.0\ * && "$(cat "$2/tools/versions/phpbrew.zephir")" == n2 && "$(cat "$2/tools/bin/zephir")" == zephir-fixture && "$(ls -A "$2/proj")" == zephir.phar-notes ]]' _ "${_o}" "${_P66}"
+  bash -c '[[ "$1" == rc=0\ src=1.1.0\ phar=1.1.0\ marker=1.1.0\ * && "$(cat "$2/tools/versions/phpbrew.zephir")" == n2 && "$(sed -n "s/^# id=//p" "$2/tools/bin/zephir")" == zephir@n2 && "$(ls -A "$2/proj")" == zephir.phar-notes ]]' _ "${_o}" "${_P66}"
 # Comment lines stripped (the §19 shape): the rewrite's own comment names what it replaced.
 assert_fail "66i: composer-setup.php (the unpinned bootstrap) is gone from executable lines" \
   bash -c 'grep -vE "^[[:space:]]*#" "$1" | grep -q "composer-setup\.php"' _ "${PHPBREW_TOOLS}"
+
+# ─── Section 67: the five phars are checked before they replace the old one ──
+# Pin-audit tranche 2 step 15b. zephir, phalcon, pickle, pie and deployer used to go
+# straight from the download into tools/bin: `curl -fsSLO` + `mv` (deployer `curl -LO`
+# with no -f, so a 404 page was installed and its marker written). None publishes a
+# checksum. Now each is downloaded into the temp dir as <tool>.phar and opened as a Phar
+# (signature-verified) before it replaces anything; deployer and pie, the two that run
+# under the image's php, must also name their pin. zephir/phalcon/pickle cannot run
+# there (mbstring missing), so their VERSION is pinned by URL only.
+printf '\n── Section 67: the five phars checked before they replace the old one (tranche 2 step 15b)\n'
+_P67_TOOLS='zephir:ZEPHIR:zephir:zephir.phar:bin/zephir:zephir::
+phalcon:PHALCON:phalcon-devtools:phalcon.phar:bin/phalcon:phalcon:v:
+deployer:DEPLOYER:deployer:deployer.phar:bin/dep:deployer:v:Deployer %s
+pickle:PICKLE:pickle:pickle.phar:bin/pickle:pickle:v:
+pie:PIE:pie:pie.phar:bin/pie:pie::🥧 PHP Installer for Extensions (PIE) %s'
+# Per tool: 1.1.0 and 1.2.0 good; 1.3.0 not published; 1.4.0 an HTML page served with
+# 200; 1.5.0 truncated (no signature magic); 1.6.0 intact but, for the two that run,
+# reporting 1.6.00.
+while IFS=: read -r _k _sfx _repo _file _dest _mk _pfx _vl; do
+  for _v in 1.1.0 1.2.0 1.6.0; do
+    _line=""
+    [[ -n "${_vl}" ]] && _line="$(printf "${_vl}" "${_v/1.6.0/1.6.00}")"
+    _p66_gh "${_repo}" "${_pfx}${_v}" "${_file}" ok "${_line}"
+  done
+  _p66_gh "${_repo}" "${_pfx}1.4.0" "${_file}" html
+  _p66_gh "${_repo}" "${_pfx}1.5.0" "${_file}" trunc
+done <<<"${_P67_TOOLS}"
+
+assert_pass "67a: stub php opens a good fixture phar, refuses the HTML page, the truncated file and a copy without .phar (non-vacuity)" \
+  bash -c 'p="$1/stub/php"; g="$1/up/gh/pie"; c="try { new Phar(\$argv[1]); } catch (Throwable \$e) { exit(1); }"
+    cp "$g/1.1.0/pie.phar" "$1/renamed"
+    "$p" -r "$c" "$g/1.1.0/pie.phar" && ! "$p" -r "$c" "$g/1.4.0/pie.phar" && ! "$p" -r "$c" "$g/1.5.0/pie.phar" && ! "$p" -r "$c" "$1/renamed"' _ "${_P66}"
+assert_pass "67a: stub curl without -f installs the 404 page (deployer's old defect), with -f fails 22 (non-vacuity)" \
+  bash -c 'cd "$1/work" && P66="$1" "$1/stub/curl" -LO https://github.com/deployphp/deployer/releases/download/v1.3.0/deployer.phar && grep -q 404 deployer.phar && rm deployer.phar \
+    && { P66="$1" "$1/stub/curl" -fsSLO https://github.com/deployphp/deployer/releases/download/v1.3.0/deployer.phar; test $? = 22; }' _ "${_P66}"
+
+_p67_prep() { # $1 = tool spec line, $2 = installed tag|none
+  local _k _sfx _repo _file _dest _mk _pfx _vl t="${_P66}/tools"
+  IFS=: read -r _k _sfx _repo _file _dest _mk _pfx _vl <<<"$1"
+  _p66_prep 1.1.0 1.1.0 1.1.0 v1.1.0
+  rm -f "${t}/${_dest}" "${t}/versions/phpbrew.${_mk}"
+  if [[ "$2" != none ]]; then
+    cp "${_P66}/up/gh/${_repo}/$2/${_file}" "${t}/${_dest}"
+    printf '%s\n' "$2" >"${t}/versions/phpbrew.${_mk}"
+  fi
+}
+_p67_run() { # $1 = tool spec line, $2 = pin → rc, installed id, marker, named FATAL, strays in tools/bin
+  local _k _sfx _repo _file _dest _mk _pfx _vl t="${_P66}/tools" o id
+  IFS=: read -r _k _sfx _repo _file _dest _mk _pfx _vl <<<"$1"
+  local -x "_P66_${_sfx}=$2"
+  o="$(_p66_run 1.1.0 v1.1.0)"
+  id="$(sed -n 's/^# id=//p' "${t}/${_dest}" 2>/dev/null || true)"
+  printf '%s id=%s marker=%s fatal=%s stray=%s' "${o%% *}" "${id:-none}" \
+    "$(cat "${t}/versions/phpbrew.${_mk}" 2>/dev/null || echo none)" \
+    "$(if grep -q "^FATAL: .*${_k} left as it was" "${_P66}/last.log"; then echo yes; else echo no; fi)" \
+    "$({ ls -A "${t}/bin" | grep -cE '\.phar|\.tmp|\.new' || true; })"
+}
+while IFS= read -r _spec; do
+  IFS=: read -r _k _sfx _repo _file _dest _mk _pfx _vl <<<"${_spec}"
+  _p67_prep "${_spec}" "${_pfx}1.1.0"
+  assert_pass "67b: ${_k} ${_pfx}1.1.0 -> pin ${_pfx}1.2.0: checked, installed, marker last" \
+    test "$(_p67_run "${_spec}" "${_pfx}1.2.0")" = "rc=0 id=${_repo}@${_pfx}1.2.0 marker=${_pfx}1.2.0 fatal=no stray=0"
+  _p67_prep "${_spec}" "${_pfx}1.2.0"
+  assert_pass "67c: ${_k} ${_pfx}1.2.0 -> pin moved back to ${_pfx}1.1.0" \
+    test "$(_p67_run "${_spec}" "${_pfx}1.1.0")" = "rc=0 id=${_repo}@${_pfx}1.1.0 marker=${_pfx}1.1.0 fatal=no stray=0"
+  _p67_prep "${_spec}" none
+  assert_pass "67d: ${_k} first install at ${_pfx}1.1.0" \
+    test "$(_p67_run "${_spec}" "${_pfx}1.1.0")" = "rc=0 id=${_repo}@${_pfx}1.1.0 marker=${_pfx}1.1.0 fatal=no stray=0"
+  _p67_prep "${_spec}" "${_pfx}1.1.0"
+  _o="$(_p67_run "${_spec}" "${_pfx}1.1.0")"
+  assert_pass "67e: ${_k} current -> not downloaded, not touched" \
+    bash -c '[[ "$1" == "rc=0 id=$3@$4 marker=$4 fatal=no stray=0" ]] && ! grep -q "/$3/releases/" "$2/curl.log"' _ "${_o}" "${_P66}" "${_repo}" "${_pfx}1.1.0"
+  _fails='1.3.0:not published|1.4.0:an HTML page|1.5.0:truncated'
+  [[ -n "${_vl}" ]] && _fails="${_fails}|1.6.0:reports 1.6.00"
+  while IFS=: read -r _v _why; do
+    _p67_prep "${_spec}" "${_pfx}1.1.0"
+    assert_pass "67f: ${_k} pin ${_pfx}${_v} (${_why}) -> named FATAL, old ${_k} and marker untouched" \
+      test "$(_p67_run "${_spec}" "${_pfx}${_v}")" = "rc=fail id=${_repo}@${_pfx}1.1.0 marker=${_pfx}1.1.0 fatal=yes stray=0"
+  done <<<"${_fails//|/$'\n'}"
+done <<<"${_P67_TOOLS}"
+# An interrupted copy: an `install` that writes a short copy of anything headed for
+# tools/bin. The compare after the copy must refuse it and leave the old marker.
+mkdir -p "${_P66}/stub-short"
+cat >"${_P66}/stub-short/install" <<'EOF'
+#!/bin/bash
+src="${@: -2:1}" dst="${@: -1}"
+[[ "${dst}" == */tools/bin/* ]] || exec /usr/bin/install "$@"
+head -c 20 "${src}" >"${dst}"
+EOF
+chmod +x "${_P66}/stub-short/install"
+while IFS= read -r _spec; do
+  IFS=: read -r _k _sfx _repo _file _dest _mk _pfx _vl <<<"${_spec}"
+  [[ "${_k}" == zephir || "${_k}" == deployer ]] || continue
+  _p67_prep "${_spec}" "${_pfx}1.1.0"
+  _o="$(_P66_PATH_PRE="${_P66}/stub-short:" _p67_run "${_spec}" "${_pfx}1.2.0")"
+  assert_pass "67g: ${_k} copy into tools/bin cut short -> FATAL, marker stays ${_pfx}1.1.0" \
+    bash -c '[[ "$1" == rc=fail\ id=*\ marker="$3"\ fatal=no\ stray=0 ]] && grep -q "^FATAL: the installed $4 differs from the checked download" "$2/last.log"' _ "${_o}" "${_P66}" "${_pfx}1.1.0" "${_k}"
+done <<<"${_P67_TOOLS}"
 
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'

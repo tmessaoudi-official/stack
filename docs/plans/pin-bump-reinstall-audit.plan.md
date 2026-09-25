@@ -386,7 +386,7 @@ then drop the old dir and wipe `pkg.*`; the marker is written where it is today 
   two version checks) sits inside an `if` with a named FATAL: a bare failure reaches the prologue's generic
   handler first (measured: the unwrapped download exited 22 with no reason given). laravel: the exact
   require line is unchanged; `vendor/bin/laravel --version` must name the pin before the marker. The stray
-  tab on the old clone line is gone. §66: 15 checks (a fixture repo with six tags via `insteadOf`, stub
+  tab on the old clone line is gone. §66: 15 checks after `5ee3cee` (14 at `a40d2e7`; a fixture repo with six tags via `insteadOf`, stub
   curl/php/sudo), 10 red first with the old code's reasons (`composer-setup.php` reached, source wiped before
   a clone that then failed, `1.4.00` accepted for laravel). 66i first went red on the new code's own COMMENT
   naming composer-setup.php; comment lines are now stripped (the §19 shape). Sabotage S1-S7 each caught and
@@ -406,7 +406,34 @@ then drop the old dir and wipe `pkg.*`; the marker is written where it is today 
   reinstall + zephir bump) was red first for that reason (`proj=[]`); S8 (drop the `cd`) caught and restored.
   Suite 808/808. REAL: `-w /stack/projects` over a scratch projects dir with the planted file, composer
   2.10.2 → 2.10.3 plus a real zephir 1.4.0 download (3.3 MB phar installed, marker 1.4.0); the planted file
-  survived, nothing was added, no temp dir left [Verified: ran].
+  survived, nothing was added, no temp dir left [Verified: ran]. The `cd` is safe for the two blocks that pipe
+  an installer (read to a file, never piped): mago's `$(pwd)` fallback is dead behind `--install-dir`
+  (`mago.sh:229`) and castor refuses rather than falling back to `.` once `--install-dir` is given
+  (`install:277-285`); both stage under /tmp. Step 15a commits: `a40d2e7` + `5ee3cee`.
+- AS BUILT (15b): three helpers. `_pt_phar <tool> <url>` downloads with `curl -f` to
+  `${_pt_dl}/<tool>.phar` and opens it with `new Phar()` (signature-verified: `phar.require_hash=1` in the
+  image; a truncated file, an HTML page, a one-byte corruption and a copy without the `.phar` name were each
+  refused, and all five pinned phars accepted [Verified: probe in the 02phpbrew image]). `_pt_runs` runs a
+  file and matches its version with `_pt_names`. `_pt_place` does `install -m 0755` then `cmp`, so a short
+  copy FATALs before the marker. deployer and pie (`Deployer <v>`, `(PIE) <v>`; rc 0, stdout only
+  [measured]) are version-checked before they are placed. zephir, phalcon and pickle cannot run under the
+  image's php 8.5.4 (mbstring missing) [measured], so their version is UNCERTIFIED-BY-EXECUTION: pinned by
+  the release URL plus the Phar signature only. None of the five publishes a checksum (pie's `.asc` and
+  `.sha256` 404). deployer's `curl -LO` without `-f` (a 404 page installed, marker written) and its
+  `mv`/`chmod 2> /dev/null` are gone; so are the four `rm -rf <tool>.pha*` globs. A post-install version
+  run was written and then removed: after a `cmp` pass the installed bytes are the checked download's, so it
+  could never fire. §67: 41 checks (67a stub non-vacuity ×2; per tool up, down, first install, no-op; 17
+  failure cases: not published, HTML page, truncated, and for deployer/pie a `1.6.00` reply; 67g a short
+  copy for zephir and deployer), 17 red first with the old code's reasons (HTML and truncated files
+  installed with their markers, deployer installing the 404 page, unpublished pins dying unnamed). The
+  stub php models the MEASURED open (`.phar` name, `__HALT_COMPILER();`, trailing `GBMB`); the stub curl
+  now models a missing `-f`. §25g/25h (zephir only, anchored on the deleted glob) retired: their four
+  properties are asserted per tool in §67. Sabotage P1–P6 caught and restored byte-identical; P7 (drop `-f`)
+  SURVIVES by design, since the Phar open refuses the 404 page. Suite 845/845. REAL, throwaway 02phpbrew
+  container, scratch tools/, cwd a scratch projects dir: all five at their pins (installed sha256 equal to
+  independent downloads), deployer v8.0.5 → v8.0.4 → v8.0.5 and pie 1.5.0 → 1.4.3 → 1.5.0, pie 9.9.9 →
+  named FATAL with the old pie and marker kept, no-op; no stray file in tools/bin, the projects file
+  survived, no temp dir left on success [Verified: ran].
 
 ### Step 16 — android SDK (M/L) — DESIGN FORK, needs a ruling
 - Any change to the 14 SDK inputs wipes `ANDROID_HOME`, `ANDROID_SDK_HOME`, `ANDROID_SDK_ROOT` AND
