@@ -5081,6 +5081,102 @@ assert_pass "64j: current -> nothing downloaded, nothing touched" \
 assert_fail "64k: no remote script is piped into a shell" \
   grep -qE '\|[[:space:]]*(ba)?sh\b' "${DIST_BIN}/base-bin/global-stack-base-install-mise.sh"
 
+# ─── Section 65: hurl is compiled in the 00base image, then copied into tools/ (tranche 2 step 14c) ──
+# hurl's only Linux x86_64 build links libxml2.so.2, absent on Ubuntu 26.04 (libxml2.so.16),
+# so the downloaded binary could never run — in 00base or on the host [measured 2026-09-25].
+# The image now compiles the pinned release (ruling 09:58); install-hurl.sh checks that the
+# image's hurl IS the pin (an image older than the pin is FATAL: rebuild), wipes tools/hurl,
+# copies hurl + hurlfmt in, re-checks, and writes the marker last. An installed hurl that
+# cannot run is itself a reinstall trigger — the live tools/hurl is exactly that today,
+# with a marker equal to the pin, so without it the gate would skip it forever.
+printf '\n%b── Section 65: hurl compiled in the image, copied into tools/ (tranche 2 step 14c)%b\n' "${C_BOLD}" "${C_RESET}"
+
+_P65="${TMP_DIR}/p65"
+mkdir -p "${_P65}/stub" "${_P65}/work"
+printf '#!/bin/bash\nprintf "%%s\\n" "$*" >>"%s/curl.log"\nexit 22\n' "${_P65}" >"${_P65}/stub/curl"
+printf '#!/bin/bash\nexec "$@"\n' >"${_P65}/stub/sudo"
+chmod +x "${_P65}/stub/curl" "${_P65}/stub/sudo"
+_p65_bin() { # $1 = dir, $2 = version printed, $3 = ok|broken → fake hurl + hurlfmt
+  mkdir -p "$1"
+  if [[ "$3" == broken ]]; then
+    printf '#!/bin/sh\necho "hurl: error while loading shared libraries: libxml2.so.2" >&2\nexit 127\n' >"$1/hurl"
+  else
+    printf '#!/bin/sh\necho "hurl %s (x86_64-pc-linux-gnu) libcurl/8.18.0 OpenSSL/3.5.3 zlib/1.3.1 libxml2/2.15.2"\necho "Features (libcurl):  alt-svc AsynchDNS HTTP2 IPv6 Largefile libz SSL UnixSockets"\n' "$2" >"$1/hurl"
+  fi
+  printf '#!/bin/sh\necho "hurlfmt %s"\n' "$2" >"$1/hurlfmt"
+  chmod +x "$1/hurl" "$1/hurlfmt"
+}
+_p65_prep() { # $1 = image hurl version|none, $2 = installed version|none|broken, $3 = marker|none
+  rm -rf "${_P65}/image" "${_P65}/tools" "${_P65}/curl.log"
+  mkdir -p "${_P65}/tools/versions"
+  [[ "$1" == none ]] || _p65_bin "${_P65}/image/bin" "$1" ok
+  case "$2" in
+    none) ;;
+    broken) _p65_bin "${_P65}/tools/hurl/bin" "$3" broken && : >"${_P65}/tools/hurl/stale" ;;
+    *) _p65_bin "${_P65}/tools/hurl/bin" "$2" ok && : >"${_P65}/tools/hurl/stale" ;;
+  esac
+  [[ "$3" == none ]] || printf '%s\n' "$3" >"${_P65}/tools/versions/base.hurl"
+}
+_p65_run() { # $1 = pin → "rc=<0|fail> ver=<v|none> fmt=<v|none> marker=<m|none> stale=<yes|no>"
+  local rc=0 t="${_P65}/tools/hurl"
+  # tools/hurl/bin is on PATH exactly as the image ENV puts it there (Dockerfile PATH=).
+  (cd "${_P65}/work" && env -i HOME="${_P65}" PATH="${_P65}/stub:${t}/bin:${DIST_BIN}/base-bin:/usr/bin:/bin" \
+    GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS="${_P65}/tools/versions" GLOBAL_STACK_HURLPATH="${t}" \
+    GLOBAL_STACK_HURL_BUILD_PATH="${_P65}/image" GLOBAL_STACK_HURL_VERSION="$1" \
+    GLOBAL_STACK_DOCKER_USER_ID="$(id -un)" GLOBAL_STACK_DOCKER_GROUP_ID="$(id -gn)" \
+    bash "${DIST_BIN}/base-bin/global-stack-base-install-hurl.sh") >"${_P65}/last.log" 2>&1 || rc=fail
+  local ver fmt
+  ver="$({ "${t}/bin/hurl" --version 2>/dev/null || true; } | awk 'NR == 1 { print $2 }')"
+  fmt="$({ "${t}/bin/hurlfmt" --version 2>/dev/null || true; } | awk '{ print $2 }')"
+  printf 'rc=%s ver=%s fmt=%s marker=%s stale=%s' "${rc}" "${ver:-none}" "${fmt:-none}" \
+    "$(cat "${_P65}/tools/versions/base.hurl" 2>/dev/null || echo none)" \
+    "$(if [[ -e "${t}/stale" ]]; then echo yes; else echo no; fi)"
+}
+
+_p65_prep 1.1.0 none none
+assert_pass "65b: first install -> the image's hurl and hurlfmt copied in, marker written" \
+  test "$(_p65_run 1.1.0)" = "rc=0 ver=1.1.0 fmt=1.1.0 marker=1.1.0 stale=no"
+_p65_prep 1.1.0 1.0.0 1.0.0
+assert_pass "65c: 1.0.0 -> pin 1.1.0 (image rebuilt): tools/hurl wiped and replaced" \
+  test "$(_p65_run 1.1.0)" = "rc=0 ver=1.1.0 fmt=1.1.0 marker=1.1.0 stale=no"
+assert_pass "65i: that reinstall downloaded nothing (the binary comes from the image)" \
+  test ! -s "${_P65}/curl.log"
+_p65_prep 1.0.0 1.1.0 1.1.0
+assert_pass "65d: 1.1.0 -> pin moved back to 1.0.0 (image rebuilt): wiped and replaced" \
+  test "$(_p65_run 1.0.0)" = "rc=0 ver=1.0.0 fmt=1.0.0 marker=1.0.0 stale=no"
+_p65_prep 1.0.0 1.0.0 1.0.0
+_o="$(_p65_run 1.1.0)"
+assert_pass "65e: image older than the pin (not rebuilt) -> FATAL naming the rebuild, old hurl untouched" \
+  bash -c '[[ "$1" == "rc=fail ver=1.0.0 fmt=1.0.0 marker=1.0.0 stale=yes" ]] && grep -q "rebuild" "$2/last.log"' _ "${_o}" "${_P65}"
+_p65_prep none 1.0.0 1.0.0
+_o="$(_p65_run 1.1.0)"
+assert_pass "65f: image carries no compiled hurl -> WARN naming the rebuild, boot continues, old hurl untouched (ruling 2026-09-25)" \
+  bash -c '[[ "$1" == "rc=0 ver=1.0.0 fmt=1.0.0 marker=1.0.0 stale=yes" ]] && grep -q "^WARN: .*rebuild 00base" "$2/last.log"' _ "${_o}" "${_P65}"
+# Today's exact transition: the pre-14c image (no compiled hurl) over the broken download.
+_p65_prep none broken 1.1.0
+_o="$(_p65_run 1.1.0)"
+assert_pass "65f2: pre-14c image over the broken download -> WARN, boot continues, nothing wiped" \
+  bash -c '[[ "$1" == "rc=0 ver=none fmt=1.1.0 marker=1.1.0 stale=yes" ]] && grep -q "^WARN: .*rebuild 00base" "$2/last.log"' _ "${_o}" "${_P65}"
+_p65_prep 1.1.0 broken 1.1.0
+assert_pass "65g: installed hurl cannot run, marker == pin (today's live state) -> reinstalled from the image" \
+  test "$(_p65_run 1.1.0)" = "rc=0 ver=1.1.0 fmt=1.1.0 marker=1.1.0 stale=no"
+_p65_prep 1.1.0 1.1.0 1.1.0
+assert_pass "65h: current and runnable -> nothing touched" \
+  test "$(_p65_run 1.1.0)" = "rc=0 ver=1.1.0 fmt=1.1.0 marker=1.1.0 stale=yes"
+
+# The image side (SYNTAX-ONLY surface — a real build certifies it, see the plan's 14c AS BUILT).
+_D00="${SCRIPT_DIR}/../../docker/images/00base"
+assert_pass "65j: 00base has a hurl-build stage that compiles hurl AND hurlfmt at the pin, --locked" \
+  bash -c 'grep -qE "^FROM ubuntu:\\\$\{GLOBAL_STACK_IMAGE_UBUNTU_VERSION\} AS hurl-build$" "$1" \
+    && grep -qE "cargo\" install --locked --root /opt/hurl \"hurl@\\\$\{GLOBAL_STACK_HURL_VERSION\}\" \"hurlfmt@\\\$\{GLOBAL_STACK_HURL_VERSION\}\"" "$1"' _ "${_D00}/Dockerfile"
+assert_pass "65k: the final stage copies the compiled binaries and names their path for install-hurl.sh" \
+  bash -c 'grep -qx "COPY --from=hurl-build /opt/hurl/bin/ /opt/hurl/bin/" "$1" && grep -q "GLOBAL_STACK_HURL_BUILD_PATH=\"/opt/hurl\"" "$1"' _ "${_D00}/Dockerfile"
+assert_pass "65l: the stage's Rust pins reach the build (compose build args)" \
+  bash -c 'for v in GLOBAL_STACK_RUST_VERSION GLOBAL_STACK_RUSTUP_INIT_VERSION GLOBAL_STACK_HURL_VERSION; do
+    grep -qE "^ +${v}: \\\$\{${v}\}$" "$1" || exit 1; done' _ "${_D00}/docker-compose.yaml"
+assert_fail "65m: no host shell template puts HURLPATH itself (not its bin/) on PATH" \
+  grep -rqE 'PATH="?\$\{GLOBAL_STACK_HURLPATH\}:' "${SCRIPT_DIR}/../../templates/shell"
+
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
 if [[ "${FAIL}" -eq 0 ]]; then

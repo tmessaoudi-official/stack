@@ -1,6 +1,39 @@
 # shellcheck disable=SC2148
 ARG GLOBAL_STACK_IMAGE_UBUNTU_VERSION=resolute-20260912
 
+# hurl — pin-audit tranche 2 step 14c (ruling 2026-09-25 09:58). hurl's only Linux x86_64
+# build links libxml2.so.2, which Ubuntu 26.04 no longer ships (it has libxml2.so.16), so
+# the upstream binary cannot run in this image or on the host. This throwaway stage
+# compiles the pinned release against this image's own Ubuntu; only the two binaries
+# reach the final image (/opt/hurl/bin), and global-stack-base-install-hurl.sh copies them
+# into tools/hurl at boot. BuildKit reruns the compile only when a pin below changes.
+# shellcheck disable=SC2148
+FROM ubuntu:${GLOBAL_STACK_IMAGE_UBUNTU_VERSION} AS hurl-build
+
+ARG GLOBAL_STACK_HURL_VERSION
+ARG GLOBAL_STACK_RUST_VERSION
+ARG GLOBAL_STACK_RUSTUP_INIT_VERSION
+
+SHELL ["/bin/bash", "-xeEu", "-o", "pipefail", "-c"]
+
+WORKDIR /tmp
+
+# Build deps are hurl's documented Debian/Ubuntu list (docs/installation.md at the pinned
+# tag); unpinned like every apt package here (.hadolint.yaml ignores DL3008). rustup-init
+# is the archived binary for its pin, checked against its published SHA-256.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends build-essential pkg-config libssl-dev \
+        libcurl4-openssl-dev libxml2-dev libclang-dev curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && curl -fsSLO "https://static.rust-lang.org/rustup/archive/${GLOBAL_STACK_RUSTUP_INIT_VERSION}/x86_64-unknown-linux-gnu/rustup-init" \
+    && curl -fsSLO "https://static.rust-lang.org/rustup/archive/${GLOBAL_STACK_RUSTUP_INIT_VERSION}/x86_64-unknown-linux-gnu/rustup-init.sha256" \
+    && sha256sum -c rustup-init.sha256 \
+    && chmod +x rustup-init \
+    && ./rustup-init -y --no-modify-path --profile minimal --default-toolchain "${GLOBAL_STACK_RUST_VERSION}" \
+    && "${HOME}/.cargo/bin/cargo" install --locked --root /opt/hurl "hurl@${GLOBAL_STACK_HURL_VERSION}" "hurlfmt@${GLOBAL_STACK_HURL_VERSION}" \
+    && _hurl_got="$(/opt/hurl/bin/hurl --version)" \
+    && [[ "${_hurl_got}" == "hurl ${GLOBAL_STACK_HURL_VERSION} "* ]]
+
 # shellcheck disable=SC2148
 FROM ubuntu:${GLOBAL_STACK_IMAGE_UBUNTU_VERSION}
 
@@ -314,6 +347,11 @@ RUN --mount=type=secret,id=global_stack_secret_docker_password \
     && mkdir -p ${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/caroot \
     && chmod -R a+rwx ${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/caroot \
     && { [ "${GLOBAL_STACK_UNU}" = "true" ] && global-stack-base-unu.sh || echo -e "\n Will not upgrade the distribution"; }
+
+# After the big RUN on purpose, like the ENV below: neither a hurl pin change nor this
+# step invalidates the base layer.
+COPY --from=hurl-build /opt/hurl/bin/ /opt/hurl/bin/
+ENV GLOBAL_STACK_HURL_BUILD_PATH="/opt/hurl"
 
 USER "${GLOBAL_STACK_DOCKER_USER_ID}":"${GLOBAL_STACK_DOCKER_GROUP_ID}"
 

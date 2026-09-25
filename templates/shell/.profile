@@ -28,6 +28,6 @@ if [ -d "${GLOBAL_STACK_ZIGPATH}" ]; then
     PATH="${GLOBAL_STACK_ZIGPATH}:${PATH}"
 fi
 
-if [ -d "${GLOBAL_STACK_HURLPATH}" ]; then 
-    PATH="${GLOBAL_STACK_HURLPATH}:${PATH}"
+if [ -d "${GLOBAL_STACK_HURLPATH}"/bin ]; then
+    PATH="${GLOBAL_STACK_HURLPATH}/bin:${PATH}"
 fi

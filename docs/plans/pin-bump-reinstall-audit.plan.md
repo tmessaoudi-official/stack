@@ -28,6 +28,7 @@ version and its usage ! no implementation yet !"* — AUDIT ONLY; nothing below 
 - [2026-09-25 09:58] AGREED: mise's delete-before-install is fixed IN step 14 (supersedes 09:37): pinned mise binary from its GitHub release with its checksum (no remote script piped to sh), `mise --version` checked against the pin, then data dirs wiped, marker last.
 - [2026-09-25 10:07] AGREED: go's GOPATH (`go/home`) is renamed to the sibling `tools/go.gopath-aside` for the duration of a go reinstall — the one named exception to "nothing next to the old tree"; restored on any failure, restored at the next start when GOPATH is absent, FATAL when both exist, never deleted.
 - [2026-09-25 10:18] AGREED: hurl stays at `/stack/tools/hurl/bin` (host PATH unchanged) — the image only COMPILES it; boot copies it into tools/ like mkcert (confirms 09:58 after the developer asked).
+- [2026-09-25 11:47] AGREED: an 00base image with NO compiled hurl (any image built before step 14c) makes install-hurl.sh WARN (naming `rebuild 00base`) and leave tools/hurl untouched instead of FATAL — the boot must not fail over an unused tool during the transition; the rebuild then repairs hurl on its own. An image whose compiled hurl does not match the pin stays FATAL.
 
 ## Formal Plan
 <!-- written at Phase 4 — tranche 1, APPROVED 2026-09-24 15:05 (steps 5-9; step 8 revised) -->
@@ -334,6 +335,25 @@ then drop the old dir and wipe `pkg.*`; the marker is written where it is today 
   restored byte-identical. Suite 780/780. Real downloads in a throwaway 00base container: v2026.9.10 →
   v2026.9.11 → v2026.9.10, stale data gone each time, real `usage` installed, current pin untouched, no temp
   dir left [Verified: ran].
+- AS BUILT (14c): 00base gains a `hurl-build` stage (same pinned Ubuntu; hurl's documented apt build deps;
+  archived `rustup-init` at `GLOBAL_STACK_RUSTUP_INIT_VERSION` checked against its `*./rustup-init` SHA-256;
+  toolchain `GLOBAL_STACK_RUST_VERSION`; `cargo install --locked --root /opt/hurl hurl@<pin> hurlfmt@<pin>` —
+  two crates, checked on crates.io; the stage re-checks `hurl --version`). `COPY --from` and
+  `ENV GLOBAL_STACK_HURL_BUILD_PATH` sit AFTER the big RUN so neither invalidates the base layer; compose
+  build args gain the two Rust pins. install-hurl.sh downloads nothing: it checks the image's hurl names the
+  pin (else FATAL), wipes `tools/hurl`, installs hurl + hurlfmt, re-checks, marker last. An installed hurl
+  that cannot run is a reinstall trigger (the live copy is exactly that, marker == pin). An image with NO
+  compiled hurl (built before 14c) WARNs and leaves tools/ alone (ruling 11:47) — sync-bin ships this script
+  on the next boot while the image changes only on a rebuild. `templates/shell/.profile` now puts
+  `HURLPATH/bin`, not `HURLPATH`, on PATH (65m). §65: 13 checks, red first; 65h/65i were first red for a
+  test-side reason (PATH lacked tools/hurl/bin; the no-download check sat after a no-op) and were fixed
+  before the red set was counted. Sabotage H1–H6 each caught, restored byte-identical. Suite 793/793;
+  `compose config -q` clean; `check-image-versions` clean; hadolint +1 DL3026 (the new FROM, same notice as
+  the existing one). REAL: the stage compiled (386 s); in the real 00base image the binary has 0 missing
+  libs, repaired a copy of the live broken tools/hurl (completions/ and man/ gone), ran a request file,
+  hurlfmt works, the second boot is a no-op; the pre-14c image path WARNs with rc 0; the same binary runs on
+  the host (Ubuntu 26.04) [Verified: ran]. Step 14 commits: 14a `5360b17`, follow-up `84cd38f`, 14b
+  `008b841`, 14c (this commit; its sha lands with step 15).
 
 ### Step 15 — composer bootstrap pinned (S)
 - `phpbrew-install-tools.sh:24-25` runs `composer-setup.php` with no `--version` → latest [Verified: pass 2
@@ -378,7 +398,7 @@ escape hatches keeping pkg markers; the `source X && cmd` class.
 | 11 | Runtimes nvm/php/java/flutter delete-after-install (php.edge exempt) | M | done | 902f08f | docker/config/dist/bin/base-bin/**, docker/config/dist/bin/nvm-bin/**, docker/config/dist/bin/phpbrew-bin/**, docker/config/dist/bin/sdkman-bin/**, docker/config/dist/bin/fvm-bin/**, bin/tests/startup-prologue.test.sh |
 | 12 | Package slots: cleanup only after the new install succeeded | M | done | f5075ed | docker/config/dist/bin/base-bin/**, docker/config/dist/bin/rbenv-bin/**, docker/config/dist/bin/sdkman-bin/**, bin/tests/startup-prologue.test.sh |
 | 13 | rbenv plugins reuse step 6's in-place tag move | S | done | 46e80a7 | docker/config/dist/bin/rbenv-bin/**, bin/tests/startup-prologue.test.sh |
-| 14 | go/zig/mise/hurl: check first, then wipe and install fresh (14a/14b/14c) | L | doing | - | docker/config/dist/bin/base-bin/**, docker/images/00base/**, bin/tests/startup-prologue.test.sh |
+| 14 | go/zig/mise/hurl: check first, then wipe and install fresh (14a/14b/14c) | L | done | - | docker/config/dist/bin/base-bin/**, docker/images/00base/**, bin/tests/startup-prologue.test.sh |
 | 15 | composer bootstrap pinned + verified | S | todo | - | docker/config/dist/bin/phpbrew-bin/**, bin/tests/startup-prologue.test.sh |
 | 16 | android: stop wiping GRADLE_USER_HOME | S | todo | - | docker/config/dist/bin/android-bin/**, bin/tests/startup-prologue.test.sh |
 | 17 | Docs: CLAUDE.md tranche 2 (hand-off) | S | todo | - | CLAUDE.md |
