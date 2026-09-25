@@ -4942,8 +4942,17 @@ _p63_prep go 1.0.0 1.0.0
 mkdir -p "${_P63}/tools/go.gopath-aside/pkg"
 : >"${_P63}/tools/go.gopath-aside/pkg/other"
 _o="$(_p63_run go 1.0.0)"
-assert_pass "63j2: go leftover aside AND a GOPATH on a current pin -> still FATAL, both kept" \
-  bash -c '[[ "$1" == "rc=fail ver=1.0.0 marker=1.0.0 files=only-in-1.0.0 gopath=600 aside=yes" && -f "$2/tools/go.gopath-aside/pkg/other" ]]' _ "${_o}" "${_P63}"
+assert_pass "63j2: go leftover aside AND a GOPATH on a current pin -> still FATAL (and says why), both kept" \
+  bash -c '[[ "$1" == "rc=fail ver=1.0.0 marker=1.0.0 files=only-in-1.0.0 gopath=600 aside=yes" && -f "$2/tools/go.gopath-aside/pkg/other" ]] \
+    && grep -q "FATAL: both .* exist" "$2/last.log"' _ "${_o}" "${_P63}"
+# The shape a killed reinstall really leaves on the next boot: base-start.sh runs
+# create-directories.sh (which mkdirs GOPATH) BEFORE install-go.sh, so GOPATH exists but
+# is EMPTY while the real one sits in the aside. That is not a conflict to merge by hand.
+_p63_prep go 1.0.0 1.0.0
+mv "${_P63}/tools/go/home" "${_P63}/tools/go.gopath-aside"
+mkdir -p "${_P63}/tools/go/home"
+assert_pass "63j3: go leftover aside and an EMPTY GOPATH (create-directories.sh) -> empty dir dropped, aside restored" \
+  test "$(_p63_run go 1.0.0)" = "rc=0 ver=1.0.0 marker=1.0.0 files=only-in-1.0.0 gopath=600 aside=no"
 _p63_prep go 1.0.0 1.0.0
 _o="$(P63_FAIL_CHOWN=1 _p63_run go 1.1.0)"
 assert_pass "63m: go failure while GOPATH is aside (chown fails) -> GOPATH restored by the EXIT trap, marker kept" \

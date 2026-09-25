@@ -17,7 +17,9 @@ source global-stack-base-version-gate.sh
 # for the wipe and renamed back after the permission pass, so the module cache and the
 # `go install`ed binaries survive a bump with their modes untouched. The EXIT trap puts
 # it back on any failure. A leftover aside (a run killed mid-reinstall) is restored
-# here when GOPATH is absent and is FATAL when both exist; it is never deleted.
+# here when GOPATH is absent or an EMPTY dir — the shape the next boot really meets,
+# since base-start.sh runs create-directories.sh, which mkdirs GOPATH, before this
+# script — and is FATAL only when GOPATH has content. The aside is never deleted.
 _go_aside="${GOROOT}.gopath-aside"
 _go_nested=0
 case "${GOPATH}" in "${GOROOT}"/*) _go_nested=1 ;; esac
@@ -29,6 +31,11 @@ _go_restore_gopath() {
     return 0
 }
 if [[ -e "${_go_aside}" ]]; then
+    # Emptiness is tested first: a bare `rmdir` on a non-empty dir would abort under
+    # `set -e` before the FATAL below could say why.
+    if [[ -d "${GOPATH}" && -z "$(ls -A "${GOPATH}")" ]]; then
+        sudo rmdir "${GOPATH}"
+    fi
     if [[ -e "${GOPATH}" ]]; then
         printf 'FATAL: both %s and %s exist - a go reinstall was interrupted; merge them by hand\n' \
             "${_go_aside}" "${GOPATH}" >&2

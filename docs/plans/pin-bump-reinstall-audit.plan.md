@@ -316,6 +316,12 @@ then drop the old dir and wipe `pkg.*`; the marker is written where it is today 
   §62b2 cold start rides along. Suite 768/768. Real downloads in a throwaway 00base container with a scratch
   `tools/`: go 1.27.0 → 1.27.1 → 1.27.0 and zig 0.15.2 → 0.16.0 → 0.15.2, stale file gone every time,
   GOPATH file kept at 600, no aside or temp dir left [Verified: ran].
+- AS BUILT (14a follow-up): a killed reinstall's next boot meets the aside AND an EMPTY GOPATH, because
+  `base-start.sh:13` runs `create-directories.sh` (which mkdirs GOPATH) before `:31` install-go. An empty GOPATH
+  is now dropped (emptiness tested first — a bare `rmdir` would abort under `set -e` before the FATAL could say
+  why) and the aside restored; FATAL only when GOPATH has content. 63j3 red first; SA1 (no drop) caught, SA2
+  (drop without the emptiness test) first SURVIVED — rc and dirs are identical, only the message is lost — so
+  63j2 now also requires the FATAL text.
 
 ### Step 15 — composer bootstrap pinned (S)
 - `phpbrew-install-tools.sh:24-25` runs `composer-setup.php` with no `--version` → latest [Verified: pass 2
