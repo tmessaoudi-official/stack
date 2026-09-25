@@ -4745,8 +4745,209 @@ for _pl in 'ruby-build RUBY_BUILD rbenv.ruby-build' 'rbenv-gemset GEMSET rbenv.g
   assert_pass "62i: ${_pd} non-empty dir that is not a clone -> fails loud, nothing deleted" \
     bash -c '[[ "${1%% *}" != 0 && "${1#* }" == "nogit none token keep" ]]' _ "${_o}"
 done
+# Cold start: rbenv is freshly cloned and plugins/ is gitignored upstream, so the parent
+# does not exist yet. The old arm ran `mkdir -p`; `git clone` creates it on its own.
+for _pl in 'ruby-build RUBY_BUILD rbenv.ruby-build' 'rbenv-gemset GEMSET rbenv.gemset'; do
+  read -r _pd _pv _pm <<<"${_pl}"
+  rm -rf "${_P62}/root/plugins"
+  rm -f "${_P62}/versions/${_pm}"
+  assert_pass "62b2: ${_pd} cold start (plugins/ absent) -> cloned at the pin" \
+    test "$(_p62_iou "${_pd}" "${_pv}" "${_pm}" v1.1.0 mirror)" = "0 ${_P56_C2} v1.1.0 - -"
+done
 assert_fail "62j: no plugin arm deletes its plugin dir before installing" \
   grep -qE 'rm -rf .*plugins/' "${DIST_BIN}/rbenv-bin/global-stack-rbenv-iou.sh"
+
+# ─── Section 63: go/zig are checked BEFORE the wipe, then installed fresh (tranche 2 step 14a) ──
+# Both installers extracted the new archive OVER the old tree, so every file the old
+# version shipped and the new one does not survived, in either direction; nothing
+# checked the download, and the marker was written whatever the binary turned out to
+# be. Now (ruling 2026-09-25 09:58): download to a temp dir, check the upstream SHA-256
+# and that the archive holds the binary, and only then wipe and unpack fresh; the
+# marker follows a version check. go's GOPATH lives INSIDE GOROOT, so it is renamed
+# to the sibling go.gopath-aside for the wipe (ruling 10:07) and must come back
+# untouched — including its file modes, which the old `chmod -R a+rwx` rewrote.
+# curl and sudo are stubs; the fixture archives mirror the real member paths, listed
+# from the real 1.27.1 / 0.16.0 archives on 2026-09-25.
+printf '\n%b── Section 63: go/zig check first, then wipe and unpack fresh (tranche 2 step 14a)%b\n' "${C_BOLD}" "${C_RESET}"
+
+_P63="${TMP_DIR}/p63"
+mkdir -p "${_P63}/stub" "${_P63}/up/go" "${_P63}/up/zig" "${_P63}/build" "${_P63}/work" "${_P63}/versions"
+cat >"${_P63}/stub/curl" <<'EOF'
+#!/bin/bash
+# Serves the fixture upstream. -f semantics: an unknown URL exits 22, like a 404.
+out="" dash_o=0 url=""
+while (($#)); do
+  case "$1" in
+    --connect-timeout | --max-time) shift ;;
+    -o) out="$2"; shift ;;
+    --*) ;;
+    -*) [[ "$1" == *O* ]] && dash_o=1 ;;
+    http*) url="$1" ;;
+  esac
+  shift
+done
+printf '%s\n' "${url}" >>"${P63}/curl.log"
+case "${url}" in
+  https://go.dev/dl/* | https://dl.google.com/go/*) f="${P63}/up/go/${url##*/}" ;;
+  https://ziglang.org/download/index.json) f="${P63}/up/zig/index.json" ;;
+  https://ziglang.org/download/*) f="${P63}/up/zig/${url##*/}" ;;
+  *) exit 22 ;;
+esac
+[[ -f "${f}" ]] || exit 22
+if [[ -n "${out}" ]]; then cp "${f}" "${out}"; elif ((dash_o)); then cp "${f}" "./${url##*/}"; else cat "${f}"; fi
+EOF
+cat >"${_P63}/stub/sudo" <<'EOF'
+#!/bin/bash
+if [[ "$1" == chown && -n "${P63_FAIL_CHOWN:-}" ]]; then exit 1; fi
+exec "$@"
+EOF
+chmod +x "${_P63}/stub/curl" "${_P63}/stub/sudo"
+
+_p63_mk() { # $1 = go|zig, $2 = version archived, $3 = version the binary prints, $4 = full|nobin
+  local w="${_P63}/build/$1-$2" a
+  rm -rf "${w}"
+  if [[ "$1" == go ]]; then
+    mkdir -p "${w}/go/bin" "${w}/go/src"
+    printf '#!/bin/sh\necho "go version go%s linux/amd64"\n' "$3" >"${w}/go/bin/go"
+    printf 'go%s\n' "$2" >"${w}/go/VERSION"
+    : >"${w}/go/src/only-in-$2"
+    [[ "$4" == nobin ]] && rm -f "${w}/go/bin/go"
+    chmod -R a+rx "${w}"
+    a="${_P63}/up/go/go$2.linux-amd64.tar.gz"
+    tar -C "${w}" -czf "${a}" go
+    sha256sum <"${a}" | cut -d' ' -f1 >"${a}.sha256"
+  else
+    local d="zig-x86_64-linux-$2"
+    mkdir -p "${w}/${d}/lib"
+    printf '#!/bin/sh\necho "%s"\n' "$3" >"${w}/${d}/zig"
+    : >"${w}/${d}/lib/only-in-$2"
+    [[ "$4" == nobin ]] && rm -f "${w}/${d}/zig"
+    chmod -R a+rx "${w}"
+    a="${_P63}/up/zig/${d}.tar.xz"
+    tar -C "${w}" -cJf "${a}" "${d}"
+    printf '%s %s\n' "$2" "$(sha256sum <"${a}" | cut -d' ' -f1)" >>"${_P63}/up/zig/shas"
+  fi
+}
+# 1.0.0/1.1.0 good; 1.2.0 published with a wrong checksum; 1.3.0 archive without the
+# binary; 1.4.0 whose binary reports 1.4.00 (a prefix match without the trailing
+# space would accept it); 1.5.0 not published at all.
+for _t in go zig; do
+  _p63_mk "${_t}" 1.0.0 1.0.0 full
+  _p63_mk "${_t}" 1.1.0 1.1.0 full
+  _p63_mk "${_t}" 1.2.0 1.2.0 full
+  _p63_mk "${_t}" 1.3.0 1.3.0 nobin
+  _p63_mk "${_t}" 1.4.0 1.4.00 full
+done
+printf '%064d\n' 0 >"${_P63}/up/go/go1.2.0.linux-amd64.tar.gz.sha256"
+sed -i 's/^1\.2\.0 .*/1.2.0 '"$(printf '%064d' 0)"'/' "${_P63}/up/zig/shas"
+awk 'BEGIN { printf "{" } NR > 1 { printf "," }
+  { printf "\"%s\":{\"x86_64-linux\":{\"tarball\":\"https://ziglang.org/download/%s/zig-x86_64-linux-%s.tar.xz\",\"shasum\":\"%s\"}}", $1, $1, $1, $2 }
+  END { print "}" }' "${_P63}/up/zig/shas" >"${_P63}/up/zig/index.json"
+
+assert_pass "63a: fixture archives carry the real member paths and a matching checksum (non-vacuity)" \
+  bash -c 'tar -tzf "$1/up/go/go1.1.0.linux-amd64.tar.gz" | grep -qx go/bin/go \
+    && tar -tJf "$1/up/zig/zig-x86_64-linux-1.1.0.tar.xz" | grep -qx zig-x86_64-linux-1.1.0/zig \
+    && [[ "$(sha256sum <"$1/up/go/go1.1.0.linux-amd64.tar.gz" | cut -d" " -f1)" == "$(cat "$1/up/go/go1.1.0.linux-amd64.tar.gz.sha256")" ]] \
+    && jq -e ".\"1.1.0\".\"x86_64-linux\".shasum | length == 64" "$1/up/zig/index.json" >/dev/null' _ "${_P63}"
+
+_p63_prep() { # $1 = go|zig, $2 = installed version|none, $3 = marker|none — go also gets a GOPATH file at mode 600
+  local t="${_P63}/tools/$1"
+  rm -rf "${t}" "${_P63}/tools/go.gopath-aside" "${_P63}/versions/base.$1"
+  if [[ "$2" != none ]]; then
+    mkdir -p "${t}"
+    if [[ "$1" == go ]]; then
+      tar -C "${t}" --strip-components=1 -xzf "${_P63}/up/go/go$2.linux-amd64.tar.gz"
+      mkdir -p "${t}/home/pkg"
+      printf 'k\n' >"${t}/home/pkg/keep"
+      chmod 600 "${t}/home/pkg/keep"
+    else
+      tar -C "${t}" --strip-components=1 -xJf "${_P63}/up/zig/zig-x86_64-linux-$2.tar.xz"
+    fi
+  fi
+  [[ "$3" == none ]] || printf '%s\n' "$3" >"${_P63}/versions/base.$1"
+}
+_p63_run() { # $1 = go|zig, $2 = pin → "rc=<0|fail> ver=<v|none> marker=<m|none> files=<only-in-*>" (+ go: " gopath=<mode|none> aside=<yes|no>")
+  local rc=0 t="${_P63}/tools/$1" ver files
+  rm -f "${_P63}/curl.log"
+  (cd "${_P63}/work" && env -i HOME="${_P63}" P63="${_P63}" P63_FAIL_CHOWN="${P63_FAIL_CHOWN:-}" \
+    PATH="${_P63}/stub:${_P63}/tools/go/bin:${_P63}/tools/zig:${DIST_BIN}/base-bin:/usr/bin:/bin" \
+    GLOBAL_STACK_DOCKER_TOOLS_PATH="${_P63}/tools" GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS="${_P63}/versions" \
+    GLOBAL_STACK_DOCKER_USER_ID="$(id -un)" GLOBAL_STACK_DOCKER_GROUP_ID="$(id -gn)" \
+    GOROOT="${_P63}/tools/go" GOPATH="${_P63}/tools/go/home" GLOBAL_STACK_GO_VERSION="$2" \
+    GLOBAL_STACK_ZIGPATH="${_P63}/tools/zig" GLOBAL_STACK_ZIG_VERSION="$2" \
+    bash "${DIST_BIN}/base-bin/global-stack-base-install-$1.sh") >"${_P63}/last.log" 2>&1 || rc=fail
+  if [[ "$1" == go ]]; then
+    ver="$("${t}/bin/go" version 2>/dev/null | awk '{ sub(/^go/, "", $3); print $3 }')"
+    files="$(find "${t}/src" -name 'only-in-*' -printf '%f\n' 2>/dev/null | sort | paste -sd, -)"
+  else
+    ver="$("${t}/zig" version 2>/dev/null)"
+    files="$(find "${t}/lib" -name 'only-in-*' -printf '%f\n' 2>/dev/null | sort | paste -sd, -)"
+  fi
+  printf 'rc=%s ver=%s marker=%s files=%s' "${rc}" "${ver:-none}" \
+    "$(cat "${_P63}/versions/base.$1" 2>/dev/null || echo none)" "${files:-none}"
+  if [[ "$1" == go ]]; then
+    printf ' gopath=%s aside=%s' "$(stat -c %a "${t}/home/pkg/keep" 2>/dev/null || echo none)" \
+      "$(if [[ -e "${_P63}/tools/go.gopath-aside" ]]; then echo yes; else echo no; fi)"
+  fi
+}
+_p63_curls() { if [[ -f "${_P63}/curl.log" ]]; then wc -l <"${_P63}/curl.log" | tr -d ' '; else echo 0; fi; }
+
+for _t in go zig; do
+  _g=""
+  [[ "${_t}" == go ]] && _g=" gopath=600 aside=no"
+  _p63_prep "${_t}" none none
+  _o="$(_p63_run "${_t}" 1.1.0)"
+  assert_pass "63b: ${_t} first install -> the pin, marker written" \
+    test "${_o% gopath=*}" = "rc=0 ver=1.1.0 marker=1.1.0 files=only-in-1.1.0"
+  _p63_prep "${_t}" 1.0.0 1.0.0
+  assert_pass "63c: ${_t} 1.0.0 -> pin 1.1.0: clean tree of the new version, nothing of the old left" \
+    test "$(_p63_run "${_t}" 1.1.0)" = "rc=0 ver=1.1.0 marker=1.1.0 files=only-in-1.1.0${_g}"
+  _p63_prep "${_t}" 1.1.0 1.1.0
+  assert_pass "63d: ${_t} 1.1.0 -> pin moved back to 1.0.0: clean tree of the old version" \
+    test "$(_p63_run "${_t}" 1.0.0)" = "rc=0 ver=1.0.0 marker=1.0.0 files=only-in-1.0.0${_g}"
+  _p63_prep "${_t}" 1.0.0 1.0.0
+  assert_pass "63e: ${_t} download fails its upstream checksum -> FATAL, old tool and marker untouched" \
+    test "$(_p63_run "${_t}" 1.2.0)" = "rc=fail ver=1.0.0 marker=1.0.0 files=only-in-1.0.0${_g}"
+  _p63_prep "${_t}" 1.0.0 1.0.0
+  assert_pass "63f: ${_t} archive without the binary -> FATAL, old tool and marker untouched" \
+    test "$(_p63_run "${_t}" 1.3.0)" = "rc=fail ver=1.0.0 marker=1.0.0 files=only-in-1.0.0${_g}"
+  _p63_prep "${_t}" 1.0.0 1.0.0
+  assert_pass "63g: ${_t} pin not published (download fails) -> FATAL, old tool and marker untouched" \
+    test "$(_p63_run "${_t}" 1.5.0)" = "rc=fail ver=1.0.0 marker=1.0.0 files=only-in-1.0.0${_g}"
+  _p63_prep "${_t}" 1.0.0 1.0.0
+  _o="$(_p63_run "${_t}" 1.4.0)"
+  assert_pass "63h: ${_t} installed binary reports 1.4.00 for pin 1.4.0 -> FATAL, marker not written" \
+    bash -c '[[ "$1" == "rc=fail ver=1.4.00 marker=1.0.0 files=only-in-1.4.0$2" ]]' _ "${_o}" "${_g}"
+  _p63_prep "${_t}" 1.1.0 1.1.0
+  _o="$(_p63_run "${_t}" 1.1.0)"
+  assert_pass "63k: ${_t} current -> nothing downloaded, nothing touched" \
+    bash -c '[[ "$1" == "rc=0 ver=1.1.0 marker=1.1.0 files=only-in-1.1.0$2" && "$3" == 0 ]]' _ "${_o}" "${_g}" "$(_p63_curls)"
+done
+
+# go only: GOPATH set aside and back. A leftover aside (the container was killed mid-
+# reinstall) is restored when GOPATH is absent, FATAL when both exist, never deleted.
+_p63_prep go 1.0.0 1.0.0
+mv "${_P63}/tools/go/home" "${_P63}/tools/go.gopath-aside"
+assert_pass "63i: go leftover aside and no GOPATH -> aside restored, even on a current pin" \
+  test "$(_p63_run go 1.0.0)" = "rc=0 ver=1.0.0 marker=1.0.0 files=only-in-1.0.0 gopath=600 aside=no"
+_p63_prep go 1.0.0 1.0.0
+mkdir -p "${_P63}/tools/go.gopath-aside/pkg"
+: >"${_P63}/tools/go.gopath-aside/pkg/other"
+_o="$(_p63_run go 1.1.0)"
+assert_pass "63j: go leftover aside AND a GOPATH -> FATAL, both kept, nothing installed" \
+  bash -c '[[ "$1" == "rc=fail ver=1.0.0 marker=1.0.0 files=only-in-1.0.0 gopath=600 aside=yes" && -f "$2/tools/go.gopath-aside/pkg/other" ]]' _ "${_o}" "${_P63}"
+# On a CURRENT pin nothing is moved, so `mv -T` never gets the chance to refuse: only
+# the explicit check stops a stale aside from lingering unnoticed on every boot.
+_p63_prep go 1.0.0 1.0.0
+mkdir -p "${_P63}/tools/go.gopath-aside/pkg"
+: >"${_P63}/tools/go.gopath-aside/pkg/other"
+_o="$(_p63_run go 1.0.0)"
+assert_pass "63j2: go leftover aside AND a GOPATH on a current pin -> still FATAL, both kept" \
+  bash -c '[[ "$1" == "rc=fail ver=1.0.0 marker=1.0.0 files=only-in-1.0.0 gopath=600 aside=yes" && -f "$2/tools/go.gopath-aside/pkg/other" ]]' _ "${_o}" "${_P63}"
+_p63_prep go 1.0.0 1.0.0
+_o="$(P63_FAIL_CHOWN=1 _p63_run go 1.1.0)"
+assert_pass "63m: go failure while GOPATH is aside (chown fails) -> GOPATH restored by the EXIT trap, marker kept" \
+  bash -c '[[ "$1" == rc=fail\ *\ marker=1.0.0\ *\ gopath=600\ aside=no ]]' _ "${_o}"
 
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'

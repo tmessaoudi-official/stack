@@ -22,6 +22,12 @@ version and its usage ! no implementation yet !"* — AUDIT ONLY; nothing below 
 - [2026-09-24 23:55] AGREED: tranche 2 approved as steps 11–17, step by step, test-first, tier asked at every gate.
 - [2026-09-24 23:55] AGREED: step 14 — a go bump's staged swap moves `go/home` (GOPATH) into the new tree; GOPATH is preserved, not wiped.
 - [2026-09-24 23:55] AGREED: step 16 — option (a) only: keep the clean full SDK wipe, stop wiping `GRADLE_USER_HOME`.
+- [2026-09-25 09:37] SUPERSEDED (see 2026-09-25 09:58): mise's delete-before-install (`install-mise.sh:18-21`, data dirs removed before `curl https://mise.run | sh`) is logged as a known issue and fixed later, outside step 14; step 14 stays go/zig/hurl.
+- [2026-09-25 09:58] AGREED: no tool is ever unpacked next to its old tree in tools/. go/zig reinstall = download to container /tmp, check the upstream-published SHA-256 and that the archive holds the binary, THEN wipe the tool dir (go's `home` GOPATH set aside and restored), unpack fresh, run the version check, marker last.
+- [2026-09-25 09:58] AGREED: hurl is fixed now — a pinned 00base build stage compiles hurl ${GLOBAL_STACK_HURL_VERSION} from source (cargo --locked, pinned Rust) against Ubuntu 26.04's libxml2.so.16; install-hurl.sh copies the binary into tools/hurl (the mkcert pattern). Reason: the only upstream Linux build links libxml2.so.2, absent on 26.04, so hurl has been unrunnable in 00base.
+- [2026-09-25 09:58] AGREED: mise's delete-before-install is fixed IN step 14 (supersedes 09:37): pinned mise binary from its GitHub release with its checksum (no remote script piped to sh), `mise --version` checked against the pin, then data dirs wiped, marker last.
+- [2026-09-25 10:07] AGREED: go's GOPATH (`go/home`) is renamed to the sibling `tools/go.gopath-aside` for the duration of a go reinstall — the one named exception to "nothing next to the old tree"; restored on any failure, restored at the next start when GOPATH is absent, FATAL when both exist, never deleted.
+- [2026-09-25 10:18] AGREED: hurl stays at `/stack/tools/hurl/bin` (host PATH unchanged) — the image only COMPILES it; boot copies it into tools/ like mkcert (confirms 09:58 after the developer asked).
 
 ## Formal Plan
 <!-- written at Phase 4 — tranche 1, APPROVED 2026-09-24 15:05 (steps 5-9; step 8 revised) -->
@@ -269,20 +275,47 @@ then drop the old dir and wipe `pkg.*`; the marker is written where it is today 
   each restored byte-identical. Suite 745/745. Live `tools/` plugins are clones at their pins with markers
   equal to `.env.local`, so the next boot is `skip` [Verified: read].
 
-### Step 14 — go / zig / hurl: staged extract, verify, swap (M)
-- Today each extracts OVER its tree (`install-go.sh:19`, `install-zig.sh:13`, `install-hurl.sh:17`)
-  [Verified: read] — stale files survive, both directions. New, per the 15:05 clean-wipe ruling: extract into
-  `<dir>.new`, check the binary's `version` output names the pin, then remove the old tree and `mv` the new
-  one into place; marker last. A failed download/extract leaves the old tool working.
-- go: GOPATH is `go/home`, INSIDE GOROOT (`.env:350-351`) [Verified]. RULING NEEDED (it amends 15:05's
-  "wipe"): (i) staged swap MOVES `home` into the new tree — `go install`ed binaries + module cache survive,
-  no `.env` change; (ii) full wipe including GOPATH on every go bump; (iii) move GOPATH out of GOROOT
-  (`.env` + shellrc + consumers).
-- The `rm -rf <dir>` → `mv <dir>.new <dir>` swap is a sub-second window in which `tools/<tool>` is absent for
-  anything with it on PATH (host included) — accepted. `sudo` on tar/chmod/chown applies to the `.new` tree.
-- Test §63: stub `curl` serving fake tarballs whose binary prints its version; up / down / failed download /
-  GOPATH survives / leftover `.new` cleared. Certification: real go, zig, hurl downloads into scratch dirs,
-  up then down.
+### Step 14 — go / zig / mise / hurl: check first, then wipe and install fresh (L) — REVISED by rulings 2026-09-25 09:58
+- Today go/zig/hurl extract OVER their tree (`install-go.sh:19`, `install-zig.sh:13`, `install-hurl.sh:17`) and mise
+  wipes its data dirs BEFORE `curl https://mise.run | sh` (`install-mise.sh:18-21`) [Verified: read]. Nothing is
+  ever unpacked next to its old tree (ruling 09:58). Three commits:
+- **14a go/zig.** Download into a container `mktemp -d`; check the SHA-256 against upstream (go:
+  `dl.google.com/go/<archive>.sha256`; zig: `index.json` `.<v>."x86_64-linux".shasum`), building the
+  `<hash>  <file>` line ourselves; check the archive lists `go/bin/go` / `zig-x86_64-linux-<v>/zig`. Any failure →
+  FATAL, old tool and marker untouched. Then wipe the tool dir, unpack fresh, chmod/chown the fresh tree, and
+  check the version as the developer user (go: `^go version go<pin> ` WITH the trailing space; zig: exact).
+  Marker last. **The one named exception to "nothing next to the old tree": go's GOPATH (`go/home`, 1.9 GB) is
+  renamed to the sibling `${GOROOT}.gopath-aside` before the wipe and renamed back after the chown** — a
+  same-filesystem rename is the only instant move, and it is user data, not an unpacked version. An EXIT trap
+  restores it on any failure; at the next start a leftover aside is restored when GOPATH is absent, is FATAL
+  when both exist, and is never deleted.
+- **14b mise.** The pinned release binary `mise-<v>-linux-x64` + the release's `SHASUMS256.txt` replace the piped
+  installer; `--version` (printed WITHOUT the leading `v` — probe the real output first) checked against the
+  pin before anything is touched; then the data dirs are wiped, the binary placed at `MISE_INSTALL_PATH`,
+  `mise use -g usage` run, marker last. (`usage` itself stays unpinned — pass-2 float, unchanged.)
+- **14c hurl.** hurl's only Linux build links `libxml2.so.2`, absent on Ubuntu 26.04 (`.so.16`), so hurl has
+  been unrunnable in 00base [Verified: ldd]. A `hurl-build` stage on the same pinned Ubuntu tag installs hurl's
+  documented build deps (apt, build stage only), `rustup-init` at `GLOBAL_STACK_RUSTUP_INIT_VERSION` after its
+  checksum, toolchain `GLOBAL_STACK_RUST_VERSION` (hurl MSRV 1.95.0), then `cargo install --locked hurl --version
+  <pin> --root /opt/hurl`; the main stage copies `/opt/hurl/bin`. `install-hurl.sh` checks the image's
+  `hurl --version` names the pin (else the image is stale → FATAL), wipes `tools/hurl`, copies hurl + hurlfmt,
+  checks again, marker last. Man pages/completions are dropped (cargo does not ship them). Compose build args
+  gain the two Rust pins; `make check-image-versions` must stay clean.
+- Tests: §63 go/zig, §64 mise, §65 hurl — stub `curl`/`sudo`, red first with the old code's failure named;
+  sabotage per section. Execution: real go/zig/mise downloads up then down in a throwaway 00base container
+  with a scratch `tools/`; a real build of the hurl stage plus `ldd` + `hurl --version` in the result. The live
+  `tools/` and running stack are never touched. Composer's test moves to §66.
+- AS BUILT (14a): go/zig download into `mktemp -d`, check the upstream SHA-256 (`<hash>  <file>` built by the
+  script) and the archive listing (`grep -x … >/dev/null`, never `-q`: an early exit SIGPIPEs tar under
+  pipefail), then wipe + unpack fresh; chmod/chown BEFORE GOPATH returns (the old `chmod -R a+rwx` rewrote
+  every GOPATH file to 0777); version check (go `go version go<pin> ` with the space, zig exact), marker last.
+  go's EXIT trap restores the aside. §63: 22 checks, 13 red first for the stated reason (old tree left
+  behind, bad checksum installed, `1.4.00` accepted, aside ignored, GOPATH 600 → 777). Sabotage S1–S9 each
+  caught and restored byte-identical — S6 (drop the both-exist FATAL) first SURVIVED, because on a reinstall
+  pin `mv -T` refuses the non-empty aside anyway; 63j2 (current pin, where nothing moves) now catches it.
+  §62b2 cold start rides along. Suite 768/768. Real downloads in a throwaway 00base container with a scratch
+  `tools/`: go 1.27.0 → 1.27.1 → 1.27.0 and zig 0.15.2 → 0.16.0 → 0.15.2, stale file gone every time,
+  GOPATH file kept at 600, no aside or temp dir left [Verified: ran].
 
 ### Step 15 — composer bootstrap pinned (S)
 - `phpbrew-install-tools.sh:24-25` runs `composer-setup.php` with no `--version` → latest [Verified: pass 2
@@ -326,8 +359,8 @@ escape hatches keeping pkg markers; the `source X && cmd` class.
 | 10 | Tranche 2: plan the delete-before-install sites (nvm/phpbrew/sdkman/fvm/android/rbenv-plugins), composer bootstrap, env-update downgrade policy | M | done | 1906f6c | docs/plans/** |
 | 11 | Runtimes nvm/php/java/flutter delete-after-install (php.edge exempt) | M | done | 902f08f | docker/config/dist/bin/base-bin/**, docker/config/dist/bin/nvm-bin/**, docker/config/dist/bin/phpbrew-bin/**, docker/config/dist/bin/sdkman-bin/**, docker/config/dist/bin/fvm-bin/**, bin/tests/startup-prologue.test.sh |
 | 12 | Package slots: cleanup only after the new install succeeded | M | done | f5075ed | docker/config/dist/bin/base-bin/**, docker/config/dist/bin/rbenv-bin/**, docker/config/dist/bin/sdkman-bin/**, bin/tests/startup-prologue.test.sh |
-| 13 | rbenv plugins reuse step 6's in-place tag move | S | done | - | docker/config/dist/bin/rbenv-bin/**, bin/tests/startup-prologue.test.sh |
-| 14 | go/zig/hurl staged extract-verify-swap, GOPATH carried across | M | todo | - | docker/images/00base/**, bin/tests/startup-prologue.test.sh |
+| 13 | rbenv plugins reuse step 6's in-place tag move | S | done | 46e80a7 | docker/config/dist/bin/rbenv-bin/**, bin/tests/startup-prologue.test.sh |
+| 14 | go/zig/mise/hurl: check first, then wipe and install fresh (14a/14b/14c) | L | doing | - | docker/config/dist/bin/base-bin/**, docker/images/00base/**, bin/tests/startup-prologue.test.sh |
 | 15 | composer bootstrap pinned + verified | S | todo | - | docker/config/dist/bin/phpbrew-bin/**, bin/tests/startup-prologue.test.sh |
 | 16 | android: stop wiping GRADLE_USER_HOME | S | todo | - | docker/config/dist/bin/android-bin/**, bin/tests/startup-prologue.test.sh |
 | 17 | Docs: CLAUDE.md tranche 2 (hand-off) | S | todo | - | CLAUDE.md |
@@ -345,6 +378,8 @@ escape hatches keeping pkg markers; the `source X && cmd` class.
   On a repeat, capture `_andv_probe`'s raw `${out}` (the xtrace of every `android sdk install` the stub got)
   to a file BEFORE it is parsed — `1| ndk-bundle|none` cannot say whether ndk-bundle ever reached the stub.
 ### Known issues
+- mise deletes `MISE_DATA_DIR`/`STATE`/`CONFIG`/`CACHE` BEFORE `curl https://mise.run | sh` (`install-mise.sh:18-21`) — a failed download leaves mise wiped. Being fixed in step 14 (ruling 2026-09-25 09:58). [Verified: read]
+- hurl 8.0.1 cannot run in 00base: `libxml2.so.2 => not found` (26.04 ships libxml2.so.16), and upstream publishes no other Linux x86_64 build [Verified: ldd + release assets in a throwaway container]. Being fixed in step 14 (ruling 2026-09-25 09:58).
 - `RELOAD_PHP=true` (`phpbrew-start.sh:43`) removes `frankenphp-${GLOBAL_STACK_FRANKENPHP_VERSION}-<php name>` by the
   CURRENT frankenphp pin, so a frankenphp binary built under an older pin is orphaned. Same class step 11 fixed in
   the pin-bump cleanup (`902f08f`); this one is pre-existing and not a pin-bump path. Logged, not fixed.
