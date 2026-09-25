@@ -244,7 +244,10 @@ then drop the old dir and wipe `pkg.*`; the marker is written where it is today 
   after — it pins first-install; 61h red before only on order, it pins the per-slot reset). Sabotage T1–T4
   each caught, restored byte-identical. Suite 727/727. Real downgrades in scratch: `pip install six==1.16.0`
   over 1.17.0 → 1.16.0, one dist-info; `npm add -g --force is-number@6.0.0` over 7.0.0 → 6.0.0 [Verified].
-  Step 11's "S1–S8" means S1–S7 plus the frankenphp glob revert.
+  gem, in the shipped order: `rake` 13.2.1, then install 13.1.0, then `gem uninstall rake -v 13.2.1 -x -I` →
+  stub kept, `rake --version` 13.1.0, only 13.1.0 listed [Verified: ran `gem` directly, not through the
+  engine or `rbenv init`; the kept stub means `rbenv rehash` keeps its shim — Inferred]. sdkman's
+  deselect-not-refuse is [Verified: read] only; no `sdk uninstall` ran. Step 11's "S1–S8" means S1–S7 plus the frankenphp glob revert.
 
 ### Step 13 — rbenv plugins: reuse step 6's in-place move (S)
 - `rbenv-iou.sh` ruby-build/gemset arms `rm -rf plugins/<p>` then `git clone` [Verified: read]. The plugins
@@ -253,6 +256,18 @@ then drop the old dir and wipe `pkg.*`; the marker is written where it is today 
   when they differ. No `.new` state, no second shape. (advisor 3C round 1)
 - Test §62 on §56's real-git fixture, plugin arms: pin up / down → at the tag; current → no fetch; unknown
   tag → fails, plugin dir intact.
+
+- AS BUILT (step 13): one helper, `_rbenv_plugin_follow_pin`, serves both arms; rbenv's own block (step 6)
+  is untouched, so §29b's structural anchor still reads it. The gate lines are byte-identical (§29f
+  extracts them) and still print the WARN; the trigger is now `gate != skip || ! -d plugins/<p>/.git`, and
+  the marker is written after the move. Deviation from the plan text (advisor 3C): a plugin dir that is not
+  a clone is never removed — `git clone` fills an empty one and fails loud on a non-empty one, files kept
+  [Verified: probe, rc 128]. §62 (18 checks) drives the whole iou with github.com redirected by
+  `GIT_CONFIG_COUNT` insteadOf to a mirror of §56's fixture or to a dead path; red first on d/e/f/h/i/j for
+  the stated reason (the old arm printed `128 nogit`: deleted, then the clone failed). Sabotage S1
+  delete-then-reclone (10 red), S2 marker before the move (62h/62i ruby-build), S3 always fetch (62f ×2),
+  each restored byte-identical. Suite 745/745. Live `tools/` plugins are clones at their pins with markers
+  equal to `.env.local`, so the next boot is `skip` [Verified: read].
 
 ### Step 14 — go / zig / hurl: staged extract, verify, swap (M)
 - Today each extracts OVER its tree (`install-go.sh:19`, `install-zig.sh:13`, `install-hurl.sh:17`)
@@ -310,8 +325,8 @@ escape hatches keeping pkg markers; the `source X && cmd` class.
 | 9 | Docs: CLAUDE.md manager-reinstall claim (hand-off) | S | done | 81c3dcc | CLAUDE.md, bin/tests/startup-prologue.test.sh |
 | 10 | Tranche 2: plan the delete-before-install sites (nvm/phpbrew/sdkman/fvm/android/rbenv-plugins), composer bootstrap, env-update downgrade policy | M | done | 1906f6c | docs/plans/** |
 | 11 | Runtimes nvm/php/java/flutter delete-after-install (php.edge exempt) | M | done | 902f08f | docker/config/dist/bin/base-bin/**, docker/config/dist/bin/nvm-bin/**, docker/config/dist/bin/phpbrew-bin/**, docker/config/dist/bin/sdkman-bin/**, docker/config/dist/bin/fvm-bin/**, bin/tests/startup-prologue.test.sh |
-| 12 | Package slots: cleanup only after the new install succeeded | M | done | - | docker/config/dist/bin/base-bin/**, docker/config/dist/bin/rbenv-bin/**, docker/config/dist/bin/sdkman-bin/**, bin/tests/startup-prologue.test.sh |
-| 13 | rbenv plugins reuse step 6's in-place tag move | S | todo | - | docker/config/dist/bin/rbenv-bin/**, bin/tests/startup-prologue.test.sh |
+| 12 | Package slots: cleanup only after the new install succeeded | M | done | f5075ed | docker/config/dist/bin/base-bin/**, docker/config/dist/bin/rbenv-bin/**, docker/config/dist/bin/sdkman-bin/**, bin/tests/startup-prologue.test.sh |
+| 13 | rbenv plugins reuse step 6's in-place tag move | S | done | - | docker/config/dist/bin/rbenv-bin/**, bin/tests/startup-prologue.test.sh |
 | 14 | go/zig/hurl staged extract-verify-swap, GOPATH carried across | M | todo | - | docker/images/00base/**, bin/tests/startup-prologue.test.sh |
 | 15 | composer bootstrap pinned + verified | S | todo | - | docker/config/dist/bin/phpbrew-bin/**, bin/tests/startup-prologue.test.sh |
 | 16 | android: stop wiping GRADLE_USER_HOME | S | todo | - | docker/config/dist/bin/android-bin/**, bin/tests/startup-prologue.test.sh |

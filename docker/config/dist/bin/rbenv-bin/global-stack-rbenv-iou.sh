@@ -32,22 +32,40 @@ fi
 # REACHABLE on a plugin-only bump only when rbenv-start.sh began calling this script
 # on every install-mode boot (pin-audit A2/A1, startup-prologue.test.sh §56) — before
 # that, the whole file ran only on an rbenv-marker mismatch.
+#
+# The plugins are git clones at a tag, like rbenv itself, so they follow their pin the
+# same way (pin-audit tranche 2 step 13, startup-prologue.test.sh §62): an existing
+# clone moves in place, and touches the network only when HEAD is not already the
+# tag's commit. They used to be removed and re-cloned, so a clone that failed (an
+# unknown tag, no network) left rbenv with no ruby-build at all. A directory that is
+# not a clone is never removed: an empty one is cloned into, and a non-empty one makes
+# `git clone` fail loud with its files left as they were.
+_rbenv_plugin_follow_pin() { # $1 = plugin dir name, $2 = upstream url, $3 = tag
+  local _dir="${RBENV_ROOT}/plugins/${1}" _want
+  if [ ! -d "${_dir}/.git" ]; then
+    git clone --progress --verbose --branch "${3}" "${2}" "${_dir}"
+    return 0
+  fi
+  _want="$(git -C "${_dir}" rev-parse -q --verify "refs/tags/${3}^{commit}" || true)"
+  if [ -z "${_want}" ] || [ "${_want}" != "$(git -C "${_dir}" rev-parse HEAD)" ]; then
+    git -C "${_dir}" fetch --force --tags origin
+    git -C "${_dir}" -c advice.detachedHead=false checkout --force "refs/tags/${3}"
+  fi
+  return 0
+}
+
 if [[ -n "${GLOBAL_STACK_RBENV_RUBY_BUILD_VERSION}" ]]; then
   _rb_build_gate="$(gs_version_gate "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/rbenv.ruby-build" "${GLOBAL_STACK_RBENV_RUBY_BUILD_VERSION}" "rbenv.ruby-build")"
-  if [ "${_rb_build_gate}" != "skip" ] || [[ ! -d "${RBENV_ROOT}/plugins/ruby-build" ]]; then
-    rm -rf "${RBENV_ROOT}/plugins/ruby-build"
-    mkdir -p "${RBENV_ROOT}"/plugins/ruby-build
-    git clone --progress --verbose --branch ${GLOBAL_STACK_RBENV_RUBY_BUILD_VERSION} https://github.com/sstephenson/ruby-build.git "${RBENV_ROOT}"/plugins/ruby-build
+  if [ "${_rb_build_gate}" != "skip" ] || [[ ! -d "${RBENV_ROOT}/plugins/ruby-build/.git" ]]; then
+    _rbenv_plugin_follow_pin ruby-build https://github.com/sstephenson/ruby-build.git "${GLOBAL_STACK_RBENV_RUBY_BUILD_VERSION}"
     printf '%s\n' "${GLOBAL_STACK_RBENV_RUBY_BUILD_VERSION}" >"${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/rbenv.ruby-build"
   fi
 fi
 
 if [[ -n "${GLOBAL_STACK_RBENV_GEMSET_VERSION}" ]]; then
   _rb_gemset_gate="$(gs_version_gate "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/rbenv.gemset" "${GLOBAL_STACK_RBENV_GEMSET_VERSION}" "rbenv.gemset")"
-  if [ "${_rb_gemset_gate}" != "skip" ] || [[ ! -d "${RBENV_ROOT}/plugins/rbenv-gemset" ]]; then
-    rm -rf "${RBENV_ROOT}/plugins/rbenv-gemset"
-    mkdir -p "${RBENV_ROOT}"/plugins/rbenv-gemset
-    git clone --progress --verbose --branch ${GLOBAL_STACK_RBENV_GEMSET_VERSION} https://github.com/jf/rbenv-gemset.git ${RBENV_ROOT}/plugins/rbenv-gemset
+  if [ "${_rb_gemset_gate}" != "skip" ] || [[ ! -d "${RBENV_ROOT}/plugins/rbenv-gemset/.git" ]]; then
+    _rbenv_plugin_follow_pin rbenv-gemset https://github.com/jf/rbenv-gemset.git "${GLOBAL_STACK_RBENV_GEMSET_VERSION}"
     printf '%s\n' "${GLOBAL_STACK_RBENV_GEMSET_VERSION}" >"${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/rbenv.gemset"
   fi
 fi

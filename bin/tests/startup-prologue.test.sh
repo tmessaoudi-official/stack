@@ -4662,6 +4662,92 @@ assert_pass "61g: first install (no marker) -> no cleanup" \
 assert_pass "61h: a first-install slot after a reinstalled one fires no cleanup of its own" \
   test "$(_p61_run 0 1.0 2.0 ok with-b)" = "rc=0 log=install:pkga:2.0,cleanup:pkga:1.0,install:pkgb:3.0 marker=2.0"
 
+# ─── Section 62: rbenv plugins follow their pin in place (tranche 2 step 13) ──
+# ruby-build and rbenv-gemset are git clones at a tag, like rbenv itself. Their arms in
+# rbenv-iou.sh used to `rm -rf` the plugin and re-clone it from github, so a clone that
+# failed (an unknown tag, no network) left rbenv with no ruby-build at all. An existing
+# clone now moves in place, as §56 pins for rbenv. github.com is redirected through
+# git's command-scoped config (GIT_CONFIG_COUNT ... insteadOf), either to a local mirror
+# of §56's fixture or to a path that does not exist: a case that must NOT re-clone
+# proves it by succeeding with github unreachable, and the shipped URLs are exercised
+# with no network at all.
+printf '\n%b── Section 62: rbenv plugins follow their pin in place (tranche 2 step 13)%b\n' "${C_BOLD}" "${C_RESET}"
+
+_P62="${TMP_DIR}/p62"
+mkdir -p "${_P62}/errors" "${_P62}/versions" "${_P62}/gh/sstephenson" "${_P62}/gh/jf"
+for _m in sstephenson/ruby-build jf/rbenv-gemset; do
+  GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 git clone -q --bare "${_P56}/upstream" "${_P62}/gh/${_m}.git" >/dev/null 2>&1 || true
+done
+assert_pass "62a: github mirrors of the §56 fixture hold both tags (non-vacuity)" \
+  bash -c 'for m in sstephenson/ruby-build jf/rbenv-gemset; do
+    [[ "$(git -C "$1/gh/${m}.git" rev-parse "v1.1.0^{commit}" 2>/dev/null)" == "$2" ]] || exit 1; done' _ "${_P62}" "${_P56_C2}"
+_p56_clone "${_P62}/root" v1.1.0 # rbenv itself sits at its pin, so its own block is a no-fetch no-op
+
+_p62_plugin() { # $1 = plugin dir, $2 = none|empty|junk|<tag>, $3 = marker file, $4 = marker content|none
+  local d="${_P62}/root/plugins/$1"
+  rm -rf "${d}"
+  case "$2" in
+    none) ;;
+    empty) mkdir -p "${d}" ;;
+    junk) mkdir -p "${d}" && : >"${d}/keep" ;;
+    *) GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 git -c advice.detachedHead=false clone -q --branch "$2" "${_P56}/upstream" "${d}" >/dev/null 2>&1 ;;
+  esac
+  rm -f "${_P62}/versions/$3"
+  [[ "$4" == none ]] || printf '%s\n' "$4" >"${_P62}/versions/$3"
+}
+_p62_iou() { # $1 = plugin dir, $2 = RUBY_BUILD|GEMSET, $3 = marker file, $4 = pin, $5 = mirror|dead → "<rc> <HEAD|nogit> <marker|none> <token|-> <keep|->"
+  local rc=0 gh="${_P62}/gh/" d="${_P62}/root/plugins/$1"
+  [[ "$5" == dead ]] && gh="${_P62}/no-such-github/"
+  rm -f "${_P62}/errors/p62-token"
+  env -i PATH="${DIST_BIN}/base-bin:/usr/bin:/bin" HOME="${_P62}" \
+    GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_COUNT=1 \
+    "GIT_CONFIG_KEY_0=url.${gh}.insteadOf" GIT_CONFIG_VALUE_0=https://github.com/ \
+    GLOBAL_STACK_ERROR_TOKEN=p62-token GLOBAL_STACK_DOCKER_TOOLS_PATH="${_P62}" \
+    GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS="${_P62}/errors" \
+    GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS="${_P62}/versions" \
+    RBENV_ROOT="${_P62}/root" GLOBAL_STACK_RBENV_VERSION=v1.1.0 \
+    GLOBAL_STACK_RBENV_RUBY_BUILD_VERSION= GLOBAL_STACK_RBENV_GEMSET_VERSION= "GLOBAL_STACK_RBENV_$2_VERSION=$4" \
+    bash "${DIST_BIN}/rbenv-bin/global-stack-rbenv-iou.sh" >/dev/null 2>&1 || rc=$?
+  printf '%s %s %s %s %s' "${rc}" \
+    "$(if [[ -d "${d}/.git" ]]; then git -C "${d}" rev-parse HEAD; else echo nogit; fi)" \
+    "$(cat "${_P62}/versions/$3" 2>/dev/null || echo none)" \
+    "$(if [[ -f "${_P62}/errors/p62-token" ]]; then echo token; else echo -; fi)" \
+    "$(if [[ -f "${d}/keep" ]]; then echo keep; else echo -; fi)"
+}
+for _pl in 'ruby-build RUBY_BUILD rbenv.ruby-build' 'rbenv-gemset GEMSET rbenv.gemset'; do
+  read -r _pd _pv _pm <<<"${_pl}"
+  _p62_plugin "${_pd}" none "${_pm}" none
+  assert_pass "62b: ${_pd} absent -> cloned at the pin from its shipped github URL" \
+    test "$(_p62_iou "${_pd}" "${_pv}" "${_pm}" v1.1.0 mirror)" = "0 ${_P56_C2} v1.1.0 - -"
+  _p62_plugin "${_pd}" empty "${_pm}" none
+  assert_pass "62c: ${_pd} left as an empty dir -> cloned into it at the pin" \
+    test "$(_p62_iou "${_pd}" "${_pv}" "${_pm}" v1.1.0 mirror)" = "0 ${_P56_C2} v1.1.0 - -"
+  _p62_plugin "${_pd}" v1.0.0 "${_pm}" v1.0.0
+  assert_pass "62d: ${_pd} at v1.0.0, pin bumped to v1.1.0, github unreachable -> moves UP in place" \
+    test "$(_p62_iou "${_pd}" "${_pv}" "${_pm}" v1.1.0 dead)" = "0 ${_P56_C2} v1.1.0 - -"
+  _p62_plugin "${_pd}" v1.1.0 "${_pm}" v1.1.0
+  assert_pass "62e: ${_pd} at v1.1.0, pin moved back to v1.0.0, github unreachable -> moves DOWN in place" \
+    test "$(_p62_iou "${_pd}" "${_pv}" "${_pm}" v1.0.0 dead)" = "0 ${_P56_C1} v1.0.0 - -"
+  _p62_plugin "${_pd}" v1.1.0 "${_pm}" v1.0.0
+  git -C "${_P62}/root/plugins/${_pd}" remote set-url origin "${_P62}/no-such-remote"
+  assert_pass "62f: ${_pd} stale marker but HEAD already at the pin -> no fetch, marker rewritten" \
+    test "$(_p62_iou "${_pd}" "${_pv}" "${_pm}" v1.1.0 dead)" = "0 ${_P56_C2} v1.1.0 - -"
+  _p62_plugin "${_pd}" v1.1.0 "${_pm}" v1.1.0
+  git -C "${_P62}/root/plugins/${_pd}" remote set-url origin "${_P62}/no-such-remote"
+  assert_pass "62g: ${_pd} current -> nothing touched (no network, rc 0)" \
+    test "$(_p62_iou "${_pd}" "${_pv}" "${_pm}" v1.1.0 dead)" = "0 ${_P56_C2} v1.1.0 - -"
+  _p62_plugin "${_pd}" v1.0.0 "${_pm}" v1.0.0
+  _o="$(_p62_iou "${_pd}" "${_pv}" "${_pm}" v9.9.9 dead)"
+  assert_pass "62h: ${_pd} pin with no such tag -> fails loud, still at v1.0.0, marker kept, token written" \
+    bash -c '[[ "${1%% *}" != 0 && "${1#* }" == "$2 v1.0.0 token -" ]]' _ "${_o}" "${_P56_C1}"
+  _p62_plugin "${_pd}" junk "${_pm}" none
+  _o="$(_p62_iou "${_pd}" "${_pv}" "${_pm}" v1.1.0 mirror)"
+  assert_pass "62i: ${_pd} non-empty dir that is not a clone -> fails loud, nothing deleted" \
+    bash -c '[[ "${1%% *}" != 0 && "${1#* }" == "nogit none token keep" ]]' _ "${_o}"
+done
+assert_fail "62j: no plugin arm deletes its plugin dir before installing" \
+  grep -qE 'rm -rf .*plugins/' "${DIST_BIN}/rbenv-bin/global-stack-rbenv-iou.sh"
+
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
 if [[ "${FAIL}" -eq 0 ]]; then
