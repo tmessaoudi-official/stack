@@ -30,6 +30,11 @@ version and its usage ! no implementation yet !"* — AUDIT ONLY; nothing below 
 - [2026-09-25 10:18] AGREED: hurl stays at `/stack/tools/hurl/bin` (host PATH unchanged) — the image only COMPILES it; boot copies it into tools/ like mkcert (confirms 09:58 after the developer asked).
 - [2026-09-25 11:47] AGREED: an 00base image with NO compiled hurl (any image built before step 14c) makes install-hurl.sh WARN (naming `rebuild 00base`) and leave tools/hurl untouched instead of FATAL — the boot must not fail over an unused tool during the transition; the rebuild then repairs hurl on its own. An image whose compiled hurl does not match the pin stays FATAL.
 - [2026-09-25 12:08] AGREED: step 15 covers ALL 11 tools in `phpbrew-install-tools.sh`, not only the composer bootstrap: temp-dir download with `curl -f`, upstream checksum where published, the tool's own version check against the pin, THEN replace, marker last; pinned release assets replace the piped mago/castor installers; composer builds in a temp dir with a pinned, SHA-384-checked bootstrap before the old one is wiped.
+- [2026-09-26 11:17] AGREED: tranche 3 — fix ALL reinstall sites the tranche-2 milestone panel found outside the ruled list (fvm's /stack/projects extract+delete, deno and bun incl. bun's piped installer, caddy, httpd, nginx, phpmyadmin, rust, php.edge) now, same shape as tranche 2; one milestone panel over tranches 2+3.
+- [2026-09-26 11:43] AGREED: tranche 3 plan (steps 18-27) approved as drafted; every enabled web server rebuilds on its first boot after the commit.
+- [2026-09-26 11:43] AGREED: prefix-baked sites (httpd, nginx, php.edge, rust, shared ModSecurity) use policy B — every input fetched and checked before the wipe, build at the final path, check the build, FATAL + error token on a build failure.
+- [2026-09-26 11:43] AGREED: caddy is built locally with xcaddy (new pin GLOBAL_STACK_XCADDY_VERSION, checksum-verified); add-package is dropped.
+- [2026-09-26 11:43] AGREED: phpMyAdmin and the ModSecurity-apache connector are SHA-tracked (use-sha annotations, the php.edge shape; phpMyAdmin TYPE=commit).
 
 ## Formal Plan
 <!-- written at Phase 4 — tranche 1, APPROVED 2026-09-24 15:05 (steps 5-9; step 8 revised) -->
@@ -521,6 +526,143 @@ A7 SDKMAN installer hardcoding 5.23.0; PARTIAL: fvm unplumbed var, nvm raw-pin (
 groovy/spark depends_on; B `|| echo` / `curl -L` without `-f` in 00base, phpbrew ext exit-0; C RELOAD_*
 escape hatches keeping pkg markers; the `source X && cmd` class.
 
+## Formal Plan — tranche 3 (APPROVED 2026-09-26 11:43; rulings 11:17 and 11:43)
+
+Scope (ruling 11:17): every reinstall site the tranche-2 milestone panel found outside the ruled list — fvm,
+deno, bun, rust, phpmyadmin, caddy, httpd, nginx, php.edge — same shape as tranche 2, plus the panel's
+round-1 doc findings; then ONE milestone panel over tranches 2+3. Absorbs A4 (caddy plugin pins) and A5
+(nginx/httpd modules) from "Not in tranche 2".
+
+**Shape (tranche 2's, unchanged):** fetch into a `mktemp -d` OUTSIDE `tools/` (never the compose
+`working_dir` `/stack/projects`), `curl -f`, the published checksum where one exists (fail closed on an
+unlisted asset), archive listing, the artifact's own `--version` against the pin, THEN wipe and place, marker
+last. Nothing is unpacked beside its old tree in `tools/` (ruling). Bidirectional: every gate stays equality.
+
+Two site classes — the difference is where the install prefix lives [Verified: inventory read 2026-09-26]:
+- **Relocatable** (a binary or a self-contained tree): fvm, deno, bun, phpmyadmin, caddy. Built and checked
+  entirely in the temp dir; a failed check leaves the old one working.
+- **Prefix-baked** (`configure --prefix` / rustup homes / phpbrew's build root): httpd, nginx, php.edge, rust.
+  The build cannot run anywhere but its final path. POLICY = RULING NEEDED (see question); draft assumes
+  option B: every INPUT fetched and checked before the wipe, then wipe, build at the final path, check the
+  build (`--version`/config test), FATAL + error token on failure — the old one is gone on a BUILD failure,
+  the same trade the android ruling (a) accepted; a download/checksum failure still leaves it working.
+  Consequence stated accurately: since 2026-09-02 each web server writes its own error token and
+  `base-wait-for.sh` polls it, so a failed httpd/nginx build makes phpmyadmin/localstack/serverless/alltogether
+  fail FAST on that token, not hang 3600s [Verified: CLAUDE.md § token invariant exception; re-read in step].
+- **The shared ModSecurity tree** (`tools/http`: libmodsecurity + CRS) is a THIRD prefix-baked site: both
+  `httpd-iou-common.sh:57-94` and `nginx-iou-common.sh:55-85` gate the SAME `http.mod_security` marker, then
+  `rm -rf` source+lib, `git clone --branch <pin>`, build at `--prefix`, no check [Verified: read]. Whichever
+  web server boots first owns the rebuild; they are alternatives (one enabled) [Inferred: CLAUDE.md, not
+  enforced — two enabled at once would race on the same path, pre-existing].
+
+**Live-bump consequence of approving:** the composite gates (22-24) change what the web-server markers hold,
+so every enabled web server REBUILDS on the first boot after the commit, with no pin bump. Same for
+phpmyadmin/the ModSecurity connector if the floating-pin option is taken.
+
+**What is wiped (explicit, so it is ruled, not assumed):** caddy replaces `bin/caddy` only (vhosts/Caddyfile
+are regenerated every boot anyway); httpd/nginx wipe their tree EXCEPT `logs/` (the GRADLE_USER_HOME shape);
+everything else wipes its whole tree as today.
+
+### Step 18 — fvm (S) · `fvm-bin/global-stack-fvm-start.sh:76-85`
+Today: downloads and `sudo rm -rf fvm-*.tar.gz fvm/` in cwd `/stack/projects` (panel P1). Fix: temp dir,
+`curl -f`, listing must contain `fvm/fvm`, `fvm --version` = pin, `install -m 0755` into `tools/bin`, marker
+last. No checksum published for 4.3.1 [Verified: release assets]. Tests §70: bump up/down, bad tarball →
+named FATAL + old binary and marker untouched, projects dir untouched, no `rm` in cwd.
+
+### Step 19 — deno + bun (M) · `nvm-bin/global-stack-nvm-install-tools.sh:14-51`
+Today: deno runs a downloaded `install.sh` in cwd; bun is `curl https://bun.sh/install | bash` (panel P1,
+ruling "never pipe"); both `rm -rf` the binary + marker BEFORE fetching. Fix: pinned
+`deno-x86_64-unknown-linux-gnu.zip` + `.zip.sha256sum`; `bun-linux-x64.zip` + `SHASUMS256.txt` (asset's own
+line) [Verified: assets for v2.9.7 / bun-v1.4.2]; `unzip -l` listing; `deno --version` first line /
+`bun --version` = pin; `install -m 0755`; bun's `bunx` symlink recreated (the installer made it — verify
+before relying); no installer script at all. `unzip` + `sha256sum` present in 02nvm [Verified: image]. §71.
+
+### Step 20 — rust (S) · `rust-bin/global-stack-rust-start.sh:35-39`, `global-stack-rust-iou.sh`
+Today: wipes `RUSTUP_HOME` + `CARGO_HOME` before `rust-iou.sh` fetches rustup-init. Fix (prefix-baked
+policy): rustup-init fetched + checksum-checked into the temp dir BEFORE the wipe; after install
+`rustc --version` must name `GLOBAL_STACK_RUST_VERSION` or FATAL. rustup verifies its own component hashes
+from the dist manifest [Unverified: recall — confirm in the step]. The fetch moves from iou to before the
+start.sh wipe; §58 (a rustup-only bump lands without a RUST wipe) must stay green. §72.
+
+### Step 21 — phpmyadmin (M) · `phpmyadmin-bin/global-stack-phpmyadmin-{start,iou}.sh`
+Today: wipe first; branch/tag/commit fetched with `curl -LsS` (no `-f`), nothing checksummed; composer +
+yarn build run inside the final dir. Fix: build the whole tree in the temp dir (relocatable [Inferred:
+inventory; confirm no absolute path is written by the build]), `-f` everywhere, `type=release` checked
+against the published `.sha256` [Verified: 5.2.3 URL 200], check `index.php` + `vendor/autoload.php` + the
+built JS exist, THEN wipe + move. The pin is `master`/`branch` (annotated `lock:` — intentional), which the
+equality gate can never see move — RULING NEEDED (floating pins): the php.edge shape, `(use-sha)
+(version-prefix:…) github:phpmyadmin/phpmyadmin` + `TYPE=commit`, so env-update advances a SHA the gate sees. §73.
+
+### Step 22 — caddy (M) · `caddy-bin/global-stack-caddy-{start,iou}.sh`
+Today: wipe, `go build` of the core, then `caddy add-package` ×4 — which DOWNLOADS a binary built by
+caddyserver.com's build service [Verified: `caddy help add-package` → "Downloads an updated Caddy binary"],
+so the shipped binary is neither built locally nor checksummed; the four plugin pins are not gate inputs
+(A4). Fix: RULING NEEDED — draft assumes `xcaddy build <CADDY_VERSION> --with <plugin>@<pin>…` (local
+build, xcaddy itself a new `.env` pin fetched via its `checksums.txt` [Verified: v0.4.7 assets], plumbed
+through the 01caddy compose (compose-env-plumbing surface); build in the temp dir; `caddy version` names the
+pin and `caddy list-modules --packages --versions` names each plugin AT its pin; `install -m 0755` over
+`bin/caddy` (single binary: vhosts/Caddyfile are regenerated, `logs/` kept). Composite gate
+`core;plugins…` with a both-ways guard (the §47 shape). `GLOBAL_STACK_XCADDY_VERSION` is deliberately NOT a
+gate input: it is the builder, and the binary is determined by the caddy + plugin pins. Fixes `start:88-90` passing the marker path twice. §74.
+
+### Step 23 — httpd (L) · `httpd-bin/global-stack-httpd-{start,iou}.sh`
+Today: wipe, `svn checkout http://svn.apache.org` (plain http, no checksum) of httpd/apr/apr-util, build at
+the final prefix; apxs connectors (ModSecurity-apache `master`, mod_auth_openidc) install into the prefix;
+the gate holds only `HTTPD_VERSION` (A5). Fix (prefix-baked policy): switch to release tarballs + `.sha256`
+from **archive.apache.org only** (downloads.apache.org drops superseded releases, so a pin moved DOWN would
+404) [Verified: httpd 2.4.68 tarball + .sha256, apr 1.7.6, apr-util 1.6.5 all 200 there]. The `.env` pins and
+their svn-listing annotations stay `tags/X` — the install uses `${V#tags/}` — so env-update and its t37j/t37i
+tests are untouched; an svn tag with no release tarball fails CLOSED before the wipe (consider
+`(verify-asset:)` on the three annotations — confirm its placeholder sees the stripped version first). BUILD
+change: tarballs ship `configure` (no `./buildconf`), apr/apr-util extracted into `srclib/apr{,-util}` by
+name. Checksum format differs from tranche 2's `checksums.txt`: all three Apache `.sha256` files are
+`<64 hex> *<name>` (binary-mode `*`) [Verified: httpd 2.4.68, apr 1.7.6, apr-util 1.6.5], so the match is
+`($2 == n || $2 == "*" n) && length($1) == 64` — the tranche-2 awk would fail closed on a GOOD file. Every
+source fetched and checked before the wipe; after the build `httpd -v` names the pin and `apachectl -t` passes. Composite gate: httpd,
+apr, apr-util, modsec lib, modsec-apache connector (`master` — floating-pins ruling), openidc. `logs/` kept.
+**23a — the shared ModSecurity tree** (both `*-iou-common.sh`): clone at the pinned tag into the temp dir
+BEFORE the wipe, then wipe, build at the prefix, check `lib/libmodsecurity.so.3` exists and `bin/` holds
+at least one file (certain: `iou-common.sh:91` already chmods `bin/*`); `modsec-rules-check` running is a
+stronger check [Unverified: not read in v3.0.16's build — add only if the step confirms it is built]; CRS: clone into temp, check `crs-setup.conf.example` +
+`rules/` exist, then swap (relocatable). §75.
+
+### Step 24 — nginx (M) · `nginx-bin/global-stack-nginx-{start,iou}.sh`
+Today: wipe, `curl` of nginx.org tarball with no signature check, connector cloned into
+`NGINX_PATH/mods/modsecurity-source` every run and never removed; connector + modsec lib not gate inputs.
+Fix: tarball verified against its `.asc` with the five nginx.org developer keys committed in the repo
+(`gpg --homedir <tmp> --no-default-keyring --keyring <repo file> --status-fd 1 --verify`, asserting a
+`VALIDSIG` line whose fingerprint is in a pinned list — never the exit code alone; a new signing key fails
+CLOSED and loud). The five keys, fingerprints derived with `gpg --show-keys` from nginx.org/keys/*.key
+[Verified 2026-09-26; cross-check against nginx.org/en/pgp_keys.html by eye in the step]: arut
+`43387825DDB1BB97EC36BA5D007C8D7C15D87369`, pluknet `D6786CE303D9A9022998DC6CC8464D549AF75C0A` (signed
+1.31.6 [Verified: `gpg --list-packets`]), sb `7338973069ED3F443F4D37DFA64FD5B17ADB39A8`, thresh
+`13C82A63B603576156E30A4EA0EA981B66B0D967`, nginx_signing `8540A6F18833A80E9C1653A42FD21310B49F6B46`.
+Keyring committed at `docker/config/dist/bin/nginx-bin/nginx-release-keys.asc` (ASCII-armoured — reviewable
+in a diff; a clean clone gets it with the scripts). Only `gpg` exists, no `gpgv` [Verified: 00base]; connector cloned into the temp
+dir; after the build `nginx -V` names the pin and `nginx -t` passes. Composite gate: nginx, connector,
+modsec lib. Fixes `start:202` `nginx stop` → `nginx -s stop`. `logs/` kept. §76.
+
+### Step 25 — php.edge (S) · `phpbrew-bin/global-stack-phpbrew-start.sh:96-99`
+Prefix baked by phpbrew (no `INSTALL_ROOT` exposed) → prefix-baked policy. Today no post-build check (the
+`bin/php` FATAL is unreachable for edge). Fix: after the build, `tools/phpbrew/php/php-master/bin/php -r 'echo PHP_VERSION;'` (that path, never PATH's
+`php`) must succeed
+and end in `-dev`; sidecar `php.edge.build` written only after that. §77.
+
+### Step 26 — docs + tranche-2 panel findings (M)
+CLAUDE.md hand-off script: the "Two exceptions" / "every downloaded tool" overclaim rewritten for the
+tranche-3 end state; Rust pins feed the 00base hurl stage; go/zig/mise also baked into 00base. `.env:1430-1436`
+Rust comments. `.claude/skills/bump-versions/SKILL.md:24` stops advising marker deletion / RELOAD. This
+plan's wrong `/bump-versions` statement; install-tools stale symfony comment; `LOCAL_RELOAD_FLUTTER3_41_9`
+in the do-not-wipe lists; Files cells of rows 14 and 17; the RELOAD question moved to `### Needs input`.
+P3: named FATALs for `install-go.sh` `_go_sha=` and `install-mise.sh` first `_mise_got=`.
+
+### Step 27 — milestone panel over tranches 2+3 (frozen commit; two consecutive clean rounds, cap 5)
+
+**Certification honesty:** every step is proven by stubbed full-script runs + sabotage in
+`startup-prologue.test.sh`, and by a throwaway-container run against a scratch `tools/` where the image
+exists. No step is proven by a live bring-up; the web servers and php.edge are UNCERTIFIED-BY-EXECUTION
+until the developer rebuilds.
+
 ## Status
 <!-- progress-block v1 -->
 | # | Step | Size | State | Evidence | Files |
@@ -542,6 +684,16 @@ escape hatches keeping pkg markers; the `source X && cmd` class.
 | 15 | all 11 phpbrew tools: check first, then replace (15a/15b/15c) | L | done | ff79ee0 | docker/config/dist/bin/phpbrew-bin/**, bin/tests/startup-prologue.test.sh |
 | 16 | android: stop wiping GRADLE_USER_HOME | S | done | 42b5eb2 | docker/config/dist/bin/android-bin/**, bin/tests/startup-prologue.test.sh |
 | 17 | Docs: CLAUDE.md tranche 2 (hand-off) | S | done | 3413222 | CLAUDE.md |
+| 18 | fvm: temp-dir fetch, listing + --version, install, marker last | S | todo | - | docker/config/dist/bin/fvm-bin/**, bin/tests/startup-prologue.test.sh |
+| 19 | deno + bun: pinned zip + checksum, no installer script, no pipe | M | todo | - | docker/config/dist/bin/nvm-bin/**, bin/tests/startup-prologue.test.sh |
+| 20 | rust: rustup-init checked before the wipe, rustc --version after | S | todo | - | docker/config/dist/bin/rust-bin/**, bin/tests/startup-prologue.test.sh |
+| 21 | phpmyadmin: build + check in temp, then swap; SHA-tracked pin | M | todo | - | docker/config/dist/bin/phpmyadmin-bin/**, .env, bin/tests/startup-prologue.test.sh |
+| 22 | caddy: xcaddy local build, composite gate, list-modules check | M | todo | - | docker/config/dist/bin/caddy-bin/**, docker/images/01caddy/**, .env, bin/tests/startup-prologue.test.sh, bin/tests/compose-env-plumbing.test.sh |
+| 23 | httpd + shared ModSecurity: archive tarballs + sha256, composite gate, build check | L | todo | - | docker/config/dist/bin/httpd-bin/**, docker/config/dist/bin/nginx-bin/global-stack-nginx-iou-common.sh, .env, bin/tests/startup-prologue.test.sh |
+| 24 | nginx: PGP-verified tarball, connector in temp, composite gate, build check | M | todo | - | docker/config/dist/bin/nginx-bin/**, bin/tests/startup-prologue.test.sh |
+| 25 | php.edge: post-build php check before the sidecar marker | S | todo | - | docker/config/dist/bin/phpbrew-bin/**, bin/tests/startup-prologue.test.sh |
+| 26 | Docs + tranche-2 panel findings (CLAUDE.md hand-off, skill, .env comments, P3s) | M | todo | - | CLAUDE.md, .env, .claude/skills/bump-versions/**, docs/plans/**, docker/config/dist/bin/base-bin/**, docker/config/dist/bin/phpbrew-bin/** |
+| 27 | Milestone panel over tranches 2+3 (frozen commit, two clean rounds) | M | todo | - | var/claude/** |
 <!-- /progress-block -->
 ### Blocked
 ### Needs input
