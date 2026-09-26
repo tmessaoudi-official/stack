@@ -6951,6 +6951,87 @@ assert_pass "76m: the composite = NGINX + NGINX_MODSECURITY_MOD + HTTP_MODSECURI
   bash -c '[[ "$1" == "$(printf "%s\n" GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION GLOBAL_STACK_NGINX_MODSECURITY_MOD_VERSION GLOBAL_STACK_NGINX_VERSION)" && "$2" == "$(printf "%s\n" GLOBAL_STACK_NGINX_MODSECURITY_MOD_VERSION GLOBAL_STACK_NGINX_VERSION)" ]]' _ "${_p76_want_vars}" "${_p76_iou_vars}"
 gpgconf --homedir "${_P76}/gk" --kill all >/dev/null 2>&1 || true
 
+# ─── Section 77: every php install is checked by running it before any marker is written (tranche 3 step 25) ──
+# phpbrew's own exit status is not proof of a working php (its `ext install` exits 0 after a
+# failed make — see memory), and the only post-install check was `[ -x bin/php ]`, inside the
+# `_php_gate = reinstall` cleanup. php.edge never reaches that branch: its marker is always
+# "php-master", so its gate is always `skip`, and the checkpoint-7 edge branch forces the build
+# by deleting the marker instead. An edge build that produced no working php therefore went on
+# to write the php.edge.build sidecar claiming the new SHA. The check now runs right after the
+# install step, on EVERY install: the php it built must run and report the pin — `X.Y.Z-dev`
+# for edge (php-src master; measured 8.6.0-dev), exactly ${PHP_VERSION} otherwise (measured:
+# 8.4.25 → 8.4.25, 8.5.10 → 8.5.10). A FATAL there exits 1 (the prologue's EXIT trap writes the
+# error token) before the old php is cleaned and before any marker or sidecar is written.
+printf '\n── Section 77: php installs checked by running bin/php before any marker (tranche 3 step 25)\n'
+_P77_START="${DIST_BIN}/phpbrew-bin/global-stack-phpbrew-start.sh"
+_P77="$(mktemp -d)"
+# The first setup-mode install block: from its trigger line to the matching 2-space `fi`.
+awk '/^  if \[ ! -f "\$\{GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS\}\/php\.\$\{PHP_VERSION_AS\}" \] \|\| \[ "\$\{_php_gate\}" = "reinstall" \]; then$/ { f = 1 }
+  f { print } f && /^  fi$/ { exit }' "${_P77_START}" >"${_P77}/block.sh"
+assert_pass "77a: the extracted install block holds the install step and the reinstall cleanup (anchor non-vacuity)" \
+  bash -c 'grep -q "global-stack-phpbrew-php-install-version.sh$" "$1" && grep -q "rm -rf" "$1" && [[ "$(tail -1 "$1")" == "  fi" ]]' _ "${_P77}/block.sh"
+mkdir -p "${_P77}/stub"
+cat >"${_P77}/stub/global-stack-phpbrew-php-install-version.sh" <<'STUB'
+#!/bin/bash
+# Models phpbrew: exits 0 whatever it built. P77_MODE: ok (php reports P77_REPORT) | missing | crash.
+[[ "${P77_MODE}" == missing ]] && exit 0
+mkdir -p "${PHPBREW_ROOT}/php/${PHP_VERSION_NAME}/bin"
+if [[ "${P77_MODE}" == crash ]]; then
+  printf '#!/bin/sh\necho "php: error while loading shared libraries" >&2\nexit 127\n' >"${PHPBREW_ROOT}/php/${PHP_VERSION_NAME}/bin/php"
+else
+  printf '#!/bin/sh\n[ "$1" = -r ] && [ "$2" = "echo PHP_VERSION;" ] && printf %%s "%s"\n' "${P77_REPORT}" >"${PHPBREW_ROOT}/php/${PHP_VERSION_NAME}/bin/php"
+fi
+chmod +x "${PHPBREW_ROOT}/php/${PHP_VERSION_NAME}/bin/php"
+STUB
+chmod +x "${_P77}/stub/global-stack-phpbrew-php-install-version.sh"
+# _p77_run <label> <pin> <name> <mode> <report> <gate> [old] → "rc=… fatal=… old=…"
+_p77_run() {
+  local r="${_P77}/r" rc=0
+  rm -rf "${r}"
+  mkdir -p "${r}/versions" "${r}/root/php" "${r}/bin"
+  if [[ -n "${7:-}" ]]; then
+    mkdir -p "${r}/root/php/$7/bin"
+    printf '%s\n' "$7" >"${r}/versions/php.$1"
+  fi
+  env -i PATH="${_P77}/stub:/usr/bin:/bin" GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS="${r}/versions" \
+    PHPBREW_ROOT="${r}/root" PHPBREW_BIN="${r}/bin" GLOBAL_STACK_FRANKENPHP_VERSION=1.0.0 \
+    PHP_VERSION_AS="$1" PHP_VERSION="$2" PHP_VERSION_NAME="$3" P77_MODE="$4" P77_REPORT="$5" \
+    _php_gate="$6" _php_old="${7:-}" \
+    bash -c 'set -eE -o pipefail; source "$1"; source "$2"' _ \
+    "${DIST_BIN}/base-bin/global-stack-base-version-gate.sh" "${_P77}/block.sh" >"${_P77}/log" 2>&1 || rc=1
+  printf 'rc=%s fatal=%s old=%s' "${rc}" "$(grep -c '^FATAL: ' "${_P77}/log" || true)" \
+    "$(if [[ -n "${7:-}" && -d "${r}/root/php/$7" ]]; then echo kept; elif [[ -n "${7:-}" ]]; then echo gone; else echo none; fi)"
+}
+_P77_EDGE='github.com/php/php-src@13cec7c276033883e1e0ee22ea92fa1838b06dca'
+# Edge is reached with _php_gate=skip and no marker: exactly how the checkpoint-7 branch hands it over.
+assert_pass "77b: edge (gate skip, marker deleted) reporting 8.6.0-dev -> installed, no FATAL" \
+  test "$(_p77_run edge "${_P77_EDGE}" php-master ok 8.6.0-dev skip)" = "rc=0 fatal=0 old=none"
+for _p77_case in 'a release version (no -dev)|ok|8.6.0' 'no php at all|missing|' 'a php that cannot run|crash|' 'nothing on stdout|ok|'; do
+  IFS='|' read -r _p77_why _p77_mode _p77_rep <<<"${_p77_case}"
+  assert_pass "77c: edge build yields ${_p77_why} -> named FATAL, rc 1" \
+    bash -c '[[ "$1" == "rc=1 fatal=1 old=none" ]] && grep "^FATAL: " "$2" | grep -qF "php-master"' _ \
+    "$(_p77_run edge "${_P77_EDGE}" php-master "${_p77_mode}" "${_p77_rep}" skip)" "${_P77}/log"
+done
+assert_pass "77d: a fresh 8.4 install (no marker) reporting its pin -> installed" \
+  test "$(_p77_run 8.4 8.4.25 php-8.4.25 ok 8.4.25 install)" = "rc=0 fatal=0 old=none"
+assert_pass "77e: a fresh 8.4 install reporting another version -> named FATAL naming both" \
+  bash -c '[[ "$1" == "rc=1 fatal=1 old=none" ]] && grep "^FATAL: " "$2" | grep -qF "8.4.24" && grep "^FATAL: " "$2" | grep -qF "8.4.25"' _ \
+  "$(_p77_run 8.4 8.4.25 php-8.4.25 ok 8.4.24 install)" "${_P77}/log"
+assert_pass "77f: an 8.4 reinstall 8.4.24 -> 8.4.25 reporting its pin -> old php cleaned" \
+  test "$(_p77_run 8.4 8.4.25 php-8.4.25 ok 8.4.25 reinstall php-8.4.24)" = "rc=0 fatal=0 old=gone"
+assert_pass "77g: an 8.4 reinstall whose new php reports the wrong version -> FATAL, old php KEPT" \
+  test "$(_p77_run 8.4 8.4.25 php-8.4.25 ok 8.4.2 reinstall php-8.4.24)" = "rc=1 fatal=1 old=kept"
+assert_pass "77h: the compare is exact, not a prefix: 8.5.10 wanted, 8.5.100 reported -> FATAL" \
+  test "$(_p77_run 8.5 8.5.10 php-8.5.10 ok 8.5.100 install)" = "rc=1 fatal=1 old=none"
+# Order in the shipped file: the check runs before the reinstall cleanup's rm -rf and before
+# the version marker and the edge sidecar are written.
+_p77_chk="$(grep -n "echo PHP_VERSION;" "${_P77_START}" | grep -v '^[0-9]*: *#' | head -1 | cut -d: -f1 || true)"
+_p77_rm="$(grep -n 'rm -rf "${PHPBREW_ROOT}/php/${_php_old}"' "${_P77_START}" | head -1 | cut -d: -f1 || true)"
+_p77_side="$(grep -n '> "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/php.edge.build"' "${_P77_START}" | head -1 | cut -d: -f1 || true)"
+assert_pass "77i: the run check precedes the old-php cleanup and the php.edge.build write" \
+  bash -c '[[ -n "$1" && -n "$2" && -n "$3" ]] && (( $1 < $2 && $1 < $3 ))' _ "${_p77_chk}" "${_p77_rm}" "${_p77_side}"
+rm -rf "${_P77}"
+
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
 if [[ "${FAIL}" -eq 0 ]]; then
