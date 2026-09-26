@@ -36,7 +36,10 @@ version and its usage ! no implementation yet !"* — AUDIT ONLY; nothing below 
 - [2026-09-26 11:43] AGREED: caddy is built locally with xcaddy (new pin GLOBAL_STACK_XCADDY_VERSION, checksum-verified); add-package is dropped.
 - [2026-09-26 11:43] AGREED: phpMyAdmin and the ModSecurity-apache connector are SHA-tracked (use-sha annotations, the php.edge shape; phpMyAdmin TYPE=commit).
 - [2026-09-26 15:52] AGREED: the shared ModSecurity build drops `--with-lua` (no image installs a Lua dev package, no config uses Lua; configure then auto-detects and builds without it) — step 23a; it also needs `submodule update --init --recursive` (Mbed TLS's nested submodules), both measured in the 01caddy image.
-- [2026-09-26 23:29] AGREED: step 27 runs the three-lens reviewer panel for ONE round on frozen 3400670 (range 1906f6c..3400670), not the repo's two-consecutive-clean-rounds default; findings are fixed or logged, with no second round.
+- [2026-09-26 23:29] AGREED: step 27 runs the three-lens reviewer panel for ONE round on frozen 3400670 (range 1906f6c..3400670; the freeze became f3e92d4, which adds only this entry), not the repo's two-consecutive-clean-rounds default; findings are fixed or logged, with no second round.
+- [2026-09-27 00:40] AGREED: step 27 round-1 findings — fix all with failing-first tests (fvm gate, §74/§75 clean-clone, zig capture, temp dirs on FATAL, guard floors, docs + CLAUDE.md hand-off); log elasticmq (new install site) and the cjose/liboauth2 chain gap (latent) as Known issues.
+- [2026-09-27 00:40] AGREED: run env-scan to sync .env.local's stale GLOBAL_STACK_HTTPD_MODSECURITY_MOD_VERSION (`master`) to the committed pin — a sync, not a version update.
+- [2026-09-27 00:50] RECORDED (author decisions reported to the developer at the time, not rulings — logged here at the step-27 panel's request): step 25 widened the php run-check to every php install; step 26 plumbed go/zig/mise (+ MISE_VERSION) into 00base's runtime env instead of only documenting them; step 26 dropped `subversion` from the 01caddy/01httpd/01nginx images.
 
 ## Formal Plan
 <!-- written at Phase 4 — tranche 1, APPROVED 2026-09-24 15:05 (steps 5-9; step 8 revised) -->
@@ -708,7 +711,8 @@ not found"), and `--with-lua=<pkgconfig dir>` stops configure ("LUA was explicit
 found"; ruling 15:52 dropped it). The shared wipe moved from BOTH start scripts into iou-common behind
 the clone (nginx-start.sh therefore in the Files cell); iou-common runs every boot and gates itself.
 The connector is SHA-tracked (`0488c77`, env-update resolves it `(up to date)`); a branch/tag ref
-still works. `(verify-asset:)` does not apply to the three svn annotations (it needs `(fetch-json:)`);
+still works. **Omitted at the time (step 27 panel P0):** `bin/env-scan.sh` was not re-run after this pin changed,
+so `.env.local` kept `master` until 2026-09-27 00:40 (synced then, one line, backup taken). `(verify-asset:)` does not apply to the three svn annotations (it needs `(fetch-json:)`);
 the iou fails closed on a missing tarball before any wipe. **UNCERTIFIED-BY-EXECUTION:** a live
 01httpd boot through the new start.sh (no 01httpd image exists on this machine; httpd is not enabled
 here, so nothing live changes); the lib-bump reinstall path and every failure path are proven by
@@ -871,7 +875,7 @@ CLAUDE.md `21d598f`, via `/tmp/edit-claudemd-step26-20260926.sh` (classifier-blo
   - The `subversion` removal and the 00base runtime env. The images are not rebuilt and 00base is not
     restarted; the plumbing is proven by `docker compose config` resolution only.
 
-### Step 27 — milestone panel over tranches 2+3 (frozen commit; two consecutive clean rounds, cap 5)
+### Step 27 — milestone panel over tranches 2+3 (frozen f3e92d4; ONE round by ruling 2026-09-26 23:29, not the two-clean-rounds default)
 
 **Certification honesty:** every step is proven by stubbed full-script runs + sabotage in
 `startup-prologue.test.sh`, and by a throwaway-container run against a scratch `tools/` where the image
@@ -892,7 +896,7 @@ until the developer rebuilds.
 | 8 | Host claude = container-only pin (comment + .env note) + no-ordered-comparison guard | S | done | 90e25db | templates/shell/global-unu.sh, .env, bin/tests/startup-prologue.test.sh, docker/config/dist/bin/rust-bin/** |
 | 9 | Docs: CLAUDE.md manager-reinstall claim (hand-off) | S | done | 81c3dcc | CLAUDE.md, bin/tests/startup-prologue.test.sh |
 | 10 | Tranche 2: plan the delete-before-install sites (nvm/phpbrew/sdkman/fvm/android/rbenv-plugins), composer bootstrap, env-update downgrade policy | M | done | 1906f6c | docs/plans/** |
-| 11 | Runtimes nvm/php/java/flutter delete-after-install (php.edge exempt) | M | done | 902f08f | docker/config/dist/bin/base-bin/**, docker/config/dist/bin/nvm-bin/**, docker/config/dist/bin/phpbrew-bin/**, docker/config/dist/bin/sdkman-bin/**, docker/config/dist/bin/fvm-bin/**, bin/tests/startup-prologue.test.sh |
+| 11 | Runtimes nvm/php/java/flutter delete-after-install (php.edge exempt) | M | done | 80415c0 | docker/config/dist/bin/base-bin/**, docker/config/dist/bin/nvm-bin/**, docker/config/dist/bin/phpbrew-bin/**, docker/config/dist/bin/sdkman-bin/**, docker/config/dist/bin/fvm-bin/**, bin/tests/startup-prologue.test.sh |
 | 12 | Package slots: cleanup only after the new install succeeded | M | done | f5075ed | docker/config/dist/bin/base-bin/**, docker/config/dist/bin/rbenv-bin/**, docker/config/dist/bin/sdkman-bin/**, bin/tests/startup-prologue.test.sh |
 | 13 | rbenv plugins reuse step 6's in-place tag move | S | done | 46e80a7 | docker/config/dist/bin/rbenv-bin/**, bin/tests/startup-prologue.test.sh |
 | 14 | go/zig/mise/hurl: check first, then wipe and install fresh (14a/14b/14c) | L | done | 8bae406 | docker/config/dist/bin/base-bin/**, docker/images/00base/**, bin/tests/startup-prologue.test.sh, templates/shell/.profile |
@@ -909,7 +913,7 @@ until the developer rebuilds.
 | 24 | nginx: PGP-verified tarball, connector in temp, composite gate, build check | M | done | 82a3524 | docker/config/dist/bin/nginx-bin/**, bin/tests/startup-prologue.test.sh |
 | 25 | php.edge: post-build php check before the sidecar marker | S | done | b273b9c | docker/config/dist/bin/phpbrew-bin/**, bin/tests/startup-prologue.test.sh |
 | 26 | Docs + tranche-2 panel findings (CLAUDE.md hand-off, skill, .env comments, P3s) | M | done | 293a8d0 | CLAUDE.md, .env, .claude/skills/bump-versions/**, docs/plans/**, docs/BLAST-RADIUS.md, templates/tips/env-scan.md, docker/config/dist/bin/base-bin/**, docker/config/dist/bin/phpbrew-bin/**, docker/images/00base/**, docker/images/01caddy/**, docker/images/01httpd/**, docker/images/01nginx/**, bin/tests/** |
-| 27 | Milestone panel over tranches 2+3 (frozen commit, two clean rounds) | M | todo | - | var/claude/** |
+| 27 | Milestone panel over tranches 2+3 (frozen f3e92d4, one round by ruling) | M | doing | - | var/claude/**, docker/config/dist/bin/**, bin/tests/**, .claude/skills/bump-versions/**, docs/plans/**, CLAUDE.md |
 <!-- /progress-block -->
 ### Blocked
 ### Needs input
@@ -941,6 +945,13 @@ until the developer rebuilds.
   large blocks, so 3000 lines never showed it; 60000 did [Verified: rc 141 on 3/3, host and 04android image].
   Here-string too; 43ae (60000-line listing) red 3/3 before, green 3/3 after.
 ### Known issues
+- elasticmq (`serverless-bin/global-stack-serverless-framework-start.sh:163`) downloads its jar with `curl -fsSL -o`
+  straight over the live `tools/serverless-framework/bin/elasticmq-server-all.jar`: no temp dir, no check, so a download
+  cut mid-transfer leaves a truncated jar and the old one gone. A pinned download no tranche covered (step 27 panel P2).
+  Logged, not fixed (ruling 2026-09-27 00:40).
+- `nginx-start.sh:114-127` vs `:140`: when the cjose or liboauth2 gate fires, start.sh deletes that library and its
+  marker, but only `_ngx_gate` calls the nginx iou that rebuilds it — so a chain-only pin bump leaves the library
+  deleted. Pre-existing (same at 1906f6c), latent (both pins are locked empty). Step 27 panel P3; logged, not fixed.
 - mise deletes `MISE_DATA_DIR`/`STATE`/`CONFIG`/`CACHE` BEFORE `curl https://mise.run | sh` (`install-mise.sh:18-21`) — a failed download leaves mise wiped. FIXED in 14b (`008b841`): checked before the wipe (ruling 2026-09-25 09:58). [Verified: read]
 - hurl 8.0.1 cannot run in 00base: `libxml2.so.2 => not found` (26.04 ships libxml2.so.16), and upstream publishes no other Linux x86_64 build [Verified: ldd + release assets in a throwaway container]. Being fixed in step 14 (ruling 2026-09-25 09:58). FIXED in 14c (`8bae406`): the live `tools/hurl` stays broken until 00base is rebuilt; until then every 00base boot WARNs (ruling 11:47) and the developer rebuilds later (ruling 2026-09-25).
 - `RELOAD_PHP=true` (`phpbrew-start.sh:43`) removes `frankenphp-${GLOBAL_STACK_FRANKENPHP_VERSION}-<php name>` by the
