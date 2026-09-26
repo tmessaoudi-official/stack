@@ -780,6 +780,33 @@ Prefix baked by phpbrew (no `INSTALL_ROOT` exposed) → prefix-baked policy. Tod
 `bin/php` FATAL is unreachable for edge). Fix: after the build, `tools/phpbrew/php/php-master/bin/php -r 'echo PHP_VERSION;'` (that path, never PATH's
 `php`) must succeed
 and end in `-dev`; sidecar `php.edge.build` written only after that. §77.
+**Done — `b273b9c`.** Widened slightly, on purpose. The check sits right after the install step
+and runs on EVERY php install, not just edge: the php it built must run `-r 'echo PHP_VERSION;'` and
+report `X.Y.Z-dev` (edge) or exactly `${PHP_VERSION}` (the others). Measured on the installed builds:
+`8.6.0-dev`, `8.4.25` and `8.5.10`. The same gap existed for a fresh 8.4/8.5 install (marker absent),
+whose only check was the reinstall-only `-x` test. That `-x` guard stays inside the cleanup block,
+local to the `rm -rf` it protects (§60 pins it). A named FATAL exits 1 before the old php is cleaned
+and before any marker or sidecar is written; the prologue's EXIT trap writes the token.
+
+§77 has 12 checks and runs the shipped install block against a stub install step that exits 0
+whatever it built. Against the old script: 8 red, 4 green (happy paths plus the anchor). There are
+6 sabotages, each red on its named check against a green §60+§77 baseline:
+- check disabled;
+- check reachable only on reinstall (the pre-fix edge shape);
+- edge accepting any output;
+- a prefix compare;
+- FATAL without `exit`;
+- check moved after the old-php cleanup.
+
+Full suite 1059/1059. The shipped check lines were also run against the real php-master, php-8.4.25
+and php-8.5.10 builds in `tools/`: all accepted, and a pin of 8.4.26 against the 8.4.25 build got the
+named FATAL.
+
+**Risk accepted:** a partial non-edge pin (`8.4`) would now FATAL. Every pin is a full version, as
+env-update writes them.
+
+**UNCERTIFIED-BY-EXECUTION:** no php.edge rebuild was run, since it needs a 03phpedge boot and a
+php-src compile.
 
 ### Step 26 — docs + tranche-2 panel findings (M)
 CLAUDE.md hand-off script: the "Two exceptions" / "every downloaded tool" overclaim rewritten for the
@@ -825,7 +852,7 @@ until the developer rebuilds.
 | 22 | caddy: xcaddy local build, composite gate, list-modules check | M | done | 8bc5158 | docker/config/dist/bin/caddy-bin/**, docker/images/01caddy/**, .env, bin/tests/startup-prologue.test.sh |
 | 23 | httpd + shared ModSecurity: archive tarballs + sha256, composite gate, build check | L | done | f49f7d7 | docker/config/dist/bin/httpd-bin/**, docker/config/dist/bin/nginx-bin/global-stack-nginx-iou-common.sh, docker/config/dist/bin/nginx-bin/global-stack-nginx-start.sh, .env, bin/tests/startup-prologue.test.sh |
 | 24 | nginx: PGP-verified tarball, connector in temp, composite gate, build check | M | done | 82a3524 | docker/config/dist/bin/nginx-bin/**, bin/tests/startup-prologue.test.sh |
-| 25 | php.edge: post-build php check before the sidecar marker | S | todo | - | docker/config/dist/bin/phpbrew-bin/**, bin/tests/startup-prologue.test.sh |
+| 25 | php.edge: post-build php check before the sidecar marker | S | done | b273b9c | docker/config/dist/bin/phpbrew-bin/**, bin/tests/startup-prologue.test.sh |
 | 26 | Docs + tranche-2 panel findings (CLAUDE.md hand-off, skill, .env comments, P3s) | M | todo | - | CLAUDE.md, .env, .claude/skills/bump-versions/**, docs/plans/**, docker/config/dist/bin/base-bin/**, docker/config/dist/bin/phpbrew-bin/** |
 | 27 | Milestone panel over tranches 2+3 (frozen commit, two clean rounds) | M | todo | - | var/claude/** |
 <!-- /progress-block -->
