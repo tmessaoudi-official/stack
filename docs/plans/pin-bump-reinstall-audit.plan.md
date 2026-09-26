@@ -746,6 +746,14 @@ until the developer rebuilds.
   kernel log; load average ~22-24 at the time. Cause UNKNOWN — watch for a repeat before calling it a flake.
   On a repeat, capture `_andv_probe`'s raw `${out}` (the xtrace of every `android sdk install` the stub got)
   to a file BEFORE it is parsed — `1| ndk-bundle|none` cannot say whether ndk-bundle ever reached the stub.
+  RESOLVED 2026-09-26 (repeat: 43ac `1| ndk-bundle|none`, then 43aa `1| build-tools/36.1.0|none` in a §43-only run):
+  NOT a test flake — the SHIPPED verify tested each id with `printf '%s\n' "${_installed}" | grep -qF` under
+  pipefail; grep -q exits on its first match and a printf still writing dies of SIGPIPE [Verified: PIPESTATUS
+  `141 0` on 3/3 runs with a padded listing; 4 false-absent in 3000 unpadded runs at load ~30, 0 with a
+  here-string]. A real 04android reinstall could FATAL a good SDK the same way. Fixed with a here-string; 43ad
+  pads the stub listing past the pipe buffer so the piped shape reds on every run (3/3 before, 3/3 green after).
+  The same sweep over `dist/bin` found one other `| grep -q` (`base-import-pg-project-dump-if-database-empty.sh:13`):
+  it matches psql's LAST line, so grep reads everything first, and it has no callers — left as is.
 ### Known issues
 - mise deletes `MISE_DATA_DIR`/`STATE`/`CONFIG`/`CACHE` BEFORE `curl https://mise.run | sh` (`install-mise.sh:18-21`) — a failed download leaves mise wiped. FIXED in 14b (`008b841`): checked before the wipe (ruling 2026-09-25 09:58). [Verified: read]
 - hurl 8.0.1 cannot run in 00base: `libxml2.so.2 => not found` (26.04 ships libxml2.so.16), and upstream publishes no other Linux x86_64 build [Verified: ldd + release assets in a throwaway container]. Being fixed in step 14 (ruling 2026-09-25 09:58). FIXED in 14c (`8bae406`): the live `tools/hurl` stays broken until 00base is rebuilt; until then every 00base boot WARNs (ruling 11:47) and the developer rebuilds later (ruling 2026-09-25).

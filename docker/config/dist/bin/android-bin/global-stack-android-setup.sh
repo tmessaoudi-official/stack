@@ -156,7 +156,12 @@ for _want in "${_pkgs[@]}" ${_img_pkgs[@]+"${_img_pkgs[@]}"}; do
   # the first boot that ever ran this block. With the install id bare, "${_want//;//}"
   # already yields bare and the exception is simply unnecessary.
   _id="${_want//;//}"
-  printf '%s\n' "${_installed}" | grep -qF -- "${_id}" || _missing="${_missing} ${_id}"
+  # A here-string, never `printf … | grep -q`: under pipefail, grep -q exits on its first
+  # match and a printf still writing dies of SIGPIPE (PIPESTATUS "141 0"), so a PRESENT
+  # package read as absent and FATALed a good SDK whenever grep won that race
+  # [measured: 4 in 3000 under load; every time once the listing outgrows the pipe
+  # buffer]. startup-prologue.test.sh 43ad.
+  grep -qF -- "${_id}" <<<"${_installed}" || _missing="${_missing} ${_id}"
 done
 if [ -n "${_missing}" ]; then
   printf 'FATAL: android sdk install reported success but these packages are absent:%s\n' "${_missing}" >&2

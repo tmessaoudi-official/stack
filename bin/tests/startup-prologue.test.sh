@@ -2855,9 +2855,10 @@ done
 #      sets below, i.e. the matching case). Single-instance packages take no version
 #      at install time, so the pin is an EXPECTED version the verify asserts against
 #      what upstream actually served -- $2 is how the mismatch arm gets exercised.
+# $3 = padding lines the listing prints AFTER the real ids (default 0). See 43ad.
 # echoes "<rc>|<absent-ids>|<version-warn>"
 _andv_probe() {
-  local omit="${1}" ptv="${2:-37.0.1}" d="${TMP_DIR}/andv" rc out
+  local omit="${1}" ptv="${2:-37.0.1}" pad="${3:-0}" d="${TMP_DIR}/andv" rc out
   rm -rf "${d}"
   mkdir -p "${d}/bin" "${d}/versions"
   : >"${d}/asked"
@@ -2866,6 +2867,7 @@ _andv_probe() {
 D="${d}"
 OMIT="${omit}"
 PTV="${ptv}"
+PAD="${pad}"
 case "\${1}" in
   --version) echo "1.0.0-stub"; exit 0 ;;
   --sdk=*) shift ;;
@@ -2904,6 +2906,9 @@ case "\${1}.\${2}" in
       if [ "\${id}" = "platform-tools" ]; then v="\${PTV}"; fi
       printf '  %s  %s  description\n' "\${id}" "\${v}"
     done <"\${D}/asked"
+    for ((i = 0; i < PAD; i++)); do
+      printf '  pad/%s  0.0.0  a listing line past the 64 KiB pipe buffer\n' "\${i}"
+    done
     exit 0 ;;
 esac
 exit 0
@@ -3013,6 +3018,15 @@ assert_output_contains "43ab: a platform-tools version adrift from the pin WARNs
 # ...and the drift is a WARNING only: rc stays 0 and nothing is reported absent.
 assert_output_contains "43ac: ...but does not fail the install (WARN, not FATAL)" \
   '0||platform-tools' _andv_probe "" "9.9.9"
+# A present package must never read as absent. The verify used to test each id with
+# `printf '%s\n' "${_installed}" | grep -qF` under pipefail: grep -q exits on its first
+# match, a printf still writing then dies of SIGPIPE (PIPESTATUS "141 0"), and pipefail
+# turns that into "absent" -- a FATAL on a good SDK. It hit only when grep won the race,
+# so 43q/43ac went red at random under load (`1| ndk-bundle|none` on 2026-09-24 and
+# 2026-09-26; 4 in 3000 in isolation). A listing longer than the pipe buffer after the
+# real ids makes the race certain, so this reds on every run of the piped shape.
+assert_output_contains "43ad: a present package is never reported absent, however long the listing (no SIGPIPE)" \
+  '0||none' _andv_probe "" "" 3000
 
 # setup-dist.sh's AVD loop is EXECUTED here, not grepped. 43c/43e/43l are static and
 # were green both before and after the loop was rewritten from glob-and-reverse-parse
