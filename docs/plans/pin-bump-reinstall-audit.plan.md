@@ -726,7 +726,8 @@ until the developer rebuilds.
 | 18 | fvm: temp-dir fetch, listing + --version, install, marker last | S | done | 033ba49 | docker/config/dist/bin/fvm-bin/**, bin/tests/startup-prologue.test.sh |
 | 19 | deno + bun: pinned zip + checksum, no installer script, no pipe | M | done | a6d2e63 | docker/config/dist/bin/nvm-bin/**, bin/tests/startup-prologue.test.sh |
 | 20 | rust: rustup-init checked before the wipe, rustc --version after | S | done | 5f41482 | docker/config/dist/bin/rust-bin/**, bin/tests/startup-prologue.test.sh |
-| 21 | phpmyadmin: build + check in temp, then swap; SHA-tracked pin | M | done | - | docker/config/dist/bin/phpmyadmin-bin/**, .env, bin/tests/startup-prologue.test.sh |
+| 21 | phpmyadmin: build + check in temp, then swap; SHA-tracked pin | M | done | 1f9bea5 | docker/config/dist/bin/phpmyadmin-bin/**, .env, bin/tests/startup-prologue.test.sh |
+| 21b | android verify: here-strings, no SIGPIPE on a long `sdk list` (verify + version read) | S | done | 9924ec6 | docker/config/dist/bin/android-bin/**, bin/tests/startup-prologue.test.sh |
 | 22 | caddy: xcaddy local build, composite gate, list-modules check | M | todo | - | docker/config/dist/bin/caddy-bin/**, docker/images/01caddy/**, .env, bin/tests/startup-prologue.test.sh, bin/tests/compose-env-plumbing.test.sh |
 | 23 | httpd + shared ModSecurity: archive tarballs + sha256, composite gate, build check | L | todo | - | docker/config/dist/bin/httpd-bin/**, docker/config/dist/bin/nginx-bin/global-stack-nginx-iou-common.sh, .env, bin/tests/startup-prologue.test.sh |
 | 24 | nginx: PGP-verified tarball, connector in temp, composite gate, build check | M | todo | - | docker/config/dist/bin/nginx-bin/**, bin/tests/startup-prologue.test.sh |
@@ -754,6 +755,10 @@ until the developer rebuilds.
   pads the stub listing past the pipe buffer so the piped shape reds on every run (3/3 before, 3/3 green after).
   The same sweep over `dist/bin` found one other `| grep -q` (`base-import-pg-project-dump-if-database-empty.sh:13`):
   it matches psql's LAST line, so grep reads everything first, and it has no callers — left as is.
+  Second instance, found by the 6C advisor one screen down: the platform-tools version read was
+  `printf | awk '… { print $2; exit }'` inside `$(…)` under set -e, so a SIGPIPE ABORTED setup. mawk reads in
+  large blocks, so 3000 lines never showed it; 60000 did [Verified: rc 141 on 3/3, host and 04android image].
+  Here-string too; 43ae (60000-line listing) red 3/3 before, green 3/3 after.
 ### Known issues
 - mise deletes `MISE_DATA_DIR`/`STATE`/`CONFIG`/`CACHE` BEFORE `curl https://mise.run | sh` (`install-mise.sh:18-21`) — a failed download leaves mise wiped. FIXED in 14b (`008b841`): checked before the wipe (ruling 2026-09-25 09:58). [Verified: read]
 - hurl 8.0.1 cannot run in 00base: `libxml2.so.2 => not found` (26.04 ships libxml2.so.16), and upstream publishes no other Linux x86_64 build [Verified: ldd + release assets in a throwaway container]. Being fixed in step 14 (ruling 2026-09-25 09:58). FIXED in 14c (`8bae406`): the live `tools/hurl` stays broken until 00base is rebuilt; until then every 00base boot WARNs (ruling 11:47) and the developer rebuilds later (ruling 2026-09-25).

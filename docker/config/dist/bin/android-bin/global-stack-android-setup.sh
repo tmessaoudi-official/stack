@@ -187,7 +187,10 @@ fi
 # `skip` without reaching this line. Bumping .env changes the marker, which forces
 # the reinstall that picks up upstream's current build -- which is what the pin means
 # for a single-instance package.
-_ptv_got="$(printf '%s\n' "${_installed}" | awk '$1 == "platform-tools" { print $2; exit }')"
+# A here-string for the same SIGPIPE reason as the verify loop above: awk's `exit` closes
+# the pipe early, and under set -e a 141 from this $(…) would ABORT setup on a good SDK
+# [measured: rc 141 on 3/3 once the listing outgrows mawk's read blocks]. 43ae.
+_ptv_got="$(awk '$1 == "platform-tools" { print $2; exit }' <<<"${_installed}")"
 if [ "${_ptv_got}" != "${GLOBAL_STACK_ANDROID_PLATFORM_TOOLS_VERSION}" ]; then
   printf 'WARN: platform-tools %s != pinned %s (single-instance: upstream serves one build, the pin cannot request another - bump .env to match)\n' \
     "${_ptv_got:-<absent>}" "${GLOBAL_STACK_ANDROID_PLATFORM_TOOLS_VERSION}" >&2

@@ -3027,6 +3027,12 @@ assert_output_contains "43ac: ...but does not fail the install (WARN, not FATAL)
 # real ids makes the race certain, so this reds on every run of the piped shape.
 assert_output_contains "43ad: a present package is never reported absent, however long the listing (no SIGPIPE)" \
   '0||none' _andv_probe "" "" 3000
+# The version read one screen down had the same shape: `printf | awk '… { print $2; exit }'`
+# inside $(…) under set -e, so a SIGPIPE there ABORTED setup outright. mawk reads its input
+# in large blocks, so 3000 lines never overflowed them; 60000 did [measured: rc 141 on 3/3,
+# host and 04android image alike, mawk 1.3.4].
+assert_output_contains "43ae: ...nor does reading the platform-tools version abort setup (no SIGPIPE)" \
+  '0||none' _andv_probe "" "" 60000
 
 # setup-dist.sh's AVD loop is EXECUTED here, not grepped. 43c/43e/43l are static and
 # were green both before and after the loop was rewritten from glob-and-reverse-parse
