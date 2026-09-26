@@ -488,9 +488,12 @@ then drop the old dir and wipe `pkg.*`; the marker is written where it is today 
   `setup.sh:35`'s `chmod -R a+rwx` / `chown -R` of `GRADLE_USER_HOME` now walk a preserved cache on each
   reinstall — harmless, only slower on a large cache. §69: 6 checks run the SHIPPED gate→wipe→mkdir block,
   extracted by anchors, under `env -i` with every path pinned into the test root and a stub `sudo` that refuses
-  any path outside it (69a proves the refusal, exit 99, before the block ever runs) — the block is a real
-  `sudo rm -rf` of variables an ordinary /stack shell exports. 69b-69d red first (`gradle=wiped` on all three
-  triggers); the sabotage re-adding `GRADLE_USER_HOME` reds the same three and was restored byte-identical;
+  any path outside it (69a proves the refusal, exit 99, on a SIBLING tmp dir that must survive — first written
+  against the live `/stack/tools/android` path, fixed at 6C so a broken guard costs a tmp dir, not the SDK)
+  — the block is a real `sudo rm -rf` of variables an ordinary /stack shell exports. 69b-69d red first
+  (`gradle=wiped` on all three triggers); the sabotage re-adding `GRADLE_USER_HOME` reds the same three, one
+  dropping `ANDROID_HOME` + `ANDROID_SDK_ROOT` (equal in `.env`, so both) reds them on `sdk=kept`, and a stub
+  `sudo` that accepts everything reds 69a — each restored byte-identical;
   69e (current → nothing wiped) guards the skip path. A fingerprint of the live `tools/android`, `tools/gradle`
   and both markers was identical before and after every run. Suite 888/888. Certified by the §69 execution
   only: no throwaway 04android run, a one-token change to a 15+ minute multi-GB reinstall path.

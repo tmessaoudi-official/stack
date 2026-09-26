@@ -5632,7 +5632,9 @@ assert_pass "68h: at least 4 executable curl calls (counted per call, not per li
 # wipe itself stays whole. The SHIPPED gate→wipe→mkdir block runs here, extracted by its
 # anchors. SAFETY: that block is a real `sudo rm -rf` of variables an ordinary /stack
 # shell exports, so it runs under env -i with every one of them pinned under ${_P69},
-# and the stub sudo refuses any path outside ${_P69} (69a proves the refusal first).
+# and the stub sudo refuses any path outside ${_P69}. 69a proves the refusal first on a
+# SIBLING tmp dir, never on a live path: if the guard ever broke, the probe would cost
+# one empty tmp dir, not the developer's SDK.
 printf '\n── Section 69: an android SDK reinstall keeps the Gradle cache (tranche 2 step 16)\n'
 _P69="${TMP_DIR}/p69"
 mkdir -p "${_P69}/stub"
@@ -5646,8 +5648,9 @@ EOF
 chmod +x "${_P69}/stub/sudo"
 _P69_ANDR="${DIST_BIN}/android-bin/global-stack-android-start.sh"
 awk '/^_android_gate=/,/^mkdir -p "\$\{ANDROID_HOME\}"/' "${_P69_ANDR}" >"${_P69}/block.sh"
-assert_pass "69a: the stub sudo refuses a path outside the test root (exit 99) and runs one inside it (fail-safe proven first)" \
-  bash -c '"$1/stub/sudo" rm -rf /stack/tools/android; [[ $? == 99 ]] && mkdir -p "$1/x" && "$1/stub/sudo" rm -rf "$1/x" && [[ ! -e "$1/x" ]]' _ "${_P69}"
+mkdir -p "${TMP_DIR}/outside69/x"
+assert_pass "69a: the stub sudo refuses a sibling path outside the test root (exit 99, dir still there) and runs one inside it (fail-safe proven first)" \
+  bash -c '"$1/stub/sudo" rm -rf "$2/x"; [[ $? == 99 && -d "$2/x" ]] && mkdir -p "$1/x" && "$1/stub/sudo" rm -rf "$1/x" && [[ ! -e "$1/x" ]]' _ "${_P69}" "${TMP_DIR}/outside69"
 assert_pass "69a: the extracted block holds the wipe and the mkdir (anchor non-vacuity)" \
   bash -c 'grep -q "sudo rm -rf \"\${ANDROID_HOME}\"" "$1" && grep -q "^mkdir -p \"\${ANDROID_HOME}\"" "$1" && [[ "$(grep -c . "$1")" -ge 4 ]]' _ "${_P69}/block.sh"
 _p69_run() { # $1 = gate answer (skip|install), $2 = RELOAD_ANDROID, $3 = android.cli marker present (1|0) → state
