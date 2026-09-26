@@ -377,7 +377,8 @@ start (can take 30+ minutes).
 | `GLOBAL_STACK_RELOAD_FLUTTER3` | Force Flutter 3 reinstall |
 
 > **Not every RELOAD wipes** (pin-audit tranche 2, `docs/plans/pin-bump-reinstall-audit.plan.md`): the
-> `NODE*`, `JAVA*` and `FLUTTER3` switches remove only the success and version markers
+> `NODE*`, `JAVA*` and `FLUTTER3` switches (plus `GLOBAL_STACK_LOCAL_RELOAD_FLUTTER3_41_9`, which
+> `local.03flutter3-41-9` maps to the same in-container `GLOBAL_STACK_RELOAD_FLUTTER`) remove only the success and version markers
 > (`nvm-start.sh`, `sdkman-start.sh`, `fvm-start.sh`); the installer then finds the version
 > directory already on disk and does nothing, so they do NOT reinstall (a Known issue since
 > tranche 2 step 11). `GLOBAL_STACK_RELOAD_ANDROID` wipes the SDK but keeps `GRADLE_USER_HOME`
