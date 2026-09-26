@@ -733,6 +733,47 @@ Keyring committed at `docker/config/dist/bin/nginx-bin/nginx-release-keys.asc` (
 in a diff; a clean clone gets it with the scripts). Only `gpg` exists, no `gpgv` [Verified: 00base]; connector cloned into the temp
 dir; after the build `nginx -V` names the pin and `nginx -t` passes. Composite gate: nginx, connector,
 modsec lib. Fixes `start:202` `nginx stop` → `nginx -s stop`. `logs/` kept. §76.
+**Done — `82a3524`.** §76 has 29 checks and runs REAL gpg against three throwaway keys
+(pinned / in the keyring but unpinned / stranger). The test copy of the iou gets the test fingerprint
+spliced in as a sixth, third-position entry, and 76a asserts exactly that one-line diff. Against the
+pre-change scripts: 28 red, 1 green (the fixture check). There are 19 sabotages, each red on its named
+check against a green §30+§76 baseline, and each restore is byte-identical. The mutations:
+- fingerprint membership by IFS join;
+- pinned, listing, connector-`config`, `-V` version, `--add-module` and `nginx -t` checks each switched off;
+- wipe moved before the fetch; `logs/` not kept; OpenIDC-chain markers kept;
+- connector dropped from the composite; marker written before the iou; start.sh wipe re-added;
+- `nginx stop` restored; `curl -f` stripped; temp dir kept on FATAL;
+- a pinned fingerprint altered; gate on NGINX_VERSION alone; missing keyring not refused.
+
+Full suite 1047/1047. A real run of the SHIPPED iou in the 01caddy image, against a scratch tools root
+and the libmodsecurity built by step 23's run, took 164 s. Results: rc 0; GOODSIG plus a VALIDSIG
+whose primary is pluknet's; `nginx version: nginx/1.31.6`; `--add-module` pointing at the connector;
+`libmodsecurity.so.3` resolved to the shared lib; `nginx -t` ok; logs kept; no token; no temp dir left.
+
+The five fingerprints were cross-checked on 2026-09-26. nginx.org/en/pgp_keys.html publishes no
+fingerprints; it links exactly the five `.key` files. The primaries derived from freshly fetched copies
+equal the pinned list. `nginx_signing.key` also carries two older keys, which stay unpinned on purpose.
+
+**Measured along the way:**
+- **Membership join:** the first real run REJECTED a good pinned signature. The script's `IFS=$'\n\t'`
+  makes `"${arr[*]}"` join with newlines, so the `" ${list[*]} " == *" x "*` membership test could
+  never match. It is now a loop, and N1 pins it.
+- **gpg-agent:** a gpg-agent-stop helper was added and then REMOVED. Its "two agents left" evidence
+  was the probe `pgrep -fa gpg-agent | grep scratch` matching its own `bash -c` command line. Measured
+  by exact process name in the image: gpg-agent is alive before `rm -rf` of the temp homedir and gone
+  one second after. §76's `agents=` field stays as an observation.
+- **svn:** nginx uses no svn, which completes the step-23 `subversion` follow-up below.
+- **Build path:** `nginx -V` names the connector's temp path, now deleted. This is cosmetic (static
+  module).
+
+**UNCERTIFIED-BY-EXECUTION:**
+- A live 01nginx boot through the new start.sh. No 01nginx image exists here, nginx is not enabled,
+  and 01caddy stood in, since their Dockerfiles differ only by sysctl, EXPOSE, CMD and an automake step
+  that `.env` leaves empty.
+- The OpenIDC chain. It is unchanged, but its pins are empty here, so the real run skipped it.
+- Every failure path, proven by stubs only.
+- Expired and revoked signing keys, which are rejected on the status lines (EXPKEYSIG / REVKEYSIG)
+  but have no test key.
 
 ### Step 25 — php.edge (S) · `phpbrew-bin/global-stack-phpbrew-start.sh:96-99`
 Prefix baked by phpbrew (no `INSTALL_ROOT` exposed) → prefix-baked policy. Today no post-build check (the
@@ -783,7 +824,7 @@ until the developer rebuilds.
 | 21b | android verify: here-strings, no SIGPIPE on a long `sdk list` (verify + version read) | S | done | 9924ec6 | docker/config/dist/bin/android-bin/**, bin/tests/startup-prologue.test.sh |
 | 22 | caddy: xcaddy local build, composite gate, list-modules check | M | done | 8bc5158 | docker/config/dist/bin/caddy-bin/**, docker/images/01caddy/**, .env, bin/tests/startup-prologue.test.sh |
 | 23 | httpd + shared ModSecurity: archive tarballs + sha256, composite gate, build check | L | done | f49f7d7 | docker/config/dist/bin/httpd-bin/**, docker/config/dist/bin/nginx-bin/global-stack-nginx-iou-common.sh, docker/config/dist/bin/nginx-bin/global-stack-nginx-start.sh, .env, bin/tests/startup-prologue.test.sh |
-| 24 | nginx: PGP-verified tarball, connector in temp, composite gate, build check | M | todo | - | docker/config/dist/bin/nginx-bin/**, bin/tests/startup-prologue.test.sh |
+| 24 | nginx: PGP-verified tarball, connector in temp, composite gate, build check | M | done | 82a3524 | docker/config/dist/bin/nginx-bin/**, bin/tests/startup-prologue.test.sh |
 | 25 | php.edge: post-build php check before the sidecar marker | S | todo | - | docker/config/dist/bin/phpbrew-bin/**, bin/tests/startup-prologue.test.sh |
 | 26 | Docs + tranche-2 panel findings (CLAUDE.md hand-off, skill, .env comments, P3s) | M | todo | - | CLAUDE.md, .env, .claude/skills/bump-versions/**, docs/plans/**, docker/config/dist/bin/base-bin/**, docker/config/dist/bin/phpbrew-bin/** |
 | 27 | Milestone panel over tranches 2+3 (frozen commit, two clean rounds) | M | todo | - | var/claude/** |
