@@ -71,18 +71,34 @@ printf '\n******** Starting fvm %s %s ********\n' "${FVM_MODE}" "${FLUTTER_VERSI
 mkdir -p "${PUB_CACHE}" "${FVM_CACHE_PATH}" "${FVM_GIT_CACHE_PATH}"
 
 if [[ "${FVM_MODE}" = "install" ]]; then
-  # ckpt4: version-drift WARN only (single source: gs_version_gate). Reinstall
-  # decision stays with the existing content-compare below (behavior unchanged);
-  # `|| true` satisfies the set -eE ERR-trap invariant for a discard-decision call.
-  gs_version_gate "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/fvm" "${GLOBAL_STACK_FVM_VERSION}" "fvm" >/dev/null || true
-  if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/fvm" ]] || \
-     [[ "$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/fvm" 2>/dev/null)" != "${GLOBAL_STACK_FVM_VERSION}" ]] || \
-     [[ "${GLOBAL_STACK_RELOAD_FVM}" = "true" ]]; then
-    curl --connect-timeout 30 --max-time 300 -fsSL -o "fvm-${FVM_VERSION}-linux-x64.tar.gz" "https://github.com/leoafarias/fvm/releases/download/${FVM_VERSION}/fvm-${FVM_VERSION}-linux-x64.tar.gz"
-    tar -xvf fvm-${FVM_VERSION}-linux-x64.tar.gz
-    sudo mv fvm/fvm ${GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN}/fvm
-    sudo chmod +x ${GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN}/fvm
-    sudo rm -rf fvm-${FVM_VERSION}-linux-x64.tar.gz fvm/
+  # Pin-audit tranche 3 step 18 (ruling 2026-09-26 11:17; pinned by startup-prologue.test.sh
+  # §70). The tarball used to be downloaded and unpacked in the cwd, which is compose's
+  # working_dir, the developer's /stack/projects, and then `sudo rm -rf fvm/` ran there. So a
+  # project named fvm was deleted on every fvm bump, and nothing was checked. Now the tarball
+  # lands in a temp dir and is checked (it holds fvm/fvm, and that binary's own --version
+  # prints the pin) before it replaces the old binary. The marker is written last.
+  # fvm publishes no checksum [Verified 2026-09-26: the 4.3.1 release assets].
+  _fvm_gate="$(gs_version_gate "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/fvm" "${GLOBAL_STACK_FVM_VERSION}" "fvm")"
+  if [[ "${_fvm_gate}" != "skip" ]] || [[ "${GLOBAL_STACK_RELOAD_FVM}" = "true" ]]; then
+    _fvm_dl="$(mktemp -d)"
+    _fvm_tgz="${_fvm_dl}/fvm-${FVM_VERSION}-linux-x64.tar.gz"
+    if ! curl --connect-timeout 30 --max-time 300 -fsSL -o "${_fvm_tgz}" "https://github.com/leoafarias/fvm/releases/download/${FVM_VERSION}/fvm-${FVM_VERSION}-linux-x64.tar.gz"; then
+      printf 'FATAL: fvm %s could not be downloaded - fvm left as it was\n' "${FVM_VERSION}" >&2
+      exit 1
+    fi
+    # grep reads the whole listing (no -q): an early exit would SIGPIPE tar under pipefail.
+    if ! tar -tzf "${_fvm_tgz}" 2>/dev/null | grep -xF 'fvm/fvm' >/dev/null; then
+      printf 'FATAL: fvm %s: the download is not a tarball holding fvm/fvm - fvm left as it was\n' "${FVM_VERSION}" >&2
+      exit 1
+    fi
+    tar -C "${_fvm_dl}" -xzf "${_fvm_tgz}" fvm/fvm
+    if ! _fvm_says="$("${_fvm_dl}/fvm/fvm" --version 2>&1)" || [[ "${_fvm_says}" != "${FVM_VERSION}" ]]; then
+      printf 'FATAL: fvm %s: the downloaded binary reports "%s" - fvm left as it was\n' "${FVM_VERSION}" "${_fvm_says:-}" >&2
+      exit 1
+    fi
+    # Checked: from here on the old binary is replaced.
+    sudo install -m 0755 "${_fvm_dl}/fvm/fvm" "${GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN}/fvm"
+    rm -rf "${_fvm_dl}"
     echo "${FVM_VERSION}" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/fvm"
   fi
 fi

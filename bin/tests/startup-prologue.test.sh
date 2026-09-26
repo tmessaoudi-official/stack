@@ -770,7 +770,7 @@ PROBE_WIRING=(
   'pyenv-bin/global-stack-pyenv-start.sh|gs_version_gate "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/pyenv" "${GLOBAL_STACK_PYENV_VERSION#v}" "pyenv" >/dev/null'
   'rbenv-bin/global-stack-rbenv-start.sh|gs_version_gate "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/rbenv" "${GLOBAL_STACK_RBENV_VERSION#v}" "rbenv" >/dev/null'
   'sdkman-bin/global-stack-sdkman-start.sh|gs_version_gate "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/sdkman" "${GLOBAL_STACK_SDKMAN_VERSION}" "sdkman" >/dev/null'
-  'fvm-bin/global-stack-fvm-start.sh|gs_version_gate "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/fvm" "${GLOBAL_STACK_FVM_VERSION}" "fvm" >/dev/null'
+  'fvm-bin/global-stack-fvm-start.sh|_fvm_gate="$(gs_version_gate "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/fvm" "${GLOBAL_STACK_FVM_VERSION}" "fvm")"'
   'rust-bin/global-stack-rust-start.sh|gs_version_gate "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/rust" "${GLOBAL_STACK_RUST_VERSION}" "rust" >/dev/null'
 )
 
@@ -5682,6 +5682,110 @@ assert_pass "69d: android.cli marker missing -> the SDK wiped, the Gradle cache 
   test "$(_p69_run skip false 0)" = "rc=0 sdk=wiped gradle=kept sdkmarker=gone climarker=gone refused=0"
 assert_pass "69e: everything current -> nothing wiped" \
   test "$(_p69_run skip false 1)" = "rc=0 sdk=kept gradle=kept sdkmarker=kept climarker=kept refused=0"
+
+# ─── Section 70: fvm is checked in a temp dir before it replaces the old binary ──
+# Pin-audit tranche 3 step 18 (ruling 2026-09-26 11:17). The fvm tarball used to be
+# downloaded and unpacked in the cwd, which is compose's working_dir, the developer's
+# /stack/projects, and the script then ran `sudo rm -rf fvm/` there. So a project named
+# fvm was deleted on every fvm bump. Nothing was checked, either. The SHIPPED install block
+# runs here, extracted by its anchors, against a stub curl that models -f and a stub sudo
+# that refuses any absolute path outside ${_P70}. The fixture's fvm prints its version
+# the way the real 4.3.1 binary does: `fvm --version` -> `4.3.1`, nothing else
+# [measured 2026-09-26].
+printf '\n── Section 70: fvm checked in a temp dir before it replaces the old binary (tranche 3 step 18)\n'
+_P70="${TMP_DIR}/p70"
+mkdir -p "${_P70}/stub" "${_P70}/fix"
+cat >"${_P70}/stub/sudo" <<EOF
+#!/bin/bash
+for a in "\$@"; do
+  [[ "\${a}" != /* || "\${a}" == "${_P70}"/* ]] || { echo "REFUSED \${a}" >&2; exit 99; }
+done
+exec "\$@"
+EOF
+cat >"${_P70}/stub/curl" <<'EOF'
+#!/bin/bash
+out="" url="" fail=0
+while (($#)); do
+  case "$1" in
+    -o) out="$2"; shift ;;
+    --connect-timeout|--max-time) shift ;;
+    -*) [[ "$1" == --* ]] || [[ "$1" != *f* ]] || fail=1 ;;
+    *) url="$1" ;;
+  esac
+  shift
+done
+printf '%s\n' "${url}" >>"${P70_LOG}"
+src="${P70_FIX}/${url#https://github.com/leoafarias/fvm/releases/download/}"
+if [[ -f "${src}" ]]; then cat "${src}" >"${out}"; exit 0; fi
+((fail)) && exit 22
+printf '<html>404 Not Found</html>\n' >"${out}"
+EOF
+chmod +x "${_P70}/stub/sudo" "${_P70}/stub/curl"
+_p70_fvm() { # $1 = path, $2 = what `--version` prints
+  mkdir -p "$(dirname "$1")"
+  printf '#!/bin/sh\necho %s\n' "$2" >"$1"
+  chmod 0755 "$1"
+}
+_p70_tgz() { # $1 = version, $2 = what its fvm prints ('' = the tarball holds no fvm/fvm)
+  local d="${_P70}/build/$1"
+  rm -rf "${d}"
+  mkdir -p "${d}/fvm/src" "${_P70}/fix/$1"
+  printf 'license\n' >"${d}/fvm/src/LICENSE"
+  [[ -z "$2" ]] || _p70_fvm "${d}/fvm/fvm" "$2"
+  tar -C "${d}" -czf "${_P70}/fix/$1/fvm-$1-linux-x64.tar.gz" fvm
+}
+_p70_tgz 4.3.0 4.3.0
+_p70_tgz 4.3.1 4.3.1
+_p70_tgz 4.3.2 4.3.2
+_p70_tgz 4.4.0 ''     # no fvm/fvm in the tarball
+_p70_tgz 4.5.0 4.5.00 # reports a different version
+mkdir -p "${_P70}/fix/4.7.0"
+printf '<html>not a tarball</html>\n' >"${_P70}/fix/4.7.0/fvm-4.7.0-linux-x64.tar.gz"
+# 4.6.0 is not served at all (curl -f exits 22).
+_P70_FVM="${DIST_BIN}/fvm-bin/global-stack-fvm-start.sh"
+awk '/^if \[\[ "\$\{FVM_MODE\}" = "install" \]\]; then$/{n++} n==2{print} n==2 && /^fi$/{exit}' "${_P70_FVM}" >"${_P70}/block.sh"
+assert_pass "70a: the extracted install block holds the download and the marker write (anchor non-vacuity)" \
+  bash -c 'grep -q "releases/download" "$1" && grep -q "VERSIONS}/fvm\"\$" "$1" && [[ "$(grep -c . "$1")" -ge 8 ]]' _ "${_P70}/block.sh"
+_p70_run() { # $1 = pin, $2 = installed fvm version ('' = none), $3 = marker ('' = none), $4 = RELOAD_FVM
+  local r="${_P70}/r" rc=0
+  rm -rf "${r}"
+  mkdir -p "${r}/tools/bin" "${r}/tools/versions" "${r}/projects/fvm" "${r}/tmp"
+  printf 'keep\n' >"${r}/projects/fvm/keep"
+  printf 'mine\n' >"${r}/projects/fvm-$1-linux-x64.tar.gz"
+  [[ -z "$2" ]] || _p70_fvm "${r}/tools/bin/fvm" "$2"
+  [[ -z "$3" ]] || printf '%s\n' "$3" >"${r}/tools/versions/fvm"
+  : >"${_P70}/curl.log"
+  (cd "${r}/projects" && env -i PATH="${_P70}/stub:/usr/bin:/bin" HOME="${r}" TMPDIR="${r}/tmp" \
+    P70_FIX="${_P70}/fix" P70_LOG="${_P70}/curl.log" FVM_MODE=install FVM_VERSION="$1" \
+    GLOBAL_STACK_FVM_VERSION="$1" GLOBAL_STACK_RELOAD_FVM="$4" \
+    GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS="${r}/tools/versions" GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN="${r}/tools/bin" \
+    bash -c 'set -eE -o pipefail; source "$1"; source "$2"' _ \
+    "${DIST_BIN}/base-bin/global-stack-base-version-gate.sh" "${_P70}/block.sh") >"${_P70}/last.log" 2>&1 || rc=$?
+  printf 'rc=%s bin=%s marker=%s projects=%s tmp=%s curls=%s fatal=%s refused=%s' "${rc}" \
+    "$("${r}/tools/bin/fvm" --version 2>/dev/null || echo none)" \
+    "$(cat "${r}/tools/versions/fvm" 2>/dev/null || echo none)" \
+    "$(if [[ "$(cat "${r}/projects/fvm/keep" "${r}/projects/fvm-$1-linux-x64.tar.gz" 2>/dev/null)" == $'keep\nmine' && "$(ls -A "${r}/projects" | wc -l)" == 2 ]]; then echo intact; else echo touched; fi)" \
+    "$(ls -A "${r}/tmp" | wc -l)" "$(grep -c . "${_P70}/curl.log" || true)" \
+    "$(grep -c '^FATAL: fvm' "${_P70}/last.log" || true)" "$(grep -c REFUSED "${_P70}/last.log" || true)"
+}
+assert_pass "70b: fvm 4.3.1 -> pin 4.3.2: checked in a temp dir, installed, marker last, the projects dir untouched" \
+  test "$(_p70_run 4.3.2 4.3.1 4.3.1 false)" = "rc=0 bin=4.3.2 marker=4.3.2 projects=intact tmp=0 curls=1 fatal=0 refused=0"
+assert_pass "70c: fvm 4.3.2 -> pin moved back to 4.3.0" \
+  test "$(_p70_run 4.3.0 4.3.2 4.3.2 false)" = "rc=0 bin=4.3.0 marker=4.3.0 projects=intact tmp=0 curls=1 fatal=0 refused=0"
+assert_pass "70d: first install at 4.3.1 (no binary, no marker)" \
+  test "$(_p70_run 4.3.1 '' '' false)" = "rc=0 bin=4.3.1 marker=4.3.1 projects=intact tmp=0 curls=1 fatal=0 refused=0"
+assert_pass "70e: marker = pin -> nothing downloaded, nothing changed" \
+  test "$(_p70_run 4.3.1 4.3.1 4.3.1 false)" = "rc=0 bin=4.3.1 marker=4.3.1 projects=intact tmp=0 curls=0 fatal=0 refused=0"
+assert_pass "70f: marker = pin but RELOAD_FVM=true -> reinstalled" \
+  test "$(_p70_run 4.3.1 4.3.0 4.3.1 true)" = "rc=0 bin=4.3.1 marker=4.3.1 projects=intact tmp=0 curls=1 fatal=0 refused=0"
+for _p70_bad in '4.4.0|holds no fvm/fvm' '4.5.0|reports 4.5.00' '4.6.0|is not published (curl -f)' '4.7.0|is an HTML page'; do
+  assert_pass "70g: pin ${_p70_bad%%|*} (${_p70_bad#*|}) -> named FATAL, old fvm and marker untouched, projects untouched" \
+    bash -c '[[ "$1" == "rc=1 bin=4.3.1 marker=4.3.1 projects=intact "*" fatal=1 refused=0" ]]' _ "$(_p70_run "${_p70_bad%%|*}" 4.3.1 4.3.1 false)"
+done
+# Without -f an unpublished pin downloads a 404 page. The listing check still refuses it,
+# but the FATAL then blames the wrong thing, so -f is pinned directly (the §68h shape).
+assert_pass "70h: fvm-start.sh has at least 1 executable curl call, and every one carries -f (floor + guard)" \
+  bash -c 'calls="$(grep -vE "^[[:space:]]*#" "$1" | grep -oE "curl [^;|]*")"; [[ "$(grep -c . <<<"${calls}")" -ge 1 ]] && ! grep -vE "(^| )-[a-zA-Z]*f[a-zA-Z]*( |$)" <<<"${calls}" | grep -q .' _ "${_P70_FVM}"
 
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
