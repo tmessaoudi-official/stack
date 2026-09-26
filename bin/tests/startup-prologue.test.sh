@@ -1747,101 +1747,13 @@ for _ex in caddy-bin/global-stack-caddy-start.sh nginx-bin/global-stack-nginx-st
     grep -q '^source global-stack-base-prologue\.sh$' "${DIST_BIN}/${_ex}"
 done
 
-# ─── Section 24: nvm-install-tools deno/bun version gate (row 16) ─────────
-printf '\n%b── Section 24: nvm-install-tools deno/bun gate%b\n' "${C_BOLD}" "${C_RESET}"
-
-# Row 16, the first Track 5b migration. Both blocks were exist-only
-# (`[ -f "${DENO_JS}" ]`), so a GLOBAL_STACK_DENO_VERSION / _BUN_VERSION bump did
-# nothing at all and neither tool had a marker. This section is the shape rows
-# 17-21 copy: stub curl on PATH, drive the gate from a fixture tools tree.
-NVM_TOOLS="${DIST_BIN}/nvm-bin/global-stack-nvm-install-tools.sh"
-
-# _nvm_tools_run <tool> <marker_body> <pin> <binary_present> [curl_fail]
-#   echoes: "<decision-ish trace>|<marker content after the run>|<binary present>"
-_nvm_tools_run() {
-  local tool="$1" marker_body="$2" pin="$3" bin_present="$4" curl_fail="${5:-0}"
-  local root="${TMP_DIR}/nvmtools"
-  rm -rf "${root}"
-  mkdir -p "${root}/vers" "${root}/deno/bin" "${root}/bun/bin" "${root}/stub" \
-           "${root}/errors" "${root}/run"
-
-  # curl stub: for deno the script downloads an installer to a file and runs it;
-  # for bun it pipes curl's stdout into `bash -s <version>`. Both shapes covered.
-  {
-    printf '#!/bin/bash\n'
-    printf '[ "${CURL_FAIL:-0}" = "1" ] && exit 22\n'
-    printf 'out=""; prev=""\n'
-    printf 'for a in "$@"; do [ "$prev" = "-o" ] && out="$a"; prev="$a"; done\n'
-    printf 'if [ -n "$out" ]; then\n'
-    printf '  printf "#!/bin/bash\\nmkdir -p \\"%%s/bin\\"\\ntouch \\"%%s/bin/deno\\"\\n" "${DENO_INSTALL}" "${DENO_INSTALL}" > "$out"\n'
-    printf 'else\n'
-    printf '  printf "mkdir -p \\"%%s/bin\\"\\ntouch \\"%%s/bin/bun\\"\\n" "${BUN_INSTALL}" "${BUN_INSTALL}"\n'
-    printf 'fi\n'
-  } >"${root}/stub/curl"
-  chmod +x "${root}/stub/curl"
-
-  [[ -n "${marker_body}" ]] && printf '%s\n' "${marker_body}" >"${root}/vers/nvm.${tool}"
-  if [[ "${bin_present}" == "1" ]]; then
-    touch "${root}/deno/bin/deno" "${root}/bun/bin/bun"
-  else
-    rm -f "${root}/deno/bin/deno" "${root}/bun/bin/bun"
-  fi
-
-  # Pin the tool under test; give the OTHER tool a matching marker + binary so it
-  # is a no-op and cannot pollute the assertion.
-  local deno_pin bun_pin
-  if [[ "${tool}" == deno ]]; then
-    deno_pin="${pin}"; bun_pin="9.9.9"
-    printf '9.9.9\n' >"${root}/vers/nvm.bun"; touch "${root}/bun/bin/bun"
-  else
-    bun_pin="${pin}"; deno_pin="9.9.9"
-    printf '9.9.9\n' >"${root}/vers/nvm.deno"; touch "${root}/deno/bin/deno"
-  fi
-
-  ( cd "${root}/run" && env \
-      PATH="${root}/stub:${DIST_BIN}/base-bin:${PATH}" \
-      CURL_FAIL="${curl_fail}" \
-      DENO_INSTALL="${root}/deno" \
-      BUN_INSTALL="${root}/bun" \
-      GLOBAL_STACK_DENO_VERSION="${deno_pin}" \
-      GLOBAL_STACK_BUN_VERSION="${bun_pin}" \
-      GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS="${root}/vers" \
-      GLOBAL_STACK_DOCKER_TOOLS_PATH="${root}" \
-      GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS="${root}/errors" \
-      GLOBAL_STACK_ERROR_TOKEN="nvm-test" \
-      bash "${NVM_TOOLS}" >/dev/null 2>&1 ) || true
-
-  local after="<none>"
-  [[ -f "${root}/vers/nvm.${tool}" ]] && after="$(cat "${root}/vers/nvm.${tool}")"
-  local present=0
-  [[ -f "${root}/${tool}/bin/${tool}" ]] && present=1
-  printf '%s|%s' "${after}" "${present}"
-}
-
-for _tool in deno bun; do
-  # absent marker, absent binary → install, marker written with the pin
-  _r="$(_nvm_tools_run "${_tool}" "" 1.2.3 0)"
-  assert_pass "24a: ${_tool} first install writes the marker" test "${_r}" = "1.2.3|1"
-
-  # marker == pin, binary present → skip, marker untouched
-  _r="$(_nvm_tools_run "${_tool}" 1.2.3 1.2.3 1)"
-  assert_pass "24b: ${_tool} marker matching the pin → skip" test "${_r}" = "1.2.3|1"
-
-  # marker != pin → reinstall, marker updated to the new pin. THE DEFECT: before
-  # row 16 this did nothing, because the guard only asked whether the binary existed.
-  _r="$(_nvm_tools_run "${_tool}" 1.2.3 1.2.4 1)"
-  assert_pass "24c: ${_tool} pin bumped → reinstall and marker updated" test "${_r}" = "1.2.4|1"
-
-  # marker says up to date but the artifact is gone (a hand-cleaned tools/ tree):
-  # must still install. Preserves the old exist-only behaviour as a floor.
-  _r="$(_nvm_tools_run "${_tool}" 1.2.3 1.2.3 0)"
-  assert_pass "24d: ${_tool} marker matches but binary missing → still installs" \
-    test "${_r}" = "1.2.3|1"
-
-  # a failed download must NOT leave a satisfied marker behind
-  _r="$(_nvm_tools_run "${_tool}" "" 1.2.3 0 1)"
-  assert_pass "24e: ${_tool} failed install writes no marker" test "${_r}" = "<none>|0"
-done
+# ─── Section 24: nvm-install-tools deno/bun version gate (row 16) — RETIRED ──
+# Row 16 made both blocks content-compared (they had been exist-only). Its stub curl
+# modelled the two installer scripts, deno's downloaded install.sh and bun's piped
+# `curl | bash`. Tranche 3 step 19 removed both installers, so that model no longer
+# describes anything shipped. Its five properties (first install, skip, bump, a marker
+# that outlives its binary, no marker after a failed install) are now proven
+# behaviourally in §71 against the real release layouts.
 
 # ─── Section 25: phpbrew-install-tools version gates (row 17) ─────────────
 printf '\n%b── Section 25: phpbrew-install-tools gates%b\n' "${C_BOLD}" "${C_RESET}"
@@ -4907,7 +4819,7 @@ mkdir -p "${_P63}/tools/go.gopath-aside/pkg"
 _o="$(_p63_run go 1.0.0)"
 assert_pass "63j2: go leftover aside AND a GOPATH on a current pin -> still FATAL (and says why), both kept" \
   bash -c '[[ "$1" == "rc=fail ver=1.0.0 marker=1.0.0 files=only-in-1.0.0 gopath=600 aside=yes" && -f "$2/tools/go.gopath-aside/pkg/other" ]] \
-    && grep -q "FATAL: both .* exist" "$2/last.log"' _ "${_o}" "${_P63}"
+    && grep -q "^FATAL: both .* exist" "$2/last.log"' _ "${_o}" "${_P63}"
 # The shape a killed reinstall really leaves on the next boot: base-start.sh runs
 # create-directories.sh (which mkdirs GOPATH) BEFORE install-go.sh, so GOPATH exists but
 # is EMPTY while the real one sits in the aside. That is not a conflict to merge by hand.
@@ -5110,7 +5022,7 @@ assert_pass "65d: 1.1.0 -> pin moved back to 1.0.0 (image rebuilt): wiped and re
 _p65_prep 1.0.0 1.0.0 1.0.0
 _o="$(_p65_run 1.1.0)"
 assert_pass "65e: image older than the pin (not rebuilt) -> FATAL naming the rebuild, old hurl untouched" \
-  bash -c '[[ "$1" == "rc=fail ver=1.0.0 fmt=1.0.0 marker=1.0.0 stale=yes" ]] && grep -q "rebuild" "$2/last.log"' _ "${_o}" "${_P65}"
+  bash -c '[[ "$1" == "rc=fail ver=1.0.0 fmt=1.0.0 marker=1.0.0 stale=yes" ]] && grep -q "^FATAL: .*rebuild 00base" "$2/last.log"' _ "${_o}" "${_P65}"
 _p65_prep none 1.0.0 1.0.0
 _o="$(_p65_run 1.1.0)"
 assert_pass "65f: image carries no compiled hurl -> WARN naming the rebuild, boot continues, old hurl untouched (ruling 2026-09-25)" \
@@ -5786,6 +5698,166 @@ done
 # but the FATAL then blames the wrong thing, so -f is pinned directly (the §68h shape).
 assert_pass "70h: fvm-start.sh has at least 1 executable curl call, and every one carries -f (floor + guard)" \
   bash -c 'calls="$(grep -vE "^[[:space:]]*#" "$1" | grep -oE "curl [^;|]*")"; [[ "$(grep -c . <<<"${calls}")" -ge 1 ]] && ! grep -vE "(^| )-[a-zA-Z]*f[a-zA-Z]*( |$)" <<<"${calls}" | grep -q .' _ "${_P70_FVM}"
+
+# ─── Section 71: deno and bun are checked in a temp dir before they replace the old one ──
+# Pin-audit tranche 3 step 19 (ruling 2026-09-26 11:17). deno ran a downloaded
+# install.sh in the cwd, the developer's /stack/projects; bun was `curl bun.sh/install |
+# bash`. Both removed the old binary and marker BEFORE fetching, so a failed download
+# lost a working tool, and neither was checked. The WHOLE script runs here with the real
+# prologue, so a FATAL is asserted by its error token. The fixtures mirror the real
+# release layouts [measured 2026-09-26: deno v2.9.7 zip holds `deno`, whose --version
+# prints three lines, the first `deno 2.9.7 (stable, release, x86_64-unknown-linux-gnu)`;
+# bun-v1.4.2's zip holds `bun-linux-x64/bun`, which prints `1.4.2`; the checksums are
+# `<hex>  <name>` in the asset's .sha256sum and in SHASUMS256.txt].
+printf '\n── Section 71: deno and bun checked in a temp dir before they replace the old one (tranche 3 step 19)\n'
+_P71="${TMP_DIR}/p71"
+mkdir -p "${_P71}/stub" "${_P71}/fix"
+cat >"${_P71}/stub/curl" <<'EOF'
+#!/bin/bash
+out="" url="" fail=0
+while (($#)); do
+  case "$1" in
+    -o) out="$2"; shift ;;
+    --connect-timeout|--max-time) shift ;;
+    -*) [[ "$1" == --* ]] || [[ "$1" != *f* ]] || fail=1 ;;
+    *) url="$1" ;;
+  esac
+  shift
+done
+printf '%s\n' "${url}" >>"${P71_LOG}"
+src="${P71_FIX}/${url#https://github.com/}"
+if [[ -f "${src}" && -n "${out}" ]]; then cat "${src}" >"${out}"; exit 0; fi
+if [[ -f "${src}" ]]; then cat "${src}"; exit 0; fi
+((fail)) && exit 22
+if [[ -n "${out}" ]]; then printf '<html>404 Not Found</html>\n' >"${out}"; else printf '<html>404 Not Found</html>\n'; fi
+EOF
+chmod +x "${_P71}/stub/curl"
+_p71_deno_bin() { # $1 = path, $2 = the version its first line reports
+  mkdir -p "$(dirname "$1")"
+  printf '#!/bin/sh\nprintf "deno %s (stable, release, x86_64-unknown-linux-gnu)\\nv8 15.0.245.2-rusty\\ntypescript 6.0.3\\n"\n' "$2" >"$1"
+  chmod 0755 "$1"
+}
+_p71_bun_bin() { # $1 = path, $2 = what it prints
+  mkdir -p "$(dirname "$1")"
+  printf '#!/bin/sh\necho %s\n' "$2" >"$1"
+  chmod 0755 "$1"
+}
+_p71_sum() { sha256sum "$1" | awk '{ print $1 }'; }
+# _p71_deno <tag> <reports|''=no member> <sum: ok|bad>
+_p71_deno() {
+  local d="${_P71}/fix/denoland/deno/releases/download/$1" b="${_P71}/build/deno/$1" z=deno-x86_64-unknown-linux-gnu.zip
+  rm -rf "${b}"; mkdir -p "${d}" "${b}"
+  if [[ -n "$2" ]]; then _p71_deno_bin "${b}/deno" "$2"; else printf 'x\n' >"${b}/README"; fi
+  (cd "${b}" && zip -q "${d}/${z}" ./*)
+  if [[ "$3" == ok ]]; then printf '%s  %s\n' "$(_p71_sum "${d}/${z}")" "${z}" >"${d}/${z}.sha256sum"
+  else printf '%064d  %s\n' 0 "${z}" >"${d}/${z}.sha256sum"; fi
+}
+# _p71_bun <tag> <reports|''=no member> <sum: ok|bad|unlisted>
+_p71_bun() {
+  local d="${_P71}/fix/oven-sh/bun/releases/download/$1" b="${_P71}/build/bun/$1" z=bun-linux-x64.zip
+  rm -rf "${b}"; mkdir -p "${d}" "${b}/bun-linux-x64"
+  if [[ -n "$2" ]]; then _p71_bun_bin "${b}/bun-linux-x64/bun" "$2"; else printf 'x\n' >"${b}/bun-linux-x64/README"; fi
+  (cd "${b}" && zip -qr "${d}/${z}" bun-linux-x64)
+  {
+    printf '%064d  bun-darwin-aarch64.zip\n' 1
+    case "$3" in
+      ok) printf '%s  %s\n' "$(_p71_sum "${d}/${z}")" "${z}" ;;
+      bad) printf '%064d  %s\n' 0 "${z}" ;;
+    esac
+    printf '%064d  bun-linux-x64-baseline.zip\n' 2
+  } >"${d}/SHASUMS256.txt"
+}
+_p71_deno v2.9.7 2.9.7 ok
+_p71_deno v2.9.8 2.9.8 ok
+_p71_deno v2.9.9 2.9.90 ok   # reports 2.9.90: the version must be followed by a space
+_p71_deno v2.10.0 2.10.0 bad # published checksum does not match
+_p71_deno v2.12.0 '' ok      # zip without `deno`
+_p71_bun bun-v1.4.2 1.4.2 ok
+_p71_bun bun-v1.4.3 1.4.3 ok
+_p71_bun bun-v1.5.0 1.5.0 unlisted # SHASUMS256.txt does not list bun-linux-x64.zip
+_p71_bun bun-v1.6.0 1.6.0 bad
+_p71_bun bun-v1.7.0 1.7.00 ok
+_p71_bun bun-v1.9.0 '' ok
+# An HTML page served as the zip, WITH a matching checksum: only the listing can refuse it.
+_P71_H="${_P71}/fix/denoland/deno/releases/download/v2.13.0"
+mkdir -p "${_P71_H}"
+printf '<html>not a zip</html>\n' >"${_P71_H}/deno-x86_64-unknown-linux-gnu.zip"
+printf '%s  deno-x86_64-unknown-linux-gnu.zip\n' "$(_p71_sum "${_P71_H}/deno-x86_64-unknown-linux-gnu.zip")" >"${_P71_H}/deno-x86_64-unknown-linux-gnu.zip.sha256sum"
+# v2.11.0 and bun-v1.8.0 are not published at all (curl -f exits 22).
+_P71_NT="${DIST_BIN}/nvm-bin/global-stack-nvm-install-tools.sh"
+# _p71_run <deno pin> <bun pin> <deno installed|''> <deno marker|''> <bun installed|''> <bun marker|''>
+_p71_run() {
+  local r="${_P71}/r" rc=0 dv bv bx
+  rm -rf "${r}"
+  mkdir -p "${r}/tools/versions" "${r}/tools/errors" "${r}/tools/deno/gen" "${r}/tools/bun" "${r}/projects" "${r}/tmp"
+  printf 'cache\n' >"${r}/tools/deno/gen/keep"
+  printf 'mine\n' >"${r}/projects/deno-insall.sh"
+  printf 'mine\n' >"${r}/projects/deno-x86_64-unknown-linux-gnu.zip"
+  [[ -z "$3" ]] || _p71_deno_bin "${r}/tools/deno/bin/deno" "$3"
+  [[ -z "$4" ]] || printf '%s\n' "$4" >"${r}/tools/versions/nvm.deno"
+  [[ -z "$5" ]] || { _p71_bun_bin "${r}/tools/bun/bin/bun" "$5"; ln -s "${r}/tools/bun/bin/bun" "${r}/tools/bun/bin/bunx"; }
+  [[ -z "$6" ]] || printf '%s\n' "$6" >"${r}/tools/versions/nvm.bun"
+  : >"${_P71}/curl.log"
+  (cd "${r}/projects" && env -i HOME="${r}" TMPDIR="${r}/tmp" PATH="${_P71}/stub:${DIST_BIN}/base-bin:/usr/bin:/bin" \
+    P71_FIX="${_P71}/fix" P71_LOG="${_P71}/curl.log" \
+    GLOBAL_STACK_ERROR_TOKEN=p71-token GLOBAL_STACK_DOCKER_TOOLS_PATH="${r}/tools" \
+    GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS="${r}/tools/errors" GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS="${r}/tools/versions" \
+    DENO_INSTALL="${r}/tools/deno" BUN_INSTALL="${r}/tools/bun" \
+    GLOBAL_STACK_DENO_VERSION="$1" GLOBAL_STACK_BUN_VERSION="$2" \
+    bash "${_P71_NT}") >"${_P71}/last.log" 2>&1 || rc=fail
+  dv="$({ "${r}/tools/deno/bin/deno" --version 2>/dev/null || true; } | awk 'NR == 1 { print $2 }')"
+  bv="$("${r}/tools/bun/bin/bun" --version 2>/dev/null || true)"
+  bx="$("${r}/tools/bun/bin/bunx" --version 2>/dev/null || true)"
+  printf 'rc=%s deno=%s dmarker=%s bun=%s bunx=%s bmarker=%s token=%s fatal=%s cache=%s projects=%s tmp=%s curls=%s' "${rc}" \
+    "${dv:-none}" "$(cat "${r}/tools/versions/nvm.deno" 2>/dev/null || echo none)" "${bv:-none}" "${bx:-none}" \
+    "$(cat "${r}/tools/versions/nvm.bun" 2>/dev/null || echo none)" \
+    "$(if [[ -e "${r}/tools/errors/p71-token" ]]; then echo 1; else echo 0; fi)" \
+    "$(grep -c '^FATAL: ' "${_P71}/last.log" || true)" \
+    "$(cat "${r}/tools/deno/gen/keep" 2>/dev/null || echo gone)" \
+    "$(if [[ "$(cat "${r}/projects/deno-insall.sh" "${r}/projects/deno-x86_64-unknown-linux-gnu.zip" 2>/dev/null)" == $'mine\nmine' && "$(ls -A "${r}/projects" | wc -l)" == 2 ]]; then echo intact; else echo touched; fi)" \
+    "$(ls -A "${r}/tmp" | wc -l)" "$(grep -c . "${_P71}/curl.log" || true)"
+}
+_P71_OK="token=0 fatal=0 cache=cache projects=intact tmp=0"
+assert_pass "71a: first install of both -> checked, installed, bunx made, markers last, deno's cache and the projects dir untouched" \
+  test "$(_p71_run v2.9.7 bun-v1.4.2 '' '' '' '')" = "rc=0 deno=2.9.7 dmarker=v2.9.7 bun=1.4.2 bunx=1.4.2 bmarker=bun-v1.4.2 ${_P71_OK} curls=4"
+assert_pass "71b: deno v2.9.7 -> pin v2.9.8 (bun current: not fetched)" \
+  test "$(_p71_run v2.9.8 bun-v1.4.2 2.9.7 v2.9.7 1.4.2 bun-v1.4.2)" = "rc=0 deno=2.9.8 dmarker=v2.9.8 bun=1.4.2 bunx=1.4.2 bmarker=bun-v1.4.2 ${_P71_OK} curls=2"
+assert_pass "71c: deno v2.9.8 -> pin moved back to v2.9.7" \
+  test "$(_p71_run v2.9.7 bun-v1.4.2 2.9.8 v2.9.8 1.4.2 bun-v1.4.2)" = "rc=0 deno=2.9.7 dmarker=v2.9.7 bun=1.4.2 bunx=1.4.2 bmarker=bun-v1.4.2 ${_P71_OK} curls=2"
+assert_pass "71d: bun 1.4.2 -> pin bun-v1.4.3, bunx follows" \
+  test "$(_p71_run v2.9.7 bun-v1.4.3 2.9.7 v2.9.7 1.4.2 bun-v1.4.2)" = "rc=0 deno=2.9.7 dmarker=v2.9.7 bun=1.4.3 bunx=1.4.3 bmarker=bun-v1.4.3 ${_P71_OK} curls=2"
+assert_pass "71e: bun 1.4.3 -> pin moved back to bun-v1.4.2" \
+  test "$(_p71_run v2.9.7 bun-v1.4.2 2.9.7 v2.9.7 1.4.3 bun-v1.4.3)" = "rc=0 deno=2.9.7 dmarker=v2.9.7 bun=1.4.2 bunx=1.4.2 bmarker=bun-v1.4.2 ${_P71_OK} curls=2"
+assert_pass "71f: both markers = pins -> nothing downloaded, nothing changed" \
+  test "$(_p71_run v2.9.7 bun-v1.4.2 2.9.7 v2.9.7 1.4.2 bun-v1.4.2)" = "rc=0 deno=2.9.7 dmarker=v2.9.7 bun=1.4.2 bunx=1.4.2 bmarker=bun-v1.4.2 ${_P71_OK} curls=0"
+assert_pass "71g: deno marker = pin but the binary is gone -> installed (the floor)" \
+  test "$(_p71_run v2.9.7 bun-v1.4.2 '' v2.9.7 1.4.2 bun-v1.4.2)" = "rc=0 deno=2.9.7 dmarker=v2.9.7 bun=1.4.2 bunx=1.4.2 bmarker=bun-v1.4.2 ${_P71_OK} curls=2"
+assert_pass "71g: bun marker = pin but the binary is gone -> installed, bunx made (the floor)" \
+  test "$(_p71_run v2.9.7 bun-v1.4.2 2.9.7 v2.9.7 '' bun-v1.4.2)" = "rc=0 deno=2.9.7 dmarker=v2.9.7 bun=1.4.2 bunx=1.4.2 bmarker=bun-v1.4.2 ${_P71_OK} curls=2"
+# Each bad pin also names the FATAL it must print: an unlisted asset would otherwise still be
+# refused (by the checksum compare), and the message would blame the wrong thing. Only the
+# FATAL line is searched: the prologue's failure dump quotes its ancestors' command lines.
+for _p71_bad in 'v2.9.9|reports 2.9.90|reports "deno 2.9.90 ' 'v2.10.0|checksum mismatch|does not match its published SHA-256' \
+  'v2.11.0|not published|could not be downloaded' 'v2.12.0|zip holds no deno|is not a zip holding deno ' \
+  'v2.13.0|an HTML page with a matching checksum|is not a zip holding deno '; do
+  IFS='|' read -r _p71_pin _p71_why _p71_msg <<<"${_p71_bad}"
+  assert_pass "71h: deno pin ${_p71_pin} (${_p71_why}) -> its named FATAL + error token, old deno and marker untouched, projects untouched" \
+    bash -c '[[ "$1" == "rc=fail deno=2.9.7 dmarker=v2.9.7 bun="*" token=1 fatal=1 cache=cache projects=intact "* ]] && grep "^FATAL: " "$3" | grep -qF "$2"' _ \
+    "$(_p71_run "${_p71_pin}" bun-v1.4.2 2.9.7 v2.9.7 1.4.2 bun-v1.4.2)" "${_p71_msg}" "${_P71}/last.log"
+done
+for _p71_bad in 'bun-v1.5.0|SHASUMS256.txt does not list the asset|lists no single checksum for bun-linux-x64.zip' \
+  'bun-v1.6.0|checksum mismatch|does not match its published SHA-256' 'bun-v1.7.0|reports 1.7.00|reports "1.7.00"' \
+  'bun-v1.8.0|not published|could not be downloaded' 'bun-v1.9.0|zip holds no bun|is not a zip holding bun-linux-x64/bun '; do
+  IFS='|' read -r _p71_pin _p71_why _p71_msg <<<"${_p71_bad}"
+  assert_pass "71i: bun pin ${_p71_pin} (${_p71_why}) -> its named FATAL + error token, old bun, bunx and marker untouched" \
+    bash -c '[[ "$1" == "rc=fail deno=2.9.7 dmarker=v2.9.7 bun=1.4.2 bunx=1.4.2 bmarker=bun-v1.4.2 token=1 fatal=1 cache=cache projects=intact "* ]] && grep "^FATAL: " "$3" | grep -qF "$2"' _ \
+    "$(_p71_run v2.9.7 "${_p71_pin}" 2.9.7 v2.9.7 1.4.2 bun-v1.4.2)" "${_p71_msg}" "${_P71}/last.log"
+done
+_p71_exec="$(grep -vE '^[[:space:]]*#' "${_P71_NT}")"
+assert_pass "71j: at least 2 executable curl calls, and every one carries -f (floor + guard)" \
+  bash -c 'calls="$(grep -oE "curl [^;|]*" <<<"$1")"; [[ "$(grep -c . <<<"${calls}")" -ge 2 ]] && ! grep -vE "(^| )-[a-zA-Z]*f[a-zA-Z]*( |$)" <<<"${calls}" | grep -q .' _ "${_p71_exec}"
+assert_pass "71k: no executable line pipes into bash or sh, and no installer script is fetched" \
+  bash -c '! grep -qE "\|[[:space:]]*(sudo[[:space:]]+)?(ba)?sh\b|install\.sh|bun\.sh/install|deno\.land/x/install" <<<"$1"' _ "${_p71_exec}"
 
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
