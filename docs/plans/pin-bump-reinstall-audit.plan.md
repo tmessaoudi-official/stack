@@ -35,6 +35,7 @@ version and its usage ! no implementation yet !"* — AUDIT ONLY; nothing below 
 - [2026-09-26 11:43] AGREED: prefix-baked sites (httpd, nginx, php.edge, rust, shared ModSecurity) use policy B — every input fetched and checked before the wipe, build at the final path, check the build, FATAL + error token on a build failure.
 - [2026-09-26 11:43] AGREED: caddy is built locally with xcaddy (new pin GLOBAL_STACK_XCADDY_VERSION, checksum-verified); add-package is dropped.
 - [2026-09-26 11:43] AGREED: phpMyAdmin and the ModSecurity-apache connector are SHA-tracked (use-sha annotations, the php.edge shape; phpMyAdmin TYPE=commit).
+- [2026-09-26 15:52] AGREED: the shared ModSecurity build drops `--with-lua` (no image installs a Lua dev package, no config uses Lua; configure then auto-detects and builds without it) — step 23a; it also needs `submodule update --init --recursive` (Mbed TLS's nested submodules), both measured in the 01caddy image.
 
 ## Formal Plan
 <!-- written at Phase 4 — tranche 1, APPROVED 2026-09-24 15:05 (steps 5-9; step 8 revised) -->
@@ -562,6 +563,10 @@ phpmyadmin/the ModSecurity connector if the floating-pin option is taken.
 **What is wiped (explicit, so it is ruled, not assumed):** caddy replaces `bin/caddy` only (vhosts/Caddyfile
 are regenerated every boot anyway); httpd/nginx wipe their tree EXCEPT `logs/` (the GRADLE_USER_HOME shape);
 everything else wipes its whole tree as today.
+The shared ModSecurity tree (step 23a) removes only libmodsecurity's source, lib and marker after
+its clone is checked; `mod_security/{tmp,logs,conf}` are kept (the setup scripts recreate them and
+re-sync conf/ every boot); a lib BUILD failure leaves no library, so the old `mod_security3.so` cannot
+load either — httpd/nginx are down until the next boot either way (policy B, accepted).
 
 ### Step 18 — fvm (S) · `fvm-bin/global-stack-fvm-start.sh:76-85`
 Today: downloads and `sudo rm -rf fvm-*.tar.gz fvm/` in cwd `/stack/projects` (panel P1). Fix: temp dir,
@@ -681,6 +686,31 @@ BEFORE the wipe, then wipe, build at the prefix, check `lib/libmodsecurity.so.3`
 at least one file (certain: `iou-common.sh:91` already chmods `bin/*`); `modsec-rules-check` running is a
 stronger check [Unverified: not read in v3.0.16's build — add only if the step confirms it is built]; CRS: clone into temp, check `crs-setup.conf.example` +
 `rules/` exist, then swap (relocatable). §75.
+**Done.** §75 51 checks + 30f2 (and `_ws_decision` now reads `_<srv>_want`, so 30e/30f cannot pass
+by comparing a composite gate to ""). Against the pre-change scripts §75 is 50 red / 2 green (the two
+"markers current" cases, behaviour that was already right). 24 sabotages, each red on its named check
+against a green §30+§75 baseline, restores byte-identical: sha256 neutered, Apache `*name` form
+rejected, listing/top-dir/`-v`/`-V`/`apachectl -t`/module checks off, wipe moved before the fetch,
+`logs/` not kept, apr-util out of the composite, marker before the iou, start.sh wipe re-added,
+`curl -f` stripped, downloads.apache.org, temp dir kept (iou and iou-common), gate on HTTPD_VERSION
+alone, submodules not `--recursive`, lib/CRS wiped before the clone, `.so.3` check off, `--with-lua`
+re-added, one iou-common copy drifting. Full suite 1018/1018. Real run of the SHIPPED iou-common + iou
+in the 01caddy image (its Dockerfile differs from 01httpd's only by a sysctl line, EXPOSE and CMD),
+scratch tools root: rc 0/0 in 1888 s — libmodsecurity v3.0.16 (`.so.3`, `modsec-rules-check`), CRS
+v4.29.0, `Apache/2.4.68`, `Compiled using: APR 1.7.6, APR-UTIL 1.6.5` (system apr-util is 1.6.3, so
+`--with-included-apr` is what makes the apr pins real), `mod_security3.so` RUNPATH → the lib (loads
+without LD_LIBRARY_PATH), `mod_auth_openidc.so`, `apachectl -t` Syntax OK with both loaded, logs kept,
+no token, no temp left. **Two pre-existing breaks fixed on the way, both measured:** the shared library
+could never build — `submodule update --init` leaves Mbed TLS's nested submodules empty ("Mbed TLS was
+not found"), and `--with-lua=<pkgconfig dir>` stops configure ("LUA was explicitly requested but not
+found"; ruling 15:52 dropped it). The shared wipe moved from BOTH start scripts into iou-common behind
+the clone (nginx-start.sh therefore in the Files cell); iou-common runs every boot and gates itself.
+The connector is SHA-tracked (`0488c77`, env-update resolves it `(up to date)`); a branch/tag ref
+still works. `(verify-asset:)` does not apply to the three svn annotations (it needs `(fetch-json:)`);
+the iou fails closed on a missing tarball before any wipe. **UNCERTIFIED-BY-EXECUTION:** a live
+01httpd boot through the new start.sh (no 01httpd image exists on this machine; httpd is not enabled
+here, so nothing live changes); the lib-bump reinstall path and every failure path are proven by
+stubs only. The nginx side of iou-common is byte-identical and stub-tested; nginx's own build is step 24.
 
 ### Step 24 — nginx (M) · `nginx-bin/global-stack-nginx-{start,iou}.sh`
 Today: wipe, `curl` of nginx.org tarball with no signature check, connector cloned into
@@ -746,7 +776,7 @@ until the developer rebuilds.
 | 21 | phpmyadmin: build + check in temp, then swap; SHA-tracked pin | M | done | 1f9bea5 | docker/config/dist/bin/phpmyadmin-bin/**, .env, bin/tests/startup-prologue.test.sh |
 | 21b | android verify: here-strings, no SIGPIPE on a long `sdk list` (verify + version read) | S | done | 9924ec6 | docker/config/dist/bin/android-bin/**, bin/tests/startup-prologue.test.sh |
 | 22 | caddy: xcaddy local build, composite gate, list-modules check | M | done | 8bc5158 | docker/config/dist/bin/caddy-bin/**, docker/images/01caddy/**, .env, bin/tests/startup-prologue.test.sh |
-| 23 | httpd + shared ModSecurity: archive tarballs + sha256, composite gate, build check | L | todo | - | docker/config/dist/bin/httpd-bin/**, docker/config/dist/bin/nginx-bin/global-stack-nginx-iou-common.sh, .env, bin/tests/startup-prologue.test.sh |
+| 23 | httpd + shared ModSecurity: archive tarballs + sha256, composite gate, build check | L | done | f49f7d7 | docker/config/dist/bin/httpd-bin/**, docker/config/dist/bin/nginx-bin/global-stack-nginx-iou-common.sh, docker/config/dist/bin/nginx-bin/global-stack-nginx-start.sh, .env, bin/tests/startup-prologue.test.sh |
 | 24 | nginx: PGP-verified tarball, connector in temp, composite gate, build check | M | todo | - | docker/config/dist/bin/nginx-bin/**, bin/tests/startup-prologue.test.sh |
 | 25 | php.edge: post-build php check before the sidecar marker | S | todo | - | docker/config/dist/bin/phpbrew-bin/**, bin/tests/startup-prologue.test.sh |
 | 26 | Docs + tranche-2 panel findings (CLAUDE.md hand-off, skill, .env comments, P3s) | M | todo | - | CLAUDE.md, .env, .claude/skills/bump-versions/**, docs/plans/**, docker/config/dist/bin/base-bin/**, docker/config/dist/bin/phpbrew-bin/** |
