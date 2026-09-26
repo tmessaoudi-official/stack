@@ -616,6 +616,22 @@ built JS exist, THEN wipe + move. The pin is `master`/`branch` (annotated `lock:
 equality gate can never see move — RULING NEEDED (floating pins): the php.edge shape, `(use-sha)
 (version-prefix:…) github:phpmyadmin/phpmyadmin` + `TYPE=commit`, so env-update advances a SHA the gate sees. §73.
 
+**AS BUILT (step 21):** the build moved from start.sh into phpmyadmin-iou.sh: the archive is downloaded with `-f`,
+listed, and the whole tree is built in a `mktemp -d` (release: checked against the published `.sha256`; branch/tag/
+commit: the GitHub archive whose top dir must be `phpmyadmin-<ref>`); `index.php` present and `vendor/autoload.php`
+loadable by `php`, THEN the old tree is removed and the new one moved in; the marker follows. `.env` is SHA-tracked
+(`(use-sha) (git:…) github:phpmyadmin/phpmyadmin master sha:…`, `TYPE=commit`, no version-prefix: the archive URL
+takes the bare sha) — env-update classifies it as a SHA record [Verified: `--check --filter=PHPMYADMIN`]. §73 15
+checks, sabotages red; §28d now counts one `_pma_install` guard. Real 04phpmyadmin image, writable scratch tools root,
+live php/node/composer read-only: rc 0 in 332 s, the old tree's files gone, autoload loads, temp dir removed, no
+token. Full suite 938/939: the one red is 43ac, the pre-existing android verify SIGPIPE race (Fragile, 2026-09-24),
+root-caused and fixed in the next commit; that run had the step-22 caddy drafts in the working tree. Follow-ups,
+not fixed: phpstan's `vendor/phpstan/extension-installer/src/GeneratedConfig.php` carries the (deleted) temp build
+path — dev-only, the old in-place build carried a live one; `--no-dev` would drop it. The composer.json
+`phpmyadmin`→`phpmyadminx` `sed -i` moved verbatim and asserts nothing — its reason is unrecorded, so a silent no-op
+stays the old behaviour rather than becoming a FATAL. `get-latest-version.sh` has no callers. `.env.local` still
+holds `master`/`branch` until the developer runs env-scan.
+
 ### Step 22 — caddy (M) · `caddy-bin/global-stack-caddy-{start,iou}.sh`
 Today: wipe, `go build` of the core, then `caddy add-package` ×4 — which DOWNLOADS a binary built by
 caddyserver.com's build service [Verified: `caddy help add-package` → "Downloads an updated Caddy binary"],
@@ -710,7 +726,7 @@ until the developer rebuilds.
 | 18 | fvm: temp-dir fetch, listing + --version, install, marker last | S | done | 033ba49 | docker/config/dist/bin/fvm-bin/**, bin/tests/startup-prologue.test.sh |
 | 19 | deno + bun: pinned zip + checksum, no installer script, no pipe | M | done | a6d2e63 | docker/config/dist/bin/nvm-bin/**, bin/tests/startup-prologue.test.sh |
 | 20 | rust: rustup-init checked before the wipe, rustc --version after | S | done | 5f41482 | docker/config/dist/bin/rust-bin/**, bin/tests/startup-prologue.test.sh |
-| 21 | phpmyadmin: build + check in temp, then swap; SHA-tracked pin | M | todo | - | docker/config/dist/bin/phpmyadmin-bin/**, .env, bin/tests/startup-prologue.test.sh |
+| 21 | phpmyadmin: build + check in temp, then swap; SHA-tracked pin | M | done | - | docker/config/dist/bin/phpmyadmin-bin/**, .env, bin/tests/startup-prologue.test.sh |
 | 22 | caddy: xcaddy local build, composite gate, list-modules check | M | todo | - | docker/config/dist/bin/caddy-bin/**, docker/images/01caddy/**, .env, bin/tests/startup-prologue.test.sh, bin/tests/compose-env-plumbing.test.sh |
 | 23 | httpd + shared ModSecurity: archive tarballs + sha256, composite gate, build check | L | todo | - | docker/config/dist/bin/httpd-bin/**, docker/config/dist/bin/nginx-bin/global-stack-nginx-iou-common.sh, .env, bin/tests/startup-prologue.test.sh |
 | 24 | nginx: PGP-verified tarball, connector in temp, composite gate, build check | M | todo | - | docker/config/dist/bin/nginx-bin/**, bin/tests/startup-prologue.test.sh |

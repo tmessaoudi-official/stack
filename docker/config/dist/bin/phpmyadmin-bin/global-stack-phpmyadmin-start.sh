@@ -54,42 +54,19 @@ if [ "${_pma_gate}" != "skip" ] || [ "${GLOBAL_STACK_RELOAD_PHPMYADMIN}" = "true
   _pma_install=1
 fi
 
+# Tranche 3 step 21 (§73): the iou downloads, builds and checks the new tree in a temp
+# dir and only then replaces the old one, so nothing is removed here any more. The marker
+# follows the iou's success.
 if [ "${_pma_install}" = "1" ]; then
-  rm -rf "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin" "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpmyadmin"
+  global-stack-phpmyadmin-iou.sh
+  printf '%s\n' "${_pma_want}" >"${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpmyadmin"
 fi
 
 mkdir -p "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin"
 
-if [ "${_pma_install}" = "1" ]; then
-  global-stack-phpmyadmin-iou.sh
-fi
-
 global-stack-phpmyadmin-sync-dist.sh
 
 cd "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin"
-
-if [ "${_pma_install}" = "1" ]; then
-  if [[ "${GLOBAL_STACK_PHPMYADMIN_TYPE_VERSION}" == "branch" ]]; then
-    sed -i 's/"name": "phpmyadmin\/phpmyadmin",/"name": "phpmyadmin\/phpmyadminx",/' "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin/composer.json" 
-    composer install --ignore-platform-reqs
-    yarn install
-    yarn build
-  elif [[ "${GLOBAL_STACK_PHPMYADMIN_TYPE_VERSION}" == "tag" ]]; then
-    sed -i 's/"name": "phpmyadmin\/phpmyadmin",/"name": "phpmyadmin\/phpmyadminx",/' "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin/composer.json" 
-    composer install --ignore-platform-reqs
-    yarn install
-    yarn build
-  elif [[ "${GLOBAL_STACK_PHPMYADMIN_TYPE_VERSION}" == "commit" ]]; then
-    sed -i 's/"name": "phpmyadmin\/phpmyadmin",/"name": "phpmyadmin\/phpmyadminx",/' "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin/composer.json" 
-    composer install --ignore-platform-reqs
-    yarn install
-    yarn build
-  fi
-  # Marker last, and INSIDE the install branch. It used to sit outside every
-  # condition, so it was refreshed on every boot and always matched — which is
-  # precisely why a version bump was invisible.
-  printf '%s\n' "${_pma_want}" >"${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpmyadmin"
-fi
 
 chmod 0444 "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin/config."*
 chmod 0640 "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin/config.secret.inc.php"

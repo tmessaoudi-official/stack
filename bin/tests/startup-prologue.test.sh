@@ -2116,9 +2116,11 @@ assert_fail "28c: awscli is NOT gated (it has no .env version var)" \
 PMA="${DIST_BIN}/phpmyadmin-bin/global-stack-phpmyadmin-start.sh"
 assert_pass "28d: phpmyadmin composes a version+type marker" \
   grep -q '^_pma_want=.*PHPMYADMIN_VERSION.*PHPMYADMIN_TYPE_VERSION' "${PMA}"
+# Tranche 3 step 21 moved the wipe and the build into the iou (checked in a temp dir,
+# §73), so start.sh keeps ONE gated branch: the iou call and the marker write after it.
 _pma_guards="$(grep -c '\[ "${_pma_install}" = "1" \]' "${PMA}" || true)"
-assert_pass "28d: all three phpmyadmin branches use the gate decision" \
-  test "${_pma_guards}" = "3"
+assert_pass "28d: start.sh's one phpmyadmin install branch uses the gate decision" \
+  test "${_pma_guards}" = "1"
 assert_fail "28e: no exist-only phpmyadmin marker guard remains" \
   grep -q '! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpmyadmin"' "${PMA}"
 # the marker write must now be indented INSIDE the install branch, not at column 0
@@ -5957,6 +5959,162 @@ assert_pass "72h: at least 2 executable curl calls in rust-iou.sh, and every one
   bash -c 'calls="$(grep -oE "curl [^;|]*" <<<"$1")"; [[ "$(grep -c . <<<"${calls}")" -ge 2 ]] && ! grep -vE "(^| )-[a-zA-Z]*f[a-zA-Z]*( |$)" <<<"${calls}" | grep -q .' _ "${_p72_exec}"
 assert_fail "72i: rust-start.sh no longer wipes RUSTUP_HOME or CARGO_HOME (the wipe moved behind the check)" \
   bash -c 'grep -vE "^[[:space:]]*#" "$1" | grep -qE "rm -rf[^#]*(RUSTUP_HOME|CARGO_HOME)"' _ "${DIST_BIN}/rust-bin/global-stack-rust-start.sh"
+
+# ─── Section 73: phpMyAdmin is built and checked in a temp dir before it replaces the old tree ──
+# Pin-audit tranche 3 step 21 (rulings 2026-09-26 11:17 and 11:43). start.sh wiped
+# tools/phpmyadmin and its marker BEFORE the iou fetched anything; the iou fetched GitHub
+# archives with `curl -LsS` (no -f, so a 404 page was "downloaded"), and composer + yarn
+# then built inside the live dir. A failed fetch or build left no phpMyAdmin. Now the iou
+# downloads, lists, builds and checks the whole tree in a temp dir; only then is the old
+# tree replaced. The marker is written by start.sh after the iou succeeded. The SHIPPED
+# start.sh block (gate -> iou -> marker) runs here with the REAL iou on PATH, against stub
+# curl/composer/yarn/php. A GitHub archive's top dir is `phpmyadmin-<ref>` with the FULL
+# sha for a commit [measured 2026-09-26: phpmyadmin-d711de93c358f03fbf46ee67cfaeb8bab0108331/],
+# so the listing is an identity check. A release zip's .sha256 reads `<hex>  <name>`.
+printf '\n── Section 73: phpMyAdmin built and checked in a temp dir before it replaces the old tree (tranche 3 step 21)\n'
+_P73="${TMP_DIR}/p73"
+mkdir -p "${_P73}/stub" "${_P73}/fix" "${_P73}/build"
+cat >"${_P73}/stub/curl" <<'EOF'
+#!/bin/bash
+out="" url="" fail=0
+while (($#)); do
+  case "$1" in
+    -o) out="$2"; shift ;;
+    --connect-timeout|--max-time) shift ;;
+    -*) [[ "$1" == --* ]] || [[ "$1" != *f* ]] || fail=1 ;;
+    *) url="$1" ;;
+  esac
+  shift
+done
+printf '%s\n' "${url}" >>"${P73_LOG}"
+src="${P73_FIX}/${url#https://}"
+if [[ -f "${src}" ]]; then cat "${src}" >"${out}"; exit 0; fi
+((fail)) && exit 22
+printf '<html>404</html>\n' >"${out}"
+EOF
+cat >"${_P73}/stub/composer" <<'EOF'
+#!/bin/bash
+[[ "$1" == install ]] || exit 0
+case "${PWD}" in "${GLOBAL_STACK_DOCKER_TOOLS_PATH}"/*) w=tools ;; *) w=tmp ;; esac
+printf '%s:%s\n' "${w}" "$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin/REV" 2>/dev/null || echo none)" >>"${P73_BLOG}"
+[[ "${P73_FAIL:-}" == composer ]] && { echo "composer: failed" >&2; exit 1; }
+grep -q '"name": "phpmyadmin/phpmyadminx",' composer.json || { echo "composer: name not rewritten" >&2; exit 3; }
+mkdir -p vendor && printf '<?php\n' >vendor/autoload.php
+EOF
+cat >"${_P73}/stub/yarn" <<'EOF'
+#!/bin/bash
+[[ "$1" == build ]] || exit 0
+[[ "${P73_FAIL:-}" == yarn ]] && { echo "yarn: build failed" >&2; exit 2; }
+mkdir -p public/js && printf 'runtime\n' >public/js/runtime.js
+EOF
+cat >"${_P73}/stub/php" <<'EOF'
+#!/bin/bash
+[[ "$1" == -r && -f "$3" ]]
+EOF
+cat >"${_P73}/stub/sudo" <<EOF
+#!/bin/bash
+for a in "\$@"; do
+  [[ "\${a}" != /* || "\${a}" == "${_P73}"/* ]] || { echo "REFUSED \${a}" >&2; exit 99; }
+done
+exec "\$@"
+EOF
+cat >"${_P73}/stub/global-stack-phpmyadmin-sync-dist.sh" <<'EOF'
+#!/bin/bash
+printf 'config\n' >"${GLOBAL_STACK_DOCKER_TOOLS_PATH}/phpmyadmin/config.inc.php"
+EOF
+chmod +x "${_P73}/stub/"*
+_P73_A=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+_P73_B=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+_P73_D=dddddddddddddddddddddddddddddddddddddddd
+_p73_src() { # $1 = archive path, $2 = top dir, $3 = rev
+  local b="${_P73}/build/$2"
+  rm -rf "${b}"; mkdir -p "${b}" "$(dirname "$1")"
+  printf '<?php\n' >"${b}/index.php"
+  printf '{\n    "name": "phpmyadmin/phpmyadmin",\n}\n' >"${b}/composer.json"
+  printf '%s\n' "$3" >"${b}/REV"
+  tar -C "${_P73}/build" -czf "$1" "$2"
+}
+_P73_GH="${_P73}/fix/github.com/phpmyadmin/phpmyadmin/archive"
+_p73_src "${_P73_GH}/${_P73_A}.tar.gz" "phpmyadmin-${_P73_A}" A
+_p73_src "${_P73_GH}/${_P73_B}.tar.gz" "phpmyadmin-${_P73_B}" B
+_p73_src "${_P73_GH}/${_P73_D}.tar.gz" "phpmyadmin-${_P73_A}" A   # served for D, but it is commit A
+_p73_src "${_P73_GH}/refs/heads/master.tar.gz" phpmyadmin-master M
+# Release zips are prebuilt (vendor included); 5.2.4's published checksum does not match.
+for _v in 5.2.3 5.2.4; do
+  _b="${_P73}/build/rel/phpMyAdmin-${_v}-all-languages"
+  mkdir -p "${_b}/vendor" "${_P73}/fix/files.phpmyadmin.net/phpMyAdmin/${_v}"
+  printf '<?php\n' >"${_b}/index.php"; printf '<?php\n' >"${_b}/vendor/autoload.php"; printf 'R%s\n' "${_v}" >"${_b}/REV"
+  _z="${_P73}/fix/files.phpmyadmin.net/phpMyAdmin/${_v}/phpMyAdmin-${_v}-all-languages.zip"
+  (cd "${_P73}/build/rel" && zip -qr "${_z}" "phpMyAdmin-${_v}-all-languages")
+  if [[ "${_v}" == 5.2.3 ]]; then printf '%s  %s\n' "$(sha256sum "${_z}" | awk '{ print $1 }')" "$(basename "${_z}")" >"${_z}.sha256"
+  else printf '%064d  %s\n' 0 "$(basename "${_z}")" >"${_z}.sha256"; fi
+done
+_P73_START="${DIST_BIN}/phpmyadmin-bin/global-stack-phpmyadmin-start.sh"
+awk '/^_pma_want=/{f=1} f{print} f && /^ *printf .*VERSIONS}\/phpmyadmin"$/{m=1} m && /^fi$/{exit}' "${_P73_START}" >"${_P73}/block.sh"
+assert_pass "73a: the extracted start.sh block holds the gate, the iou call and the marker write (anchor non-vacuity)" \
+  bash -c 'grep -q "^_pma_gate=" "$1" && grep -q "global-stack-phpmyadmin-iou.sh" "$1" && grep -q "VERSIONS}/phpmyadmin\"$" "$1"' _ "${_P73}/block.sh"
+# _p73_run <version> <type> <old rev|''> <marker|''> [RELOAD] → state
+_p73_run() {
+  local r="${_P73}/r" rc=0
+  rm -rf "${r}"
+  mkdir -p "${r}/tools/versions" "${r}/tools/errors" "${r}/tmp" "${r}/home"
+  if [[ -n "$3" ]]; then
+    mkdir -p "${r}/tools/phpmyadmin/vendor"
+    printf '%s\n' "$3" >"${r}/tools/phpmyadmin/REV"
+    printf 'old\n' >"${r}/tools/phpmyadmin/old-only.txt"
+    printf '<?php\n' >"${r}/tools/phpmyadmin/vendor/autoload.php"
+  fi
+  [[ -z "$4" ]] || printf '%s\n' "$4" >"${r}/tools/versions/phpmyadmin"
+  : >"${_P73}/curl.log"; : >"${_P73}/build.log"
+  env -i HOME="${r}/home" TMPDIR="${r}/tmp" PATH="${_P73}/stub:${DIST_BIN}/phpmyadmin-bin:${DIST_BIN}/base-bin:/usr/bin:/bin" \
+    P73_FIX="${_P73}/fix" P73_LOG="${_P73}/curl.log" P73_BLOG="${_P73}/build.log" P73_FAIL="${P73_FAIL:-}" \
+    GLOBAL_STACK_ERROR_TOKEN=p73-token GLOBAL_STACK_DOCKER_TOOLS_PATH="${r}/tools" \
+    GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS="${r}/tools/errors" GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS="${r}/tools/versions" \
+    GLOBAL_STACK_DOCKER_USER_ID="$(id -un)" GLOBAL_STACK_DOCKER_GROUP_ID="$(id -gn)" \
+    GLOBAL_STACK_PHPMYADMIN_VERSION="$1" GLOBAL_STACK_PHPMYADMIN_TYPE_VERSION="$2" GLOBAL_STACK_RELOAD_PHPMYADMIN="${5:-false}" \
+    bash -c 'set -eE -o pipefail; source "$1"; source "$2"' _ \
+    "${DIST_BIN}/base-bin/global-stack-base-version-gate.sh" "${_P73}/block.sh" >"${_P73}/last.log" 2>&1 || rc=fail
+  printf 'rc=%s build=%s rev=%s marker=%s oldonly=%s vendor=%s token=%s fatal=%s tmp=%s refused=%s curls=%s' "${rc}" \
+    "$(if [[ -s "${_P73}/build.log" ]]; then paste -sd, "${_P73}/build.log"; else echo none; fi)" \
+    "$(cat "${r}/tools/phpmyadmin/REV" 2>/dev/null || echo none)" \
+    "$(cat "${r}/tools/versions/phpmyadmin" 2>/dev/null || echo none)" \
+    "$(if [[ -e "${r}/tools/phpmyadmin/old-only.txt" ]]; then echo kept; else echo gone; fi)" \
+    "$(if [[ -f "${r}/tools/phpmyadmin/vendor/autoload.php" ]]; then echo yes; else echo no; fi)" \
+    "$(if [[ -e "${r}/tools/errors/p73-token" ]]; then echo 1; else echo 0; fi)" \
+    "$(grep -c '^FATAL: ' "${_P73}/last.log" || true)" "$(ls -A "${r}/tmp" | wc -l)" \
+    "$(grep -c REFUSED "${_P73}/last.log" || true)" "$(grep -c . "${_P73}/curl.log" || true)"
+}
+_P73_OK="oldonly=gone vendor=yes token=0 fatal=0 tmp=0 refused=0"
+assert_pass "73b: commit A -> pin commit B: built in a temp dir WHILE the old tree stayed live, then replaced whole, marker last" \
+  test "$(_p73_run "${_P73_B}" commit A "${_P73_A};type=commit")" = "rc=0 build=tmp:A rev=B marker=${_P73_B};type=commit ${_P73_OK} curls=1"
+assert_pass "73c: commit B -> pin moved back to commit A" \
+  test "$(_p73_run "${_P73_A}" commit B "${_P73_B};type=commit")" = "rc=0 build=tmp:B rev=A marker=${_P73_A};type=commit ${_P73_OK} curls=1"
+assert_pass "73d: first install (no tree, no marker)" \
+  test "$(_p73_run "${_P73_A}" commit '' '')" = "rc=0 build=tmp:none rev=A marker=${_P73_A};type=commit ${_P73_OK} curls=1"
+assert_pass "73e: marker = pin -> nothing downloaded or built, the tree untouched" \
+  test "$(_p73_run "${_P73_A}" commit A "${_P73_A};type=commit")" = "rc=0 build=none rev=A marker=${_P73_A};type=commit oldonly=kept vendor=yes token=0 fatal=0 tmp=0 refused=0 curls=0"
+assert_pass "73f: marker = pin but RELOAD_PHPMYADMIN=true -> rebuilt" \
+  test "$(_p73_run "${_P73_A}" commit A "${_P73_A};type=commit" true)" = "rc=0 build=tmp:A rev=A marker=${_P73_A};type=commit ${_P73_OK} curls=1"
+assert_pass "73g: type=branch master still builds (the old pin shape)" \
+  test "$(_p73_run master branch A "${_P73_A};type=commit")" = "rc=0 build=tmp:A rev=M marker=master;type=branch ${_P73_OK} curls=1"
+assert_pass "73h: type=release 5.2.3: zip checked against its published sha256, no build step" \
+  test "$(_p73_run 5.2.3 release A "${_P73_A};type=commit")" = "rc=0 build=none rev=R5.2.3 marker=5.2.3;type=release ${_P73_OK} curls=2"
+for _p73_bad in "cccccccccccccccccccccccccccccccccccccccc|commit|-|not published|could not be downloaded" \
+  "${_P73_D}|commit|-|the archive is another commit|does not hold phpmyadmin-${_P73_D}/index.php" \
+  "${_P73_B}|commit|composer|composer install fails|the build failed" \
+  "${_P73_B}|commit|yarn|yarn build fails|the build failed" \
+  "5.2.4|release|-|checksum mismatch|does not match its published SHA-256"; do
+  IFS='|' read -r _p73_v _p73_t _p73_f _p73_why _p73_msg <<<"${_p73_bad}"
+  [[ "${_p73_f}" == - ]] && _p73_f=""
+  assert_pass "73i: ${_p73_t} ${_p73_v:0:12} (${_p73_why}) -> its named FATAL + token, old tree and marker untouched, nothing left in tmp" \
+    bash -c '[[ "$1" == "rc=fail build="*" rev=A marker=$4;type=commit oldonly=kept vendor=yes token=1 fatal=1 "*" refused=0 "* ]] && grep "^FATAL: " "$3" | grep -qF "$2"' _ \
+    "$(P73_FAIL="${_p73_f}" _p73_run "${_p73_v}" "${_p73_t}" A "${_P73_A};type=commit")" "${_p73_msg}" "${_P73}/last.log" "${_P73_A}"
+done
+_p73_exec="$(grep -hvE '^[[:space:]]*#' "${DIST_BIN}/phpmyadmin-bin/global-stack-phpmyadmin-iou.sh")"
+assert_pass "73j: at least 2 executable curl calls in the iou, and every one carries -f (floor + guard)" \
+  bash -c 'calls="$(grep -oE "curl [^;|]*" <<<"$1")"; [[ "$(grep -c . <<<"${calls}")" -ge 2 ]] && ! grep -vE "(^| )-[a-zA-Z]*f[a-zA-Z]*( |$)" <<<"${calls}" | grep -q .' _ "${_p73_exec}"
+assert_fail "73k: start.sh no longer removes tools/phpmyadmin itself (the swap moved behind the check)" \
+  bash -c 'grep -vE "^[[:space:]]*#" "$1" | grep -qE "rm -rf[^#]*TOOLS_PATH}/phpmyadmin\""' _ "${_P73_START}"
 
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
