@@ -457,7 +457,8 @@ then drop the old dir and wipe `pkg.*`; the marker is written where it is today 
   published, checksum mismatch, tarball without the binary, an HTML page WITH a matching checksum, a `.00`
   version, no checksums.txt, a checksums.txt without the asset's line; 68g no executable line pipes into a
   shell; 68h every curl carries `-f`, counted per CALL with a floor of 4 — two composer calls share a
-  line). §67 gained castor (+7). Red first: 25 for the old code's reasons (fabpot's 404 page installed with
+  line). CORRECTED (6C): §68 is 29 checks, and castor added +8 to §67 (7 was its red count; 67e passes on
+  the old code) — 882 - 845 = 37 = 29 + 8. §67 gained castor. Red first: 25 for the old code's reasons (fabpot's 404 page installed with
   its marker; bad checksums and `.00` versions installed; the piped installers never fetching the pin),
   after a fixture fault was fixed first — the symfony tarball had `./symfony` members, which the real one
   does not. Sabotage C1-C10: C3 (drop the listing) SURVIVES by design — extracting a missing member fails
@@ -467,10 +468,11 @@ then drop the old dir and wipe `pkg.*`; the marker is written where it is today 
   sha256 equal to upstream's artifacts (castor equal to the live copy); symfony v5.20.0 → v5.17.1, mago
   1.49.0 → 1.48.0, castor v1.7.0 → v1.6.0, fabpot v2.1.3 → v2.1.2 and back; fabpot v9.9.9 → named FATAL
   with the working checker and marker kept; no-op; the 15a/15b tools untouched, no stray file, no temp
-  dir left on success [Verified: ran]. symfony v5.19.0 was skipped for the down run: it publishes no
-  checksums.txt.
+  dir left on success [Verified: ran]. CORRECTED (6C): symfony v5.19.0 and v5.18.0 are tags with NO
+  release (their tarball 404s too), which is why the down run used v5.17.1. 68g catches `| bash` but not
+  `bash <(curl …)` — same class, absent today. Step 15c commit: `ff79ee0`.
 
-### Step 16 — android SDK (M/L) — DESIGN FORK, needs a ruling
+### Step 16 — android SDK (S) — RULED 2026-09-24 23:55: option (a) only
 - Any change to the 14 SDK inputs wipes `ANDROID_HOME`, `ANDROID_SDK_HOME`, `ANDROID_SDK_ROOT` AND
   `GRADLE_USER_HOME` before a 15+ min multi-GB install (`android-start.sh:168-176`) [Verified: read]. A failed
   install leaves no SDK (the container stays up in `sleep infinity`, unhealthy with an error token).
@@ -479,6 +481,19 @@ then drop the old dir and wipe `pkg.*`; the marker is written where it is today 
   the new one is proven — costs a second full SDK on disk during the install. The AVDs under
   `ANDROID_SDK_HOME` are recreated by `setup-dist.sh` every boot, so (b) leaves them to that step rather
   than staging them [Inferred from §43's `_andd_probe`; to confirm]. Choices: (a) alone / (a)+(b) / leave.
+- AS BUILT (16): `GRADLE_USER_HOME` is dropped from the `sudo rm -rf` in `android-start.sh`; the SDK dirs and both
+  markers are still wiped whole. The line serves all three triggers — a changed SDK input, a missing
+  `android.cli` marker AND `RELOAD_ANDROID=true` — so RELOAD_ANDROID no longer clears the Gradle cache either
+  (the ruling is unqualified; step 17 corrects CLAUDE.md's "RELOAD = full reinstall" wording for android).
+  `setup.sh:35`'s `chmod -R a+rwx` / `chown -R` of `GRADLE_USER_HOME` now walk a preserved cache on each
+  reinstall — harmless, only slower on a large cache. §69: 6 checks run the SHIPPED gate→wipe→mkdir block,
+  extracted by anchors, under `env -i` with every path pinned into the test root and a stub `sudo` that refuses
+  any path outside it (69a proves the refusal, exit 99, before the block ever runs) — the block is a real
+  `sudo rm -rf` of variables an ordinary /stack shell exports. 69b-69d red first (`gradle=wiped` on all three
+  triggers); the sabotage re-adding `GRADLE_USER_HOME` reds the same three and was restored byte-identical;
+  69e (current → nothing wiped) guards the skip path. A fingerprint of the live `tools/android`, `tools/gradle`
+  and both markers was identical before and after every run. Suite 888/888. Certified by the §69 execution
+  only: no throwaway 04android run, a one-token change to a 15+ minute multi-GB reinstall path.
 
 ### Step 17 — docs (S)
 CLAUDE.md hand-off (runtimes now delete-after-install; staged go/zig/hurl; the php.edge exception), memory.
@@ -507,8 +522,8 @@ escape hatches keeping pkg markers; the `source X && cmd` class.
 | 12 | Package slots: cleanup only after the new install succeeded | M | done | f5075ed | docker/config/dist/bin/base-bin/**, docker/config/dist/bin/rbenv-bin/**, docker/config/dist/bin/sdkman-bin/**, bin/tests/startup-prologue.test.sh |
 | 13 | rbenv plugins reuse step 6's in-place tag move | S | done | 46e80a7 | docker/config/dist/bin/rbenv-bin/**, bin/tests/startup-prologue.test.sh |
 | 14 | go/zig/mise/hurl: check first, then wipe and install fresh (14a/14b/14c) | L | done | 8bae406 | docker/config/dist/bin/base-bin/**, docker/images/00base/**, bin/tests/startup-prologue.test.sh |
-| 15 | all 11 phpbrew tools: check first, then replace (15a/15b/15c) | L | done | - | docker/config/dist/bin/phpbrew-bin/**, bin/tests/startup-prologue.test.sh |
-| 16 | android: stop wiping GRADLE_USER_HOME | S | todo | - | docker/config/dist/bin/android-bin/**, bin/tests/startup-prologue.test.sh |
+| 15 | all 11 phpbrew tools: check first, then replace (15a/15b/15c) | L | done | ff79ee0 | docker/config/dist/bin/phpbrew-bin/**, bin/tests/startup-prologue.test.sh |
+| 16 | android: stop wiping GRADLE_USER_HOME | S | done | - | docker/config/dist/bin/android-bin/**, bin/tests/startup-prologue.test.sh |
 | 17 | Docs: CLAUDE.md tranche 2 (hand-off) | S | todo | - | CLAUDE.md |
 <!-- /progress-block -->
 ### Blocked
@@ -529,6 +544,10 @@ escape hatches keeping pkg markers; the `source X && cmd` class.
 - `RELOAD_PHP=true` (`phpbrew-start.sh:43`) removes `frankenphp-${GLOBAL_STACK_FRANKENPHP_VERSION}-<php name>` by the
   CURRENT frankenphp pin, so a frankenphp binary built under an older pin is orphaned. Same class step 11 fixed in
   the pin-bump cleanup (`902f08f`); this one is pre-existing and not a pin-bump path. Logged, not fixed.
+- A symfony-cli or fabpot release that ships no `checksums.txt`, or one that does not list the linux asset, is now
+  REFUSED at boot (named FATAL, old copy kept) where the old code installed it. Fail-closed by design (step 15c),
+  but it constrains future pins, and env-update's `github:` fetcher cannot pre-check it (`(verify-asset:)` is
+  `url`-only, row 42). Step 17 hand-off material.
 - `templates/shell/global-unu.sh:524` pipes `curl -sSL https://claude.ai/install.sh | bash` on the HOST: the same
   class step 15c removed from 02phpbrew (mago/castor). Host surface, outside tranche 2; logged, not fixed.
 - `/new-service` (`.claude/skills/new-service/SKILL.md`) scaffolds a startup script with NO version gate at all

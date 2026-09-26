@@ -165,8 +165,11 @@ fi
 # <<< android-marker-migration
 _android_gate="$(gs_version_gate "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/android.sdk" "${GS_ANDROID_SDK_WANT}" "android.sdk")"
 
+# The SDK is wiped whole before a reinstall; GRADLE_USER_HOME is not (pin-audit tranche 2
+# step 16, ruling 2026-09-24 23:55): Gradle's cache belongs to no SDK pin, so an SDK bump
+# or RELOAD_ANDROID=true keeps it. startup-prologue.test.sh section 69 runs this block.
 if [ "${_android_gate}" != "skip" ] || [ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/android.cli" ] || [ "${GLOBAL_STACK_RELOAD_ANDROID}" = "true" ]; then
-  sudo rm -rf "${ANDROID_HOME}" "${ANDROID_SDK_HOME}" "${ANDROID_SDK_ROOT}" "${GRADLE_USER_HOME}" "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/android.cli" "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/android.sdk"
+  sudo rm -rf "${ANDROID_HOME}" "${ANDROID_SDK_HOME}" "${ANDROID_SDK_ROOT}" "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/android.cli" "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/android.sdk"
 fi
 
 mkdir -p "${ANDROID_HOME}" "${ANDROID_SDK_HOME}/.android" "${ANDROID_SDK_ROOT}" "${GRADLE_USER_HOME}"

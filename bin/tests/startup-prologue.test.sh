@@ -5625,6 +5625,61 @@ assert_pass "68g: no executable line pipes into bash or sh" \
 assert_pass "68h: at least 4 executable curl calls (counted per call, not per line), and every one carries -f (floor + guard)" \
   bash -c 'c="$(grep -oE "curl [^;|]*" <<<"$1")"; n="$(grep -c . <<<"${c}")"; bad="$(grep -cvE "[[:space:]]-[a-zA-Z]*f[a-zA-Z]*[[:space:]]" <<<"${c}" || true)"; [[ "${n}" -ge 4 && "${bad}" == 0 ]]' _ "${_pt_exec}"
 
+# ─── Section 69: an android SDK reinstall keeps the Gradle cache ────────────
+# Pin-audit tranche 2 step 16 (ruling 2026-09-24 23:55, option a): every reinstall
+# trigger (a changed SDK input, a missing android.cli marker, RELOAD_ANDROID=true) wiped
+# GRADLE_USER_HOME together with the SDK. Gradle's cache belongs to no SDK pin; the SDK
+# wipe itself stays whole. The SHIPPED gate→wipe→mkdir block runs here, extracted by its
+# anchors. SAFETY: that block is a real `sudo rm -rf` of variables an ordinary /stack
+# shell exports, so it runs under env -i with every one of them pinned under ${_P69},
+# and the stub sudo refuses any path outside ${_P69} (69a proves the refusal first).
+printf '\n── Section 69: an android SDK reinstall keeps the Gradle cache (tranche 2 step 16)\n'
+_P69="${TMP_DIR}/p69"
+mkdir -p "${_P69}/stub"
+cat >"${_P69}/stub/sudo" <<EOF
+#!/bin/bash
+for a in "\$@"; do
+  [[ "\${a}" == -* || "\${a}" == "${_P69}"/* || "\${a}" == rm || "\${a}" == mkdir ]] || { echo "REFUSED \${a}" >&2; exit 99; }
+done
+exec "\$@"
+EOF
+chmod +x "${_P69}/stub/sudo"
+_P69_ANDR="${DIST_BIN}/android-bin/global-stack-android-start.sh"
+awk '/^_android_gate=/,/^mkdir -p "\$\{ANDROID_HOME\}"/' "${_P69_ANDR}" >"${_P69}/block.sh"
+assert_pass "69a: the stub sudo refuses a path outside the test root (exit 99) and runs one inside it (fail-safe proven first)" \
+  bash -c '"$1/stub/sudo" rm -rf /stack/tools/android; [[ $? == 99 ]] && mkdir -p "$1/x" && "$1/stub/sudo" rm -rf "$1/x" && [[ ! -e "$1/x" ]]' _ "${_P69}"
+assert_pass "69a: the extracted block holds the wipe and the mkdir (anchor non-vacuity)" \
+  bash -c 'grep -q "sudo rm -rf \"\${ANDROID_HOME}\"" "$1" && grep -q "^mkdir -p \"\${ANDROID_HOME}\"" "$1" && [[ "$(grep -c . "$1")" -ge 4 ]]' _ "${_P69}/block.sh"
+_p69_run() { # $1 = gate answer (skip|install), $2 = RELOAD_ANDROID, $3 = android.cli marker present (1|0) → state
+  local r="${_P69}/r" rc=0
+  rm -rf "${r}"
+  mkdir -p "${r}/tools/android/home/.android" "${r}/tools/android/platforms/x" "${r}/tools/gradle/caches/modules-2" "${r}/tools/versions"
+  : >"${r}/tools/android/platforms/x/f"
+  : >"${r}/tools/gradle/caches/modules-2/dep.jar"
+  printf 'want\n' >"${r}/tools/versions/android.sdk"
+  [[ "$3" == 1 ]] && printf 'cli\n' >"${r}/tools/versions/android.cli"
+  env -i PATH="${_P69}/stub:/usr/bin:/bin" P69_GATE="$1" \
+    ANDROID_HOME="${r}/tools/android" ANDROID_SDK_ROOT="${r}/tools/android" ANDROID_SDK_HOME="${r}/tools/android/home" \
+    GRADLE_USER_HOME="${r}/tools/gradle" GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS="${r}/tools/versions" \
+    GLOBAL_STACK_RELOAD_ANDROID="$2" GS_ANDROID_SDK_WANT=want \
+    bash -c 'set -euo pipefail; gs_version_gate() { printf "%s" "${P69_GATE}"; }; source "$1"' _ "${_P69}/block.sh" \
+    >"${_P69}/last.log" 2>&1 || rc=$?
+  printf 'rc=%s sdk=%s gradle=%s sdkmarker=%s climarker=%s refused=%s' "${rc}" \
+    "$(if [[ -e "${r}/tools/android/platforms/x/f" ]]; then echo kept; else echo wiped; fi)" \
+    "$(if [[ -e "${r}/tools/gradle/caches/modules-2/dep.jar" ]]; then echo kept; else echo wiped; fi)" \
+    "$(if [[ -e "${r}/tools/versions/android.sdk" ]]; then echo kept; else echo gone; fi)" \
+    "$(if [[ -e "${r}/tools/versions/android.cli" ]]; then echo kept; else echo gone; fi)" \
+    "$(grep -c REFUSED "${_P69}/last.log" || true)"
+}
+assert_pass "69b: an SDK input changed -> the SDK and both markers wiped, the Gradle cache kept" \
+  test "$(_p69_run install false 1)" = "rc=0 sdk=wiped gradle=kept sdkmarker=gone climarker=gone refused=0"
+assert_pass "69c: RELOAD_ANDROID=true -> the SDK wiped, the Gradle cache kept" \
+  test "$(_p69_run skip true 1)" = "rc=0 sdk=wiped gradle=kept sdkmarker=gone climarker=gone refused=0"
+assert_pass "69d: android.cli marker missing -> the SDK wiped, the Gradle cache kept" \
+  test "$(_p69_run skip false 0)" = "rc=0 sdk=wiped gradle=kept sdkmarker=gone climarker=gone refused=0"
+assert_pass "69e: everything current -> nothing wiped" \
+  test "$(_p69_run skip false 1)" = "rc=0 sdk=kept gradle=kept sdkmarker=kept climarker=kept refused=0"
+
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
 if [[ "${FAIL}" -eq 0 ]]; then
