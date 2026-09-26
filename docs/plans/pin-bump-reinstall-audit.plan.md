@@ -568,6 +568,12 @@ Today: downloads and `sudo rm -rf fvm-*.tar.gz fvm/` in cwd `/stack/projects` (p
 `curl -f`, listing must contain `fvm/fvm`, `fvm --version` = pin, `install -m 0755` into `tools/bin`, marker
 last. No checksum published for 4.3.1 [Verified: release assets]. Tests §70: bump up/down, bad tarball →
 named FATAL + old binary and marker untouched, projects dir untouched, no `rm` in cwd.
+**AS BUILT (`033ba49`):** §70 11 checks (up, down, first, current, RELOAD, four bad pins, `-f` floor+guard); six
+sabotages as predicted (S5 `-f` dropped survived until 70h was added). Real 02fvm container: real curl + the Dart
+binary, `sudo install` as `developer`, `4.3.1`, projects intact, no temp left. `RELOAD_FVM=true` still removes
+`tools/bin/fvm` earlier in the script by design (RELOAD = full wipe). Not covered: §70 pins `FVM_VERSION` and
+`GLOBAL_STACK_FVM_VERSION` to the same value, so the "fvm unplumbed var" audit item stays open. The temp dir leaks
+on a FATAL path (the prologue owns EXIT; same accepted shape as install-tools).
 
 ### Step 19 — deno + bun (M) · `nvm-bin/global-stack-nvm-install-tools.sh:14-51`
 Today: deno runs a downloaded `install.sh` in cwd; bun is `curl https://bun.sh/install | bash` (panel P1,
@@ -576,6 +582,13 @@ ruling "never pipe"); both `rm -rf` the binary + marker BEFORE fetching. Fix: pi
 line) [Verified: assets for v2.9.7 / bun-v1.4.2]; `unzip -l` listing; `deno --version` first line /
 `bun --version` = pin; `install -m 0755`; bun's `bunx` symlink recreated (the installer made it — verify
 before relying); no installer script at all. `unzip` + `sha256sum` present in 02nvm [Verified: image]. §71.
+**AS BUILT (`a6d2e63`):** §71 20 checks; §24 retired (its stubs modelled the removed installers; its five properties
+moved into §71, the binary-missing floor for BOTH tools). Ten sabotages red; B2 (unlisted asset) red only after each
+bad pin asserted its own FATAL text on `^FATAL: ` lines (the prologue's failure dump quotes ancestor command lines,
+memory `feedback-prologue-log-quotes-ancestors`). Behaviour change: `bun completions`, both installers' `~/.bashrc`
+edits and deno's shell setup are dropped (container home only, never `tools/`); `bunx` is linked explicitly (it came
+from `bun completions`). A deno FATAL stops bun's bump in the same boot (pre-existing order). Real 02nvm run: both
+installed from real zips, bunx works, projects intact, no token, no temp left, a second run downloads nothing.
 
 ### Step 20 — rust (S) · `rust-bin/global-stack-rust-start.sh:35-39`, `global-stack-rust-iou.sh`
 Today: wipes `RUSTUP_HOME` + `CARGO_HOME` before `rust-iou.sh` fetches rustup-init. Fix (prefix-baked
@@ -583,6 +596,16 @@ policy): rustup-init fetched + checksum-checked into the temp dir BEFORE the wip
 `rustc --version` must name `GLOBAL_STACK_RUST_VERSION` or FATAL. rustup verifies its own component hashes
 from the dist manifest [Unverified: recall — confirm in the step]. The fetch moves from iou to before the
 start.sh wipe; §58 (a rustup-only bump lands without a RUST wipe) must stay green. §72.
+**AS BUILT (`5f41482`):** the installer script is gone too: rust-iou.sh fetches the pinned `rustup-init` BINARY +
+`.sha256` (`<hex> *./rustup-init`) from static.rust-lang.org, the archive the installer used and the one 00base's
+Dockerfile already checks. The RUST gate and the wipe moved into rust-iou.sh, after the check; rustc is checked by
+path. Toolchain integrity = rustup's own per-component sha256 against the channel manifest [Verified: manifest
+`hash` fields; `src/dist/download.rs` at 1.29.1]. §58 rewritten to the binary model (11 checks kept), §72 15 checks;
+nine sabotages red where predicted (R1 redone as valid code). Real 02rust: an unpublished rustup-init FATALs with
+`jj`, the old toolchain and both markers kept; a real 1.98.0 → 1.98.1 bump wipes and reinstalls (rustc 1.98.1,
+rustup 1.29.1, `CARGO_HOME/env` present). The live `tools/bin/rustup.installer.sh` is orphaned; left in place. The
+five cargo tools reinstall after a wipe through their `command -v` floor (pre-existing, correct). Stale docs for
+step 26: CLAUDE.md:352 describes §58 as "rustup via its own `RUSTUP_VERSION` knob".
 
 ### Step 21 — phpmyadmin (M) · `phpmyadmin-bin/global-stack-phpmyadmin-{start,iou}.sh`
 Today: wipe first; branch/tag/commit fetched with `curl -LsS` (no `-f`), nothing checksummed; composer +
@@ -684,9 +707,9 @@ until the developer rebuilds.
 | 15 | all 11 phpbrew tools: check first, then replace (15a/15b/15c) | L | done | ff79ee0 | docker/config/dist/bin/phpbrew-bin/**, bin/tests/startup-prologue.test.sh |
 | 16 | android: stop wiping GRADLE_USER_HOME | S | done | 42b5eb2 | docker/config/dist/bin/android-bin/**, bin/tests/startup-prologue.test.sh |
 | 17 | Docs: CLAUDE.md tranche 2 (hand-off) | S | done | 3413222 | CLAUDE.md |
-| 18 | fvm: temp-dir fetch, listing + --version, install, marker last | S | todo | - | docker/config/dist/bin/fvm-bin/**, bin/tests/startup-prologue.test.sh |
-| 19 | deno + bun: pinned zip + checksum, no installer script, no pipe | M | todo | - | docker/config/dist/bin/nvm-bin/**, bin/tests/startup-prologue.test.sh |
-| 20 | rust: rustup-init checked before the wipe, rustc --version after | S | todo | - | docker/config/dist/bin/rust-bin/**, bin/tests/startup-prologue.test.sh |
+| 18 | fvm: temp-dir fetch, listing + --version, install, marker last | S | done | 033ba49 | docker/config/dist/bin/fvm-bin/**, bin/tests/startup-prologue.test.sh |
+| 19 | deno + bun: pinned zip + checksum, no installer script, no pipe | M | done | a6d2e63 | docker/config/dist/bin/nvm-bin/**, bin/tests/startup-prologue.test.sh |
+| 20 | rust: rustup-init checked before the wipe, rustc --version after | S | done | 5f41482 | docker/config/dist/bin/rust-bin/**, bin/tests/startup-prologue.test.sh |
 | 21 | phpmyadmin: build + check in temp, then swap; SHA-tracked pin | M | todo | - | docker/config/dist/bin/phpmyadmin-bin/**, .env, bin/tests/startup-prologue.test.sh |
 | 22 | caddy: xcaddy local build, composite gate, list-modules check | M | todo | - | docker/config/dist/bin/caddy-bin/**, docker/images/01caddy/**, .env, bin/tests/startup-prologue.test.sh, bin/tests/compose-env-plumbing.test.sh |
 | 23 | httpd + shared ModSecurity: archive tarballs + sha256, composite gate, build check | L | todo | - | docker/config/dist/bin/httpd-bin/**, docker/config/dist/bin/nginx-bin/global-stack-nginx-iou-common.sh, .env, bin/tests/startup-prologue.test.sh |
