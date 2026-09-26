@@ -771,7 +771,7 @@ PROBE_WIRING=(
   'rbenv-bin/global-stack-rbenv-start.sh|gs_version_gate "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/rbenv" "${GLOBAL_STACK_RBENV_VERSION#v}" "rbenv" >/dev/null'
   'sdkman-bin/global-stack-sdkman-start.sh|gs_version_gate "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/sdkman" "${GLOBAL_STACK_SDKMAN_VERSION}" "sdkman" >/dev/null'
   'fvm-bin/global-stack-fvm-start.sh|_fvm_gate="$(gs_version_gate "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/fvm" "${GLOBAL_STACK_FVM_VERSION}" "fvm")"'
-  'rust-bin/global-stack-rust-start.sh|gs_version_gate "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/rust" "${GLOBAL_STACK_RUST_VERSION}" "rust" >/dev/null'
+  'rust-bin/global-stack-rust-iou.sh|_rust_gate="$(gs_version_gate "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/rust" "${GLOBAL_STACK_RUST_VERSION}" "rust")"'
 )
 
 for pair in "${PROBE_WIRING[@]}"; do
@@ -4137,34 +4137,39 @@ done
 # over three lines, so the sed matched nothing and rustup floated to latest while
 # the rust-init marker (written BEFORE any install, from the pin) claimed the pin.
 # And the whole script ran only on a RUST mismatch, so a RUSTUP_INIT bump alone was
-# never reached. The stubs below model what was MEASURED against the real installers
-# (2026-09-24, scratch homes): the installer installs rustup at $RUSTUP_VERSION when
-# set (1.28.2 and 1.29.1 scripts both honour it) and at latest otherwise; re-running
-# it replaces rustup in EITHER direction; `rustup toolchain install` with
-# auto-self-update left enabled self-updates rustup to latest (observed 1.28.2 ->
+# never reached. Measured 2026-09-24 against the real installers (scratch homes):
+# re-running the install replaces rustup in EITHER direction; `rustup toolchain install`
+# with auto-self-update left enabled self-updates rustup to latest (observed 1.28.2 ->
 # 1.29.1: "info: downloading self-update"); the setting persists in settings.toml.
 printf '\n%b── Section 58: rustup-init honours its pin both ways (pin-audit pass 2)%b\n' "${C_BOLD}" "${C_RESET}"
 
+# Tranche 3 step 20 (2026-09-26): the installer script is gone. rust-iou.sh now fetches
+# the pinned rustup-init BINARY + its .sha256 from static.rust-lang.org and checks both
+# (and the binary's own --version) BEFORE anything is wiped. The stubs model what was
+# MEASURED for 1.29.1: the .sha256 line is `<hex> *./rustup-init`; `rustup-init --version`
+# prints `rustup-init 1.29.1 (d95a37b6a 2026-08-13)`; run with -y it installs itself as
+# ${CARGO_HOME}/bin/rustup (so rustup reports rustup-init's version) and writes
+# ${CARGO_HOME}/env; re-running it over an install replaces rustup and keeps toolchains.
 _P58="${TMP_DIR}/p58"
-mkdir -p "${_P58}/tpl"
+mkdir -p "${_P58}/tpl" "${_P58}/fix"
 cat >"${_P58}/tpl/curl" <<'STUB'
 #!/bin/bash
-echo curl >>"${P58_LOG}"
-while [ $# -gt 0 ]; do
-  if [ "$1" = -o ]; then cp "${P58_TPL}/installer" "$2"; shift; fi
+out="" url="" fail=0
+while (($#)); do
+  case "$1" in
+    -o) out="$2"; shift ;;
+    --connect-timeout|--max-time) shift ;;
+    -*) [[ "$1" == --* ]] || [[ "$1" != *f* ]] || fail=1 ;;
+    *) url="$1" ;;
+  esac
   shift
 done
-STUB
-cat >"${_P58}/tpl/installer" <<'STUB'
-#!/bin/bash
-echo "installer:${RUSTUP_VERSION:-unset}" >>"${P58_LOG}"
-v=9.9.9
-if [ "${P58_MODE}" = honour ] && [ -n "${RUSTUP_VERSION:-}" ]; then v="${RUSTUP_VERSION}"; fi
-mkdir -p "${CARGO_HOME}/bin" "${RUSTUP_HOME}"
-cp "${P58_TPL}/rustup" "${CARGO_HOME}/bin/rustup"
-chmod +x "${CARGO_HOME}/bin/rustup"
-printf '%s\n' "${v}" >"${CARGO_HOME}/bin/.ver"
-: >"${CARGO_HOME}/env"
+echo curl >>"${P58_LOG}"
+src="${P58_FIX}/${url#https://static.rust-lang.org/rustup/archive/}"
+src="${src/\/x86_64-unknown-linux-gnu\//\/}"
+if [[ -f "${src}" ]]; then cat "${src}" >"${out}"; exit 0; fi
+((fail)) && exit 22
+printf '<html>404</html>\n' >"${out}"
 STUB
 cat >"${_P58}/tpl/rustup" <<'STUB'
 #!/bin/bash
@@ -4174,40 +4179,78 @@ case "$1 $2" in
   "toolchain install")
     echo "toolchain:$3" >>"${P58_LOG}"
     [ "$(cat "${RUSTUP_HOME}/auto_self_update" 2>/dev/null)" = disable ] || echo 9.9.9 >"${CARGO_HOME}/bin/.ver"
+    mkdir -p "${RUSTUP_HOME}/toolchains/$3"
+    printf '#!/bin/sh\necho "rustc %s (stub 2026-01-01)"\n' "${P58_RUSTC:-$3}" >"${CARGO_HOME}/bin/rustc"
+    chmod +x "${CARGO_HOME}/bin/rustc"
     exit 0 ;;
   "default "*) echo "default:$2" >>"${P58_LOG}"; exit 0 ;;
 esac
 echo "rustup:$*" >>"${P58_LOG}"
 STUB
 chmod +x "${_P58}/tpl/"*
+# _p58_ri <version> <what --version reports> <sha: ok|bad|unlisted>
+_p58_ri() {
+  local d="${_P58}/fix/$1"
+  mkdir -p "${d}"
+  cat >"${d}/rustup-init" <<STUB
+#!/bin/bash
+if [ "\$1" = --version ]; then echo "rustup-init $2 (d95a37b6a 2026-08-13)"; exit 0; fi
+echo "rustup-init:$1:\$(IFS=_; echo "\$*")" >>"\${P58_LOG}"
+mkdir -p "\${CARGO_HOME}/bin" "\${RUSTUP_HOME}"
+cp "\${P58_TPL}/rustup" "\${CARGO_HOME}/bin/rustup"
+chmod +x "\${CARGO_HOME}/bin/rustup"
+printf '%s\n' "$1" >"\${CARGO_HOME}/bin/.ver"
+: >"\${CARGO_HOME}/env"
+STUB
+  case "$3" in
+    ok) printf '%s *./rustup-init\n' "$(sha256sum "${d}/rustup-init" | awk '{ print $1 }')" >"${d}/rustup-init.sha256" ;;
+    bad) printf '%064d *./rustup-init\n' 0 >"${d}/rustup-init.sha256" ;;
+    unlisted) printf '%s *./rustup-init.exe\n' "$(sha256sum "${d}/rustup-init" | awk '{ print $1 }')" >"${d}/rustup-init.sha256" ;;
+  esac
+}
+_p58_ri 1.28.2 1.28.2 ok
+_p58_ri 1.29.1 1.29.1 ok
+_p58_ri 1.29.2 1.29.20 ok   # reports another version: the space after the version is checked
+_p58_ri 1.29.3 1.29.3 bad
+_p58_ri 1.29.4 1.29.4 unlisted
+# 1.29.5 is not published (curl -f exits 22).
 
-# _p58_run <rustup pin> <rust-init marker|""> <installed rustup|""> <rust marker|""> <honour|ignore>
-#   → "rc=<n> rustup=<ver|none> init=<marker|none> rust=<marker|none> calls=<a,b,...>"
+# _p58_run <rustup pin> <rust-init marker|""> <installed rustup|""> <rust marker|""> [rust pin] [RELOAD_RUST]
+#   → "rc=<n> rustup=<ver|none> init=<marker|none> rust=<marker|none> rustc=<ver|none> jj=<kept|gone>
+#      token=<0|1> fatal=<n> calls=<a,b,...>"
+# An installed rustup comes with a planted ${CARGO_HOME}/bin/jj (a cargo-installed tool) and an
+# old toolchain dir: a RUST wipe must take both, anything else must leave them.
 _p58_run() {
   local d rc=0
   d="$(mktemp -d)"
-  mkdir -p "${d}/bin" "${d}/tools" "${d}/versions" "${d}/errors" "${d}/cargo" "${d}/rustup"
+  mkdir -p "${d}/bin" "${d}/tools" "${d}/versions" "${d}/errors" "${d}/cargo" "${d}/rustup" "${d}/tmp"
   cp "${_P58}/tpl/curl" "${d}/bin/curl"
   [[ -n "$2" ]] && printf '%s\n' "$2" >"${d}/versions/rust-init"
   [[ -n "$4" ]] && printf '%s\n' "$4" >"${d}/versions/rust"
   if [[ -n "$3" ]]; then
-    mkdir -p "${d}/cargo/bin"
+    mkdir -p "${d}/cargo/bin" "${d}/rustup/toolchains/old"
     cp "${_P58}/tpl/rustup" "${d}/cargo/bin/rustup"
     printf '%s\n' "$3" >"${d}/cargo/bin/.ver"
+    printf '#!/bin/sh\necho jj\n' >"${d}/cargo/bin/jj"
+    : >"${d}/cargo/env"
   fi
   : >"${d}/log"
-  env -i PATH="${d}/bin:${d}/tools:${d}/cargo/bin:${DIST_BIN}/base-bin:/usr/bin:/bin" HOME="${d}" \
-    P58_LOG="${d}/log" P58_TPL="${_P58}/tpl" P58_MODE="$5" \
+  env -i PATH="${d}/bin:${d}/tools:${d}/cargo/bin:${DIST_BIN}/base-bin:/usr/bin:/bin" HOME="${d}" TMPDIR="${d}/tmp" \
+    P58_LOG="${d}/log" P58_TPL="${_P58}/tpl" P58_FIX="${_P58}/fix" P58_RUSTC="${P58_RUSTC:-}" \
     CARGO_HOME="${d}/cargo" RUSTUP_HOME="${d}/rustup" \
     GLOBAL_STACK_ERROR_TOKEN=p58-token GLOBAL_STACK_DOCKER_TOOLS_PATH="${d}" \
     GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS="${d}/errors" GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN="${d}/tools" \
-    GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS="${d}/versions" \
-    GLOBAL_STACK_RUSTUP_INIT_VERSION="$1" GLOBAL_STACK_RUST_VERSION=1.98.1 \
-    bash "${DIST_BIN}/rust-bin/global-stack-rust-iou.sh" >/dev/null 2>&1 || rc=$?
-  printf 'rc=%s rustup=%s init=%s rust=%s calls=%s' "${rc}" \
+    GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS="${d}/versions" GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES="${d}/successes" \
+    GLOBAL_STACK_RUSTUP_INIT_VERSION="$1" GLOBAL_STACK_RUST_VERSION="${5:-1.98.1}" GLOBAL_STACK_RELOAD_RUST="${6:-false}" \
+    bash "${DIST_BIN}/rust-bin/global-stack-rust-iou.sh" >"${d}/out" 2>&1 || rc=$?
+  printf 'rc=%s rustup=%s init=%s rust=%s rustc=%s jj=%s token=%s fatal=%s tmp=%s calls=%s' "${rc}" \
     "$(cat "${d}/cargo/bin/.ver" 2>/dev/null || echo none)" \
     "$(cat "${d}/versions/rust-init" 2>/dev/null || echo none)" \
     "$(cat "${d}/versions/rust" 2>/dev/null || echo none)" \
+    "$({ "${d}/cargo/bin/rustc" --version 2>/dev/null || true; } | awk '{ print $2 }' | grep . || echo none)" \
+    "$(if [[ -e "${d}/cargo/bin/jj" && -d "${d}/rustup/toolchains/old" ]]; then echo kept; else echo gone; fi)" \
+    "$(if [[ -e "${d}/errors/p58-token" ]]; then echo 1; else echo 0; fi)" \
+    "$(grep -c '^FATAL: ' "${d}/out" || true)" "$(ls -A "${d}/tmp" | wc -l)" \
     "$(paste -sd, "${d}/log")"
   rm -rf "${d}"
 }
@@ -4217,38 +4260,36 @@ _p58_field() { # $1 = field name, $2 = _p58_run output
   return 0
 }
 
-assert_fail "58a: rust-iou.sh no longer sed-patches the downloaded installer" \
+assert_fail "58a: rust-iou.sh no longer sed-patches anything it downloads" \
   grep -q 'sed -i' "${DIST_BIN}/rust-bin/global-stack-rust-iou.sh"
 
 # RUSTUP_INIT bumped ALONE (rust current, rustup 1.28.2 installed and recorded).
-_o="$(_p58_run 1.29.1 1.28.2 1.28.2 1.98.1 honour)"
-assert_pass "58b: rustup-init pin bumped alone -> installed rustup moves UP to the pin (got: ${_o})" \
-  test "$(_p58_field rustup "${_o}")/$(_p58_field init "${_o}")/$(_p58_field rc "${_o}")" = "1.29.1/1.29.1/0"
-assert_pass "58c: ... and the installer was handed the pin through RUSTUP_VERSION" \
-  grep -q 'installer:1.29.1' <<<"$(_p58_field calls "${_o}")"
+_o="$(_p58_run 1.29.1 1.28.2 1.28.2 1.98.1)"
+assert_pass "58b: rustup-init pin bumped alone -> installed rustup moves UP to the pin, the toolchain and jj kept (got: ${_o})" \
+  test "$(_p58_field rustup "${_o}")/$(_p58_field init "${_o}")/$(_p58_field rc "${_o}")/$(_p58_field jj "${_o}")/$(_p58_field tmp "${_o}")" = "1.29.1/1.29.1/0/kept/0"
+assert_pass "58c: ... by running the checked rustup-init binary at the pin with the installer's arguments" \
+  grep -q 'rustup-init:1.29.1:-y_--profile_default_--default-toolchain_none' <<<"$(_p58_field calls "${_o}")"
 # Rolled back.
-_o="$(_p58_run 1.28.2 1.29.1 1.29.1 1.98.1 honour)"
+_o="$(_p58_run 1.28.2 1.29.1 1.29.1 1.98.1)"
 assert_pass "58d: rustup-init pin moved back -> installed rustup moves DOWN to the pin (got: ${_o})" \
-  test "$(_p58_field rustup "${_o}")/$(_p58_field init "${_o}")/$(_p58_field rc "${_o}")" = "1.28.2/1.28.2/0"
+  test "$(_p58_field rustup "${_o}")/$(_p58_field init "${_o}")/$(_p58_field rc "${_o}")/$(_p58_field jj "${_o}")" = "1.28.2/1.28.2/0/kept"
 # Steady state: no network.
-_o="$(_p58_run 1.29.1 1.29.1 1.29.1 1.98.1 honour)"
-assert_fail "58e: rustup-init current and rustup present -> no download, no installer run (got: ${_o})" \
-  grep -Eq 'curl|installer' <<<"$(_p58_field calls "${_o}")"
-# The marker is not trusted on its own: the pre-fix code wrote it from the PIN before
-# installing anything, so on a live install it records intent, not the binary. Marker
-# current + installed rustup stale must still reinstall.
-_o="$(_p58_run 1.29.1 1.29.1 1.28.2 1.98.1 honour)"
+_o="$(_p58_run 1.29.1 1.29.1 1.29.1 1.98.1)"
+assert_fail "58e: rustup-init current and rustup present -> no download, no rustup-init run (got: ${_o})" \
+  grep -Eq 'curl|rustup-init' <<<"$(_p58_field calls "${_o}")"
+# The marker is not trusted on its own: marker current + installed rustup stale must still reinstall.
+_o="$(_p58_run 1.29.1 1.29.1 1.28.2 1.98.1)"
 assert_pass "58k: marker says the pin but the installed rustup differs -> reinstall to the pin (got: ${_o})" \
   test "$(_p58_field rustup "${_o}")/$(_p58_field rc "${_o}")" = "1.29.1/0"
-# An installer that ignores the knob (upstream renames it) must fail loud, not record the pin.
-_o="$(_p58_run 1.29.1 1.28.2 1.28.2 1.98.1 ignore)"
-assert_pass "58f: installed rustup != pin after the install -> non-zero and the pin is NOT recorded (got: ${_o})" \
-  bash -c '[[ "$1" != 0 && "$2" != "1.29.1" ]]' _ "$(_p58_field rc "${_o}")" "$(_p58_field init "${_o}")"
+# A rustup-init whose --version is not the pin is refused before it runs.
+_o="$(_p58_run 1.29.2 1.28.2 1.28.2 1.98.1)"
+assert_pass "58f: the downloaded rustup-init reports 1.29.20 for pin 1.29.2 -> FATAL + token, never run, rustup and marker untouched (got: ${_o})" \
+  test "$(_p58_field rc "${_o}")/$(_p58_field rustup "${_o}")/$(_p58_field init "${_o}")/$(_p58_field token "${_o}")/$(_p58_field fatal "${_o}")/$(_p58_field jj "${_o}")" = "1/1.28.2/1.28.2/1/1/kept"
 # Fresh install (no markers, no rustup): toolchain installed, and rustup still at the pin
 # afterwards — i.e. auto-self-update was disabled BEFORE the toolchain install.
-_o="$(_p58_run 1.29.1 "" "" "" honour)"
-assert_pass "58g: fresh install -> rustup at the pin, toolchain 1.98.1 installed + default, rust marker written (got: ${_o})" \
-  test "$(_p58_field rustup "${_o}")/$(_p58_field rust "${_o}")/$(_p58_field rc "${_o}")" = "1.29.1/1.98.1/0"
+_o="$(_p58_run 1.29.1 "" "" "")"
+assert_pass "58g: fresh install -> rustup at the pin, toolchain 1.98.1 installed + default, rustc checked, rust marker written (got: ${_o})" \
+  test "$(_p58_field rustup "${_o}")/$(_p58_field rust "${_o}")/$(_p58_field rustc "${_o}")/$(_p58_field rc "${_o}")" = "1.29.1/1.98.1/1.98.1/0"
 assert_pass "58h: ... auto-self-update disabled before the toolchain install" \
   bash -c 'c="$1"; [[ "${c}" == *asu:disable*toolchain:1.98.1* && "${c}" == *default:1.98.1* ]]' _ "$(_p58_field calls "${_o}")"
 
@@ -5858,6 +5899,64 @@ assert_pass "71j: at least 2 executable curl calls, and every one carries -f (fl
   bash -c 'calls="$(grep -oE "curl [^;|]*" <<<"$1")"; [[ "$(grep -c . <<<"${calls}")" -ge 2 ]] && ! grep -vE "(^| )-[a-zA-Z]*f[a-zA-Z]*( |$)" <<<"${calls}" | grep -q .' _ "${_p71_exec}"
 assert_pass "71k: no executable line pipes into bash or sh, and no installer script is fetched" \
   bash -c '! grep -qE "\|[[:space:]]*(sudo[[:space:]]+)?(ba)?sh\b|install\.sh|bun\.sh/install|deno\.land/x/install" <<<"$1"' _ "${_p71_exec}"
+
+# ─── Section 72: a RUST bump checks rustup-init BEFORE it wipes the rust homes ──
+# Pin-audit tranche 3 step 20 (rulings 2026-09-26 11:17 and 11:43, policy B). rust-start.sh
+# wiped RUSTUP_HOME + CARGO_HOME on a RUST change and only then did rust-iou.sh fetch
+# rustup-init, so an unpublished or broken pin left no rust at all. The wipe now lives in
+# rust-iou.sh, AFTER rustup-init is downloaded and checked; a failed check leaves both
+# homes, the cargo-installed tools and every marker untouched. The toolchain itself is
+# downloaded by rustup after the wipe (rustup checks each component against the channel
+# manifest's sha256 [read: src/dist/download.rs at 1.29.1]); a rustc that does not report
+# the pin is FATAL and records no rust marker. Reuses §58's stubs and _p58_run.
+printf '\n── Section 72: a RUST bump checks rustup-init before it wipes the rust homes (tranche 3 step 20)\n'
+_o="$(_p58_run 1.29.1 1.29.1 1.29.1 1.98.0 1.98.1)"
+assert_pass "72a: RUST 1.98.0 -> pin 1.98.1: homes wiped (jj and the old toolchain gone), rustup reinstalled, rustc checked, markers last (got: ${_o})" \
+  test "$(_p58_field rc "${_o}")/$(_p58_field rustup "${_o}")/$(_p58_field init "${_o}")/$(_p58_field rust "${_o}")/$(_p58_field rustc "${_o}")/$(_p58_field jj "${_o}")/$(_p58_field token "${_o}")/$(_p58_field tmp "${_o}")" = "0/1.29.1/1.29.1/1.98.1/1.98.1/gone/0/0"
+_o="$(_p58_run 1.29.1 1.29.1 1.29.1 1.98.1 1.97.0)"
+assert_pass "72b: RUST pin moved back 1.98.1 -> 1.97.0: wiped and reinstalled at 1.97.0 (got: ${_o})" \
+  test "$(_p58_field rc "${_o}")/$(_p58_field rust "${_o}")/$(_p58_field rustc "${_o}")/$(_p58_field jj "${_o}")" = "0/1.97.0/1.97.0/gone"
+_o="$(_p58_run 1.29.1 1.29.1 1.29.1 1.98.1 1.98.1 true)"
+assert_pass "72c: RELOAD_RUST=true with everything current -> wiped and reinstalled (got: ${_o})" \
+  test "$(_p58_field rc "${_o}")/$(_p58_field rust "${_o}")/$(_p58_field jj "${_o}")/$(_p58_field rustup "${_o}")" = "0/1.98.1/gone/1.29.1"
+for _p72_bad in '1.29.2|reports 1.29.20|reports "rustup-init 1.29.20 ' '1.29.3|checksum mismatch|does not match its published SHA-256' \
+  '1.29.4|the .sha256 names another file|lists no single checksum' '1.29.5|not published|could not be downloaded'; do
+  IFS='|' read -r _p72_pin _p72_why _ <<<"${_p72_bad}"
+  _o="$(_p58_run "${_p72_pin}" 1.29.1 1.29.1 1.98.0 1.98.1)"
+  assert_pass "72d: RUST bump with rustup-init ${_p72_pin} (${_p72_why}) -> its named FATAL + token BEFORE any wipe: homes, jj, both markers untouched (got: ${_o})" \
+    test "$(_p58_field rc "${_o}")/$(_p58_field rustup "${_o}")/$(_p58_field init "${_o}")/$(_p58_field rust "${_o}")/$(_p58_field jj "${_o}")/$(_p58_field token "${_o}")/$(_p58_field fatal "${_o}")" = "1/1.29.1/1.29.1/1.98.0/kept/1/1"
+done
+# The FATAL text itself (the run's log is gone with its tmp dir, so assert it through a
+# second run that keeps only the FATAL lines).
+_p72_msg_of() { # $1 = rustup pin → the run's FATAL line(s)
+  local d rc=0
+  d="$(mktemp -d)"
+  mkdir -p "${d}/bin" "${d}/versions" "${d}/errors" "${d}/cargo/bin" "${d}/rustup" "${d}/tmp"
+  cp "${_P58}/tpl/curl" "${d}/bin/curl"
+  env -i PATH="${d}/bin:${DIST_BIN}/base-bin:/usr/bin:/bin" HOME="${d}" TMPDIR="${d}/tmp" P58_LOG="${d}/log" \
+    P58_TPL="${_P58}/tpl" P58_FIX="${_P58}/fix" CARGO_HOME="${d}/cargo" RUSTUP_HOME="${d}/rustup" \
+    GLOBAL_STACK_ERROR_TOKEN=p72 GLOBAL_STACK_DOCKER_TOOLS_PATH="${d}" GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS="${d}/errors" \
+    GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS="${d}/versions" GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES="${d}/successes" \
+    GLOBAL_STACK_RUSTUP_INIT_VERSION="$1" GLOBAL_STACK_RUST_VERSION=1.98.1 GLOBAL_STACK_RELOAD_RUST=false \
+    bash "${DIST_BIN}/rust-bin/global-stack-rust-iou.sh" >"${d}/out" 2>&1 || rc=$?
+  grep '^FATAL: ' "${d}/out" || true
+  rm -rf "${d}"
+}
+for _p72_bad in '1.29.2|reports "rustup-init 1.29.20 ' '1.29.3|does not match its published SHA-256' \
+  '1.29.4|lists no single checksum' '1.29.5|could not be downloaded'; do
+  assert_pass "72e: rustup-init ${_p72_bad%%|*} -> the FATAL says: ${_p72_bad#*|}" \
+    grep -qF "${_p72_bad#*|}" <<<"$(_p72_msg_of "${_p72_bad%%|*}")"
+done
+_o="$(P58_RUSTC=1.98.10 _p58_run 1.29.1 1.29.1 1.29.1 1.98.0 1.98.1)"
+assert_pass "72f: the toolchain install yields rustc 1.98.10 for pin 1.98.1 -> FATAL + token, NO rust marker (got: ${_o})" \
+  test "$(_p58_field rc "${_o}")/$(_p58_field rust "${_o}")/$(_p58_field token "${_o}")/$(_p58_field fatal "${_o}")" = "1/none/1/1"
+_p72_exec="$(grep -vE '^[[:space:]]*#' "${DIST_BIN}/rust-bin/global-stack-rust-iou.sh")"
+assert_pass "72g: rust-iou.sh fetches no installer script (no rustup-init.sh, no rustup.installer.sh), pipes nothing into a shell" \
+  bash -c '! grep -qE "rustup-init\.sh([^a-z0-9]|$)|rustup\.installer\.sh|\|[[:space:]]*(ba)?sh\b" <<<"$1"' _ "${_p72_exec}"
+assert_pass "72h: at least 2 executable curl calls in rust-iou.sh, and every one carries -f (floor + guard)" \
+  bash -c 'calls="$(grep -oE "curl [^;|]*" <<<"$1")"; [[ "$(grep -c . <<<"${calls}")" -ge 2 ]] && ! grep -vE "(^| )-[a-zA-Z]*f[a-zA-Z]*( |$)" <<<"${calls}" | grep -q .' _ "${_p72_exec}"
+assert_fail "72i: rust-start.sh no longer wipes RUSTUP_HOME or CARGO_HOME (the wipe moved behind the check)" \
+  bash -c 'grep -vE "^[[:space:]]*#" "$1" | grep -qE "rm -rf[^#]*(RUSTUP_HOME|CARGO_HOME)"' _ "${DIST_BIN}/rust-bin/global-stack-rust-start.sh"
 
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
