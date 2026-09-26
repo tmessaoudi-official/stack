@@ -104,10 +104,6 @@ fi
 # exactly `gate != skip` — but silent and repeated. Each gate is computed ONCE,
 # AFTER the RELOAD cleanup above (which may delete a marker), and reused by both
 # the cleanup blocks and the IOU decision, so a change is announced once per boot.
-_ngx_modsec_gate=skip
-if [[ -n "${GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION}" ]]; then
-  _ngx_modsec_gate="$(gs_version_gate "${HTTP_COMMON_MOD_SECURITY_VERSION_PATH}" "${GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION}" "http.mod_security")"
-fi
 _ngx_cjose_gate=skip
 if [[ -n "${GLOBAL_STACK_NGINX_CJOSE_VERSION}" ]]; then
   _ngx_cjose_gate="$(gs_version_gate "${NGINX_CJOSE_VERSION_PATH}" "${GLOBAL_STACK_NGINX_CJOSE_VERSION}" "nginx.cjose")"
@@ -116,21 +112,9 @@ _ngx_liboauth2_gate=skip
 if [[ -n "${GLOBAL_STACK_NGINX_LIBOAUTH2_VERSION}" ]]; then
   _ngx_liboauth2_gate="$(gs_version_gate "${NGINX_LIBOAUTH2_VERSION_PATH}" "${GLOBAL_STACK_NGINX_LIBOAUTH2_VERSION}" "nginx.liboauth2")"
 fi
-_ngx_crs_gate=skip
-if [[ -n "${GLOBAL_STACK_HTTP_CORERULESET_VERSION}" ]]; then
-  _ngx_crs_gate="$(gs_version_gate "${HTTP_COMMON_CORERULESET_VERSION_PATH}" "${GLOBAL_STACK_HTTP_CORERULESET_VERSION}" "http.coreruleset")"
-fi
-
-# Clean mod_security if version mismatch
-if [ "${_ngx_modsec_gate}" != "skip" ]; then
-  rm -rf \
-    "${MODSECURITY_SOURCE_LIB_PATH}" \
-    "${MODSECURITY_LIB_PATH}" \
-    "${HTTP_COMMON_MOD_SECURITY_VERSION_PATH}" \
-    "${MODSECURITY_TMP_PATH}" \
-    "${MODSECURITY_LOGS_PATH}" \
-    "${MODSECURITY_CONF_PATH}"
-fi
+# The shared ModSecurity library and the CoreRuleSet are no longer gated or wiped here:
+# iou-common gates them itself, runs on every boot, and fetches and checks before it
+# replaces anything (tranche 3 step 23, startup-prologue.test.sh §75).
 
 # Clean mod_auth_openidc if version mismatch
 if [ "${_ngx_cjose_gate}" != "skip" ]; then
@@ -148,29 +132,19 @@ if [ "${_ngx_liboauth2_gate}" != "skip" ]; then
     "${NGINX_LIBOAUTH2_VERSION_PATH}"
 fi
 
-# Clean CoreRuleSet if version mismatch
-if [ "${_ngx_crs_gate}" != "skip" ]; then
-  rm -rf \
-    "${CORERULESET_PATH}" \
-    "${HTTP_COMMON_CORERULESET_VERSION_PATH}"
-fi
-
 # Create temporary directory for nginx
 mkdir -p \
   "${NGINX_PATH}/tmp"
 
-# Run IOU setup for common HTTPd components if required
-if [[ "${GLOBAL_STACK_RELOAD_HTTP_COMMON}" == "true" ]] || \
-   [ "${_ngx_modsec_gate}" != "skip" ] || \
-   [ "${_ngx_crs_gate}" != "skip" ]; then
-  global-stack-nginx-iou-common.sh \
-    "${HTTP_COMMONS_PATH}" \
-    "${HTTP_COMMON_MOD_SECURITY_VERSION_PATH}" \
-    "${HTTP_COMMON_CORERULESET_VERSION_PATH}" \
-    "${MODSECURITY_SOURCE_LIB_PATH}" \
-    "${MODSECURITY_LIB_PATH}" \
-    "${CORERULESET_PATH}"
-fi
+# The shared ModSecurity library + CoreRuleSet: iou-common gates them itself (a current
+# marker is a no-op), so it runs on every boot, before the nginx iou that links the library.
+global-stack-nginx-iou-common.sh \
+  "${HTTP_COMMONS_PATH}" \
+  "${HTTP_COMMON_MOD_SECURITY_VERSION_PATH}" \
+  "${HTTP_COMMON_CORERULESET_VERSION_PATH}" \
+  "${MODSECURITY_SOURCE_LIB_PATH}" \
+  "${MODSECURITY_LIB_PATH}" \
+  "${CORERULESET_PATH}"
 
 # Install nginx if necessary
 if [[ ! -f "${NGINX_VERSIONS_PATH}" || "${GLOBAL_STACK_RELOAD_NGINX}" == "true" ]]; then

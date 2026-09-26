@@ -40,6 +40,7 @@ stackCatch() {
 trap 'stackCatch $? ${LINENO} "${BASH_COMMAND}"' ERR EXIT
 
 # Define reusable paths passed as arguments
+# shellcheck disable=SC2034 # kept for the positional contract both start.sh call sites use
 HTTP_COMMONS_PATH="${1}"
 HTTP_COMMON_MOD_SECURITY_VERSION_PATH="${2}"
 HTTP_COMMON_CORERULESET_VERSION_PATH="${3}"
@@ -53,69 +54,76 @@ CORERULESET_PATH="${6}"
 # returns `install` (silent) rather than `reinstall`.
 source global-stack-base-version-gate.sh
 
-# Install ModSecurity if needed
-if [[ -n "${GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION}" ]] && \
-   [ "$(gs_version_gate "${HTTP_COMMON_MOD_SECURITY_VERSION_PATH}" "${GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION}" "http.mod_security")" != "skip" ]; then
-  
-  # Create directory for the ModSecurity source & lib
-  mkdir -p \
-    "${MODSECURITY_SOURCE_LIB_PATH}" \
-    "${MODSECURITY_LIB_PATH}"
-  
-  # Clone the ModSecurity repository
-  git clone --progress \
-    --branch "${GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION}" \
-    https://github.com/SpiderLabs/ModSecurity.git \
-    --depth 1 \
-    "${MODSECURITY_SOURCE_LIB_PATH}"
-  
-  # Configure Git and update submodules
-  git -C "${MODSECURITY_SOURCE_LIB_PATH}" config core.fileMode false
-  git -C "${MODSECURITY_SOURCE_LIB_PATH}" submodule update --init
-  
-  # Build and install ModSecurity
-  cd "${MODSECURITY_SOURCE_LIB_PATH}"
-  ./build.sh
-  CFLAGS="-Og" ./configure \
-    --prefix="${MODSECURITY_LIB_PATH}" \
-    --enable-shared \
-    --with-lua=/usr/lib/x86_64-linux-gnu/pkgconfig/
-  make
-  make install
+# Tranche 3 step 23a (startup-prologue.test.sh §75). This body is byte-identical in
+# httpd- and nginx-iou-common.sh (§75 guards it): the two web servers are alternatives
+# sharing one tree and one pair of markers.
+# The ModSecurity library is PREFIX-BAKED (policy B, ruling 2026-09-26 11:43): its source is
+# cloned and checked in a temp dir BEFORE anything is removed, so a failed fetch leaves the
+# old library working; then the old library is removed, the new one is built at its prefix
+# and checked. A BUILD failure therefore leaves no library - the accepted trade: the web
+# server writes its error token and its consumers fail fast on it. The CoreRuleSet is plain
+# files, so it is cloned and checked in the temp dir and only then swapped in. mod_security's
+# tmp/, logs/ and conf/ are kept (they were wiped before): the setup scripts recreate them
+# and re-sync conf/ on every boot.
+_hc_fatal() {
+  printf 'FATAL: %s\n' "$1" >&2
+  rm -rf "${_hc_dl:-}"
+  exit 1
+}
+_hc_dl="$(mktemp -d)"
 
-  cd "${HTTP_COMMONS_PATH}"
-
-  rm -rf \
-    "${MODSECURITY_SOURCE_LIB_PATH}"
-
-  find ${MODSECURITY_LIB_PATH}/bin -type f -exec sudo chmod a+x {} \;
-  
-  # Save the installed version
-  echo "${GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION}" > "${HTTP_COMMON_MOD_SECURITY_VERSION_PATH}"
+if [[ -n "${GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION}" ]] \
+  && [[ "$(gs_version_gate "${HTTP_COMMON_MOD_SECURITY_VERSION_PATH}" "${GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION}" "http.mod_security")" != "skip" ]]; then
+  _hc_ms="${_hc_dl}/modsecurity"
+  # --recursive: Mbed TLS (others/mbedtls) carries its own submodule, and without it
+  # v3.0.16's configure stops at "Mbed TLS was not found" [measured, 01caddy image] - the
+  # plain --init used before could not build this library at all.
+  if ! git clone --progress --branch "${GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION}" --depth 1 \
+    https://github.com/SpiderLabs/ModSecurity.git "${_hc_ms}" \
+    || ! git -C "${_hc_ms}" config core.fileMode false \
+    || ! git -C "${_hc_ms}" submodule update --init --recursive; then
+    _hc_fatal "ModSecurity ${GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION} could not be cloned - the old library left as it was"
+  fi
+  if [[ ! -f "${_hc_ms}/build.sh" ]]; then
+    _hc_fatal "ModSecurity ${GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION}: the clone holds no build.sh - the old library left as it was"
+  fi
+  # Checked: from here on the old library is replaced.
+  rm -rf "${MODSECURITY_SOURCE_LIB_PATH}" "${MODSECURITY_LIB_PATH}" "${HTTP_COMMON_MOD_SECURITY_VERSION_PATH}"
+  mkdir -p "${MODSECURITY_LIB_PATH}"
+  # No --with-lua (ruling 2026-09-26 15:52): it made configure stop at "LUA was explicitly
+  # requested but not found" - no image installs a Lua dev package and no rule here uses
+  # Lua - so configure now auto-detects it and builds without.
+  if ! (cd "${_hc_ms}" \
+    && ./build.sh \
+    && CFLAGS="-Og" ./configure --prefix="${MODSECURITY_LIB_PATH}" --enable-shared \
+    && make \
+    && make install); then
+    _hc_fatal "ModSecurity ${GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION}: the build failed - the old library is already removed (prefix-baked), fix the cause and restart"
+  fi
+  if [[ ! -e "${MODSECURITY_LIB_PATH}/lib/libmodsecurity.so.3" ]] || ! compgen -G "${MODSECURITY_LIB_PATH}/bin/*" >/dev/null; then
+    _hc_fatal "ModSecurity ${GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION}: the build installed no lib/libmodsecurity.so.3 or nothing in bin/"
+  fi
+  find "${MODSECURITY_LIB_PATH}/bin" -type f -exec sudo chmod a+x {} \;
+  printf '%s\n' "${GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION}" >"${HTTP_COMMON_MOD_SECURITY_VERSION_PATH}"
 fi
 
-# Install Core Rule Set if needed
-if [[ -n "${GLOBAL_STACK_HTTP_CORERULESET_VERSION}" ]] && \
-   [ "$(gs_version_gate "${HTTP_COMMON_CORERULESET_VERSION_PATH}" "${GLOBAL_STACK_HTTP_CORERULESET_VERSION}" "http.coreruleset")" != "skip" ]; then
-  
-  # Create directory for Core Rule Set
-  mkdir -p \
-    "${CORERULESET_PATH}"
-  
-  # Clone the Core Rule Set repository
-  git clone --progress \
-    --branch "${GLOBAL_STACK_HTTP_CORERULESET_VERSION}" \
-    https://github.com/coreruleset/coreruleset.git \
-    --depth 1 \
-    "${CORERULESET_PATH}"
-  
-  # Configure Git and update submodules
-  git -C "${CORERULESET_PATH}" config core.fileMode false
-  git -C "${CORERULESET_PATH}" submodule update --init
-  
-  # Copy the example setup config
-  cp "${CORERULESET_PATH}/crs-setup.conf.example" "${CORERULESET_PATH}/crs-setup.conf"
-  
-  # Save the installed version
-  echo "${GLOBAL_STACK_HTTP_CORERULESET_VERSION}" > "${HTTP_COMMON_CORERULESET_VERSION_PATH}"
+if [[ -n "${GLOBAL_STACK_HTTP_CORERULESET_VERSION}" ]] \
+  && [[ "$(gs_version_gate "${HTTP_COMMON_CORERULESET_VERSION_PATH}" "${GLOBAL_STACK_HTTP_CORERULESET_VERSION}" "http.coreruleset")" != "skip" ]]; then
+  _hc_crs="${_hc_dl}/coreruleset"
+  if ! git clone --progress --branch "${GLOBAL_STACK_HTTP_CORERULESET_VERSION}" --depth 1 \
+    https://github.com/coreruleset/coreruleset.git "${_hc_crs}" \
+    || ! git -C "${_hc_crs}" config core.fileMode false; then
+    _hc_fatal "CoreRuleSet ${GLOBAL_STACK_HTTP_CORERULESET_VERSION} could not be cloned - the old rules left as they were"
+  fi
+  if [[ ! -f "${_hc_crs}/crs-setup.conf.example" || ! -d "${_hc_crs}/rules" ]]; then
+    _hc_fatal "CoreRuleSet ${GLOBAL_STACK_HTTP_CORERULESET_VERSION}: the clone holds no crs-setup.conf.example or rules/ - the old rules left as they were"
+  fi
+  cp "${_hc_crs}/crs-setup.conf.example" "${_hc_crs}/crs-setup.conf"
+  # Checked: from here on the old rules are replaced.
+  rm -rf "${CORERULESET_PATH}"
+  mkdir -p "${CORERULESET_PATH%/*}"
+  mv "${_hc_crs}" "${CORERULESET_PATH}"
+  printf '%s\n' "${GLOBAL_STACK_HTTP_CORERULESET_VERSION}" >"${HTTP_COMMON_CORERULESET_VERSION_PATH}"
 fi
+
+rm -rf "${_hc_dl}"

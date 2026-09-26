@@ -2284,6 +2284,10 @@ _ws_decision() {
   { printf '#!/bin/bash\nset -e\n'
     printf 'source global-stack-base-version-gate.sh\n'
     printf '%s="%s/vers/%s"\n' "${pathvar}" "${root}" "${marker}"
+    # A composite gate (caddy step 22, httpd step 23) compares against `_<srv>_want`;
+    # without that line the gate compared the marker to "" and a bump "reinstalled"
+    # for the wrong reason. The `_want` of an unset plugin pin is simply empty here.
+    grep -m1 "^${anchor%_gate}_want=" "${file}" || true
     grep -m1 "^${anchor}" "${file}" || true
     printf 'printf "DECISION=%%s\\n" "${%s:-<no-gate>}"\n' "${anchor%%=*}"
   } >"${root}/block.sh"
@@ -2298,6 +2302,12 @@ assert_pass "30e: nginx bumped pin → reinstall" \
   test "$(_ws_decision _ngx_gate nginx 1.0 1.1 GLOBAL_STACK_NGINX_VERSION NGINX_VERSIONS_PATH "${DIST_BIN}/nginx-bin/global-stack-nginx-start.sh")" = "reinstall"
 assert_pass "30f: httpd bumped pin → reinstall" \
   test "$(_ws_decision _httpd_gate httpd 2.4.1 2.4.2 GLOBAL_STACK_HTTPD_VERSION HTTPD_VERSIONS_PATH "${DIST_BIN}/httpd-bin/global-stack-httpd-start.sh")" = "reinstall"
+# _ws_decision uses `env`, not `env -i` (PATH must survive), so the other five pins are
+# INHERITED from whatever shell runs the suite - a /stack login shell exports them all. The
+# expected marker is therefore built from that same environment (the §27 lesson).
+_ws_httpd_body="tags/2.4.2;apr=${GLOBAL_STACK_HTTPD_APR_VERSION:-};apr-util=${GLOBAL_STACK_HTTPD_APR_UTIL_VERSION:-};modsec-lib=${GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION:-};modsec-apache=${GLOBAL_STACK_HTTPD_MODSECURITY_MOD_VERSION:-};openidc=${GLOBAL_STACK_HTTPD_MOD_AUTH_OPENIDC_VERSION:-}"
+assert_pass "30f2: httpd composite unchanged → skip (proves the _httpd_want line is read, not compared to \"\")" \
+  test "$(_ws_decision _httpd_gate httpd "${_ws_httpd_body}" tags/2.4.2 GLOBAL_STACK_HTTPD_VERSION HTTPD_VERSIONS_PATH "${DIST_BIN}/httpd-bin/global-stack-httpd-start.sh")" = "skip"
 assert_pass "30f: caddy no marker → install" \
   test "$(_ws_decision _caddy_gate caddy "" 2.8 GLOBAL_STACK_CADDY_VERSION CADDY_VERSIONS_PATH "${DIST_BIN}/caddy-bin/global-stack-caddy-start.sh")" = "install"
 
@@ -6325,6 +6335,371 @@ assert_pass "74n: .env pins GLOBAL_STACK_XCADDY_VERSION under an @todo env-updat
   bash -c 'grep -B1 "^GLOBAL_STACK_XCADDY_VERSION=v[0-9]" "$1" | grep -q "^# @todo env-update github:caddyserver/xcaddy "' _ "${REPO_ROOT}/.env"
 assert_pass "74n: ...and 01caddy plumbs it into the container" \
   grep -q 'GLOBAL_STACK_XCADDY_VERSION=${GLOBAL_STACK_XCADDY_VERSION}' "${REPO_ROOT}/docker/images/01caddy/docker-compose.yaml"
+
+# ─── Section 75: httpd + the shared ModSecurity tree fetch and check every input before anything is wiped ──
+# Pin-audit tranche 3 step 23/23a (rulings 2026-09-26 11:17, 11:43, 15:52). httpd was
+# `svn checkout http://…` of httpd/apr/apr-util into a tree start.sh had already wiped, its
+# gate held HTTPD_VERSION alone (A5), and both start scripts wiped the shared libmodsecurity
+# and CRS before iou-common cloned anything. Now: every source is fetched and checked in a
+# temp dir first; then the old build is removed (httpd keeps logs/), built at its prefix
+# (policy B) and checked. The stubs model what was MEASURED in the 01caddy image (same
+# packages as 01httpd): Apache's `.sha256` is `<64 hex> *<name>`; `httpd -v` ->
+# `Server version: Apache/2.4.68 (Unix)`; `httpd -V` -> `Compiled using: APR 1.7.6,
+# APR-UTIL 1.6.5, PCRE …` with --with-included-apr, and the SYSTEM apr (apr-util 1.6.3 in
+# that image) without it; `apachectl -t` -> Syntax OK on the fresh conf; the connector
+# archive's top dir is ModSecurity-apache-<ref>.
+printf '\n── Section 75: httpd + shared ModSecurity tree: fetch and check before any wipe (tranche 3 step 23)\n'
+_P75="${TMP_DIR}/p75"
+mkdir -p "${_P75}/stub" "${_P75}/fix" "${_P75}/src"
+cat >"${_P75}/stub/curl" <<'EOF'
+#!/bin/bash
+out="" url="" fail=0
+while (($#)); do
+  case "$1" in
+    -o) out="$2"; shift ;;
+    --connect-timeout|--max-time) shift ;;
+    -*) [[ "$1" == --* ]] || [[ "$1" != *f* ]] || fail=1 ;;
+    *) url="$1" ;;
+  esac
+  shift
+done
+printf 'curl %s\n' "${url}" >>"${P75_LOG}"
+src="${P75_FIX}/${url#https://}"
+if [[ -f "${src}" ]]; then cat "${src}" >"${out}"; exit 0; fi
+((fail)) && exit 22
+printf '<html>404</html>\n' >"${out}"
+EOF
+# git: clone writes the tree the real repo holds (the files the scripts look for); -C is a no-op
+# that is logged (so the --recursive submodule call is visible).
+cat >"${_P75}/stub/git" <<'EOF'
+#!/bin/bash
+printf 'git %s\n' "$*" >>"${P75_LOG}"
+[[ "$1" == clone ]] || exit 0
+br="" url="" dest=""
+shift
+while (($#)); do
+  case "$1" in
+    --branch) br="$2"; shift ;;
+    --depth) shift ;;
+    -*) ;;
+    *) if [[ -z "${url}" ]]; then url="$1"; else dest="$1"; fi ;;
+  esac
+  shift
+done
+case "${url}" in
+  *ModSecurity.git)
+    [[ -n "${P75_MS_CLONE_FAIL:-}" ]] && exit 128
+    mkdir -p "${dest}"; printf '%s\n' "${br}" >"${dest}/.modsec"
+    printf '#!/bin/bash\nprintf "%%s\\n" "$@" >.configure-args\n' >"${dest}/configure"
+    [[ -n "${P75_MS_NOBUILD:-}" ]] || printf '#!/bin/bash\n:\n' >"${dest}/build.sh"
+    chmod +x "${dest}"/* ;;
+  *coreruleset.git)
+    [[ -n "${P75_CRS_CLONE_FAIL:-}" ]] && exit 128
+    mkdir -p "${dest}"
+    [[ -n "${P75_CRS_NORULES:-}" ]] || { mkdir -p "${dest}/rules"; printf '%s\n' "${br}" >"${dest}/rules/REQUEST-901.conf"; }
+    printf 'SecAction\n' >"${dest}/crs-setup.conf.example" ;;
+  *mod_auth_openidc.git)
+    [[ -n "${P75_OIDC_CLONE_FAIL:-}" ]] && exit 128
+    mkdir -p "${dest}"; : >"${dest}/.oidc"
+    printf '#!/bin/bash\nprintf "%%s\\n" "$@" >.configure-args\n' >"${dest}/configure"
+    printf '#!/bin/bash\n:\n' >"${dest}/autogen.sh"
+    chmod +x "${dest}"/* ;;
+  *) exit 128 ;;
+esac
+EOF
+# make: the build step does nothing; `install` produces what the real install does, keyed on the
+# tree it runs in. P75_BUILD_FAIL=<httpd|msa|oidc|modsec> fails that tree's build.
+cat >"${_P75}/stub/make" <<'EOF'
+#!/bin/bash
+printf 'make %s (%s)\n' "$*" "$(ls -A | grep -E '^\.(httpd|msa|oidc|modsec)$' || true)" >>"${P75_LOG}"
+[[ -n "${P75_BUILD_FAIL:-}" && -e ".${P75_BUILD_FAIL}" ]] && { echo "make: *** [all] Error 1" >&2; exit 2; }
+[[ " $* " == *" install "* ]] || exit 0
+args="$(cat .configure-args)"
+pfx="$(sed -n 's/^--prefix=//p' <<<"${args}")"
+apxs="$(sed -n 's/^--with-apxs=//p' <<<"${args}")"
+if [[ -e .httpd ]]; then
+  v="$(cat .httpd)" apr="$(cat srclib/apr/.apr)" apu="$(cat srclib/apr-util/.apu 2>/dev/null || true)"
+  # Without --with-included-apr configure takes the SYSTEM apr (01httpd: 1.7.6 / 1.6.3).
+  grep -qx -- --with-included-apr <<<"${args}" || { apr=1.7.6 apu=1.6.3; }
+  v="${P75_REPORT:-${v}}"
+  mkdir -p "${pfx}/bin" "${pfx}/modules" "${pfx}/conf"
+  cat >"${pfx}/bin/httpd" <<H
+#!/bin/bash
+case "\$1" in
+  -v) printf 'Server version: Apache/%s (Unix)\nServer built:   Sep 26 2026 15:27:57\n' '${v}' ;;
+  -V) printf 'Server version: Apache/%s (Unix)\nCompiled using: APR %s, APR-UTIL %s, PCRE 10.46 2025-08-27\n' '${v}' '${apr}' '${apu}' ;;
+esac
+H
+  printf '#!/bin/bash\n[[ "$1" == -t ]] || exit 0\n[[ -z "%s" ]] || { echo "AH00526: Syntax error" >&2; exit 1; }\necho "Syntax OK"\n' "${P75_T_FAIL:-}" >"${pfx}/bin/apachectl"
+  printf '#!/bin/bash\n:\n' >"${pfx}/bin/apxs"
+  chmod 0644 "${pfx}"/bin/* # find … chmod a+x must make them runnable
+  printf 'ServerRoot "%s"\n' "${pfx}" >"${pfx}/conf/httpd.conf"
+elif [[ -e .msa || -e .oidc ]]; then
+  m=mod_security3.so; [[ -e .oidc ]] && m=mod_auth_openidc.so
+  [[ "${P75_NO_MODULE:-}" == "${m}" ]] || : >"${apxs%/bin/apxs}/modules/${m}"
+elif [[ -e .modsec ]]; then
+  mkdir -p "${pfx}/lib" "${pfx}/bin"
+  [[ -n "${P75_MS_NOLIB:-}" ]] || cat .modsec >"${pfx}/lib/libmodsecurity.so.3"
+  : >"${pfx}/bin/modsec-rules-check"
+fi
+EOF
+# sudo refuses any absolute path outside the test root (the §69 shape), else runs the command.
+cat >"${_P75}/stub/sudo" <<'EOF'
+#!/bin/bash
+for a in "$@"; do
+  [[ "${a}" != /* || "${a}" == "${P75_ROOT}"/* || "${a}" == /usr/bin/* || "${a}" == /bin/* ]] || { echo "sudo stub: refuses ${a}" >&2; exit 97; }
+done
+exec "$@"
+EOF
+printf '#!/bin/bash\nprintf "iou-common %%s\\n" "$#" >>"${P75_LOG}"\n' >"${_P75}/stub/global-stack-httpd-iou-common.sh"
+chmod +x "${_P75}/stub/"*
+# _p75_tar <dist seg> <name> <version> <sums: ok|bad|unlisted|none> [nocfg] - an Apache release
+# tarball + its .sha256 under ${_P75}/fix/archive.apache.org/dist/<seg>/.
+_p75_tar() {
+  local d="${_P75}/fix/archive.apache.org/dist/$1" t="${_P75}/src/$2-$3" a="$2-$3.tar.gz"
+  rm -rf "${t}"
+  mkdir -p "${d}" "${t}/srclib"
+  [[ "${5:-}" == nocfg ]] || printf '#!/bin/bash\nprintf "%%s\\n" "$@" >.configure-args\n' >"${t}/configure"
+  case "$2" in httpd) printf '%s\n' "$3" >"${t}/.httpd" ;; apr) printf '%s\n' "$3" >"${t}/.apr" ;; apr-util) printf '%s\n' "$3" >"${t}/.apu" ;; esac
+  chmod -R +x "${t}"
+  tar -C "${_P75}/src" -czf "${d}/${a}" "$2-$3"
+  case "$4" in
+    ok) printf '%s *%s\n' "$(sha256sum "${d}/${a}" | awk '{ print $1 }')" "${a}" >"${d}/${a}.sha256" ;;
+    bad) printf '%064d *%s\n' 0 "${a}" >"${d}/${a}.sha256" ;;
+    unlisted) printf '%s *%s\n' "$(sha256sum "${d}/${a}" | awk '{ print $1 }')" "$2-0.0.0.tar.gz" >"${d}/${a}.sha256" ;;
+  esac
+}
+_p75_tar httpd httpd 2.4.67 ok
+_p75_tar httpd httpd 2.4.68 ok
+_p75_tar httpd httpd 2.4.90 bad
+_p75_tar httpd httpd 2.4.91 unlisted
+_p75_tar httpd httpd 2.4.92 ok nocfg
+_p75_tar apr apr 1.7.6 ok
+_p75_tar apr apr 1.7.7 bad
+_p75_tar apr apr-util 1.6.4 ok
+_p75_tar apr apr-util 1.6.5 ok
+# 2.4.99 is not published at all (curl -f exits 22).
+# _p75_msa <ref> [top dir] - the GitHub archive of the connector at <ref>.
+_p75_msa() {
+  local d="${_P75}/fix/github.com/owasp-modsecurity/ModSecurity-apache/archive" top="${2:-ModSecurity-apache-$1}"
+  rm -rf "${_P75:?}/src/${top}"
+  mkdir -p "${d}" "${_P75}/src/${top}"
+  printf '#!/bin/bash\nprintf "%%s\\n" "$@" >.configure-args\n' >"${_P75}/src/${top}/configure"
+  printf '#!/bin/bash\n:\n' >"${_P75}/src/${top}/autogen.sh"
+  : >"${_P75}/src/${top}/.msa"
+  chmod +x "${_P75}/src/${top}/configure" "${_P75}/src/${top}/autogen.sh"
+  tar -C "${_P75}/src" -czf "${d}/$1.tar.gz" "${top}"
+}
+_P75_SHA1=0488c77f69669584324b70460614a382224b4883
+_P75_SHA2=1111111111111111111111111111111111111111
+_p75_msa "${_P75_SHA1}"
+_p75_msa "${_P75_SHA2}"
+_p75_msa master
+_p75_msa 2222222222222222222222222222222222222222 ModSecurity-apache-3333333333333333333333333333333333333333
+_P75_START="${DIST_BIN}/httpd-bin/global-stack-httpd-start.sh"
+awk '/^_httpd_want=/{f=1} f{print} f && /^ *printf .*HTTPD_VERSIONS_PATH}"$/{m=1} m && /^fi$/{exit}' "${_P75_START}" >"${_P75}/block.sh"
+assert_pass "75a: the extracted start.sh block holds the composite gate, iou-common, the iou and the marker write (anchor non-vacuity)" \
+  bash -c 'grep -q "^_httpd_gate=" "$1" && grep -q "global-stack-httpd-iou-common.sh" "$1" && grep -q "global-stack-httpd-iou.sh" "$1" && grep -q "HTTPD_VERSIONS_PATH}\"$" "$1"' _ "${_P75}/block.sh"
+# _p75_run <httpd pin> <apr pin> <apr-util pin> <connector ref> <old httpd|''> <marker|''> [RELOAD] → state
+_p75_run() {
+  local r="${_P75}/r" rc=0 bin
+  rm -rf "${r}"
+  mkdir -p "${r}/tools/versions" "${r}/tools/errors" "${r}/tools/httpd/logs" "${r}/tools/httpd/conf" "${r}/tools/http" "${r}/tmp"
+  printf 'log\n' >"${r}/tools/httpd/logs/access_log"
+  if [[ -n "$5" ]]; then
+    mkdir -p "${r}/tools/httpd/bin"
+    printf '#!/bin/bash\nprintf "Server version: Apache/%s (Unix)\\n"\n' "$5" >"${r}/tools/httpd/bin/httpd"
+    chmod +x "${r}/tools/httpd/bin/httpd"
+    printf 'old\n' >"${r}/tools/httpd/conf/old.conf"
+  fi
+  [[ -z "$6" ]] || printf '%s\n' "$6" >"${r}/tools/versions/httpd"
+  : >"${_P75}/log"
+  env -i HOME="${r}" TMPDIR="${r}/tmp" PATH="${_P75}/stub:${DIST_BIN}/httpd-bin:${DIST_BIN}/base-bin:/usr/bin:/bin" \
+    P75_FIX="${_P75}/fix" P75_LOG="${_P75}/log" P75_ROOT="${r}" P75_BUILD_FAIL="${P75_BUILD_FAIL:-}" \
+    P75_REPORT="${P75_REPORT:-}" P75_T_FAIL="${P75_T_FAIL:-}" P75_NO_MODULE="${P75_NO_MODULE:-}" \
+    P75_OIDC_CLONE_FAIL="${P75_OIDC_CLONE_FAIL:-}" \
+    GLOBAL_STACK_ERROR_TOKEN=httpd GLOBAL_STACK_DOCKER_TOOLS_PATH="${r}/tools" GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS="${r}/tools/errors" \
+    HTTPD_PATH="${r}/tools/httpd" HTTPD_VERSIONS_PATH="${r}/tools/versions/httpd" HTTP_COMMONS_PATH="${r}/tools/http" \
+    HTTP_COMMON_MOD_SECURITY_VERSION_PATH="${r}/tools/versions/http.mod_security" HTTP_COMMON_CORERULESET_VERSION_PATH="${r}/tools/versions/http.coreruleset" \
+    MODSECURITY_SOURCE_LIB_PATH="${r}/tools/http/libs/modsecurity-source" MODSECURITY_LIB_PATH="${r}/tools/http/libs/modsecurity" \
+    CORERULESET_PATH="${r}/tools/http/rules/coreruleset" \
+    GLOBAL_STACK_RELOAD_HTTPD="${7:-false}" GLOBAL_STACK_RELOAD_HTTP_COMMON=false \
+    GLOBAL_STACK_HTTPD_VERSION="$1" GLOBAL_STACK_HTTPD_APR_VERSION="$2" GLOBAL_STACK_HTTPD_APR_UTIL_VERSION="$3" \
+    GLOBAL_STACK_HTTPD_MODSECURITY_MOD_VERSION="$4" GLOBAL_STACK_HTTPD_MOD_AUTH_OPENIDC_VERSION=v2.4.20.3 \
+    GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION=v3.0.16 \
+    bash -c 'set -eE -o pipefail; source "$1"; source "$2"' _ \
+    "${DIST_BIN}/base-bin/global-stack-base-version-gate.sh" "${_P75}/block.sh" >"${_P75}/last.log" 2>&1 || rc=fail
+  bin="$({ "${r}/tools/httpd/bin/httpd" -v 2>/dev/null || true; } | sed -n '1s/^Server version: Apache\/\([^ ]*\).*/\1/p')"
+  printf 'rc=%s httpd=%s marker=%s logs=%s old=%s mods=%s token=%s fatal=%s tmp=%s builds=%s' "${rc}" "${bin:-none}" \
+    "$(cat "${r}/tools/versions/httpd" 2>/dev/null || echo none)" \
+    "$(if [[ -e "${r}/tools/httpd/logs/access_log" ]]; then echo kept; else echo gone; fi)" \
+    "$(if [[ -e "${r}/tools/httpd/conf/old.conf" ]]; then echo kept; else echo gone; fi)" \
+    "$(ls "${r}/tools/httpd/modules" 2>/dev/null | grep -c '\.so$' || true)" \
+    "$(if [[ -e "${r}/tools/errors/httpd" ]]; then echo 1; else echo 0; fi)" \
+    "$(grep -c '^FATAL: ' "${_P75}/last.log" || true)" "$(ls -A "${r}/tmp" | wc -l)" "$(grep -c '^make .*install (.httpd)' "${_P75}/log" || true)"
+}
+_p75_want() { printf '%s;apr=%s;apr-util=%s;modsec-lib=v3.0.16;modsec-apache=%s;openidc=v2.4.20.3' "$1" "$2" "$3" "$4"; }
+_P75_OLD="$(_p75_want tags/2.4.67 tags/1.7.6 tags/1.6.5 "${_P75_SHA1}")"
+_P75_NEW="$(_p75_want tags/2.4.68 tags/1.7.6 tags/1.6.5 "${_P75_SHA1}")"
+assert_pass "75b: httpd tags/2.4.67 -> tags/2.4.68: fetched, checked, rebuilt with both modules, composite marker, logs kept, old tree gone" \
+  test "$(_p75_run tags/2.4.68 tags/1.7.6 tags/1.6.5 "${_P75_SHA1}" 2.4.67 "${_P75_OLD}")" = "rc=0 httpd=2.4.68 marker=${_P75_NEW} logs=kept old=gone mods=2 token=0 fatal=0 tmp=0 builds=1"
+assert_pass "75c: httpd pin moved back tags/2.4.68 -> tags/2.4.67" \
+  test "$(_p75_run tags/2.4.67 tags/1.7.6 tags/1.6.5 "${_P75_SHA1}" 2.4.68 "${_P75_NEW}")" = "rc=0 httpd=2.4.67 marker=${_P75_OLD} logs=kept old=gone mods=2 token=0 fatal=0 tmp=0 builds=1"
+assert_pass "75d: an apr-util bump alone (1.6.4 -> 1.6.5) rebuilds httpd (the gate held HTTPD_VERSION alone before)" \
+  test "$(_p75_run tags/2.4.68 tags/1.7.6 tags/1.6.5 "${_P75_SHA1}" 2.4.68 "$(_p75_want tags/2.4.68 tags/1.7.6 tags/1.6.4 "${_P75_SHA1}")")" = "rc=0 httpd=2.4.68 marker=${_P75_NEW} logs=kept old=gone mods=2 token=0 fatal=0 tmp=0 builds=1"
+assert_pass "75e: a connector sha bump alone rebuilds httpd" \
+  test "$(_p75_run tags/2.4.68 tags/1.7.6 tags/1.6.5 "${_P75_SHA2}" 2.4.68 "${_P75_NEW}")" = "rc=0 httpd=2.4.68 marker=$(_p75_want tags/2.4.68 tags/1.7.6 tags/1.6.5 "${_P75_SHA2}") logs=kept old=gone mods=2 token=0 fatal=0 tmp=0 builds=1"
+assert_pass "75f: marker = every pin -> nothing fetched or built (iou-common still runs, it gates itself)" \
+  bash -c '[[ "$1" == "rc=0 httpd=2.4.68 marker=$2 logs=kept old=kept mods=0 token=0 fatal=0 tmp=0 builds=0" ]] && ! grep -q "^curl " "$3" && grep -qx "iou-common 6" "$3"' _ \
+  "$(_p75_run tags/2.4.68 tags/1.7.6 tags/1.6.5 "${_P75_SHA1}" 2.4.68 "${_P75_NEW}")" "${_P75_NEW}" "${_P75}/log"
+assert_pass "75g: marker = every pin but RELOAD_HTTPD=true -> rebuilt, logs kept" \
+  test "$(_p75_run tags/2.4.68 tags/1.7.6 tags/1.6.5 "${_P75_SHA1}" 2.4.68 "${_P75_NEW}" true)" = "rc=0 httpd=2.4.68 marker=${_P75_NEW} logs=kept old=gone mods=2 token=0 fatal=0 tmp=0 builds=1"
+assert_pass "75g2: first install (no httpd, no marker); a branch name as the connector ref still works (un-scanned .env.local)" \
+  test "$(_p75_run tags/2.4.68 tags/1.7.6 tags/1.6.5 master '' '')" = "rc=0 httpd=2.4.68 marker=$(_p75_want tags/2.4.68 tags/1.7.6 tags/1.6.5 master) logs=kept old=gone mods=2 token=0 fatal=0 tmp=0 builds=1"
+# Failures BEFORE the wipe: the old httpd, its conf and the marker are untouched.
+for _p75_bad in 'tags/2.4.90|tags/1.7.6|-|httpd checksum mismatch|httpd-2.4.90.tar.gz does not match its published SHA-256' \
+  'tags/2.4.91|tags/1.7.6|-|the .sha256 lists another file|lists no single checksum for httpd-2.4.91.tar.gz' \
+  'tags/2.4.99|tags/1.7.6|-|the httpd tag has no release tarball|httpd 2.4.99 could not be downloaded' \
+  'tags/2.4.92|tags/1.7.6|-|a tarball without configure|holds no httpd-2.4.92/configure' \
+  'tags/2.4.68|tags/1.7.7|-|apr checksum mismatch|apr-1.7.7.tar.gz does not match' \
+  'tags/2.4.68|tags/1.7.6|MSA=2222222222222222222222222222222222222222|the connector archive holds another tree|not a single ModSecurity-apache-2222' \
+  'tags/2.4.68|tags/1.7.6|MSA=4444444444444444444444444444444444444444|the connector sha is not published|ModSecurity-apache 4444444444444444444444444444444444444444 could not be downloaded' \
+  'tags/2.4.68|tags/1.7.6|P75_OIDC_CLONE_FAIL=1|mod_auth_openidc cannot be cloned|mod_auth_openidc v2.4.20.3 could not be cloned'; do
+  IFS='|' read -r _p75_h _p75_a _p75_env _p75_why _p75_msg <<<"${_p75_bad}"
+  _p75_ref="${_P75_SHA1}"
+  [[ "${_p75_env}" != MSA=* ]] || { _p75_ref="${_p75_env#MSA=}"; _p75_env=-; }
+  [[ "${_p75_env}" != - ]] || _p75_env="P75_NONE="
+  assert_pass "75h: ${_p75_why} -> its named FATAL + token, old httpd/conf/marker untouched, logs kept, no temp dir left" \
+    bash -c '[[ "$1" == "rc=fail httpd=2.4.67 marker=$4 logs=kept old=kept mods=0 token=1 fatal=1 tmp=0 builds=0" ]] && grep "^FATAL: " "$3" | grep -qF "$2"' _ \
+    "$(
+      export "${_p75_env?}"
+      _p75_run "${_p75_h}" "${_p75_a}" tags/1.6.5 "${_p75_ref}" 2.4.67 "${_P75_OLD}"
+    )" \
+    "${_p75_msg}" "${_P75}/last.log" "${_P75_OLD}"
+done
+# Failures AFTER the wipe (policy B): named FATAL + token, marker NOT advanced, logs kept.
+for _p75_bad in 'P75_BUILD_FAIL=httpd|the httpd build fails|httpd 2.4.68: the build failed' \
+  'P75_BUILD_FAIL=msa|the connector build fails|ModSecurity-apache 0488c77f69669584324b70460614a382224b4883: the build failed' \
+  'P75_BUILD_FAIL=oidc|the mod_auth_openidc build fails|mod_auth_openidc v2.4.20.3: the build failed' \
+  'P75_REPORT=2.4.680|the built httpd reports 2.4.680|reports "Server version: Apache/2.4.680' \
+  'P75_T_FAIL=1|apachectl -t rejects the fresh conf|apachectl -t rejects' \
+  'P75_NO_MODULE=mod_security3.so|the connector installed no module|modules/mod_security3.so was not installed'; do
+  IFS='|' read -r _p75_env _p75_why _p75_msg <<<"${_p75_bad}"
+  assert_pass "75i: ${_p75_why} -> its named FATAL + token, the marker not advanced, logs kept, no temp dir left" \
+    bash -c '[[ "$1" == "rc=fail httpd="*" marker=$4 logs=kept old=gone mods="*" token=1 fatal=1 tmp=0 builds="* ]] && grep "^FATAL: " "$3" | grep -qF "$2"' _ \
+    "$(
+      export "${_p75_env?}"
+      _p75_run tags/2.4.68 tags/1.7.6 tags/1.6.5 "${_P75_SHA1}" 2.4.67 "${_P75_OLD}"
+    )" \
+    "${_p75_msg}" "${_P75}/last.log" "${_P75_OLD}"
+done
+# The apr pins are real only because the build uses the bundled apr: drop the flag and
+# configure takes the system apr-util 1.6.3 (the stub models that), which the -V check catches.
+_P75_IOU="${DIST_BIN}/httpd-bin/global-stack-httpd-iou.sh"
+assert_pass "75j: configure is passed --with-included-apr (the check that it took effect is 75i's -V arm)" \
+  grep -qE '^ +--with-included-apr \\$' "${_P75_IOU}"
+# The mutation must stay valid code: deleting the line would cut the \-continued configure
+# call short and fail for the wrong reason, so the flag is swapped for a harmless real one.
+sed 's/--with-included-apr \\$/--enable-so \\/' "${_P75_IOU}" >"${_P75}/stub/global-stack-httpd-iou.sh"
+assert_pass "75j2a: the mutated iou lost the flag, kept the line and still parses (the mutation landed)" \
+  bash -c '! grep -qE "^ +--with-included-apr" "$1" && grep -qE "^ +--enable-so \\\\$" "$1" && bash -n "$1"' _ "${_P75}/stub/global-stack-httpd-iou.sh"
+chmod +x "${_P75}/stub/global-stack-httpd-iou.sh"
+assert_pass "75j2: ...and without it the SYSTEM apr-util is compiled in and the iou FATALs by name (the -V check is live)" \
+  bash -c '[[ "$1" == "rc=fail "* ]] && grep "^FATAL: " "$2" | grep -qF "not compiled with the pinned APR 1.7.6, APR-UTIL 1.6.5"' _ \
+  "$(_p75_run tags/2.4.68 tags/1.7.6 tags/1.6.5 "${_P75_SHA1}" 2.4.67 "${_P75_OLD}")" "${_P75}/last.log"
+rm -f "${_P75}/stub/global-stack-httpd-iou.sh"
+_p75_exec="$(grep -vE '^[[:space:]]*#' "${_P75_IOU}")"
+assert_pass "75k: >= 3 executable curl calls in the iou, every one with -f; archive.apache.org only; no svn, no http:// left" \
+  bash -c 'calls="$(grep -oE "curl [^;|]*" <<<"$1")"; [[ "$(grep -c . <<<"${calls}")" -ge 3 ]] && ! grep -vE "(^| )-[a-zA-Z]*f[a-zA-Z]*( |$)" <<<"${calls}" | grep -q . && ! grep -qE "svn |http://|downloads\.apache\.org" <<<"$1" && grep -q "archive\.apache\.org" <<<"$1"' _ "${_p75_exec}"
+# 75l reads start.sh whole (comments out, continuations joined): the old wipe was a
+# multi-line `rm -rf \` naming "${HTTPD_PATH}" on its own line.
+for _p75_s in httpd-bin/global-stack-httpd-start.sh nginx-bin/global-stack-nginx-start.sh; do
+  assert_fail "75l: ${_p75_s##*/} wipes neither the httpd tree nor the shared libmodsecurity/CRS (the ious replace after their checks)" \
+    bash -c 'grep -vE "^[[:space:]]*#" "$1" | sed -e ":a" -e "/\\\\$/{N;s/\\\\\n//;ba}" | grep -E "rm -rf" | grep -qE "\"\\\$\{(HTTPD_PATH|MODSECURITY_LIB_PATH|MODSECURITY_SOURCE_LIB_PATH|CORERULESET_PATH)\}\""' _ "${DIST_BIN}/${_p75_s}"
+done
+# Both ways, discovered (the §47 shape): the composite = every pin the iou builds with, plus
+# the shared library pin (built by iou-common, linked by the connector) and nothing else.
+_p75_iou_vars="$(grep -oE 'GLOBAL_STACK_HTTPD?_[A-Z_]*VERSION' <<<"${_p75_exec}" | sort -u || true)"
+_p75_want_vars="$(grep '^_httpd_want=' "${_P75_START}" | grep -oE 'GLOBAL_STACK_HTTPD?_[A-Z_]*VERSION' | sort -u || true)"
+assert_pass "75m: the composite holds >= 6 pins: every one the iou reads, plus GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION and nothing else" \
+  bash -c '[[ "$(grep -c . <<<"$2")" -ge 6 ]] && [[ "$(grep -vx GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION <<<"$2")" == "$1" ]] && grep -qx GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION <<<"$2"' _ "${_p75_iou_vars}" "${_p75_want_vars}"
+
+# ── 23a: the shared ModSecurity library + CRS (iou-common), both copies ──
+_P75_HC="${DIST_BIN}/httpd-bin/global-stack-httpd-iou-common.sh"
+_P75_NC="${DIST_BIN}/nginx-bin/global-stack-nginx-iou-common.sh"
+_p75_body() { sed -n '/^# Tranche 3 step 23a /,$p' "$1"; }
+assert_pass "75n: the iou-common body (from its step-23a anchor on) is byte-identical in httpd and nginx, and >= 40 lines (anchor non-vacuity)" \
+  bash -c '[[ "$(grep -c . <<<"$1")" -ge 40 && "$1" == "$2" ]]' _ "$(_p75_body "${_P75_HC}")" "$(_p75_body "${_P75_NC}")"
+# _p75c_run <script> <lib pin> <crs pin> <lib marker|''> <crs marker|''> → state
+_p75c_run() {
+  local r="${_P75}/c" rc=0 h
+  rm -rf "${r}"
+  h="${r}/tools/http"
+  mkdir -p "${r}/tools/versions" "${r}/tools/errors" "${h}/libs/modsecurity/lib" "${h}/libs/modsecurity/bin" "${h}/rules/coreruleset/rules" "${h}/mod_security/logs" "${r}/tmp"
+  printf 'old\n' >"${h}/libs/modsecurity/lib/libmodsecurity.so.3"
+  : >"${h}/libs/modsecurity/bin/modsec-rules-check"
+  printf 'old\n' >"${h}/rules/coreruleset/rules/OLD.conf"
+  printf 'audit\n' >"${h}/mod_security/logs/audit.log"
+  [[ -z "$4" ]] || printf '%s\n' "$4" >"${r}/tools/versions/http.mod_security"
+  [[ -z "$5" ]] || printf '%s\n' "$5" >"${r}/tools/versions/http.coreruleset"
+  : >"${_P75}/log"
+  env -i HOME="${r}" TMPDIR="${r}/tmp" PATH="${_P75}/stub:${DIST_BIN}/base-bin:/usr/bin:/bin" \
+    P75_LOG="${_P75}/log" P75_ROOT="${r}" P75_BUILD_FAIL="${P75_BUILD_FAIL:-}" P75_MS_CLONE_FAIL="${P75_MS_CLONE_FAIL:-}" \
+    P75_MS_NOBUILD="${P75_MS_NOBUILD:-}" P75_MS_NOLIB="${P75_MS_NOLIB:-}" P75_CRS_CLONE_FAIL="${P75_CRS_CLONE_FAIL:-}" \
+    P75_CRS_NORULES="${P75_CRS_NORULES:-}" \
+    GLOBAL_STACK_ERROR_TOKEN=httpd GLOBAL_STACK_DOCKER_TOOLS_PATH="${r}/tools" GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS="${r}/tools/errors" \
+    GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION="$2" GLOBAL_STACK_HTTP_CORERULESET_VERSION="$3" \
+    bash "$1" "${h}" "${r}/tools/versions/http.mod_security" "${r}/tools/versions/http.coreruleset" \
+    "${h}/libs/modsecurity-source" "${h}/libs/modsecurity" "${h}/rules/coreruleset" >"${_P75}/last.log" 2>&1 || rc=fail
+  printf 'rc=%s lib=%s libm=%s crs=%s crsm=%s setup=%s audit=%s token=%s fatal=%s tmp=%s' "${rc}" \
+    "$(cat "${h}/libs/modsecurity/lib/libmodsecurity.so.3" 2>/dev/null || echo none)" \
+    "$(cat "${r}/tools/versions/http.mod_security" 2>/dev/null || echo none)" \
+    "$(ls "${h}/rules/coreruleset/rules" 2>/dev/null | tr '\n' ',' || true)" \
+    "$(cat "${r}/tools/versions/http.coreruleset" 2>/dev/null || echo none)" \
+    "$(if [[ -f "${h}/rules/coreruleset/crs-setup.conf" ]]; then echo yes; else echo no; fi)" \
+    "$(if [[ -e "${h}/mod_security/logs/audit.log" ]]; then echo kept; else echo gone; fi)" \
+    "$(if [[ -e "${r}/tools/errors/httpd" ]]; then echo 1; else echo 0; fi)" \
+    "$(grep -c '^FATAL: ' "${_P75}/last.log" || true)" "$(ls -A "${r}/tmp" | wc -l)"
+}
+for _p75_c in "${_P75_HC}" "${_P75_NC}"; do
+  _p75_n="${_p75_c##*/}"
+  assert_pass "75o: ${_p75_n}: lib v3.0.15 -> v3.0.16 and CRS v4.28.0 -> v4.29.0: cloned, checked, built/swapped, markers advanced, audit log kept" \
+    test "$(_p75c_run "${_p75_c}" v3.0.16 v4.29.0 v3.0.15 v4.28.0)" = "rc=0 lib=v3.0.16 libm=v3.0.16 crs=REQUEST-901.conf, crsm=v4.29.0 setup=yes audit=kept token=0 fatal=0 tmp=0"
+  assert_pass "75o: ${_p75_n}: both pins moved back" \
+    test "$(_p75c_run "${_p75_c}" v3.0.15 v4.28.0 v3.0.16 v4.29.0)" = "rc=0 lib=v3.0.15 libm=v3.0.15 crs=REQUEST-901.conf, crsm=v4.28.0 setup=yes audit=kept token=0 fatal=0 tmp=0"
+  assert_pass "75o: ${_p75_n}: both markers current -> nothing cloned, nothing touched" \
+    bash -c '[[ "$1" == "rc=0 lib=old libm=v3.0.16 crs=OLD.conf, crsm=v4.29.0 setup=no audit=kept token=0 fatal=0 tmp=0" ]] && ! grep -q "^git clone" "$2"' _ \
+    "$(_p75c_run "${_p75_c}" v3.0.16 v4.29.0 v3.0.16 v4.29.0)" "${_P75}/log"
+  assert_pass "75o: ${_p75_n}: ModSecurity's submodules are initialised --recursive (Mbed TLS nests its own)" \
+    bash -c '_=$1; grep -q "^git -C .*/modsecurity submodule update --init --recursive$" "$2"' _ \
+    "$(_p75c_run "${_p75_c}" v3.0.16 v4.29.0 v3.0.15 v4.29.0)" "${_P75}/log"
+  for _p75_bad in 'P75_MS_CLONE_FAIL=1|the library clone fails|ModSecurity v3.0.16 could not be cloned|lib=old libm=v3.0.15' \
+    'P75_MS_NOBUILD=1|the clone holds no build.sh|the clone holds no build.sh|lib=old libm=v3.0.15' \
+    'P75_BUILD_FAIL=modsec|the library build fails (policy B: the old library is gone)|the build failed - the old library is already removed|lib=none libm=none' \
+    'P75_MS_NOLIB=1|the build installs no libmodsecurity.so.3|installed no lib/libmodsecurity.so.3|lib=none libm=none'; do
+    IFS='|' read -r _p75_env _p75_why _p75_msg _p75_lib <<<"${_p75_bad}"
+    assert_pass "75p: ${_p75_n}: ${_p75_why} -> its named FATAL + token, ${_p75_lib}, the CRS untouched, audit log kept, no temp dir left" \
+      bash -c '[[ "$1" == "rc=fail $4 crs=OLD.conf, crsm=v4.29.0 setup=no audit=kept token=1 fatal=1 tmp=0" ]] && grep "^FATAL: " "$3" | grep -qF "$2"' _ \
+      "$(
+        export "${_p75_env?}"
+        _p75c_run "${_p75_c}" v3.0.16 v4.29.0 v3.0.15 v4.29.0
+      )" \
+      "${_p75_msg}" "${_P75}/last.log" "${_p75_lib}"
+  done
+  for _p75_bad in 'P75_CRS_CLONE_FAIL=1|the CRS clone fails|CoreRuleSet v4.29.0 could not be cloned' \
+    'P75_CRS_NORULES=1|the CRS clone holds no rules/|holds no crs-setup.conf.example or rules/'; do
+    IFS='|' read -r _p75_env _p75_why _p75_msg <<<"${_p75_bad}"
+    assert_pass "75q: ${_p75_n}: ${_p75_why} -> its named FATAL + token, the old rules and marker untouched, no temp dir left" \
+      bash -c '[[ "$1" == "rc=fail lib=old libm=v3.0.16 crs=OLD.conf, crsm=v4.28.0 setup=no audit=kept token=1 fatal=1 tmp=0" ]] && grep "^FATAL: " "$3" | grep -qF "$2"' _ \
+      "$(
+        export "${_p75_env?}"
+        _p75c_run "${_p75_c}" v3.0.16 v4.29.0 v3.0.16 v4.28.0
+      )" \
+      "${_p75_msg}" "${_P75}/last.log"
+  done
+done
+assert_fail "75r: neither iou-common asks configure for Lua (ruling 2026-09-26 15:52: no image has it; configure stopped)" \
+  bash -c 'grep -vhE "^[[:space:]]*#" "$1" "$2" | grep -q -- "--with-lua"' _ "${_P75_HC}" "${_P75_NC}"
 
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'

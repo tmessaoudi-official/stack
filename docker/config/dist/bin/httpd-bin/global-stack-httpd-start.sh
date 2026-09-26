@@ -73,18 +73,15 @@ global-stack-base-wait-for.sh \
 # what row 15's extraction exists for. Sourced here, above the first use.
 source global-stack-base-version-gate.sh
 
-_httpd_gate="$(gs_version_gate "${HTTPD_VERSIONS_PATH}" "${GLOBAL_STACK_HTTPD_VERSION}" "httpd")"
+# The marker is composite (tranche 3 step 23, startup-prologue.test.sh §75): apr and apr-util
+# are built into httpd, and the ModSecurity connector links the shared libmodsecurity, so a
+# bump of any of them must rebuild httpd too — the gate used to hold HTTPD_VERSION alone (A5).
+_httpd_want="${GLOBAL_STACK_HTTPD_VERSION};apr=${GLOBAL_STACK_HTTPD_APR_VERSION};apr-util=${GLOBAL_STACK_HTTPD_APR_UTIL_VERSION};modsec-lib=${GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION};modsec-apache=${GLOBAL_STACK_HTTPD_MODSECURITY_MOD_VERSION};openidc=${GLOBAL_STACK_HTTPD_MOD_AUTH_OPENIDC_VERSION}"
+_httpd_gate="$(gs_version_gate "${HTTPD_VERSIONS_PATH}" "${_httpd_want}" "httpd")"
 
-# Clean up old installations if needed
-if [[ "${GLOBAL_STACK_RELOAD_HTTPD}" == "true" ]] || \
-   [ "${_httpd_gate}" != "skip" ]; then
-  rm -rf \
-    "${HTTPD_PATH}" \
-    "${HTTPD_VERSIONS_PATH}" \
-    "${HTTPD_SUCCESSES_PATH}"
-fi
-
-# Clean up old http common installations if needed
+# RELOAD_HTTP_COMMON is the explicit full reinstall of the shared tree, so it still wipes
+# up front. Nothing else is wiped here any more: iou-common and the iou fetch and check
+# every input first and only then replace what they build (tranche 3 step 23).
 if [[ "${GLOBAL_STACK_RELOAD_HTTP_COMMON}" == "true" ]]; then
   rm -rf \
     "${HTTP_COMMONS_PATH}" \
@@ -92,65 +89,30 @@ if [[ "${GLOBAL_STACK_RELOAD_HTTP_COMMON}" == "true" ]]; then
     "${HTTP_COMMON_CORERULESET_VERSION_PATH}"
 fi
 
-# The compares below were already correct: { ! -e P || $(cat P) != $V } is exactly
-# `gate != skip`. What they lacked was the WARN, and there were four copies of the
-# same expression. Each gate is computed ONCE here, AFTER the RELOAD cleanup above
-# (which may delete the marker), and referenced by both the cleanup and the IOU
-# decision below, so a version change is announced once rather than per test site.
-_httpd_modsec_gate=skip
-if [[ -n "${GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION}" ]]; then
-  _httpd_modsec_gate="$(gs_version_gate "${HTTP_COMMON_MOD_SECURITY_VERSION_PATH}" "${GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION}" "http.mod_security")"
-fi
-_httpd_crs_gate=skip
-if [[ -n "${GLOBAL_STACK_HTTP_CORERULESET_VERSION}" ]]; then
-  _httpd_crs_gate="$(gs_version_gate "${HTTP_COMMON_CORERULESET_VERSION_PATH}" "${GLOBAL_STACK_HTTP_CORERULESET_VERSION}" "http.coreruleset")"
-fi
+# The shared ModSecurity library and the CoreRuleSet gate THEMSELVES inside iou-common,
+# which runs on every boot: a current marker is a no-op there. It must run before the
+# httpd iou, whose ModSecurity connector links the library.
+global-stack-httpd-iou-common.sh \
+  "${HTTP_COMMONS_PATH}" \
+  "${HTTP_COMMON_MOD_SECURITY_VERSION_PATH}" \
+  "${HTTP_COMMON_CORERULESET_VERSION_PATH}" \
+  "${MODSECURITY_SOURCE_LIB_PATH}" \
+  "${MODSECURITY_LIB_PATH}" \
+  "${CORERULESET_PATH}"
 
-# Clean mod_security if version mismatch
-if [ "${_httpd_modsec_gate}" != "skip" ]; then
-  rm -rf \
-    "${MODSECURITY_SOURCE_LIB_PATH}" \
-    "${MODSECURITY_LIB_PATH}" \
-    "${HTTP_COMMON_MOD_SECURITY_VERSION_PATH}" \
-    "${MODSECURITY_TMP_PATH}" \
-    "${MODSECURITY_LOGS_PATH}" \
-    "${MODSECURITY_CONF_PATH}"
-fi
-
-# Clean CoreRuleSet if version mismatch
-if [ "${_httpd_crs_gate}" != "skip" ]; then
-  rm -rf \
-    "${CORERULESET_PATH}" \
-    "${HTTP_COMMON_CORERULESET_VERSION_PATH}"
+# Build httpd if necessary. The iou fetches and checks every source before it wipes
+# ${HTTPD_PATH} (logs/ kept), builds at that prefix and checks the result; the marker
+# follows its success.
+if [[ "${_httpd_gate}" != "skip" || "${GLOBAL_STACK_RELOAD_HTTPD}" == "true" ]]; then
+  global-stack-httpd-iou.sh \
+    "${HTTPD_PATH}" \
+    "${MODSECURITY_LIB_PATH}"
+  printf '%s\n' "${_httpd_want}" >"${HTTPD_VERSIONS_PATH}"
 fi
 
 # Create temporary directory for httpd
 mkdir -p \
   "${HTTPD_PATH}/tmp"
-
-# Run IOU setup for common HTTPd components if required
-if [[ "${GLOBAL_STACK_RELOAD_HTTP_COMMON}" == "true" ]] || \
-   [ "${_httpd_modsec_gate}" != "skip" ] || \
-   [ "${_httpd_crs_gate}" != "skip" ]; then
-  global-stack-httpd-iou-common.sh \
-    "${HTTP_COMMONS_PATH}" \
-    "${HTTP_COMMON_MOD_SECURITY_VERSION_PATH}" \
-    "${HTTP_COMMON_CORERULESET_VERSION_PATH}" \
-    "${MODSECURITY_SOURCE_LIB_PATH}" \
-    "${MODSECURITY_LIB_PATH}" \
-    "${CORERULESET_PATH}"
-fi
-
-# Install httpd if necessary
-if [[ ! -f "${HTTPD_VERSIONS_PATH}" || "${GLOBAL_STACK_RELOAD_HTTPD}" == "true" ]]; then
-  global-stack-httpd-iou.sh \
-    "${HTTPD_PATH}" \
-    "${HTTP_COMMONS_PATH}" \
-    "${HTTPD_VERSIONS_PATH}" \
-    "${MODSECURITY_SOURCE_LIB_PATH}" \
-    "${MODSECURITY_LIB_PATH}" \
-    "${CORERULESET_PATH}"
-fi
 
 # Run httpd setup and mkcert commands
 global-stack-httpd-setup.sh \
@@ -171,11 +133,6 @@ sudo rm -rf \
 
 # Start Apache in the foreground
 "${HTTPD_PATH}/bin/apachectl" -D FOREGROUND &
-
-# Save the updated httpd version if installed or reloaded
-if [[ ! -f "${HTTPD_VERSIONS_PATH}" || "${GLOBAL_STACK_RELOAD_HTTPD}" == "true" ]]; then
-  echo "${GLOBAL_STACK_HTTPD_VERSION}" > "${HTTPD_VERSIONS_PATH}"
-fi
 
 global-stack-base-prepare-shell.sh
 

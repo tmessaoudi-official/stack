@@ -39,44 +39,106 @@ stackCatch() {
 # family was missed by row 25, whose Files cell scoped it to the three
 # web-server trees, and by row 35's own filing, which named only the three
 # *-setup.sh — startup-prologue.test.sh §49 now enumerates the class instead.
-# Define reusable paths
 HTTPD_PATH="${1}"
-HTTP_COMMONS_PATH="${2}"
-HTTPD_VERSIONS_PATH="${3}"
-MODSECURITY_SOURCE_LIB_PATH="${4}"
-MODSECURITY_LIB_PATH="${5}"
-CORERULESET_PATH="${6}"
-MODSECURITY_APACHE_PATH="${HTTPD_PATH}/mods/modsecurity-source"
-MOD_AUTH_OPENIDC_APACHE_PATH="${HTTPD_PATH}/mods/mod_auth_openidc-source"
+MODSECURITY_LIB_PATH="${2}"
 
-cd "${HTTPD_PATH}"
+# Pin-audit tranche 3 step 23 (rulings 2026-09-26 11:17 and 11:43; startup-prologue.test.sh
+# §75). httpd was `svn checkout http://svn.apache.org` of httpd, apr and apr-util (plain
+# http, nothing checked) into a tree start.sh had already wiped, and the two connectors
+# were cloned only after the build had replaced the old httpd. httpd is PREFIX-BAKED
+# (policy B): every source is fetched and checked in a temp dir first, so a failed fetch
+# or checksum leaves the old httpd working; then ${HTTPD_PATH} is wiped (logs/ kept),
+# httpd is built at that prefix and checked. A BUILD failure leaves no httpd - the
+# accepted trade: the error token makes its consumers fail fast.
+_hd_fatal() {
+  printf 'FATAL: %s\n' "$1" >&2
+  rm -rf "${_hd_dl:-}"
+  exit 1
+}
+if [[ -z "${HTTPD_PATH}" || "${HTTPD_PATH}" == / ]]; then
+  _hd_fatal "refusing to build httpd at \"${HTTPD_PATH}\""
+fi
+_hd_dl="$(mktemp -d)"
 
-# Extract the latest and current versions of HTTPD
-LATEST_HTTPD_VERSION=$(echo "${GLOBAL_STACK_HTTPD_VERSION}" | sed 's/.*\///g')
-CURRENT_HTTPD_VERSION=$( [[ -f "${HTTPD_VERSIONS_PATH}" ]] && cat "${HTTPD_VERSIONS_PATH}" || echo "null" )
+# Release tarballs from archive.apache.org ONLY: downloads.apache.org drops a release once
+# it is superseded, so a pin moved DOWN would 404 there. The .env pins keep their svn
+# `tags/` spelling (env-update lists the svn tags), so the tag prefix is stripped here.
+# $1 = httpd|apr path segment, $2 = name, $3 = pin (tags/X or X) -> ${_hd_dl}/<name>-<X>/
+_hd_fetch() {
+  local v="${3#tags/}" a u
+  a="${2}-${v}.tar.gz"
+  u="https://archive.apache.org/dist/${1}/${a}"
+  if ! curl --connect-timeout 30 --max-time 600 -fsSL -o "${_hd_dl}/${a}" "${u}" \
+    || ! curl --connect-timeout 30 --max-time 60 -fsSL -o "${_hd_dl}/${a}.sha256" "${u}.sha256"; then
+    _hd_fatal "${2} ${v} could not be downloaded from archive.apache.org - httpd left as it was"
+  fi
+  # Apache writes `<64 hex> *<name>` (binary-mode `*`) [measured: httpd 2.4.68, apr 1.7.6,
+  # apr-util 1.6.5], so the name matches with or without the `*`.
+  local want
+  want="$(awk -v n="${a}" '($2 == n || $2 == "*" n) && length($1) == 64 { print $1 }' "${_hd_dl}/${a}.sha256")"
+  if [[ "$(grep -c . <<<"${want}")" != 1 ]]; then
+    _hd_fatal "${2} ${v}: ${a}.sha256 lists no single checksum for ${a} - httpd left as it was"
+  fi
+  if ! printf '%s  %s\n' "${want}" "${_hd_dl}/${a}" | sha256sum -c --quiet - >/dev/null 2>&1; then
+    _hd_fatal "${2} ${v}: ${a} does not match its published SHA-256 - httpd left as it was"
+  fi
+  # grep reads the whole listing (no -q): an early exit would SIGPIPE tar under pipefail.
+  if ! tar -tzf "${_hd_dl}/${a}" | grep -xF "${2}-${v}/configure" >/dev/null; then
+    _hd_fatal "${2} ${v}: ${a} holds no ${2}-${v}/configure - httpd left as it was"
+  fi
+  tar -C "${_hd_dl}" -xzf "${_hd_dl}/${a}"
+}
+_hd_v="${GLOBAL_STACK_HTTPD_VERSION#tags/}"
+_hd_apr="${GLOBAL_STACK_HTTPD_APR_VERSION#tags/}"
+_hd_apu="${GLOBAL_STACK_HTTPD_APR_UTIL_VERSION#tags/}"
+_hd_fetch httpd httpd "${_hd_v}"
+_hd_src="${_hd_dl}/httpd-${_hd_v}"
+_hd_fetch apr apr "${_hd_apr}"
+mv "${_hd_dl}/apr-${_hd_apr}" "${_hd_src}/srclib/apr"
+if [[ -n "${_hd_apu}" ]]; then
+  _hd_fetch apr apr-util "${_hd_apu}"
+  mv "${_hd_dl}/apr-util-${_hd_apu}" "${_hd_src}/srclib/apr-util"
+fi
 
-# If the versions differ, update HTTPD
-if [[ "${LATEST_HTTPD_VERSION}" != "${CURRENT_HTTPD_VERSION}" ]]; then
-  echo -e "\nUpdating httpd from ${CURRENT_HTTPD_VERSION} to (${GLOBAL_STACK_HTTPD_VERSION}) ${LATEST_HTTPD_VERSION}"
-  
-  # Remove old build directory and checkout the new version
-  rm -rf \
-    "${HTTPD_PATH}/httpd-build"
-  mkdir -p \
-    "${HTTPD_PATH}/httpd-build"
-  
-  svn checkout "http://svn.apache.org/repos/asf/httpd/httpd/${GLOBAL_STACK_HTTPD_VERSION}" \
-    "${HTTPD_PATH}/httpd-build"
+# The ModSecurity connector has no release; its pin is a commit (SHA-tracked, ruling
+# 2026-09-26 11:43), fetched as the GitHub archive of that ref. The archive's single top
+# directory is ModSecurity-apache-<ref> [measured: a sha and `master`], which also proves
+# GitHub served the ref that was asked for.
+_hd_msa=""
+if [[ -n "${GLOBAL_STACK_HTTPD_MODSECURITY_MOD_VERSION}" ]]; then
+  _hd_msa="ModSecurity-apache-${GLOBAL_STACK_HTTPD_MODSECURITY_MOD_VERSION}"
+  if ! curl --connect-timeout 30 --max-time 300 -fsSL -o "${_hd_dl}/msa.tar.gz" \
+    "https://github.com/owasp-modsecurity/ModSecurity-apache/archive/${GLOBAL_STACK_HTTPD_MODSECURITY_MOD_VERSION}.tar.gz"; then
+    _hd_fatal "ModSecurity-apache ${GLOBAL_STACK_HTTPD_MODSECURITY_MOD_VERSION} could not be downloaded - httpd left as it was"
+  fi
+  if [[ "$(tar -tzf "${_hd_dl}/msa.tar.gz" | awk -F/ '{ print $1 }' | sort -u)" != "${_hd_msa}" ]] \
+    || ! tar -tzf "${_hd_dl}/msa.tar.gz" | grep -xF "${_hd_msa}/autogen.sh" >/dev/null; then
+    _hd_fatal "ModSecurity-apache ${GLOBAL_STACK_HTTPD_MODSECURITY_MOD_VERSION}: the archive is not a single ${_hd_msa}/ tree with an autogen.sh - httpd left as it was"
+  fi
+  tar -C "${_hd_dl}" -xzf "${_hd_dl}/msa.tar.gz"
+fi
 
-  # Checkout APR and APR-util if necessary
-  cd "${HTTPD_PATH}/httpd-build"
-  svn co "http://svn.apache.org/repos/asf/apr/apr/${GLOBAL_STACK_HTTPD_APR_VERSION}" "srclib/apr"
-  [[ -n "${GLOBAL_STACK_HTTPD_APR_UTIL_VERSION}" ]] && svn co "http://svn.apache.org/repos/asf/apr/apr-util/${GLOBAL_STACK_HTTPD_APR_UTIL_VERSION}" "srclib/apr-util"
+_hd_oidc=""
+if [[ -n "${GLOBAL_STACK_HTTPD_MOD_AUTH_OPENIDC_VERSION}" ]]; then
+  _hd_oidc="${_hd_dl}/mod_auth_openidc"
+  if ! git clone --progress --branch "${GLOBAL_STACK_HTTPD_MOD_AUTH_OPENIDC_VERSION}" --depth 1 \
+    https://github.com/OpenIDC/mod_auth_openidc.git "${_hd_oidc}" \
+    || [[ ! -f "${_hd_oidc}/autogen.sh" ]]; then
+    _hd_fatal "mod_auth_openidc ${GLOBAL_STACK_HTTPD_MOD_AUTH_OPENIDC_VERSION} could not be cloned - httpd left as it was"
+  fi
+fi
 
-  # Build and configure httpd
-  ./buildconf
-  CFLAGS="-Og" ./configure \
+# Every input is here and checked: from now on the old httpd is replaced. logs/ is kept.
+mkdir -p "${HTTPD_PATH}"
+find "${HTTPD_PATH}" -mindepth 1 -maxdepth 1 ! -name logs -exec rm -rf {} +
+
+# --with-included-apr: without it configure is free to take the SYSTEM apr-1-config
+# (libapr1-dev and libaprutil1-dev are installed, apr-util 1.6.3), and the two apr pins
+# would be decoration. The check below proves which apr was compiled in.
+if ! (cd "${_hd_src}" \
+  && CFLAGS="-Og" ./configure \
     --prefix="${HTTPD_PATH}" \
+    --with-included-apr \
     --enable-load-all-modules \
     --with-ssl=/usr/lib/ssl \
     --enable-ssl \
@@ -88,70 +150,47 @@ if [[ "${LATEST_HTTPD_VERSION}" != "${CURRENT_HTTPD_VERSION}" ]]; then
     --enable-log-debug \
     --with-libxml2=/usr/lib \
     --with-ldap=ldap \
-    --with-openssl
-  
-  # Make and install
-  make prefix="${HTTPD_PATH}"
-  make prefix="${HTTPD_PATH}" install
-
-  cd "${HTTPD_PATH}"
-
-  rm -rf \
-    "${HTTPD_PATH}/httpd-build"
-else
-  echo -e "\nHttpd is already the latest version (${GLOBAL_STACK_HTTPD_VERSION} - ${CURRENT_HTTPD_VERSION})"
+    --with-openssl \
+  && make prefix="${HTTPD_PATH}" \
+  && make prefix="${HTTPD_PATH}" install); then
+  _hd_fatal "httpd ${_hd_v}: the build failed - the old httpd is already removed (prefix-baked), fix the cause and restart"
 fi
-
-# Install the Apache ModSecurity connector if needed
-if [[ -n "${GLOBAL_STACK_HTTPD_MODSECURITY_MOD_VERSION}" && "" != "${GLOBAL_STACK_HTTPD_MODSECURITY_MOD_VERSION}" ]]; then
-  mkdir -p "${MODSECURITY_APACHE_PATH}"
-  git clone --progress --branch "${GLOBAL_STACK_HTTPD_MODSECURITY_MOD_VERSION}" \
-    https://github.com/SpiderLabs/ModSecurity-apache.git \
-    --depth 1 "${MODSECURITY_APACHE_PATH}"
-
-  git -C "${MODSECURITY_APACHE_PATH}" config core.fileMode false
-  git -C "${MODSECURITY_APACHE_PATH}" submodule update --init
-
-  # Build and install the Apache connector
-  cd "${MODSECURITY_APACHE_PATH}"
-  ./autogen.sh
-  CFLAGS="-Og" ./configure \
+if [[ -n "${_hd_msa}" ]] && ! (cd "${_hd_dl}/${_hd_msa}" \
+  && ./autogen.sh \
+  && CFLAGS="-Og" ./configure \
     --with-apxs="${HTTPD_PATH}/bin/apxs" \
     --with-apache="${HTTPD_PATH}/bin/httpd" \
-    --with-libmodsecurity="${MODSECURITY_LIB_PATH}"
-  make
-  make install
-
-  cd "${HTTPD_PATH}"
-
-  rm -rf "${MODSECURITY_APACHE_PATH}"
+    --with-libmodsecurity="${MODSECURITY_LIB_PATH}" \
+  && make \
+  && make install); then
+  _hd_fatal "ModSecurity-apache ${GLOBAL_STACK_HTTPD_MODSECURITY_MOD_VERSION}: the build failed - httpd ${_hd_v} is built but has no ModSecurity module"
+fi
+if [[ -n "${_hd_oidc}" ]] && ! (cd "${_hd_oidc}" \
+  && ./autogen.sh \
+  && CFLAGS="-Og" ./configure --with-apxs="${HTTPD_PATH}/bin/apxs" \
+  && make \
+  && make install); then
+  _hd_fatal "mod_auth_openidc ${GLOBAL_STACK_HTTPD_MOD_AUTH_OPENIDC_VERSION}: the build failed - httpd ${_hd_v} is built but has no mod_auth_openidc"
 fi
 
-# Install the Apache mod_auth_openidc connector if needed
-if [[ -n "${GLOBAL_STACK_HTTPD_MOD_AUTH_OPENIDC_VERSION}" && "" != "${GLOBAL_STACK_HTTPD_MOD_AUTH_OPENIDC_VERSION}" ]]; then
-  mkdir -p "${MOD_AUTH_OPENIDC_APACHE_PATH}"
-  git clone --progress --branch "${GLOBAL_STACK_HTTPD_MOD_AUTH_OPENIDC_VERSION}" \
-    https://github.com/OpenIDC/mod_auth_openidc.git \
-    --depth 1 "${MOD_AUTH_OPENIDC_APACHE_PATH}"
-
-  git -C "${MOD_AUTH_OPENIDC_APACHE_PATH}" config core.fileMode false
-  git -C "${MOD_AUTH_OPENIDC_APACHE_PATH}" submodule update --init
-
-  # Build and install the Apache connector
-  cd "${MOD_AUTH_OPENIDC_APACHE_PATH}"
-  ./autogen.sh
-  CFLAGS="-Og" ./configure \
-    --with-apxs="${HTTPD_PATH}/bin/apxs"
-  make
-  make install
-
-  cd "${HTTPD_PATH}"
-
-  rm -rf "${MOD_AUTH_OPENIDC_APACHE_PATH}"
+# Check the build [measured: `Server version: Apache/2.4.68 (Unix)` and
+# `Compiled using: APR 1.7.6, APR-UTIL 1.6.5, PCRE ...`; `apachectl -t` -> Syntax OK on the
+# freshly installed conf, which httpd-setup replaces right after].
+find "${HTTPD_PATH}/bin" -type f -exec sudo chmod a+x {} \;
+if ! _hd_says="$("${HTTPD_PATH}/bin/httpd" -v 2>&1)" || [[ "${_hd_says}" != "Server version: Apache/${_hd_v} "* ]]; then
+  _hd_fatal "httpd ${_hd_v}: the built binary reports \"${_hd_says%%$'\n'*}\""
 fi
+_hd_apr_want="APR ${_hd_apr},"
+[[ -z "${_hd_apu}" ]] || _hd_apr_want="APR ${_hd_apr}, APR-UTIL ${_hd_apu},"
+if ! _hd_cfg="$("${HTTPD_PATH}/bin/httpd" -V 2>&1)" || ! grep -qF "Compiled using: ${_hd_apr_want}" <<<"${_hd_cfg}"; then
+  _hd_fatal "httpd ${_hd_v}: not compiled with the pinned ${_hd_apr_want%,} (httpd -V: \"$(grep -F 'Compiled using:' <<<"${_hd_cfg}" || true)\")"
+fi
+if ! "${HTTPD_PATH}/bin/apachectl" -t; then
+  _hd_fatal "httpd ${_hd_v}: apachectl -t rejects the freshly installed configuration"
+fi
+for _hd_m in ${_hd_msa:+mod_security3.so} ${_hd_oidc:+mod_auth_openidc.so}; do
+  [[ -f "${HTTPD_PATH}/modules/${_hd_m}" ]] || _hd_fatal "httpd ${_hd_v}: modules/${_hd_m} was not installed"
+done
 
-# Final permissions and cleanup
-cd "${HTTPD_PATH}"
-find bin -type f -exec sudo chmod a+x {} \;
-
+rm -rf "${_hd_dl}"
 cd "${GLOBAL_STACK_DOCKER_TOOLS_PATH}"
