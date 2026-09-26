@@ -2564,6 +2564,8 @@ assert_pass "38c: the excludes match GLOBAL_STACK_SHELL_ZSH_HISTORY_TARGET" \
 # i.e. that module has no tagged release at all and tracks a commit. Two builds from one
 # commit could differ. None of the four had an .env entry, so env-update could not see them.
 _CIOU="${DIST_BIN}/caddy-bin/global-stack-caddy-iou.sh"
+# Since tranche 3 step 22 there is no add-package at all (xcaddy builds the plugins in),
+# so 39a can no longer fire; 74j asserts add-package is gone and §74 covers the pins.
 assert_fail "39a: no add-package call is left unpinned" \
   bash -c 'grep -E "caddy add-package [^@]+$" "$1" | grep -qv "^[[:space:]]*#"' _ "${_CIOU}"
 for _p in TRANSFORM_ENCODER BROTLI SECURITY CACHE_HANDLER; do
@@ -6135,6 +6137,194 @@ assert_pass "73j: at least 2 executable curl calls in the iou, and every one car
   bash -c 'calls="$(grep -oE "curl [^;|]*" <<<"$1")"; [[ "$(grep -c . <<<"${calls}")" -ge 2 ]] && ! grep -vE "(^| )-[a-zA-Z]*f[a-zA-Z]*( |$)" <<<"${calls}" | grep -q .' _ "${_p73_exec}"
 assert_fail "73k: start.sh no longer removes tools/phpmyadmin itself (the swap moved behind the check)" \
   bash -c 'grep -vE "^[[:space:]]*#" "$1" | grep -qE "rm -rf[^#]*TOOLS_PATH}/phpmyadmin\""' _ "${_P73_START}"
+
+# ─── Section 74: caddy is built locally by a checked xcaddy, then checked, then replaces the old binary ──
+# Pin-audit tranche 3 step 22 (rulings 2026-09-26 11:17 and 11:43). start.sh wiped
+# tools/caddy on a CADDY bump, then the iou ran `go build` and four `caddy add-package`,
+# which DOWNLOAD a binary built by caddyserver.com [`caddy help add-package`]; nothing was
+# checked, and the four plugin pins were not gate inputs, so a plugin bump did nothing (A4).
+# The SHIPPED start.sh block (composite gate -> iou -> marker) runs here with the REAL iou
+# on PATH. The stubs model what was MEASURED: xcaddy 0.4.7's checksums.txt holds SHA-512
+# sums; `xcaddy version` -> `v0.4.7 h1:...`; `caddy version` -> `v2.11.4 h1:...`;
+# `caddy list-modules --packages --versions` -> `<module> <version> <package>`, a commit pin
+# listed as a pseudo-version ending in its first 12 hex digits.
+printf '\n── Section 74: caddy built by a checked xcaddy, checked, then replaces the old binary (tranche 3 step 22)\n'
+_P74="${TMP_DIR}/p74"
+mkdir -p "${_P74}/stub" "${_P74}/fix" "${_P74}/build"
+cat >"${_P74}/stub/curl" <<'EOF'
+#!/bin/bash
+out="" url="" fail=0
+while (($#)); do
+  case "$1" in
+    -o) out="$2"; shift ;;
+    --connect-timeout|--max-time) shift ;;
+    -*) [[ "$1" == --* ]] || [[ "$1" != *f* ]] || fail=1 ;;
+    *) url="$1" ;;
+  esac
+  shift
+done
+printf '%s\n' "${url}" >>"${P74_LOG}"
+src="${P74_FIX}/${url#https://}"
+if [[ -f "${src}" ]]; then cat "${src}" >"${out}"; exit 0; fi
+((fail)) && exit 22
+printf '<html>404</html>\n' >"${out}"
+EOF
+chmod +x "${_P74}/stub/curl"
+# The fixture xcaddy: `version`, and `build <v> --output <f> --with pkg@pin...` writing a
+# stub caddy that reports <v> and lists each plugin the way the real caddy does.
+# P74_BUILD_FAIL / P74_REPORT (another caddy version) / P74_DROP (a package left out) /
+# P74_SKEW (a package listed at another version) inject the failures.
+_p74_xcaddy() { # $1 = version it reports
+  cat <<EOF
+#!/bin/bash
+if [[ "\$1" == version ]]; then echo "$1 h1:stub="; exit 0; fi
+[[ "\$1" == build ]] || exit 2
+echo "build:GOTOOLCHAIN=\${GOTOOLCHAIN:-unset} \$*" >>"\${P74_LOG}"
+[[ -n "\${P74_BUILD_FAIL:-}" ]] && { echo "go: build failed" >&2; exit 1; }
+v="\$2"; shift 2; out=""; lines=""
+while ((\$#)); do
+  case "\$1" in
+    --output) out="\$2"; shift ;;
+    --with) pkg="\${2%@*}"; pin="\${2#*@}"; shift
+      [[ "\${pkg}" == "\${P74_DROP:-}" ]] && { shift; continue; }
+      [[ "\${pkg}" == "\${P74_SKEW:-}" ]] && pin="v9.9.9"
+      [[ "\${pin}" =~ ^[0-9a-f]{40}\$ ]] && pin="v0.0.0-20260101000000-\${pin:0:12}"
+      lines+="mod.\${pkg##*/} \${pin} \${pkg}"\$'\n' ;;
+  esac
+  shift
+done
+{ printf '#!/bin/bash\n'
+  printf 'if [[ "\$1" == version ]]; then echo "%s h1:x="; exit 0; fi\n' "\${P74_REPORT:-\${v}}"
+  printf 'if [[ "\$1" == list-modules ]]; then cat <<"MODS"\nhttp.handlers.file_server\n%sMODS\nfi\n' "\${lines}"
+} >"\${out}"
+chmod +x "\${out}"
+EOF
+}
+# _p74_rel <xcaddy version, no v> <what it reports> <sums: ok|bad|unlisted>
+_p74_rel() {
+  local d="${_P74}/fix/github.com/caddyserver/xcaddy/releases/download/v$1" b="${_P74}/build/$1" a="xcaddy_$1_linux_amd64.tar.gz"
+  rm -rf "${b}"
+  mkdir -p "${d}" "${b}"
+  _p74_xcaddy "$2" >"${b}/xcaddy"
+  chmod +x "${b}/xcaddy"
+  printf 'l\n' >"${b}/LICENSE"
+  tar -C "${b}" -czf "${d}/${a}" LICENSE xcaddy
+  case "$3" in
+    ok) printf '%s  %s\n' "$(sha512sum "${d}/${a}" | awk '{ print $1 }')" "${a}" >"${d}/xcaddy_$1_checksums.txt" ;;
+    bad) printf '%0128d  %s\n' 0 "${a}" >"${d}/xcaddy_$1_checksums.txt" ;;
+    unlisted) printf '%s  xcaddy_$1_linux_arm64.tar.gz\n' "$(sha512sum "${d}/${a}" | awk '{ print $1 }')" >"${d}/xcaddy_$1_checksums.txt" ;;
+  esac
+}
+_p74_rel 0.4.7 v0.4.7 ok
+_p74_rel 0.4.8 v0.4.8 bad
+_p74_rel 0.4.9 v0.4.9 unlisted
+_p74_rel 0.4.6 v0.4.60 ok # reports another version
+# v0.5.0 is not published (curl -f exits 22).
+_P74_TE=ba4124974830222da7f12a091cf11ddf4d49363f
+_P74_START="${DIST_BIN}/caddy-bin/global-stack-caddy-start.sh"
+awk '/^_caddy_want=/{f=1} f{print} f && /^ *printf .*CADDY_VERSIONS_PATH}"$/{m=1} m && /^fi$/{exit}' "${_P74_START}" >"${_P74}/block.sh"
+assert_pass "74a: the extracted start.sh block holds the composite gate, the iou call and the marker write (anchor non-vacuity)" \
+  bash -c 'grep -q "^_caddy_gate=" "$1" && grep -q "global-stack-caddy-iou.sh" "$1" && grep -q "CADDY_VERSIONS_PATH}\"$" "$1"' _ "${_P74}/block.sh"
+# _p74_run <caddy pin> <brotli pin> <old caddy|''> <marker|''> [RELOAD] [xcaddy pin] → state
+_p74_run() {
+  local r="${_P74}/r" rc=0 bin _p74_xc="${6:-v0.4.7}"
+  [[ "${_p74_xc}" != EMPTY ]] || _p74_xc="" # compose hands an un-scanned pin over EMPTY
+  rm -rf "${r}"
+  mkdir -p "${r}/tools/versions" "${r}/tools/errors" "${r}/tools/caddy/logs" "${r}/tools/caddy/vhosts" "${r}/tools/caddy/bin" "${r}/tmp"
+  printf 'log\n' >"${r}/tools/caddy/logs/access.log"
+  if [[ -n "${P74_STALE_BUILD:-}" ]]; then mkdir -p "${r}/tools/caddy/caddy-build" && printf 'module x\n' >"${r}/tools/caddy/caddy-build/go.mod"; fi
+  if [[ -n "$3" ]]; then
+    printf '#!/bin/bash\necho "%s h1:old="\n' "$3" >"${r}/tools/caddy/bin/caddy"
+    chmod +x "${r}/tools/caddy/bin/caddy"
+  fi
+  [[ -z "$4" ]] || printf '%s\n' "$4" >"${r}/tools/versions/caddy"
+  : >"${_P74}/log"
+  env -i HOME="${r}" TMPDIR="${r}/tmp" PATH="${_P74}/stub:${DIST_BIN}/caddy-bin:${DIST_BIN}/base-bin:/usr/bin:/bin" \
+    P74_FIX="${_P74}/fix" P74_LOG="${_P74}/log" P74_BUILD_FAIL="${P74_BUILD_FAIL:-}" P74_REPORT="${P74_REPORT:-}" \
+    P74_DROP="${P74_DROP:-}" P74_SKEW="${P74_SKEW:-}" \
+    GLOBAL_STACK_ERROR_TOKEN=caddy GLOBAL_STACK_DOCKER_TOOLS_PATH="${r}/tools" GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS="${r}/tools/errors" \
+    CADDY_PATH="${r}/tools/caddy" CADDY_VERSIONS_PATH="${r}/tools/versions/caddy" GLOBAL_STACK_RELOAD_CADDY="${5:-false}" \
+    GLOBAL_STACK_CADDY_VERSION="$1" GLOBAL_STACK_CADDY_BROTLI_VERSION="$2" GLOBAL_STACK_XCADDY_VERSION="${_p74_xc}" \
+    GLOBAL_STACK_CADDY_TRANSFORM_ENCODER_VERSION="${_P74_TE}" GLOBAL_STACK_CADDY_SECURITY_VERSION=v1.1.64 \
+    GLOBAL_STACK_CADDY_CACHE_HANDLER_VERSION=v0.17.0 \
+    bash -c 'set -eE -o pipefail; source "$1"; source "$2"' _ \
+    "${DIST_BIN}/base-bin/global-stack-base-version-gate.sh" "${_P74}/block.sh" >"${_P74}/last.log" 2>&1 || rc=fail
+  bin="$({ "${r}/tools/caddy/bin/caddy" version 2>/dev/null || true; } | awk '{ print $1 }')"
+  printf 'rc=%s caddy=%s marker=%s logs=%s token=%s fatal=%s tmp=%s builds=%s' "${rc}" "${bin:-none}" \
+    "$(cat "${r}/tools/versions/caddy" 2>/dev/null || echo none)" \
+    "$(if [[ -e "${r}/tools/caddy/logs/access.log" ]]; then echo kept; else echo gone; fi)" \
+    "$(if [[ -e "${r}/tools/errors/caddy" ]]; then echo 1; else echo 0; fi)" \
+    "$(grep -c '^FATAL: ' "${_P74}/last.log" || true)" "$(ls -A "${r}/tmp" | wc -l)" "$(grep -c '^build:' "${_P74}/log" || true)"
+}
+_p74_want() { printf '%s;transform-encoder=%s;brotli=%s;security=v1.1.64;cache-handler=v0.17.0' "$1" "${_P74_TE}" "$2"; }
+_P74_OLD="$(_p74_want v2.11.3 v1.6.0)"
+assert_pass "74b: caddy v2.11.3 -> pin v2.11.4: built by the checked xcaddy, checked, installed, composite marker, logs kept" \
+  test "$(_p74_run v2.11.4 v1.6.0 v2.11.3 "${_P74_OLD}")" = "rc=0 caddy=v2.11.4 marker=$(_p74_want v2.11.4 v1.6.0) logs=kept token=0 fatal=0 tmp=0 builds=1"
+assert_pass "74c: caddy pin moved back v2.11.4 -> v2.11.3" \
+  test "$(_p74_run v2.11.3 v1.6.0 v2.11.4 "$(_p74_want v2.11.4 v1.6.0)")" = "rc=0 caddy=v2.11.3 marker=${_P74_OLD} logs=kept token=0 fatal=0 tmp=0 builds=1"
+assert_pass "74d: a PLUGIN bump alone (brotli v1.6.0 -> v1.6.1) rebuilds caddy (it did nothing before)" \
+  test "$(_p74_run v2.11.3 v1.6.1 v2.11.3 "${_P74_OLD}")" = "rc=0 caddy=v2.11.3 marker=$(_p74_want v2.11.3 v1.6.1) logs=kept token=0 fatal=0 tmp=0 builds=1"
+assert_pass "74e: marker = every pin -> nothing downloaded or built" \
+  test "$(_p74_run v2.11.3 v1.6.0 v2.11.3 "${_P74_OLD}")" = "rc=0 caddy=v2.11.3 marker=${_P74_OLD} logs=kept token=0 fatal=0 tmp=0 builds=0"
+assert_pass "74f: marker = every pin but RELOAD_CADDY=true -> rebuilt" \
+  test "$(_p74_run v2.11.3 v1.6.0 v2.11.3 "${_P74_OLD}" true)" = "rc=0 caddy=v2.11.3 marker=${_P74_OLD} logs=kept token=0 fatal=0 tmp=0 builds=1"
+assert_pass "74g: first install (no binary, no marker)" \
+  test "$(_p74_run v2.11.4 v1.6.0 '' '')" = "rc=0 caddy=v2.11.4 marker=$(_p74_want v2.11.4 v1.6.0) logs=kept token=0 fatal=0 tmp=0 builds=1"
+for _p74_bad in 'v0.4.8|-|xcaddy checksum mismatch|does not match its published SHA-512' \
+  'EMPTY|-|the xcaddy pin is empty (.env.local not yet env-scanned)|GLOBAL_STACK_XCADDY_VERSION is empty' \
+  'v0.4.9|-|checksums.txt does not list the asset|lists no single checksum' \
+  'v0.5.0|-|xcaddy not published|could not be downloaded' \
+  'v0.4.6|-|xcaddy reports v0.4.60|reports "v0.4.60 h1' \
+  'v0.4.7|P74_BUILD_FAIL=1|xcaddy build fails|xcaddy build failed' \
+  'v0.4.7|P74_REPORT=v2.11.40|the built caddy reports v2.11.40|the built binary reports "v2.11.40' \
+  'v0.4.7|P74_DROP=github.com/ueffel/caddy-brotli|a plugin missing from the binary|lists github.com/ueffel/caddy-brotli at ""' \
+  'v0.4.7|P74_SKEW=github.com/greenpau/caddy-security|a plugin at another version|lists github.com/greenpau/caddy-security at "v9.9.9"' \
+  'v0.4.7|P74_SKEW=github.com/caddyserver/transform-encoder|the commit-pinned plugin at another version|lists github.com/caddyserver/transform-encoder at "v9.9.9"'; do
+  IFS='|' read -r _p74_x _p74_env _p74_why _p74_msg <<<"${_p74_bad}"
+  [[ "${_p74_env}" == - ]] && _p74_env="P74_NONE="
+  assert_pass "74h: ${_p74_why} -> its named FATAL + token, the old binary and marker untouched, logs kept, no temp dir left" \
+    bash -c '[[ "$1" == "rc=fail caddy=v2.11.3 marker=$4 logs=kept token=1 fatal=1 tmp=0 "* ]] && grep "^FATAL: " "$3" | grep -qF "$2"' _ \
+    "$(
+      export "${_p74_env?}"
+      _p74_run v2.11.4 v1.6.0 v2.11.3 "${_P74_OLD}" false "${_p74_x}"
+    )" \
+    "${_p74_msg}" "${_P74}/last.log" "${_P74_OLD}"
+done
+# Both ways, discovered (the §47 shape): every GLOBAL_STACK_CADDY_*_VERSION the iou builds
+# with is in the start.sh composite, and every one in the composite is built with.
+# `|| true`: an anchor matching nothing must red the floor below, not abort the run under
+# set -e with no tally.
+_p74_iou_vars="$(grep -vE '^[[:space:]]*#' "${DIST_BIN}/caddy-bin/global-stack-caddy-iou.sh" | grep -oE 'GLOBAL_STACK_CADDY_[A-Z_]+_VERSION' | sort -u || true)"
+_p74_want_vars="$(grep '^_caddy_want=' "${_P74_START}" | grep -oE 'GLOBAL_STACK_CADDY_[A-Z_]*VERSION' | sort -u || true)"
+assert_pass "74i: the composite holds the caddy pin plus at least 4 plugin pins (floor), and the iou builds with the same plugin set" \
+  bash -c '[[ "$(grep -c . <<<"$2")" -ge 5 ]] && [[ "$(grep -vx GLOBAL_STACK_CADDY_VERSION <<<"$2")" == "$(grep -vx GLOBAL_STACK_CADDY_VERSION <<<"$1")" ]]' _ "${_p74_iou_vars}" "${_p74_want_vars}"
+_p74_exec="$(grep -vE '^[[:space:]]*#' "${DIST_BIN}/caddy-bin/global-stack-caddy-iou.sh")"
+assert_pass "74j: at least 2 executable curl calls in the iou, every one with -f, and no add-package left" \
+  bash -c 'calls="$(grep -oE "curl [^;|]*" <<<"$1")"; [[ "$(grep -c . <<<"${calls}")" -ge 2 ]] && ! grep -vE "(^| )-[a-zA-Z]*f[a-zA-Z]*( |$)" <<<"${calls}" | grep -q . && ! grep -q "add-package" <<<"$1"' _ "${_p74_exec}"
+# 74k reads the WHOLE start.sh (comment lines out, backslash continuations joined): the
+# old wipe was a multi-line `rm -rf \` naming "${CADDY_PATH}" on its own line.
+assert_fail "74k: start.sh wipes \${CADDY_PATH} nowhere (the iou replaces the binary only after its checks)" \
+  bash -c 'grep -vE "^[[:space:]]*#" "$1" | sed -e ":a" -e "/\\\\$/{N;s/\\\\\n//;ba}" | grep -qE "rm -rf.*\"\\\$\{CADDY_PATH\}\"( |$)"' _ "${_P74_START}"
+# GOTOOLCHAIN defaults to `auto` [measured: tools/go 1.27.1], under which a module whose
+# go.mod needs a newer go makes go DOWNLOAD an unpinned toolchain. The build must run with
+# `local`, so that case fails the build (a named FATAL) instead of fetching.
+_p74_run v2.11.4 v1.6.0 v2.11.3 "${_P74_OLD}" >/dev/null
+assert_pass "74l: xcaddy builds with GOTOOLCHAIN=local (a newer-go module FATALs, never downloads a toolchain)" \
+  bash -c 'grep "^build:" "$1" | grep -q "^build:GOTOOLCHAIN=local "' _ "${_P74}/log"
+# The old build left a git clone of caddy at tools/caddy/caddy-build; a build removes it.
+P74_STALE_BUILD=1 _p74_run v2.11.4 v1.6.0 v2.11.3 "${_P74_OLD}" >/dev/null
+assert_fail "74m: a build removes the old build's caddy-build clone" \
+  test -e "${_P74}/r/tools/caddy/caddy-build/go.mod"
+# ...and only a build does: with the marker current nothing runs, so the fixture stays
+# (this is also 74m's non-vacuity — a fixture that was never created would pass 74m).
+P74_STALE_BUILD=1 _p74_run v2.11.3 v1.6.0 v2.11.3 "${_P74_OLD}" >/dev/null
+assert_pass "74m2: ...and nothing touches it when no build runs (74m's fixture is real)" \
+  test -e "${_P74}/r/tools/caddy/caddy-build/go.mod"
+# The builder is pinned like everything else (the §39 shape): defined, annotated, plumbed.
+assert_pass "74n: .env pins GLOBAL_STACK_XCADDY_VERSION under an @todo env-update annotation" \
+  bash -c 'grep -B1 "^GLOBAL_STACK_XCADDY_VERSION=v[0-9]" "$1" | grep -q "^# @todo env-update github:caddyserver/xcaddy "' _ "${REPO_ROOT}/.env"
+assert_pass "74n: ...and 01caddy plumbs it into the container" \
+  grep -q 'GLOBAL_STACK_XCADDY_VERSION=${GLOBAL_STACK_XCADDY_VERSION}' "${REPO_ROOT}/docker/images/01caddy/docker-compose.yaml"
 
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
