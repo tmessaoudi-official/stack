@@ -827,8 +827,8 @@ Rust comments. `.claude/skills/bump-versions/SKILL.md:24` stops advising marker 
 plan's wrong `/bump-versions` statement; install-tools stale symfony comment; `LOCAL_RELOAD_FLUTTER3_41_9`
 in the do-not-wipe lists; Files cells of rows 14 and 17; the RELOAD question moved to `### Needs input`.
 P3: named FATALs for `install-go.sh` `_go_sha=` and `install-mise.sh` first `_mise_got=`.
-**Done — `293a8d0` (code + tests), `f87cf44` (images), `b0f846f` (docs); CLAUDE.md via
-`/tmp/edit-claudemd-step26-20260926.sh` (classifier-blocked; dry-run on a copy: 7/7 anchors).**
+**Done — `293a8d0` (code + tests), `f87cf44` (images), `b0f846f` (docs), `9cbf20b` (6C follow-up);
+CLAUDE.md `21d598f`, via `/tmp/edit-claudemd-step26-20260926.sh` (classifier-blocked; run by the developer, 7/7 anchors).**
 
 - **Scope widened on purpose (the P2 plumbing finding):** documenting the go/zig/mise "image-baked"
   pins showed a real defect, not just a gap in the docs. 00base installs them at BOOT
