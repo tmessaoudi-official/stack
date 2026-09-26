@@ -33,7 +33,6 @@ RUN shopt -s extdebug \
     && IFS=$'\n\t' \
     && apt-get update --allow-releaseinfo-change \
     && apt-get install -y --no-install-recommends --fix-missing \
-    subversion \
     libnghttp2-dev \
     libcurl4-gnutls-dev \
     libtool-bin \
