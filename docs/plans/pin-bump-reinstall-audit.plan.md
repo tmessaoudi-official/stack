@@ -36,6 +36,7 @@ version and its usage ! no implementation yet !"* — AUDIT ONLY; nothing below 
 - [2026-09-26 11:43] AGREED: caddy is built locally with xcaddy (new pin GLOBAL_STACK_XCADDY_VERSION, checksum-verified); add-package is dropped.
 - [2026-09-26 11:43] AGREED: phpMyAdmin and the ModSecurity-apache connector are SHA-tracked (use-sha annotations, the php.edge shape; phpMyAdmin TYPE=commit).
 - [2026-09-26 15:52] AGREED: the shared ModSecurity build drops `--with-lua` (no image installs a Lua dev package, no config uses Lua; configure then auto-detects and builds without it) — step 23a; it also needs `submodule update --init --recursive` (Mbed TLS's nested submodules), both measured in the 01caddy image.
+- [2026-09-26 23:29] AGREED: step 27 runs the three-lens reviewer panel for ONE round on frozen 3400670 (range 1906f6c..3400670), not the repo's two-consecutive-clean-rounds default; findings are fixed or logged, with no second round.
 
 ## Formal Plan
 <!-- written at Phase 4 — tranche 1, APPROVED 2026-09-24 15:05 (steps 5-9; step 8 revised) -->
