@@ -195,6 +195,26 @@ for _p in ${BOOT_PINS+"${BOOT_PINS[@]}"}; do
     ko "7: 00base resolved ${_p}='${_got}' at runtime (want '${_want}' from .env.local)"
   fi
 done
+# install-mise.sh also exports the bare MISE_VERSION into the host's mise.shellrc, and
+# it derives from the same pin — so it must track at runtime too, or the host sees the
+# old version next to the new binary.
+_want="$(sed -n 's/^GLOBAL_STACK_MISE_VERSION=//p' "${REPO_ROOT}/.env.local" | tail -1)"
+_got="$( (cd "${REPO_ROOT}" && docker compose --env-file .env.local config --format json 2>/dev/null) \
+  | jq -r '.services["00base"].environment.MISE_VERSION // "<absent>"' 2>/dev/null)"
+if [[ -n "${_want}" && "${_got}" == "${_want}" ]]; then
+  ok "7: 00base's MISE_VERSION (exported to mise.shellrc) tracks GLOBAL_STACK_MISE_VERSION=${_got}"
+else
+  ko "7: 00base's runtime MISE_VERSION='${_got}' (want '${_want}', the GLOBAL_STACK_MISE_VERSION value)"
+fi
+# The hurl exemption is a decision, so it is pinned both ways: its pin must stay OUT of the
+# runtime env, or every env-only hurl bump fails the 00base boot (install-hurl.sh FATAL).
+_got="$( (cd "${REPO_ROOT}" && docker compose --env-file .env.local config --format json 2>/dev/null) \
+  | jq -r '.services["00base"].environment | if . == null then "<no env>" elif has("GLOBAL_STACK_HURL_VERSION") then "present" else "absent" end' 2>/dev/null)"
+if [[ "${_got}" == absent ]]; then
+  ok "7: GLOBAL_STACK_HURL_VERSION stays out of 00base's runtime env (the image build supplies it)"
+else
+  ko "7: GLOBAL_STACK_HURL_VERSION in 00base's runtime env is '${_got}' — an env-only hurl bump would FATAL the boot"
+fi
 if [[ "${_exempt}" -eq 1 && "${_checked}" -ge 3 ]]; then
   ok "7: ${_checked} boot-installed pin(s) derived from ${BASE_START##*/}, hurl exempt by name"
 else

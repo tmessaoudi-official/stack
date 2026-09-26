@@ -837,8 +837,12 @@ P3: named FATALs for `install-go.sh` `_go_sha=` and `install-mise.sh` first `_mi
   therefore gated against the OLD pin and installed nothing. This is F3's shape (USE_LOCKS). The three
   now reach 00base's runtime `environment:`, and the build args stay as the default.
   - `compose-env-plumbing.test.sh` §7 derives the pin set from the installers `base-start.sh` calls.
-    It was 3 red before the fix (`<absent>` at runtime) and is 19/19 after. A broken derivation fails
+    It was 3 red before the fix (`<absent>` at runtime) and is 21/21 after. A broken derivation fails
     its floor.
+  - 6C follow-up: the bare `MISE_VERSION`, exported by install-mise into the host's `mise.shellrc`, is
+    plumbed too (it was also image-frozen). §7 pins hurl staying OUT of the runtime env, and both new
+    checks fail on a swap mutation with a byte-identical restore. The skill's step 5 names the two
+    ungated sites (frankenphp, awscli).
   - hurl is exempt by name, and is the floor. Its binary is compiled by the image, so its pin must come
     from the same build (install-hurl.sh FATALs on a build/pin mismatch). Plumbing it would turn every
     env-only hurl bump into a failed 00base boot.
@@ -861,7 +865,7 @@ P3: named FATALs for `install-go.sh` `_go_sha=` and `install-mise.sh` first `_mi
     the RELOAD question moved to Needs input.
   - CLAUDE.md (hand-off): restart vs rebuild plus the tranche-3 end state, 1063 tests with a §70-§77
     sentence, the §58 model, plumbing §7, and the local flutter switch.
-- **Results:** startup-prologue 1063/1063, plumbing 19/19, `config -q` rc 0.
+- **Results:** startup-prologue 1063/1063, plumbing 21/21, `config -q` rc 0.
 - **UNCERTIFIED-BY-EXECUTION:**
   - The `subversion` removal and the 00base runtime env. The images are not rebuilt and 00base is not
     restarted; the plumbing is proven by `docker compose config` resolution only.
