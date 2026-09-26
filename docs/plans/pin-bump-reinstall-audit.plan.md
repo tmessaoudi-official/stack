@@ -500,6 +500,20 @@ then drop the old dir and wipe `pkg.*`; the marker is written where it is today 
 
 ### Step 17 — docs (S)
 CLAUDE.md hand-off (runtimes now delete-after-install; staged go/zig/hurl; the php.edge exception), memory.
+- AS BUILT (17): the unblocked surfaces first, in one commit: `docs/BLAST-RADIUS.md`'s RELOAD row,
+  `templates/tips/env-scan.md` (a note under the RELOAD table), `/debug-service`'s two runbook lines, and the
+  §67 label (five → six phars; test TEXT only, `bash -n` is the evidence and the tally stays 888). The RELOAD
+  inventory covered CLAUDE.md, BLAST-RADIUS, templates/tips, `.env`, `.claude/skills` (`/stack-ask-human`
+  and `/bump-versions` state no wipe semantics and are left; `.env:1448`'s one-line comment is left as a
+  pointer). The corrected claim: `RELOAD_NODE*` / `_JAVA*` / `_FLUTTER3` remove only the success and version
+  markers [Verified: read `nvm-start.sh:43-46`, `sdkman-start.sh:58-61`, `fvm-start.sh:41-44`], after which
+  the installer no-ops on the version dir on disk [Inferred: the step-11 finding, not re-run]. CLAUDE.md
+  goes through `/tmp/edit-claudemd-tranche2-20260926.sh` (classifier-blocked): the Common Workflows comment
+  (what tranche 2 delivered, with android's pre-install wipe and php.edge as the two exceptions, and hurl's
+  00base rebuild), the three RELOAD statements, the test count 685 → 888 with a §60-§69 sentence, and two
+  Gotchas lines (the checksums.txt refusal with the URL-only phar versions; `/new-service` scaffolds no gate,
+  the scaffold fix logged as a follow-up). The script commits CLAUDE.md alone, then this plan's row 17 with
+  that commit's sha. Step 16 commits: `42b5eb2` + `bbcadb2`.
 
 ### Not in tranche 2 (still open from the audits)
 A3 FRANKENPHP launch skip; A4 caddy plugin pins; A5 nginx/httpd modules; A6 `make rebuild` not pushing;
@@ -526,8 +540,8 @@ escape hatches keeping pkg markers; the `source X && cmd` class.
 | 13 | rbenv plugins reuse step 6's in-place tag move | S | done | 46e80a7 | docker/config/dist/bin/rbenv-bin/**, bin/tests/startup-prologue.test.sh |
 | 14 | go/zig/mise/hurl: check first, then wipe and install fresh (14a/14b/14c) | L | done | 8bae406 | docker/config/dist/bin/base-bin/**, docker/images/00base/**, bin/tests/startup-prologue.test.sh |
 | 15 | all 11 phpbrew tools: check first, then replace (15a/15b/15c) | L | done | ff79ee0 | docker/config/dist/bin/phpbrew-bin/**, bin/tests/startup-prologue.test.sh |
-| 16 | android: stop wiping GRADLE_USER_HOME | S | done | - | docker/config/dist/bin/android-bin/**, bin/tests/startup-prologue.test.sh |
-| 17 | Docs: CLAUDE.md tranche 2 (hand-off) | S | todo | - | CLAUDE.md |
+| 16 | android: stop wiping GRADLE_USER_HOME | S | done | 42b5eb2 | docker/config/dist/bin/android-bin/**, bin/tests/startup-prologue.test.sh |
+| 17 | Docs: CLAUDE.md tranche 2 (hand-off) | S | doing | - | CLAUDE.md |
 <!-- /progress-block -->
 ### Blocked
 ### Needs input

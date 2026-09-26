@@ -376,6 +376,13 @@ start (can take 30+ minutes).
 | `GLOBAL_STACK_RELOAD_FVM` | Force FVM (manager) reinstall |
 | `GLOBAL_STACK_RELOAD_FLUTTER3` | Force Flutter 3 reinstall |
 
+> **Not every RELOAD wipes** (pin-audit tranche 2, `docs/plans/pin-bump-reinstall-audit.plan.md`): the
+> `NODE*`, `JAVA*` and `FLUTTER3` switches remove only the success and version markers
+> (`nvm-start.sh`, `sdkman-start.sh`, `fvm-start.sh`); the installer then finds the version
+> directory already on disk and does nothing, so they do NOT reinstall (a Known issue since
+> tranche 2 step 11). `GLOBAL_STACK_RELOAD_ANDROID` wipes the SDK but keeps `GRADLE_USER_HOME`
+> (step 16).
+
 > **Compose-internal mapped names**: each tier-03 compose file maps its per-version var
 > to a generic container-internal name — e.g. `GLOBAL_STACK_RELOAD_NODE=${GLOBAL_STACK_RELOAD_NODE24}`
 > in `docker/images/03node24/docker-compose.yaml`. The generic names (`RELOAD_NODE`,

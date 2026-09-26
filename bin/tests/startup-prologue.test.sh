@@ -5382,7 +5382,7 @@ assert_pass "66j: cwd = the projects dir, composer reinstall + zephir bump -> bo
 assert_fail "66i: composer-setup.php (the unpinned bootstrap) is gone from executable lines" \
   bash -c 'grep -vE "^[[:space:]]*#" "$1" | grep -q "composer-setup\.php"' _ "${PHPBREW_TOOLS}"
 
-# ─── Section 67: the five phars are checked before they replace the old one ──
+# ─── Section 67: the six phars are checked before they replace the old one (castor since 15c) ──
 # Pin-audit tranche 2 step 15b. zephir, phalcon, pickle, pie and deployer used to go
 # straight from the download into tools/bin: `curl -fsSLO` + `mv` (deployer `curl -LO`
 # with no -f, so a 404 page was installed and its marker written). None publishes a
@@ -5392,7 +5392,7 @@ assert_fail "66i: composer-setup.php (the unpinned bootstrap) is gone from execu
 # there (mbstring missing), so their VERSION is pinned by URL only. castor (step 15c) joins
 # them: it used to be `castor install | bash`, whose default is this same phar, and it
 # runs under the image's php, so it is version-checked like deployer and pie.
-printf '\n── Section 67: the five phars checked before they replace the old one (tranche 2 step 15b)\n'
+printf '\n── Section 67: the six phars checked before they replace the old one (tranche 2 steps 15b/15c)\n'
 _P67_TOOLS='zephir:ZEPHIR:zephir:zephir.phar:bin/zephir:zephir::
 phalcon:PHALCON:phalcon-devtools:phalcon.phar:bin/phalcon:phalcon:v:
 deployer:DEPLOYER:deployer:deployer.phar:bin/dep:deployer:v:Deployer %s

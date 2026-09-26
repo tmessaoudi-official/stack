@@ -21,8 +21,8 @@ If no service name provided, list failed services from `ls tools/errors/ 2>/dev/
 5. **Version markers**: `ls tools/versions/ 2>/dev/null` — check whether the runtime's install marker exists (a missing marker means the next start triggers a full reinstall)
 6. **Root-cause hypothesis**: correlate the findings (error token content, log tail, dependency health, marker state) into a single hypothesis and suggest next actions **without executing any of them**:
    - `make login-<service>` — shell in for interactive inspection
-   - `GLOBAL_STACK_RELOAD_<RUNTIME>=true` in `.env.local` + restart — force full reinstall (slow; reset to `false` after)
-   - delete `tools/versions/<marker>` — force reinstall of that runtime only
+   - `GLOBAL_STACK_RELOAD_<RUNTIME>=true` in `.env.local` + restart — force a reinstall (slow; reset to `false` after) — node/java/flutter only drop their markers and do NOT reinstall: CLAUDE.md § Gotchas, the `RELOAD_*` bullet
+   - delete `tools/versions/<marker>` — force reinstall of that runtime only (same node/java/flutter caveat)
    - `make restart-<service>` — simple restart if the failure looks transient
 
 ## Output:

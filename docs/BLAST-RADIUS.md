@@ -22,7 +22,7 @@
 > | `make soft-restart` | **NOT a soft restart.** `sudo rm -rf`s `tools/` and restores from `var/tools`; a stale `var/tools` costs a multi-10-minute full reinstall. The documented soft restart is `make down-n-up`. |
 > | `make hard-restart` | Wipes all images + volumes, rebuilds from scratch. |
 > | `docker volume rm …` | DB state lives in **named volumes**, not `docker/data/` — removing one is the credential/data reset, and it is irreversible. |
-> | `GLOBAL_STACK_RELOAD_*=true` | Forces a full tier reinstall (30+ min). Reset to `false` after use. |
+> | `GLOBAL_STACK_RELOAD_*=true` | Forces a tier reinstall (30+ min). Reset to `false` after use. Not every one wipes: `_NODE*` / `_JAVA*` / `_FLUTTER3` drop only the markers and the installer then no-ops on the version dir already on disk; `_ANDROID` wipes the SDK but keeps `GRADLE_USER_HOME` — CLAUDE.md § Gotchas. |
 > | `bin/env-update.sh --apply` | Rewrites `.env`; cascades into `.env.local` + Dockerfile `ARG` lines via `env-scan`. Rollback: `git checkout -- .env` then restore the newest `.env.local.bak.*`. Always `--check --dry-run` first. |
 > | `make save` | Exports **every** Docker image on the machine, not just stack images — slow and disk-hungry. |
 > | `make create-buildx-builder` | **Bounces the host Docker daemon** (`systemctl stop docker` … `start docker`), killing every running container on the machine — including containers from unrelated projects. Also `sudo rm -rf`s the buildkit state volume. |
