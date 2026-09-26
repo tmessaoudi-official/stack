@@ -510,7 +510,8 @@ CLAUDE.md hand-off (runtimes now delete-after-install; staged go/zig/hurl; the p
   `templates/tips/env-scan.md` (a note under the RELOAD table), `/debug-service`'s two runbook lines, and the
   §67 label (five → six phars; test TEXT only, `bash -n` is the evidence and the tally stays 888). The RELOAD
   inventory covered CLAUDE.md, BLAST-RADIUS, templates/tips, `.env`, `.claude/skills` (`/stack-ask-human`
-  and `/bump-versions` state no wipe semantics and are left; `.env:1448`'s one-line comment is left as a
+  states no wipe semantics and is left; `/bump-versions` was WRONGLY left too — its step 5 advised deleting
+  the marker or setting RELOAD, the broken path; corrected in step 26; `.env:1448`'s one-line comment is left as a
   pointer). The corrected claim: `RELOAD_NODE*` / `_JAVA*` / `_FLUTTER3` remove only the success and version
   markers [Verified: read `nvm-start.sh:43-46`, `sdkman-start.sh:58-61`, `fvm-start.sh:41-44`], after which
   the installer no-ops on the version dir on disk [Inferred: the step-11 finding, not re-run]. CLAUDE.md
@@ -826,6 +827,44 @@ Rust comments. `.claude/skills/bump-versions/SKILL.md:24` stops advising marker 
 plan's wrong `/bump-versions` statement; install-tools stale symfony comment; `LOCAL_RELOAD_FLUTTER3_41_9`
 in the do-not-wipe lists; Files cells of rows 14 and 17; the RELOAD question moved to `### Needs input`.
 P3: named FATALs for `install-go.sh` `_go_sha=` and `install-mise.sh` first `_mise_got=`.
+**Done — `293a8d0` (code + tests), `f87cf44` (images), `b0f846f` (docs); CLAUDE.md via
+`/tmp/edit-claudemd-step26-20260926.sh` (classifier-blocked; dry-run on a copy: 7/7 anchors).**
+
+- **Scope widened on purpose (the P2 plumbing finding):** documenting the go/zig/mise "image-baked"
+  pins showed a real defect, not just a gap in the docs. 00base installs them at BOOT
+  (`base-start.sh` → `base-install-{go,zig,mise}.sh`, sole caller [Verified: git grep + local.* sweep]),
+  but their pins reached it only as build args frozen in the image `ENV`. A `.env` bump plus a restart
+  therefore gated against the OLD pin and installed nothing. This is F3's shape (USE_LOCKS). The three
+  now reach 00base's runtime `environment:`, and the build args stay as the default.
+  - `compose-env-plumbing.test.sh` §7 derives the pin set from the installers `base-start.sh` calls.
+    It was 3 red before the fix (`<absent>` at runtime) and is 19/19 after. A broken derivation fails
+    its floor.
+  - hurl is exempt by name, and is the floor. Its binary is compiled by the image, so its pin must come
+    from the same build (install-hurl.sh FATALs on a build/pin mismatch). Plumbing it would turn every
+    env-only hurl bump into a failed 00base boot.
+  - The old CLAUDE.md line "a hurl bump … until then 00base WARNs" was wrong. That WARN is for images
+    built before step 14c; an env-only hurl bump changes nothing until the rebuild.
+- **P3 fixes:** named FATALs at `install-go.sh` `_go_sha=` ("cannot fetch the published SHA-256") and
+  at `install-mise.sh`'s first `_mise_got=` (the capture now sits inside its `if`). Tests 63n and 64g2
+  were red before for exactly that reason: the state was safe but the log had no FATAL line. The stale
+  install-tools symfony comment now says what the `cd` still guards; no cwd-relative write remains.
+- **Images:** `subversion` is dropped from the 01caddy, 01httpd and 01nginx Dockerfiles. `svn` has no
+  user left in any of their trees, dist/bin or http-common. hadolint output is unchanged.
+- **Docs:**
+  - `.env`: go/zig/mise reinstall on restart; hurl only with a 00base rebuild; both Rust pins feed the
+    hurl-build stage (386 s); the ModSecurity note describes the boot-time build, and its two conf
+    paths are corrected. env-update still parses all seven records.
+  - `/bump-versions` step 5 no longer advises deleting a marker or setting RELOAD, and sorts pins into
+    restart vs rebuild.
+  - BLAST-RADIUS and the env-scan tip name `LOCAL_RELOAD_FLUTTER3_41_9`.
+  - This plan: the line-513 claim is corrected, the Files cells of rows 14 and 17 are completed, and
+    the RELOAD question moved to Needs input.
+  - CLAUDE.md (hand-off): restart vs rebuild plus the tranche-3 end state, 1063 tests with a §70-§77
+    sentence, the §58 model, plumbing §7, and the local flutter switch.
+- **Results:** startup-prologue 1063/1063, plumbing 19/19, `config -q` rc 0.
+- **UNCERTIFIED-BY-EXECUTION:**
+  - The `subversion` removal and the 00base runtime env. The images are not rebuilt and 00base is not
+    restarted; the plumbing is proven by `docker compose config` resolution only.
 
 ### Step 27 — milestone panel over tranches 2+3 (frozen commit; two consecutive clean rounds, cap 5)
 
@@ -851,10 +890,10 @@ until the developer rebuilds.
 | 11 | Runtimes nvm/php/java/flutter delete-after-install (php.edge exempt) | M | done | 902f08f | docker/config/dist/bin/base-bin/**, docker/config/dist/bin/nvm-bin/**, docker/config/dist/bin/phpbrew-bin/**, docker/config/dist/bin/sdkman-bin/**, docker/config/dist/bin/fvm-bin/**, bin/tests/startup-prologue.test.sh |
 | 12 | Package slots: cleanup only after the new install succeeded | M | done | f5075ed | docker/config/dist/bin/base-bin/**, docker/config/dist/bin/rbenv-bin/**, docker/config/dist/bin/sdkman-bin/**, bin/tests/startup-prologue.test.sh |
 | 13 | rbenv plugins reuse step 6's in-place tag move | S | done | 46e80a7 | docker/config/dist/bin/rbenv-bin/**, bin/tests/startup-prologue.test.sh |
-| 14 | go/zig/mise/hurl: check first, then wipe and install fresh (14a/14b/14c) | L | done | 8bae406 | docker/config/dist/bin/base-bin/**, docker/images/00base/**, bin/tests/startup-prologue.test.sh |
+| 14 | go/zig/mise/hurl: check first, then wipe and install fresh (14a/14b/14c) | L | done | 8bae406 | docker/config/dist/bin/base-bin/**, docker/images/00base/**, bin/tests/startup-prologue.test.sh, templates/shell/.profile |
 | 15 | all 11 phpbrew tools: check first, then replace (15a/15b/15c) | L | done | ff79ee0 | docker/config/dist/bin/phpbrew-bin/**, bin/tests/startup-prologue.test.sh |
 | 16 | android: stop wiping GRADLE_USER_HOME | S | done | 42b5eb2 | docker/config/dist/bin/android-bin/**, bin/tests/startup-prologue.test.sh |
-| 17 | Docs: CLAUDE.md tranche 2 (hand-off) | S | done | 3413222 | CLAUDE.md |
+| 17 | Docs: CLAUDE.md tranche 2 (hand-off) | S | done | 3413222 | CLAUDE.md, .claude/skills/debug-service/**, docs/BLAST-RADIUS.md, templates/tips/env-scan.md, docs/plans/**, bin/tests/startup-prologue.test.sh |
 | 18 | fvm: temp-dir fetch, listing + --version, install, marker last | S | done | 033ba49 | docker/config/dist/bin/fvm-bin/**, bin/tests/startup-prologue.test.sh |
 | 19 | deno + bun: pinned zip + checksum, no installer script, no pipe | M | done | a6d2e63 | docker/config/dist/bin/nvm-bin/**, bin/tests/startup-prologue.test.sh |
 | 20 | rust: rustup-init checked before the wipe, rustc --version after | S | done | 5f41482 | docker/config/dist/bin/rust-bin/**, bin/tests/startup-prologue.test.sh |
@@ -864,11 +903,16 @@ until the developer rebuilds.
 | 23 | httpd + shared ModSecurity: archive tarballs + sha256, composite gate, build check | L | done | f49f7d7 | docker/config/dist/bin/httpd-bin/**, docker/config/dist/bin/nginx-bin/global-stack-nginx-iou-common.sh, docker/config/dist/bin/nginx-bin/global-stack-nginx-start.sh, .env, bin/tests/startup-prologue.test.sh |
 | 24 | nginx: PGP-verified tarball, connector in temp, composite gate, build check | M | done | 82a3524 | docker/config/dist/bin/nginx-bin/**, bin/tests/startup-prologue.test.sh |
 | 25 | php.edge: post-build php check before the sidecar marker | S | done | b273b9c | docker/config/dist/bin/phpbrew-bin/**, bin/tests/startup-prologue.test.sh |
-| 26 | Docs + tranche-2 panel findings (CLAUDE.md hand-off, skill, .env comments, P3s) | M | todo | - | CLAUDE.md, .env, .claude/skills/bump-versions/**, docs/plans/**, docker/config/dist/bin/base-bin/**, docker/config/dist/bin/phpbrew-bin/** |
+| 26 | Docs + tranche-2 panel findings (CLAUDE.md hand-off, skill, .env comments, P3s) | M | done | 293a8d0 | CLAUDE.md, .env, .claude/skills/bump-versions/**, docs/plans/**, docs/BLAST-RADIUS.md, templates/tips/env-scan.md, docker/config/dist/bin/base-bin/**, docker/config/dist/bin/phpbrew-bin/**, docker/images/00base/**, docker/images/01caddy/**, docker/images/01httpd/**, docker/images/01nginx/**, bin/tests/** |
 | 27 | Milestone panel over tranches 2+3 (frozen commit, two clean rounds) | M | todo | - | var/claude/** |
 <!-- /progress-block -->
 ### Blocked
 ### Needs input
+- RELOAD semantics (moved from Known issues at step 26): `RELOAD_NODE` / `RELOAD_JAVA` / `RELOAD_FLUTTER=true`
+  (and `GLOBAL_STACK_LOCAL_RELOAD_FLUTTER3_41_9`, which feeds the same container switch) remove the version
+  marker only; the gate says `install`, the installer finds the version already on disk and no-ops, so these
+  do NOT reinstall (the php and `RELOAD_FVM` flags do wipe). Found at step 11 3C. Not a pin-bump path — a pin
+  bump reinstalls through the gate. Your call: should RELOAD mean a real wipe for these three?
 - Resolved and moved to the Decisions Log: A1–A7/B/C ordering and tranche-1 approval (steps 5–9 landed),
   host claude (keep auto-update), env-update downgrade policy (rule 5 stays SKIP, 23:40).
 ### Needs research
@@ -905,10 +949,6 @@ until the developer rebuilds.
   class step 15c removed from 02phpbrew (mago/castor). Host surface, outside tranche 2; logged, not fixed.
 - `/new-service` (`.claude/skills/new-service/SKILL.md`) scaffolds a startup script with NO version gate at all
   (`grep -c gs_version_gate` → 0), so a service created from it never reinstalls on a pin bump. Step 17 material.
-- `RELOAD_NODE` / `RELOAD_JAVA` / `RELOAD_FLUTTER=true` remove the version marker only. The gate then says
-  `install`, the installer finds the version already on disk and no-ops, so these RELOAD flags do NOT
-  reinstall anything (the php and `RELOAD_FVM` flags do wipe). Found at step 11 3C; not fixed (it is not a
-  pin-bump path). Needs a ruling if RELOAD should mean a real wipe for these three.
 - A consumer container that is ALREADY running when its runtime reinstalls keeps a PATH baked at its own
   boot and loses the old version dir under it. Starting consumers are safe: they wait on
   `successes/<rt>.<AS>`, which the runtime removes before its gate runs [Verified: alltogether `:19-28`,
