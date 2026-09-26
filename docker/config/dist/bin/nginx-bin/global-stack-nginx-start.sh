@@ -79,18 +79,12 @@ global-stack-base-wait-for.sh \
 # what row 15's extraction exists for. Sourced here, above the first use.
 source global-stack-base-version-gate.sh
 
-_ngx_gate="$(gs_version_gate "${NGINX_VERSIONS_PATH}" "${GLOBAL_STACK_NGINX_VERSION}" "nginx")"
-
-# Clean up old installations if needed
-if [[ "${GLOBAL_STACK_RELOAD_NGINX}" == "true" ]] || \
-   [ "${_ngx_gate}" != "skip" ]; then
-  rm -rf \
-    "${NGINX_PATH}" \
-    "${NGINX_VERSIONS_PATH}" \
-    "${NGINX_CJOSE_VERSION_PATH}" \
-    "${NGINX_LIBOAUTH2_VERSION_PATH}" \
-    "${NGINX_SUCCESSES_PATH}"
-fi
+# The marker is composite (tranche 3 step 24, startup-prologue.test.sh §76): the ModSecurity
+# connector is compiled into nginx and links the shared libmodsecurity, so a bump of either
+# must rebuild nginx too - the gate held NGINX_VERSION alone. Nothing is wiped here any more:
+# the iou verifies and fetches everything first, then replaces the tree (logs/ kept).
+_ngx_want="${GLOBAL_STACK_NGINX_VERSION};modsec-nginx=${GLOBAL_STACK_NGINX_MODSECURITY_MOD_VERSION};modsec-lib=${GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION}"
+_ngx_gate="$(gs_version_gate "${NGINX_VERSIONS_PATH}" "${_ngx_want}" "nginx")"
 
 # Clean up old http common installations if needed
 if [[ "${GLOBAL_STACK_RELOAD_HTTP_COMMON}" == "true" ]]; then
@@ -100,8 +94,8 @@ if [[ "${GLOBAL_STACK_RELOAD_HTTP_COMMON}" == "true" ]]; then
     "${HTTP_COMMON_CORERULESET_VERSION_PATH}"
 fi
 
-# The four compares below were already correct — { ! -e P || $(cat P) != $V } is
-# exactly `gate != skip` — but silent and repeated. Each gate is computed ONCE,
+# The two OpenIDC-chain compares below were already correct — { ! -e P || $(cat P) != $V }
+# is exactly `gate != skip` — but silent and repeated. Each gate is computed ONCE,
 # AFTER the RELOAD cleanup above (which may delete a marker), and reused by both
 # the cleanup blocks and the IOU decision, so a change is announced once per boot.
 _ngx_cjose_gate=skip
@@ -132,10 +126,6 @@ if [ "${_ngx_liboauth2_gate}" != "skip" ]; then
     "${NGINX_LIBOAUTH2_VERSION_PATH}"
 fi
 
-# Create temporary directory for nginx
-mkdir -p \
-  "${NGINX_PATH}/tmp"
-
 # The shared ModSecurity library + CoreRuleSet: iou-common gates them itself (a current
 # marker is a no-op), so it runs on every boot, before the nginx iou that links the library.
 global-stack-nginx-iou-common.sh \
@@ -146,8 +136,8 @@ global-stack-nginx-iou-common.sh \
   "${MODSECURITY_LIB_PATH}" \
   "${CORERULESET_PATH}"
 
-# Install nginx if necessary
-if [[ ! -f "${NGINX_VERSIONS_PATH}" || "${GLOBAL_STACK_RELOAD_NGINX}" == "true" ]]; then
+# Build nginx if necessary; the marker follows the iou's success.
+if [[ "${_ngx_gate}" != "skip" || "${GLOBAL_STACK_RELOAD_NGINX}" == "true" ]]; then
   global-stack-nginx-iou.sh \
     "${NGINX_PATH}" \
     "${HTTP_COMMONS_PATH}" \
@@ -161,7 +151,12 @@ if [[ ! -f "${NGINX_VERSIONS_PATH}" || "${GLOBAL_STACK_RELOAD_NGINX}" == "true" 
     "${LIBOAUTH2_PATH}" \
     "${NGINX_LIBOAUTH2_VERSION_PATH}" \
     "${NGINX_CJOSE_VERSION_PATH}"
+  printf '%s\n' "${_ngx_want}" >"${NGINX_VERSIONS_PATH}"
 fi
+
+# Create temporary directory for nginx
+mkdir -p \
+  "${NGINX_PATH}/tmp"
 
 # Run nginx setup and mkcert commands
 global-stack-nginx-setup.sh \
@@ -172,8 +167,11 @@ global-stack-nginx-setup.sh \
 
 global-stack-base-init-mkcert.sh
 
-# Stop any running instance of Nginx (ignore errors)
-"${NGINX_PATH}/sbin/nginx" stop 2>/dev/null || true
+# Stop any running instance of Nginx. `nginx stop` (the old form) is not an nginx option
+# [measured: `invalid option: "stop"`, rc 1], so this never stopped anything. With nothing
+# running - every boot of a fresh container - `-s stop` fails too [measured: `invalid PID
+# number ""`, rc 1], which is why its failure is ignored.
+"${NGINX_PATH}/sbin/nginx" -s stop 2>/dev/null || true
 
 # Remove old PID and cgisock files
 sudo rm -rf \
@@ -181,11 +179,6 @@ sudo rm -rf \
 
 # Start Nginx in the foreground
 "${NGINX_PATH}/sbin/nginx" -g "daemon off;" &
-
-# Save the updated nginx version if installed or reloaded
-if [[ ! -f "${NGINX_VERSIONS_PATH}" || "${GLOBAL_STACK_RELOAD_NGINX}" == "true" ]]; then
-  echo "${GLOBAL_STACK_NGINX_VERSION}" > "${NGINX_VERSIONS_PATH}"
-fi
 
 global-stack-base-prepare-shell.sh
 

@@ -2296,8 +2296,10 @@ _ws_decision() {
     bash "${root}/block.sh" 2>/dev/null | sed -n 's/^DECISION=//p' || true
 }
 
-assert_pass "30e: nginx unchanged pin → skip" \
-  test "$(_ws_decision _ngx_gate nginx 1.0 1.0 GLOBAL_STACK_NGINX_VERSION NGINX_VERSIONS_PATH "${DIST_BIN}/nginx-bin/global-stack-nginx-start.sh")" = "skip"
+# nginx's gate is composite since step 24; the other two pins are inherited (see 30f2).
+_ws_ngx_body="1.0;modsec-nginx=${GLOBAL_STACK_NGINX_MODSECURITY_MOD_VERSION:-};modsec-lib=${GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION:-}"
+assert_pass "30e: nginx unchanged composite → skip" \
+  test "$(_ws_decision _ngx_gate nginx "${_ws_ngx_body}" 1.0 GLOBAL_STACK_NGINX_VERSION NGINX_VERSIONS_PATH "${DIST_BIN}/nginx-bin/global-stack-nginx-start.sh")" = "skip"
 assert_pass "30e: nginx bumped pin → reinstall" \
   test "$(_ws_decision _ngx_gate nginx 1.0 1.1 GLOBAL_STACK_NGINX_VERSION NGINX_VERSIONS_PATH "${DIST_BIN}/nginx-bin/global-stack-nginx-start.sh")" = "reinstall"
 assert_pass "30f: httpd bumped pin → reinstall" \
@@ -6700,6 +6702,254 @@ for _p75_c in "${_P75_HC}" "${_P75_NC}"; do
 done
 assert_fail "75r: neither iou-common asks configure for Lua (ruling 2026-09-26 15:52: no image has it; configure stopped)" \
   bash -c 'grep -vhE "^[[:space:]]*#" "$1" "$2" | grep -q -- "--with-lua"' _ "${_P75_HC}" "${_P75_NC}"
+
+# ─── Section 76: nginx verifies its tarball's signature and clones the connector before anything is wiped ──
+# Pin-audit tranche 3 step 24 (rulings 2026-09-26 11:17 and 11:43). nginx was a `curl` of
+# the nginx.org tarball with no signature check into a tree start.sh had already wiped, the
+# connector was cloned into ${NGINX_PATH}/mods and never removed, and the gate held
+# NGINX_VERSION alone. The signature check runs REAL gpg here, against keys generated for
+# the test: a "pinned" key, a key that is in the keyring but not pinned, and one that is not
+# in the keyring at all. The shipped iou is copied with only its fingerprint list replaced
+# the shipped five PLUS the test key's, inserted in the middle (the keyring is read from next to
+# the script, so the copy reads the test keyring). Keeping the real list matters: a copy holding
+# ONE fingerprint once hid an IFS join bug that rejected every real signature. The nginx stubs model what was MEASURED in the 01caddy image: `nginx -V` writes to
+# stderr only, first line `nginx version: nginx/1.31.6`, `configure arguments:` naming the
+# --add-module path; `nginx -t` passes on the fresh conf.
+printf '\n── Section 76: nginx: signature-verified tarball + connector in a temp dir before any wipe (tranche 3 step 24)\n'
+_P76="${TMP_DIR}/p76"
+mkdir -p "${_P76}/stub" "${_P76}/fix/nginx.org/download" "${_P76}/src" "${_P76}/gk"
+chmod 700 "${_P76}/gk"
+_p76_gpg() { gpg --batch --homedir "${_P76}/gk" --pinentry-mode loopback --passphrase '' "$@"; }
+for _p76_uid in pinned unpinned stranger; do
+  _p76_gpg --quick-gen-key "stack test ${_p76_uid} <${_p76_uid}@test.invalid>" ed25519 sign never >/dev/null 2>&1 || true
+done
+_p76_fpr() { _p76_gpg --with-colons --list-keys "$1@test.invalid" 2>/dev/null | awk -F: '/^fpr/ { print $10; exit }'; }
+_P76_PIN="$(_p76_fpr pinned)"
+_P76_UNPIN="$(_p76_fpr unpinned)"
+assert_pass "76a: gpg generated the three test keys (fixture non-vacuity)" \
+  bash -c '[[ "$1" =~ ^[0-9A-F]{40}$ && "$2" =~ ^[0-9A-F]{40}$ && "$3" =~ ^[0-9A-F]{40}$ ]]' _ "${_P76_PIN}" "${_P76_UNPIN}" "$(_p76_fpr stranger)"
+# The test keyring holds "pinned" and "unpinned" (the stranger is left out), behind a header
+# the way the shipped file carries one.
+{ printf 'test keyring - text outside the armour is ignored\n'; _p76_gpg --armor --export pinned@test.invalid unpinned@test.invalid; } >"${_P76}/stub/nginx-release-keys.asc"
+# The iou under test: the shipped one with the fingerprint list replaced by the test key's.
+_P76_IOU="${DIST_BIN}/nginx-bin/global-stack-nginx-iou.sh"
+awk -v f="${_P76_PIN}" '/^_ng_fprs=\($/ { l = 1 } l && /^  [0-9A-F]{40}$/ && ++n == 3 { print "  " f } { print } /^\)$/ { l = 0 }' "${_P76_IOU}" >"${_P76}/stub/global-stack-nginx-iou.sh"
+assert_pass "76a: the test copy = the shipped iou plus ONE fingerprint line, the test key's, in the middle of the real five" \
+  bash -c '[[ "$(diff "$1" "$2" | grep -c "^[<>]")" == 1 ]] && diff "$1" "$2" | grep -qx "> *  $3" && [[ "$(grep -cE "^  [0-9A-F]{40}$" "$2")" == 6 ]] && bash -n "$2"' _ \
+  "${_P76_IOU}" "${_P76}/stub/global-stack-nginx-iou.sh" "${_P76_PIN}"
+cat >"${_P76}/stub/curl" <<'EOF'
+#!/bin/bash
+out="" url="" fail=0
+while (($#)); do
+  case "$1" in
+    -o) out="$2"; shift ;;
+    --connect-timeout|--max-time) shift ;;
+    -*) [[ "$1" == --* ]] || [[ "$1" != *f* ]] || fail=1 ;;
+    *) url="$1" ;;
+  esac
+  shift
+done
+printf 'curl %s\n' "${url}" >>"${P76_LOG}"
+src="${P76_FIX}/${url#https://}"
+if [[ -f "${src}" ]]; then cat "${src}" >"${out}"; exit 0; fi
+((fail)) && exit 22
+printf '<html>404</html>\n' >"${out}"
+EOF
+cat >"${_P76}/stub/git" <<'EOF'
+#!/bin/bash
+printf 'git %s\n' "$*" >>"${P76_LOG}"
+[[ "$1" == clone ]] || exit 0
+[[ -n "${P76_MSN_CLONE_FAIL:-}" ]] && exit 128
+dest="${!#}"
+mkdir -p "${dest}/src"
+[[ -n "${P76_MSN_NOCONFIG:-}" ]] || printf 'ngx_addon_name=ngx_http_modsecurity_module\n' >"${dest}/config"
+EOF
+# make: `install` in the nginx tree writes what the real install does; the binary answers -V
+# on stderr with the configure arguments it was given, and -t.
+cat >"${_P76}/stub/make" <<'EOF'
+#!/bin/bash
+printf 'make %s\n' "$*" >>"${P76_LOG}"
+[[ -n "${P76_BUILD_FAIL:-}" ]] && { echo "make: *** [build] Error 1" >&2; exit 2; }
+[[ " $* " == *" install "* ]] || exit 0
+args="$(cat .configure-args)"
+pfx="$(sed -n 's/^--prefix=//p' <<<"${args}")"
+v="${P76_REPORT:-$(cat .nginx)}"
+[[ -z "${P76_DROP_MODULE:-}" ]] || args="$(grep -v -- '^--add-module=' <<<"${args}")"
+mkdir -p "${pfx}/sbin" "${pfx}/conf" "${pfx}/html"
+printf '%s\n' "${args}" | tr '\n' ' ' >"${pfx}/.cfgargs"
+cat >"${pfx}/sbin/nginx" <<N
+#!/bin/bash
+case "\$1" in
+  -V) printf 'nginx version: nginx/%s\nbuilt by gcc 15.2.0\nconfigure arguments: %s\n' '${v}' "\$(cat '${pfx}/.cfgargs')" >&2 ;;
+  -t) [[ -z "${P76_T_FAIL:-}" ]] || { echo "nginx: [emerg] unexpected end of file" >&2; exit 1; }
+      echo "nginx: configuration file ${pfx}/conf/nginx.conf test is successful" >&2 ;;
+esac
+N
+chmod 0644 "${pfx}/sbin/nginx" # find … chmod a+x must make it runnable
+printf 'events {}\n' >"${pfx}/conf/nginx.conf"
+EOF
+cat >"${_P76}/stub/sudo" <<'EOF'
+#!/bin/bash
+for a in "$@"; do
+  [[ "${a}" != /* || "${a}" == "${P76_ROOT}"/* ]] || { echo "sudo stub: refuses ${a}" >&2; exit 97; }
+done
+exec "$@"
+EOF
+printf '#!/bin/bash\nprintf "iou-common %%s\\n" "$#" >>"${P76_LOG}"\n' >"${_P76}/stub/global-stack-nginx-iou-common.sh"
+chmod +x "${_P76}/stub/"*
+# _p76_tar <version> <sig: pinned|unpinned|stranger|tampered|none> [nocfg]
+_p76_tar() {
+  local d="${_P76}/fix/nginx.org/download" t="${_P76}/src/nginx-$1" a="nginx-$1.tar.gz"
+  rm -rf "${t}"
+  mkdir -p "${t}"
+  [[ "${3:-}" == nocfg ]] || printf '#!/bin/bash\nprintf "%%s\\n" "$@" >.configure-args\n' >"${t}/configure"
+  printf '%s\n' "$1" >"${t}/.nginx"
+  chmod -R +x "${t}"
+  tar -C "${_P76}/src" -czf "${d}/${a}" "nginx-$1"
+  case "$2" in
+    pinned|unpinned|stranger) _p76_gpg --local-user "$2@test.invalid" --armor --detach-sign -o "${d}/${a}.asc" "${d}/${a}" 2>/dev/null ;;
+    tampered) _p76_gpg --local-user pinned@test.invalid --armor --detach-sign -o "${d}/${a}.asc" "${d}/${a}" 2>/dev/null
+      printf 'x' >>"${d}/${a}" ;;
+  esac
+}
+_p76_tar 1.31.5 pinned
+_p76_tar 1.31.6 pinned
+_p76_tar 1.31.90 tampered
+_p76_tar 1.31.91 unpinned
+_p76_tar 1.31.92 stranger
+_p76_tar 1.31.93 none
+_p76_tar 1.31.94 pinned nocfg
+# 1.31.99 is not published at all.
+_P76_START="${DIST_BIN}/nginx-bin/global-stack-nginx-start.sh"
+awk '/^_ngx_want=/{f=1} f{print} f && /^ *printf .*NGINX_VERSIONS_PATH}"$/{m=1} m && /^fi$/{exit}' "${_P76_START}" >"${_P76}/block.sh"
+assert_pass "76a: the extracted start.sh block holds the composite gate, iou-common, the iou and the marker write (anchor non-vacuity)" \
+  bash -c 'grep -q "^_ngx_gate=" "$1" && grep -q "global-stack-nginx-iou-common.sh" "$1" && grep -q "global-stack-nginx-iou.sh" "$1" && grep -q "NGINX_VERSIONS_PATH}\"$" "$1"' _ "${_P76}/block.sh"
+# _p76_run <nginx pin> <connector pin> <modsec lib pin> <old nginx|''> <marker|''> [RELOAD] → state
+_p76_run() {
+  local r="${_P76}/r" rc=0 bin
+  rm -rf "${r}"
+  mkdir -p "${r}/tools/versions" "${r}/tools/errors" "${r}/tools/nginx/logs" "${r}/tools/nginx/conf" "${r}/tools/http" "${r}/tmp"
+  printf 'log\n' >"${r}/tools/nginx/logs/access.log"
+  if [[ -n "$4" ]]; then
+    mkdir -p "${r}/tools/nginx/sbin"
+    printf '#!/bin/bash\nprintf "nginx version: nginx/%s\\n" >&2\n' "$4" >"${r}/tools/nginx/sbin/nginx"
+    chmod +x "${r}/tools/nginx/sbin/nginx"
+    printf 'old\n' >"${r}/tools/nginx/conf/old.conf"
+  fi
+  printf 'cjose\n' >"${r}/tools/versions/nginx.cjose"
+  [[ -z "$5" ]] || printf '%s\n' "$5" >"${r}/tools/versions/nginx"
+  : >"${_P76}/log"
+  env -i HOME="${r}" TMPDIR="${r}/tmp" PATH="${_P76}/stub:${DIST_BIN}/nginx-bin:${DIST_BIN}/base-bin:/usr/bin:/bin" \
+    P76_FIX="${_P76}/fix" P76_LOG="${_P76}/log" P76_ROOT="${r}" P76_BUILD_FAIL="${P76_BUILD_FAIL:-}" \
+    P76_REPORT="${P76_REPORT:-}" P76_T_FAIL="${P76_T_FAIL:-}" P76_DROP_MODULE="${P76_DROP_MODULE:-}" \
+    P76_MSN_CLONE_FAIL="${P76_MSN_CLONE_FAIL:-}" P76_MSN_NOCONFIG="${P76_MSN_NOCONFIG:-}" \
+    GLOBAL_STACK_ERROR_TOKEN=nginx GLOBAL_STACK_DOCKER_TOOLS_PATH="${r}/tools" GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS="${r}/tools/errors" \
+    NGINX_PATH="${r}/tools/nginx" NGINX_VERSIONS_PATH="${r}/tools/versions/nginx" HTTP_COMMONS_PATH="${r}/tools/http" \
+    HTTP_COMMON_MOD_SECURITY_VERSION_PATH="${r}/tools/versions/http.mod_security" HTTP_COMMON_CORERULESET_VERSION_PATH="${r}/tools/versions/http.coreruleset" \
+    MODSECURITY_SOURCE_LIB_PATH="${r}/tools/http/libs/modsecurity-source" MODSECURITY_LIB_PATH="${r}/tools/http/libs/modsecurity" \
+    CORERULESET_PATH="${r}/tools/http/rules/coreruleset" \
+    NGINX_CJOSE_VERSION_PATH="${r}/tools/versions/nginx.cjose" NGINX_LIBOAUTH2_VERSION_PATH="${r}/tools/versions/nginx.liboauth2" \
+    CJOSE_SOURCE_PATH="${r}/tools/nginx/libs/cjose-source" CJOSE_PATH="${r}/tools/nginx/libs/cjose" \
+    LIBOAUTH2_SOURCE_PATH="${r}/tools/nginx/libs/liboauth2-source" LIBOAUTH2_PATH="${r}/tools/nginx/libs/liboauth2" \
+    GLOBAL_STACK_RELOAD_NGINX="${6:-false}" GLOBAL_STACK_RELOAD_HTTP_COMMON=false \
+    GLOBAL_STACK_NGINX_VERSION="$1" GLOBAL_STACK_NGINX_MODSECURITY_MOD_VERSION="$2" GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION="$3" \
+    GLOBAL_STACK_NGINX_CJOSE_VERSION= GLOBAL_STACK_NGINX_LIBOAUTH2_VERSION= GLOBAL_STACK_NGINX_MOD_AUTH_OPENIDC_VERSION= \
+    bash -c 'set -eE -o pipefail; source "$1"; source "$2"' _ \
+    "${DIST_BIN}/base-bin/global-stack-base-version-gate.sh" "${_P76}/block.sh" >"${_P76}/last.log" 2>&1 || rc=fail
+  bin="$({ "${r}/tools/nginx/sbin/nginx" -V 2>&1 || true; } | sed -n '1s/^nginx version: nginx\///p')"
+  printf 'rc=%s nginx=%s marker=%s logs=%s old=%s cjosem=%s msmod=%s token=%s fatal=%s tmp=%s builds=%s' "${rc}" "${bin:-none}" \
+    "$(cat "${r}/tools/versions/nginx" 2>/dev/null || echo none)" \
+    "$(if [[ -e "${r}/tools/nginx/logs/access.log" ]]; then echo kept; else echo gone; fi)" \
+    "$(if [[ -e "${r}/tools/nginx/conf/old.conf" ]]; then echo kept; else echo gone; fi)" \
+    "$(if [[ -e "${r}/tools/versions/nginx.cjose" ]]; then echo kept; else echo gone; fi)" \
+    "$({ cat "${r}/tools/nginx/.cfgargs" 2>/dev/null || true; } | grep -c -- '--add-module=' || true)" \
+    "$(if [[ -e "${r}/tools/errors/nginx" ]]; then echo 1; else echo 0; fi)" \
+    "$(grep -c '^FATAL: ' "${_P76}/last.log" || true)" "$(ls -A "${r}/tmp" | wc -l)" "$(grep -c '^make .*install' "${_P76}/log" || true)"
+  # gpg agents started in the iou's temp homedir must not outlive it.
+  printf ' agents=%s' "$({ pgrep -f "${r}/tmp/" || true; } | grep -c . || true)"
+  pkill -f "${r}/tmp/" 2>/dev/null || true
+}
+_p76_want() { printf '%s;modsec-nginx=%s;modsec-lib=%s' "$1" "$2" "$3"; }
+_P76_OLD="$(_p76_want 1.31.5 v1.0.4 v3.0.16)"
+_P76_NEW="$(_p76_want 1.31.6 v1.0.4 v3.0.16)"
+assert_pass "76b: nginx 1.31.5 -> 1.31.6: signature verified, connector built in, composite marker, logs kept, old tree + OpenIDC-chain markers gone" \
+  test "$(_p76_run 1.31.6 v1.0.4 v3.0.16 1.31.5 "${_P76_OLD}")" = "rc=0 nginx=1.31.6 marker=${_P76_NEW} logs=kept old=gone cjosem=gone msmod=1 token=0 fatal=0 tmp=0 builds=1 agents=0"
+assert_pass "76c: nginx pin moved back 1.31.6 -> 1.31.5" \
+  test "$(_p76_run 1.31.5 v1.0.4 v3.0.16 1.31.6 "${_P76_NEW}")" = "rc=0 nginx=1.31.5 marker=${_P76_OLD} logs=kept old=gone cjosem=gone msmod=1 token=0 fatal=0 tmp=0 builds=1 agents=0"
+assert_pass "76d: a connector bump alone rebuilds nginx (the gate held NGINX_VERSION alone before)" \
+  test "$(_p76_run 1.31.6 v1.0.5 v3.0.16 1.31.6 "${_P76_NEW}")" = "rc=0 nginx=1.31.6 marker=$(_p76_want 1.31.6 v1.0.5 v3.0.16) logs=kept old=gone cjosem=gone msmod=1 token=0 fatal=0 tmp=0 builds=1 agents=0"
+assert_pass "76e: a shared-library bump alone rebuilds nginx (the connector links it)" \
+  test "$(_p76_run 1.31.6 v1.0.4 v3.0.17 1.31.6 "${_P76_NEW}")" = "rc=0 nginx=1.31.6 marker=$(_p76_want 1.31.6 v1.0.4 v3.0.17) logs=kept old=gone cjosem=gone msmod=1 token=0 fatal=0 tmp=0 builds=1 agents=0"
+assert_pass "76f: marker = every pin -> nothing fetched or built (iou-common still runs, it gates itself)" \
+  bash -c '[[ "$1" == "rc=0 nginx=1.31.6 marker=$2 logs=kept old=kept cjosem=kept msmod=0 token=0 fatal=0 tmp=0 builds=0 agents=0" ]] && ! grep -q "^curl " "$3" && grep -qx "iou-common 6" "$3"' _ \
+  "$(_p76_run 1.31.6 v1.0.4 v3.0.16 1.31.6 "${_P76_NEW}")" "${_P76_NEW}" "${_P76}/log"
+assert_pass "76g: marker = every pin but RELOAD_NGINX=true -> rebuilt, logs kept" \
+  test "$(_p76_run 1.31.6 v1.0.4 v3.0.16 1.31.6 "${_P76_NEW}" true)" = "rc=0 nginx=1.31.6 marker=${_P76_NEW} logs=kept old=gone cjosem=gone msmod=1 token=0 fatal=0 tmp=0 builds=1 agents=0"
+assert_pass "76g2: first install with the connector unset -> no --add-module, nothing cloned" \
+  bash -c '[[ "$1" == "rc=0 nginx=1.31.6 marker=$2 logs=kept old=gone cjosem=gone msmod=0 token=0 fatal=0 tmp=0 builds=1 agents=0" ]] && ! grep -q "^git clone" "$3"' _ \
+  "$(_p76_run 1.31.6 '' v3.0.16 '' '')" "$(_p76_want 1.31.6 '' v3.0.16)" "${_P76}/log"
+# Failures BEFORE the wipe: the old nginx, its conf, the chain marker and the marker untouched.
+for _p76_bad in '1.31.90|-|a tampered tarball (BADSIG)|is not a good signature by a pinned nginx.org key' \
+  '1.31.91|-|a good signature by a key in the keyring but NOT pinned|is not a good signature by a pinned nginx.org key (signer: "'"${_P76_UNPIN}"'")' \
+  '1.31.92|-|a signature by a key not in the keyring|is not a good signature by a pinned nginx.org key (signer: "")' \
+  '1.31.93|-|no .asc published|nginx 1.31.93 could not be downloaded' \
+  '1.31.99|-|the version is not published|nginx 1.31.99 could not be downloaded' \
+  '1.31.94|-|a signed tarball without configure|holds no nginx-1.31.94/configure' \
+  '1.31.6|P76_MSN_CLONE_FAIL=1|the connector clone fails|ModSecurity-nginx v1.0.4 could not be cloned' \
+  '1.31.6|P76_MSN_NOCONFIG=1|the connector holds no module config|holds no nginx module config'; do
+  IFS='|' read -r _p76_v _p76_env _p76_why _p76_msg <<<"${_p76_bad}"
+  [[ "${_p76_env}" != - ]] || _p76_env="P76_NONE="
+  assert_pass "76h: ${_p76_why} -> its named FATAL + token, old nginx/conf/markers untouched, logs kept, no temp dir left" \
+    bash -c '[[ "$1" == "rc=fail nginx=1.31.5 marker=$4 logs=kept old=kept cjosem=kept msmod=0 token=1 fatal=1 tmp=0 builds=0 agents=0" ]] && grep "^FATAL: " "$3" | grep -qF "$2"' _ \
+    "$(
+      export "${_p76_env?}"
+      _p76_run "${_p76_v}" v1.0.4 v3.0.16 1.31.5 "${_P76_OLD}"
+    )" \
+    "${_p76_msg}" "${_P76}/last.log" "${_P76_OLD}"
+done
+mv "${_P76}/stub/nginx-release-keys.asc" "${_P76}/keys.away"
+assert_pass "76h: the keyring missing next to the iou -> its named FATAL, old nginx untouched" \
+  bash -c '[[ "$1" == "rc=fail nginx=1.31.5 marker=$3 logs=kept old=kept cjosem=kept msmod=0 token=1 fatal=1 tmp=0 builds=0 agents=0" ]] && grep "^FATAL: " "$2" | grep -qF "nginx-release-keys.asc is missing"' _ \
+  "$(_p76_run 1.31.6 v1.0.4 v3.0.16 1.31.5 "${_P76_OLD}")" "${_P76}/last.log" "${_P76_OLD}"
+mv "${_P76}/keys.away" "${_P76}/stub/nginx-release-keys.asc"
+# Failures AFTER the wipe (policy B): named FATAL + token, the marker NOT advanced, logs kept.
+for _p76_bad in 'P76_BUILD_FAIL=1|the build fails|nginx 1.31.6: the build failed' \
+  'P76_REPORT=1.31.60|the built nginx reports 1.31.60|reports "nginx version: nginx/1.31.60"' \
+  'P76_DROP_MODULE=1|the binary was built without the connector|not configured with the ModSecurity-nginx module' \
+  'P76_T_FAIL=1|nginx -t rejects the fresh conf|nginx -t rejects'; do
+  IFS='|' read -r _p76_env _p76_why _p76_msg <<<"${_p76_bad}"
+  assert_pass "76i: ${_p76_why} -> its named FATAL + token, the marker not advanced, logs kept, no temp dir left" \
+    bash -c '[[ "$1" == "rc=fail nginx="*" marker=$4 logs=kept old=gone cjosem=gone msmod="*" token=1 fatal=1 tmp=0 builds="* ]] && grep "^FATAL: " "$3" | grep -qF "$2"' _ \
+    "$(
+      export "${_p76_env?}"
+      _p76_run 1.31.6 v1.0.4 v3.0.16 1.31.5 "${_P76_OLD}"
+    )" \
+    "${_p76_msg}" "${_P76}/last.log" "${_P76_OLD}"
+done
+# The SHIPPED pins: the five nginx.org primary fingerprints, each a primary key in the
+# committed keyring; the keyring's two older keys are present and deliberately unpinned.
+_P76_KEYS="${DIST_BIN}/nginx-bin/nginx-release-keys.asc"
+# `|| true`: a missing keyring or list must red 76j, not abort the run under set -e.
+_p76_shipped="$(awk '/^_ng_fprs=\($/ { f = 1; next } f && /^\)$/ { exit } f { print $1 }' "${_P76_IOU}" | sort || true)"
+_p76_primaries="$(gpg --batch --homedir "${_P76}/gk" --show-keys --with-colons "${_P76_KEYS}" 2>/dev/null | awk -F: '/^pub/ { p = 1 } /^fpr/ && p { print $10; p = 0 }' | sort || true)"
+assert_pass "76j: the shipped list is exactly the five nginx.org fingerprints recorded in the plan" \
+  test "${_p76_shipped}" = "$(printf '%s\n' 13C82A63B603576156E30A4EA0EA981B66B0D967 43387825DDB1BB97EC36BA5D007C8D7C15D87369 7338973069ED3F443F4D37DFA64FD5B17ADB39A8 8540A6F18833A80E9C1653A42FD21310B49F6B46 D6786CE303D9A9022998DC6CC8464D549AF75C0A)"
+assert_pass "76j: ...each is a PRIMARY key in the committed keyring, which holds exactly two more (unpinned)" \
+  bash -c '[[ "$(comm -23 <(printf "%s\n" "$1") <(printf "%s\n" "$2"))" == "" && "$(comm -13 <(printf "%s\n" "$1") <(printf "%s\n" "$2") | grep -c .)" == 2 ]]' _ "${_p76_shipped}" "${_p76_primaries}"
+_p76_exec="$(grep -vE '^[[:space:]]*#' "${_P76_IOU}")"
+assert_pass "76k: >= 2 executable curl calls in the iou, every one with -f, https://nginx.org only" \
+  bash -c 'calls="$(grep -oE "curl [^;|]*" <<<"$1")"; [[ "$(grep -c . <<<"${calls}")" -ge 2 ]] && ! grep -vE "(^| )-[a-zA-Z]*f[a-zA-Z]*( |$)" <<<"${calls}" | grep -q . && ! grep -q "http://" <<<"$1" && grep -q "https://nginx.org/download/" <<<"$1"' _ "${_p76_exec}"
+assert_fail "76l: nginx-start.sh wipes \${NGINX_PATH} nowhere (the iou replaces it after its checks)" \
+  bash -c 'grep -vE "^[[:space:]]*#" "$1" | sed -e ":a" -e "/\\\\$/{N;s/\\\\\n//;ba}" | grep -E "rm -rf" | grep -qE "\"\\\$\{NGINX_PATH\}\"( |$)"' _ "${_P76_START}"
+assert_pass "76l: ...and stops nginx with \`-s stop\` (\`nginx stop\` is not an nginx option: measured rc 1)" \
+  bash -c 'grep -vE "^[[:space:]]*#" "$1" | grep -qF "/sbin/nginx\" -s stop" && ! grep -vE "^[[:space:]]*#" "$1" | grep -qF "/sbin/nginx\" stop"' _ "${_P76_START}"
+# The composite is exactly nginx + connector + the shared library; the iou reads every one
+# of them except the library (iou-common builds it), plus the OpenIDC chain's own-gated pins.
+_p76_want_vars="$(grep '^_ngx_want=' "${_P76_START}" | grep -oE 'GLOBAL_STACK_[A-Z_]*VERSION' | sort -u || true)"
+_p76_iou_vars="$(grep -oE 'GLOBAL_STACK_NGINX_[A-Z0-9_]*VERSION' <<<"${_p76_exec}" | grep -vE '_(CJOSE|LIBOAUTH2|MOD_AUTH_OPENIDC)_' | sort -u || true)"
+assert_pass "76m: the composite = NGINX + NGINX_MODSECURITY_MOD + HTTP_MODSECURITY_LIB, and the iou reads the first two (the chain pins keep their own gates)" \
+  bash -c '[[ "$1" == "$(printf "%s\n" GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION GLOBAL_STACK_NGINX_MODSECURITY_MOD_VERSION GLOBAL_STACK_NGINX_VERSION)" && "$2" == "$(printf "%s\n" GLOBAL_STACK_NGINX_MODSECURITY_MOD_VERSION GLOBAL_STACK_NGINX_VERSION)" ]]' _ "${_p76_want_vars}" "${_p76_iou_vars}"
+gpgconf --homedir "${_P76}/gk" --kill all >/dev/null 2>&1 || true
 
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
