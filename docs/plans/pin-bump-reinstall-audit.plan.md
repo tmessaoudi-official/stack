@@ -807,6 +807,17 @@ env-update writes them.
 
 **UNCERTIFIED-BY-EXECUTION:** no php.edge rebuild was run, since it needs a 03phpedge boot and a
 php-src compile.
+**6C follow-up — `747c7ff`.** The advisor pointed out that PHP CLI writes startup warnings to STDOUT.
+Measured on php-8.4.25 with a missing `extension=`: the warning lands ahead of the version, so the
+exact compare would have failed a working php whose fresh ini loads a missing library. The check now
+runs `php -n` (php.ini skipped: it asks the binary, not its config), and a FATAL carries php's own
+stderr. §77 is now 14 checks:
+- 77c2: the FATAL names php's stderr;
+- 77c3: a polluting ini still passes (its stub models the measured stdout warning).
+
+8 sabotages, including `-n` dropped and the diagnostic dropped. Full suite 1061/1061.
+`install-version.sh` has one caller, this block, and there is no copy of the script anywhere.
+local.05's `alltogether-start.sh` only consumes the php markers and success tokens.
 
 ### Step 26 — docs + tranche-2 panel findings (M)
 CLAUDE.md hand-off script: the "Two exceptions" / "every downloaded tool" overclaim rewritten for the
