@@ -636,13 +636,30 @@ holds `master`/`branch` until the developer runs env-scan.
 Today: wipe, `go build` of the core, then `caddy add-package` ×4 — which DOWNLOADS a binary built by
 caddyserver.com's build service [Verified: `caddy help add-package` → "Downloads an updated Caddy binary"],
 so the shipped binary is neither built locally nor checksummed; the four plugin pins are not gate inputs
-(A4). Fix: RULING NEEDED — draft assumes `xcaddy build <CADDY_VERSION> --with <plugin>@<pin>…` (local
+(A4). Fix (ruled 2026-09-26 11:43 — xcaddy, add-package dropped): `xcaddy build <CADDY_VERSION> --with <plugin>@<pin>…` (local
 build, xcaddy itself a new `.env` pin fetched via its `checksums.txt` [Verified: v0.4.7 assets], plumbed
 through the 01caddy compose (compose-env-plumbing surface); build in the temp dir; `caddy version` names the
 pin and `caddy list-modules --packages --versions` names each plugin AT its pin; `install -m 0755` over
 `bin/caddy` (single binary: vhosts/Caddyfile are regenerated, `logs/` kept). Composite gate
 `core;plugins…` with a both-ways guard (the §47 shape). `GLOBAL_STACK_XCADDY_VERSION` is deliberately NOT a
 gate input: it is the builder, and the binary is determined by the caddy + plugin pins. Fixes `start:88-90` passing the marker path twice. §74.
+**Done** (recovered 2026-09-26 after the session crashed mid-verification; WIP was snapshotted to
+`refs/recovery/step22-*` before anything was touched). §74 25 checks. 14 sabotages each red their named
+check(s) against a green baseline, restores byte-identical: sha512 neutered, xcaddy/caddy version checks off,
+exact and commit-pin plugin compares off, `GOTOOLCHAIN=local` dropped, brotli out of the composite, the
+multi-line `"${CADDY_PATH}"` wipe re-added, marker before the iou, iou failure swallowed, caddy-build kept,
+`curl -f` stripped, compose plumbing dropped, temp dir kept on FATAL. P2 fixed in recovery: `_cd_fatal`
+leaked the xcaddy temp dir on every failed boot; 74h now asserts `tmp=0`. Real 01caddy image, scratch tools
+root, live `tools/go` (1.27.1) read-only, GOPATH/GOCACHE in scratch: rc 0 in 258 s — the real xcaddy 0.4.7
+passed its SHA-512, caddy `v2.11.4`, list-modules names transform-encoder
+`v0.0.0-20260423033309-ba4124974830`, brotli v1.6.0, security v1.1.64, cache-handler v0.17.0; logs kept, no
+token, temp dir removed. Full suite ALL PASSED. **Ordering constraint:** `.env.local` lacks
+`GLOBAL_STACK_XCADDY_VERSION` until `bin/env-scan.sh` runs (compose resolves it to `""`, verified), and the
+composite marker differs from the old plain-version one, so the next 01caddy boot rebuilds and FATALs by
+name (`GLOBAL_STACK_XCADDY_VERSION is empty`) — run env-scan BEFORE restarting 01caddy. Not certified by
+execution: the full `global-stack-caddy-start.sh` boot in a live container (the probe ran the iou alone).
+The Files cell no longer lists `compose-env-plumbing.test.sh`: it tests only `USE_LOCKS`; §74n pins the
+compose line and the resolved value was checked by hand.
 
 ### Step 23 — httpd (L) · `httpd-bin/global-stack-httpd-{start,iou}.sh`
 Today: wipe, `svn checkout http://svn.apache.org` (plain http, no checksum) of httpd/apr/apr-util, build at
@@ -728,7 +745,7 @@ until the developer rebuilds.
 | 20 | rust: rustup-init checked before the wipe, rustc --version after | S | done | 5f41482 | docker/config/dist/bin/rust-bin/**, bin/tests/startup-prologue.test.sh |
 | 21 | phpmyadmin: build + check in temp, then swap; SHA-tracked pin | M | done | 1f9bea5 | docker/config/dist/bin/phpmyadmin-bin/**, .env, bin/tests/startup-prologue.test.sh |
 | 21b | android verify: here-strings, no SIGPIPE on a long `sdk list` (verify + version read) | S | done | 9924ec6 | docker/config/dist/bin/android-bin/**, bin/tests/startup-prologue.test.sh |
-| 22 | caddy: xcaddy local build, composite gate, list-modules check | M | todo | - | docker/config/dist/bin/caddy-bin/**, docker/images/01caddy/**, .env, bin/tests/startup-prologue.test.sh, bin/tests/compose-env-plumbing.test.sh |
+| 22 | caddy: xcaddy local build, composite gate, list-modules check | M | done | 8bc5158 | docker/config/dist/bin/caddy-bin/**, docker/images/01caddy/**, .env, bin/tests/startup-prologue.test.sh |
 | 23 | httpd + shared ModSecurity: archive tarballs + sha256, composite gate, build check | L | todo | - | docker/config/dist/bin/httpd-bin/**, docker/config/dist/bin/nginx-bin/global-stack-nginx-iou-common.sh, .env, bin/tests/startup-prologue.test.sh |
 | 24 | nginx: PGP-verified tarball, connector in temp, composite gate, build check | M | todo | - | docker/config/dist/bin/nginx-bin/**, bin/tests/startup-prologue.test.sh |
 | 25 | php.edge: post-build php check before the sidecar marker | S | todo | - | docker/config/dist/bin/phpbrew-bin/**, bin/tests/startup-prologue.test.sh |
