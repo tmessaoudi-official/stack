@@ -876,6 +876,47 @@ CLAUDE.md `21d598f`, via `/tmp/edit-claudemd-step26-20260926.sh` (classifier-blo
     restarted; the plumbing is proven by `docker compose config` resolution only.
 
 ### Step 27 — milestone panel over tranches 2+3 (frozen f3e92d4; ONE round by ruling 2026-09-26 23:29, not the two-clean-rounds default)
+**Round 1 of 1 — frozen `f3e92d4`, range 1906f6c..f3e92d4 (47 commits, 45 files). Report:
+`var/claude/pin-audit-t3/panel-round-1.md`. Fixes `6d74d29` (code + tests) and `542788a` (docs); CLAUDE.md via
+`/tmp/edit-claudemd-step27-20260927.sh` (dry-run 4/4 anchors; copy in `var/claude/recovery/`).** Verdicts:
+all three lenses FINDINGS; lens 1 found no health-signalling break. Every tranche-2 round-1 finding was
+confirmed closed.
+- **P0** `.env.local` kept `master` for the httpd connector pin (env-scan was never re-run after step 23).
+  Synced by env-scan (ruling 00:40); the dry run showed one line, and the diff against the backup shows
+  that one line.
+- **P1 (two lenses)** fvm's gate compared `GLOBAL_STACK_FVM_VERSION`, which 02fvm never receives, so fvm
+  was reinstalled on EVERY boot. §70's harness had set that variable, so its test mirrored the defect.
+  - The gate now compares `FVM_VERSION`. §70 passes only what compose passes, and a new check, 70m, pins
+    the gate variable to 02fvm's compose.
+  - 70e and 70m were red first for exactly that reason. §14's pinned text carried the old variable.
+- **P2** §74 and §75 failed on a clean clone (100644 files with `core.fileMode=false`: 17/25 and 20/51,
+  measured in a fresh worktree). They now run executable copies and pass on both the clean clone and the
+  live tree.
+- **P2 (logged)** elasticmq's jar is downloaded unchecked over the old one (Known issues).
+- **P2 (docs)** CLAUDE.md's per-tool claim, via the hand-off.
+- **P3 zig:** zig's `index.json` capture now gives a named FATAL (63o). It was red first: the state was
+  safe but no FATAL line named the failure.
+- **P3 temp dirs:** the phpMyAdmin, rust and deno/bun FATAL helpers now remove their temp dir. The
+  failure cases of §71, §72 and §73 now assert `tmp=0`; all were red first. 73i's label already claimed
+  it, but its wildcard never checked it.
+- **P3 guard floors:** the five `assert_fail` wipe guards get a file-exists floor, and 72i also joins
+  continued lines.
+  - 72i goes red when rust-start.sh is renamed. The other four go red when retargeted at a missing file;
+    with their start script really missing, their sections abort, loudly, at extraction.
+- **P3 skill:** the `/bump-versions` rebuild-only group is now stated as a rule.
+- **P3 plan fixes:** the step 27 heading and row, row 11's evidence (`80415c0`), the step 23 env-scan
+  note, and the three author decisions recorded as RECORDED, not AGREED.
+- **P3 CLAUDE.md:** xcaddy and the nginx key rotation are now in the fail-closed Gotcha, via the
+  hand-off.
+- **P3 (logged)** the cjose/liboauth2 chain gap (latent; Known issues).
+
+Suite 1065/1065, plumbing 21/21. **UNCERTIFIED-BY-EXECUTION (all lenses):**
+- no live boot of 01httpd, 01nginx, 03phpedge or 02fvm;
+- the first real restarts of 01caddy and 04phpmyadmin, which will rebuild because their composite
+  markers are new;
+- the `subversion` removal and 00base's runtime env (compose resolution only);
+- the hurl-build stage (never built here);
+- expired and revoked nginx keys, and the OpenIDC chain.
 
 **Certification honesty:** every step is proven by stubbed full-script runs + sabotage in
 `startup-prologue.test.sh`, and by a throwaway-container run against a scratch `tools/` where the image
@@ -913,7 +954,7 @@ until the developer rebuilds.
 | 24 | nginx: PGP-verified tarball, connector in temp, composite gate, build check | M | done | 82a3524 | docker/config/dist/bin/nginx-bin/**, bin/tests/startup-prologue.test.sh |
 | 25 | php.edge: post-build php check before the sidecar marker | S | done | b273b9c | docker/config/dist/bin/phpbrew-bin/**, bin/tests/startup-prologue.test.sh |
 | 26 | Docs + tranche-2 panel findings (CLAUDE.md hand-off, skill, .env comments, P3s) | M | done | 293a8d0 | CLAUDE.md, .env, .claude/skills/bump-versions/**, docs/plans/**, docs/BLAST-RADIUS.md, templates/tips/env-scan.md, docker/config/dist/bin/base-bin/**, docker/config/dist/bin/phpbrew-bin/**, docker/images/00base/**, docker/images/01caddy/**, docker/images/01httpd/**, docker/images/01nginx/**, bin/tests/** |
-| 27 | Milestone panel over tranches 2+3 (frozen f3e92d4, one round by ruling) | M | doing | - | var/claude/**, docker/config/dist/bin/**, bin/tests/**, .claude/skills/bump-versions/**, docs/plans/**, CLAUDE.md |
+| 27 | Milestone panel over tranches 2+3 (frozen f3e92d4, one round by ruling) | M | done | 6d74d29 | var/claude/**, docker/config/dist/bin/**, bin/tests/**, .claude/skills/bump-versions/**, docs/plans/**, CLAUDE.md |
 <!-- /progress-block -->
 ### Blocked
 ### Needs input
