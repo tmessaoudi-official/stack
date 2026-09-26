@@ -78,7 +78,10 @@ if [[ "${FVM_MODE}" = "install" ]]; then
   # lands in a temp dir and is checked (it holds fvm/fvm, and that binary's own --version
   # prints the pin) before it replaces the old binary. The marker is written last.
   # fvm publishes no checksum [Verified 2026-09-26: the 4.3.1 release assets].
-  _fvm_gate="$(gs_version_gate "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/fvm" "${GLOBAL_STACK_FVM_VERSION}" "fvm")"
+  # The gate compares FVM_VERSION, the variable 02fvm's compose passes and the install below
+  # uses: it compared GLOBAL_STACK_FVM_VERSION, which never reaches the container, so the
+  # marker never matched "" and fvm was re-downloaded on every boot (step 27 panel; §70m).
+  _fvm_gate="$(gs_version_gate "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/fvm" "${FVM_VERSION}" "fvm")"
   if [[ "${_fvm_gate}" != "skip" ]] || [[ "${GLOBAL_STACK_RELOAD_FVM}" = "true" ]]; then
     _fvm_dl="$(mktemp -d)"
     _fvm_tgz="${_fvm_dl}/fvm-${FVM_VERSION}-linux-x64.tar.gz"

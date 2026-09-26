@@ -10,6 +10,8 @@ set -xeE -o pipefail
 
 _rust_fatal() {
   printf 'FATAL: %s\n' "$1" >&2
+  # Step 27 panel: remove the download dir on FATAL too — only one mktemp actually made.
+  [[ -z "${_ri_dl:-}" ]] || rm -rf "${_ri_dl}"
   exit 1
 }
 

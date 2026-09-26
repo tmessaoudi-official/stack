@@ -17,8 +17,13 @@ if [[ -n "${GLOBAL_STACK_ZIG_VERSION}" ]] &&
     _zig_dl="$(mktemp -d)"
     trap 'rm -rf "${_zig_dl}"' EXIT
     curl --connect-timeout 30 --max-time 300 -fsSL -o "${_zig_dl}/${archive}" "https://ziglang.org/download/${GLOBAL_STACK_ZIG_VERSION}/${archive}"
-    _zig_sha="$(curl --connect-timeout 30 --max-time 60 -fsSL https://ziglang.org/download/index.json \
-        | jq -r --arg v "${GLOBAL_STACK_ZIG_VERSION}" '.[$v]["x86_64-linux"].shasum // empty')"
+    # Inside an `if` (step 27 panel): a bare failing capture exited on curl's code with nothing
+    # naming it. A version missing from index.json yields "" and fails the check below.
+    if ! _zig_sha="$(curl --connect-timeout 30 --max-time 60 -fsSL https://ziglang.org/download/index.json \
+        | jq -r --arg v "${GLOBAL_STACK_ZIG_VERSION}" '.[$v]["x86_64-linux"].shasum // empty')"; then
+        printf 'FATAL: cannot fetch or parse https://ziglang.org/download/index.json - zig left as it was\n' >&2
+        exit 1
+    fi
     if ! printf '%s  %s\n' "${_zig_sha}" "${_zig_dl}/${archive}" | sha256sum -c --quiet - >/dev/null 2>&1; then
         printf 'FATAL: %s does not match the SHA-256 in index.json - zig left as it was\n' "${archive}" >&2
         exit 1

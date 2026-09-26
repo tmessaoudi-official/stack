@@ -770,7 +770,7 @@ PROBE_WIRING=(
   'pyenv-bin/global-stack-pyenv-start.sh|gs_version_gate "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/pyenv" "${GLOBAL_STACK_PYENV_VERSION#v}" "pyenv" >/dev/null'
   'rbenv-bin/global-stack-rbenv-start.sh|gs_version_gate "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/rbenv" "${GLOBAL_STACK_RBENV_VERSION#v}" "rbenv" >/dev/null'
   'sdkman-bin/global-stack-sdkman-start.sh|gs_version_gate "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/sdkman" "${GLOBAL_STACK_SDKMAN_VERSION}" "sdkman" >/dev/null'
-  'fvm-bin/global-stack-fvm-start.sh|_fvm_gate="$(gs_version_gate "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/fvm" "${GLOBAL_STACK_FVM_VERSION}" "fvm")"'
+  'fvm-bin/global-stack-fvm-start.sh|_fvm_gate="$(gs_version_gate "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/fvm" "${FVM_VERSION}" "fvm")"'
   'rust-bin/global-stack-rust-iou.sh|_rust_gate="$(gs_version_gate "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/rust" "${GLOBAL_STACK_RUST_VERSION}" "rust")"'
 )
 
@@ -4741,7 +4741,7 @@ done
 printf '%s\n' "${url}" >>"${P63}/curl.log"
 case "${url}" in
   https://go.dev/dl/* | https://dl.google.com/go/*) f="${P63}/up/go/${url##*/}" ;;
-  https://ziglang.org/download/index.json) f="${P63}/up/zig/index.json" ;;
+  https://ziglang.org/download/index.json) [[ -z "${P63_NO_INDEX:-}" ]] || exit 22; f="${P63}/up/zig/index.json" ;;
   https://ziglang.org/download/*) f="${P63}/up/zig/${url##*/}" ;;
   *) exit 22 ;;
 esac
@@ -4825,7 +4825,7 @@ _p63_prep() { # $1 = go|zig, $2 = installed version|none, $3 = marker|none — g
 _p63_run() { # $1 = go|zig, $2 = pin → "rc=<0|fail> ver=<v|none> marker=<m|none> files=<only-in-*>" (+ go: " gopath=<mode|none> aside=<yes|no>")
   local rc=0 t="${_P63}/tools/$1" ver files
   rm -f "${_P63}/curl.log"
-  (cd "${_P63}/work" && env -i HOME="${_P63}" P63="${_P63}" P63_FAIL_CHOWN="${P63_FAIL_CHOWN:-}" \
+  (cd "${_P63}/work" && env -i HOME="${_P63}" P63="${_P63}" P63_FAIL_CHOWN="${P63_FAIL_CHOWN:-}" P63_NO_INDEX="${P63_NO_INDEX:-}" \
     PATH="${_P63}/stub:${_P63}/tools/go/bin:${_P63}/tools/zig:${DIST_BIN}/base-bin:/usr/bin:/bin" \
     GLOBAL_STACK_DOCKER_TOOLS_PATH="${_P63}/tools" GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS="${_P63}/versions" \
     GLOBAL_STACK_DOCKER_USER_ID="$(id -un)" GLOBAL_STACK_DOCKER_GROUP_ID="$(id -gn)" \
@@ -4917,6 +4917,10 @@ _p63_prep go 1.0.0 1.0.0
 _o="$(_p63_run go 1.6.0)"
 assert_pass "63n: go archive published without its .sha256 -> named FATAL (cannot fetch), go and marker untouched" \
   bash -c '[[ "$1" == "rc=fail ver=1.0.0 marker=1.0.0 files=only-in-1.0.0 "* ]] && grep "^FATAL: " "$2" | grep -qF "cannot fetch the published SHA-256"' _ "${_o}" "${_P63}/last.log"
+_p63_prep zig 1.0.0 1.0.0
+_o="$(P63_NO_INDEX=1 _p63_run zig 1.1.0)"
+assert_pass "63o: zig index.json unreachable -> named FATAL (cannot fetch), zig and marker untouched" \
+  bash -c '[[ "$1" == "rc=fail ver=1.0.0 marker=1.0.0 files=only-in-1.0.0" ]] && grep "^FATAL: " "$2" | grep -qF "cannot fetch"' _ "${_o}" "${_P63}/last.log"
 
 # ─── Section 64: mise is checked BEFORE its data is wiped (tranche 2 step 14b) ──
 # install-mise.sh removed mise's four data dirs and THEN piped https://mise.run into sh,
@@ -5763,7 +5767,7 @@ _p70_run() { # $1 = pin, $2 = installed fvm version ('' = none), $3 = marker (''
   : >"${_P70}/curl.log"
   (cd "${r}/projects" && env -i PATH="${_P70}/stub:/usr/bin:/bin" HOME="${r}" TMPDIR="${r}/tmp" \
     P70_FIX="${_P70}/fix" P70_LOG="${_P70}/curl.log" FVM_MODE=install FVM_VERSION="$1" \
-    GLOBAL_STACK_FVM_VERSION="$1" GLOBAL_STACK_RELOAD_FVM="$4" \
+    GLOBAL_STACK_RELOAD_FVM="$4" \
     GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS="${r}/tools/versions" GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN="${r}/tools/bin" \
     bash -c 'set -eE -o pipefail; source "$1"; source "$2"' _ \
     "${DIST_BIN}/base-bin/global-stack-base-version-gate.sh" "${_P70}/block.sh") >"${_P70}/last.log" 2>&1 || rc=$?
@@ -5792,6 +5796,14 @@ done
 # but the FATAL then blames the wrong thing, so -f is pinned directly (the §68h shape).
 assert_pass "70h: fvm-start.sh has at least 1 executable curl call, and every one carries -f (floor + guard)" \
   bash -c 'calls="$(grep -vE "^[[:space:]]*#" "$1" | grep -oE "curl [^;|]*")"; [[ "$(grep -c . <<<"${calls}")" -ge 1 ]] && ! grep -vE "(^| )-[a-zA-Z]*f[a-zA-Z]*( |$)" <<<"${calls}" | grep -q .' _ "${_P70_FVM}"
+
+# The env above is exactly what 02fvm's compose passes (FVM_VERSION, never
+# GLOBAL_STACK_FVM_VERSION): step 18's version of this harness set both, so §70e certified
+# "marker = pin -> nothing downloaded" while the real container, lacking the variable its gate
+# compared, reinstalled fvm on every boot (step 27 panel). 70m pins the pairing statically.
+_p70_gatevar="$(grep -oE 'gs_version_gate "[^"]*/fvm" "\$\{[A-Z_]+\}"' "${DIST_BIN}/fvm-bin/global-stack-fvm-start.sh" | grep -oE '\$\{[A-Z_]+\}"$' | tr -d '${}"' || true)"
+assert_pass "70m: the variable fvm's gate compares (${_p70_gatevar:-none found}) is one 02fvm's compose passes" \
+  bash -c '[[ -n "$1" ]] && grep -qE "^ +- $1=" "$2"' _ "${_p70_gatevar}" "${SCRIPT_DIR}/../../docker/images/02fvm/docker-compose.yaml"
 
 # ─── Section 71: deno and bun are checked in a temp dir before they replace the old one ──
 # Pin-audit tranche 3 step 19 (ruling 2026-09-26 11:17). deno ran a downloaded
@@ -5936,7 +5948,7 @@ for _p71_bad in 'v2.9.9|reports 2.9.90|reports "deno 2.9.90 ' 'v2.10.0|checksum 
   'v2.13.0|an HTML page with a matching checksum|is not a zip holding deno '; do
   IFS='|' read -r _p71_pin _p71_why _p71_msg <<<"${_p71_bad}"
   assert_pass "71h: deno pin ${_p71_pin} (${_p71_why}) -> its named FATAL + error token, old deno and marker untouched, projects untouched" \
-    bash -c '[[ "$1" == "rc=fail deno=2.9.7 dmarker=v2.9.7 bun="*" token=1 fatal=1 cache=cache projects=intact "* ]] && grep "^FATAL: " "$3" | grep -qF "$2"' _ \
+    bash -c '[[ "$1" == "rc=fail deno=2.9.7 dmarker=v2.9.7 bun="*" token=1 fatal=1 cache=cache projects=intact tmp=0 "* ]] && grep "^FATAL: " "$3" | grep -qF "$2"' _ \
     "$(_p71_run "${_p71_pin}" bun-v1.4.2 2.9.7 v2.9.7 1.4.2 bun-v1.4.2)" "${_p71_msg}" "${_P71}/last.log"
 done
 for _p71_bad in 'bun-v1.5.0|SHASUMS256.txt does not list the asset|lists no single checksum for bun-linux-x64.zip' \
@@ -5944,7 +5956,7 @@ for _p71_bad in 'bun-v1.5.0|SHASUMS256.txt does not list the asset|lists no sing
   'bun-v1.8.0|not published|could not be downloaded' 'bun-v1.9.0|zip holds no bun|is not a zip holding bun-linux-x64/bun '; do
   IFS='|' read -r _p71_pin _p71_why _p71_msg <<<"${_p71_bad}"
   assert_pass "71i: bun pin ${_p71_pin} (${_p71_why}) -> its named FATAL + error token, old bun, bunx and marker untouched" \
-    bash -c '[[ "$1" == "rc=fail deno=2.9.7 dmarker=v2.9.7 bun=1.4.2 bunx=1.4.2 bmarker=bun-v1.4.2 token=1 fatal=1 cache=cache projects=intact "* ]] && grep "^FATAL: " "$3" | grep -qF "$2"' _ \
+    bash -c '[[ "$1" == "rc=fail deno=2.9.7 dmarker=v2.9.7 bun=1.4.2 bunx=1.4.2 bmarker=bun-v1.4.2 token=1 fatal=1 cache=cache projects=intact tmp=0 "* ]] && grep "^FATAL: " "$3" | grep -qF "$2"' _ \
     "$(_p71_run v2.9.7 "${_p71_pin}" 2.9.7 v2.9.7 1.4.2 bun-v1.4.2)" "${_p71_msg}" "${_P71}/last.log"
 done
 _p71_exec="$(grep -vE '^[[:space:]]*#' "${_P71_NT}")"
@@ -5993,12 +6005,13 @@ _p72_msg_of() { # $1 = rustup pin → the run's FATAL line(s)
     GLOBAL_STACK_RUSTUP_INIT_VERSION="$1" GLOBAL_STACK_RUST_VERSION=1.98.1 GLOBAL_STACK_RELOAD_RUST=false \
     bash "${DIST_BIN}/rust-bin/global-stack-rust-iou.sh" >"${d}/out" 2>&1 || rc=$?
   grep '^FATAL: ' "${d}/out" || true
+  printf 'TMPLEFT: %s\n' "$(ls -A "${d}/tmp" | wc -l)"
   rm -rf "${d}"
 }
 for _p72_bad in '1.29.2|reports "rustup-init 1.29.20 ' '1.29.3|does not match its published SHA-256' \
   '1.29.4|lists no single checksum' '1.29.5|could not be downloaded'; do
-  assert_pass "72e: rustup-init ${_p72_bad%%|*} -> the FATAL says: ${_p72_bad#*|}" \
-    grep -qF "${_p72_bad#*|}" <<<"$(_p72_msg_of "${_p72_bad%%|*}")"
+  assert_pass "72e: rustup-init ${_p72_bad%%|*} -> the FATAL says: ${_p72_bad#*|}, and no temp dir is left" \
+    bash -c 'grep -qF "$1" <<<"$2" && grep -qx "TMPLEFT: 0" <<<"$2"' _ "${_p72_bad#*|}" "$(_p72_msg_of "${_p72_bad%%|*}")"
 done
 _o="$(P58_RUSTC=1.98.10 _p58_run 1.29.1 1.29.1 1.29.1 1.98.0 1.98.1)"
 assert_pass "72f: the toolchain install yields rustc 1.98.10 for pin 1.98.1 -> FATAL + token, NO rust marker (got: ${_o})" \
@@ -6009,7 +6022,7 @@ assert_pass "72g: rust-iou.sh fetches no installer script (no rustup-init.sh, no
 assert_pass "72h: at least 2 executable curl calls in rust-iou.sh, and every one carries -f (floor + guard)" \
   bash -c 'calls="$(grep -oE "curl [^;|]*" <<<"$1")"; [[ "$(grep -c . <<<"${calls}")" -ge 2 ]] && ! grep -vE "(^| )-[a-zA-Z]*f[a-zA-Z]*( |$)" <<<"${calls}" | grep -q .' _ "${_p72_exec}"
 assert_fail "72i: rust-start.sh no longer wipes RUSTUP_HOME or CARGO_HOME (the wipe moved behind the check)" \
-  bash -c 'grep -vE "^[[:space:]]*#" "$1" | grep -qE "rm -rf[^#]*(RUSTUP_HOME|CARGO_HOME)"' _ "${DIST_BIN}/rust-bin/global-stack-rust-start.sh"
+  bash -c '[[ -s "$1" ]] || exit 0; grep -vE "^[[:space:]]*#" "$1" | sed -e ":a" -e "/\\\\$/{N;s/\\\\\n//;ba}" | grep -qE "rm -rf[^#]*(RUSTUP_HOME|CARGO_HOME)"' _ "${DIST_BIN}/rust-bin/global-stack-rust-start.sh"
 
 # ─── Section 73: phpMyAdmin is built and checked in a temp dir before it replaces the old tree ──
 # Pin-audit tranche 3 step 21 (rulings 2026-09-26 11:17 and 11:43). start.sh wiped
@@ -6158,14 +6171,14 @@ for _p73_bad in "cccccccccccccccccccccccccccccccccccccccc|commit|-|not published
   IFS='|' read -r _p73_v _p73_t _p73_f _p73_why _p73_msg <<<"${_p73_bad}"
   [[ "${_p73_f}" == - ]] && _p73_f=""
   assert_pass "73i: ${_p73_t} ${_p73_v:0:12} (${_p73_why}) -> its named FATAL + token, old tree and marker untouched, nothing left in tmp" \
-    bash -c '[[ "$1" == "rc=fail build="*" rev=A marker=$4;type=commit oldonly=kept vendor=yes token=1 fatal=1 "*" refused=0 "* ]] && grep "^FATAL: " "$3" | grep -qF "$2"' _ \
+    bash -c '[[ "$1" == "rc=fail build="*" rev=A marker=$4;type=commit oldonly=kept vendor=yes token=1 fatal=1 tmp=0 refused=0 "* ]] && grep "^FATAL: " "$3" | grep -qF "$2"' _ \
     "$(P73_FAIL="${_p73_f}" _p73_run "${_p73_v}" "${_p73_t}" A "${_P73_A};type=commit")" "${_p73_msg}" "${_P73}/last.log" "${_P73_A}"
 done
 _p73_exec="$(grep -hvE '^[[:space:]]*#' "${DIST_BIN}/phpmyadmin-bin/global-stack-phpmyadmin-iou.sh")"
 assert_pass "73j: at least 2 executable curl calls in the iou, and every one carries -f (floor + guard)" \
   bash -c 'calls="$(grep -oE "curl [^;|]*" <<<"$1")"; [[ "$(grep -c . <<<"${calls}")" -ge 2 ]] && ! grep -vE "(^| )-[a-zA-Z]*f[a-zA-Z]*( |$)" <<<"${calls}" | grep -q .' _ "${_p73_exec}"
 assert_fail "73k: start.sh no longer removes tools/phpmyadmin itself (the swap moved behind the check)" \
-  bash -c 'grep -vE "^[[:space:]]*#" "$1" | grep -qE "rm -rf[^#]*TOOLS_PATH}/phpmyadmin\""' _ "${_P73_START}"
+  bash -c '[[ -s "$1" ]] || exit 0; grep -vE "^[[:space:]]*#" "$1" | grep -qE "rm -rf[^#]*TOOLS_PATH}/phpmyadmin\""' _ "${_P73_START}"
 
 # ─── Section 74: caddy is built locally by a checked xcaddy, then checked, then replaces the old binary ──
 # Pin-audit tranche 3 step 22 (rulings 2026-09-26 11:17 and 11:43). start.sh wiped
@@ -6180,6 +6193,12 @@ assert_fail "73k: start.sh no longer removes tools/phpmyadmin itself (the swap m
 printf '\n── Section 74: caddy built by a checked xcaddy, checked, then replaces the old binary (tranche 3 step 22)\n'
 _P74="${TMP_DIR}/p74"
 mkdir -p "${_P74}/stub" "${_P74}/fix" "${_P74}/build"
+# The shipped scripts are committed 100644 and core.fileMode=false, so a clean clone has no
+# exec bits and a bare-name call from ${DIST_BIN}/caddy-bin fails rc 126 (step 27 panel). Run
+# executable COPIES, taken now, so a sabotage applied to the shipped file still reaches them.
+mkdir -p "${_P74}/bin"
+cp "${DIST_BIN}/caddy-bin/"*.sh "${_P74}/bin/"
+chmod +x "${_P74}/bin/"*.sh
 cat >"${_P74}/stub/curl" <<'EOF'
 #!/bin/bash
 out="" url="" fail=0
@@ -6268,7 +6287,7 @@ _p74_run() {
   fi
   [[ -z "$4" ]] || printf '%s\n' "$4" >"${r}/tools/versions/caddy"
   : >"${_P74}/log"
-  env -i HOME="${r}" TMPDIR="${r}/tmp" PATH="${_P74}/stub:${DIST_BIN}/caddy-bin:${DIST_BIN}/base-bin:/usr/bin:/bin" \
+  env -i HOME="${r}" TMPDIR="${r}/tmp" PATH="${_P74}/stub:${_P74}/bin:${DIST_BIN}/base-bin:/usr/bin:/bin" \
     P74_FIX="${_P74}/fix" P74_LOG="${_P74}/log" P74_BUILD_FAIL="${P74_BUILD_FAIL:-}" P74_REPORT="${P74_REPORT:-}" \
     P74_DROP="${P74_DROP:-}" P74_SKEW="${P74_SKEW:-}" \
     GLOBAL_STACK_ERROR_TOKEN=caddy GLOBAL_STACK_DOCKER_TOOLS_PATH="${r}/tools" GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS="${r}/tools/errors" \
@@ -6333,7 +6352,7 @@ assert_pass "74j: at least 2 executable curl calls in the iou, every one with -f
 # 74k reads the WHOLE start.sh (comment lines out, backslash continuations joined): the
 # old wipe was a multi-line `rm -rf \` naming "${CADDY_PATH}" on its own line.
 assert_fail "74k: start.sh wipes \${CADDY_PATH} nowhere (the iou replaces the binary only after its checks)" \
-  bash -c 'grep -vE "^[[:space:]]*#" "$1" | sed -e ":a" -e "/\\\\$/{N;s/\\\\\n//;ba}" | grep -qE "rm -rf.*\"\\\$\{CADDY_PATH\}\"( |$)"' _ "${_P74_START}"
+  bash -c '[[ -s "$1" ]] || exit 0; grep -vE "^[[:space:]]*#" "$1" | sed -e ":a" -e "/\\\\$/{N;s/\\\\\n//;ba}" | grep -qE "rm -rf.*\"\\\$\{CADDY_PATH\}\"( |$)"' _ "${_P74_START}"
 # GOTOOLCHAIN defaults to `auto` [measured: tools/go 1.27.1], under which a module whose
 # go.mod needs a newer go makes go DOWNLOAD an unpinned toolchain. The build must run with
 # `local`, so that case fails the build (a named FATAL) instead of fetching.
@@ -6370,6 +6389,12 @@ assert_pass "74n: ...and 01caddy plumbs it into the container" \
 printf '\n── Section 75: httpd + shared ModSecurity tree: fetch and check before any wipe (tranche 3 step 23)\n'
 _P75="${TMP_DIR}/p75"
 mkdir -p "${_P75}/stub" "${_P75}/fix" "${_P75}/src"
+# The shipped scripts are committed 100644 and core.fileMode=false, so a clean clone has no
+# exec bits and a bare-name call from ${DIST_BIN}/httpd-bin fails rc 126 (step 27 panel). Run
+# executable COPIES, taken now, so a sabotage applied to the shipped file still reaches them.
+mkdir -p "${_P75}/bin"
+cp "${DIST_BIN}/httpd-bin/"*.sh "${_P75}/bin/"
+chmod +x "${_P75}/bin/"*.sh
 cat >"${_P75}/stub/curl" <<'EOF'
 #!/bin/bash
 out="" url="" fail=0
@@ -6533,7 +6558,7 @@ _p75_run() {
   fi
   [[ -z "$6" ]] || printf '%s\n' "$6" >"${r}/tools/versions/httpd"
   : >"${_P75}/log"
-  env -i HOME="${r}" TMPDIR="${r}/tmp" PATH="${_P75}/stub:${DIST_BIN}/httpd-bin:${DIST_BIN}/base-bin:/usr/bin:/bin" \
+  env -i HOME="${r}" TMPDIR="${r}/tmp" PATH="${_P75}/stub:${_P75}/bin:${DIST_BIN}/base-bin:/usr/bin:/bin" \
     P75_FIX="${_P75}/fix" P75_LOG="${_P75}/log" P75_ROOT="${r}" P75_BUILD_FAIL="${P75_BUILD_FAIL:-}" \
     P75_REPORT="${P75_REPORT:-}" P75_T_FAIL="${P75_T_FAIL:-}" P75_NO_MODULE="${P75_NO_MODULE:-}" \
     P75_OIDC_CLONE_FAIL="${P75_OIDC_CLONE_FAIL:-}" \
@@ -6634,7 +6659,7 @@ assert_pass "75k: >= 3 executable curl calls in the iou, every one with -f; arch
 # multi-line `rm -rf \` naming "${HTTPD_PATH}" on its own line.
 for _p75_s in httpd-bin/global-stack-httpd-start.sh nginx-bin/global-stack-nginx-start.sh; do
   assert_fail "75l: ${_p75_s##*/} wipes neither the httpd tree nor the shared libmodsecurity/CRS (the ious replace after their checks)" \
-    bash -c 'grep -vE "^[[:space:]]*#" "$1" | sed -e ":a" -e "/\\\\$/{N;s/\\\\\n//;ba}" | grep -E "rm -rf" | grep -qE "\"\\\$\{(HTTPD_PATH|MODSECURITY_LIB_PATH|MODSECURITY_SOURCE_LIB_PATH|CORERULESET_PATH)\}\""' _ "${DIST_BIN}/${_p75_s}"
+    bash -c '[[ -s "$1" ]] || exit 0; grep -vE "^[[:space:]]*#" "$1" | sed -e ":a" -e "/\\\\$/{N;s/\\\\\n//;ba}" | grep -E "rm -rf" | grep -qE "\"\\\$\{(HTTPD_PATH|MODSECURITY_LIB_PATH|MODSECURITY_SOURCE_LIB_PATH|CORERULESET_PATH)\}\""' _ "${DIST_BIN}/${_p75_s}"
 done
 # Both ways, discovered (the §47 shape): the composite = every pin the iou builds with, plus
 # the shared library pin (built by iou-common, linked by the connector) and nothing else.
@@ -6957,7 +6982,7 @@ _p76_exec="$(grep -vE '^[[:space:]]*#' "${_P76_IOU}")"
 assert_pass "76k: >= 2 executable curl calls in the iou, every one with -f, https://nginx.org only" \
   bash -c 'calls="$(grep -oE "curl [^;|]*" <<<"$1")"; [[ "$(grep -c . <<<"${calls}")" -ge 2 ]] && ! grep -vE "(^| )-[a-zA-Z]*f[a-zA-Z]*( |$)" <<<"${calls}" | grep -q . && ! grep -q "http://" <<<"$1" && grep -q "https://nginx.org/download/" <<<"$1"' _ "${_p76_exec}"
 assert_fail "76l: nginx-start.sh wipes \${NGINX_PATH} nowhere (the iou replaces it after its checks)" \
-  bash -c 'grep -vE "^[[:space:]]*#" "$1" | sed -e ":a" -e "/\\\\$/{N;s/\\\\\n//;ba}" | grep -E "rm -rf" | grep -qE "\"\\\$\{NGINX_PATH\}\"( |$)"' _ "${_P76_START}"
+  bash -c '[[ -s "$1" ]] || exit 0; grep -vE "^[[:space:]]*#" "$1" | sed -e ":a" -e "/\\\\$/{N;s/\\\\\n//;ba}" | grep -E "rm -rf" | grep -qE "\"\\\$\{NGINX_PATH\}\"( |$)"' _ "${_P76_START}"
 assert_pass "76l: ...and stops nginx with \`-s stop\` (\`nginx stop\` is not an nginx option: measured rc 1)" \
   bash -c 'grep -vE "^[[:space:]]*#" "$1" | grep -qF "/sbin/nginx\" -s stop" && ! grep -vE "^[[:space:]]*#" "$1" | grep -qF "/sbin/nginx\" stop"' _ "${_P76_START}"
 # The composite is exactly nginx + connector + the shared library; the iou reads every one

@@ -24,6 +24,8 @@ cd "${_nt_dl}"
 
 _nt_fatal() {
     printf 'FATAL: %s\n' "$1" >&2
+    # Step 27 panel: remove the download dir on FATAL too — only one mktemp actually made.
+    [[ -z "${_nt_dl:-}" ]] || rm -rf "${_nt_dl}"
     exit 1
 }
 

@@ -18,6 +18,9 @@ source global-stack-base-prologue.sh
 # next boot rebuilds.
 _pma_fatal() {
   printf 'FATAL: %s\n' "$1" >&2
+  # A failed build must not leave its vendor/ and node_modules in /tmp once per restart
+  # (step 27 panel). Only a temp dir mktemp actually made is removed.
+  [[ -z "${_pma_dl:-}" ]] || rm -rf "${_pma_dl}"
   exit 1
 }
 
