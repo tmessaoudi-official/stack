@@ -541,7 +541,7 @@ escape hatches keeping pkg markers; the `source X && cmd` class.
 | 14 | go/zig/mise/hurl: check first, then wipe and install fresh (14a/14b/14c) | L | done | 8bae406 | docker/config/dist/bin/base-bin/**, docker/images/00base/**, bin/tests/startup-prologue.test.sh |
 | 15 | all 11 phpbrew tools: check first, then replace (15a/15b/15c) | L | done | ff79ee0 | docker/config/dist/bin/phpbrew-bin/**, bin/tests/startup-prologue.test.sh |
 | 16 | android: stop wiping GRADLE_USER_HOME | S | done | 42b5eb2 | docker/config/dist/bin/android-bin/**, bin/tests/startup-prologue.test.sh |
-| 17 | Docs: CLAUDE.md tranche 2 (hand-off) | S | doing | - | CLAUDE.md |
+| 17 | Docs: CLAUDE.md tranche 2 (hand-off) | S | done | 3413222 | CLAUDE.md |
 <!-- /progress-block -->
 ### Blocked
 ### Needs input
