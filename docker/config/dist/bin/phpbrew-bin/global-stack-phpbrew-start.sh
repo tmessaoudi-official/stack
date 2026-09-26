@@ -149,15 +149,20 @@ if [ "${PHPBREW_MODE}" = "setup" ]; then
     # for edge (php-src master), exactly ${PHP_VERSION} otherwise. This runs on EVERY install,
     # edge included — edge never reaches the reinstall branch (its marker is always
     # php-master), so before this an edge build that yielded no php still wrote its
-    # php.edge.build sidecar (tranche 3 step 25, startup-prologue.test.sh §77). The substitution
-    # may fail (no php, a php that cannot load its libs): that is caught by the compare below,
-    # which names it, instead of by an unnamed ERR trap.
-    _php_says="$("${PHPBREW_ROOT}/php/${_php_new}/bin/php" -r 'echo PHP_VERSION;' 2>/dev/null || true)"
+    # php.edge.build sidecar (tranche 3 step 25, startup-prologue.test.sh §77). `-n` skips
+    # php.ini: the CLI prints startup warnings ("Unable to load dynamic library") on STDOUT,
+    # ahead of the version [measured on php-8.4.25], and this runs before the extensions and
+    # the dist conf are set up — the question here is the binary, not its config. The
+    # substitution may fail (no php, a php that cannot load its libs): that is caught by the
+    # compare below, which names it with php's own stderr, instead of by an unnamed ERR trap.
+    _php_bin="${PHPBREW_ROOT}/php/${_php_new}/bin/php"
+    _php_says="$("${_php_bin}" -n -r 'echo PHP_VERSION;' 2>/dev/null || true)"
     if { [ "${PHP_VERSION_AS}" = "edge" ] && [[ "${_php_says}" != [0-9]*-dev ]]; } \
       || { [ "${PHP_VERSION_AS}" != "edge" ] && [ "${_php_says}" != "${PHP_VERSION}" ]; }; then
       printf 'FATAL: php %s does not report its pin after the install step (reports "%s", want %s)%s\n' \
         "${_php_new}" "${_php_says}" "$([ "${PHP_VERSION_AS}" = "edge" ] && echo 'X.Y.Z-dev' || echo "${PHP_VERSION}")" \
         "${_php_old:+; keeping ${_php_old}}" >&2
+      printf '  php said: %s\n' "$("${_php_bin}" -n -r 'echo PHP_VERSION;' 2>&1 >/dev/null | head -3 || true)" >&2
       exit 1
     fi
     # Delete-after-install: only now, with the new php proven on disk, drop the old

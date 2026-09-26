@@ -6973,13 +6973,20 @@ assert_pass "77a: the extracted install block holds the install step and the rei
 mkdir -p "${_P77}/stub"
 cat >"${_P77}/stub/global-stack-phpbrew-php-install-version.sh" <<'STUB'
 #!/bin/bash
-# Models phpbrew: exits 0 whatever it built. P77_MODE: ok (php reports P77_REPORT) | missing | crash.
+# Models phpbrew: exits 0 whatever it built. P77_MODE: ok (php reports P77_REPORT) | missing |
+# crash | pollute (an ini loading a library that is not there: php prints its startup warning
+# on STDOUT ahead of the version unless -n skips php.ini — measured on php-8.4.25).
 [[ "${P77_MODE}" == missing ]] && exit 0
 mkdir -p "${PHPBREW_ROOT}/php/${PHP_VERSION_NAME}/bin"
 if [[ "${P77_MODE}" == crash ]]; then
   printf '#!/bin/sh\necho "php: error while loading shared libraries" >&2\nexit 127\n' >"${PHPBREW_ROOT}/php/${PHP_VERSION_NAME}/bin/php"
 else
-  printf '#!/bin/sh\n[ "$1" = -r ] && [ "$2" = "echo PHP_VERSION;" ] && printf %%s "%s"\n' "${P77_REPORT}" >"${PHPBREW_ROOT}/php/${PHP_VERSION_NAME}/bin/php"
+  {
+    printf '#!/bin/sh\n'
+    [[ "${P77_MODE}" == pollute ]] && printf '[ "$1" = -n ] || printf "\\nWarning: PHP Startup: Unable to load dynamic library\\n"\n'
+    printf '[ "$1" = -n ] && shift\n'
+    printf '[ "$1" = -r ] && [ "$2" = "echo PHP_VERSION;" ] && printf %%s "%s"\n' "${P77_REPORT}"
+  } >"${PHPBREW_ROOT}/php/${PHP_VERSION_NAME}/bin/php"
 fi
 chmod +x "${PHPBREW_ROOT}/php/${PHP_VERSION_NAME}/bin/php"
 STUB
@@ -7012,6 +7019,11 @@ for _p77_case in 'a release version (no -dev)|ok|8.6.0' 'no php at all|missing|'
     bash -c '[[ "$1" == "rc=1 fatal=1 old=none" ]] && grep "^FATAL: " "$2" | grep -qF "php-master"' _ \
     "$(_p77_run edge "${_P77_EDGE}" php-master "${_p77_mode}" "${_p77_rep}" skip)" "${_P77}/log"
 done
+assert_pass "77c2: the FATAL for a php that cannot run carries php's own stderr" \
+  bash -c '_=$1; grep -qF "php said: php: error while loading shared libraries" "$2"' _ \
+  "$(_p77_run edge "${_P77_EDGE}" php-master crash '' skip)" "${_P77}/log"
+assert_pass "77c3: a php whose ini loads a missing library still passes (-n: the check asks the binary, not its config)" \
+  test "$(_p77_run 8.4 8.4.25 php-8.4.25 pollute 8.4.25 install)" = "rc=0 fatal=0 old=none"
 assert_pass "77d: a fresh 8.4 install (no marker) reporting its pin -> installed" \
   test "$(_p77_run 8.4 8.4.25 php-8.4.25 ok 8.4.25 install)" = "rc=0 fatal=0 old=none"
 assert_pass "77e: a fresh 8.4 install reporting another version -> named FATAL naming both" \
