@@ -50,19 +50,51 @@ _pt_phar() {
     fi
 }
 
-# _pt_runs <file> <text right before the version> <version>: the file runs under php and
-# names exactly that version. Only deployer and pie can run under the image's php;
-# zephir, phalcon and pickle need mbstring, so their version is pinned by URL alone.
-_pt_runs() {
-    local _pt_v
-    _pt_v="$(php "$1" --version --no-ansi 2>/dev/null)" && _pt_names "${_pt_v}" "$2" "$3"
+# _pt_get <tool> <url> <file name>: download to ${_pt_dl}/<tool>/<file name>.
+_pt_get() {
+    mkdir -p "${_pt_dl}/$1"
+    if ! curl --connect-timeout 30 --max-time 300 -fsSL -o "${_pt_dl}/$1/$3" "$2"; then
+        _pt_fatal "$1 could not be downloaded from $2 - $1 left as it was"
+    fi
 }
 
-# _pt_place <tool> <installed path>: replace the installed copy with the checked download
-# and compare the two, so an interrupted copy cannot leave a marker behind.
+# _pt_sum <tool> <file name>: the file must match ITS OWN line of the release's
+# checksums.txt (`<sha256>  <name>`, fetched with _pt_get beside it). The file lists every
+# platform's asset, so checking all of it would fail on the ones that are not here.
+_pt_sum() {
+    awk -v n="$2" '$2 == n && length($1) == 64' "${_pt_dl}/$1/checksums.txt" >"${_pt_dl}/$1/$2.sha256"
+    if [[ ! -s "${_pt_dl}/$1/$2.sha256" ]]; then
+        _pt_fatal "$2 is not listed in $1's checksums.txt - $1 left as it was"
+    fi
+    if ! (cd "${_pt_dl}/$1" && sha256sum -c --quiet "$2.sha256" >/dev/null 2>&1); then
+        _pt_fatal "$2 does not match its published sha256 - $1 left as it was"
+    fi
+}
+
+# _pt_untar <tool> <archive file name> <member>: the archive must list that member, which
+# is then unpacked beside it in ${_pt_dl}/<tool>/. grep -x, never -q: an early exit would
+# SIGPIPE tar under pipefail.
+_pt_untar() {
+    if ! tar -tzf "${_pt_dl}/$1/$2" | grep -xF "$3" >/dev/null || ! tar -xzf "${_pt_dl}/$1/$2" -C "${_pt_dl}/$1" "$3"; then
+        _pt_fatal "$2 carries no $3 - $1 left as it was"
+    fi
+}
+
+# _pt_says <text right before the version> <version> <command…>: the command runs and its
+# output names exactly that version (_pt_names). Of the phars only deployer, pie and castor
+# run under the image's php; zephir, phalcon and pickle need mbstring, so their version is
+# pinned by URL alone.
+_pt_says() {
+    local _pt_v _pt_pre="$1" _pt_ver="$2"
+    shift 2
+    _pt_v="$("$@" 2>/dev/null)" && _pt_names "${_pt_v}" "${_pt_pre}" "${_pt_ver}"
+}
+
+# _pt_place <tool> <checked file> <installed path>: replace the installed copy with the
+# checked download and compare the two, so an interrupted copy cannot leave a marker behind.
 _pt_place() {
-    install -m 0755 "${_pt_dl}/$1.phar" "$2"
-    if ! cmp -s "${_pt_dl}/$1.phar" "$2"; then
+    install -m 0755 "$2" "$3"
+    if ! cmp -s "$2" "$3"; then
         _pt_fatal "the installed $1 differs from the checked download - marker not written"
     fi
 }
@@ -148,7 +180,7 @@ if [ "${_zephir_gate}" = "skip" ] && [ -f "${ZEPHIR_LANG_PHAR_FILE}" ]; then
 else
     echo -e "\nInstalling ${ZEPHIR_LANG_PHAR_FILE}."
     _pt_phar zephir "https://github.com/zephir-lang/zephir/releases/download/${ZEPHIR_LANG_LATEST}/zephir.phar"
-    _pt_place zephir "${ZEPHIR_LANG_PHAR_FILE}"
+    _pt_place zephir "${_pt_dl}/zephir.phar" "${ZEPHIR_LANG_PHAR_FILE}"
     printf '%s\n' "${ZEPHIR_LANG_LATEST}" >"${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew.zephir"
 fi
 
@@ -161,7 +193,7 @@ if [ "${_phalcon_gate}" = "skip" ] && [ -f "${PHALCON_DEVTOOLS_PHAR_FILE}" ]; th
 else
     echo -e "\nInstalling ${PHALCON_DEVTOOLS_PHAR_FILE}."
     _pt_phar phalcon "https://github.com/phalcon/phalcon-devtools/releases/download/${PHALCON_DEVTOOLS_LATEST}/phalcon.phar"
-    _pt_place phalcon "${PHALCON_DEVTOOLS_PHAR_FILE}"
+    _pt_place phalcon "${_pt_dl}/phalcon.phar" "${PHALCON_DEVTOOLS_PHAR_FILE}"
     printf '%s\n' "${PHALCON_DEVTOOLS_LATEST}" >"${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew.phalcon"
 fi
 
@@ -175,10 +207,10 @@ if [ "${_deployer_gate}" = "skip" ] && [ -f "${DEPLOYER_PHAR_FILE}" ]; then
 else
     echo -e "\nInstalling ${DEPLOYER_PHAR_FILE}."
     _pt_phar deployer "https://github.com/deployphp/deployer/releases/download/${GLOBAL_STACK_DEPLOYER_VERSION}/deployer.phar"
-    if ! _pt_runs "${_pt_dl}/deployer.phar" "Deployer " "${GLOBAL_STACK_DEPLOYER_VERSION#v}"; then
+    if ! _pt_says "Deployer " "${GLOBAL_STACK_DEPLOYER_VERSION#v}" php "${_pt_dl}/deployer.phar" --version --no-ansi; then
         _pt_fatal "the downloaded deployer is not ${GLOBAL_STACK_DEPLOYER_VERSION} - deployer left as it was"
     fi
-    _pt_place deployer "${DEPLOYER_PHAR_FILE}"
+    _pt_place deployer "${_pt_dl}/deployer.phar" "${DEPLOYER_PHAR_FILE}"
     printf '%s\n' "${GLOBAL_STACK_DEPLOYER_VERSION}" >"${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew.deployer"
 fi
 
@@ -201,12 +233,17 @@ if [ "${_symfony_gate}" = "skip" ] && [ -f "${SYMFONY_CLI_PHAR_FILE}" ]; then
     # symfony self:update deliberately not run — the .env pin is the source of truth
 else
     echo -e "\nInstalling ${SYMFONY_CLI_PHAR_FILE}."
-    curl --connect-timeout 30 --max-time 300 -LO https://github.com/symfony-cli/symfony-cli/releases/download/${GLOBAL_STACK_SYMFONY_CLI_VERSION}/symfony-cli_linux_amd64.tar.gz
-    tar --extract --file=symfony-cli_linux_amd64.tar.gz symfony
-    chmod a+x ./symfony 2> /dev/null
-    mv ./symfony "${SYMFONY_HOME}/bin/symfony"
-    chmod a+x "${SYMFONY_CLI_PHAR_FILE}" 2> /dev/null
-    rm -rf symfony-cli_linux_amd64.tar.gz 2> /dev/null
+    # Step 15c: was `curl -LO` without -f, then tar and mv — no checksum, no version.
+    # `symfony version` answers rc 0; `symfony --version` exits 1 [measured].
+    _pt_u="https://github.com/symfony-cli/symfony-cli/releases/download/${GLOBAL_STACK_SYMFONY_CLI_VERSION}"
+    _pt_get symfony "${_pt_u}/symfony-cli_linux_amd64.tar.gz" symfony-cli_linux_amd64.tar.gz
+    _pt_get symfony "${_pt_u}/checksums.txt" checksums.txt
+    _pt_sum symfony symfony-cli_linux_amd64.tar.gz
+    _pt_untar symfony symfony-cli_linux_amd64.tar.gz symfony
+    if ! _pt_says "Symfony CLI version " "${GLOBAL_STACK_SYMFONY_CLI_VERSION#v}" "${_pt_dl}/symfony/symfony" version --no-ansi; then
+        _pt_fatal "the downloaded symfony is not ${GLOBAL_STACK_SYMFONY_CLI_VERSION} - symfony left as it was"
+    fi
+    _pt_place symfony "${_pt_dl}/symfony/symfony" "${SYMFONY_CLI_PHAR_FILE}"
     printf '%s\n' "${GLOBAL_STACK_SYMFONY_CLI_VERSION}" >"${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew.symfony-cli"
 fi
 
@@ -219,7 +256,7 @@ if [ "${_pickle_gate}" = "skip" ] && [ -f "${PICKLE_PHAR_FILE}" ]; then
 else
     echo -e "\nInstalling ${PICKLE_PHAR_FILE}."
     _pt_phar pickle "https://github.com/FriendsOfPHP/pickle/releases/download/${PICKLE_LATEST}/pickle.phar"
-    _pt_place pickle "${PICKLE_PHAR_FILE}"
+    _pt_place pickle "${_pt_dl}/pickle.phar" "${PICKLE_PHAR_FILE}"
     printf '%s\n' "${PICKLE_LATEST}" >"${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew.pickle"
 fi
 
@@ -231,10 +268,10 @@ if [ "${_pie_gate}" = "skip" ] && [ -f "${PIE_PHAR_FILE}" ]; then
 else
     echo -e "\nInstalling ${PIE_PHAR_FILE}."
     _pt_phar pie "https://github.com/php/pie/releases/download/${PIE_LATEST}/pie.phar"
-    if ! _pt_runs "${_pt_dl}/pie.phar" "(PIE) " "${PIE_LATEST#v}"; then
+    if ! _pt_says "(PIE) " "${PIE_LATEST#v}" php "${_pt_dl}/pie.phar" --version --no-ansi; then
         _pt_fatal "the downloaded pie is not ${PIE_LATEST} - pie left as it was"
     fi
-    _pt_place pie "${PIE_PHAR_FILE}"
+    _pt_place pie "${_pt_dl}/pie.phar" "${PIE_PHAR_FILE}"
     printf '%s\n' "${PIE_LATEST}" >"${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew.pie"
 fi
 
@@ -245,8 +282,15 @@ if [ "${_mago_gate}" = "skip" ] && [ -f "${MAGO_PHAR_FILE}" ]; then
     echo -e "\n${MAGO_PHAR_FILE} already installed (${MAGO_LATEST})."
 else
     echo -e "\nInstalling ${MAGO_PHAR_FILE}."
-    curl --connect-timeout 30 --max-time 300 --proto '=https' --tlsv1.2 -sSf https://carthage.software/mago.sh | bash -s -- --install-dir=${PHPBREW_BIN} --version=${MAGO_LATEST}
-    chmod a+x "${MAGO_PHAR_FILE}"
+    # Step 15c: was `curl …/mago.sh | bash`. The pinned release tarball directly; no
+    # checksum is published (GitHub attestations only), so listing + version.
+    _pt_m="mago-${MAGO_LATEST}-x86_64-unknown-linux-gnu"
+    _pt_get mago "https://github.com/carthage-software/mago/releases/download/${MAGO_LATEST}/${_pt_m}.tar.gz" "${_pt_m}.tar.gz"
+    _pt_untar mago "${_pt_m}.tar.gz" "${_pt_m}/mago"
+    if ! _pt_says "mago " "${MAGO_LATEST#v}" "${_pt_dl}/mago/${_pt_m}/mago" --version; then
+        _pt_fatal "the downloaded mago is not ${MAGO_LATEST} - mago left as it was"
+    fi
+    _pt_place mago "${_pt_dl}/mago/${_pt_m}/mago" "${MAGO_PHAR_FILE}"
     printf '%s\n' "${MAGO_LATEST}" >"${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew.mago"
 fi
 
@@ -257,8 +301,14 @@ if [ "${_castor_gate}" = "skip" ] && [ -f "${CASTOR_PHAR_FILE}" ]; then
     echo -e "\n${CASTOR_PHAR_FILE} already installed (${CASTOR_LATEST})."
 else
     echo -e "\nInstalling ${CASTOR_PHAR_FILE}."
-    curl --connect-timeout 30 --max-time 300 "https://castor.jolicode.com/install" | bash -s -- --install-dir=${PHPBREW_BIN} --version=${CASTOR_LATEST}
-    chmod a+x "${CASTOR_PHAR_FILE}"
+    # Step 15c: was `curl …/install | bash`, whose default is this same phar (the live
+    # tools/bin/castor is byte-identical to it) — kept a phar, not the static build, so
+    # castor tasks keep running on the developer's php. No checksum is published.
+    _pt_phar castor "https://github.com/jolicode/castor/releases/download/${CASTOR_LATEST}/castor.linux-amd64.phar"
+    if ! _pt_says "castor v" "${CASTOR_LATEST#v}" php "${_pt_dl}/castor.phar" --version --no-ansi; then
+        _pt_fatal "the downloaded castor is not ${CASTOR_LATEST} - castor left as it was"
+    fi
+    _pt_place castor "${_pt_dl}/castor.phar" "${CASTOR_PHAR_FILE}"
     printf '%s\n' "${CASTOR_LATEST}" >"${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew.castor"
 fi
 
@@ -270,8 +320,17 @@ if [ "${_fabpot_gate}" = "skip" ] && [ -f "${FABPOT_LOCAL_PHP_SECURITY_CHECKER}"
     echo -e "\n${FABPOT_LOCAL_PHP_SECURITY_CHECKER} already installed (${FABPOT_LOCAL_PHP_SECURITY_CHECKER_LATEST})."
 else
     echo -e "\nInstalling ${FABPOT_LOCAL_PHP_SECURITY_CHECKER}."
-    curl --connect-timeout 30 --max-time 300 -LsS "https://github.com/fabpot/local-php-security-checker/releases/download/${FABPOT_LOCAL_PHP_SECURITY_CHECKER_LATEST}/local-php-security-checker_linux_amd64" -o "${FABPOT_LOCAL_PHP_SECURITY_CHECKER}"
-    chmod a+x "${FABPOT_LOCAL_PHP_SECURITY_CHECKER}"
+    # Step 15c: was `curl -LsS -o <the installed binary>` without -f, so a 404 page
+    # overwrote the working checker and its marker was written.
+    _pt_u="https://github.com/fabpot/local-php-security-checker/releases/download/${FABPOT_LOCAL_PHP_SECURITY_CHECKER_LATEST}"
+    _pt_get fabpot "${_pt_u}/local-php-security-checker_linux_amd64" local-php-security-checker_linux_amd64
+    _pt_get fabpot "${_pt_u}/checksums.txt" checksums.txt
+    _pt_sum fabpot local-php-security-checker_linux_amd64
+    chmod 0755 "${_pt_dl}/fabpot/local-php-security-checker_linux_amd64"
+    if ! _pt_says "Local PHP Security Checker " "${FABPOT_LOCAL_PHP_SECURITY_CHECKER_LATEST#v}" "${_pt_dl}/fabpot/local-php-security-checker_linux_amd64" --version; then
+        _pt_fatal "the downloaded fabpot is not ${FABPOT_LOCAL_PHP_SECURITY_CHECKER_LATEST} - fabpot left as it was"
+    fi
+    _pt_place fabpot "${_pt_dl}/fabpot/local-php-security-checker_linux_amd64" "${FABPOT_LOCAL_PHP_SECURITY_CHECKER}"
     printf '%s\n' "${FABPOT_LOCAL_PHP_SECURITY_CHECKER_LATEST}" >"${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/phpbrew.fabpot-local-php-security-checker"
 fi
 

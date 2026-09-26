@@ -1852,10 +1852,9 @@ printf '\n%b── Section 25: phpbrew-install-tools gates%b\n' "${C_BOLD}" "${C
 # The eleventh, laravel/installer, was unpinned and followed by a blanket
 # `composer global update --with-all-dependencies` that would move any pin back.
 #
-# COVERAGE HONESTY: seven of the eleven are covered behaviourally in §66 (composer,
-# laravel) and §67 (zephir, phalcon, deployer, pickle, pie); the other four (symfony,
-# mago, castor, fabpot — step 15c) only STRUCTURALLY, by the marker-last invariant
-# below, which is what the marker-first defect violated.
+# All eleven are covered behaviourally: §66 (composer, laravel), §67 (zephir, phalcon,
+# deployer, pickle, pie, castor) and §68 (symfony, mago, fabpot). The structural checks
+# below still pin the marker-last invariant the marker-first defect violated.
 PHPBREW_TOOLS="${DIST_BIN}/phpbrew-bin/global-stack-phpbrew-install-tools.sh"
 
 assert_pass "25a: phpbrew-install-tools passes bash -n" bash -n "${PHPBREW_TOOLS}"
@@ -5324,9 +5323,10 @@ _p66_run() { # $1 = composer pin, $2 = laravel pin → state string
     PHPBREW_BIN="${t}/bin" SYMFONY_HOME="${t}/symfony" COMPOSER_HOME="${t}/composer" COMPOSER_SOURCE="${t}/composer/source" \
     GLOBAL_STACK_COMPOSER_VERSION="$1" GLOBAL_STACK_LARAVEL_INSTALLER_VERSION="$2" \
     GLOBAL_STACK_ZEPHIR_LANG_VERSION="${_P66_ZEPHIR:-n1}" GLOBAL_STACK_PHALCON_DEVTOOLS_VERSION="${_P66_PHALCON:-n1}" \
-    GLOBAL_STACK_DEPLOYER_VERSION="${_P66_DEPLOYER:-n1}" GLOBAL_STACK_SYMFONY_CLI_VERSION=n1 \
+    GLOBAL_STACK_DEPLOYER_VERSION="${_P66_DEPLOYER:-n1}" GLOBAL_STACK_SYMFONY_CLI_VERSION="${_P66_SYMFONY:-n1}" \
     GLOBAL_STACK_PICKLE_VERSION="${_P66_PICKLE:-n1}" GLOBAL_STACK_PIE_VERSION="${_P66_PIE:-n1}" \
-    GLOBAL_STACK_MAGO_VERSION=n1 GLOBAL_STACK_CASTOR_VERSION=n1 GLOBAL_STACK_FABPOT_LOCAL_PHP_SECURITY_CHECKER_VERSION=n1 \
+    GLOBAL_STACK_MAGO_VERSION="${_P66_MAGO:-n1}" GLOBAL_STACK_CASTOR_VERSION="${_P66_CASTOR:-n1}" \
+    GLOBAL_STACK_FABPOT_LOCAL_PHP_SECURITY_CHECKER_VERSION="${_P66_FABPOT:-n1}" \
     bash "${DIST_BIN}/phpbrew-bin/global-stack-phpbrew-install-tools.sh") >"${_P66}/last.log" 2>&1 || rc=fail
   src="$({ bash "${t}/composer/source/bin/composer" --version 2>/dev/null || true; } | awk '{ print $3 }')"
   phar="$({ bash "${t}/composer/bin/composer" --version 2>/dev/null || true; } | awk '{ print $3 }')"
@@ -5389,13 +5389,16 @@ assert_fail "66i: composer-setup.php (the unpinned bootstrap) is gone from execu
 # checksum. Now each is downloaded into the temp dir as <tool>.phar and opened as a Phar
 # (signature-verified) before it replaces anything; deployer and pie, the two that run
 # under the image's php, must also name their pin. zephir/phalcon/pickle cannot run
-# there (mbstring missing), so their VERSION is pinned by URL only.
+# there (mbstring missing), so their VERSION is pinned by URL only. castor (step 15c) joins
+# them: it used to be `castor install | bash`, whose default is this same phar, and it
+# runs under the image's php, so it is version-checked like deployer and pie.
 printf '\n── Section 67: the five phars checked before they replace the old one (tranche 2 step 15b)\n'
 _P67_TOOLS='zephir:ZEPHIR:zephir:zephir.phar:bin/zephir:zephir::
 phalcon:PHALCON:phalcon-devtools:phalcon.phar:bin/phalcon:phalcon:v:
 deployer:DEPLOYER:deployer:deployer.phar:bin/dep:deployer:v:Deployer %s
 pickle:PICKLE:pickle:pickle.phar:bin/pickle:pickle:v:
-pie:PIE:pie:pie.phar:bin/pie:pie::🥧 PHP Installer for Extensions (PIE) %s'
+pie:PIE:pie:pie.phar:bin/pie:pie::🥧 PHP Installer for Extensions (PIE) %s
+castor:CASTOR:castor:castor.linux-amd64.phar:bin/castor:castor:v:castor v%s'
 # Per tool: 1.1.0 and 1.2.0 good; 1.3.0 not published; 1.4.0 an HTML page served with
 # 200; 1.5.0 truncated (no signature magic); 1.6.0 intact but, for the two that run,
 # reporting 1.6.00.
@@ -5479,6 +5482,148 @@ while IFS= read -r _spec; do
   assert_pass "67g: ${_k} copy into tools/bin cut short -> FATAL, marker stays ${_pfx}1.1.0" \
     bash -c '[[ "$1" == rc=fail\ id=*\ marker="$3"\ fatal=no\ stray=0 ]] && grep -q "^FATAL: the installed $4 differs from the checked download" "$2/last.log"' _ "${_o}" "${_P66}" "${_pfx}1.1.0" "${_k}"
 done <<<"${_P67_TOOLS}"
+
+# ─── Section 68: symfony, mago and fabpot checked before they replace the old one ──
+# Pin-audit tranche 2 step 15c. symfony was `curl -LO` (no -f) + tar; mago was
+# `curl …/mago.sh | bash`; fabpot was `curl -LsS -o <the installed binary>` with no -f,
+# so a 404 page overwrote the working checker and its marker was written. Now each is
+# downloaded into the temp dir, checked against its release's checksums.txt where one is
+# published (symfony, fabpot), its archive listed (symfony, mago), its version run, and
+# only then placed. castor moved to §67.
+printf '\n── Section 68: symfony, mago, fabpot checked before they replace the old one (tranche 2 step 15c)\n'
+_P68_TOOLS='symfony:SYMFONY:symfony-cli:symfony/bin/symfony:symfony-cli:v:Symfony CLI version %s (c) 2021-2026 Fabien Potencier
+mago:MAGO:mago:bin/mago:mago::mago %s
+fabpot:FABPOT:local-php-security-checker:bin/fabpot-local-php-security-checker:fabpot-local-php-security-checker:v:Local PHP Security Checker %s, built at 2024-05-09T11:54:42Z'
+# _p68_mk <spec> <ver> ok|badsum|nobin|html|badver|nosums → release <pfx><ver> of that tool.
+# checksums.txt also lists a darwin asset that is never published, as the real ones do, so
+# only the asset's OWN line can be checked. symfony answers `version` (rc 0) and exits 1
+# on `--version`, as measured.
+_p68_mk() {
+  local _k _sfx _repo _dest _mk _pfx _vl tag d b line asset inner
+  IFS=: read -r _k _sfx _repo _dest _mk _pfx _vl <<<"$1"
+  tag="${_pfx}$2" d="${_P66}/up/gh/${_repo}/${_pfx}$2" b="${_P66}/up/bin/${_repo}/${_pfx}$2"
+  mkdir -p "${d}" "${b}"
+  line="$(printf "${_vl}" "$2")"
+  [[ "$3" == badver ]] && line="$(printf "${_vl}" "$2"0)"
+  {
+    printf '#!/bin/bash\n# id=%s@%s\n' "${_repo}" "${tag}"
+    if [[ "${_k}" == symfony ]]; then
+      printf 'case "${1:-}" in version) echo "%s"; exit 0 ;; --version) echo "%s"; exit 1 ;; esac\nexit 0\n' "${line}" "${line}"
+    else
+      printf 'case "${1:-}" in --version) echo "%s" ;; esac\nexit 0\n' "${line}"
+    fi
+  } >"${b}/bin"
+  chmod +x "${b}/bin"
+  [[ "$3" == html ]] && printf '<html>Not Found</html>\n' >"${b}/bin"
+  case "${_k}" in
+    symfony)
+      asset=symfony-cli_linux_amd64.tar.gz
+      mkdir -p "${b}/t" && printf 'MIT\n' >"${b}/t/LICENSE"
+      # bare member names (LICENSE, symfony), as the real tarball lists them [measured]
+      if [[ "$3" == nobin ]]; then
+        tar -czf "${d}/${asset}" -C "${b}/t" LICENSE
+      else
+        cp "${b}/bin" "${b}/t/symfony"
+        tar -czf "${d}/${asset}" -C "${b}/t" LICENSE symfony
+      fi ;;
+    mago)
+      inner="mago-$2-x86_64-unknown-linux-gnu" asset="mago-$2-x86_64-unknown-linux-gnu.tar.gz"
+      [[ "$3" == nobin ]] && inner="mago-$2"
+      mkdir -p "${b}/t/${inner}" && cp "${b}/bin" "${b}/t/${inner}/mago"
+      tar -czf "${d}/${asset}" -C "${b}/t" "${inner}" ;;
+    fabpot)
+      asset=local-php-security-checker_linux_amd64
+      cp "${b}/bin" "${d}/${asset}" ;;
+  esac
+  if [[ "${_k}" != mago && "$3" != nosums ]]; then
+    {
+      printf '%s  %s\n' "$(printf 'x' | sha256sum | cut -d' ' -f1)" "${asset/linux_amd64/darwin_arm64}"
+      if [[ "$3" == badsum ]]; then
+        printf '%064d  %s\n' 0 "${asset}"
+      elif [[ "$3" != unlisted ]]; then
+        (cd "${d}" && sha256sum "${asset}")
+      fi
+    } >"${d}/checksums.txt"
+  fi
+}
+while IFS= read -r _spec; do
+  IFS=: read -r _k _sfx _repo _dest _mk _pfx _vl <<<"${_spec}"
+  for _m in 1.1.0:ok 1.2.0:ok 1.4.0:badsum 1.5.0:nobin 1.6.0:badver 1.7.0:nosums; do
+    _p68_mk "${_spec}" "${_m%%:*}" "${_m#*:}"
+  done
+  [[ "${_k}" == fabpot ]] && _p68_mk "${_spec}" 1.5.0 html
+  [[ "${_k}" == symfony ]] && _p68_mk "${_spec}" 1.8.0 unlisted
+done <<<"${_P68_TOOLS}"
+assert_pass "68a: fixtures — a good tarball's own checksums.txt line verifies, the whole file does not (non-vacuity)" \
+  bash -c 'cd "$1/up/gh/symfony-cli/v1.1.0" && grep " symfony-cli_linux_amd64.tar.gz$" checksums.txt | sha256sum -c --quiet - && ! sha256sum -c --quiet checksums.txt >/dev/null 2>&1 \
+    && tar -tzf "$1/up/gh/mago/1.1.0/mago-1.1.0-x86_64-unknown-linux-gnu.tar.gz" | grep -qx "mago-1.1.0-x86_64-unknown-linux-gnu/mago" \
+    && tar -tzf "$1/up/gh/symfony-cli/v1.1.0/symfony-cli_linux_amd64.tar.gz" | grep -qx symfony \
+    && ! "$1/up/bin/symfony-cli/v1.1.0/bin" --version >/dev/null && "$1/up/bin/symfony-cli/v1.1.0/bin" version | grep -q "version 1.1.0 " \
+    && "$1/up/bin/mago/1.6.0/bin" --version | grep -qx "mago 1.6.00"' _ "${_P66}"
+
+_p68_prep() { # $1 = tool spec, $2 = installed tag|none
+  local _k _sfx _repo _dest _mk _pfx _vl t="${_P66}/tools"
+  IFS=: read -r _k _sfx _repo _dest _mk _pfx _vl <<<"$1"
+  _p66_prep 1.1.0 1.1.0 1.1.0 v1.1.0
+  rm -f "${t}/${_dest}" "${t}/versions/phpbrew.${_mk}"
+  if [[ "$2" != none ]]; then
+    cp "${_P66}/up/bin/${_repo}/$2/bin" "${t}/${_dest}"
+    printf '%s\n' "$2" >"${t}/versions/phpbrew.${_mk}"
+  fi
+}
+_p68_run() { # $1 = tool spec, $2 = pin → rc, installed id, marker, named FATAL, strays
+  local _k _sfx _repo _dest _mk _pfx _vl t="${_P66}/tools" o id
+  IFS=: read -r _k _sfx _repo _dest _mk _pfx _vl <<<"$1"
+  local -x "_P66_${_sfx}=$2"
+  o="$(_p66_run 1.1.0 v1.1.0)"
+  id="$(sed -n 's/^# id=//p' "${t}/${_dest}" 2>/dev/null || true)"
+  printf '%s id=%s marker=%s fatal=%s stray=%s' "${o%% *}" "${id:-none}" \
+    "$(cat "${t}/versions/phpbrew.${_mk}" 2>/dev/null || echo none)" \
+    "$(if grep -q "^FATAL: .*${_k} left as it was" "${_P66}/last.log"; then echo yes; else echo no; fi)" \
+    "$({ ls -A "${t}/bin" "${t}/symfony/bin" | grep -cE '\.tar\.gz|\.phar|\.tmp|\.new|checksums|\.sha256|linux' || true; })"
+}
+while IFS= read -r _spec; do
+  IFS=: read -r _k _sfx _repo _dest _mk _pfx _vl <<<"${_spec}"
+  _p68_prep "${_spec}" "${_pfx}1.1.0"
+  assert_pass "68b: ${_k} ${_pfx}1.1.0 -> pin ${_pfx}1.2.0: checked, installed, marker last" \
+    test "$(_p68_run "${_spec}" "${_pfx}1.2.0")" = "rc=0 id=${_repo}@${_pfx}1.2.0 marker=${_pfx}1.2.0 fatal=no stray=0"
+  _p68_prep "${_spec}" "${_pfx}1.2.0"
+  assert_pass "68c: ${_k} ${_pfx}1.2.0 -> pin moved back to ${_pfx}1.1.0" \
+    test "$(_p68_run "${_spec}" "${_pfx}1.1.0")" = "rc=0 id=${_repo}@${_pfx}1.1.0 marker=${_pfx}1.1.0 fatal=no stray=0"
+  _p68_prep "${_spec}" none
+  assert_pass "68d: ${_k} first install at ${_pfx}1.1.0" \
+    test "$(_p68_run "${_spec}" "${_pfx}1.1.0")" = "rc=0 id=${_repo}@${_pfx}1.1.0 marker=${_pfx}1.1.0 fatal=no stray=0"
+  _p68_prep "${_spec}" "${_pfx}1.1.0"
+  _o="$(_p68_run "${_spec}" "${_pfx}1.1.0")"
+  assert_pass "68e: ${_k} current -> not downloaded, not touched" \
+    bash -c '[[ "$1" == "rc=0 id=$3@$4 marker=$4 fatal=no stray=0" ]] && ! grep -q "/$3/releases/" "$2/curl.log"' _ "${_o}" "${_P66}" "${_repo}" "${_pfx}1.1.0"
+  case "${_k}" in
+    symfony) _fails='1.3.0:not published|1.4.0:checksum mismatch|1.5.0:tarball without the binary|1.6.0:reports a .00 version|1.7.0:no checksums.txt' ;;
+    mago) _fails='1.3.0:not published|1.5.0:tarball without the binary|1.6.0:reports a .00 version' ;;
+    fabpot) _fails='1.3.0:not published|1.4.0:checksum mismatch|1.5.0:an HTML page with a matching checksum|1.6.0:reports a .00 version|1.7.0:no checksums.txt' ;;
+  esac
+  while IFS=: read -r _v _why; do
+    _p68_prep "${_spec}" "${_pfx}1.1.0"
+    assert_pass "68f: ${_k} pin ${_pfx}${_v} (${_why}) -> named FATAL, old ${_k} and marker untouched" \
+      test "$(_p68_run "${_spec}" "${_pfx}${_v}")" = "rc=fail id=${_repo}@${_pfx}1.1.0 marker=${_pfx}1.1.0 fatal=yes stray=0"
+  done <<<"${_fails//|/$'\n'}"
+done <<<"${_P68_TOOLS}"
+# A checksums.txt that does not list the asset at all: fail closed either way, but the
+# FATAL must say so rather than report a mismatch against nothing.
+_spec="$(grep '^symfony:' <<<"${_P68_TOOLS}")"
+_p68_prep "${_spec}" v1.1.0
+_o="$(_p68_run "${_spec}" v1.8.0)"
+assert_pass "68f: symfony pin v1.8.0 (checksums.txt without the asset's line) -> FATAL names it as not listed, old symfony kept" \
+  bash -c '[[ "$1" == "rc=fail id=symfony-cli@v1.1.0 marker=v1.1.0 fatal=yes stray=0" ]] && grep -q "^FATAL: symfony-cli_linux_amd64.tar.gz is not listed in symfony" "$2/last.log"' _ "${_o}" "${_P66}"
+
+# Static, comment lines stripped (the §19 shape — the comments name what they replaced):
+# no remote script is piped into a shell (ruling: never pipe remote scripts), and every
+# curl fails on an HTTP error. The floor keeps the curl check from passing on nothing.
+_pt_exec="$(grep -vE '^[[:space:]]*#' "${PHPBREW_TOOLS}")"
+assert_pass "68g: no executable line pipes into bash or sh" \
+  bash -c '! grep -qE "\|[[:space:]]*(sudo[[:space:]]+)?(ba)?sh([[:space:]]|$)" <<<"$1"' _ "${_pt_exec}"
+assert_pass "68h: at least 4 executable curl calls (counted per call, not per line), and every one carries -f (floor + guard)" \
+  bash -c 'c="$(grep -oE "curl [^;|]*" <<<"$1")"; n="$(grep -c . <<<"${c}")"; bad="$(grep -cvE "[[:space:]]-[a-zA-Z]*f[a-zA-Z]*[[:space:]]" <<<"${c}" || true)"; [[ "${n}" -ge 4 && "${bad}" == 0 ]]' _ "${_pt_exec}"
 
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'

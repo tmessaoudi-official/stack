@@ -413,7 +413,9 @@ then drop the old dir and wipe `pkg.*`; the marker is written where it is today 
 - AS BUILT (15b): three helpers. `_pt_phar <tool> <url>` downloads with `curl -f` to
   `${_pt_dl}/<tool>.phar` and opens it with `new Phar()` (signature-verified: `phar.require_hash=1` in the
   image; a truncated file, an HTML page, a one-byte corruption and a copy without the `.phar` name were each
-  refused, and all five pinned phars accepted [Verified: probe in the 02phpbrew image]). `_pt_runs` runs a
+  refused, and all five pinned phars accepted [Verified: probe in the 02phpbrew image]; `require_hash` is PHP's
+  default and nothing in the repo sets it, and install-tools resolves the system php, since its PATH adds no
+  php [Verified: `git grep`; Inferred from `phpbrew-start.sh:10`]). `_pt_runs` runs a
   file and matches its version with `_pt_names`. `_pt_place` does `install -m 0755` then `cmp`, so a short
   copy FATALs before the marker. deployer and pie (`Deployer <v>`, `(PIE) <v>`; rc 0, stdout only
   [measured]) are version-checked before they are placed. zephir, phalcon and pickle cannot run under the
@@ -434,6 +436,39 @@ then drop the old dir and wipe `pkg.*`; the marker is written where it is today 
   independent downloads), deployer v8.0.5 → v8.0.4 → v8.0.5 and pie 1.5.0 → 1.4.3 → 1.5.0, pie 9.9.9 →
   named FATAL with the old pie and marker kept, no-op; no stray file in tools/bin, the projects file
   survived, no temp dir left on success [Verified: ran].
+  zephir/phalcon/pickle moved DOWN only in §67c's fixtures; the real runs moved deployer and pie down and
+  back. Step 15b commit: `f8e5d03`.
+- AS BUILT (15c): symfony and fabpot are checked against their release's `checksums.txt`, but only
+  against the asset's OWN line (`awk '$2 == n && length($1) == 64'`; mawk has no `{64}`), since the file
+  lists every platform; a file that does not list the asset FATALs as "not listed", not as a mismatch.
+  symfony's tarball must list the bare member `symfony` (as upstream's does) and is unpacked in the temp
+  dir; mago's pinned release tarball (`mago-<v>-x86_64-unknown-linux-gnu/mago`) replaces `mago.sh | bash`.
+  Every one is version-run before it is placed: `symfony version --no-ansi` (its `--version` exits 1),
+  `mago --version`, `castor --version`, fabpot `--version` [all measured rc 0, stdout only]. fabpot's
+  `curl -LsS -o <the installed binary>` without `-f` is gone: a 404 page no longer overwrites the working
+  checker. castor: the old installer's default was the PHAR, and the live `tools/bin/castor` is
+  byte-identical to the upstream v1.7.0 phar [Verified: `file -b` + sha256], so it stays a phar (not the
+  static build, which embeds its own php and would drop the developer's extensions from castor tasks) and
+  joins §67: Phar open + `castor v<v>` (decided in-session, two-way door; not a ruling). mago and castor
+  publish no checksum (GitHub attestations; castor's installer looks for a `SHA256SUMS` that v1.7.0 does
+  not publish), so their integrity is the listing/Phar signature plus the version run. New helpers:
+  `_pt_get`, `_pt_sum`, `_pt_untar`, and `_pt_says` (replaces `_pt_runs`; runs any command); `_pt_place`
+  now takes the checked file. §68: 31 checks (fixture non-vacuity; per tool up, down, first, no-op; not
+  published, checksum mismatch, tarball without the binary, an HTML page WITH a matching checksum, a `.00`
+  version, no checksums.txt, a checksums.txt without the asset's line; 68g no executable line pipes into a
+  shell; 68h every curl carries `-f`, counted per CALL with a floor of 4 — two composer calls share a
+  line). §67 gained castor (+7). Red first: 25 for the old code's reasons (fabpot's 404 page installed with
+  its marker; bad checksums and `.00` versions installed; the piped installers never fetching the pin),
+  after a fixture fault was fixed first — the symfony tarball had `./symfony` members, which the real one
+  does not. Sabotage C1-C10: C3 (drop the listing) SURVIVES by design — extracting a missing member fails
+  with the same named FATAL; C10 (drop the not-listed branch) first SURVIVED (fail-closed, only the message
+  changed), so the unlisted fixture was added and now catches it. Suite 882/882; shfmt diff 6 → 0,
+  shellcheck 7 → 4. REAL, throwaway 02phpbrew container, scratch tools/: all four at their pins, installed
+  sha256 equal to upstream's artifacts (castor equal to the live copy); symfony v5.20.0 → v5.17.1, mago
+  1.49.0 → 1.48.0, castor v1.7.0 → v1.6.0, fabpot v2.1.3 → v2.1.2 and back; fabpot v9.9.9 → named FATAL
+  with the working checker and marker kept; no-op; the 15a/15b tools untouched, no stray file, no temp
+  dir left on success [Verified: ran]. symfony v5.19.0 was skipped for the down run: it publishes no
+  checksums.txt.
 
 ### Step 16 — android SDK (M/L) — DESIGN FORK, needs a ruling
 - Any change to the 14 SDK inputs wipes `ANDROID_HOME`, `ANDROID_SDK_HOME`, `ANDROID_SDK_ROOT` AND
@@ -472,7 +507,7 @@ escape hatches keeping pkg markers; the `source X && cmd` class.
 | 12 | Package slots: cleanup only after the new install succeeded | M | done | f5075ed | docker/config/dist/bin/base-bin/**, docker/config/dist/bin/rbenv-bin/**, docker/config/dist/bin/sdkman-bin/**, bin/tests/startup-prologue.test.sh |
 | 13 | rbenv plugins reuse step 6's in-place tag move | S | done | 46e80a7 | docker/config/dist/bin/rbenv-bin/**, bin/tests/startup-prologue.test.sh |
 | 14 | go/zig/mise/hurl: check first, then wipe and install fresh (14a/14b/14c) | L | done | 8bae406 | docker/config/dist/bin/base-bin/**, docker/images/00base/**, bin/tests/startup-prologue.test.sh |
-| 15 | all 11 phpbrew tools: check first, then replace (15a/15b/15c) | L | doing | - | docker/config/dist/bin/phpbrew-bin/**, bin/tests/startup-prologue.test.sh |
+| 15 | all 11 phpbrew tools: check first, then replace (15a/15b/15c) | L | done | - | docker/config/dist/bin/phpbrew-bin/**, bin/tests/startup-prologue.test.sh |
 | 16 | android: stop wiping GRADLE_USER_HOME | S | todo | - | docker/config/dist/bin/android-bin/**, bin/tests/startup-prologue.test.sh |
 | 17 | Docs: CLAUDE.md tranche 2 (hand-off) | S | todo | - | CLAUDE.md |
 <!-- /progress-block -->
@@ -494,6 +529,8 @@ escape hatches keeping pkg markers; the `source X && cmd` class.
 - `RELOAD_PHP=true` (`phpbrew-start.sh:43`) removes `frankenphp-${GLOBAL_STACK_FRANKENPHP_VERSION}-<php name>` by the
   CURRENT frankenphp pin, so a frankenphp binary built under an older pin is orphaned. Same class step 11 fixed in
   the pin-bump cleanup (`902f08f`); this one is pre-existing and not a pin-bump path. Logged, not fixed.
+- `templates/shell/global-unu.sh:524` pipes `curl -sSL https://claude.ai/install.sh | bash` on the HOST: the same
+  class step 15c removed from 02phpbrew (mago/castor). Host surface, outside tranche 2; logged, not fixed.
 - `/new-service` (`.claude/skills/new-service/SKILL.md`) scaffolds a startup script with NO version gate at all
   (`grep -c gs_version_gate` → 0), so a service created from it never reinstalls on a pin bump. Step 17 material.
 - `RELOAD_NODE` / `RELOAD_JAVA` / `RELOAD_FLUTTER=true` remove the version marker only. The gate then says
