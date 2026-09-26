@@ -163,6 +163,44 @@ assert_grep "6: 00base still passes it as a build arg" \
 assert_grep "6: the shared base-env fragment declares it" \
   "${VAR_UNDER_TEST}" "docker/config/compose-fragments/base-env.compose.yaml"
 
+# ── 7. Pins 00base installs at BOOT reach it at runtime ─────────────────────
+# F3's shape again (pin-audit step 26): 00base's start script runs the base-install-*.sh
+# installers, which read their GLOBAL_STACK_*_VERSION at boot and install into tools/ — but
+# go, zig and mise were passed ONLY as build args, baked into the image ENV, so a .env bump
+# followed by a restart gated against the OLD pin and installed nothing. The pin set is
+# derived from the installers base-start.sh calls, never listed here. hurl is the one named
+# exemption, on purpose: its binary is compiled BY the image, so its pin must come from the
+# same build (install-hurl.sh FATALs on a build/pin mismatch — runtime plumbing would turn
+# every env-only hurl bump into a failed 00base boot). The exemption doubles as the floor.
+BASE_START="docker/config/dist/bin/base-bin/global-stack-base-start.sh"
+BOOT_PINS=()
+while IFS= read -r _p; do
+  BOOT_PINS+=("${_p}")
+done < <(cd "${REPO_ROOT}/docker/config/dist/bin/base-bin" \
+  && grep -ohE 'global-stack-base-install-[a-z0-9-]+\.sh' "${REPO_ROOT}/${BASE_START}" | sort -u \
+  | xargs grep -ohE 'GLOBAL_STACK_[A-Z0-9_]+_VERSION\b' | sort -u)
+_exempt=0 _checked=0
+for _p in ${BOOT_PINS+"${BOOT_PINS[@]}"}; do
+  if [[ "${_p}" == GLOBAL_STACK_HURL_VERSION ]]; then
+    _exempt=1
+    continue
+  fi
+  _checked=$((_checked + 1))
+  _want="$(sed -n "s/^${_p}=//p" "${REPO_ROOT}/.env.local" | tail -1)"
+  _got="$( (cd "${REPO_ROOT}" && docker compose --env-file .env.local config --format json 2>/dev/null) \
+    | jq -r --arg v "${_p}" '.services["00base"].environment[$v] // "<absent>"' 2>/dev/null)"
+  if [[ -n "${_want}" && "${_got}" == "${_want}" ]]; then
+    ok "7: 00base receives ${_p}=${_got} at runtime (not only baked into its image)"
+  else
+    ko "7: 00base resolved ${_p}='${_got}' at runtime (want '${_want}' from .env.local)"
+  fi
+done
+if [[ "${_exempt}" -eq 1 && "${_checked}" -ge 3 ]]; then
+  ok "7: ${_checked} boot-installed pin(s) derived from ${BASE_START##*/}, hurl exempt by name"
+else
+  ko "7: derived ${_checked} boot-installed pin(s), hurl seen=${_exempt} — the derivation broke"
+fi
+
 # ── Summary ─────────────────────────────────────────────────────────────────
 TOTAL=$((PASS + FAIL))
 printf '\n'

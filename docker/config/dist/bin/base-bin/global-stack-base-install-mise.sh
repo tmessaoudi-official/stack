@@ -35,9 +35,11 @@ if [[ -n "${GLOBAL_STACK_MISE_VERSION}" && "${GLOBAL_STACK_BASE_INSTALL_TOOLS}" 
         exit 1
     fi
     chmod 0755 "${_mise_dl}/${_mise_asset}"
-    _mise_got="$(MISE_DATA_DIR="${_mise_dl}/d" MISE_STATE_DIR="${_mise_dl}/s" MISE_CONFIG_DIR="${_mise_dl}/c" \
-        MISE_CACHE_DIR="${_mise_dl}/k" "${_mise_dl}/${_mise_asset}" --version 2>/dev/null)"
-    if [[ "${_mise_got}" != "${_mise_want}"* ]]; then
+    # The capture sits inside the `if`: a binary that cannot run used to exit here with
+    # nothing naming it; now it reaches the FATAL below, which reports what it printed.
+    if ! _mise_got="$(MISE_DATA_DIR="${_mise_dl}/d" MISE_STATE_DIR="${_mise_dl}/s" MISE_CONFIG_DIR="${_mise_dl}/c" \
+        MISE_CACHE_DIR="${_mise_dl}/k" "${_mise_dl}/${_mise_asset}" --version 2>/dev/null)" \
+        || [[ "${_mise_got}" != "${_mise_want}"* ]]; then
         printf 'FATAL: downloaded mise reports "%s", pin is %s - mise left as it was\n' "${_mise_got}" "${GLOBAL_STACK_MISE_VERSION}" >&2
         exit 1
     fi

@@ -13,11 +13,11 @@ source global-stack-base-prologue.sh
 # container's /tmp. Every fallible check sits inside its `if`: a bare failing
 # capture would fire the prologue's ERR trap before the FATAL could say why.
 _pt_dl="$(mktemp -d)"
-# symfony still downloads with `curl -O` into the CURRENT directory (the phar blocks did
-# too, and ran `rm -rf zephir.pha*`-style globs there on EVERY boot until step 15b). The
-# cwd is compose's `working_dir`, /stack/projects: the developer's own projects, where
-# such a glob deleted a file of theirs (or, after the old composer block's bare `cd`,
-# composer's source tree). Working in the temp dir keeps every download out of both.
+# Every download and extract below names its path in the temp dir. The cd stays so that
+# anything a tool writes RELATIVE to the cwd lands there too: the cwd is otherwise compose's
+# `working_dir`, /stack/projects, the developer's own projects — where the old `curl -O`
+# downloads and their `rm -rf zephir.pha*`-style globs ran on EVERY boot until step 15b and
+# deleted a file of theirs (or, after the old composer block's bare `cd`, composer's source).
 cd "${_pt_dl}"
 
 # _pt_names <output> <text right before the version> <version>: true when the output

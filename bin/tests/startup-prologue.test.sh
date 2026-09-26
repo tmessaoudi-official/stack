@@ -4792,6 +4792,10 @@ for _t in go zig; do
 done
 printf '%064d\n' 0 >"${_P63}/up/go/go1.2.0.linux-amd64.tar.gz.sha256"
 sed -i 's/^1\.2\.0 .*/1.2.0 '"$(printf '%064d' 0)"'/' "${_P63}/up/zig/shas"
+# go 1.6.0: the archive is published but its .sha256 is not (step 26: the capture used to sit
+# outside an `if`, so a failed fetch exited on curl's code with no FATAL naming it).
+_p63_mk go 1.6.0 1.6.0 full
+rm -f "${_P63}/up/go/go1.6.0.linux-amd64.tar.gz.sha256"
 awk 'BEGIN { printf "{" } NR > 1 { printf "," }
   { printf "\"%s\":{\"x86_64-linux\":{\"tarball\":\"https://ziglang.org/download/%s/zig-x86_64-linux-%s.tar.xz\",\"shasum\":\"%s\"}}", $1, $1, $1, $2 }
   END { print "}" }' "${_P63}/up/zig/shas" >"${_P63}/up/zig/index.json"
@@ -4909,6 +4913,10 @@ _p63_prep go 1.0.0 1.0.0
 _o="$(P63_FAIL_CHOWN=1 _p63_run go 1.1.0)"
 assert_pass "63m: go failure while GOPATH is aside (chown fails) -> GOPATH restored by the EXIT trap, marker kept" \
   bash -c '[[ "$1" == rc=fail\ *\ marker=1.0.0\ *\ gopath=600\ aside=no ]]' _ "${_o}"
+_p63_prep go 1.0.0 1.0.0
+_o="$(_p63_run go 1.6.0)"
+assert_pass "63n: go archive published without its .sha256 -> named FATAL (cannot fetch), go and marker untouched" \
+  bash -c '[[ "$1" == "rc=fail ver=1.0.0 marker=1.0.0 files=only-in-1.0.0 "* ]] && grep "^FATAL: " "$2" | grep -qF "cannot fetch the published SHA-256"' _ "${_o}" "${_P63}/last.log"
 
 # ─── Section 64: mise is checked BEFORE its data is wiped (tranche 2 step 14b) ──
 # install-mise.sh removed mise's four data dirs and THEN piped https://mise.run into sh,
@@ -4968,6 +4976,11 @@ _p64_mk v1.0.0 1.0.0
 _p64_mk v1.1.0 1.1.0
 _p64_mk v1.2.0 1.2.0
 _p64_mk v1.4.0 1.4.00
+# v1.6.0: a binary that cannot run (exits 1 on --version), checksum valid (step 26: the capture
+# used to sit outside an `if`, so the script exited with no FATAL naming it).
+_p64_mk v1.6.0 1.6.0
+printf '#!/bin/bash\necho "mise: cannot execute" >&2\nexit 1\n' >"${_P64}/up/v1.6.0/mise-v1.6.0-linux-x64"
+(cd "${_P64}/up/v1.6.0" && sha256sum ./mise-v1.6.0-linux-x64 >SHASUMS256.txt)
 printf '%064d  ./mise-v1.2.0-linux-x64\n' 0 >"${_P64}/up/v1.2.0/SHASUMS256.txt"
 assert_pass "64a: fixture SHASUMS256.txt uses the real './<asset>' naming and verifies (non-vacuity)" \
   bash -c 'cd "$1/up/v1.1.0" && grep -qE "^[0-9a-f]{64}  \./mise-v1\.1\.0-linux-x64$" SHASUMS256.txt && sha256sum -c --quiet SHASUMS256.txt' _ "${_P64}"
@@ -5018,6 +5031,10 @@ assert_pass "64f: downloaded binary reports 1.4.00 for pin v1.4.0 -> FATAL, old 
 _p64_prep v1.0.0
 assert_pass "64g: pin not published (download fails) -> FATAL, old binary, data and marker untouched" \
   test "$(_p64_run v1.5.0)" = "rc=fail ver=1.0.0 marker=v1.0.0 data=stale-from-v1.0.0"
+_p64_prep v1.0.0
+_o="$(_p64_run v1.6.0)"
+assert_pass "64g2: downloaded binary cannot run -> named FATAL, old binary, data and marker untouched" \
+  bash -c '[[ "$1" == "rc=fail ver=1.0.0 marker=v1.0.0 data=stale-from-v1.0.0" ]] && grep "^FATAL: " "$2" | grep -qF "downloaded mise reports"' _ "${_o}" "${_P64}/last.log"
 _p64_prep v1.0.0
 _o="$(P64_FAIL_USE=1 _p64_run v1.1.0)"
 assert_pass "64h: \`mise use -g usage\` fails -> FATAL, marker NOT written (a mise without usage is broken)" \

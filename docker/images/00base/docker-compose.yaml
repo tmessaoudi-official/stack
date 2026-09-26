@@ -99,6 +99,15 @@ services:
     cap_add:
       - NET_ADMIN
     environment:
+      # Read at BOOT by base-install-{go,zig,mise}.sh, so they must track
+      # .env.local here: as build args alone they were frozen in the image
+      # ENV and a pin bump plus a restart installed nothing
+      # (compose-env-plumbing.test.sh §7). The build args stay as the
+      # default for a container started outside compose. hurl is NOT here
+      # on purpose: the image compiles it, so its pin comes from that build.
+      - GLOBAL_STACK_GO_VERSION=${GLOBAL_STACK_GO_VERSION}
+      - GLOBAL_STACK_ZIG_VERSION=${GLOBAL_STACK_ZIG_VERSION}
+      - GLOBAL_STACK_MISE_VERSION=${GLOBAL_STACK_MISE_VERSION}
       - GLOBAL_STACK_RELOAD_PERMISSIONS=${GLOBAL_STACK_RELOAD_PERMISSIONS}
       - GLOBAL_STACK_EXPOSED_VIRTUAL_HOSTS=${GLOBAL_STACK_EXPOSED_VIRTUAL_HOSTS}
       - GLOBAL_STACK_HTTPS_LOCALHOST_IPS=${GLOBAL_STACK_HTTPS_LOCALHOST_IPS}

@@ -55,7 +55,11 @@ if [[ -n "${GLOBAL_STACK_GO_VERSION}" ]] &&
     _go_dl="$(mktemp -d)"
     trap 'rm -rf "${_go_dl}"; _go_restore_gopath' EXIT
     curl --connect-timeout 30 --max-time 300 -fsSL -o "${_go_dl}/${archive}" "https://go.dev/dl/${archive}"
-    _go_sha="$(curl --connect-timeout 30 --max-time 60 -fsSL "https://dl.google.com/go/${archive}.sha256")"
+    # Inside an `if`: a bare failing capture exited on curl's code with nothing naming it.
+    if ! _go_sha="$(curl --connect-timeout 30 --max-time 60 -fsSL "https://dl.google.com/go/${archive}.sha256")"; then
+        printf 'FATAL: cannot fetch the published SHA-256 of %s - go left as it was\n' "${archive}" >&2
+        exit 1
+    fi
     if ! printf '%s  %s\n' "${_go_sha}" "${_go_dl}/${archive}" | sha256sum -c --quiet - >/dev/null 2>&1; then
         printf 'FATAL: %s does not match its published SHA-256 - go left as it was\n' "${archive}" >&2
         exit 1
