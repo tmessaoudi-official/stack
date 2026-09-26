@@ -711,6 +711,12 @@ the iou fails closed on a missing tarball before any wipe. **UNCERTIFIED-BY-EXEC
 01httpd boot through the new start.sh (no 01httpd image exists on this machine; httpd is not enabled
 here, so nothing live changes); the lib-bump reinstall path and every failure path are proven by
 stubs only. The nginx side of iou-common is byte-identical and stub-tested; nginx's own build is step 24.
+Step-26 follow-ups from step 23: `subversion` is still installed by the 01caddy, 01httpd and 01nginx
+Dockerfiles although httpd no longer uses svn (drop it once step 24 confirms nginx does not either — an
+image change, needs a rebuild); the `GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION` annotation's note "bump
+requires rebuilding HTTPD and Nginx images" is stale (the library is built at boot into tools/). For
+step 24: no 01nginx image exists locally either, and 01nginx's Dockerfile differs from 01caddy's
+(automake for the OpenIDC chain) — `diff` them before reusing 01caddy as the stand-in.
 
 ### Step 24 — nginx (M) · `nginx-bin/global-stack-nginx-{start,iou}.sh`
 Today: wipe, `curl` of nginx.org tarball with no signature check, connector cloned into
