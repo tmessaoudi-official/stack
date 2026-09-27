@@ -877,8 +877,8 @@ CLAUDE.md `21d598f`, via `/tmp/edit-claudemd-step26-20260926.sh` (classifier-blo
 
 ### Step 27 — milestone panel over tranches 2+3 (frozen f3e92d4; ONE round by ruling 2026-09-26 23:29, not the two-clean-rounds default)
 **Round 1 of 1 — frozen `f3e92d4`, range 1906f6c..f3e92d4 (47 commits, 45 files). Report:
-`var/claude/pin-audit-t3/panel-round-1.md`. Fixes `6d74d29` (code + tests) and `542788a` (docs); CLAUDE.md via
-`/tmp/edit-claudemd-step27-20260927.sh` (dry-run 4/4 anchors; copy in `var/claude/recovery/`).** Verdicts:
+`var/claude/pin-audit-t3/panel-round-1.md`. Fixes `6d74d29` (code + tests) and `542788a` (docs); CLAUDE.md `1c2f2e1`
+(developer-run hand-off, 4/4 anchors applied).** Verdicts:
 all three lenses FINDINGS; lens 1 found no health-signalling break. Every tranche-2 round-1 finding was
 confirmed closed.
 - **P0** `.env.local` kept `master` for the httpd connector pin (env-scan was never re-run after step 23).
