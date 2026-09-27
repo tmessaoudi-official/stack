@@ -981,8 +981,8 @@ Sabotage F1–F4 each went red with byte-identical restores (`var/claude/pin-aud
 
 Suite 1095/1095. **UNCERTIFIED-BY-EXECUTION:** the new fetch path has never run live. It is armed,
 not firing: since `6d74d29` the fvm marker equals `FVM_VERSION`, so a normal boot or the idle-PC rebuild takes
-the `skip` path. It fires only on a pin bump or `RELOAD_FVM=true`. CLAUDE.md: `/tmp/edit-claudemd-row29-20260927.sh`
-(dry-run below), pending the developer's run.
+the `skip` path. It fires only on a pin bump or `RELOAD_FVM=true`. CLAUDE.md `0e82862` (developer-run hand-off, 5/5
+anchors applied).
 
 ## Status
 <!-- progress-block v1 -->
