@@ -40,6 +40,8 @@ version and its usage ! no implementation yet !"* — AUDIT ONLY; nothing below 
 - [2026-09-27 00:40] AGREED: step 27 round-1 findings — fix all with failing-first tests (fvm gate, §74/§75 clean-clone, zig capture, temp dirs on FATAL, guard floors, docs + CLAUDE.md hand-off); log elasticmq (new install site) and the cjose/liboauth2 chain gap (latent) as Known issues.
 - [2026-09-27 00:40] AGREED: run env-scan to sync .env.local's stale GLOBAL_STACK_HTTPD_MODSECURITY_MOD_VERSION (`master`) to the committed pin — a sync, not a version update.
 - [2026-09-27 00:50] RECORDED (author decisions reported to the developer at the time, not rulings — logged here at the step-27 panel's request): step 25 widened the php run-check to every php install; step 26 plumbed go/zig/mise (+ MISE_VERSION) into 00base's runtime env instead of only documenting them; step 26 dropped `subversion` from the 01caddy/01httpd/01nginx images.
+- [2026-09-27 09:05] AGREED: fix both remaining step-27 Known issues now, test-first — elasticmq's jar download and the nginx OpenIDC-chain gap (row 28); the live rebuild and the RELOAD reproduction wait for an idle PC.
+- [2026-09-27 09:05] RECORDED (author decisions for row 28, not rulings): elasticmq's jar is checked against the SHA-256 GitHub serves as the release asset's `digest` (api.github.com, the only checksum upstream exposes) plus its manifest `Implementation-Version`; the API digest therefore counts as a published checksum, and fvm (whose assets carry one too, verified 4.3.1) becomes a logged follow-up. nginx's chain pins join its composite marker with `${VAR:+…}`, so the marker stays byte-identical while they are empty.
 
 ## Formal Plan
 <!-- written at Phase 4 — tranche 1, APPROVED 2026-09-24 15:05 (steps 5-9; step 8 revised) -->
@@ -923,6 +925,42 @@ Suite 1065/1065, plumbing 21/21. **UNCERTIFIED-BY-EXECUTION (all lenses):**
 exists. No step is proven by a live bring-up; the web servers and php.edge are UNCERTIFIED-BY-EXECUTION
 until the developer rebuilds.
 
+### Step 28 — the two step-27 Known issues (M) · ruling 2026-09-27 09:05
+**elasticmq** (`serverless-bin/global-stack-serverless-framework-start.sh`): the jar lands in a temp dir.
+Four checks run before `install -m 0755` replaces the old jar, and the marker is written last:
+1. The SHA-256 GitHub serves as the release asset's `digest` (api.github.com; upstream publishes no checksum
+   file) [measured v1.7.1: `sha256:a40dfd03…` = `sha256sum` of the jar]. A single value is required, so a
+   `null` digest or a missing asset is refused.
+2. The download itself, with its own named FATAL.
+3. The jar holds `org/elasticmq/server/Main.class`.
+4. `META-INF/MANIFEST.MF`'s `Implementation-Version` equals the pin. The line ends in CRLF [measured], so
+   `\r` is stripped and the fixture carries CRLF.
+
+Every failure is a named FATAL that leaves the old jar and marker and removes the temp dir. The API call is
+unauthenticated, made only on a version change, and shares the per-IP budget of 60 an hour with env-update's
+`github:` fetcher; a refusal keeps the old jar. §78: 16 checks. The 14 behavioural checks were red against
+the old block, extracted by its old anchor. Sabotage M1–M5b each went red (log:
+`var/claude/pin-audit-t3/sabotage-row28.log`).
+
+**nginx OpenIDC chain:**
+- start.sh's composite gains `cjose=`, `liboauth2=` and `openidc=`, each added only when its pin is set
+  (`${VAR:+…}`). While they are empty the marker is byte-identical, so the first boot after this change does
+  not rebuild nginx (76n).
+- start.sh's two chain gates and their deletions are gone, so a chain-only bump runs the iou (76o, 76o2).
+- The iou clones cjose, liboauth2 and ngx_openidc_module into its temp dir BEFORE the wipe (76p ×3). It then
+  moves each into its old source path and builds it after nginx, as before; each build failure is a named
+  FATAL (76q ×3).
+- start.sh deletes no chain path (76r).
+- 76m now pins all six composite inputs. Its `[A-Z_]` regex could not match `LIBOAUTH2`, and its hard-coded
+  C-order list failed under the suite's locale; it now compares sets.
+- The iou's unused version-gate source went too, so 30a now asserts that the iou calls no `gs_version_gate`
+  instead of asserting that it sources the helper. That check went red on a gate call injected into a worktree
+  copy. The first full run caught this 30a failure (1090/1091), which is why the check changed.
+- Sabotage N1–N5 and N3b each went red. N3b moved the cjose clone after the wipe and was caught by 76p alone.
+
+Suite 1091/1091. **UNCERTIFIED-BY-EXECUTION:** no live boot of 04serverless-framework, and the nginx
+OpenIDC chain has never been built with a pin set (all three are locked empty; every test runs against stubs).
+
 ## Status
 <!-- progress-block v1 -->
 | # | Step | Size | State | Evidence | Files |
@@ -955,6 +993,7 @@ until the developer rebuilds.
 | 25 | php.edge: post-build php check before the sidecar marker | S | done | b273b9c | docker/config/dist/bin/phpbrew-bin/**, bin/tests/startup-prologue.test.sh |
 | 26 | Docs + tranche-2 panel findings (CLAUDE.md hand-off, skill, .env comments, P3s) | M | done | 293a8d0 | CLAUDE.md, .env, .claude/skills/bump-versions/**, docs/plans/**, docs/BLAST-RADIUS.md, templates/tips/env-scan.md, docker/config/dist/bin/base-bin/**, docker/config/dist/bin/phpbrew-bin/**, docker/images/00base/**, docker/images/01caddy/**, docker/images/01httpd/**, docker/images/01nginx/**, bin/tests/** |
 | 27 | Milestone panel over tranches 2+3 (frozen f3e92d4, one round by ruling) | M | done | 6d74d29 | var/claude/**, docker/config/dist/bin/**, bin/tests/**, .claude/skills/bump-versions/**, docs/plans/**, CLAUDE.md |
+| 28 | Known issues: elasticmq jar checked in temp; nginx OpenIDC chain in the composite, cloned before the wipe | M | done | 0151d31 | docker/config/dist/bin/serverless-bin/**, docker/config/dist/bin/nginx-bin/**, bin/tests/startup-prologue.test.sh, docs/plans/** |
 <!-- /progress-block -->
 ### Blocked
 ### Needs input
@@ -989,10 +1028,15 @@ until the developer rebuilds.
 - elasticmq (`serverless-bin/global-stack-serverless-framework-start.sh:163`) downloads its jar with `curl -fsSL -o`
   straight over the live `tools/serverless-framework/bin/elasticmq-server-all.jar`: no temp dir, no check, so a download
   cut mid-transfer leaves a truncated jar and the old one gone. A pinned download no tranche covered (step 27 panel P2).
-  Logged, not fixed (ruling 2026-09-27 00:40).
+  Logged, not fixed (ruling 2026-09-27 00:40). FIXED in 28 (0151d31): checked in a temp dir (GitHub asset digest, Main
+  class, manifest version) before it replaces the old jar (ruling 2026-09-27 09:05).
 - `nginx-start.sh:114-127` vs `:140`: when the cjose or liboauth2 gate fires, start.sh deletes that library and its
   marker, but only `_ngx_gate` calls the nginx iou that rebuilds it — so a chain-only pin bump leaves the library
   deleted. Pre-existing (same at 1906f6c), latent (both pins are locked empty). Step 27 panel P3; logged, not fixed.
+  FIXED in 28 (0151d31): the chain pins are in nginx's composite (only when set), start.sh deletes nothing, and the iou
+  clones every chain source before the wipe (ruling 2026-09-27 09:05).
+- fvm's GitHub release assets carry a SHA-256 `digest` too (verified 4.3.1), which row 28 counts as a published
+  checksum for elasticmq; fvm still checks only its listing and `--version`. Follow-up, not fixed.
 - mise deletes `MISE_DATA_DIR`/`STATE`/`CONFIG`/`CACHE` BEFORE `curl https://mise.run | sh` (`install-mise.sh:18-21`) — a failed download leaves mise wiped. FIXED in 14b (`008b841`): checked before the wipe (ruling 2026-09-25 09:58). [Verified: read]
 - hurl 8.0.1 cannot run in 00base: `libxml2.so.2 => not found` (26.04 ships libxml2.so.16), and upstream publishes no other Linux x86_64 build [Verified: ldd + release assets in a throwaway container]. Being fixed in step 14 (ruling 2026-09-25 09:58). FIXED in 14c (`8bae406`): the live `tools/hurl` stays broken until 00base is rebuilt; until then every 00base boot WARNs (ruling 11:47) and the developer rebuilds later (ruling 2026-09-25).
 - `RELOAD_PHP=true` (`phpbrew-start.sh:43`) removes `frankenphp-${GLOBAL_STACK_FRANKENPHP_VERSION}-<php name>` by the
