@@ -6,8 +6,8 @@ set -xeEuo pipefail
 shopt -s extdebug
 IFS=$'\n\t'
 
-# Row 20: prologue-exempt, so the version gate is sourced alone.
-source global-stack-base-version-gate.sh
+# No version gate here any more: start.sh's composite decides, and the chain's own inner
+# gates went with row 28 (the tree is wiped just before the chain builds).
 
 # Trap errors and handle cleanup or error reporting
 trap 'stackCatch $? ${LINENO} "${BASH_COMMAND}"' ERR EXIT
@@ -44,6 +44,7 @@ stackCatch() {
 # *-setup.sh — startup-prologue.test.sh §49 now enumerates the class instead.
 # Define reusable paths
 NGINX_PATH="${1}"
+# shellcheck disable=SC2034 # 2 is kept for the positional contract (the chain no longer cd's there, row 28)
 HTTP_COMMONS_PATH="${2}"
 # shellcheck disable=SC2034 # 3, 4 and 6 are kept for the positional contract of the start.sh call
 NGINX_VERSIONS_PATH="${3}"
@@ -150,6 +151,28 @@ if [[ -n "${GLOBAL_STACK_NGINX_MODSECURITY_MOD_VERSION}" ]]; then
   _ng_add=(--add-module="${_ng_msn}")
 fi
 
+# The OpenIDC chain (row 28): each pinned source is cloned here too, before the wipe, so an
+# unpublished pin or an unreachable GitHub leaves the old nginx and its libs in place. The
+# chain used to be cloned after the wipe, and start.sh deleted a library whose own gate fired
+# while only the nginx gate ran this script; its pins are in the composite marker now.
+# _ng_chain_clone <name> <pin>: https://github.com/OpenIDC/<name>.git into ${_ng_dl}/<name>
+_ng_chain_clone() {
+  if ! git clone --progress --branch "$2" --depth 1 "https://github.com/OpenIDC/$1.git" "${_ng_dl}/$1" \
+    || ! git -C "${_ng_dl}/$1" config core.fileMode false \
+    || ! git -C "${_ng_dl}/$1" submodule update --init; then
+    _ng_fatal "$1 $2 could not be cloned - nginx left as it was"
+  fi
+}
+if [[ -n "${GLOBAL_STACK_NGINX_CJOSE_VERSION}" ]]; then
+  _ng_chain_clone cjose "${GLOBAL_STACK_NGINX_CJOSE_VERSION}"
+fi
+if [[ -n "${GLOBAL_STACK_NGINX_LIBOAUTH2_VERSION}" ]]; then
+  _ng_chain_clone liboauth2 "${GLOBAL_STACK_NGINX_LIBOAUTH2_VERSION}"
+fi
+if [[ -n "${GLOBAL_STACK_NGINX_MOD_AUTH_OPENIDC_VERSION}" ]]; then
+  _ng_chain_clone ngx_openidc_module "${GLOBAL_STACK_NGINX_MOD_AUTH_OPENIDC_VERSION}"
+fi
+
 # Every input is here and checked: from now on the old nginx is replaced. logs/ is kept.
 # The OpenIDC chain's libs live under ${NGINX_PATH}/libs, so their markers go with them
 # (start.sh used to delete both with the tree). nginx builds in ${NGINX_PATH}/nginx-build,
@@ -207,123 +230,57 @@ fi
 
 cd "${NGINX_PATH}"
 
-# Install cJOSE if needed
-if [[ -n "${GLOBAL_STACK_NGINX_CJOSE_VERSION}" ]] && \
-   { [[ ! -e "${NGINX_CJOSE_VERSION_PATH}" ]] || \
-     [[ "$(gs_version_gate "${NGINX_CJOSE_VERSION_PATH}" "${GLOBAL_STACK_NGINX_CJOSE_VERSION}" "nginx.cjose")" != "skip" ]]; }; then
-  
-  # Create directory for cJOSE source & lib
-  mkdir -p \
-    "${CJOSE_SOURCE_PATH}" \
-    "${CJOSE_PATH}"
-  
-  # Clone the cJOSE repository
-  git clone --progress \
-    --branch "${GLOBAL_STACK_NGINX_CJOSE_VERSION}" \
-    https://github.com/OpenIDC/cjose.git \
-    --depth 1 \
-    "${CJOSE_SOURCE_PATH}"
-  
-  # Configure Git and update submodules
-  git -C "${CJOSE_SOURCE_PATH}" config core.fileMode false
-  git -C "${CJOSE_SOURCE_PATH}" submodule update --init
-  
-  # Build and install cJOSE
-  cd "${CJOSE_SOURCE_PATH}"
-
-  CFLAGS="-Og" ./configure \
-    --prefix="${CJOSE_PATH}"
-
-  make
-  make install
-
-  cd "${HTTP_COMMONS_PATH}"
-
-  # rm -rf \
-  #   "${CJOSE_SOURCE_PATH}"
-  
-  # Save the installed version
-  echo "${GLOBAL_STACK_NGINX_CJOSE_VERSION}" > "${NGINX_CJOSE_VERSION_PATH}"
-
-  cd "${NGINX_PATH}"
+# The OpenIDC chain, from the sources cloned before the wipe; each is built after nginx
+# (liboauth2 and the module configure against ${NGINX_PATH}/nginx-build) and keeps its
+# source dir next to its prefix, as before. The tree was just wiped, so every pinned
+# library is built; a build failure is a named FATAL and the composite marker stays old.
+if [[ -n "${GLOBAL_STACK_NGINX_CJOSE_VERSION}" ]]; then
+  mkdir -p "${CJOSE_SOURCE_PATH%/*}" "${CJOSE_PATH}"
+  mv -T "${_ng_dl}/cjose" "${CJOSE_SOURCE_PATH}"
+  if ! (cd "${CJOSE_SOURCE_PATH}" \
+    && CFLAGS="-Og" ./configure --prefix="${CJOSE_PATH}" \
+    && make \
+    && make install); then
+    _ng_fatal "cjose ${GLOBAL_STACK_NGINX_CJOSE_VERSION}: the build failed - the old nginx is already removed (prefix-baked), fix the cause and restart"
+  fi
+  echo "${GLOBAL_STACK_NGINX_CJOSE_VERSION}" >"${NGINX_CJOSE_VERSION_PATH}"
 fi
 
-# Install liboauth2 if needed
-if [[ -n "${GLOBAL_STACK_NGINX_LIBOAUTH2_VERSION}" ]] && \
-   { [[ ! -e "${NGINX_LIBOAUTH2_VERSION_PATH}" ]] || \
-     [[ "$(cat "${NGINX_LIBOAUTH2_VERSION_PATH}")" != "${GLOBAL_STACK_NGINX_LIBOAUTH2_VERSION}" ]]; }; then
-  rm -rf \
-    "${LIBOAUTH2_SOURCE_PATH}" \
-    "${LIBOAUTH2_PATH}"
-
-  # Create directory for liboauth2 source & lib
-  mkdir -p \
-    "${LIBOAUTH2_SOURCE_PATH}" \
-    "${LIBOAUTH2_PATH}"
-  
-  # Clone the cJOSE repository
-  git clone --progress \
-    --branch "${GLOBAL_STACK_NGINX_LIBOAUTH2_VERSION}" \
-    https://github.com/OpenIDC/liboauth2.git \
-    --depth 1 \
-    "${LIBOAUTH2_SOURCE_PATH}"
-  
-  # Configure Git and update submodules
-  git -C "${LIBOAUTH2_SOURCE_PATH}" config core.fileMode false
-  git -C "${LIBOAUTH2_SOURCE_PATH}" submodule update --init
-  
-  # Build and install cJOSE
-  cd "${LIBOAUTH2_SOURCE_PATH}"
-
-  ./autogen.sh
-
-  CFLAGS="-Og" ./configure \
-    --prefix="${LIBOAUTH2_PATH}" \
-    --with-nginx=${NGINX_PATH}/nginx-build \
-    --without-apache \
-    CFLAGS="-I${CJOSE_PATH}/include" \
-    LDFLAGS="-L${CJOSE_PATH}/lib -Wl,-rpath=${CJOSE_PATH}/lib"
-
-  make
-  make install
-
-  # rm -rf \
-  #   "${LIBOAUTH2_SOURCE_PATH}"
-  
-  # Save the installed version
-  echo "${GLOBAL_STACK_NGINX_LIBOAUTH2_VERSION}" > "${NGINX_LIBOAUTH2_VERSION_PATH}"
-
-  cd "${NGINX_PATH}"
+if [[ -n "${GLOBAL_STACK_NGINX_LIBOAUTH2_VERSION}" ]]; then
+  mkdir -p "${LIBOAUTH2_SOURCE_PATH%/*}" "${LIBOAUTH2_PATH}"
+  mv -T "${_ng_dl}/liboauth2" "${LIBOAUTH2_SOURCE_PATH}"
+  if ! (cd "${LIBOAUTH2_SOURCE_PATH}" \
+    && ./autogen.sh \
+    && CFLAGS="-Og" ./configure \
+      --prefix="${LIBOAUTH2_PATH}" \
+      --with-nginx="${NGINX_PATH}/nginx-build" \
+      --without-apache \
+      CFLAGS="-I${CJOSE_PATH}/include" \
+      LDFLAGS="-L${CJOSE_PATH}/lib -Wl,-rpath=${CJOSE_PATH}/lib" \
+    && make \
+    && make install); then
+    _ng_fatal "liboauth2 ${GLOBAL_STACK_NGINX_LIBOAUTH2_VERSION}: the build failed - the old nginx is already removed (prefix-baked), fix the cause and restart"
+  fi
+  echo "${GLOBAL_STACK_NGINX_LIBOAUTH2_VERSION}" >"${NGINX_LIBOAUTH2_VERSION_PATH}"
 fi
 
-# Install the Nginx mod_auth_openidc connector if needed
-if [[ -n "${GLOBAL_STACK_NGINX_MOD_AUTH_OPENIDC_VERSION}" && "" != "${GLOBAL_STACK_NGINX_MOD_AUTH_OPENIDC_VERSION}" ]]; then
-  mkdir -p \
-    "${MOD_AUTH_OPENIDC_NGINX_SOURCE_PATH}" \
-    "${MOD_AUTH_OPENIDC_NGINX_PATH}"
-
-  git clone --progress --branch "${GLOBAL_STACK_NGINX_MOD_AUTH_OPENIDC_VERSION}" \
-    https://github.com/OpenIDC/ngx_openidc_module.git \
-    --depth 1 "${MOD_AUTH_OPENIDC_NGINX_SOURCE_PATH}"
-
-  git -C "${MOD_AUTH_OPENIDC_NGINX_SOURCE_PATH}" config core.fileMode false
-  git -C "${MOD_AUTH_OPENIDC_NGINX_SOURCE_PATH}" submodule update --init
-
-  cd "${MOD_AUTH_OPENIDC_NGINX_SOURCE_PATH}"
-
-  ./autogen.sh
-
-  OAUTH2_NGINX_CFLAGS="-I${LIBOAUTH2_PATH}/include -I${CJOSE_PATH}/include" OAUTH2_NGINX_LIBS="-L${LIBOAUTH2_PATH}/lib -L${CJOSE_PATH}/lib -loauth2_nginx -loauth2 -lcjose" OAUTH2_CFLAGS="-I${LIBOAUTH2_PATH}/include -I${CJOSE_PATH}/include" OAUTH2_LIBS="-L${LIBOAUTH2_PATH}/lib -L${CJOSE_PATH}/lib -loauth2 -lcjose" CFLAGS="-Og" CFLAGS="-Og" ./configure \
-     --prefix="${MOD_AUTH_OPENIDC_NGINX_PATH}" \
-     --with-nginx=${NGINX_PATH}/nginx-build
-
-  make
-  make install
-
-  # rm -rf \
-  #   "${MOD_AUTH_OPENIDC_NGINX_SOURCE_PATH}"
-
-  cd "${NGINX_PATH}"
+# The nginx mod_auth_openidc connector (ngx_openidc_module).
+if [[ -n "${GLOBAL_STACK_NGINX_MOD_AUTH_OPENIDC_VERSION}" ]]; then
+  mkdir -p "${MOD_AUTH_OPENIDC_NGINX_SOURCE_PATH%/*}" "${MOD_AUTH_OPENIDC_NGINX_PATH}"
+  mv -T "${_ng_dl}/ngx_openidc_module" "${MOD_AUTH_OPENIDC_NGINX_SOURCE_PATH}"
+  if ! (cd "${MOD_AUTH_OPENIDC_NGINX_SOURCE_PATH}" \
+    && ./autogen.sh \
+    && OAUTH2_NGINX_CFLAGS="-I${LIBOAUTH2_PATH}/include -I${CJOSE_PATH}/include" \
+      OAUTH2_NGINX_LIBS="-L${LIBOAUTH2_PATH}/lib -L${CJOSE_PATH}/lib -loauth2_nginx -loauth2 -lcjose" \
+      OAUTH2_CFLAGS="-I${LIBOAUTH2_PATH}/include -I${CJOSE_PATH}/include" \
+      OAUTH2_LIBS="-L${LIBOAUTH2_PATH}/lib -L${CJOSE_PATH}/lib -loauth2 -lcjose" \
+      CFLAGS="-Og" ./configure \
+      --prefix="${MOD_AUTH_OPENIDC_NGINX_PATH}" \
+      --with-nginx="${NGINX_PATH}/nginx-build" \
+    && make \
+    && make install); then
+    _ng_fatal "ngx_openidc_module ${GLOBAL_STACK_NGINX_MOD_AUTH_OPENIDC_VERSION}: the build failed - the old nginx is already removed (prefix-baked), fix the cause and restart"
+  fi
 fi
 
 rm -rf "${NGINX_PATH}/nginx-build"

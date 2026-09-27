@@ -83,7 +83,11 @@ source global-stack-base-version-gate.sh
 # connector is compiled into nginx and links the shared libmodsecurity, so a bump of either
 # must rebuild nginx too - the gate held NGINX_VERSION alone. Nothing is wiped here any more:
 # the iou verifies and fetches everything first, then replaces the tree (logs/ kept).
-_ngx_want="${GLOBAL_STACK_NGINX_VERSION};modsec-nginx=${GLOBAL_STACK_NGINX_MODSECURITY_MOD_VERSION};modsec-lib=${GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION}"
+# The OpenIDC chain (cjose, liboauth2, ngx_openidc_module) joined it in row 28: start.sh used
+# to delete a chain library when its own gate fired while only this gate ran the iou that
+# rebuilds it. Each chain pin is added only when set, so while they are empty the marker is
+# byte-identical to the three-field one and nothing rebuilds (startup-prologue.test.sh 76n).
+_ngx_want="${GLOBAL_STACK_NGINX_VERSION};modsec-nginx=${GLOBAL_STACK_NGINX_MODSECURITY_MOD_VERSION};modsec-lib=${GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION}${GLOBAL_STACK_NGINX_CJOSE_VERSION:+;cjose=${GLOBAL_STACK_NGINX_CJOSE_VERSION}}${GLOBAL_STACK_NGINX_LIBOAUTH2_VERSION:+;liboauth2=${GLOBAL_STACK_NGINX_LIBOAUTH2_VERSION}}${GLOBAL_STACK_NGINX_MOD_AUTH_OPENIDC_VERSION:+;openidc=${GLOBAL_STACK_NGINX_MOD_AUTH_OPENIDC_VERSION}}"
 _ngx_gate="$(gs_version_gate "${NGINX_VERSIONS_PATH}" "${_ngx_want}" "nginx")"
 
 # Clean up old http common installations if needed
@@ -94,40 +98,11 @@ if [[ "${GLOBAL_STACK_RELOAD_HTTP_COMMON}" == "true" ]]; then
     "${HTTP_COMMON_CORERULESET_VERSION_PATH}"
 fi
 
-# The two OpenIDC-chain compares below were already correct — { ! -e P || $(cat P) != $V }
-# is exactly `gate != skip` — but silent and repeated. Each gate is computed ONCE,
-# AFTER the RELOAD cleanup above (which may delete a marker), and reused by both
-# the cleanup blocks and the IOU decision, so a change is announced once per boot.
-_ngx_cjose_gate=skip
-if [[ -n "${GLOBAL_STACK_NGINX_CJOSE_VERSION}" ]]; then
-  _ngx_cjose_gate="$(gs_version_gate "${NGINX_CJOSE_VERSION_PATH}" "${GLOBAL_STACK_NGINX_CJOSE_VERSION}" "nginx.cjose")"
-fi
-_ngx_liboauth2_gate=skip
-if [[ -n "${GLOBAL_STACK_NGINX_LIBOAUTH2_VERSION}" ]]; then
-  _ngx_liboauth2_gate="$(gs_version_gate "${NGINX_LIBOAUTH2_VERSION_PATH}" "${GLOBAL_STACK_NGINX_LIBOAUTH2_VERSION}" "nginx.liboauth2")"
-fi
-# The shared ModSecurity library and the CoreRuleSet are no longer gated or wiped here:
-# iou-common gates them itself, runs on every boot, and fetches and checks before it
-# replaces anything (tranche 3 step 23, startup-prologue.test.sh §75).
-
-# Clean mod_auth_openidc if version mismatch
-if [ "${_ngx_cjose_gate}" != "skip" ]; then
-  rm -rf \
-    "${CJOSE_SOURCE_PATH}" \
-    "${CJOSE_PATH}" \
-    "${NGINX_CJOSE_VERSION_PATH}"
-fi
-
-# Clean mod_auth_openidc if version mismatch
-if [ "${_ngx_liboauth2_gate}" != "skip" ]; then
-  rm -rf \
-    "${LIBOAUTH2_SOURCE_PATH}" \
-    "${LIBOAUTH2_PATH}" \
-    "${NGINX_LIBOAUTH2_VERSION_PATH}"
-fi
-
-# The shared ModSecurity library + CoreRuleSet: iou-common gates them itself (a current
-# marker is a no-op), so it runs on every boot, before the nginx iou that links the library.
+# Nothing is gated or wiped here besides the composite above. The OpenIDC chain's pins are in
+# it, and the iou clones every chain source before it replaces the tree (row 28, §76). The
+# shared ModSecurity library + CoreRuleSet: iou-common gates them itself (a current marker is
+# a no-op) and fetches and checks before it replaces anything (tranche 3 step 23, §75), so it
+# runs on every boot, before the nginx iou that links the library.
 global-stack-nginx-iou-common.sh \
   "${HTTP_COMMONS_PATH}" \
   "${HTTP_COMMON_MOD_SECURITY_VERSION_PATH}" \

@@ -2243,8 +2243,16 @@ declare -a _WS_FILES=(
 )
 
 for _f in "${_WS_FILES[@]}"; do
-  assert_pass "30a: ${_f##*/} sources the gate helper ALONE" \
-    grep -q '^source global-stack-base-version-gate\.sh$' "${DIST_BIN}/${_f}"
+  if [[ "${_f}" == nginx-bin/global-stack-nginx-iou.sh ]]; then
+    # Row 28: the nginx iou gates nothing any more (start.sh's composite decides, and the
+    # chain's inner gates went with the tree wipe), so it no longer sources the helper. A
+    # gate re-added here without the helper would die `gs_version_gate: command not found`.
+    assert_fail "30a: ${_f##*/} calls no gs_version_gate (row 28), so it needs no helper" \
+      bash -c 'grep -vE "^[[:space:]]*#" "$1" | grep -q gs_version_gate' _ "${DIST_BIN}/${_f}"
+  else
+    assert_pass "30a: ${_f##*/} sources the gate helper ALONE" \
+      grep -q '^source global-stack-base-version-gate\.sh$' "${DIST_BIN}/${_f}"
+  fi
   assert_fail "30a: ${_f##*/} does NOT source the prologue (stays exempt)" \
     grep -q 'global-stack-base-prologue\.sh' "${DIST_BIN}/${_f}"
   assert_pass "30a: ${_f##*/} still passes bash -n" bash -n "${DIST_BIN}/${_f}"
@@ -6801,16 +6809,35 @@ cat >"${_P76}/stub/git" <<'EOF'
 #!/bin/bash
 printf 'git %s\n' "$*" >>"${P76_LOG}"
 [[ "$1" == clone ]] || exit 0
-[[ -n "${P76_MSN_CLONE_FAIL:-}" ]] && exit 128
 dest="${!#}"
-mkdir -p "${dest}/src"
-[[ -n "${P76_MSN_NOCONFIG:-}" ]] || printf 'ngx_addon_name=ngx_http_modsecurity_module\n' >"${dest}/config"
+case "$*" in
+  *ModSecurity-nginx*)
+    [[ -n "${P76_MSN_CLONE_FAIL:-}" ]] && exit 128
+    mkdir -p "${dest}/src"
+    [[ -n "${P76_MSN_NOCONFIG:-}" ]] || printf 'ngx_addon_name=ngx_http_modsecurity_module\n' >"${dest}/config" ;;
+  *)
+    # An OpenIDC-chain repo (row 28): an autotools source tree.
+    [[ -n "${P76_CHAIN_CLONE_FAIL:-}" && "$*" == *"/${P76_CHAIN_CLONE_FAIL}.git"* ]] && exit 128
+    mkdir -p "${dest}"
+    printf '#!/bin/bash\nprintf "%%s\\n" "$@" >.configure-args\n' >"${dest}/configure"
+    printf '#!/bin/bash\n: >.autogen\n' >"${dest}/autogen.sh"
+    chmod +x "${dest}/configure" "${dest}/autogen.sh" ;;
+esac
 EOF
 # make: `install` in the nginx tree writes what the real install does; the binary answers -V
 # on stderr with the configure arguments it was given, and -t.
 cat >"${_P76}/stub/make" <<'EOF'
 #!/bin/bash
 printf 'make %s\n' "$*" >>"${P76_LOG}"
+if [[ ! -f .nginx ]]; then
+  # An OpenIDC-chain library (row 28): install writes its lib/ under the configured prefix.
+  [[ -n "${P76_CHAIN_BUILD_FAIL:-}" && "${PWD##*/}" == "${P76_CHAIN_BUILD_FAIL}"* ]] && { echo "make: *** [chain] Error 1" >&2; exit 2; }
+  [[ " $* " == *" install "* ]] || exit 0
+  pfx="$(sed -n 's/^--prefix=//p' .configure-args)"
+  mkdir -p "${pfx}/lib"
+  printf '%s\n' "${PWD##*/}" >"${pfx}/lib/.built-from"
+  exit 0
+fi
 [[ -n "${P76_BUILD_FAIL:-}" ]] && { echo "make: *** [build] Error 1" >&2; exit 2; }
 [[ " $* " == *" install "* ]] || exit 0
 args="$(cat .configure-args)"
@@ -6885,6 +6912,7 @@ _p76_run() {
     P76_FIX="${_P76}/fix" P76_LOG="${_P76}/log" P76_ROOT="${r}" P76_BUILD_FAIL="${P76_BUILD_FAIL:-}" \
     P76_REPORT="${P76_REPORT:-}" P76_T_FAIL="${P76_T_FAIL:-}" P76_DROP_MODULE="${P76_DROP_MODULE:-}" \
     P76_MSN_CLONE_FAIL="${P76_MSN_CLONE_FAIL:-}" P76_MSN_NOCONFIG="${P76_MSN_NOCONFIG:-}" \
+    P76_CHAIN_CLONE_FAIL="${P76_CHAIN_CLONE_FAIL:-}" P76_CHAIN_BUILD_FAIL="${P76_CHAIN_BUILD_FAIL:-}" \
     GLOBAL_STACK_ERROR_TOKEN=nginx GLOBAL_STACK_DOCKER_TOOLS_PATH="${r}/tools" GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS="${r}/tools/errors" \
     NGINX_PATH="${r}/tools/nginx" NGINX_VERSIONS_PATH="${r}/tools/versions/nginx" HTTP_COMMONS_PATH="${r}/tools/http" \
     HTTP_COMMON_MOD_SECURITY_VERSION_PATH="${r}/tools/versions/http.mod_security" HTTP_COMMON_CORERULESET_VERSION_PATH="${r}/tools/versions/http.coreruleset" \
@@ -6895,7 +6923,8 @@ _p76_run() {
     LIBOAUTH2_SOURCE_PATH="${r}/tools/nginx/libs/liboauth2-source" LIBOAUTH2_PATH="${r}/tools/nginx/libs/liboauth2" \
     GLOBAL_STACK_RELOAD_NGINX="${6:-false}" GLOBAL_STACK_RELOAD_HTTP_COMMON=false \
     GLOBAL_STACK_NGINX_VERSION="$1" GLOBAL_STACK_NGINX_MODSECURITY_MOD_VERSION="$2" GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION="$3" \
-    GLOBAL_STACK_NGINX_CJOSE_VERSION= GLOBAL_STACK_NGINX_LIBOAUTH2_VERSION= GLOBAL_STACK_NGINX_MOD_AUTH_OPENIDC_VERSION= \
+    GLOBAL_STACK_NGINX_CJOSE_VERSION="${P76_CJOSE:-}" GLOBAL_STACK_NGINX_LIBOAUTH2_VERSION="${P76_LIBOAUTH2:-}" \
+    GLOBAL_STACK_NGINX_MOD_AUTH_OPENIDC_VERSION="${P76_OPENIDC:-}" \
     bash -c 'set -eE -o pipefail; source "$1"; source "$2"' _ \
     "${DIST_BIN}/base-bin/global-stack-base-version-gate.sh" "${_P76}/block.sh" >"${_P76}/last.log" 2>&1 || rc=fail
   bin="$({ "${r}/tools/nginx/sbin/nginx" -V 2>&1 || true; } | sed -n '1s/^nginx version: nginx\///p')"
@@ -6987,10 +7016,48 @@ assert_pass "76l: ...and stops nginx with \`-s stop\` (\`nginx stop\` is not an 
   bash -c 'grep -vE "^[[:space:]]*#" "$1" | grep -qF "/sbin/nginx\" -s stop" && ! grep -vE "^[[:space:]]*#" "$1" | grep -qF "/sbin/nginx\" stop"' _ "${_P76_START}"
 # The composite is exactly nginx + connector + the shared library; the iou reads every one
 # of them except the library (iou-common builds it), plus the OpenIDC chain's own-gated pins.
-_p76_want_vars="$(grep '^_ngx_want=' "${_P76_START}" | grep -oE 'GLOBAL_STACK_[A-Z_]*VERSION' | sort -u || true)"
-_p76_iou_vars="$(grep -oE 'GLOBAL_STACK_NGINX_[A-Z0-9_]*VERSION' <<<"${_p76_exec}" | grep -vE '_(CJOSE|LIBOAUTH2|MOD_AUTH_OPENIDC)_' | sort -u || true)"
-assert_pass "76m: the composite = NGINX + NGINX_MODSECURITY_MOD + HTTP_MODSECURITY_LIB, and the iou reads the first two (the chain pins keep their own gates)" \
-  bash -c '[[ "$1" == "$(printf "%s\n" GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION GLOBAL_STACK_NGINX_MODSECURITY_MOD_VERSION GLOBAL_STACK_NGINX_VERSION)" && "$2" == "$(printf "%s\n" GLOBAL_STACK_NGINX_MODSECURITY_MOD_VERSION GLOBAL_STACK_NGINX_VERSION)" ]]' _ "${_p76_want_vars}" "${_p76_iou_vars}"
+_p76_want_vars="$(grep '^_ngx_want=' "${_P76_START}" | grep -oE 'GLOBAL_STACK_[A-Z0-9_]*VERSION' | sort -u || true)"
+_p76_iou_vars="$(grep -oE 'GLOBAL_STACK_NGINX_[A-Z0-9_]*VERSION' <<<"${_p76_exec}" | sort -u || true)"
+_p76_nginx_pins="$(printf '%s\n' GLOBAL_STACK_NGINX_CJOSE_VERSION GLOBAL_STACK_NGINX_LIBOAUTH2_VERSION GLOBAL_STACK_NGINX_MODSECURITY_MOD_VERSION GLOBAL_STACK_NGINX_MOD_AUTH_OPENIDC_VERSION GLOBAL_STACK_NGINX_VERSION)"
+assert_pass "76m: the composite = the five nginx pins + HTTP_MODSECURITY_LIB, and the iou reads all five nginx pins (row 28: the chain has no gates of its own any more)" \
+  bash -c '[[ "$(sort <<<"$1")" == "$(printf "%s\n" GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION "$3" | sort)" && "$(sort <<<"$2")" == "$(sort <<<"$3")" ]]' _ "${_p76_want_vars}" "${_p76_iou_vars}" "${_p76_nginx_pins}"
+# Row 28 (step 27 panel P3). start.sh deleted cjose or liboauth2 when its own gate fired, but
+# only the nginx gate ran the iou that rebuilds them, so a chain-only bump left the library
+# deleted; the ngx_openidc_module pin was in no gate at all. The chain pins are in the
+# composite now (only when set: an empty pin leaves the marker byte-identical), and the iou
+# clones every chain source before the wipe, then builds each after nginx.
+_p76_chain() {
+  local r="${_P76}/r" m
+  for m in cjose liboauth2; do
+    printf '%s=%s ' "${m}" "$(cat "${r}/tools/versions/nginx.${m}" 2>/dev/null || echo none)"
+  done
+  printf 'built=%s' "$(cd "${r}/tools/nginx" 2>/dev/null && find libs mods -name .built-from 2>/dev/null | sort | tr '\n' ',' || true)"
+}
+assert_pass "76n: empty chain pins -> the composite is byte-identical to nginx;modsec-nginx;modsec-lib (no rebuild on the first boot after row 28)" \
+  bash -c '[[ "$(env -i GLOBAL_STACK_NGINX_VERSION=1.31.6 GLOBAL_STACK_NGINX_MODSECURITY_MOD_VERSION=v1.0.4 GLOBAL_STACK_HTTP_MODSECURITY_LIB_VERSION=v3.0.16 GLOBAL_STACK_NGINX_CJOSE_VERSION= GLOBAL_STACK_NGINX_LIBOAUTH2_VERSION= GLOBAL_STACK_NGINX_MOD_AUTH_OPENIDC_VERSION= bash -c "$(grep "^_ngx_want=" "$1"); printf %s \"\${_ngx_want}\"")" == "$2" ]]' _ \
+  "${_P76_START}" "${_P76_NEW}"
+assert_pass "76o: a cjose-only bump rebuilds nginx AND cjose (start.sh used to delete cjose and never rebuild it)" \
+  bash -c '[[ "$1" == "rc=0 nginx=1.31.6 marker=$3;cjose=v0.6.2.4 logs=kept old=gone cjosem=kept msmod=1 token=0 fatal=0 tmp=0 builds="* && "$2" == "cjose=v0.6.2.4 liboauth2=none built=libs/cjose/lib/.built-from," ]]' _ \
+  "$(P76_CJOSE=v0.6.2.4 _p76_run 1.31.6 v1.0.4 v3.0.16 1.31.6 "${_P76_NEW}")" "$(_p76_chain)" "${_P76_NEW}"
+assert_pass "76o2: all three chain pins -> each cloned, built from its own source, and in the marker" \
+  bash -c '[[ "$1" == "rc=0 nginx=1.31.6 marker=$3;cjose=v0.6.2.4;liboauth2=v2.2.0;openidc=v1.0.0 logs=kept old=gone cjosem=kept msmod=1 token=0 fatal=0 tmp=0 builds="* && "$2" == "cjose=v0.6.2.4 liboauth2=v2.2.0 built=libs/cjose/lib/.built-from,libs/liboauth2/lib/.built-from,mods/mod_auth_openidc/lib/.built-from," ]]' _ \
+  "$(P76_CJOSE=v0.6.2.4 P76_LIBOAUTH2=v2.2.0 P76_OPENIDC=v1.0.0 _p76_run 1.31.6 v1.0.4 v3.0.16 1.31.6 "${_P76_NEW}")" "$(_p76_chain)" "${_P76_NEW}"
+for _p76_repo in cjose liboauth2 ngx_openidc_module; do
+  assert_pass "76p: the ${_p76_repo} clone fails -> its named FATAL BEFORE the wipe: old nginx, conf, markers untouched, no temp dir" \
+    bash -c '[[ "$1" == "rc=fail nginx=1.31.6 marker=$4 logs=kept old=kept cjosem=kept msmod=0 token=1 fatal=1 tmp=0 builds=0 agents=0" ]] && grep "^FATAL: " "$3" | grep -qF "$2 " && grep "^FATAL: " "$3" | grep -qF "could not be cloned - nginx left as it was"' _ \
+    "$(P76_CHAIN_CLONE_FAIL="${_p76_repo}" P76_CJOSE=v0.6.2.4 P76_LIBOAUTH2=v2.2.0 P76_OPENIDC=v1.0.0 _p76_run 1.31.6 v1.0.4 v3.0.16 1.31.6 "${_P76_NEW}")" \
+    "${_p76_repo}" "${_P76}/last.log" "${_P76_NEW}"
+done
+# The make stub fails in the source dir whose name starts with P76_CHAIN_BUILD_FAIL.
+for _p76_pair in cjose:cjose liboauth2:liboauth2 ngx_openidc_module:mod_auth_openidc; do
+  _p76_repo="${_p76_pair%%:*}"
+  assert_pass "76q: the ${_p76_repo} build fails (after the wipe) -> its named FATAL + token, the marker not advanced" \
+    bash -c '[[ "$1" == "rc=fail nginx="*" marker=$4 logs=kept old=gone "*" token=1 fatal=1 tmp=0 "* ]] && grep "^FATAL: " "$3" | grep -qF "$2 " && grep "^FATAL: " "$3" | grep -qF "the build failed"' _ \
+    "$(P76_CHAIN_BUILD_FAIL="${_p76_pair#*:}" P76_CJOSE=v0.6.2.4 P76_LIBOAUTH2=v2.2.0 P76_OPENIDC=v1.0.0 _p76_run 1.31.6 v1.0.4 v3.0.16 1.31.6 "${_P76_NEW}")" \
+    "${_p76_repo}" "${_P76}/last.log" "${_P76_NEW}"
+done
+assert_fail "76r: nginx-start.sh deletes no OpenIDC-chain path or marker (the iou replaces them after its checks)" \
+  bash -c '[[ -s "$1" ]] || exit 0; grep -vE "^[[:space:]]*#" "$1" | sed -e ":a" -e "/\\\\$/{N;s/\\\\\n//;ba}" | grep -E "rm -(rf|f)" | grep -qE "(CJOSE|LIBOAUTH2)_"' _ "${_P76_START}"
 gpgconf --homedir "${_P76}/gk" --kill all >/dev/null 2>&1 || true
 
 # ─── Section 77: every php install is checked by running it before any marker is written (tranche 3 step 25) ──
@@ -7085,6 +7152,138 @@ _p77_side="$(grep -n '> "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/php.edge.bui
 assert_pass "77i: the run check precedes the old-php cleanup and the php.edge.build write" \
   bash -c '[[ -n "$1" && -n "$2" && -n "$3" ]] && (( $1 < $2 && $1 < $3 ))' _ "${_p77_chk}" "${_p77_rm}" "${_p77_side}"
 rm -rf "${_P77}"
+
+# ─── Section 78: elasticmq's jar is checked in a temp dir before it replaces the old one (row 28) ──
+# Step 27 panel P2, logged then fixed (ruling 2026-09-27 09:05). The jar was `curl -o` straight
+# over the live tools/serverless-framework/bin/elasticmq-server-all.jar, so a cut download left
+# a truncated jar and the old one gone. Now: the SHA-256 GitHub serves as the release asset's
+# `digest` [measured v1.7.1: `sha256:a40dfd03…` = sha256sum of the jar], the jar holds the
+# server's Main class, and its manifest's Implementation-Version is the pin [measured: the line
+# ends in CRLF, so the fixture manifest carries CRLF too]. Only then does it replace the old
+# jar; the marker is written last. The shipped block is extracted by anchor and run against a
+# curl stub serving fixture files; jq, unzip, sha256sum and install are real.
+printf '\n── Section 78: elasticmq: jar checked in a temp dir (digest + Main class + manifest version) before it replaces the old one (row 28)\n'
+_P78="${TMP_DIR}/p78"
+mkdir -p "${_P78}/stub" "${_P78}/fix/api.github.com/repos/softwaremill/elasticmq/releases/tags" "${_P78}/jars"
+_P78_START="${DIST_BIN}/serverless-bin/global-stack-serverless-framework-start.sh"
+awk '/^_elasticmq_jar=/{f=1} f{print} f && /serverless\.elasticmq"$/{m=1} m && /^fi$/{exit}' "${_P78_START}" >"${_P78}/block.sh"
+assert_pass "78a: the extracted block holds the gate, a temp dir, the api.github.com digest, the install and the marker write (anchor non-vacuity)" \
+  bash -c 'grep -q "^_elasticmq_gate=" "$1" && grep -q "mktemp -d" "$1" && grep -q "api.github.com" "$1" && grep -q "install -m" "$1" && grep -q "serverless.elasticmq\"$" "$1" && bash -n "$1"' _ "${_P78}/block.sh"
+cat >"${_P78}/stub/curl" <<'EOF'
+#!/bin/bash
+out="" url="" fail=0
+while (($#)); do
+  case "$1" in
+    -o) out="$2"; shift ;;
+    --connect-timeout|--max-time) shift ;;
+    -*) [[ "$1" == --* ]] || [[ "$1" != *f* ]] || fail=1 ;;
+    *) url="$1" ;;
+  esac
+  shift
+done
+printf 'curl %s\n' "${url}" >>"${P78_LOG}"
+src="${P78_FIX}/${url#https://}"
+if [[ -f "${src}" ]]; then cat "${src}" >"${out}"; exit 0; fi
+((fail)) && exit 22
+printf '<html>404</html>\n' >"${out}"
+EOF
+chmod +x "${_P78}/stub/curl"
+# _p78_jar <version in the manifest> <file> [nomain]
+_p78_jar() {
+  local d="${_P78}/jars/build"
+  rm -rf "${d}"
+  mkdir -p "${d}/META-INF" "${d}/org/elasticmq/server"
+  printf 'Manifest-Version: 1.0\r\nImplementation-Title: elasticmq-server\r\nImplementation-Version: %s\r\n\r\n' "$1" >"${d}/META-INF/MANIFEST.MF"
+  [[ "${3:-}" == nomain ]] || printf 'cafebabe' >"${d}/org/elasticmq/server/Main.class"
+  (cd "${d}" && zip -q -r "$2" META-INF org)
+}
+# _p78_pub <tag> <asset version> <jar file|''> <digest: ok|bad|null|noasset|nojson>
+_p78_pub() {
+  local rel="${_P78}/fix/github.com/softwaremill/elasticmq/releases/download/$1" a="elasticmq-server-all-$2.jar" dg
+  mkdir -p "${rel}"
+  rm -f "${rel}/${a}"
+  [[ -z "$3" ]] || cp "$3" "${rel}/${a}"
+  case "$4" in
+    ok) dg="\"sha256:$(sha256sum "$3" | cut -d' ' -f1)\"" ;;
+    bad) dg="\"sha256:$(printf '0%.0s' {1..64})\"" ;;
+    null) dg=null ;;
+  esac
+  case "$4" in
+    nojson) rm -f "${_P78}/fix/api.github.com/repos/softwaremill/elasticmq/releases/tags/$1" ;;
+    noasset) printf '{"tag_name":"%s","assets":[{"name":"elasticmq-rest-sqs-%s.jar","digest":"sha256:%s"}]}\n' "$1" "$2" "$(printf 'a%.0s' {1..64})" \
+      >"${_P78}/fix/api.github.com/repos/softwaremill/elasticmq/releases/tags/$1" ;;
+    *) printf '{"tag_name":"%s","assets":[{"name":"%s","size":1,"digest":%s}]}\n' "$1" "${a}" "${dg}" \
+      >"${_P78}/fix/api.github.com/repos/softwaremill/elasticmq/releases/tags/$1" ;;
+  esac
+}
+_p78_jar 1.7.0 "${_P78}/jars/170.jar"
+_p78_jar 1.7.1 "${_P78}/jars/171.jar"
+_p78_jar 1.7.2 "${_P78}/jars/172-says-173.jar.tmp" && _p78_jar 1.7.3 "${_P78}/jars/172-says-173.jar"
+_p78_jar 1.7.4 "${_P78}/jars/174-nomain.jar" nomain
+printf 'not a zip\n' >"${_P78}/jars/garbage.jar"
+_p78_pub v1.7.0 1.7.0 "${_P78}/jars/170.jar" ok
+_p78_pub v1.7.1 1.7.1 "${_P78}/jars/171.jar" ok
+_p78_pub v1.7.2 1.7.2 "${_P78}/jars/172-says-173.jar" ok
+_p78_pub v1.7.4 1.7.4 "${_P78}/jars/174-nomain.jar" ok
+_p78_pub v1.7.5 1.7.5 "${_P78}/jars/garbage.jar" ok
+_p78_pub v1.7.6 1.7.6 "${_P78}/jars/171.jar" bad
+_p78_pub v1.7.7 1.7.7 "${_P78}/jars/171.jar" null
+_p78_pub v1.7.8 1.7.8 "${_P78}/jars/171.jar" noasset
+_p78_pub v1.7.9 1.7.9 "${_P78}/jars/171.jar" nojson
+# v1.7.10: the release lists the asset with a digest, but the jar itself is not published.
+printf '{"tag_name":"v1.7.10","assets":[{"name":"elasticmq-server-all-1.7.10.jar","digest":"sha256:%s"}]}\n' "$(printf 'b%.0s' {1..64})" \
+  >"${_P78}/fix/api.github.com/repos/softwaremill/elasticmq/releases/tags/v1.7.10"
+assert_pass "78a: the fixture jars carry a CRLF manifest and the release JSON parses (fixture non-vacuity)" \
+  bash -c 'unzip -p "$1" META-INF/MANIFEST.MF | grep -q $'"'"'^Implementation-Version: 1.7.1\r$'"'"' && jq -e ".assets[0].digest" "$2" >/dev/null' _ \
+  "${_P78}/jars/171.jar" "${_P78}/fix/api.github.com/repos/softwaremill/elasticmq/releases/tags/v1.7.1"
+# _p78_run <pin> <old jar file|''> <marker|''> → state
+_p78_run() {
+  local r="${_P78}/r" rc=0 j
+  rm -rf "${r}"
+  mkdir -p "${r}/tools/versions" "${r}/tools/serverless-framework/bin" "${r}/tmp"
+  j="${r}/tools/serverless-framework/bin/elasticmq-server-all.jar"
+  [[ -z "$2" ]] || cp "$2" "${j}"
+  [[ -z "$3" ]] || printf '%s\n' "$3" >"${r}/tools/versions/serverless.elasticmq"
+  : >"${_P78}/log"
+  env -i HOME="${r}" TMPDIR="${r}/tmp" PATH="${_P78}/stub:${DIST_BIN}/base-bin:/usr/bin:/bin" \
+    P78_FIX="${_P78}/fix" P78_LOG="${_P78}/log" \
+    GLOBAL_STACK_DOCKER_TOOLS_PATH="${r}/tools" GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS="${r}/tools/versions" \
+    GLOBAL_STACK_SERVERLESS_FRAMEWORK_ELASTICMQ_VERSION="$1" \
+    bash -c 'set -eE -o pipefail; IFS=$'"'"'\n\t'"'"'; source "$1"; source "$2"' _ \
+    "${DIST_BIN}/base-bin/global-stack-base-version-gate.sh" "${_P78}/block.sh" >"${_P78}/last.log" 2>&1 || rc=fail
+  printf 'rc=%s jar=%s marker=%s fatal=%s tmp=%s curls=%s' "${rc}" \
+    "$(if [[ -f "${j}" ]]; then unzip -p "${j}" META-INF/MANIFEST.MF 2>/dev/null | sed -n 's/^Implementation-Version: //p' | tr -d '\r' | grep . || echo broken; else echo none; fi)" \
+    "$(cat "${r}/tools/versions/serverless.elasticmq" 2>/dev/null || echo none)" \
+    "$(grep -c '^FATAL: ' "${_P78}/last.log" || true)" "$(ls -A "${r}/tmp" | wc -l)" "$(grep -c '^curl ' "${_P78}/log" || true)"
+}
+assert_pass "78b: v1.7.0 -> v1.7.1: digest, Main class and manifest version checked, jar replaced, marker last, no temp dir left" \
+  test "$(_p78_run v1.7.1 "${_P78}/jars/170.jar" v1.7.0)" = "rc=0 jar=1.7.1 marker=v1.7.1 fatal=0 tmp=0 curls=2"
+assert_pass "78c: pin moved back v1.7.1 -> v1.7.0" \
+  test "$(_p78_run v1.7.0 "${_P78}/jars/171.jar" v1.7.1)" = "rc=0 jar=1.7.0 marker=v1.7.0 fatal=0 tmp=0 curls=2"
+assert_pass "78d: marker = pin and the jar present -> no network call at all" \
+  test "$(_p78_run v1.7.1 "${_P78}/jars/171.jar" v1.7.1)" = "rc=0 jar=1.7.1 marker=v1.7.1 fatal=0 tmp=0 curls=0"
+assert_pass "78e: marker = pin but the jar missing (the -f floor) -> fetched and checked" \
+  test "$(_p78_run v1.7.1 '' v1.7.1)" = "rc=0 jar=1.7.1 marker=v1.7.1 fatal=0 tmp=0 curls=2"
+assert_pass "78e2: the installed jar is the downloaded bytes and is executable (the old block's chmod a+x keeps its reason)" \
+  bash -c '_=$("$1" v1.7.1 "" ""); cmp -s "$2" "$3" && [[ -x "$3" ]]' _ _p78_run "${_P78}/jars/171.jar" "${_P78}/r/tools/serverless-framework/bin/elasticmq-server-all.jar"
+# Every failure: its named FATAL, the old jar and the marker exactly as they were, no temp dir.
+for _p78_bad in 'v1.7.9|api.github.com unreachable or rate-limited|cannot fetch its release from api.github.com' \
+  'v1.7.7|the asset has no digest (null)|lists no single sha256 digest for elasticmq-server-all-1.7.7.jar' \
+  'v1.7.8|the release lists no such asset|lists no single sha256 digest for elasticmq-server-all-1.7.8.jar' \
+  'v1.7.10|the jar is not published|could not be downloaded' \
+  'v1.7.6|the jar does not match its digest|does not match its published SHA-256' \
+  'v1.7.5|the download is not a zip|is not a jar holding org/elasticmq/server/Main.class' \
+  'v1.7.4|a jar without the server Main class|is not a jar holding org/elasticmq/server/Main.class' \
+  'v1.7.2|the manifest reports another version (1.7.3)|the downloaded jar reports "1.7.3"'; do
+  IFS='|' read -r _p78_v _p78_why _p78_msg <<<"${_p78_bad}"
+  assert_pass "78f: ${_p78_why} -> its named FATAL, old jar + marker untouched, no temp dir left" \
+    bash -c '[[ "$1" == "rc=fail jar=1.7.0 marker=v1.7.0 fatal=1 tmp=0 curls="* ]] && grep "^FATAL: " "$3" | grep -qF "$2"' _ \
+    "$(_p78_run "${_p78_v}" "${_P78}/jars/170.jar" v1.7.0)" "${_p78_msg}" "${_P78}/last.log"
+done
+_p78_exec="$(grep -vE '^[[:space:]]*#' "${_P78}/block.sh")"
+assert_pass "78g: >= 2 executable curl calls in the block, every one with -f, none writing to the live jar" \
+  bash -c 'calls="$(grep -oE "curl [^;|]*" <<<"$1")"; [[ "$(grep -c . <<<"${calls}")" -ge 2 ]] && ! grep -vE "(^| )-[a-zA-Z]*f[a-zA-Z]*( |$)" <<<"${calls}" | grep -q . && ! grep -qF -- "-o \"\${_elasticmq_jar}\"" <<<"$1" && ! grep -qF -- "-o \"\${GLOBAL_STACK_DOCKER_TOOLS_PATH}" <<<"$1"' _ "${_p78_exec}"
+rm -rf "${_P78}"
 
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'

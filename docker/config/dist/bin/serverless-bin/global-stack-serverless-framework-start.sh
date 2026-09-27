@@ -158,11 +158,55 @@ fi
 # version-sensitive), so a GLOBAL_STACK_SERVERLESS_FRAMEWORK_ELASTICMQ_VERSION bump
 # left the old jar in place forever. The -f check is kept as a floor.
 # gs_version_gate comes from the prologue this script already sources.
+# Row 28 (step 27 panel P2; startup-prologue.test.sh §78): the jar was `curl -o` straight over
+# the live one, so a cut download left a truncated jar and the old one gone. Now it lands in a
+# temp dir and is checked against the SHA-256 GitHub serves as the release asset's `digest`
+# (upstream publishes no checksum file) [measured v1.7.1: `sha256:a40dfd03…` = sha256sum of the
+# jar], it must hold the server's Main class, and its manifest must report the pin (the
+# manifest lines end in CRLF [measured]). Only then does it replace the old jar; the marker is
+# written last. Every failure is a named FATAL that leaves the old jar and marker as they were.
+# The API call is unauthenticated (60 an hour per IP, shared with env-update's github: fetcher)
+# and made only on a version change; a refusal FATALs and keeps the old jar.
+_elasticmq_jar="${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/bin/elasticmq-server-all.jar"
+_emq_fatal() {
+  printf 'FATAL: %s\n' "$1" >&2
+  [[ -z "${_emq_dl:-}" ]] || rm -rf "${_emq_dl}"
+  exit 1
+}
 _elasticmq_gate="$(gs_version_gate "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/serverless.elasticmq" "${GLOBAL_STACK_SERVERLESS_FRAMEWORK_ELASTICMQ_VERSION}" "serverless.elasticmq")"
-if [ "${_elasticmq_gate}" != "skip" ] || [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/bin/elasticmq-server-all.jar" ]]; then
-  curl --connect-timeout 30 --max-time 300 -fsSL -o "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/bin/elasticmq-server-all.jar" "https://github.com/softwaremill/elasticmq/releases/download/${GLOBAL_STACK_SERVERLESS_FRAMEWORK_ELASTICMQ_VERSION}/elasticmq-server-all-$(echo "${GLOBAL_STACK_SERVERLESS_FRAMEWORK_ELASTICMQ_VERSION}" | sed 's/v//').jar"
-  # Marker last: under `set -e` a failed download aborts before this line.
-  printf '%s\n' "${GLOBAL_STACK_SERVERLESS_FRAMEWORK_ELASTICMQ_VERSION}" >"${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/serverless.elasticmq"
+if [ "${_elasticmq_gate}" != "skip" ] || [[ ! -f "${_elasticmq_jar}" ]]; then
+  _emq_v="${GLOBAL_STACK_SERVERLESS_FRAMEWORK_ELASTICMQ_VERSION}"
+  _emq_asset="elasticmq-server-all-${_emq_v#v}.jar"
+  _emq_dl="$(mktemp -d)"
+  if ! curl --connect-timeout 30 --max-time 60 -fsSL -o "${_emq_dl}/release.json" \
+    "https://api.github.com/repos/softwaremill/elasticmq/releases/tags/${_emq_v}"; then
+    _emq_fatal "elasticmq ${_emq_v}: cannot fetch its release from api.github.com (unreachable or rate-limited) - elasticmq left as it was"
+  fi
+  # `// empty`: a release older than GitHub's digests has none, and "null" must not become the sum.
+  if ! _emq_sum="$(jq -r --arg n "${_emq_asset}" '.assets[] | select(.name == $n) | .digest // empty' "${_emq_dl}/release.json" \
+    | sed -n 's/^sha256:\([0-9a-f]\{64\}\)$/\1/p')" \
+    || [[ "$(grep -c . <<<"${_emq_sum}")" != 1 ]]; then
+    _emq_fatal "elasticmq ${_emq_v}: its release lists no single sha256 digest for ${_emq_asset} - elasticmq left as it was"
+  fi
+  if ! curl --connect-timeout 30 --max-time 300 -fsSL -o "${_emq_dl}/${_emq_asset}" \
+    "https://github.com/softwaremill/elasticmq/releases/download/${_emq_v}/${_emq_asset}"; then
+    _emq_fatal "elasticmq ${_emq_v}: ${_emq_asset} could not be downloaded - elasticmq left as it was"
+  fi
+  if ! printf '%s  %s\n' "${_emq_sum}" "${_emq_dl}/${_emq_asset}" | sha256sum -c --quiet - >/dev/null 2>&1; then
+    _emq_fatal "elasticmq ${_emq_v}: ${_emq_asset} does not match its published SHA-256 - elasticmq left as it was"
+  fi
+  # grep reads the whole listing (no -q): an early exit would SIGPIPE unzip under pipefail.
+  if ! unzip -Z1 "${_emq_dl}/${_emq_asset}" 2>/dev/null | grep -xF org/elasticmq/server/Main.class >/dev/null; then
+    _emq_fatal "elasticmq ${_emq_v}: ${_emq_asset} is not a jar holding org/elasticmq/server/Main.class - elasticmq left as it was"
+  fi
+  _emq_says="$(unzip -p "${_emq_dl}/${_emq_asset}" META-INF/MANIFEST.MF 2>/dev/null | sed -n 's/^Implementation-Version: *//p' | tr -d '\r' || true)"
+  if [[ "${_emq_says}" != "${_emq_v#v}" ]]; then
+    _emq_fatal "elasticmq ${_emq_v}: the downloaded jar reports \"${_emq_says}\" - elasticmq left as it was"
+  fi
+  install -m 0755 "${_emq_dl}/${_emq_asset}" "${_elasticmq_jar}"
+  rm -rf "${_emq_dl}"
+  # Marker last: every check above has passed and the jar is in place.
+  printf '%s\n' "${_emq_v}" >"${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/serverless.elasticmq"
 fi
 
 chmod a+x "${GLOBAL_STACK_DOCKER_TOOLS_PATH}/serverless-framework/bin/elasticmq-server-all.jar"
