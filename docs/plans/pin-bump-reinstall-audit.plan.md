@@ -42,6 +42,7 @@ version and its usage ! no implementation yet !"* — AUDIT ONLY; nothing below 
 - [2026-09-27 00:50] RECORDED (author decisions reported to the developer at the time, not rulings — logged here at the step-27 panel's request): step 25 widened the php run-check to every php install; step 26 plumbed go/zig/mise (+ MISE_VERSION) into 00base's runtime env instead of only documenting them; step 26 dropped `subversion` from the 01caddy/01httpd/01nginx images.
 - [2026-09-27 09:05] AGREED: fix both remaining step-27 Known issues now, test-first — elasticmq's jar download and the nginx OpenIDC-chain gap (row 28); the live rebuild and the RELOAD reproduction wait for an idle PC.
 - [2026-09-27 09:05] RECORDED (author decisions for row 28, not rulings): elasticmq's jar is checked against the SHA-256 GitHub serves as the release asset's `digest` (api.github.com, the only checksum upstream exposes) plus its manifest `Implementation-Version`; the API digest therefore counts as a published checksum, and fvm (whose assets carry one too, verified 4.3.1) becomes a logged follow-up. nginx's chain pins join its composite marker with `${VAR:+…}`, so the marker stays byte-identical while they are empty.
+- [2026-09-27 10:45] AGREED: start /next's recommendation — fvm checked against the SHA-256 GitHub serves as its release asset's digest, the follow-up row 28 logged (row 29).
 
 ## Formal Plan
 <!-- written at Phase 4 — tranche 1, APPROVED 2026-09-24 15:05 (steps 5-9; step 8 revised) -->
@@ -964,6 +965,25 @@ not firing: it runs only on a pin bump or a deleted jar, and a normal boot of 04
 `skip` path. The nginx OpenIDC chain has never been built with a pin set: all three are locked empty, and every
 test runs against stubs. CLAUDE.md `cc79efd` (developer-run hand-off, 6/6 anchors applied).
 
+### Step 29 — fvm checked against GitHub's asset digest (S) · /next recommendation, ruling 2026-09-27 10:45
+The follow-up row 28 logged. fvm publishes no checksum file, but GitHub serves each asset's SHA-256 as its
+`digest` [measured 4.3.1: the API's `sha256:ad59c861…` = `sha256sum` of the downloaded tarball].
+- The install block fetches the release from api.github.com and requires a single `sha256:` digest for
+  `fvm-<pin>-linux-x64.tar.gz`, with named FATALs for an unreachable API, a missing digest and a missing asset.
+- It then downloads the tarball and checks it against that digest, before the existing listing and
+  `--version` checks.
+- One `_fvm_fatal` helper, defined inside the block §70 extracts, now removes the temp dir. fvm's four FATALs
+  still leaked it; step 27 had fixed the same leak for phpMyAdmin, rust and deno/bun.
+
+§70: 70i ×4 are new, 70g now asserts `tmp=0`, and 70h's floor is 2 curl calls. Red first for those reasons:
+70b–70f saw `curls=1`, 70g hit the temp leak, 70i found 4.8.x installed unchecked, and 70h found 1 curl call.
+Sabotage F1–F4 each went red with byte-identical restores (`var/claude/pin-audit-t3/sabotage-row29.log`).
+
+Suite 1095/1095. **UNCERTIFIED-BY-EXECUTION:** the new fetch path has never run live. It is armed,
+not firing: since `6d74d29` the fvm marker equals `FVM_VERSION`, so a normal boot or the idle-PC rebuild takes
+the `skip` path. It fires only on a pin bump or `RELOAD_FVM=true`. CLAUDE.md: `/tmp/edit-claudemd-row29-20260927.sh`
+(dry-run below), pending the developer's run.
+
 ## Status
 <!-- progress-block v1 -->
 | # | Step | Size | State | Evidence | Files |
@@ -997,6 +1017,7 @@ test runs against stubs. CLAUDE.md `cc79efd` (developer-run hand-off, 6/6 anchor
 | 26 | Docs + tranche-2 panel findings (CLAUDE.md hand-off, skill, .env comments, P3s) | M | done | 293a8d0 | CLAUDE.md, .env, .claude/skills/bump-versions/**, docs/plans/**, docs/BLAST-RADIUS.md, templates/tips/env-scan.md, docker/config/dist/bin/base-bin/**, docker/config/dist/bin/phpbrew-bin/**, docker/images/00base/**, docker/images/01caddy/**, docker/images/01httpd/**, docker/images/01nginx/**, bin/tests/** |
 | 27 | Milestone panel over tranches 2+3 (frozen f3e92d4, one round by ruling) | M | done | 6d74d29 | var/claude/**, docker/config/dist/bin/**, bin/tests/**, .claude/skills/bump-versions/**, docs/plans/**, CLAUDE.md |
 | 28 | Known issues: elasticmq jar checked in temp; nginx OpenIDC chain in the composite, cloned before the wipe | M | done | 0151d31 | docker/config/dist/bin/serverless-bin/**, docker/config/dist/bin/nginx-bin/**, bin/tests/startup-prologue.test.sh, docs/plans/**, CLAUDE.md |
+| 29 | fvm: checked against GitHub's asset digest; FATALs remove the temp dir | S | done | 75607a9 | docker/config/dist/bin/fvm-bin/**, bin/tests/startup-prologue.test.sh, docs/plans/**, CLAUDE.md |
 <!-- /progress-block -->
 ### Blocked
 ### Needs input
@@ -1039,7 +1060,8 @@ test runs against stubs. CLAUDE.md `cc79efd` (developer-run hand-off, 6/6 anchor
   FIXED in 28 (0151d31): the chain pins are in nginx's composite (only when set), start.sh deletes nothing, and the iou
   clones every chain source before the wipe (ruling 2026-09-27 09:05).
 - fvm's GitHub release assets carry a SHA-256 `digest` too (verified 4.3.1), which row 28 counts as a published
-  checksum for elasticmq; fvm still checks only its listing and `--version`. Follow-up, not fixed.
+  checksum for elasticmq; fvm still checks only its listing and `--version`. Follow-up, not fixed. FIXED in 29
+  (75607a9): checked against that digest before the listing and `--version` checks (ruling 2026-09-27 10:45).
 - mise deletes `MISE_DATA_DIR`/`STATE`/`CONFIG`/`CACHE` BEFORE `curl https://mise.run | sh` (`install-mise.sh:18-21`) — a failed download leaves mise wiped. FIXED in 14b (`008b841`): checked before the wipe (ruling 2026-09-25 09:58). [Verified: read]
 - hurl 8.0.1 cannot run in 00base: `libxml2.so.2 => not found` (26.04 ships libxml2.so.16), and upstream publishes no other Linux x86_64 build [Verified: ldd + release assets in a throwaway container]. Being fixed in step 14 (ruling 2026-09-25 09:58). FIXED in 14c (`8bae406`): the live `tools/hurl` stays broken until 00base is rebuilt; until then every 00base boot WARNs (ruling 11:47) and the developer rebuilds later (ruling 2026-09-25).
 - `RELOAD_PHP=true` (`phpbrew-start.sh:43`) removes `frankenphp-${GLOBAL_STACK_FRANKENPHP_VERSION}-<php name>` by the
