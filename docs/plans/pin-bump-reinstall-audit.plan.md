@@ -962,8 +962,7 @@ every case instead of weakening one check (log:
 Suite 1091/1091. **UNCERTIFIED-BY-EXECUTION:** the new elasticmq fetch path has never run live. It is armed,
 not firing: it runs only on a pin bump or a deleted jar, and a normal boot of 04serverless-framework takes the
 `skip` path. The nginx OpenIDC chain has never been built with a pin set: all three are locked empty, and every
-test runs against stubs. CLAUDE.md: `/tmp/edit-claudemd-row28-20260927.sh` (dry-run 6/6; copy in
-`var/claude/recovery/`), pending the developer's run.
+test runs against stubs. CLAUDE.md `cc79efd` (developer-run hand-off, 6/6 anchors applied).
 
 ## Status
 <!-- progress-block v1 -->
