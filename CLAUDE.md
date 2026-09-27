@@ -81,7 +81,7 @@ check is what closes that gap, and it is not optional on this repo.
 
 | Surface | Executable evidence available |
 |---|---|
-| `bin/**`, `docker/config/dist/bin/**` | **STRONG** — `bin/tests/env-update.test.sh`, `env-scan.test.sh`, `startup-prologue.test.sh`, `bash -n`, `shellcheck`, `GS_STARTUP_DRY_RUN=1` |
+| `bin/**`, `docker/config/dist/bin/**` | **STRONG** — `bin/tests/env-update.test.sh`, `env-update-coverage.test.sh`, `env-scan.test.sh`, `startup-prologue.test.sh`, `bash -n`, `shellcheck`, `~/.claude/bin/bash-pitfalls.sh`, `GS_STARTUP_DRY_RUN=1` |
 | `docker/**` compose + Dockerfiles, `.env`, `Makefile` | **SYNTAX-ONLY** — `docker compose --env-file .env.local config -q` proves it *parses*; `make check-image-versions` catches `.env`↔`ARG` drift. Only a 10+ minute `make up` proves it comes up healthy |
 | docs, `CLAUDE.md`, `templates/tips/`, `.claude/**` | **N/A** — no runtime guarantee to break |
 

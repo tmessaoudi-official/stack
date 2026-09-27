@@ -41,6 +41,6 @@ inside the tools volume that `make soft-restart` wipes, so it can genuinely disa
 runs. Report the tool inventory alongside the results:
 
     shellcheck ✓  bash-pitfalls ✓  hadolint ✓  yamllint ✓   ← all four ran
-    shellcheck ✓  hadolint ✗  yamllint ✓   ← Dockerfiles UNCHECKED, say so in the summary
+    shellcheck ✓  bash-pitfalls ✓  hadolint ✗  yamllint ✓   ← Dockerfiles UNCHECKED, say so in the summary
 
 If arguments are provided, only lint files matching: $ARGUMENTS
