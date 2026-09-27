@@ -1256,7 +1256,7 @@ t "t19i: --backup-purge=true deletes pre-existing .bak.* then creates fresh one"
     bash '${ENV_SCAN}' --dir=\"\$D\" --backup-purge=true --scan-sources=false \
         --check-missing=false --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
     baks=\$(ls \"\$D/.env.local.bak\".* 2>/dev/null)
-    count=\$(echo \"\$baks\" | grep -c '.' 2>/dev/null || echo 0)
+    count=\$(echo \"\$baks\" | grep -c '.' 2>/dev/null) || count=0
     [[ \"\$count\" -eq 1 ]] || { echo \"expected exactly 1 bak after purge, got: \$baks\"; echo FAIL; exit 0; }
     echo \"\$baks\" | grep -qvE '20200101|20200102' || { echo \"old baks survived purge: \$baks\"; echo FAIL; exit 0; }
     echo PASS

@@ -794,7 +794,7 @@ for pair in "${PROBE_WIRING[@]}"; do
   script="${pair%%|*}"
   fragment="${pair#*|}"
   path="${DIST_BIN}/${script}"
-  n="$(grep -Fc "${fragment}" "${path}" 2>/dev/null || echo 0)"
+  n="$(grep -Fc "${fragment}" "${path}" 2>/dev/null)" || n=0
   if [[ "${n}" -eq 1 ]]; then
     PASS=$((PASS + 1))
     printf '  %b✓%b  %s WARN probe appears exactly once\n' "${C_GREEN}" "${C_RESET}" "$(basename "${script}")"
@@ -1714,7 +1714,7 @@ assert_pass "23f: helper alone, marker differs → reinstall" test "${_d}" = "re
 # Guarded against vacuity: with no helper the fire log never exists and a bare
 # count-is-zero assertion would pass while nothing ran. The decision from the
 # same run must therefore also be present.
-_vg_fire_n="$(grep -c . "${TMP_DIR}/vg-fires" 2>/dev/null || echo 0)"
+_vg_fire_n="$(grep -c . "${TMP_DIR}/vg-fires" 2>/dev/null)" || _vg_fire_n=0
 assert_pass "23g: helper fires the caller's ERR trap zero times (and did run)" \
   test "${_vg_fire_n}${_d}" = "0reinstall"
 

@@ -156,7 +156,7 @@ if [[ "${SDKMAN_MODE}" = "setup" ]]; then
   fi
 
   set +E
-  source /home/"${GLOBAL_STACK_DOCKER_USER_ID}"/${GLOBAL_STACK_SHELL_RC_TARGET} && sdk install java "${JAVA_VERSION}"
+  source /home/"${GLOBAL_STACK_DOCKER_USER_ID}"/${GLOBAL_STACK_SHELL_RC_TARGET} && sdk install java "${JAVA_VERSION}"  # bash-pitfalls: ignore BP4 — it sources the whole user rc under set +E; exit status unproven (review-remediation row 54)
   set -E
   [[ -d "${SDKMAN_DIR}/candidates/java/${JAVA_VERSION}" ]] || { printf 'Error: java %s directory missing after sdk install\n' "${JAVA_VERSION}"; exit 2; }
   _java_new="${JAVA_VERSION}"

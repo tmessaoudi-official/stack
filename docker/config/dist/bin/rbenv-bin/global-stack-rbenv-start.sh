@@ -123,7 +123,8 @@ if [[ "${RBENV_MODE}" = "install" ]]; then
   if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/rbenv" ]] || \
      [[ "$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/rbenv" 2>/dev/null)" != "${GLOBAL_STACK_RBENV_VERSION#v}" ]] || \
      [[ "true" = "${GLOBAL_STACK_RELOAD_RBENV}" ]]; then
-    source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/rbenv.shellrc" && global-stack-rbenv-install-tools.sh
+    source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/rbenv.shellrc"
+    global-stack-rbenv-install-tools.sh
     echo "$(rbenv --version | sed 's/rbenv //')" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/rbenv"
   fi
 fi
@@ -142,16 +143,19 @@ if [[ "${RBENV_MODE}" = "setup" ]]; then
   export RBENV_VERSION="${_ruby_resolved}"
 
   if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/ruby.${RUBY_VERSION_AS:-${RUBY_VERSION:-}}" || "true" = "${GLOBAL_STACK_RELOAD_RUBY}" || "${_ruby_gate}" == "reinstall" ]]; then
-    source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/rbenv.shellrc" && rbenv install --verbose --skip-existing --keep "${RBENV_VERSION}"
-    source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/rbenv.shellrc" && eval "$(rbenv init - --no-rehash ${GLOBAL_STACK_SHELL})" && global-stack-rbenv-ruby${RUBY_VERSION_AS}-setup-version.sh
+    source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/rbenv.shellrc"
+    rbenv install --verbose --skip-existing --keep "${RBENV_VERSION}"
+    source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/rbenv.shellrc"
+    eval "$(rbenv init - --no-rehash ${GLOBAL_STACK_SHELL})" && global-stack-rbenv-ruby${RUBY_VERSION_AS}-setup-version.sh
     # The new ruby is installed (set -e: a failed install never reaches this line), so
     # only NOW drop the old version dir and every pkg.* marker — the package loop
     # below then repopulates packages on the new interpreter, and the marker is
     # rewritten after it. §57 pins this order.
     if [[ "${_ruby_gate}" == "reinstall" ]]; then
-      # `source <shellrc> && <install>` does NOT trip set -e when `source` fails (only
-      # the final member of an && list does), so prove the new version is on disk
-      # before dropping the old one. The prologue's EXIT trap writes the error token.
+      # The install used to be chained behind `source <shellrc> &&`, where a failed
+      # `source` skipped it without tripping set -e; since 2026-09-27 the source stands
+      # on its own line (a missing shellrc now exits via the prologue's EXIT trap).
+      # This on-disk check stays as the independent proof before the old one is dropped.
       if [[ ! -d "${RBENV_ROOT}/versions/${_ruby_resolved}" ]]; then
         printf 'FATAL: ruby %s is not installed after the install step; keeping %s\n' "${_ruby_resolved}" "${_ruby_old}" >&2
         exit 1
@@ -199,7 +203,8 @@ if [[ "${RBENV_MODE}" = "setup" ]]; then
     --command='gem --backtrace install ${PACKAGE_NAME}:${PACKAGE_VERSION} ${PACKAGE_COMMAND_SUFFIX}'
 
   if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/ruby.${RUBY_VERSION_AS:-${RUBY_VERSION:-}}" || "true" = "${GLOBAL_STACK_RELOAD_RUBY}" || "${_ruby_gate}" == "reinstall" ]]; then
-    source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/rbenv.shellrc" && eval "$(rbenv init - --no-rehash ${GLOBAL_STACK_SHELL})" && rbenv shell && rbenv local "${RBENV_VERSION}" && global-stack-rbenv-ruby${RUBY_VERSION_AS}-setup-version.sh
+    source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/rbenv.shellrc"
+    eval "$(rbenv init - --no-rehash ${GLOBAL_STACK_SHELL})" && rbenv shell && rbenv local "${RBENV_VERSION}" && global-stack-rbenv-ruby${RUBY_VERSION_AS}-setup-version.sh
   fi
 
   if [[ "" != "${RBENV_VERSION}" ]]; then

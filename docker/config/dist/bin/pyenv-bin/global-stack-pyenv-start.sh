@@ -127,7 +127,8 @@ if [[ "${PYENV_MODE}" = "install" ]]; then
   if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/pyenv" ]] || \
      [[ "$(cat "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/pyenv" 2>/dev/null)" != "${GLOBAL_STACK_PYENV_VERSION#v}" ]] || \
      [[ "true" = "${GLOBAL_STACK_RELOAD_PYENV}" ]]; then
-    source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/pyenv.shellrc" && global-stack-pyenv-install-tools.sh
+    source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/pyenv.shellrc"
+    global-stack-pyenv-install-tools.sh
     echo "$(pyenv --version | sed 's/pyenv //')" > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/pyenv"
   fi
 fi
@@ -151,17 +152,20 @@ if [[ "${PYENV_MODE}" = "setup" ]]; then
     # Reuse the value the gate above resolved — a second call could disagree and
     # would silently reinstate the raw-vs-resolved mismatch this fix removed.
     export PYENV_VERSION="${_python_resolved}"
-    source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/pyenv.shellrc" && global-stack-pyenv-python${PYTHON_VERSION_AS}-install-version.sh
+    source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/pyenv.shellrc"
+    global-stack-pyenv-python${PYTHON_VERSION_AS}-install-version.sh
 
-    source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/pyenv.shellrc" && eval "$(pyenv init -)" && eval "$(pyenv init --path)" && pyenv shell && global-stack-pyenv-python${PYTHON_VERSION_AS}-setup-version.sh
+    source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/pyenv.shellrc"
+    eval "$(pyenv init -)" && eval "$(pyenv init --path)" && pyenv shell && global-stack-pyenv-python${PYTHON_VERSION_AS}-setup-version.sh
     # The new python is installed (set -e: a failed install never reaches this line), so
     # only NOW drop the old version dir and every pkg.* marker — the package loop
     # below then repopulates packages on the new interpreter, and the marker is
     # rewritten after it. §57 pins this order.
     if [[ "${_python_gate}" == "reinstall" ]]; then
-      # `source <shellrc> && <install>` does NOT trip set -e when `source` fails (only
-      # the final member of an && list does), so prove the new version is on disk
-      # before dropping the old one. The prologue's EXIT trap writes the error token.
+      # The install used to be chained behind `source <shellrc> &&`, where a failed
+      # `source` skipped it without tripping set -e; since 2026-09-27 the source stands
+      # on its own line (a missing shellrc now exits via the prologue's EXIT trap).
+      # This on-disk check stays as the independent proof before the old one is dropped.
       if [[ ! -d "${PYENV_ROOT}/versions/${_python_resolved}" ]]; then
         printf 'FATAL: python %s is not installed after the install step; keeping %s\n' "${_python_resolved}" "${_python_old}" >&2
         exit 1
@@ -200,7 +204,8 @@ if [[ "${PYENV_MODE}" = "setup" ]]; then
     --command='pip install ${PACKAGE_NAME}==${PACKAGE_VERSION} ${PACKAGE_COMMAND_SUFFIX}'
 
   if [[ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/python.${PYTHON_VERSION_AS:-${PYTHON_VERSION:-}}" || "true" = "${GLOBAL_STACK_RELOAD_PYENV}" || "${_python_gate}" == "reinstall" ]]; then
-    source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/pyenv.shellrc" && eval "$(pyenv init -)" && pyenv shell && pyenv local "${PYENV_VERSION}" && global-stack-pyenv-python${PYTHON_VERSION_AS}-setup-version.sh
+    source "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SHELLRC}/pyenv.shellrc"
+    eval "$(pyenv init -)" && pyenv shell && pyenv local "${PYENV_VERSION}" && global-stack-pyenv-python${PYTHON_VERSION_AS}-setup-version.sh
   fi
 
   printf '\nWriting success\n'

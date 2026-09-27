@@ -202,27 +202,27 @@ if [ "${PHPBREW_MODE}" = "setup" ]; then
     --command='phpbrew --debug --verbose --profile ext install ${PACKAGE_NAME} ${PACKAGE_VERSION} ${PACKAGE_COMMAND_SUFFIX}'
 
   if [ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/php.${PHP_VERSION_AS}" ] || [ "${_php_gate}" = "reinstall" ]; then
-    source "/home/${GLOBAL_STACK_DOCKER_USER_ID}/.phpbrew.shellrc" && mkdir -p "${PHPBREW_ROOT}/php/${PHPBREW_PHP}/var/db"
-    source "/home/${GLOBAL_STACK_DOCKER_USER_ID}/.phpbrew.shellrc" && printf '[PHP]\ndate.timezone = %s\n' "${GLOBAL_STACK_TIMEZONE}" > "${PHPBREW_ROOT}/php/${PHPBREW_PHP}/var/db/tzone.ini"
+    source "/home/${GLOBAL_STACK_DOCKER_USER_ID}/.phpbrew.shellrc" && mkdir -p "${PHPBREW_ROOT}/php/${PHPBREW_PHP}/var/db"  # bash-pitfalls: ignore BP4 — it sources phpbrew's own bashrc, whose exit status is unproven (review-remediation row 54)
+    source "/home/${GLOBAL_STACK_DOCKER_USER_ID}/.phpbrew.shellrc" && printf '[PHP]\ndate.timezone = %s\n' "${GLOBAL_STACK_TIMEZONE}" > "${PHPBREW_ROOT}/php/${PHPBREW_PHP}/var/db/tzone.ini"  # bash-pitfalls: ignore BP4 — it sources phpbrew's own bashrc, whose exit status is unproven (review-remediation row 54)
   fi
 
   global-stack-phpbrew-copy-dist-conf.sh
 
   if [ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/php.${PHP_VERSION_AS}" ] || [ "${_php_gate}" = "reinstall" ]; then
     echo -e "\n**** global-stack-phpbrew-php${PHP_VERSION_AS}-setup-version.sh"
-    source "/home/${GLOBAL_STACK_DOCKER_USER_ID}/.phpbrew.shellrc" && global-stack-phpbrew-php${PHP_VERSION_AS}-setup-version.sh
+    source "/home/${GLOBAL_STACK_DOCKER_USER_ID}/.phpbrew.shellrc" && global-stack-phpbrew-php${PHP_VERSION_AS}-setup-version.sh  # bash-pitfalls: ignore BP4 — it sources phpbrew's own bashrc, whose exit status is unproven (review-remediation row 54)
   fi
 
-  source "/home/${GLOBAL_STACK_DOCKER_USER_ID}/.phpbrew.shellrc" && global-stack-phpbrew-php${PHP_VERSION_AS}-setup-project.sh
-  source "/home/${GLOBAL_STACK_DOCKER_USER_ID}/.phpbrew.shellrc" && global-stack-phpbrew-sync-frankenphp.sh
+  source "/home/${GLOBAL_STACK_DOCKER_USER_ID}/.phpbrew.shellrc" && global-stack-phpbrew-php${PHP_VERSION_AS}-setup-project.sh  # bash-pitfalls: ignore BP4 — it sources phpbrew's own bashrc, whose exit status is unproven (review-remediation row 54)
+  source "/home/${GLOBAL_STACK_DOCKER_USER_ID}/.phpbrew.shellrc" && global-stack-phpbrew-sync-frankenphp.sh  # bash-pitfalls: ignore BP4 — it sources phpbrew's own bashrc, whose exit status is unproven (review-remediation row 54)
 
-  source "/home/${GLOBAL_STACK_DOCKER_USER_ID}/.phpbrew.shellrc" && phpbrew fpm start "${PHPBREW_PHP}" &
+  source "/home/${GLOBAL_STACK_DOCKER_USER_ID}/.phpbrew.shellrc" && phpbrew fpm start "${PHPBREW_PHP}" &  # bash-pitfalls: ignore BP4 — it sources phpbrew's own bashrc, whose exit status is unproven (review-remediation row 54)
 
   LD_LIBRARY_PATH="$(php-config --prefix)/lib:${LD_LIBRARY_PATH}"
   export LD_LIBRARY_PATH
   
   if [[ -f ${PHPBREW_BIN}/frankenphp-${GLOBAL_STACK_FRANKENPHP_VERSION}-${PHP_VERSION_NAME} ]]; then
-    source "/home/${GLOBAL_STACK_DOCKER_USER_ID}/.phpbrew.shellrc" && LD_LIBRARY_PATH="${LD_LIBRARY_PATH}" frankenphp-${GLOBAL_STACK_FRANKENPHP_VERSION}-${PHP_VERSION_NAME} run --config $(php-config --prefix)/var/frankenphp/Caddyfile &
+    source "/home/${GLOBAL_STACK_DOCKER_USER_ID}/.phpbrew.shellrc" && LD_LIBRARY_PATH="${LD_LIBRARY_PATH}" frankenphp-${GLOBAL_STACK_FRANKENPHP_VERSION}-${PHP_VERSION_NAME} run --config $(php-config --prefix)/var/frankenphp/Caddyfile &  # bash-pitfalls: ignore BP4 — it sources phpbrew's own bashrc, whose exit status is unproven (review-remediation row 54)
   fi
 fi
 
