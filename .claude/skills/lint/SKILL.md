@@ -11,7 +11,12 @@ Find and validate all shell scripts and Dockerfiles in this project for quality 
 1. Find all `.sh` files under `bin/`, `docker/config/dist/bin/` (container startup scripts), `.claude/hooks/`, and `templates/shell/`: `find bin docker/config/dist/bin .claude/hooks templates/shell -name "*.sh" -type f`
 2. Run `bash -n` syntax check on each file
 3. Run `shellcheck -x -S warning` on each file
-4. Report results grouped by file, with severity
+4. Run `bash ~/.claude/bin/bash-pitfalls.sh <files>` — silent-failure patterns a general linter does not
+   catch (`grep -c … || echo 0`, `source … &&`, `compgen -G` under `set -e`, a `[[ ]]` inside an
+   array append, a backtick in `python3 -c "…"`, a prose comment starting with the linter's name).
+   BP2/BP6 print as advisory and do not fail. If `[ -x ~/.claude/bin/bash-pitfalls.sh ]` is false, say
+   *"bash-pitfalls NOT INSTALLED — pitfalls unchecked"*; never fold that into "All clean".
+5. Report results grouped by file, with severity
 
 ## Dockerfiles
 1. Find all Dockerfiles: `find docker/images -name "Dockerfile" -type f`
@@ -35,7 +40,7 @@ happened to exist ran. `yamllint` in particular resolves to `/stack/tools/pyenv/
 inside the tools volume that `make soft-restart` wipes, so it can genuinely disappear between
 runs. Report the tool inventory alongside the results:
 
-    shellcheck ✓  hadolint ✓  yamllint ✓   ← all four ran
+    shellcheck ✓  bash-pitfalls ✓  hadolint ✓  yamllint ✓   ← all four ran
     shellcheck ✓  hadolint ✗  yamllint ✓   ← Dockerfiles UNCHECKED, say so in the summary
 
 If arguments are provided, only lint files matching: $ARGUMENTS
