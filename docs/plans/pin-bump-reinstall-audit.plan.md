@@ -939,7 +939,8 @@ Four checks run before `install -m 0755` replaces the old jar, and the marker is
 Every failure is a named FATAL that leaves the old jar and marker and removes the temp dir. The API call is
 unauthenticated, made only on a version change, and shares the per-IP budget of 60 an hour with env-update's
 `github:` fetcher; a refusal keeps the old jar. §78: 16 checks. The 14 behavioural checks were red against
-the old block, extracted by its old anchor. Sabotage M1–M5b each went red (log:
+the old block, extracted by its old anchor. Sabotage M1–M4 and M5b each went red. M5 was discarded: it broke
+every case instead of weakening one check (log:
 `var/claude/pin-audit-t3/sabotage-row28.log`).
 
 **nginx OpenIDC chain:**
@@ -956,10 +957,13 @@ the old block, extracted by its old anchor. Sabotage M1–M5b each went red (log
 - The iou's unused version-gate source went too, so 30a now asserts that the iou calls no `gs_version_gate`
   instead of asserting that it sources the helper. That check went red on a gate call injected into a worktree
   copy. The first full run caught this 30a failure (1090/1091), which is why the check changed.
-- Sabotage N1–N5 and N3b each went red. N3b moved the cjose clone after the wipe and was caught by 76p alone.
+- Sabotage N1–N5 and N3b each went red, so 11 valid mutations in all, with M5 discarded. N3b moved the cjose clone after the wipe and was caught by 76p alone.
 
-Suite 1091/1091. **UNCERTIFIED-BY-EXECUTION:** no live boot of 04serverless-framework, and the nginx
-OpenIDC chain has never been built with a pin set (all three are locked empty; every test runs against stubs).
+Suite 1091/1091. **UNCERTIFIED-BY-EXECUTION:** the new elasticmq fetch path has never run live. It is armed,
+not firing: it runs only on a pin bump or a deleted jar, and a normal boot of 04serverless-framework takes the
+`skip` path. The nginx OpenIDC chain has never been built with a pin set: all three are locked empty, and every
+test runs against stubs. CLAUDE.md: `/tmp/edit-claudemd-row28-20260927.sh` (dry-run 6/6; copy in
+`var/claude/recovery/`), pending the developer's run.
 
 ## Status
 <!-- progress-block v1 -->
@@ -993,7 +997,7 @@ OpenIDC chain has never been built with a pin set (all three are locked empty; e
 | 25 | php.edge: post-build php check before the sidecar marker | S | done | b273b9c | docker/config/dist/bin/phpbrew-bin/**, bin/tests/startup-prologue.test.sh |
 | 26 | Docs + tranche-2 panel findings (CLAUDE.md hand-off, skill, .env comments, P3s) | M | done | 293a8d0 | CLAUDE.md, .env, .claude/skills/bump-versions/**, docs/plans/**, docs/BLAST-RADIUS.md, templates/tips/env-scan.md, docker/config/dist/bin/base-bin/**, docker/config/dist/bin/phpbrew-bin/**, docker/images/00base/**, docker/images/01caddy/**, docker/images/01httpd/**, docker/images/01nginx/**, bin/tests/** |
 | 27 | Milestone panel over tranches 2+3 (frozen f3e92d4, one round by ruling) | M | done | 6d74d29 | var/claude/**, docker/config/dist/bin/**, bin/tests/**, .claude/skills/bump-versions/**, docs/plans/**, CLAUDE.md |
-| 28 | Known issues: elasticmq jar checked in temp; nginx OpenIDC chain in the composite, cloned before the wipe | M | done | 0151d31 | docker/config/dist/bin/serverless-bin/**, docker/config/dist/bin/nginx-bin/**, bin/tests/startup-prologue.test.sh, docs/plans/** |
+| 28 | Known issues: elasticmq jar checked in temp; nginx OpenIDC chain in the composite, cloned before the wipe | M | done | 0151d31 | docker/config/dist/bin/serverless-bin/**, docker/config/dist/bin/nginx-bin/**, bin/tests/startup-prologue.test.sh, docs/plans/**, CLAUDE.md |
 <!-- /progress-block -->
 ### Blocked
 ### Needs input
