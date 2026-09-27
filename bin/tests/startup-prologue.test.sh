@@ -5734,6 +5734,8 @@ while (($#)); do
 done
 printf '%s\n' "${url}" >>"${P70_LOG}"
 src="${P70_FIX}/${url#https://github.com/leoafarias/fvm/releases/download/}"
+# Row 29: the release's asset digests come from the GitHub API.
+[[ "${url}" != https://api.github.com/repos/leoafarias/fvm/releases/tags/* ]] || src="${P70_FIX}/api/${url##*/}.json"
 if [[ -f "${src}" ]]; then cat "${src}" >"${out}"; exit 0; fi
 ((fail)) && exit 22
 printf '<html>404 Not Found</html>\n' >"${out}"
@@ -5751,6 +5753,25 @@ _p70_tgz() { # $1 = version, $2 = what its fvm prints ('' = the tarball holds no
   printf 'license\n' >"${d}/fvm/src/LICENSE"
   [[ -z "$2" ]] || _p70_fvm "${d}/fvm/fvm" "$2"
   tar -C "${d}" -czf "${_P70}/fix/$1/fvm-$1-linux-x64.tar.gz" fvm
+  _p70_api "$1" ok
+}
+# _p70_api <version> <ok|bad|null|noasset|none>: the api.github.com release JSON, whose asset
+# `digest` is `sha256:<hex>` [measured 4.3.1: sha256:ad59c861… = sha256sum of the tarball].
+_p70_api() {
+  local a="fvm-$1-linux-x64.tar.gz" f="${_P70}/fix/$1/fvm-$1-linux-x64.tar.gz" dg
+  mkdir -p "${_P70}/fix/api"
+  case "$2" in
+    ok) dg="\"sha256:$(sha256sum "${f}" | cut -d' ' -f1)\"" ;;
+    bad) dg="\"sha256:$(printf '0%.0s' {1..64})\"" ;;
+    null) dg=null ;;
+    none) rm -f "${_P70}/fix/api/$1.json"; return 0 ;;
+  esac
+  if [[ "$2" == noasset ]]; then
+    printf '{"tag_name":"%s","assets":[{"name":"fvm-%s-macos-arm64.tar.gz","digest":"sha256:%s"}]}\n' "$1" "$1" "$(printf 'a%.0s' {1..64})" >"${_P70}/fix/api/$1.json"
+  else
+    printf '{"tag_name":"%s","assets":[{"name":"fvm-%s-linux-x64-musl.tar.gz","digest":"sha256:%s"},{"name":"%s","digest":%s}]}\n' \
+      "$1" "$1" "$(printf 'c%.0s' {1..64})" "${a}" "${dg}" >"${_P70}/fix/api/$1.json"
+  fi
 }
 _p70_tgz 4.3.0 4.3.0
 _p70_tgz 4.3.1 4.3.1
@@ -5759,7 +5780,15 @@ _p70_tgz 4.4.0 ''     # no fvm/fvm in the tarball
 _p70_tgz 4.5.0 4.5.00 # reports a different version
 mkdir -p "${_P70}/fix/4.7.0"
 printf '<html>not a tarball</html>\n' >"${_P70}/fix/4.7.0/fvm-4.7.0-linux-x64.tar.gz"
-# 4.6.0 is not served at all (curl -f exits 22).
+_p70_api 4.7.0 ok
+# 4.6.0 is listed with a digest, but its tarball is not served at all (curl -f exits 22).
+printf '{"tag_name":"4.6.0","assets":[{"name":"fvm-4.6.0-linux-x64.tar.gz","digest":"sha256:%s"}]}\n' "$(printf 'b%.0s' {1..64})" >"${_P70}/fix/api/4.6.0.json"
+# Row 29: the digest cases. 4.8.x are real, correctly-reporting tarballs whose release JSON
+# is wrong, missing a digest, missing the asset, or unreachable.
+for _p70_d in 4.8.1:bad 4.8.2:null 4.8.3:noasset 4.8.4:none; do
+  _p70_tgz "${_p70_d%%:*}" "${_p70_d%%:*}"
+  _p70_api "${_p70_d%%:*}" "${_p70_d#*:}"
+done
 _P70_FVM="${DIST_BIN}/fvm-bin/global-stack-fvm-start.sh"
 awk '/^if \[\[ "\$\{FVM_MODE\}" = "install" \]\]; then$/{n++} n==2{print} n==2 && /^fi$/{exit}' "${_P70_FVM}" >"${_P70}/block.sh"
 assert_pass "70a: the extracted install block holds the download and the marker write (anchor non-vacuity)" \
@@ -5787,23 +5816,33 @@ _p70_run() { # $1 = pin, $2 = installed fvm version ('' = none), $3 = marker (''
     "$(grep -c '^FATAL: fvm' "${_P70}/last.log" || true)" "$(grep -c REFUSED "${_P70}/last.log" || true)"
 }
 assert_pass "70b: fvm 4.3.1 -> pin 4.3.2: checked in a temp dir, installed, marker last, the projects dir untouched" \
-  test "$(_p70_run 4.3.2 4.3.1 4.3.1 false)" = "rc=0 bin=4.3.2 marker=4.3.2 projects=intact tmp=0 curls=1 fatal=0 refused=0"
+  test "$(_p70_run 4.3.2 4.3.1 4.3.1 false)" = "rc=0 bin=4.3.2 marker=4.3.2 projects=intact tmp=0 curls=2 fatal=0 refused=0"
 assert_pass "70c: fvm 4.3.2 -> pin moved back to 4.3.0" \
-  test "$(_p70_run 4.3.0 4.3.2 4.3.2 false)" = "rc=0 bin=4.3.0 marker=4.3.0 projects=intact tmp=0 curls=1 fatal=0 refused=0"
+  test "$(_p70_run 4.3.0 4.3.2 4.3.2 false)" = "rc=0 bin=4.3.0 marker=4.3.0 projects=intact tmp=0 curls=2 fatal=0 refused=0"
 assert_pass "70d: first install at 4.3.1 (no binary, no marker)" \
-  test "$(_p70_run 4.3.1 '' '' false)" = "rc=0 bin=4.3.1 marker=4.3.1 projects=intact tmp=0 curls=1 fatal=0 refused=0"
+  test "$(_p70_run 4.3.1 '' '' false)" = "rc=0 bin=4.3.1 marker=4.3.1 projects=intact tmp=0 curls=2 fatal=0 refused=0"
 assert_pass "70e: marker = pin -> nothing downloaded, nothing changed" \
   test "$(_p70_run 4.3.1 4.3.1 4.3.1 false)" = "rc=0 bin=4.3.1 marker=4.3.1 projects=intact tmp=0 curls=0 fatal=0 refused=0"
 assert_pass "70f: marker = pin but RELOAD_FVM=true -> reinstalled" \
-  test "$(_p70_run 4.3.1 4.3.0 4.3.1 true)" = "rc=0 bin=4.3.1 marker=4.3.1 projects=intact tmp=0 curls=1 fatal=0 refused=0"
+  test "$(_p70_run 4.3.1 4.3.0 4.3.1 true)" = "rc=0 bin=4.3.1 marker=4.3.1 projects=intact tmp=0 curls=2 fatal=0 refused=0"
 for _p70_bad in '4.4.0|holds no fvm/fvm' '4.5.0|reports 4.5.00' '4.6.0|is not published (curl -f)' '4.7.0|is an HTML page'; do
   assert_pass "70g: pin ${_p70_bad%%|*} (${_p70_bad#*|}) -> named FATAL, old fvm and marker untouched, projects untouched" \
-    bash -c '[[ "$1" == "rc=1 bin=4.3.1 marker=4.3.1 projects=intact "*" fatal=1 refused=0" ]]' _ "$(_p70_run "${_p70_bad%%|*}" 4.3.1 4.3.1 false)"
+    bash -c '[[ "$1" == "rc=1 bin=4.3.1 marker=4.3.1 projects=intact tmp=0 "*" fatal=1 refused=0" ]]' _ "$(_p70_run "${_p70_bad%%|*}" 4.3.1 4.3.1 false)"
+done
+# Row 29: the tarball is checked against the SHA-256 GitHub serves as the release asset's
+# digest (fvm publishes no checksum file). Each failure is its named FATAL.
+for _p70_bad in '4.8.1|does not match its published SHA-256' \
+  '4.8.2|lists no single sha256 digest for fvm-4.8.2-linux-x64.tar.gz' \
+  '4.8.3|lists no single sha256 digest for fvm-4.8.3-linux-x64.tar.gz' \
+  '4.8.4|cannot fetch its release from api.github.com'; do
+  assert_pass "70i: pin ${_p70_bad%%|*} (${_p70_bad#*|}) -> that FATAL, old fvm, marker and projects untouched, no temp dir" \
+    bash -c '[[ "$1" == "rc=1 bin=4.3.1 marker=4.3.1 projects=intact tmp=0 "*" fatal=1 refused=0" ]] && grep "^FATAL: fvm" "$2" | grep -qF "$3"' _ \
+    "$(_p70_run "${_p70_bad%%|*}" 4.3.1 4.3.1 false)" "${_P70}/last.log" "${_p70_bad#*|}"
 done
 # Without -f an unpublished pin downloads a 404 page. The listing check still refuses it,
 # but the FATAL then blames the wrong thing, so -f is pinned directly (the §68h shape).
-assert_pass "70h: fvm-start.sh has at least 1 executable curl call, and every one carries -f (floor + guard)" \
-  bash -c 'calls="$(grep -vE "^[[:space:]]*#" "$1" | grep -oE "curl [^;|]*")"; [[ "$(grep -c . <<<"${calls}")" -ge 1 ]] && ! grep -vE "(^| )-[a-zA-Z]*f[a-zA-Z]*( |$)" <<<"${calls}" | grep -q .' _ "${_P70_FVM}"
+assert_pass "70h: fvm-start.sh has at least 2 executable curl calls (release JSON + tarball), and every one carries -f (floor + guard)" \
+  bash -c 'calls="$(grep -vE "^[[:space:]]*#" "$1" | grep -oE "curl [^;|]*")"; [[ "$(grep -c . <<<"${calls}")" -ge 2 ]] && ! grep -vE "(^| )-[a-zA-Z]*f[a-zA-Z]*( |$)" <<<"${calls}" | grep -q .' _ "${_P70_FVM}"
 
 # The env above is exactly what 02fvm's compose passes (FVM_VERSION, never
 # GLOBAL_STACK_FVM_VERSION): step 18's version of this harness set both, so §70e certified

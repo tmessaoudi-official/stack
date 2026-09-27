@@ -77,27 +77,50 @@ if [[ "${FVM_MODE}" = "install" ]]; then
   # project named fvm was deleted on every fvm bump, and nothing was checked. Now the tarball
   # lands in a temp dir and is checked (it holds fvm/fvm, and that binary's own --version
   # prints the pin) before it replaces the old binary. The marker is written last.
-  # fvm publishes no checksum [Verified 2026-09-26: the 4.3.1 release assets].
+  # fvm publishes no checksum FILE [Verified 2026-09-26: the 4.3.1 release assets], but GitHub
+  # serves each release asset's SHA-256 as its `digest` [measured 4.3.1: sha256:ad59c861… =
+  # sha256sum of the tarball]; since row 28 that counts as a published checksum (as for
+  # elasticmq), so the tarball is checked against it first (row 29). The API call is
+  # unauthenticated (60 an hour per IP, shared with elasticmq and env-update's github:
+  # fetcher) and made only on a change; a refusal FATALs and keeps the old fvm.
   # The gate compares FVM_VERSION, the variable 02fvm's compose passes and the install below
   # uses: it compared GLOBAL_STACK_FVM_VERSION, which never reaches the container, so the
   # marker never matched "" and fvm was re-downloaded on every boot (step 27 panel; §70m).
+  # Every FATAL also removes the temp dir (row 29; step 27 fixed the same leak elsewhere).
+  # Defined inside this block, which §70 extracts by anchor.
+  _fvm_fatal() {
+    printf 'FATAL: fvm %s%s - fvm left as it was\n' "${FVM_VERSION}" "$1" >&2
+    [[ -z "${_fvm_dl:-}" ]] || rm -rf "${_fvm_dl}"
+    exit 1
+  }
   _fvm_gate="$(gs_version_gate "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/fvm" "${FVM_VERSION}" "fvm")"
   if [[ "${_fvm_gate}" != "skip" ]] || [[ "${GLOBAL_STACK_RELOAD_FVM}" = "true" ]]; then
     _fvm_dl="$(mktemp -d)"
-    _fvm_tgz="${_fvm_dl}/fvm-${FVM_VERSION}-linux-x64.tar.gz"
-    if ! curl --connect-timeout 30 --max-time 300 -fsSL -o "${_fvm_tgz}" "https://github.com/leoafarias/fvm/releases/download/${FVM_VERSION}/fvm-${FVM_VERSION}-linux-x64.tar.gz"; then
-      printf 'FATAL: fvm %s could not be downloaded - fvm left as it was\n' "${FVM_VERSION}" >&2
-      exit 1
+    _fvm_asset="fvm-${FVM_VERSION}-linux-x64.tar.gz"
+    _fvm_tgz="${_fvm_dl}/${_fvm_asset}"
+    if ! curl --connect-timeout 30 --max-time 60 -fsSL -o "${_fvm_dl}/release.json" \
+      "https://api.github.com/repos/leoafarias/fvm/releases/tags/${FVM_VERSION}"; then
+      _fvm_fatal ": cannot fetch its release from api.github.com (unreachable or rate-limited)"
+    fi
+    # `// empty`: a release older than GitHub's digests has none, and "null" must not become the sum.
+    if ! _fvm_sum="$(jq -r --arg n "${_fvm_asset}" '.assets[] | select(.name == $n) | .digest // empty' "${_fvm_dl}/release.json" \
+      | sed -n 's/^sha256:\([0-9a-f]\{64\}\)$/\1/p')" \
+      || [[ "$(grep -c . <<<"${_fvm_sum}")" != 1 ]]; then
+      _fvm_fatal ": its release lists no single sha256 digest for ${_fvm_asset}"
+    fi
+    if ! curl --connect-timeout 30 --max-time 300 -fsSL -o "${_fvm_tgz}" "https://github.com/leoafarias/fvm/releases/download/${FVM_VERSION}/${_fvm_asset}"; then
+      _fvm_fatal " could not be downloaded"
+    fi
+    if ! printf '%s  %s\n' "${_fvm_sum}" "${_fvm_tgz}" | sha256sum -c --quiet - >/dev/null 2>&1; then
+      _fvm_fatal ": ${_fvm_asset} does not match its published SHA-256"
     fi
     # grep reads the whole listing (no -q): an early exit would SIGPIPE tar under pipefail.
     if ! tar -tzf "${_fvm_tgz}" 2>/dev/null | grep -xF 'fvm/fvm' >/dev/null; then
-      printf 'FATAL: fvm %s: the download is not a tarball holding fvm/fvm - fvm left as it was\n' "${FVM_VERSION}" >&2
-      exit 1
+      _fvm_fatal ": the download is not a tarball holding fvm/fvm"
     fi
     tar -C "${_fvm_dl}" -xzf "${_fvm_tgz}" fvm/fvm
     if ! _fvm_says="$("${_fvm_dl}/fvm/fvm" --version 2>&1)" || [[ "${_fvm_says}" != "${FVM_VERSION}" ]]; then
-      printf 'FATAL: fvm %s: the downloaded binary reports "%s" - fvm left as it was\n' "${FVM_VERSION}" "${_fvm_says:-}" >&2
-      exit 1
+      _fvm_fatal ": the downloaded binary reports \"${_fvm_says:-}\""
     fi
     # Checked: from here on the old binary is replaced.
     sudo install -m 0755 "${_fvm_dl}/fvm/fvm" "${GLOBAL_STACK_DOCKER_TOOLS_PATH_BIN}/fvm"
