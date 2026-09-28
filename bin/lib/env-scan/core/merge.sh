@@ -97,6 +97,11 @@ _gs_es_process_file() {
 			fi
 		done < "${dest_file}"
 
+		# Create the merged file 600 BEFORE writing it: the `>` below truncates and keeps that mode,
+		# `sed -i` and the final `mv` keep it too. Written under the caller's umask (0002 → 664) it
+		# re-exposed /stack/.env.local as world-readable on every run (review-remediation row 17).
+		( umask 077 && : > "${merged_file}" )
+
 		# Walk src top-to-bottom, preserving source order
 		{
 			while IFS= read -r _line || [[ -n "${_line}" ]]; do

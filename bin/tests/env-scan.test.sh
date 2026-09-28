@@ -2885,6 +2885,35 @@ _flush_section
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+section "41 — the merged destination is written 600, never under the caller's umask"
+# ═══════════════════════════════════════════════════════════════════════════
+# 2026-09-28 (review-remediation row 17, audit P1-7): merge.sh built the merged file with a plain
+# `> "${merged_file}"` under the process umask (0002 → 664) and mv'd it over .env.local, so every
+# env-scan run re-exposed /stack/.env.local as world-readable, whatever mode it had been given.
+
+t "a NEW .env.local is created 600 under umask 0002" bash -c "
+    D='${TMP_DIR}/t41a'; mkdir -p \"\$D\"
+    printf 'GLOBAL_STACK_A=1\n' > \"\$D/.env\"
+    umask 0002
+    bash '${ENV_SCAN}' --dir=\"\$D\" --check-missing=false --scan-sources=false \
+        --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
+    m=\$(stat -c %a \"\$D/.env.local\" 2>/dev/null)
+    [[ \"\$m\" == 600 ]] && echo PASS || { echo \"mode=\$m\"; echo FAIL; }
+"
+
+t "an existing 644 .env.local comes back 600 after a merge under umask 0002" bash -c "
+    D='${TMP_DIR}/t41b'; mkdir -p \"\$D\"
+    printf 'GLOBAL_STACK_A=1\nGLOBAL_STACK_B=2\n' > \"\$D/.env\"
+    printf 'GLOBAL_STACK_A=1\n' > \"\$D/.env.local\"; chmod 644 \"\$D/.env.local\"
+    umask 0002
+    bash '${ENV_SCAN}' --dir=\"\$D\" --check-missing=false --scan-sources=false \
+        --show-added-entries=false --show-different-entries=false 2>&1 >/dev/null
+    m=\$(stat -c %a \"\$D/.env.local\" 2>/dev/null)
+    grep -q '^GLOBAL_STACK_B=2' \"\$D/.env.local\" || { echo 'merge did not run'; echo FAIL; exit; }
+    [[ \"\$m\" == 600 ]] && echo PASS || { echo \"mode=\$m\"; echo FAIL; }
+"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
 _flush_section
