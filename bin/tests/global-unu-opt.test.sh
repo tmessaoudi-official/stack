@@ -64,9 +64,16 @@ mkdir -p "${STUB_BIN}"
 cat >"${STUB_BIN}/curl" <<'STUB'
 #!/usr/bin/env bash
 out="" fail=0 url=""
+# Every argv, so a case can prove a secret never reached the command line.
+printf '%s\n' "$*" >>"${T}/curl-argv.log"
 while (($#)); do
   case "$1" in
     -o) out="$2"; shift 2 ;;
+    # A header, or "@-": the header lines on stdin (how a token is passed).
+    -H)
+      if [[ "$2" == @- ]]; then cat >>"${T}/headers.log"; else printf '%s\n' "$2" >>"${T}/headers.log"; fi
+      shift 2
+      ;;
     --retry | --connect-timeout | --max-time) shift 2 ;;
     -*) [[ "$1" == -*f* && "$1" != --* ]] && fail=1; shift ;;
     *) url="$1"; shift ;;
@@ -85,6 +92,23 @@ if [[ -n "${out}" ]]; then cp "${src}" "${out}"; else cat "${src}"; fi
 if [[ "${url}" == *.tar.gz && -f "${T}/on-archive" ]]; then bash "${T}/on-archive"; fi
 STUB
 chmod +x "${STUB_BIN}/curl"
+
+# ── Stub sudo ────────────────────────────────────────────────────────────────
+# Logs every call to "$T/sudo.log". "$T/no-sudo" present: exits 1, as `sudo -n`
+# does with no cached credentials. chown to root cannot happen as a user, so it
+# is only logged; chmod is applied (setuid on one's own file is allowed).
+cat >"${STUB_BIN}/sudo" <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >>"${T}/sudo.log"
+[[ -e "${T}/no-sudo" ]] && exit 1
+[[ "$1" == -n ]] && shift
+case "$1" in
+  chown) exit 0 ;;
+  chmod) exec chmod "${@:2}" ;;
+  *) exit 1 ;;
+esac
+STUB
+chmod +x "${STUB_BIN}/sudo"
 
 # ── Fixture builders ─────────────────────────────────────────────────────────
 JB_API='https://data.services.jetbrains.com/products/releases?code=IIU&type=release'
@@ -673,6 +697,182 @@ if ! grep -qE '/opt/\$\{USER\}/(task|bat|sonar-scanner-cli)|GLOBAL_STACK_(TASK|B
   ok "13e: global-unu.sh no longer installs task, bat or sonar-scanner-cli itself"
 else
   ko "13e: global-unu.sh still installs a moved tool: $(grep -nE '/opt/\$\{USER\}/(task|bat|sonar)|GLOBAL_STACK_(TASK|BAT|SONAR_SCANNER_CLI)_VERSION' "${UNU}" | head -3)"
+fi
+
+# ═════════════════════════════════════════════════════════════════════════════
+section "14. tool rows: MeGit, balenaEtcher"
+# Shapes from the real 2026-09-28 archives: MeGit → MeGit/ whose version is the
+# plugins/com.eclipsesource.megit.plugin_<X.Y.Z>.<qualifier>.jar name, checked
+# against GitHub's asset digest (its only checksum); Etcher → balenaEtcher-linux-x64/
+# whose version is package.json inside resources/app.asar, checked against the
+# release's SHA256SUMS.Linux.x64.txt, and whose chrome-sandbox must end up root
+# setuid. Both binaries write $T/ran if executed: a staged binary never may be.
+TOKEN=ghp_TESTTOKEN0000000000000000000000000000
+_mk_megit_src() { # $1 dest parent  $2 version (X.Y.Z)
+  mkdir -p "$1/MeGit/plugins/org.eclipse.platform_4.39.0.v1"
+  # shellcheck disable=SC2016 # $T expands when the stub runs, not here
+  printf '#!/bin/sh\ntouch "$T/ran"\n' >"$1/MeGit/megit" && chmod +x "$1/MeGit/megit"
+  printf 'jar' >"$1/MeGit/plugins/com.eclipsesource.megit.plugin_$2.20260428-1215.jar"
+  printf 'png' >"$1/MeGit/plugins/org.eclipse.platform_4.39.0.v1/eclipse512.png"
+}
+# $1 case dir  $2 version  $3 arch  $4 digest override ('' = the real one) → routes
+_megit_release() {
+  local d="$1" v="$2" a="megit-$2-linux.gtk.$3.tar.gz" dg
+  _mk_megit_src "$d/src" "$v"
+  tar -czf "$d/srv/${a}" -C "$d/src" MeGit
+  dg="${4:-sha256:$(sha256sum "$d/srv/${a}" | cut -d' ' -f1)}"
+  jq -n --arg a "${a}" --arg v "$v" --arg dg "${dg}" '{tag_name: ("v" + $v), assets: [
+      {name: ("megit-" + $v + "-macosx.cocoa.x86_64.tar.gz"), digest: "sha256:00", browser_download_url: "https://example.invalid/mac"},
+      {name: $a, digest: $dg, browser_download_url: ("https://github.com/eclipsesource/megit/releases/download/v" + $v + "/" + $a)}]}' >"$d/srv/release.json"
+  printf '%s\t%s\n' \
+    "https://api.github.com/repos/eclipsesource/megit/releases/tags/v$v" "$d/srv/release.json" \
+    "https://github.com/eclipsesource/megit/releases/download/v$v/${a}" "$d/srv/${a}" >>"$d/routes"
+}
+# $1 dest dir (the app tree)  $2 version → an Electron-shaped Etcher tree with a real
+# asar header (pickle: u32 4, u32 header size, u32 payload, u32 json len, json, pad).
+_mk_etcher_tree() {
+  mkdir -p "$1/resources"
+  # shellcheck disable=SC2016 # $T expands when the stub runs, not here
+  printf '#!/bin/sh\ntouch "$T/ran"\n' >"$1/balena-etcher" && chmod +x "$1/balena-etcher"
+  printf 'elf' >"$1/chrome-sandbox" && chmod 755 "$1/chrome-sandbox"
+  python3 - "$1/resources/app.asar" "$2" <<'PY'
+import json, struct, sys
+pkg = json.dumps({"name": "balena-etcher", "version": sys.argv[2]}).encode()
+hdr = json.dumps({"files": {"package.json": {"size": len(pkg), "offset": "0"}}}).encode()
+pad = b"\0" * (-len(hdr) % 4)
+payload = 4 + len(hdr) + len(pad)
+open(sys.argv[1], "wb").write(struct.pack("<IIII", 4, payload + 4, payload, len(hdr)) + hdr + pad + pkg)
+PY
+}
+# $1 case dir  $2 version  $3 list the zip in SHA256SUMS? (1/0) → routes
+_etcher_release() {
+  local d="$1" z="balenaEtcher-linux-x64-$2.zip" base="https://github.com/balena-io/etcher/releases/download/v$2"
+  _mk_etcher_tree "$d/src/balenaEtcher-linux-x64" "$2"
+  (cd "$d/src" && zip -qr "$d/srv/${z}" balenaEtcher-linux-x64)
+  {
+    printf 'f8678185cbc76e51bc465607e001147a7c7239f31d21f2712fcc6e372bc29809  balena-etcher-%s-1.x86_64.rpm\n' "$2"
+    [[ "$3" == 1 ]] && printf '%s  %s\n' "$(sha256sum "$d/srv/${z}" | cut -d' ' -f1)" "${z}"
+  } >"$d/srv/sums.txt"
+  printf '%s\t%s\n' "${base}/SHA256SUMS.Linux.x64.txt" "$d/srv/sums.txt" "${base}/${z}" "$d/srv/${z}" >>"$d/routes"
+}
+
+# MeGit, fresh, with a token: installed, the token sent as a header on stdin only.
+d="$(_fresh c14m megit GLOBAL_STACK_MEGIT_VERSION v0.12.0)"
+printf 'GLOBAL_STACK_GITHUB_TOKEN=%s\n' "${TOKEN}" >>"$d/env.local"
+_megit_release "$d" 0.12.0 x86_64 ''
+_run "$d" --apply --only=megit
+if [[ ${RC} -eq 0 && -x "$d/opt/megit/megit" && ! -e "$d/ran" ]] && grep -q 'INSTALLED.*megit v0.12.0' <<<"${OUT}"; then
+  ok "14a: MeGit installed into megit/ against the asset digest, binary never run"
+else
+  ko "14a: rc=${RC} ran=$([[ -e "$d/ran" ]] && echo YES || echo no): ${OUT}"
+fi
+if grep -qx "Authorization: Bearer ${TOKEN}" "$d/headers.log" 2>/dev/null && ! grep -q "${TOKEN}" "$d/curl-argv.log"; then
+  ok "14b: the token went to api.github.com as a header on stdin, never in curl's argv"
+else
+  ko "14b: headers=$(cat "$d/headers.log" 2>&1) argv-has-token=$(grep -c "${TOKEN}" "$d/curl-argv.log")"
+fi
+L="$d/apps/megit.desktop"
+if desktop-file-validate "${L}" >/dev/null 2>&1 && grep -qx "Exec=$d/opt/megit/megit" "${L}" && grep -qx 'StartupWMClass=megit' "${L}" \
+  && grep -qx "Icon=$d/opt/megit/plugins/org.eclipse.platform_4.39.0.v1/eclipse512.png" "${L}"; then
+  ok "14c: megit.desktop valid (Exec, StartupWMClass=megit, the Eclipse platform icon)"
+else
+  ko "14c: megit.desktop: $(cat "${L}" 2>&1)"
+fi
+: >"$d/curl.log"
+_run "$d" --check --only=megit
+if grep -qE 'current.*megit v0.12.0' <<<"${OUT}" && [[ "$(_curl_calls "$d")" == 0 && ! -e "$d/ran" ]]; then ok "14d: --check reads v0.12.0 from the plugin jar name, offline"; else ko "14d: --check: ${OUT}"; fi
+
+# MeGit without a token: anonymous, no Authorization header at all.
+d="$(_fresh c14anon megit GLOBAL_STACK_MEGIT_VERSION v0.12.0)"
+_megit_release "$d" 0.12.0 x86_64 ''
+_run "$d" --apply --only=megit
+if [[ ${RC} -eq 0 ]] && grep -q 'INSTALLED.*megit v0.12.0' <<<"${OUT}" && ! grep -qi 'authorization' "$d/headers.log" 2>/dev/null; then
+  ok "14e: no token → anonymous call, no Authorization header, still installed"
+else
+  ko "14e: rc=${RC} headers=$(cat "$d/headers.log" 2>&1): ${OUT}"
+fi
+
+# MeGit: a wrong digest, and a release without the asset → the old tree is untouched.
+d="$(_fresh c14bad megit GLOBAL_STACK_MEGIT_VERSION v0.12.0)"
+_mk_megit_src "$d/old" 0.11.0 && mv "$d/old/MeGit" "$d/opt/megit"
+before="$(_fp "$d/opt/megit")"
+_megit_release "$d" 0.12.0 x86_64 "sha256:$(printf '0%.0s' {1..64})"
+_run "$d" --apply --only=megit
+if [[ ${RC} -ne 0 && "$(_fp "$d/opt/megit")" == "${before}" ]] && grep -q 'sha256 mismatch' <<<"${OUT}"; then
+  ok "14f: a digest mismatch fails and leaves the installed MeGit byte-identical"
+else
+  ko "14f: rc=${RC}: ${OUT}"
+fi
+d="$(_fresh c14noasset megit GLOBAL_STACK_MEGIT_VERSION v0.12.0)"
+_megit_release "$d" 0.12.0 aarch64 ''
+_run "$d" --apply --only=megit
+if [[ ${RC} -ne 0 ]] && grep -q 'megit-0.12.0-linux.gtk.x86_64.tar.gz' <<<"${OUT}" && ! grep -q '\.tar\.gz$' "$d/curl.log"; then
+  ok "14g: a release without the x86_64 asset fails naming it, nothing downloaded"
+else
+  ko "14g: rc=${RC}: ${OUT}; curl: $(cat "$d/curl.log")"
+fi
+
+# Etcher over an installed 2.1.7 (root setuid sandbox, as on the real machine).
+d="$(_fresh c14e balena_etcher GLOBAL_STACK_BALENA_ETCHER_VERSION v2.2.0)"
+_mk_etcher_tree "$d/opt/balena-etcher" 2.1.7 && chmod 4755 "$d/opt/balena-etcher/chrome-sandbox"
+_etcher_release "$d" 2.2.0 1
+_run "$d" --apply --only=balena_etcher
+sb_stage="$d/opt/.gs-staging/balena_etcher/x/balenaEtcher-linux-x64/chrome-sandbox"
+if [[ ${RC} -eq 0 && ! -e "$d/ran" ]] && grep -q 'INSTALLED.*balena_etcher v2.2.0' <<<"${OUT}"; then
+  ok "14h: Etcher v2.2.0 installed against SHA256SUMS.Linux.x64.txt, binary never run"
+else
+  ko "14h: rc=${RC} ran=$([[ -e "$d/ran" ]] && echo YES || echo no): ${OUT}"
+fi
+if grep -qx -- "-n chown root:root ${sb_stage}" "$d/sudo.log" 2>/dev/null && grep -qx -- "-n chmod 4755 ${sb_stage}" "$d/sudo.log" \
+  && [[ "$(stat -c %a "$d/opt/balena-etcher/chrome-sandbox")" == 4755 ]]; then
+  ok "14i: chrome-sandbox made root:root 4755 with sudo -n on the STAGED tree, before the swap"
+else
+  ko "14i: sudo.log=$(cat "$d/sudo.log" 2>&1) mode=$(stat -c %a "$d/opt/balena-etcher/chrome-sandbox" 2>&1)"
+fi
+L="$d/apps/balena-etcher.desktop"
+if desktop-file-validate "${L}" >/dev/null 2>&1 && grep -qx "Exec=$d/opt/balena-etcher/balena-etcher" "${L}" \
+  && grep -qx 'Categories=Utility;' "${L}" && ! grep -qE '^(Icon|StartupWMClass)=' "${L}"; then
+  ok "14j: balena-etcher.desktop valid (Exec, Utility, no Icon it does not ship, no unverified StartupWMClass)"
+else
+  ko "14j: balena-etcher.desktop: $(cat "${L}" 2>&1)"
+fi
+: >"$d/curl.log"
+_run "$d" --check --only=balena_etcher
+if grep -qE 'current.*balena_etcher v2.2.0' <<<"${OUT}" && [[ "$(_curl_calls "$d")" == 0 && ! -e "$d/ran" ]]; then ok "14k: --check reads v2.2.0 from the app.asar header, offline, without running it"; else ko "14k: --check: ${OUT}"; fi
+
+# Etcher with no cached sudo, and with SHA256SUMS not listing the zip.
+d="$(_fresh c14nosudo balena_etcher GLOBAL_STACK_BALENA_ETCHER_VERSION v2.2.0)"
+_mk_etcher_tree "$d/opt/balena-etcher" 2.1.7 && chmod 4755 "$d/opt/balena-etcher/chrome-sandbox"
+before="$(_fp "$d/opt/balena-etcher")"
+_etcher_release "$d" 2.2.0 1
+: >"$d/no-sudo"
+_run "$d" --apply --only=balena_etcher
+if [[ ${RC} -ne 0 && "$(_fp "$d/opt/balena-etcher")" == "${before}" && ! -e "$d/opt/.gs-staging/balena_etcher" ]] && grep -q 'chrome-sandbox' <<<"${OUT}" && grep -q 'sudo' <<<"${OUT}"; then
+  ok "14l: no cached sudo → FAILED naming chrome-sandbox and sudo; installed 2.1.7 byte-identical, staging gone"
+else
+  ko "14l: rc=${RC}: ${OUT}"
+fi
+d="$(_fresh c14nosum balena_etcher GLOBAL_STACK_BALENA_ETCHER_VERSION v2.2.0)"
+_etcher_release "$d" 2.2.0 0
+_run "$d" --apply --only=balena_etcher
+if [[ ${RC} -ne 0 ]] && grep -q 'balenaEtcher-linux-x64-2.2.0.zip' <<<"${OUT}" && ! grep -q '\.zip$' "$d/curl.log"; then
+  ok "14m: SHA256SUMS not listing the zip fails naming it, nothing downloaded"
+else
+  ko "14m: rc=${RC}: ${OUT}; curl: $(cat "$d/curl.log")"
+fi
+
+# aarch64: MeGit takes its aarch64 asset; Etcher (x86_64-only) is unsupported.
+d="$(_fresh c14arm megit GLOBAL_STACK_MEGIT_VERSION v0.12.0)"
+printf 'GLOBAL_STACK_BALENA_ETCHER_VERSION=v2.2.0\n' >>"$d/env.local"
+_megit_release "$d" 0.12.0 aarch64 ''
+OUT="$(env -i HOME="$d" PATH="${STUB_BIN}:/usr/bin:/bin" T="$d" USER=tester GS_UNU_OPT_MACHINE=aarch64 \
+  GS_UNU_OPT_ROOT="$d/opt" GS_UNU_OPT_APPS_DIR="$d/apps" GS_UNU_OPT_ENV_FILE="$d/env.local" GS_UNU_OPT_PROC_DIR="$d/proc" \
+  bash "${SUT}" --apply --only=megit,balena_etcher 2>&1)"
+RC=$?
+if [[ ${RC} -eq 0 && -d "$d/opt/megit" ]] && grep -qE 'unsupported.*balena_etcher.*aarch64' <<<"${OUT}" && ! grep -q 'etcher' "$d/curl.log"; then
+  ok "14n: aarch64 → MeGit's aarch64 asset installed; Etcher unsupported, nothing fetched"
+else
+  ko "14n: rc=${RC}: ${OUT}; curl: $(cat "$d/curl.log")"
 fi
 
 printf '\n'

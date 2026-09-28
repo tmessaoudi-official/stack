@@ -31,22 +31,24 @@ _OPT_MACHINE="${GS_UNU_OPT_MACHINE:-$(uname -m)}"
 # ── Tool table ────────────────────────────────────────────────────────────────
 # id → install dir (relative to the root), .env pin var, kind, launcher file name.
 # A kind supplies _opt_<kind>_installed / _resolve / _version / _launcher.
-_OPT_IDS=(idea phpstorm webstorm android_studio code devin sublime_text task bat sonar_scanner_cli)
+_OPT_IDS=(idea phpstorm webstorm android_studio code devin sublime_text megit balena_etcher task bat sonar_scanner_cli)
 declare -A _OPT_DIR=([idea]=jetbrains/idea [phpstorm]=jetbrains/phpstorm [webstorm]=jetbrains/webstorm
   [android_studio]=android-studio [code]=code [devin]=devin [sublime_text]=sublime_text
-  [task]=task [bat]=bat [sonar_scanner_cli]=sonar-scanner-cli)
+  [megit]=megit [balena_etcher]=balena-etcher [task]=task [bat]=bat [sonar_scanner_cli]=sonar-scanner-cli)
 declare -A _OPT_PIN=([idea]=GLOBAL_STACK_IDEA_VERSION [phpstorm]=GLOBAL_STACK_PHPSTORM_VERSION
   [webstorm]=GLOBAL_STACK_WEBSTORM_VERSION [android_studio]=GLOBAL_STACK_ANDROID_STUDIO_VERSION
   [code]=GLOBAL_STACK_VSCODE_VERSION [devin]=GLOBAL_STACK_DEVIN_VERSION
-  [sublime_text]=GLOBAL_STACK_SUBLIME_TEXT_VERSION [task]=GLOBAL_STACK_TASK_VERSION
+  [sublime_text]=GLOBAL_STACK_SUBLIME_TEXT_VERSION [megit]=GLOBAL_STACK_MEGIT_VERSION
+  [balena_etcher]=GLOBAL_STACK_BALENA_ETCHER_VERSION [task]=GLOBAL_STACK_TASK_VERSION
   [bat]=GLOBAL_STACK_BAT_VERSION [sonar_scanner_cli]=GLOBAL_STACK_SONAR_SCANNER_CLI_VERSION)
 declare -A _OPT_KIND=([idea]=jetbrains [phpstorm]=jetbrains [webstorm]=jetbrains [android_studio]=studio
-  [code]=vscode [devin]=devin [sublime_text]=sublime [task]=task [bat]=bat [sonar_scanner_cli]=sonar)
+  [code]=vscode [devin]=devin [sublime_text]=sublime [megit]=megit [balena_etcher]=etcher
+  [task]=task [bat]=bat [sonar_scanner_cli]=sonar)
 # Machines a row has an archive for (uname -m); default x86_64. Anything else is
 # reported unsupported and skipped — never fed an x86_64 archive. Linux only.
-declare -A _OPT_ARCHES=([sonar_scanner_cli]="x86_64 aarch64")
+declare -A _OPT_ARCHES=([sonar_scanner_cli]="x86_64 aarch64" [megit]="x86_64 aarch64")
 # The launcher keeps the name the hand-made one had, so no duplicate menu entry appears.
-declare -A _OPT_DESKTOP=([android_studio]=android-studio)
+declare -A _OPT_DESKTOP=([android_studio]=android-studio [balena_etcher]=balena-etcher)
 # JetBrains-built IDEs: product code in data.services.jetbrains.com, launcher
 # binary under bin/ (its icon is bin/<binary>.png), name, comment.
 declare -A _OPT_JB_CODE=([idea]=IIU [phpstorm]=PS [webstorm]=WS)
@@ -239,6 +241,116 @@ _opt_sublime_launcher() {
   _opt_plain_launcher "Sublime Text" "Text editor for code, markup and prose" "$2/sublime_text" "$2/Icon/256x256/sublime-text.png" "Utility;TextEditor;"
 }
 
+# ── GitHub API ───────────────────────────────────────────────────────────────
+# $1 path under api.github.com → JSON. Authenticated with GLOBAL_STACK_GITHUB_TOKEN
+# when the env file sets it (its own budget, not the 60/h anonymous one the stack
+# containers share); the header reaches curl on stdin, never in its argv.
+_opt_gh_api() {
+  local tok
+  tok="$(_opt_pin GLOBAL_STACK_GITHUB_TOKEN)"
+  if [[ -n "${tok}" ]]; then
+    printf 'Authorization: Bearer %s\n' "${tok}" | curl -fsSL --retry 2 -H @- "https://api.github.com/$1"
+  else
+    curl -fsSL --retry 2 "https://api.github.com/$1"
+  fi
+}
+
+# ── Kind: megit ──────────────────────────────────────────────────────────────
+# Tree MeGit/; the pin is the tag (vX.Y.Z), read back from the name of
+# plugins/com.eclipsesource.megit.plugin_<X.Y.Z>.<qualifier>.jar. MeGit publishes
+# no checksum file: the sha256 is the asset digest GitHub serves via its API.
+_opt_megit_version() {
+  local jar
+  for jar in "$2"/plugins/com.eclipsesource.megit.plugin_*.jar; do
+    [[ -f "${jar}" ]] || continue
+    jar="${jar##*/com.eclipsesource.megit.plugin_}"
+    [[ "${jar}" =~ ^([0-9]+\.[0-9]+\.[0-9]+) ]] && printf 'v%s\n' "${BASH_REMATCH[1]}"
+    return 0
+  done
+  return 0
+}
+_opt_megit_installed() { _opt_megit_version "$1" "${GS_UNU_OPT_ROOT}/${_OPT_DIR[$1]}"; }
+_opt_megit_resolve() { # $1 id $2 pin (vX.Y.Z)
+  local asset="megit-${2#v}-linux.gtk.${_OPT_MACHINE}.tar.gz" json row
+  json="$(_opt_gh_api "repos/eclipsesource/megit/releases/tags/$2")" || {
+    _opt_err FAILED "$1: release $2 not found on api.github.com"
+    return 1
+  }
+  row="$(jq -r --arg a "${asset}" '.assets[]? | select(.name == $a and ((.digest // "") | startswith("sha256:")))
+    | .browser_download_url + "\t" + (.digest | ltrimstr("sha256:"))' <<<"${json}" | head -n 1)"
+  [[ -n "${row}" ]] || {
+    _opt_err FAILED "$1: release $2 has no ${asset} with a sha256 digest"
+    return 1
+  }
+  printf '%s\n' "${row}"
+}
+# MeGit ships no icon of its own; its window shows the Eclipse platform's. The
+# StartupWMClass is the one the hand-made launcher carried.
+_opt_megit_launcher() {
+  local icon
+  for icon in "$2"/plugins/org.eclipse.platform_*/eclipse512.png; do
+    [[ -f "${icon}" ]] && break
+    icon=""
+  done
+  printf '[Desktop Entry]\nVersion=1.5\nType=Application\nName=MeGit\nComment=Git client\n'
+  printf 'Exec=%s/megit\nTryExec=%s/megit\n' "$2" "$2"
+  [[ -n "${icon}" ]] && printf 'Icon=%s\n' "${icon}"
+  printf 'Terminal=false\nCategories=Development;RevisionControl;\nStartupNotify=true\nStartupWMClass=megit\n'
+}
+
+# ── Kind: etcher (balenaEtcher) ──────────────────────────────────────────────
+# Tree balenaEtcher-linux-x64/ (Electron, Linux x64 only); the pin is the tag,
+# read back from package.json inside resources/app.asar via the asar header —
+# never by running it. sha256 from the release's SHA256SUMS.Linux.x64.txt
+# (releases/download, not the API). The zip carries no icon (it is compiled into
+# the binary), so the launcher has none.
+_opt_etcher_version() {
+  python3 - "$2/resources/app.asar" <<'PY'
+import json, struct, sys
+with open(sys.argv[1], "rb") as f:
+    _, size, _, jlen = struct.unpack("<IIII", f.read(16))
+    entry = json.loads(f.read(jlen))["files"]["package.json"]
+    f.seek(8 + size + int(entry["offset"]))
+    print("v" + json.loads(f.read(entry["size"]))["version"])
+PY
+}
+_opt_etcher_installed() {
+  local t="${GS_UNU_OPT_ROOT}/${_OPT_DIR[$1]}"
+  [[ -f "${t}/resources/app.asar" ]] && _opt_etcher_version "$1" "${t}"
+  return 0
+}
+_opt_etcher_resolve() { # $1 id $2 pin (vX.Y.Z)
+  local base="https://github.com/balena-io/etcher/releases/download/$2" zip="balenaEtcher-linux-x64-${2#v}.zip" sums sum
+  sums="$(curl -fsSL --retry 2 "${base}/SHA256SUMS.Linux.x64.txt")" || {
+    _opt_err FAILED "$1: SHA256SUMS.Linux.x64.txt for $2 not downloadable"
+    return 1
+  }
+  sum="$(awk -v z="${zip}" '$2 == z { print $1; exit }' <<<"${sums}")"
+  [[ -n "${sum}" ]] || {
+    _opt_err FAILED "$1: SHA256SUMS.Linux.x64.txt for $2 does not list ${zip}"
+    return 1
+  }
+  printf '%s\t%s\n' "${base}/${zip}" "${sum}"
+}
+# Electron refuses to start unless chrome-sandbox is root-owned setuid. Done on the
+# STAGED tree, so without cached sudo nothing changes: the install fails and says how.
+_opt_etcher_prepare() { # $1 id $2 staged tree
+  local sb="$2/chrome-sandbox"
+  [[ -f "${sb}" ]] || {
+    _opt_err FAILED "$1: the archive has no chrome-sandbox — Etcher could not start from it"
+    return 1
+  }
+  if ! { sudo -n chown root:root "${sb}" && sudo -n chmod 4755 "${sb}"; }; then
+    _opt_err FAILED "$1: chrome-sandbox must be root-owned setuid (4755) and sudo has no cached credentials — run 'sudo -v', then re-run; installed copy untouched"
+    return 1
+  fi
+}
+_opt_etcher_launcher() {
+  printf '[Desktop Entry]\nVersion=1.5\nType=Application\nName=balenaEtcher\nComment=Flash OS images to SD cards and USB drives\n'
+  printf 'Exec=%s/balena-etcher\nTryExec=%s/balena-etcher\n' "$2" "$2"
+  printf 'Terminal=false\nCategories=Utility;\nStartupNotify=true\n'
+}
+
 # ── CLI tools moved from global-unu.sh (on PATH via .profile, no launcher) ──
 # task: a FLAT archive (no top dir), sha256 from the release's task_checksums.txt
 # (github.com/…/releases/download, not the rate-limited API). Its version can only
@@ -384,6 +496,13 @@ _opt_install() {
   got="$("_opt_${kind}_version" "${id}" "${tree}" 2>/dev/null || true)"
   if [[ "${got}" != "${pin}" ]]; then
     _opt_err FAILED "${id}: the archive holds '${got}', not the pin ${pin} — installed copy untouched"
+    _opt_rm_staging "${stage}"
+    return 1
+  fi
+
+  # A kind may need one more step on the verified tree before it goes live (Etcher:
+  # a root setuid chrome-sandbox). It runs in staging, so a failure changes nothing.
+  if declare -F "_opt_${kind}_prepare" >/dev/null && ! "_opt_${kind}_prepare" "${id}" "${tree}"; then
     _opt_rm_staging "${stage}"
     return 1
   fi
