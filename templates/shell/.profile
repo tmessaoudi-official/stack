@@ -12,10 +12,6 @@ if [ -d "/opt/$USER/bat" ] ; then
     PATH="/opt/$USER/bat:$PATH"
 fi
 
-if [ -d "/opt/$USER/go/bin" ] ; then
-    PATH="/opt/$USER/go/bin:$PATH"
-fi
-
 if [ -d "${GLOBAL_STACK_DOCKER_TOOLS_PATH}"/go/bin ]; then 
     PATH="${GLOBAL_STACK_DOCKER_TOOLS_PATH}/go/bin:${PATH}"
 fi

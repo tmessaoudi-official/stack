@@ -101,9 +101,7 @@ SYSTEM_ARCH="$(uname -m)"
 # sparc: Architecture used in older Sun Microsystems workstations and servers.
 # loongarch64: A relatively new Chinese-developed architecture.
 
-SONAR_SCANNER_CLI_OPERATING_SYSTEM="${OPERATING_SYSTEM}"
 DIFFTASTIC_OPERATING_SYSTEM=""
-BAT_OPERATING_SYSTEM=""
 SOPS_OPERATING_SYSTEM=""
 
 DOCKER_COMPOSE_ARCH=""
@@ -111,11 +109,8 @@ DOCKER_BUILDX_ARCH=""
 HADOLINT_ARCH=""
 SHELLCHECK_ARCH=""
 GITLEAKS_ARCH=""
-SONAR_SCANNER_CLI_ARCH=""
 DIFFTASTIC_ARCH=""
 SHFMT_ARCH=""
-BAT_ARCH=""
-TASK_ARCH=""
 SOPS_ARCH=""
 YAMLFMT_ARCH=""
 RTK_ARCH=""
@@ -124,7 +119,6 @@ YQ_ARCH=""
 if [[ "linux" == "${OPERATING_SYSTEM}" ]]; then
 	DIFFTASTIC_OPERATING_SYSTEM="unknown-${OPERATING_SYSTEM}-gnu"
 	# @todo add linux-musl
-	BAT_OPERATING_SYSTEM="unknown-${OPERATING_SYSTEM}-gnu"
 	SOPS_OPERATING_SYSTEM="${OPERATING_SYSTEM}"
 	case "${SYSTEM_ARCH}" in
 	"aarch64")
@@ -133,7 +127,6 @@ if [[ "linux" == "${OPERATING_SYSTEM}" ]]; then
 		HADOLINT_ARCH="arm64"
 		SHELLCHECK_ARCH="${SYSTEM_ARCH}"
 		GITLEAKS_ARCH="arm64"
-		SONAR_SCANNER_CLI_ARCH="${SYSTEM_ARCH}"
 		DIFFTASTIC_ARCH="${SYSTEM_ARCH}"
 		SHFMT_ARCH="arm64"
 		RTK_ARCH="aarch64"
@@ -148,11 +141,11 @@ if [[ "linux" == "${OPERATING_SYSTEM}" ]]; then
 		;;
 	"armv6hf")
 		SHELLCHECK_ARCH="${SYSTEM_ARCH}"
-		echo "Unsupported system/architecture (docker compose)/(docker buildx)/hadolint/gitleaks/sonar-scanner-cli/difftastic/shfmt: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
+		echo "Unsupported system/architecture (docker compose)/(docker buildx)/hadolint/gitleaks/difftastic/shfmt: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
 		;;
 	"armv6lhf")
 		SHELLCHECK_ARCH="armv6hf"
-		echo "Unsupported system/architecture (docker compose)/(docker buildx)/hadolint/gitleaks/sonar-scanner-cli/difftastic/shfmt: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
+		echo "Unsupported system/architecture (docker compose)/(docker buildx)/hadolint/gitleaks/difftastic/shfmt: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
 		;;
 	"armv7l")
 		DOCKER_COMPOSE_ARCH="armv7"
@@ -164,18 +157,18 @@ if [[ "linux" == "${OPERATING_SYSTEM}" ]]; then
 	"ppc64le")
 		DOCKER_COMPOSE_ARCH="${SYSTEM_ARCH}"
 		DOCKER_BUILDX_ARCH="${SYSTEM_ARCH}"
-		echo "Unsupported system/architecture hadolint/shellcheck/gitleaks/sonar-scanner-cli/difftastic/shfmt: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
+		echo "Unsupported system/architecture hadolint/shellcheck/gitleaks/difftastic/shfmt: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
 		;;
 	"riscv64")
 		DOCKER_COMPOSE_ARCH="${SYSTEM_ARCH}"
 		DOCKER_BUILDX_ARCH="${SYSTEM_ARCH}"
 		SHELLCHECK_ARCH="${SYSTEM_ARCH}"
-		echo "Unsupported system/architecture hadolint/gitleaks/sonar-scanner-cli/difftastic/shfmt: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
+		echo "Unsupported system/architecture hadolint/gitleaks/difftastic/shfmt: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
 		;;
 	"s390x")
 		DOCKER_COMPOSE_ARCH="${SYSTEM_ARCH}"
 		DOCKER_BUILDX_ARCH="${SYSTEM_ARCH}"
-		echo "Unsupported system/architecture hadolint/shellcheck/gitleaks/sonar-scanner-cli/difftastic/shfmt: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
+		echo "Unsupported system/architecture hadolint/shellcheck/gitleaks/difftastic/shfmt: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
 		;;
 	"x86_64")
 		DOCKER_COMPOSE_ARCH="${SYSTEM_ARCH}"
@@ -183,11 +176,8 @@ if [[ "linux" == "${OPERATING_SYSTEM}" ]]; then
 		HADOLINT_ARCH="${SYSTEM_ARCH}"
 		SHELLCHECK_ARCH="${SYSTEM_ARCH}"
 		GITLEAKS_ARCH="x64"
-		SONAR_SCANNER_CLI_ARCH="x64"
 		DIFFTASTIC_ARCH="${SYSTEM_ARCH}"
 		SHFMT_ARCH="amd64"
-		BAT_ARCH="${SYSTEM_ARCH}"
-		TASK_ARCH="amd64"
 		SOPS_ARCH="amd64"
 		YAMLFMT_ARCH="${SYSTEM_ARCH}"
 		RTK_ARCH="x86_64"
@@ -204,15 +194,13 @@ if [[ "linux" == "${OPERATING_SYSTEM}" ]]; then
 		echo "Unsupported system/architecture (docker compose)/(docker buildx)/hadolint/shellcheck/sonar-scanner-cli/difftastic: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
 		;;
 	*)
-		echo "Unsupported system/architecture (docker compose)/(docker buildx)/hadolint/shellcheck/gitleaks/sonar-scanner-cli/difftastic/shfmt: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
+		echo "Unsupported system/architecture (docker compose)/(docker buildx)/hadolint/shellcheck/gitleaks/difftastic/shfmt: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
 		;;
 	esac
 fi
 
 if [[ "darwin" == "${OPERATING_SYSTEM}" ]]; then
-	SONAR_SCANNER_CLI_OPERATING_SYSTEM="macosx"
 	DIFFTASTIC_OPERATING_SYSTEM="apple-${OPERATING_SYSTEM}"
-	BAT_OPERATING_SYSTEM="apple-${OPERATING_SYSTEM}"
 	SOPS_OPERATING_SYSTEM="${OPERATING_SYSTEM}"
 	case "${SYSTEM_ARCH}" in
 	"aarch64")
@@ -220,7 +208,6 @@ if [[ "darwin" == "${OPERATING_SYSTEM}" ]]; then
 		DOCKER_BUILDX_ARCH="arm64"
 		SHELLCHECK_ARCH="${SYSTEM_ARCH}"
 		GITLEAKS_ARCH="arm64"
-		SONAR_SCANNER_CLI_ARCH="${SYSTEM_ARCH}"
 		DIFFTASTIC_ARCH="${SYSTEM_ARCH}"
 		SHFMT_ARCH="arm64"
 		RTK_ARCH="aarch64"
@@ -233,18 +220,15 @@ if [[ "darwin" == "${OPERATING_SYSTEM}" ]]; then
 		HADOLINT_ARCH="${SYSTEM_ARCH}"
 		SHELLCHECK_ARCH="${SYSTEM_ARCH}"
 		GITLEAKS_ARCH="x64"
-		SONAR_SCANNER_CLI_ARCH="x64"
 		DIFFTASTIC_ARCH="${SYSTEM_ARCH}"
 		SHFMT_ARCH="amd64"
-		BAT_ARCH="${SYSTEM_ARCH}"
-		TASK_ARCH="amd64"
 		SOPS_ARCH="amd64"
 		YAMLFMT_ARCH="${SYSTEM_ARCH}"
 		RTK_ARCH="x86_64"
 		YQ_ARCH="amd64"
 		;;
 	*)
-		echo "Unsupported system/architecture (docker compose)/(docker buildx)/hadolint/shellcheck/gitleaks/sonar-scanner-cli/difftastic/shfmt: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
+		echo "Unsupported system/architecture (docker compose)/(docker buildx)/hadolint/shellcheck/gitleaks/difftastic/shfmt: ${OPERATING_SYSTEM}/${SYSTEM_ARCH}"
 		;;
 	esac
 fi
@@ -338,25 +322,6 @@ if eval "${env_file_exists}"; then
 			fi
 		fi
 
-		if [[ "" != "${TASK_ARCH}" && -n "${GLOBAL_STACK_TASK_VERSION}" && "" != "${GLOBAL_STACK_TASK_VERSION}" ]]; then
-			if [ -f "/opt/${USER}/task/task" ]; then GLOBAL_UNU_TASK_VERSION="$(task --version | sed 's/Task version: //' | sed 's/ \(.*\)//')"; else GLOBAL_UNU_TASK_VERSION=0; fi
-			GLOBAL_UNU_TASK_LATEST="${GLOBAL_STACK_TASK_VERSION}"
-			if [ "${GLOBAL_UNU_TASK_LATEST}" != "v${GLOBAL_UNU_TASK_VERSION}" ]; then
-				echo "Updating/Installing task - ${OPERATING_SYSTEM}, arch : ${TASK_ARCH}"
-				rm -rf "/opt/${USER}/task"
-				TASK_ARCHIVE_NAME="task_${OPERATING_SYSTEM}_${TASK_ARCH}"
-				echo "https://github.com/go-task/task/releases/download/${GLOBAL_UNU_TASK_LATEST}/${TASK_ARCHIVE_NAME}.tar.gz"
-				curl -L https://github.com/go-task/task/releases/download/${GLOBAL_UNU_TASK_LATEST}/${TASK_ARCHIVE_NAME}.tar.gz -o "/opt/${USER}/${TASK_ARCHIVE_NAME}.tar.gz"
-				mkdir -p "/opt/${USER}/${TASK_ARCHIVE_NAME}"
-				tar -xf "/opt/${USER}/${TASK_ARCHIVE_NAME}.tar.gz" -C "/opt/${USER}/${TASK_ARCHIVE_NAME}"
-				mv "/opt/${USER}/${TASK_ARCHIVE_NAME}" "/opt/${USER}/task"
-				rm -rf "/opt/${USER}/${TASK_ARCHIVE_NAME}.tar.gz"
-				sudo chmod a+x "/opt/${USER}/task/task"
-			else
-				echo "Task is latest ${GLOBAL_UNU_TASK_VERSION}"
-			fi
-		fi
-
 		if [[ "" != "${YAMLFMT_ARCH}" && -n "${GLOBAL_STACK_YAMLFMT_VERSION}" && "" != "${GLOBAL_STACK_YAMLFMT_VERSION}" ]]; then
 			if [ -f ~/.local/bin/yamlfmt ]; then GLOBAL_UNU_YAMLFMT_VERSION="$(yamlfmt -version | sed 's/yamlfmt //' | sed 's/ \(.*\)//')"; else GLOBAL_UNU_YAMLFMT_VERSION=0; fi
 			if [ "${GLOBAL_STACK_YAMLFMT_VERSION}" != "v${GLOBAL_UNU_YAMLFMT_VERSION}" ]; then
@@ -389,27 +354,6 @@ if eval "${env_file_exists}"; then
 		fi
 	fi
 
-	if [ "" != "${SONAR_SCANNER_CLI_ARCH}" ] && [ "" != "${SONAR_SCANNER_CLI_OPERATING_SYSTEM}" ] && [ -n "${GLOBAL_STACK_SONAR_SCANNER_CLI_VERSION}" ] && [ "" != "${GLOBAL_STACK_SONAR_SCANNER_CLI_VERSION}" ]; then
-		if [ -f "/opt/${USER}/sonar-scanner-cli/bin/sonar-scanner" ]; then GLOBAL_UNU_SONAR_SCANNER_CLI_VERSION="$(sonar-scanner --version | grep 'SonarScanner.*' | sed 's/.*SonarScanner //' | sed 's/CLI //')"; else GLOBAL_UNU_SONAR_SCANNER_CLI_VERSION=0; fi
-		GLOBAL_UNU_SONAR_SCANNER_CLI_LATEST="${GLOBAL_STACK_SONAR_SCANNER_CLI_VERSION}"
-		if [ "${GLOBAL_UNU_SONAR_SCANNER_CLI_LATEST}" != "${GLOBAL_UNU_SONAR_SCANNER_CLI_VERSION}" ]; then
-			echo "Updating/Installing sonar-scanner-cli - ${SONAR_SCANNER_CLI_OPERATING_SYSTEM}, arch : ${SONAR_SCANNER_CLI_ARCH}"
-			rm -rf /opt/${USER}/sonar-scanner-cli
-			SONAR_SCANNER_CLI_ARCHIVE_NAME="sonar-scanner-cli-${GLOBAL_UNU_SONAR_SCANNER_CLI_LATEST}-${SONAR_SCANNER_CLI_OPERATING_SYSTEM}"
-			if [ "$(echo "${GLOBAL_UNU_SONAR_SCANNER_CLI_LATEST}" | sed 's@^[^0-9]*\([0-9]\+\).*@\1@')" -ge "6" ]; then
-				SONAR_SCANNER_CLI_ARCHIVE_NAME="${SONAR_SCANNER_CLI_ARCHIVE_NAME}-${SONAR_SCANNER_CLI_ARCH}"
-			fi
-			echo "https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/${SONAR_SCANNER_CLI_ARCHIVE_NAME}.zip"
-			curl -L https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/${SONAR_SCANNER_CLI_ARCHIVE_NAME}.zip -o "/opt/${USER}/${SONAR_SCANNER_CLI_ARCHIVE_NAME}.zip"
-			unzip "/opt/${USER}/${SONAR_SCANNER_CLI_ARCHIVE_NAME}.zip" -d "/opt/${USER}/"
-			mv "/opt/${USER}/$(echo "${SONAR_SCANNER_CLI_ARCHIVE_NAME}" | sed 's/sonar-scanner-cli-/sonar-scanner-/')" "/opt/${USER}/sonar-scanner-cli"
-			rm -rf "/opt/${USER}/${SONAR_SCANNER_CLI_ARCHIVE_NAME}.zip"
-			sudo chmod a+x "/opt/${USER}/sonar-scanner-cli/bin/sonar-scanner" "/opt/${USER}/sonar-scanner-cli/bin/sonar-scanner-debug"
-		else
-			echo "Sonar scanner cli is latest ${GLOBAL_UNU_SONAR_SCANNER_CLI_VERSION}"
-		fi
-	fi
-
 	if [ "" != "${DIFFTASTIC_ARCH}" ] && [ "" != "${DIFFTASTIC_OPERATING_SYSTEM}" ] && [ -n "${GLOBAL_STACK_DIFFTASTIC_VERSION}" ] && [ "" != "${GLOBAL_STACK_DIFFTASTIC_VERSION}" ]; then
 		if [ -f ~/.local/bin/difft ]; then GLOBAL_UNU_DIFFTASTIC_VERSION="$(difft --version | grep "Difftastic " | sed 's/Difftastic //' | sed 's/ \(.*\)//')"; else GLOBAL_UNU_DIFFTASTIC_VERSION=0; fi
 		GLOBAL_UNU_DIFFTASTIC_LATEST=$(echo "${GLOBAL_STACK_DIFFTASTIC_VERSION}" | sed 's/v//')
@@ -437,25 +381,6 @@ if eval "${env_file_exists}"; then
 			fi
 		else
 			echo "Difftastic is latest '${GLOBAL_UNU_DIFFTASTIC_VERSION}'"
-		fi
-	fi
-
-	if [ "" != "${BAT_ARCH}" ] && [ "" != "${BAT_OPERATING_SYSTEM}" ] && [ -n "${GLOBAL_STACK_BAT_VERSION}" ] && [ "" != "${GLOBAL_STACK_BAT_VERSION}" ]; then
-		if [ -f "/opt/${USER}/bat/bat" ]; then GLOBAL_UNU_BAT_VERSION="v$(bat --version | sed 's/bat //' | sed 's/ \(.*\)//')"; else GLOBAL_UNU_BAT_VERSION=0; fi
-		GLOBAL_UNU_BAT_LATEST="${GLOBAL_STACK_BAT_VERSION}"
-		if [ "${GLOBAL_UNU_BAT_LATEST}" != "${GLOBAL_UNU_BAT_VERSION}" ]; then
-			echo "Updating/Installing bat - ${BAT_OPERATING_SYSTEM}, arch : ${BAT_ARCH}"
-			rm -rf /opt/${USER}/bat
-			BAT_ARCHIVE_NAME="bat-${GLOBAL_UNU_BAT_LATEST}-${BAT_ARCH}-${BAT_OPERATING_SYSTEM}"
-			echo "https://github.com/sharkdp/bat/releases/download/${GLOBAL_UNU_BAT_LATEST}/${BAT_ARCHIVE_NAME}.tar.gz"
-			curl -L https://github.com/sharkdp/bat/releases/download/${GLOBAL_UNU_BAT_LATEST}/${BAT_ARCHIVE_NAME}.tar.gz -o "/opt/${USER}/${BAT_ARCHIVE_NAME}.tar.gz"
-			mkdir -p "/opt/${USER}/${BAT_ARCHIVE_NAME}"
-			tar -xzf "/opt/${USER}/${BAT_ARCHIVE_NAME}.tar.gz" --strip-components=1 -C "/opt/${USER}/${BAT_ARCHIVE_NAME}"
-			mv "/opt/${USER}/${BAT_ARCHIVE_NAME}" "/opt/${USER}/bat"
-			rm -rf "/opt/${USER}/${BAT_ARCHIVE_NAME}.tar.gz"
-			sudo chmod a+x "/opt/${USER}/bat/bat"
-		else
-			echo "Bat is latest ${GLOBAL_UNU_BAT_VERSION}"
 		fi
 	fi
 
@@ -560,5 +485,21 @@ fi
 
 # change python 3 path in podman compose
 # sed -i "s|\/usr\/bin\/python3|${GLOBAL_STACK_PYENV_ROOT}/versions/${GLOBAL_STACK_PYTHON3_VERSION}/bin/python3|g" ~/.local/bin/podman-compose
+
+# >>> gs-unu-opt — the tools under /opt/$USER (IDEs, task, bat, sonar-scanner-cli): pins,
+# installs and launchers live in global-unu-opt.sh, deployed NEXT TO this script
+# (templates/shell and ~/.local/bin). This script has no set -e, so a failure must stop
+# it here explicitly rather than fall through to "Successful".
+_gs_unu_opt="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/global-unu-opt.sh"
+if [[ ! -f "${_gs_unu_opt}" ]]; then
+	echo "global-unu-opt.sh not found next to global-unu.sh (${_gs_unu_opt}) — /opt tools not updated"
+	exit 1
+fi
+if ! bash "${_gs_unu_opt}" --apply; then
+	echo "global-unu-opt.sh reported a failure — see its output above"
+	exit 1
+fi
+unset _gs_unu_opt
+# <<< gs-unu-opt
 
 echo -e "Successful :)"

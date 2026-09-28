@@ -26,19 +26,25 @@ GS_UNU_OPT_APPS_DIR="${GS_UNU_OPT_APPS_DIR:-${XDG_DATA_HOME:-${HOME}/.local/shar
 GS_UNU_OPT_ENV_FILE="${GS_UNU_OPT_ENV_FILE:-${GLOBAL_STACK_DOCKER_ROOT_PATH:-/stack}/.env.local}"
 GS_UNU_OPT_PROC_DIR="${GS_UNU_OPT_PROC_DIR:-/proc}"
 _OPT_STAGING="${GS_UNU_OPT_ROOT}/.gs-staging"
+_OPT_MACHINE="${GS_UNU_OPT_MACHINE:-$(uname -m)}"
 
 # ── Tool table ────────────────────────────────────────────────────────────────
 # id → install dir (relative to the root), .env pin var, kind, launcher file name.
 # A kind supplies _opt_<kind>_installed / _resolve / _version / _launcher.
-_OPT_IDS=(idea phpstorm webstorm android_studio code devin sublime_text)
+_OPT_IDS=(idea phpstorm webstorm android_studio code devin sublime_text task bat sonar_scanner_cli)
 declare -A _OPT_DIR=([idea]=jetbrains/idea [phpstorm]=jetbrains/phpstorm [webstorm]=jetbrains/webstorm
-  [android_studio]=android-studio [code]=code [devin]=devin [sublime_text]=sublime_text)
+  [android_studio]=android-studio [code]=code [devin]=devin [sublime_text]=sublime_text
+  [task]=task [bat]=bat [sonar_scanner_cli]=sonar-scanner-cli)
 declare -A _OPT_PIN=([idea]=GLOBAL_STACK_IDEA_VERSION [phpstorm]=GLOBAL_STACK_PHPSTORM_VERSION
   [webstorm]=GLOBAL_STACK_WEBSTORM_VERSION [android_studio]=GLOBAL_STACK_ANDROID_STUDIO_VERSION
   [code]=GLOBAL_STACK_VSCODE_VERSION [devin]=GLOBAL_STACK_DEVIN_VERSION
-  [sublime_text]=GLOBAL_STACK_SUBLIME_TEXT_VERSION)
+  [sublime_text]=GLOBAL_STACK_SUBLIME_TEXT_VERSION [task]=GLOBAL_STACK_TASK_VERSION
+  [bat]=GLOBAL_STACK_BAT_VERSION [sonar_scanner_cli]=GLOBAL_STACK_SONAR_SCANNER_CLI_VERSION)
 declare -A _OPT_KIND=([idea]=jetbrains [phpstorm]=jetbrains [webstorm]=jetbrains [android_studio]=studio
-  [code]=vscode [devin]=devin [sublime_text]=sublime)
+  [code]=vscode [devin]=devin [sublime_text]=sublime [task]=task [bat]=bat [sonar_scanner_cli]=sonar)
+# Machines a row has an archive for (uname -m); default x86_64. Anything else is
+# reported unsupported and skipped — never fed an x86_64 archive. Linux only.
+declare -A _OPT_ARCHES=([sonar_scanner_cli]="x86_64 aarch64")
 # The launcher keeps the name the hand-made one had, so no duplicate menu entry appears.
 declare -A _OPT_DESKTOP=([android_studio]=android-studio)
 # JetBrains-built IDEs: product code in data.services.jetbrains.com, launcher
@@ -180,7 +186,7 @@ _opt_vscode_resolve() { # $1 id $2 pin
   }
 }
 _opt_vscode_launcher() {
-  _opt_plain_launcher "Visual Studio Code" "Code editor" "$2/code" "$2/resources/app/resources/linux/code.png" "Development;IDE;TextEditor;"
+  _opt_plain_launcher "Visual Studio Code" "Code editor" "$2/code" "$2/resources/app/resources/linux/code.png" "Development;IDE;"
 }
 
 # ── Kind: devin (Cognition's Windsurf build) ─────────────────────────────────
@@ -208,7 +214,7 @@ _opt_devin_resolve() { # $1 id $2 pin
   }
 }
 _opt_devin_launcher() {
-  _opt_plain_launcher Devin "AI code editor" "$2/devin-desktop" "$2/resources/app/resources/linux/code.png" "Development;IDE;TextEditor;"
+  _opt_plain_launcher Devin "AI code editor" "$2/devin-desktop" "$2/resources/app/resources/linux/code.png" "Development;IDE;"
 }
 
 # ── Kind: sublime ────────────────────────────────────────────────────────────
@@ -216,7 +222,7 @@ _opt_devin_launcher() {
 # "Build NNNN" of changelog.txt — read, never by running the staged binary, which
 # is unverified: Sublime publishes no checksum, so the build number is the only
 # check an install gets (logged NOCHECKSUM).
-_opt_sublime_version() { grep -oE -m 1 'Build [0-9]+' "$2/changelog.txt" | grep -oE '[0-9]+'; }
+_opt_sublime_version() { grep -oE -m 1 'Build [0-9]+' "$2/changelog.txt" | head -n 1 | grep -oE '[0-9]+'; }
 _opt_sublime_installed() {
   local t="${GS_UNU_OPT_ROOT}/${_OPT_DIR[$1]}"
   [[ -f "${t}/changelog.txt" ]] && _opt_sublime_version "$1" "${t}"
@@ -230,7 +236,72 @@ _opt_sublime_resolve() { # $1 id $2 pin
   printf 'https://download.sublimetext.com/sublime_text_build_%s_x64.tar.xz\tnone\n' "$2"
 }
 _opt_sublime_launcher() {
-  _opt_plain_launcher "Sublime Text" "Text editor for code, markup and prose" "$2/sublime_text" "$2/Icon/256x256/sublime-text.png" "TextEditor;Development;"
+  _opt_plain_launcher "Sublime Text" "Text editor for code, markup and prose" "$2/sublime_text" "$2/Icon/256x256/sublime-text.png" "Utility;TextEditor;"
+}
+
+# ── CLI tools moved from global-unu.sh (on PATH via .profile, no launcher) ──
+# task: a FLAT archive (no top dir), sha256 from the release's task_checksums.txt
+# (github.com/…/releases/download, not the rate-limited API). Its version can only
+# be read by running it — the installed copy, or a staged one that passed that sha256.
+_opt_task_root() { printf '%s' "$1"; }
+_opt_task_version() { # "Task version: v3.x (…)" (old) or "3.53.1"
+  "$2/task" --version 2>/dev/null | head -n 1 | sed -E 's/^Task version: //; s/ .*//; s/^v?/v/'
+}
+_opt_task_installed() {
+  local t="${GS_UNU_OPT_ROOT}/${_OPT_DIR[$1]}"
+  [[ -x "${t}/task" ]] && _opt_task_version "$1" "${t}"
+  return 0
+}
+_opt_task_resolve() { # $1 id $2 pin (vX.Y.Z)
+  local base="https://github.com/go-task/task/releases/download/$2" sums sum
+  sums="$(curl -fsSL --retry 2 "${base}/task_checksums.txt")" || {
+    _opt_err FAILED "$1: task_checksums.txt for $2 not downloadable"
+    return 1
+  }
+  sum="$(awk '$2 == "task_linux_amd64.tar.gz" { print $1; exit }' <<<"${sums}")"
+  [[ -n "${sum}" ]] || {
+    _opt_err FAILED "$1: task_checksums.txt for $2 does not list task_linux_amd64.tar.gz"
+    return 1
+  }
+  printf '%s\t%s\n' "${base}/task_linux_amd64.tar.gz" "${sum}"
+}
+
+# bat: publishes no checksum (neither a .sha256 nor a sums file); its version is
+# the first "# vX.Y.Z" heading of CHANGELOG.md — read, never by running the binary.
+_opt_bat_version() { grep -m 1 -oE '^# v[0-9][0-9.]*' "$2/CHANGELOG.md" | sed 's/^# //'; }
+_opt_bat_installed() {
+  local t="${GS_UNU_OPT_ROOT}/${_OPT_DIR[$1]}"
+  [[ -f "${t}/CHANGELOG.md" ]] && _opt_bat_version "$1" "${t}"
+  return 0
+}
+_opt_bat_resolve() {
+  printf 'https://github.com/sharkdp/bat/releases/download/%s/bat-%s-x86_64-unknown-linux-gnu.tar.gz\tnone\n' "$2" "$2"
+}
+
+# sonar-scanner-cli: a zip per arch with a bare-hash .sha256 beside it; version =
+# lib/sonar-scanner-cli-<v>.jar. Its pin is shared with 00base (container install).
+_opt_sonar_version() {
+  local jar
+  for jar in "$2"/lib/sonar-scanner-cli-*.jar; do
+    [[ -f "${jar}" ]] || continue
+    jar="${jar##*/sonar-scanner-cli-}"
+    printf '%s\n' "${jar%.jar}"
+    return 0
+  done
+}
+_opt_sonar_installed() { _opt_sonar_version "$1" "${GS_UNU_OPT_ROOT}/${_OPT_DIR[$1]}"; }
+_opt_sonar_resolve() { # $1 id $2 pin
+  local arch url sum
+  case "${_OPT_MACHINE}" in
+    x86_64) arch=x64 ;;
+    aarch64) arch=aarch64 ;;
+  esac
+  url="https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-$2-linux-${arch}.zip"
+  sum="$(curl -fsSL --retry 2 "${url}.sha256")" || {
+    _opt_err FAILED "$1: ${url##*/}.sha256 not downloadable"
+    return 1
+  }
+  printf '%s\t%s\n' "${url}" "${sum%% *}"
 }
 
 # ── Engine ───────────────────────────────────────────────────────────────────
@@ -304,7 +375,9 @@ _opt_install() {
     _opt_rm_staging "${stage}"
     return 1
   fi
-  if ! _opt_extract "${stage}/archive" "${url}" "${stage}/x" || ! tree="$(_opt_single_root "${stage}/x")"; then
+  local root_fn=_opt_single_root
+  declare -F "_opt_${kind}_root" >/dev/null && root_fn="_opt_${kind}_root"
+  if ! _opt_extract "${stage}/archive" "${url}" "${stage}/x" || ! tree="$("${root_fn}" "${stage}/x")"; then
     _opt_rm_staging "${stage}"
     return 1
   fi
@@ -420,6 +493,10 @@ main() {
   local failed=0 pin cur rc
   _OPT_LAUNCHERS_CHANGED=0
   for id in "${ids[@]}"; do
+    if [[ " ${_OPT_ARCHES[${id}]:-x86_64} " != *" ${_OPT_MACHINE} "* ]]; then
+      _opt_log unsupported "${id}: no ${_OPT_MACHINE} build is published — skipped"
+      continue
+    fi
     pin="$(_opt_pin "${_OPT_PIN[${id}]}")"
     cur="$("_opt_${_OPT_KIND[${id}]}_installed" "${id}")"
     if [[ -z "${pin}" ]]; then
@@ -433,7 +510,8 @@ main() {
       _opt_install "${id}" "${pin}" || rc=$?
       ((rc == 1)) && failed=1
     fi
-    if [[ "${mode}" == apply && -d "${GS_UNU_OPT_ROOT}/${_OPT_DIR[${id}]}" ]]; then
+    if [[ "${mode}" == apply && -d "${GS_UNU_OPT_ROOT}/${_OPT_DIR[${id}]}" ]] \
+      && declare -F "_opt_${_OPT_KIND[${id}]}_launcher" >/dev/null; then
       _opt_launcher "${id}" || failed=1
     fi
   done

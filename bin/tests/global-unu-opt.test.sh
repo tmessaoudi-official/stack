@@ -546,6 +546,135 @@ else
   ko "11 sublime_text: NOCHECKSUM missing or the binary ran: ${OUT}"
 fi
 
+# ═════════════════════════════════════════════════════════════════════════════
+section "12. CLI rows moved from global-unu.sh: task, bat, sonar-scanner-cli"
+# Shapes from the real releases (2026-09-28): task → a FLAT tar.gz (no top dir)
+# listed in task_checksums.txt; bat → bat-<v>-x86_64-unknown-linux-gnu/, NO
+# published checksum, version = first "# v…" of CHANGELOG.md; sonar →
+# sonar-scanner-<v>-linux-<arch>/ in a zip with a bare-hash .sha256 next to it,
+# version = lib/sonar-scanner-cli-<v>.jar. No launchers: they are on PATH.
+
+# task
+d="$(_fresh c12task task GLOBAL_STACK_TASK_VERSION v3.54.0)"
+mkdir -p "$d/src/flat"
+printf '#!/bin/sh\necho 3.54.0\n' >"$d/src/flat/task" && chmod +x "$d/src/flat/task"
+printf 'readme\n' >"$d/src/flat/README.md"
+tar -czf "$d/srv/task_linux_amd64.tar.gz" -C "$d/src/flat" task README.md
+printf '%s  task_3.54.0_linux_amd64.deb\n%s  task_linux_amd64.tar.gz\n' "$(printf '%064d' 1)" "$(sha256sum "$d/srv/task_linux_amd64.tar.gz" | cut -d' ' -f1)" >"$d/srv/sums"
+printf '%s\t%s\n' \
+  'https://github.com/go-task/task/releases/download/v3.54.0/task_linux_amd64.tar.gz' "$d/srv/task_linux_amd64.tar.gz" \
+  'https://github.com/go-task/task/releases/download/v3.54.0/task_checksums.txt' "$d/srv/sums" >>"$d/routes"
+_run "$d" --apply --only=task
+if [[ ${RC} -eq 0 && -x "$d/opt/task/task" && -f "$d/opt/task/README.md" ]] && grep -q 'INSTALLED.*task v3.54.0' <<<"${OUT}"; then
+  ok "12 task: flat archive installed into task/ (checksum from task_checksums.txt)"
+else
+  ko "12 task: rc=${RC}: ${OUT}; tree: $(ls -A "$d/opt/task" 2>&1)"
+fi
+if [[ -z "$(ls -A "$d/apps")" ]]; then ok "12 task: no launcher for a CLI tool"; else ko "12 task: wrote a launcher: $(ls "$d/apps")"; fi
+: >"$d/curl.log"
+_run "$d" --check --only=task
+if grep -qE 'current.*task v3.54.0' <<<"${OUT}" && [[ "$(_curl_calls "$d")" == 0 ]]; then ok "12 task: --check reads v3.54.0 back, offline"; else ko "12 task: --check: ${OUT}"; fi
+d="$(_fresh c12task2 task GLOBAL_STACK_TASK_VERSION v3.54.0)"
+cp "${TMP_DIR}/c12task/srv/task_linux_amd64.tar.gz" "$d/srv/"
+printf '%s  task_linux_amd64.tar.gz\n' "$(printf '%064d' 7)" >"$d/srv/sums"
+printf '%s\t%s\n' \
+  'https://github.com/go-task/task/releases/download/v3.54.0/task_linux_amd64.tar.gz' "$d/srv/task_linux_amd64.tar.gz" \
+  'https://github.com/go-task/task/releases/download/v3.54.0/task_checksums.txt' "$d/srv/sums" >>"$d/routes"
+_run "$d" --apply --only=task
+if [[ ${RC} -ne 0 && ! -e "$d/opt/task" ]]; then ok "12 task: a checksums.txt that disagrees → nothing installed"; else ko "12 task: bad checksum installed anyway (rc=${RC}): ${OUT}"; fi
+
+# bat: no checksum; version from CHANGELOG.md; the staged binary never runs
+d="$(_fresh c12bat bat GLOBAL_STACK_BAT_VERSION v0.27.0)"
+top=bat-v0.27.0-x86_64-unknown-linux-gnu
+mkdir -p "$d/src/${top}"
+printf '# v0.27.0\n\n## Features\n\n# v0.26.1\n' >"$d/src/${top}/CHANGELOG.md"
+printf '#!/bin/sh\necho RAN >"%s/ran"\n' "$d" >"$d/src/${top}/bat" && chmod +x "$d/src/${top}/bat"
+_pack "$d" "${top}" "https://github.com/sharkdp/bat/releases/download/v0.27.0/${top}.tar.gz" z
+_run "$d" --apply --only=bat
+if [[ ${RC} -eq 0 && -x "$d/opt/bat/bat" && ! -e "$d/ran" ]] && grep -q 'NOCHECKSUM.*bat' <<<"${OUT}"; then
+  ok "12 bat: installed on its CHANGELOG version, NOCHECKSUM logged, binary never executed"
+else
+  ko "12 bat: rc=${RC} ran=$([[ -e "$d/ran" ]] && echo YES || echo no): ${OUT}"
+fi
+_run "$d" --check --only=bat
+if grep -qE 'current.*bat v0.27.0' <<<"${OUT}" && [[ ! -e "$d/ran" ]]; then ok "12 bat: --check current without running bat"; else ko "12 bat: --check: ${OUT}"; fi
+
+# sonar-scanner-cli (zip)
+_mk_sonar() { # $1 case dir  $2 version  $3 arch
+  local top="sonar-scanner-$2-linux-$3"
+  mkdir -p "$1/src/${top}/lib" "$1/src/${top}/bin"
+  printf 'jar' >"$1/src/${top}/lib/sonar-scanner-cli-$2.jar"
+  printf '#!/bin/sh\n' >"$1/src/${top}/bin/sonar-scanner" && chmod +x "$1/src/${top}/bin/sonar-scanner"
+  (cd "$1/src" && zip -qr "$1/srv/sonar-scanner-cli-$2-linux-$3.zip" "${top}")
+  sha256sum "$1/srv/sonar-scanner-cli-$2-linux-$3.zip" | cut -d' ' -f1 | tr -d '\n' >"$1/srv/zip.sha256"
+  printf '%s\t%s\n' \
+    "https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-$2-linux-$3.zip" "$1/srv/sonar-scanner-cli-$2-linux-$3.zip" \
+    "https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-$2-linux-$3.zip.sha256" "$1/srv/zip.sha256" >>"$1/routes"
+}
+d="$(_fresh c12sonar sonar_scanner_cli GLOBAL_STACK_SONAR_SCANNER_CLI_VERSION 8.2.0.7000)"
+_mk_sonar "$d" 8.2.0.7000 x64
+_run "$d" --apply --only=sonar_scanner_cli
+if [[ ${RC} -eq 0 && -x "$d/opt/sonar-scanner-cli/bin/sonar-scanner" ]] && grep -q 'INSTALLED.*sonar_scanner_cli 8.2.0.7000' <<<"${OUT}"; then
+  ok "12 sonar: zip installed into sonar-scanner-cli/ (bare-hash .sha256)"
+else
+  ko "12 sonar: rc=${RC}: ${OUT}"
+fi
+_run "$d" --check --only=sonar_scanner_cli
+if grep -qE 'current.*sonar_scanner_cli 8.2.0.7000' <<<"${OUT}"; then ok "12 sonar: --check reads the jar version back"; else ko "12 sonar: --check: ${OUT}"; fi
+
+# Architecture: aarch64 gets sonar's aarch64 zip; tools published for x86_64 only
+# are reported unsupported — never fed an x86_64 archive, never a failure.
+d="$(_fresh c12arm sonar_scanner_cli GLOBAL_STACK_SONAR_SCANNER_CLI_VERSION 8.2.0.7000)"
+printf 'GLOBAL_STACK_TASK_VERSION=v3.54.0\nGLOBAL_STACK_IDEA_VERSION=2026.3.1\n' >>"$d/env.local"
+_mk_sonar "$d" 8.2.0.7000 aarch64
+OUT="$(env -i HOME="$d" PATH="${STUB_BIN}:/usr/bin:/bin" T="$d" USER=tester GS_UNU_OPT_MACHINE=aarch64 \
+  GS_UNU_OPT_ROOT="$d/opt" GS_UNU_OPT_APPS_DIR="$d/apps" GS_UNU_OPT_ENV_FILE="$d/env.local" GS_UNU_OPT_PROC_DIR="$d/proc" \
+  bash "${SUT}" --apply --only=sonar_scanner_cli,task,idea 2>&1)"
+RC=$?
+if [[ ${RC} -eq 0 && -d "$d/opt/sonar-scanner-cli" ]] && grep -qE 'unsupported.*task.*aarch64' <<<"${OUT}" && grep -qE 'unsupported.*idea.*aarch64' <<<"${OUT}" \
+  && ! grep -qE 'task_linux|idea-' "$d/curl.log"; then
+  ok "12 arch: aarch64 → sonar's aarch64 zip installed; task and idea unsupported (nothing fetched, exit 0)"
+else
+  ko "12 arch: rc=${RC}: ${OUT}; curl: $(cat "$d/curl.log")"
+fi
+
+# ═════════════════════════════════════════════════════════════════════════════
+section "13. global-unu.sh runs it last, with --apply"
+# The hook is the "# >>> gs-unu-opt" … "# <<< gs-unu-opt" block of the SHIPPED
+# global-unu.sh, extracted by anchor (never by line number) and run next to a stub
+# global-unu-opt.sh — the whole script would run apt, snap and curl.
+UNU="${REPO_ROOT}/templates/shell/global-unu.sh"
+HOOK="$(sed -n '/^# >>> gs-unu-opt/,/^# <<< gs-unu-opt/p' "${UNU}")"
+if [[ "$(grep -c . <<<"${HOOK}")" -ge 4 ]]; then ok "13-: hook block extracted ($(grep -c . <<<"${HOOK}") lines)"; else ko "13-: no '# >>> gs-unu-opt' block in global-unu.sh — every 13x below is vacuous"; fi
+# $1 case  $2 stub body ('' = no sibling) → OUT, RC
+_hook_run() {
+  local d="${TMP_DIR}/$1"
+  mkdir -p "$d"
+  printf '%s\n' "${HOOK}" >"$d/global-unu.sh"
+  [[ -n "$2" ]] && printf '#!/usr/bin/env bash\necho "ARGS:$*" >"%s/args"\n%s\n' "$d" "$2" >"$d/global-unu-opt.sh"
+  OUT="$(cd / && env -i PATH=/usr/bin:/bin bash "$d/global-unu.sh" 2>&1)"
+  RC=$?
+}
+_hook_run c13a 'exit 0'
+if [[ ${RC} -eq 0 && "$(cat "${TMP_DIR}/c13a/args")" == "ARGS:--apply" ]]; then ok "13a: calls the sibling global-unu-opt.sh with --apply (found from its own dir, cwd /)"; else ko "13a: rc=${RC} args=$(cat "${TMP_DIR}/c13a/args" 2>&1): ${OUT}"; fi
+_hook_run c13b 'exit 1'
+if [[ ${RC} -ne 0 ]] && grep -q 'global-unu-opt.sh' <<<"${OUT}"; then ok "13b: a failing installer fails global-unu.sh (exit ${RC}), named"; else ko "13b: rc=${RC}: ${OUT}"; fi
+_hook_run c13c ''
+if [[ ${RC} -ne 0 ]] && grep -q 'not found' <<<"${OUT}"; then ok "13c: a missing sibling fails loudly (exit ${RC})"; else ko "13c: rc=${RC}: ${OUT}"; fi
+last_other="$(grep -nE '^(if |[a-z_]+\(\)|curl |sudo )' "${UNU}" | tail -n 1 | cut -d: -f1)"
+hook_end="$(grep -n '^# <<< gs-unu-opt' "${UNU}" | cut -d: -f1)"
+succ="$(grep -n 'echo -e "Successful :)"' "${UNU}" | cut -d: -f1)"
+if [[ -n "${hook_end}" && -n "${succ}" && "${hook_end}" -lt "${succ}" && "${last_other}" -lt "${hook_end}" ]]; then
+  ok "13d: the hook is the last step, before 'Successful :)'"
+else
+  ko "13d: hook end=${hook_end} last other step=${last_other} Successful=${succ}"
+fi
+if ! grep -qE '/opt/\$\{USER\}/(task|bat|sonar-scanner-cli)|GLOBAL_STACK_(TASK|BAT|SONAR_SCANNER_CLI)_VERSION' "${UNU}"; then
+  ok "13e: global-unu.sh no longer installs task, bat or sonar-scanner-cli itself"
+else
+  ko "13e: global-unu.sh still installs a moved tool: $(grep -nE '/opt/\$\{USER\}/(task|bat|sonar)|GLOBAL_STACK_(TASK|BAT|SONAR_SCANNER_CLI)_VERSION' "${UNU}" | head -3)"
+fi
+
 printf '\n'
 if ((FAIL == 0)); then
   printf '  %bALL PASSED%b   ✓ %d / %d\n' "${C_GREEN}" "${C_RESET}" "${PASS}" "$((PASS + FAIL))"
