@@ -22,6 +22,7 @@ already keeps `task`, `bat` and `sonar-scanner-cli`.
 - [2026-09-28 21:55] ASSUMED (review): bat is installed with NO checksum (NOCHECKSUM; version from CHANGELOG.md, never executed) — because bat publishes no checksum file (.sha256 and SHA256SUMS both 404), and the GitHub asset digest costs one api.github.com call per install against the 60/h budget fvm/elasticmq share during a hard restart. Parity with the old global-unu.sh, which never verified bat. Alternatives: digest lookup via the API at install time.
 - [2026-09-28 21:58] AGREED: bat: no checksum (ratifies ASSUMED 21:55). The developer asked for ONE /tmp script with everything they must run: PhpStorm move, step 8 deploy, ~/.profile fix, --check, --apply (only if everything is current), archive cleanup.
 - [2026-09-28 22:08] AGREED: Step 8 deployed by the developer's one-shot /tmp/deploy-opt-updater-20260928.sh: all 10 rows current, 7 managed launchers valid, 5865 MiB of archives freed. Next: step 5 (MeGit + Etcher) once the stack is healthy.
+- [2026-09-28 22:44] AGREED: Developer ran the deployed global-unu.sh end to end: it succeeded with the /opt hook. Next: full cold make hard-restart, then step 5 (MeGit + Etcher).
 
 ## Inventory (2026-09-28, read from each tool's own metadata)
 
@@ -197,7 +198,6 @@ JetBrains-built four, `%F` on the three editors, Sublime icon 48x48 → 256x256,
 - `make hard-restart` runs `yes y | global-unu.sh`, so once step 7 lands a hard restart also installs any IDE whose pin moved.
 - `Makefile:306` is `yes y | global-unu.sh || echo 'script does not exit'`: a failed IDE install makes global-unu exit non-zero, and hard-restart swallows it with a misleading message — the only signal there is the script's own output.
 - The `# >>> gs-unu-opt` hook runs OUTSIDE global-unu.sh's `.env.local` guard (it must stay the last step, after docker-reclaim): with no `.env.local`, every /opt tool reads `unmanaged` and nothing installs, but launchers of installed trees are still rewritten.
-- `global-unu.sh` as a whole has never run with the hook: only the extracted block (§13) and `bash -n`. Step 8 ran `global-unu-opt.sh` directly, not through `global-unu.sh`, so the hook's first real run is still the next `global-unu.sh` / hard restart.
 ### Known issues
 - `megit.desktop` is still hand-made and fails `desktop-file-validate` (unregistered Categories `GIT`/`Version`/`Dev`, app version in `Version=`) until step 5 manages it. The other 7 were replaced at step 8 by managed launchers that validate (the old ones: `~/.local/share/gs-launchers-bak.1790626060/`).
 - Launcher incident (2026-09-28 ~21:59): a sandbox run of the step-8 deploy script set `HOME_DIR` but did not pass `GS_UNU_OPT_APPS_DIR`, so the engine's `$HOME` default made `--apply` overwrite the 7 REAL hand-made launchers with sandbox paths. They were restored from a session dump that had dropped blank lines and cut the commented `#MimeType` lines at 160 chars (every live key intact), so `gs-launchers-bak.1790626060/` holds that reconstruction, not the byte-exact originals. The deploy script was fixed (explicit apps dir, launcher backup, before/after fingerprint of the real dir) before the developer ran it.
@@ -207,4 +207,5 @@ JetBrains-built four, `%F` on the three editors, Sublime icon 48x48 → 256x256,
 - `--check` on the real `/opt/developer`: all 10 rows `current`.
 - `--apply` downloaded nothing and wrote 7 launchers; all pass `desktop-file-validate`, and every TryExec and Icon resolves on disk.
 - 7 hand-downloaded archives deleted, 5865 MiB freed; MeGit's and Etcher's kept for step 5.
-- Still unproven: a real `--apply` that installs a new version into `/opt`, and a full `global-unu.sh` run with the hook.
+- Full `global-unu.sh` run with the hook: the developer reports it succeeded (2026-09-28, after step 8); afterwards all 10 rows read current, the 7 launchers kept their step-8 mtime (not rewritten) and no `.gs-staging` was left.
+- Still unproven: a real `--apply` that installs a NEW version into `/opt` (first pin bump), and the hook inside `make hard-restart`.
