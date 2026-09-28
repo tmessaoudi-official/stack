@@ -28,7 +28,7 @@ Implement AFTER the bring-up settles — nothing changes while the stack is stil
 <!-- progress-block v1 -->
 | # | Step | Size | State | Evidence | Files |
 |---|------|------|-------|----------|-------|
-| 1 | Postgres TCP healthcheck + PGCTLTIMEOUT | S | done | - | docker/images/01postgres18/**, bin/tests/postgres-healthcheck.test.sh |
+| 1 | Postgres TCP healthcheck + PGCTLTIMEOUT | S | done | 481c889 | docker/images/01postgres18/**, bin/tests/postgres-healthcheck.test.sh |
 | 2 | SonarQube error token + retry | M | todo | - | docker/config/dist/bin/sonarqube-bin/**, docker/images/02sonarqube/** |
 | 3 | rbenv install/rehash serialization | M | todo | - | docker/config/dist/bin/rbenv-bin/** |
 | 4 | SDKMAN download stall limit | S | todo | - | docker/config/dist/bin/sdkman-bin/** |
