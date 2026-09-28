@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests docker/config/dist/bin/sonarqube-bin/global-stack-start-sonarqube.sh — that an
 # UNREQUESTED SonarQube exit is reported and retried, and a requested stop is not.
-# Run: bash bin/tests/sonarqube-start.test.sh   (~15 s; no docker needed)
+# Run: bash bin/tests/sonarqube-start.test.sh   (~15 s; no docker needed; §3 reads the compose file)
 #
 # 2026-09-28 cold start: SonarQube could not reach Postgres, logged "SonarQube is
 # stopped" and exited 0. `restart: on-failure:5` never restarts an exit 0, and the
@@ -168,6 +168,34 @@ for sig in INT TERM; do
     ko "2-${sig}: a requested stop wrote errors/${TOKEN} — a false failure"
   fi
 done
+
+printf '\n%b3. Compose: the healthcheck honours the token, and the token invariant holds%b\n' "${C_BOLD}" "${C_RESET}"
+# Text-level, so this suite still needs no docker. The token is useless unless the
+# healthcheck reads it, and the invariant says the error token and the success
+# marker (the elapsed wrapper's service argument) are the SAME identifier.
+COMPOSE="${REPO_ROOT}/docker/images/02sonarqube/docker-compose.yaml"
+env_token="$(sed -n 's/^[[:space:]]*- GLOBAL_STACK_ERROR_TOKEN=\([^[:space:]]*\).*/\1/p' "${COMPOSE}")"
+hc_line="$(grep -E '^[[:space:]]+test:.*healthcheck-elapsed\.sh' "${COMPOSE}")"
+wrapper_arg="$(sed -n 's/.*healthcheck-elapsed\.sh \([^ ]*\) .*/\1/p' <<<"${hc_line}")"
+# shellcheck disable=SC2016  # matches the literal ${…} text in the compose file
+hc_token="$(sed -n 's/.*! test -f \${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}\/\([^ ]*\) &&.*/\1/p' <<<"${hc_line}")"
+if [[ -z "${hc_line}" ]]; then
+  ko "3a: no elapsed-wrapper healthcheck line found in ${COMPOSE##*/} — nothing to check"
+elif [[ "${env_token}" == "${TOKEN}" ]]; then
+  ok "3a: compose declares GLOBAL_STACK_ERROR_TOKEN=${TOKEN}"
+else
+  ko "3a: compose GLOBAL_STACK_ERROR_TOKEN is '${env_token}', expected '${TOKEN}'"
+fi
+if [[ -n "${hc_token}" && "${hc_token}" == "${env_token}" ]]; then
+  ok "3b: the healthcheck fails while errors/${hc_token} exists"
+else
+  ko "3b: the healthcheck does not test errors/<token> (found '${hc_token}') — a written token would be ignored"
+fi
+if [[ -n "${wrapper_arg}" && "${wrapper_arg}" == "${env_token}" ]]; then
+  ok "3c: success marker (wrapper argument '${wrapper_arg}') and error token are the same identifier"
+else
+  ko "3c: token invariant broken — success marker '${wrapper_arg}' vs error token '${env_token}'"
+fi
 
 printf '\n'
 if ((FAIL == 0)); then
