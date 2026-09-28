@@ -2964,9 +2964,10 @@ t "t32h: sdkman Java EA release (ea distribution suffix) filtered out in stable 
 # grep -oE restarted mid-token and yielded "1.1-zulu", which the major filter then
 # dropped — every zulu candidate vanished before selection, the preferred-dist tier
 # was always empty, and selection fell through to -tem (17/26) or -sem (21).
-# The broker only serves the BASE form (17.0.20-zulu → 302; 17.0.20+1.1-zulu → 404),
-# so the proposal must be normalised back to base-dist form, not left as advertised.
-t "t32i: sdkman Java +build identifiers — zulu preserved and normalised to base form" bash -c "
+# The base form (17.0.20-zulu) is a LEGACY alias the broker still serves for releases
+# that predate +build ids; a pin already naming the same release must stay as it is
+# (up to date), never read as a downgrade from the listed 17.0.20+1.1-zulu.
+t "t32i: sdkman Java +build identifiers — zulu preserved, legacy base pin of same release kept" bash -c "
     ${_SDK_LIBS}
     _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
     _gs_eu2_record_set \$idx type            'sdkman'
@@ -2977,7 +2978,7 @@ t "t32i: sdkman Java +build identifiers — zulu preserved and normalised to bas
     _gs_eu2_fetch_sdkman \$idx
     val=\$(_gs_eu2_record_get \$idx proposed_version)
     [[ \"\$val\" == '17.0.20-zulu' ]] \
-        || { echo \"expected '17.0.20-zulu' (base form), got: '\$val'\"; echo FAIL; exit 0; }
+        || { echo \"expected '17.0.20-zulu' (pin kept), got: '\$val'\"; echo FAIL; exit 0; }
     echo PASS
 "
 
@@ -3050,6 +3051,55 @@ t "t32l: sdkman Java — preferred dist absent upstream SKIPs loudly, never swap
       *zulu*) : ;;
       *) echo \"error_message must name the missing dist, got: '\$err'\"; echo FAIL; exit 0 ;;
     esac
+    echo PASS
+"
+
+# A NEW release gets no base-form alias: SDKMAN lists Zulu 27 only as 27.0.0+35-zulu,
+# and 27.0.0-zulu is 'invalid' to validate and 404 at the broker (2026-09-28).  The
+# fetcher stripped +build unconditionally, so a Java 26 record's (watch-major) line
+# suggested 27.0.0-zulu, it was pinned, and 03java27-zulu exhausted on-failure:5.
+# Every proposal must be an identifier SDKMAN LISTS.  Fixture mirrors the live shape.
+_T32_BUILD_IDS='26.0.2+1.1-zulu,26.0.2.fx-zulu,26.0.1.crac-zulu,27.0.0+35-zulu,27.0.0-fx+35-zulu,27.0.0-crac+35-zulu,27.0.0+35-open,27.0.0-oracle,17.0.20+1.1-zulu,17.0.21+2.1-zulu'
+_t32_build_rec() {  # $1 case  $2 current  $3 major  $4 watch_major_depth (may be empty)
+  printf '%s\n' "
+    ${_SDK_LIBS}
+    bd=\"\${TMP_DIR}/t32_$1_fixtures/http\"
+    mkdir -p \"\$bd\"
+    printf '%s' '${_T32_BUILD_IDS}' > \"\${bd}/api.sdkman.io_2_candidates_java_linux_versions_all\"
+    export _GS_EU2_HTTP_FIXTURE_DIR=\"\$bd\"
+    export _GS_EU2_CACHE_DIR=\"\${TMP_DIR}/t32_$1_cache\"
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type              'sdkman'
+    _gs_eu2_record_set \$idx identifier        'java'
+    _gs_eu2_record_set \$idx env_var           'GLOBAL_STACK_JAVA_T32_VERSION'
+    _gs_eu2_record_set \$idx current_version   '$2'
+    _gs_eu2_record_set \$idx major_hint        '$3'
+    _gs_eu2_record_set \$idx watch_major_depth '$4'
+    _gs_eu2_fetch_sdkman \$idx
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    unc=\$(_gs_eu2_record_get \$idx latest_unconstrained)"
+}
+
+t "t32m: sdkman Java (watch-major) on 26 suggests the LISTED 27.0.0+35-zulu, never 27.0.0-zulu" bash -c "
+    $(_t32_build_rec m '26.0.2-zulu' 26 1)
+    [[ \"\$unc\" == '27.0.0+35-zulu' ]] \
+        || { echo \"watch-major suggestion must be the listed id 27.0.0+35-zulu, got: '\$unc'\"; echo FAIL; exit 0; }
+    [[ \"\$val\" == '26.0.2-zulu' ]] \
+        || { echo \"legacy base pin of the same 26 release must be kept, got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t32n: sdkman Java — a pin already on the listed 27.0.0+35-zulu stays on it" bash -c "
+    $(_t32_build_rec n '27.0.0+35-zulu' 27 '')
+    [[ \"\$val\" == '27.0.0+35-zulu' ]] \
+        || { echo \"expected '27.0.0+35-zulu' (listed id), got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t32o: sdkman Java — a newer release is proposed as its LISTED +build id" bash -c "
+    $(_t32_build_rec o '17.0.19-zulu' 17 '')
+    [[ \"\$val\" == '17.0.21+2.1-zulu' ]] \
+        || { echo \"expected '17.0.21+2.1-zulu' (listed id), got: '\$val'\"; echo FAIL; exit 0; }
     echo PASS
 "
 

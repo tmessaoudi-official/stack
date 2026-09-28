@@ -21,7 +21,7 @@
 #      Java ALWAYS uses this endpoint (the /list endpoint rejects Java with 400).
 #      The 400 is specific to the generic "linux" platform used above; "linuxx64" answers
 #      /list with 200.  Switching platform is NOT a fix for anything here — both platforms
-#      advertise the same +build identifiers, which the broker does not serve (see
+#      advertise the same +build identifiers, which are what the fetcher proposes (see
 #      _gs_eu2_sdkman_strip_build).
 #
 # Java special case: versions carry distribution suffixes (e.g. 11.0.31-zulu, 11.0.31-tem).
@@ -119,14 +119,16 @@ _gs_eu2_sdkman_extract_java_versions() {
 # Prints:  the identifier with any "+BUILD" segment removed
 # Returns: 0 always
 #
-# SDKMAN ADVERTISES build metadata ("26.0.2+1.1-zulu") but its download broker only
-# serves the base form: /broker/download/java/26.0.2-zulu/linuxx64 → 302, while
-# 26.0.2+1.1-zulu → 404 [verified against api.sdkman.io, all of zulu/librca/open/
-# sapmchn/tem].  `sdk install` therefore needs the base form, so the advertised
-# build segment is stripped before the version is proposed — proposing the listed
-# form verbatim would write an identifier that no container can install.
-# It is also what keeps sort -V honest: '+' sorts before '-', so an unstripped
-# build form compares as OLDER than the base form and trips the downgrade guard.
+# Used ONLY to recognise a legacy base-form pin of the same release
+# (_gs_eu2_fetch_sdkman) — never to rewrite what is proposed.  The LISTED id is the
+# one SDKMAN serves: 27.0.0+35-zulu validates and the broker answers 302, while
+# 27.0.0-zulu is 'invalid' and 404 [verified 2026-09-28]. Base forms such as
+# 26.0.2-zulu or 17.0.20-zulu still resolve only as aliases for releases that
+# predate +build ids; a new release gets none.  Stripping every proposal (the rule
+# here until 2026-09-28) therefore invented 27.0.0-zulu, which was pinned and broke
+# 03java27-zulu.  The bug was "always strip", not "strip": do not flip this to
+# rejecting base-form pins, which are still valid for the releases that have them.
+# Ordering note: the ranked order reads a +build form as OLDER than its base form.
 _gs_eu2_sdkman_strip_build() {
   sed -E 's/\+[0-9.]+(-[a-zA-Z]+[0-9]*)$/\1/'
 }
@@ -169,15 +171,15 @@ _gs_eu2_sdkman_select_java() {
   done <<< "${_versions}"
 
   if [[ -n "${_preferred_list}" ]]; then
-    printf '%s' "${_preferred_list}" | sort -t- -k1,1V | tail -1 | _gs_eu2_sdkman_strip_build
+    printf '%s' "${_preferred_list}" | sort -t- -k1,1V | tail -1
     return
   fi
   if [[ -n "${_tem_list}" ]]; then
-    printf '%s' "${_tem_list}" | sort -t- -k1,1V | tail -1 | _gs_eu2_sdkman_strip_build
+    printf '%s' "${_tem_list}" | sort -t- -k1,1V | tail -1
     return
   fi
   if [[ -n "${_other_list}" ]]; then
-    printf '%s' "${_other_list}" | sort -t- -k1,1V | tail -1 | _gs_eu2_sdkman_strip_build
+    printf '%s' "${_other_list}" | sort -t- -k1,1V | tail -1
     return
   fi
 }
@@ -293,6 +295,14 @@ _gs_eu2_fetch_sdkman() {
     fi
 
     _proposed="$(_gs_eu2_sdkman_select_java "${_java_versions}" "${_preferred_dist}")"
+
+    # Legacy base-form pin of the SAME release (17.0.20-zulu vs listed 17.0.20+1.1-zulu):
+    # keep the pin.  It still installs, and the ranked order reads +build as OLDER than
+    # the base form, so proposing the listed id here would surface as a false downgrade.
+    if [[ -n "${_proposed}" && "${_proposed}" != "${_current}" \
+          && "$(printf '%s' "${_proposed}" | _gs_eu2_sdkman_strip_build)" == "${_current}" ]]; then
+      _proposed="${_current}"
+    fi
 
     # Preferred-distribution gate. A vendor swap is NOT a version bump: without this,
     # a pin whose distribution has no candidate upstream silently falls through to the
