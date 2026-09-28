@@ -41,13 +41,15 @@ record was still on Java 26.
 |---|------|------|-------|----------|-------|
 | 1 | Java 27 pin → 27.0.0+35-zulu | S | done | 0f5371b | .env |
 | 2 | sdkman fetcher keeps listed +build ids | M | done | 4458481 | bin/lib/env-update/fetchers/sdkman.sh, bin/tests/env-update.test.sh |
-| 3 | Start Java 27 dependents | S | doing | - | - |
+| 3 | Start Java 27 dependents | S | done | - | - |
 <!-- /progress-block -->
 ### Blocked
 ### Needs input
 ### Needs research
 ### Fragile
 ### Known issues
+- Step 3 evidence (no commit — runtime only): 2026-09-28 14:46 `env -i … make up` exit 0, 04android Healthy, 05edge/05stable/local 05 Started, `tools/errors/` empty; 05 health still settling at close.
+- Residual assumption: the legacy base-form pin rule relies on SDKMAN keeping aliases such as `17.0.20-zulu`; if they are dropped, the pin reads "up to date" while `sdk install` fails. Options: move the 17/21 pins to their listed ids (reinstalls the JDKs), or have env-update validate the pin against `/2/candidates/validate/…`.
 - The interactive shell's copy of `.env.local` word-splits values with spaces, and compose prefers it over
   `--env-file`: never run `docker compose up` for this stack from a normal shell without `env -i`.
 - Even `env -i docker compose` is not `make up`: for QUOTED `.env.local` values make passes the quotes
