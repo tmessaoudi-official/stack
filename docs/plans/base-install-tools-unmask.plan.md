@@ -34,7 +34,7 @@ The 2026-09-28 rebuild failed at `02sonarqube`: `COPY --from=local_global_stack_
 <!-- progress-block v1 -->
 | # | Step | Size | State | Evidence | Files |
 |---|------|------|-------|----------|-------|
-| 1 | difftastic asset name (install-tools + global-unu), curl -f on every 00base download, gitlab-runner rm -f + mkdir, DinD guarded groupadd, rtk init as the stack user, unmask 15 Dockerfile lines, bin/tests/base-install-tools.test.sh | M | doing | - | docker/images/*/Dockerfile, docker/images/00base/conf/bin/**, templates/shell/global-unu.sh, bin/tests/base-install-tools.test.sh |
+| 1 | difftastic asset name (install-tools + global-unu), curl -f on every 00base download, gitlab-runner rm -f + mkdir, DinD guarded groupadd, rtk init as the stack user, unmask 15 Dockerfile lines, bin/tests/base-install-tools.test.sh | M | done | 756e21f | docker/images/*/Dockerfile, docker/images/00base/conf/bin/**, templates/shell/global-unu.sh, bin/tests/base-install-tools.test.sh |
 <!-- /progress-block -->
 ### Blocked
 ### Needs input
