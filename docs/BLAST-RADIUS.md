@@ -132,7 +132,7 @@ asserts against leakage at build time).
 | Command | Hidden side effect | Dangerous context |
 |---------|--------------------|-------------------|
 | `make clean` | `CLEANFILES` may include generated files that are slow to recreate | Generated files aren't in version control |
-| `make hard-restart` (/path/to/your/project) | Wipes **all** images + volumes, full rebuild from scratch; runs `global-unu.sh`, whose last step (`global-unu-opt.sh --apply`) replaces any `/opt/$USER` tool whose `.env` pin moved — multi-GB IDE downloads, and a running IDE is skipped | Any persistent data or long build cache; an IDE pin bumped but not wanted yet |
+| `make hard-restart` (/path/to/your/project) | Wipes **all** images + volumes, full rebuild from scratch; runs `docker system prune -a -f --volumes`, which is MACHINE-WIDE (every other project's stopped containers, unused images and volumes); replaces `tools/` with `var/tools` (a skeleton unless you snapshotted a healthy tree, so a full cold reinstall, 2h+); runs `global-unu.sh`, whose last step (`global-unu-opt.sh --apply`) replaces any `/opt/$USER` tool whose `.env` pin moved — multi-GB IDE downloads, and a running IDE is skipped | Any persistent data or long build cache; an IDE pin bumped but not wanted yet |
 
 ### Databases
 
