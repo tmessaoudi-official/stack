@@ -156,6 +156,12 @@ _opt_install() {
     _opt_log SKIPPED "${id}: running from ${final} — close it and re-run to install ${pin}"
     return 3
   fi
+  # Two failure paths below park the previous tree at ${stage}/old and say so; never
+  # wipe staging over it — that would delete the only copy with nothing installed.
+  if [[ -e "${stage}/old" ]]; then
+    _opt_err FAILED "${id}: a previous run left the installed tree at ${stage}/old — move it back to ${final} or delete it, then re-run"
+    return 1
+  fi
   if [[ -e "${stage}" ]] && ! _opt_rm_staging "${stage}"; then return 1; fi
   if ! mkdir -p "${stage}/x"; then
     _opt_err FAILED "${id}: cannot create ${stage}"
@@ -209,7 +215,12 @@ _opt_install() {
   fi
   # A target that exists now would swallow the new tree as a subdirectory.
   if [[ -e "${final}" ]]; then
-    _opt_err FAILED "${id}: ${final} reappeared during the swap — previous tree kept at ${stage}/old"
+    if [[ -e "${stage}/old" ]]; then
+      _opt_err FAILED "${id}: ${final} reappeared during the swap — previous tree kept at ${stage}/old"
+    else
+      _opt_err FAILED "${id}: ${final} appeared during the swap — nothing changed"
+      _opt_rm_staging "${stage}"
+    fi
     return 1
   fi
   if ! mv "${tree}" "${final}"; then

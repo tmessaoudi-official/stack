@@ -331,6 +331,20 @@ else
 fi
 if [[ -z "$(ls -A "$d/opt/.gs-staging" 2>/dev/null)" ]]; then ok "8b: staging cleaned after the late skip"; else ko "8b: staging left: $(ls -A "$d/opt/.gs-staging")"; fi
 
+# Two FAILED paths park the previous tree at .gs-staging/<id>/old and say so; the
+# next run must refuse rather than wipe staging and delete the only copy.
+d="$(_sandbox c8c 2026.3.1)"
+mkdir -p "$d/opt/.gs-staging/idea/old"
+printf 'parked tree\n' >"$d/opt/.gs-staging/idea/old/marker"
+b_old="$(_fp "$d/opt/.gs-staging/idea/old")" b_inst="$(_fp "$d/opt/jetbrains/idea")"
+_run "$d" --apply
+if [[ ${RC} -ne 0 && "$(_fp "$d/opt/.gs-staging/idea/old")" == "${b_old}" && "$(_fp "$d/opt/jetbrains/idea")" == "${b_inst}" ]] \
+  && ! grep -q DOWNLOAD <<<"${OUT}"; then
+  ok "8c: a parked staging/old stops the install (exit ${RC}); parked and installed trees byte-identical, nothing downloaded"
+else
+  ko "8c: rc=${RC}, parked tree $([[ -e "$d/opt/.gs-staging/idea/old/marker" ]] && echo kept || echo DELETED): ${OUT}"
+fi
+
 # ═════════════════════════════════════════════════════════════════════════════
 section "7. fresh machine and arguments"
 d="$(_sandbox c7 2026.3.1)"
