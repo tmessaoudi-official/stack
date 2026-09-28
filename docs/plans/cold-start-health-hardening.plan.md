@@ -30,7 +30,7 @@ Implement AFTER the bring-up settles — nothing changes while the stack is stil
 | # | Step | Size | State | Evidence | Files |
 |---|------|------|-------|----------|-------|
 | 1 | Postgres TCP healthcheck + PGCTLTIMEOUT | S | done | 481c889 | docker/images/01postgres18/**, bin/tests/postgres-healthcheck.test.sh |
-| 2 | SonarQube error token + retry | M | done | - | docker/config/dist/bin/sonarqube-bin/**, docker/images/02sonarqube/** |
+| 2 | SonarQube error token + retry | M | done | c49dbec | docker/config/dist/bin/sonarqube-bin/**, docker/images/02sonarqube/** |
 | 3 | rbenv install/rehash serialization | M | todo | - | docker/config/dist/bin/rbenv-bin/** |
 | 4 | SDKMAN download stall limit | S | todo | - | docker/config/dist/bin/sdkman-bin/** |
 | 5 | SDKMAN tolerant install vs strict activation | S | todo | - | docker/config/dist/bin/sdkman-bin/** |
@@ -42,5 +42,6 @@ Implement AFTER the bring-up settles — nothing changes while the stack is stil
 - Step 4: where the stall limit can be set (sdkman config vs wrapper) without patching the downloaded installer.
 ### Fragile
 ### Known issues
+- Step 2 live proof (2026-09-28, rebuilt image — 02sonarqube BAKES its start script, a restart alone kept the old one): `kill -TERM` of java → `errors/02sonarqube` in 2 s, `RestartCount` 0→1, token cleared by the restart, healthy in 92 s; `docker stop` → graceful "SonarQube is stopped" in 2 s, exit 143, no token.
 - Step 2: a stop is forwarded to the JVM as SIGTERM, not the image's StopSignal SIGINT — a background child starts with SIGINT ignored (SigIgn 0x6, measured), which the JVM cannot handle. docker stop's 10 s grace vs SonarQube's real shutdown time is unchanged by this step and unmeasured.
 - Step 1 corrections (2026-09-28): the `service_healthy` dependents of 01postgres18 are 02keycloak-keycloak and 02sonarqube only — 02dpage-pgadmin4 does not depend on it (the ASSUMED entry named pgadmin). B's 300 s is agreed, not measured: the throwaway probe proves the variable reaches the init process, not that 300 s suffices under build load — that needs a fresh-volume bring-up. The fix takes effect on the next Postgres recreate (make-hash prediction: only 01postgres18 differs of 44).
