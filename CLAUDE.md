@@ -10,9 +10,7 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 ## Questions — `AskUserQuestion`, sparingly
 
-Questions to the developer use the **`AskUserQuestion` tool**, per the global framework: options with the recommended one FIRST (labelled, with its reason) and a visible *"none of these / challenge the premise"* escape. Protocol details: `.claude/skills/stack-ask-human/SKILL.md` (renamed from `ask-human` 2026-08-18 — a repo skill may not share a global skill's name).
-
-> The container-era plain-text protocol and the `❓`/`⏹` end-of-reply markers (developer directive, 2026-08-05) are **RETIRED** (2026-08-18). They existed because `AskUserQuestion` timed out in the dead cloud container; on this machine it works, `askUserQuestionTimeout` is `"never"` globally, and the marker's rationale (a prose question being indistinguishable from a pause) dies with the prose protocol.
+Questions to the developer use the **`AskUserQuestion` tool**, per the global framework: options with the recommended one FIRST (labelled, with its reason) and a visible *"none of these / challenge the premise"* escape. Protocol: the global `/ask-human` skill, § "Question quality"; this repo's additions (mandatory cases, git autonomy, a worked example): `.claude/skills/stack-ask-human/SKILL.md` (renamed from `ask-human` 2026-08-18 — a repo skill may not share a global skill's name).
 
 **Mode — the global `~/.claude/CLAUDE.md` § Mode decides what stops** (developer rulings 2026-09-27). `/stack` itself is bypassed for the ask-human gate family by a ROOT-ONLY rule, so sessions at `/stack` run **autonomous**: state the task size, announce the plan, build it, and take the recommended option on an ambiguity, logging it as `ASSUMED (review)` in the plan's Decisions Log. Subdirectories without their own rule (`/stack/docker`, `/stack/projects/CV`) run **spec**, so every gate fires there. In both modes this repo still stops for a destructive or irreversible step and for a change that would weaken a documented invariant or gotcha (§ "When this protocol is mandatory" in `/stack-ask-human`). In a cloud session there is no global CLAUDE.md: treat it as autonomous, as the no-interrupts directive always did.
 
@@ -48,7 +46,7 @@ Three consequences:
 
 - **Never propose adding a `deny` entry, or any `ask` entry beyond the three `env-update --apply` spellings that already exist**, to this repo's settings, by any route. If a command looks dangerous enough to gate, the gate is a question (`/stack-ask-human`) before running it — not a config rule that blocks it.
 - **scout's (then rent-watch's) four `Read`/`Edit(./.env)` path denies are explicitly NOT adopted here.** Their own cross-repo audit lists them as a P2 to port to all four siblings; that recommendation is **rejected for `/stack`** on two independent grounds: this ruling, and the fact that `env-update`/`env-scan`/`env-diff` must read *and* write `.env` as their core function, so the deny would break the project's main workflow rather than guard it. `.claude/hooks/env-guard-on-write.sh` is the right mechanism — it warns on a `.env` edit and lets the turn continue.
-- **Nothing mechanically stops a destructive command**, so the discipline carries the whole load: `docs/BLAST-RADIUS.md` § the `/stack` table, and § "When this protocol is mandatory" in `/stack-ask-human`. That file is kept IN THIS REPO deliberately — the global `~/.claude/BLAST-RADIUS.md` carries only `make hard-restart` and none of the `/stack`-specific radii, so a pointer at the global copy would silently lose `make soft-restart`, `docker volume rm`, the `RELOAD` flags, `env-update --apply` and `make save`. Machine-level protections stay in the developer's personal global settings, which this repo never touches.
+- **Nothing mechanically stops a destructive command**, so the discipline carries the whole load: `docs/BLAST-RADIUS.md` § the `/stack` table, and § "When a question is mandatory here" in `/stack-ask-human`. That file is kept IN THIS REPO deliberately — the global `~/.claude/BLAST-RADIUS.md` carries only `make hard-restart` and none of the `/stack`-specific radii, so a pointer at the global copy would silently lose `make soft-restart`, `docker volume rm`, the `RELOAD` flags, `env-update --apply` and `make save`. Machine-level protections stay in the developer's personal global settings, which this repo never touches.
 
 ## Certification — per-task gates, and the ONE milestone panel
 
@@ -96,7 +94,7 @@ var; skew a Dockerfile `ARG` from its `.env` value. Each is a *silent* failure i
 container that works while reporting unhealthy for 24h, a port that silently concatenates, a stale
 image behind a correct-looking `.env`.
 
-`advisor()` **is available on this machine** (verified 2026-08-18) and is the FIRST rung: call it
+`advisor()` **is available on this machine** and is the FIRST rung: call it
 per the global framework. The panel of record for gate rounds is the set of **fresh-context,
 read-only, adversarial reviewer subagents** in `.claude/agents/`. Three lenses, one agent each:
 
@@ -382,7 +380,7 @@ make start-local-registry            # Start local TLS registry (port 5000)
 - `/bump-versions` — guided `env-update` check → approval gate → apply → `env-scan` propagation → rebuild reminder
 
 **Workflow + review skills — the GLOBAL install's, plus two repo-specific ones** (global-is-reference ruling, 2026-08-18: the 13 repo-local copies of global skills were deleted; the repo now carries only what has no global equivalent):
-- `/stack-ask-human` — the question protocol with this repo's extra rules (destructive-op gates, `.env` writes, `RELOAD` flags). See § "Questions"
+- `/stack-ask-human` — this repo's additions to the global question protocol (destructive-op gates, `.env` writes, `RELOAD` flags). See § "Questions"
 - `/stack-lenses` — **load this BEFORE running any global review skill here.** It carries the /stack review dimensions (token invariant, MODE tiers, env cascade, port rules), sleuth lens K (infrastructure divergence) and the repo conventions the deleted copies used to enforce
 - `/sweep`, `/sleuth`, `/inspect`, `/gaps`, `/forge`, `/cross-check`, `/converge`, `/pre-commit`, `/aggregate-findings`, `/handoff`, `/retrospective`, `/expanding-context` — all from `~/.claude/skills/` (the developer's global install — `ls ~/.claude/skills/` is the tally; a count written here drifts). `/converge` still runs § "Certification ladder" with the three repo reviewer agents
 - `/new-service <name> [--parent <image>] [--runtime <name>] [--port <n>]` — scaffold a new service (Dockerfile, compose, startup script, printed `.env` + Makefile lines); args-first with interactive fallback
@@ -517,4 +515,4 @@ See `templates/tips/file-layout.md`.
 
 > **Remember**: Handle all work here directly with the global reasoning framework — there is no orchestrator agent to delegate to. Use `/lint` before committing shell changes — and in a container, lint manually, because the hooks are dead there. Check for trailing `;` in `COMPOSE_FILE`. Verify with `--dry-run` before applying changes. Tier 02 = install, tier 03 = setup — same startup script, different `MODE`.
 
-> **And on every single reply**: ask via **`AskUserQuestion`** (the plain-text protocol and the `❓`/`⏹` markers are RETIRED — see § "Questions"), and work on **`master`** only.
+> **And on every single reply**: ask via **`AskUserQuestion`**, and work on **`master`** only.

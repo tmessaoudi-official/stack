@@ -1,14 +1,12 @@
 ---
 name: stack-lenses
 description: >
-  MANDATORY companion to every global review skill run in /stack. Load this BEFORE running
-  /sweep, /sleuth, /inspect, /gaps, /forge, /cross-check, /converge, /pre-commit or
-  /aggregate-findings here — it carries the /stack review dimensions (token invariant, two-phase
-  MODE model, env cascade, port rules), sleuth lens K (infrastructure divergence), and the repo
-  conventions those global skills do not know about. Extracted 2026-08-18 from the deleted
-  repo-local copies of those skills (global-is-reference ruling: a repo may not duplicate a
-  global skill; what was repo-specific in them lives here instead).
+  MANDATORY companion to every global review skill run in /stack (/sweep, /sleuth, /inspect, /gaps,
+  /forge, /cross-check, /converge, /pre-commit, /aggregate-findings) — load it first: the /stack
+  review dimensions (token invariant, two-phase MODE, env cascade, port rules) and sleuth lens K.
 ---
+
+<!-- Description history (moved out of the description 2026-09-28 to keep it ≤300 chars, review-remediation 5.8): Extracted 2026-08-18 from the deleted repo-local copies of those skills (global-is-reference ruling: a repo may not duplicate a global skill; what was repo-specific in them lives here instead). -->
 
 # /stack-lenses — /stack review dimensions & conventions
 
