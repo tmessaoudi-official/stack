@@ -15,6 +15,12 @@
 # passwords to stdout. This suite pipes it straight into jq and keeps ONLY the
 # one key under test — the full config is never written to disk, never echoed,
 # and never reaches a failure message.
+#
+# §1-§7 resolve with a raw `docker compose config`; §8 resolves through make,
+# as `make up` does. The difference only matters for a value written
+# `VAR=  # reason` (compose's dotenv keeps the comment text, make reads empty);
+# none of the keys §1-§7 test is written that way. Move a section to the make
+# route before pointing it at one that is.
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

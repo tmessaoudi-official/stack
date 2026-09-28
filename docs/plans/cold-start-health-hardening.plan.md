@@ -44,6 +44,8 @@ Implement AFTER the bring-up settles — nothing changes while the stack is stil
 - [Inferred, read-only] 01mysql9's check is `mysqladmin ping -h localhost` — for the MySQL client `localhost` means the Unix SOCKET, and its init server runs with networking off, so it likely has Postgres's false positive; not probed. 01mariadb13 uses `healthcheck.sh --connect --innodb_initialized`, which requires a network connection — likely immune. Both keep the 80 s window (mysql/mariadb took ~4 min on 2026-09-28).
 ### Fragile
 ### Known issues
+- `.env`'s comment on `GLOBAL_STACK_JAVA27_SDKMAN_INSTALL_PACKAGE_GROOVY_VX2_VERSION` says "Groovy 4", but VX2 is 5.1.3 — stale text only (the override is empty either way); fix it with the next `.env` edit, since an `.env` edit runs env-scan.
+- The Java 27 consumer fix (7b3850d) is UNCERTIFIED-BY-EXECUTION until 04android reaches healthy after its SDK install and 05stable / 05edge / the local all-in-one come up on the fixed package set.
 - Step 4 rejected (see Decisions Log): sdkman 5.23.1 `__sdkman_secure_curl_download` supports only continue/retry/retry-max-time/insecure — no speed limit — and no stall was observed. The real cold-start cost is re-downloading ~1 GB of Spark at ~100 KB/s; a download cache outside tools/ is the lever if that ever matters.
 - Step 5 (tolerant install / strict activation) stays open: observed once, self-healed on restart.
 - Step 3 live proof (2026-09-28 16:14, warm path): `docker restart` of 03ruby3 + 03ruby4 together — ruby3 held the rbenv lock 15.557→15.692, ruby4 acquired at 15.693 (1 ms after the release), both healthy, no `cannot rehash`, `tools/errors/` empty. The COLD collision (two ~28 min compiles finishing together) is only reproduced by a wipe — the developer's planned hard-restart.
