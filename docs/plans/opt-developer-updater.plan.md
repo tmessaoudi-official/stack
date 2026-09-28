@@ -39,7 +39,9 @@ Not tools: `oracle-virtualbox-vms`, `root`.
 ### Needs input
 ### Needs research
 - MeGit (eclipsesource/megit) and balenaEtcher (balena-io/etcher) GitHub asset names + digests — deferred until the cold bring-up finishes (api.github.com budget).
-- Whether env-update's `url` fetcher `(fetch-json:)` can express each vendor query below, or a new fetcher type is needed.
+- env-update needs NO new fetcher: `url:` + `(fetch-json:)` returned the installed version for all 7 non-GitHub tools (probed 20:10): JetBrains `.IIU[0].version` / `.PS[0].version` / `.WS[0].version` (one `code=` per URL); Android Studio `[.content.item[]|select(.channel=="Release" or .channel=="Patch")]|max_by(.version|split(".")|map(tonumber))|.version`; VS Code `.productVersion`; Devin `.windsurfVersion`; Sublime `.latest_version`.
+- OPEN: no existing annotation puts double quotes inside `(fetch-json:)` — prove parse.sh keeps the Android Studio expression intact (failing test first).
+- OPEN: Devin feed is `.../stable/latest` only — find a versioned download, or the installer must refuse a pin that is no longer latest.
 
 ## Vendor sources (probed 2026-09-28 19:55; every latest == installed, so each feed matches reality)
 
