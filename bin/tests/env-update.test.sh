@@ -14153,6 +14153,22 @@ _t127e() (
 )
 t "t127e: JetBrains — a YEAR change is the major and HOLDs" _t127e
 
+# The Android Studio pin is the BUILD id (AI-…): the installed tree carries no other
+# version. Same selection (newest Release|Patch by marketing version), emitting .build;
+# the AI- prefix must survive, and a quarterly release inside 261 stays AUTO.
+_t127f() (
+  d="${TMP_DIR}/t127f"; mkdir -p "$d/fx"
+  printf '%s' '{"content":{"item":[{"version":"2026.2.2.2","channel":"Canary","build":"AI-262.10315.125.2622.1"},{"version":"2026.1.4.8","channel":"Patch","build":"AI-261.26222.65.2614.16379836"},{"version":"2026.1.3.8","channel":"Patch","build":"AI-261.26222.65.2613.16025427"}]}}' \
+    > "$d/fx/jb.gg_android-studio-releases-list.json"
+  out="$(_t127_check "$d" \
+    "# @todo env-update (fetch-json:${_T127_AS_JQ%.version}.build) url:https://jb.gg/android-studio-releases-list.json AI-261.26222.65.2613.16025427" \
+    'GLOBAL_STACK_T127F=AI-261.26222.65.2613.16025427')"
+  grep -qE '\[AUTO +\] +GLOBAL_STACK_T127F +AI-261\.26222\.65\.2613\.16025427 → AI-261\.26222\.65\.2614\.16379836$' <<<"$out" \
+    || { echo "want AUTO …2613.16025427 → AI-261.26222.65.2614.16379836; got:"; echo "$out" | tail -4; echo FAIL; exit 0; }
+  echo PASS
+)
+t "t127f: Android Studio — the build id (AI-…) is proposed intact; Quail 3 → 4 is AUTO" _t127f
+
 _flush_section
 
 TOTAL=$(( PASS + FAIL ))

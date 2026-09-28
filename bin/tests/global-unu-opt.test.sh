@@ -345,17 +345,112 @@ else
   ko "8c: rc=${RC}, parked tree $([[ -e "$d/opt/.gs-staging/idea/old/marker" ]] && echo kept || echo DELETED): ${OUT}"
 fi
 
+if grep -q 'compare them, keep one' <<<"${OUT}"; then ok "8c: installed tree present → message says compare, not 'move it back'"; else ko "8c: wrong remedy: ${OUT}"; fi
+
+d="$(_sandbox c8d 2026.3.1)"
+mkdir -p "$d/opt/.gs-staging/idea/old"
+mv "$d/opt/jetbrains/idea" "$d/opt/.gs-staging/idea/old/tree"
+_run "$d" --apply
+if [[ ${RC} -ne 0 && -d "$d/opt/.gs-staging/idea/old/tree" ]] && grep -q "put it back with: mv" <<<"${OUT}"; then
+  ok "8d: nothing installed + parked tree → exit ${RC}, tree kept, message gives the mv back"
+else
+  ko "8d: rc=${RC}: ${OUT}"
+fi
+
+# A tree an install already REPLACED is superseded, not parked: it must not block.
+d="$(_sandbox c8e 2026.3.1)"
+mkdir -p "$d/opt/.gs-staging/idea/superseded"
+printf 'leftover\n' >"$d/opt/.gs-staging/idea/superseded/marker"
+_run "$d" --apply
+got="$(jq -r .version "$d/opt/jetbrains/idea/product-info.json")"
+if [[ ${RC} -eq 0 && "${got}" == 2026.3.1 && -z "$(ls -A "$d/opt/.gs-staging" 2>/dev/null)" ]]; then
+  ok "8e: a leftover superseded/ does not block; the install wipes it"
+else
+  ko "8e: rc=${RC} got=${got}: ${OUT}"
+fi
+
 # ═════════════════════════════════════════════════════════════════════════════
-section "7. fresh machine and arguments"
+section "9. fresh machine and arguments"
 d="$(_sandbox c7 2026.3.1)"
 rm -rf "$d/opt/jetbrains"
 _run "$d" --apply --only=idea
 got="$(jq -r .version "$d/opt/jetbrains/idea/product-info.json" 2>/dev/null)"
-if [[ ${RC} -eq 0 && "${got}" == 2026.3.1 ]]; then ok "7a: missing tool is installed (parent dir created)"; else ko "7a: rc=${RC} got=${got}: ${OUT}"; fi
+if [[ ${RC} -eq 0 && "${got}" == 2026.3.1 ]]; then ok "9a: missing tool is installed (parent dir created)"; else ko "9a: rc=${RC} got=${got}: ${OUT}"; fi
 _run "$d" --only=nosuchtool
-if [[ ${RC} -eq 2 ]]; then ok "7b: unknown --only id → exit 2"; else ko "7b: rc=${RC}: ${OUT}"; fi
+if [[ ${RC} -eq 2 ]]; then ok "9b: unknown --only id → exit 2"; else ko "9b: rc=${RC}: ${OUT}"; fi
 _run "$d" --bogus
-if [[ ${RC} -eq 2 ]]; then ok "7c: unknown flag → exit 2"; else ko "7c: rc=${RC}"; fi
+if [[ ${RC} -eq 2 ]]; then ok "9c: unknown flag → exit 2"; else ko "9c: rc=${RC}"; fi
+
+# ═════════════════════════════════════════════════════════════════════════════
+section "10. tool rows: JetBrains IDEs and Android Studio"
+# Each shipped row, fresh machine: --apply installs exactly the pin into its
+# dir, writes its launcher under the name the hand-made one had, and a second
+# --check reads the installed version back as current (no network).
+
+# $1 case dir  $2 API code  $3 archive url  $4 top dir  $5 bin  $6 version  $7 wm class
+_mk_jb_like() {
+  local d="$1" code="$2" url="$3" top="$4" bin="$5" v="$6" wm="$7" src="$1/src" a
+  a="$d/srv/$(basename "${url}")"
+  mkdir -p "${src}/${top}/bin" "$d/srv"
+  printf '{"version":"%s","launch":[{"startupWmClass":"%s"}]}\n' "${v}" "${wm}" >"${src}/${top}/product-info.json"
+  printf '#!/bin/sh\n' >"${src}/${top}/bin/${bin}"
+  chmod +x "${src}/${top}/bin/${bin}"
+  printf 'png' >"${src}/${top}/bin/${bin}.png"
+  tar -czf "${a}" -C "${src}" "${top}"
+  SUM="$(sha256sum "${a}" | cut -d' ' -f1)"
+  printf '%s\t%s\n' "${url}" "${a}" >>"$d/routes"
+}
+
+# $1 id  $2 pin var  $3 install dir  $4 bin  $5 launcher file  $6 wm class  $7 pin
+_row_case() {
+  local id="$1" var="$2" dir="$3" bin="$4" desk="$5" wm="$6" pin="$7" d="${TMP_DIR}/row-$1"
+  mkdir -p "$d/opt" "$d/apps" "$d/proc" "$d/srv"
+  : >"$d/curl.log"
+  : >"$d/routes"
+  printf '%s=%s\n' "${var}" "${pin}" >"$d/env.local"
+  if [[ "${id}" == android_studio ]]; then
+    local url="https://edgedl.me.gvt1.com/android/studio/ide-zips/2026.1.4.9/android-studio-quail4-patch2-linux.tar.gz"
+    _mk_jb_like "$d" - "${url}" android-studio studio "${pin}" "${wm}"
+    printf '{"content":{"item":[{"version":"2026.2.1.1","channel":"Canary","build":"AI-262.1.1.2621.1","download":[]},{"version":"2026.1.4.9","channel":"Patch","build":"%s","download":[{"link":"https://edgedl.me.gvt1.com/x.deb","checksum":"0"},{"link":"%s","checksum":"%s"}]}]}}\n' \
+      "${pin}" "${url}" "${SUM}" >"$d/srv/list.json"
+    printf '%s\t%s\n' 'https://jb.gg/android-studio-releases-list.json' "$d/srv/list.json" >>"$d/routes"
+  else
+    local code url
+    # The vendor's product codes, from the live API (2026-09-28) — never read from the SUT.
+    case "${id}" in
+      phpstorm) code=PS ;;
+      webstorm) code=WS ;;
+    esac
+    url="https://download.jetbrains.com/x/${bin}-${pin}.tar.gz"
+    _mk_jb_like "$d" "${code}" "${url}" "${bin}-263.1" "${bin}" "${pin}" "${wm}"
+    printf '%s  %s\n' "${SUM}" "${bin}-${pin}.tar.gz" >"$d/srv/sum"
+    printf '{"%s":[{"version":"%s","downloads":{"linux":{"link":"%s","checksumLink":"%s.sha256"}}}]}\n' \
+      "${code}" "${pin}" "${url}" "${url}" >"$d/srv/api.json"
+    printf '%s\t%s\n' \
+      "https://data.services.jetbrains.com/products/releases?code=${code}&type=release" "$d/srv/api.json" \
+      "${url}.sha256" "$d/srv/sum" >>"$d/routes"
+  fi
+  _run "$d" --apply --only="${id}"
+  local got L="$d/apps/${desk}"
+  got="$(jq -r .version "$d/opt/${dir}/product-info.json" 2>/dev/null)"
+  if [[ ${RC} -eq 0 && "${got}" == "${pin}" ]]; then ok "10 ${id}: --apply installs ${pin} into ${dir}"; else ko "10 ${id}: rc=${RC} got='${got}': ${OUT}"; fi
+  if desktop-file-validate "${L}" >/dev/null 2>&1 && grep -qx "Exec=$d/opt/${dir}/bin/${bin}" "${L}" \
+    && grep -qx "Icon=$d/opt/${dir}/bin/${bin}.png" "${L}" && grep -qx "StartupWMClass=${wm}" "${L}"; then
+    ok "10 ${id}: ${desk} valid (Exec, Icon, StartupWMClass=${wm})"
+  else
+    ko "10 ${id}: launcher ${desk}: $(cat "${L}" 2>&1)"
+  fi
+  : >"$d/curl.log"
+  _run "$d" --check --only="${id}"
+  if grep -qE "current.*${id} ${pin}" <<<"${OUT}" && [[ "$(_curl_calls "$d")" == 0 ]]; then
+    ok "10 ${id}: --check reads it back as current, offline"
+  else
+    ko "10 ${id}: --check: ${OUT}"
+  fi
+}
+_row_case phpstorm GLOBAL_STACK_PHPSTORM_VERSION jetbrains/phpstorm phpstorm phpstorm.desktop jetbrains-phpstorm 2026.3.1
+_row_case webstorm GLOBAL_STACK_WEBSTORM_VERSION jetbrains/webstorm webstorm webstorm.desktop jetbrains-webstorm 2026.3.1
+_row_case android_studio GLOBAL_STACK_ANDROID_STUDIO_VERSION android-studio studio android-studio.desktop jetbrains-studio AI-261.26222.65.2614.16500000
 
 printf '\n'
 if ((FAIL == 0)); then

@@ -28,17 +28,24 @@ GS_UNU_OPT_PROC_DIR="${GS_UNU_OPT_PROC_DIR:-/proc}"
 _OPT_STAGING="${GS_UNU_OPT_ROOT}/.gs-staging"
 
 # ── Tool table ────────────────────────────────────────────────────────────────
-# id → install dir (relative to the root), .env pin var, kind. A kind supplies
-# _opt_<kind>_installed / _resolve / _version / _launcher.
-_OPT_IDS=(idea)
-declare -A _OPT_DIR=([idea]=jetbrains/idea)
-declare -A _OPT_PIN=([idea]=GLOBAL_STACK_IDEA_VERSION)
-declare -A _OPT_KIND=([idea]=jetbrains)
-# JetBrains: product code in data.services.jetbrains.com, launcher binary, name.
-declare -A _OPT_JB_CODE=([idea]=IIU)
-declare -A _OPT_JB_BIN=([idea]=idea)
-declare -A _OPT_JB_NAME=([idea]="IntelliJ IDEA")
-declare -A _OPT_JB_COMMENT=([idea]="Java and Kotlin IDE")
+# id → install dir (relative to the root), .env pin var, kind, launcher file name.
+# A kind supplies _opt_<kind>_installed / _resolve / _version / _launcher.
+_OPT_IDS=(idea phpstorm webstorm android_studio)
+declare -A _OPT_DIR=([idea]=jetbrains/idea [phpstorm]=jetbrains/phpstorm [webstorm]=jetbrains/webstorm
+  [android_studio]=android-studio)
+declare -A _OPT_PIN=([idea]=GLOBAL_STACK_IDEA_VERSION [phpstorm]=GLOBAL_STACK_PHPSTORM_VERSION
+  [webstorm]=GLOBAL_STACK_WEBSTORM_VERSION [android_studio]=GLOBAL_STACK_ANDROID_STUDIO_VERSION)
+declare -A _OPT_KIND=([idea]=jetbrains [phpstorm]=jetbrains [webstorm]=jetbrains [android_studio]=studio)
+# The launcher keeps the name the hand-made one had, so no duplicate menu entry appears.
+declare -A _OPT_DESKTOP=([android_studio]=android-studio)
+# JetBrains-built IDEs: product code in data.services.jetbrains.com, launcher
+# binary under bin/ (its icon is bin/<binary>.png), name, comment.
+declare -A _OPT_JB_CODE=([idea]=IIU [phpstorm]=PS [webstorm]=WS)
+declare -A _OPT_JB_BIN=([idea]=idea [phpstorm]=phpstorm [webstorm]=webstorm [android_studio]=studio)
+declare -A _OPT_JB_NAME=([idea]="IntelliJ IDEA" [phpstorm]=PhpStorm [webstorm]=WebStorm
+  [android_studio]="Android Studio")
+declare -A _OPT_JB_COMMENT=([idea]="Java and Kotlin IDE" [phpstorm]="PHP IDE"
+  [webstorm]="JavaScript and TypeScript IDE" [android_studio]="Android IDE")
 
 _opt_log() { printf '[%-9s] %s\n' "$1" "$2"; }
 _opt_err() { printf '[%-9s] %s\n' "$1" "$2" >&2; }
@@ -118,6 +125,26 @@ _opt_jetbrains_launcher() { # $1 id $2 install dir → .desktop text
   return 0
 }
 
+# ── Kind: studio (Android Studio) ────────────────────────────────────────────
+# JetBrains-built, so the tree reads like one; but its pin is the BUILD id
+# (AI-261.…), the only version the installed tree carries (product-info.json,
+# build.txt) — and its downloads come from Google, listed with sha256 in the
+# release list JetBrains publishes.
+_opt_studio_installed() { _opt_jetbrains_installed "$@"; }
+_opt_studio_version() { _opt_jetbrains_version "$@"; }
+_opt_studio_launcher() { _opt_jetbrains_launcher "$@"; }
+_opt_studio_resolve() { # $1 id $2 pin (AI-…) → "url<TAB>sha256"
+  local json row
+  json="$(curl -fsSL --retry 2 'https://jb.gg/android-studio-releases-list.json')" || return 1
+  row="$(jq -r --arg b "$2" '[.content.item[] | select(.build == $b) | .download[]
+    | select(.link | endswith("-linux.tar.gz"))][0] // empty | .link + "\t" + .checksum' <<<"${json}")"
+  [[ -n "${row}" && "${row}" != *$'\t' ]] || {
+    _opt_err FAILED "$1: build $2 has no linux archive in the release list"
+    return 1
+  }
+  printf '%s\n' "${row}"
+}
+
 # ── Engine ───────────────────────────────────────────────────────────────────
 # $1 extract dir → the single top-level entry (the app tree), or fail.
 _opt_single_root() {
@@ -158,8 +185,11 @@ _opt_install() {
   fi
   # Two failure paths below park the previous tree at ${stage}/old and say so; never
   # wipe staging over it — that would delete the only copy with nothing installed.
-  if [[ -e "${stage}/old" ]]; then
-    _opt_err FAILED "${id}: a previous run left the installed tree at ${stage}/old — move it back to ${final} or delete it, then re-run"
+  if [[ -e "${stage}/old" && -e "${final}" ]]; then
+    _opt_err FAILED "${id}: a previous run parked a tree at ${stage}/old AND ${final} exists — compare them, keep one, remove ${stage}/old, then re-run"
+    return 1
+  elif [[ -e "${stage}/old" ]]; then
+    _opt_err FAILED "${id}: a previous run left the installed tree at ${stage}/old — put it back with: mv '${stage}/old' '${final}'"
     return 1
   fi
   if [[ -e "${stage}" ]] && ! _opt_rm_staging "${stage}"; then return 1; fi
@@ -232,7 +262,12 @@ _opt_install() {
     _opt_rm_staging "${stage}"
     return 1
   fi
-  _opt_rm_staging "${stage}"
+  # The new tree is in place: what sat at old/ is now superseded, not parked, so a
+  # leftover must never trip the parked-tree guard above. The next run wipes it.
+  if [[ -e "${stage}/old" ]] && ! mv "${stage}/old" "${stage}/superseded"; then
+    _opt_err WARN "${id}: could not rename ${stage}/old to superseded — remove it by hand"
+  fi
+  _opt_rm_staging "${stage}" || _opt_err WARN "${id}: installed, but ${stage} could not be removed"
   _opt_log INSTALLED "${id} ${pin}"
 }
 
@@ -240,18 +275,18 @@ _opt_install() {
 # Generated from whatever tree is installed — also after a SKIPPED or FAILED
 # install, and for an unmanaged (empty pin) tool: all 9 launchers are managed.
 _opt_launcher() {
-  local id="$1" final="${GS_UNU_OPT_ROOT}/${_OPT_DIR[$1]}" dest="${GS_UNU_OPT_APPS_DIR}/$1.desktop"
-  local tmp rc=0
+  local id="$1" final="${GS_UNU_OPT_ROOT}/${_OPT_DIR[$1]}" name="${_OPT_DESKTOP[$1]:-$1}"
+  local dest="${GS_UNU_OPT_APPS_DIR}/${name}.desktop" tmp rc=0
   tmp="$(mktemp -d)"
-  if ! "_opt_${_OPT_KIND[$1]}_launcher" "${id}" "${final}" >"${tmp}/$1.desktop"; then
+  if ! "_opt_${_OPT_KIND[$1]}_launcher" "${id}" "${final}" >"${tmp}/${name}.desktop"; then
     _opt_err FAILED "${id}: could not generate its launcher — ${dest} left as it was"
     rc=1
-  elif [[ -f "${dest}" ]] && cmp -s "${tmp}/$1.desktop" "${dest}"; then
+  elif [[ -f "${dest}" ]] && cmp -s "${tmp}/${name}.desktop" "${dest}"; then
     :
-  elif ! desktop-file-validate "${tmp}/$1.desktop" >&2; then
+  elif ! desktop-file-validate "${tmp}/${name}.desktop" >&2; then
     _opt_err FAILED "${id}: generated launcher is invalid — ${dest} left as it was"
     rc=1
-  elif ! { mkdir -p "${GS_UNU_OPT_APPS_DIR}" && cp "${tmp}/$1.desktop" "${dest}.gs-tmp" && mv "${dest}.gs-tmp" "${dest}"; }; then
+  elif ! { mkdir -p "${GS_UNU_OPT_APPS_DIR}" && cp "${tmp}/${name}.desktop" "${dest}.gs-tmp" && mv "${dest}.gs-tmp" "${dest}"; }; then
     _opt_err FAILED "${id}: could not write ${dest}"
     rc=1
   else
