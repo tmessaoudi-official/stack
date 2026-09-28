@@ -414,13 +414,27 @@ if eval "${env_file_exists}"; then
 		if [ -f ~/.local/bin/difft ]; then GLOBAL_UNU_DIFFTASTIC_VERSION="$(difft --version | grep "Difftastic " | sed 's/Difftastic //' | sed 's/ \(.*\)//')"; else GLOBAL_UNU_DIFFTASTIC_VERSION=0; fi
 		GLOBAL_UNU_DIFFTASTIC_LATEST=$(echo "${GLOBAL_STACK_DIFFTASTIC_VERSION}" | sed 's/v//')
 		if [ "${GLOBAL_UNU_DIFFTASTIC_LATEST}" != "${GLOBAL_UNU_DIFFTASTIC_VERSION}" ]; then
-			echo "Updating/Installing difftastic - ${DIFFTASTIC_OPERATING_SYSTEM}, arch : ${DIFFTASTIC_ARCH} https://github.com/Wilfred/difftastic/releases/download/${GLOBAL_UNU_DIFFTASTIC_LATEST}/difft-${DIFFTASTIC_ARCH}-${DIFFTASTIC_OPERATING_SYSTEM}.tar.gz"
-			curl -L https://github.com/Wilfred/difftastic/releases/download/${GLOBAL_UNU_DIFFTASTIC_LATEST}/difft-${DIFFTASTIC_ARCH}-${DIFFTASTIC_OPERATING_SYSTEM}.tar.gz -o ~/.local/bin/difftastic.tar.gz
-			mkdir -p ~/.local/bin/difftastic_archive
-			tar -xf ~/.local/bin/difftastic.tar.gz -C ~/.local/bin/difftastic_archive
-			mv ~/.local/bin/difftastic_archive/difft ~/.local/bin/difft
-			rm -rf ~/.local/bin/difftastic_archive ~/.local/bin/difftastic.tar.gz
-			chmod a+rwx ~/.local/bin/difft
+			# 0.71.0 put the version in the asset name; earlier releases have none. Try both, and
+			# keep the old difft if neither is published (bin/tests/base-install-tools.test.sh §2).
+			GLOBAL_UNU_DIFFTASTIC_FETCHED=""
+			for GLOBAL_UNU_DIFFTASTIC_ASSET in \
+				"difft-${GLOBAL_UNU_DIFFTASTIC_LATEST}-${DIFFTASTIC_ARCH}-${DIFFTASTIC_OPERATING_SYSTEM}.tar.gz" \
+				"difft-${DIFFTASTIC_ARCH}-${DIFFTASTIC_OPERATING_SYSTEM}.tar.gz"; do
+				echo "Updating/Installing difftastic - ${DIFFTASTIC_OPERATING_SYSTEM}, arch : ${DIFFTASTIC_ARCH} https://github.com/Wilfred/difftastic/releases/download/${GLOBAL_UNU_DIFFTASTIC_LATEST}/${GLOBAL_UNU_DIFFTASTIC_ASSET}"
+				if curl -fL "https://github.com/Wilfred/difftastic/releases/download/${GLOBAL_UNU_DIFFTASTIC_LATEST}/${GLOBAL_UNU_DIFFTASTIC_ASSET}" -o ~/.local/bin/difftastic.tar.gz; then
+					GLOBAL_UNU_DIFFTASTIC_FETCHED=1
+					break
+				fi
+			done
+			if [ -n "${GLOBAL_UNU_DIFFTASTIC_FETCHED}" ]; then
+				mkdir -p ~/.local/bin/difftastic_archive
+				tar -xf ~/.local/bin/difftastic.tar.gz -C ~/.local/bin/difftastic_archive
+				mv ~/.local/bin/difftastic_archive/difft ~/.local/bin/difft
+				rm -rf ~/.local/bin/difftastic_archive ~/.local/bin/difftastic.tar.gz
+				chmod a+rwx ~/.local/bin/difft
+			else
+				echo "FATAL: no difftastic ${GLOBAL_UNU_DIFFTASTIC_LATEST} asset for ${DIFFTASTIC_ARCH}-${DIFFTASTIC_OPERATING_SYSTEM} under either naming scheme; keeping the current difft" >&2
+			fi
 		else
 			echo "Difftastic is latest '${GLOBAL_UNU_DIFFTASTIC_VERSION}'"
 		fi

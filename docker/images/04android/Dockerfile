@@ -38,7 +38,7 @@ RUN shopt -s extdebug \
     lib32z1 \
     libbz2-1.0:amd64 \
     mesa-utils \
-    && { [ "true" = "${GLOBAL_STACK_ANDROID_SET_LOCALE}" ] && global-stack-base-setup-locale.sh "${GLOBAL_STACK_ANDROID_LOCALE}" || echo -e "\n Locale will not be set"; } \
+    && { if [ "true" = "${GLOBAL_STACK_ANDROID_SET_LOCALE}" ]; then global-stack-base-setup-locale.sh "${GLOBAL_STACK_ANDROID_LOCALE}"; else echo -e "\n Locale will not be set"; fi; } \
     && apt-get clean -y \
     && rm -rf /var/lib/apt/lists/*
 

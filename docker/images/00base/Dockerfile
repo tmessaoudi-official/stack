@@ -212,7 +212,7 @@ RUN --mount=type=secret,id=global_stack_secret_docker_password \
     shopt -s extdebug \
     && IFS=$'\n\t' \
     && GLOBAL_STACK_DOCKER_PASSWORD=$(cat /run/secrets/global_stack_secret_docker_password) \
-    && [ "${GLOBAL_STACK_DOCKER_USER_UID}" = "" ] || [ "${GLOBAL_STACK_DOCKER_USER_ID}" = "" ] || [ "${GLOBAL_STACK_DOCKER_PASSWORD}" = "" ] || [ "${GLOBAL_STACK_DOCKER_GROUP_UID}" = "" ] || [ "${GLOBAL_STACK_DOCKER_GROUP_ID}" = "" ] && exit 1 || echo -e "\n Seems like everything is set !" \
+    && if [ "${GLOBAL_STACK_DOCKER_USER_UID}" = "" ] || [ "${GLOBAL_STACK_DOCKER_USER_ID}" = "" ] || [ "${GLOBAL_STACK_DOCKER_PASSWORD}" = "" ] || [ "${GLOBAL_STACK_DOCKER_GROUP_UID}" = "" ] || [ "${GLOBAL_STACK_DOCKER_GROUP_ID}" = "" ]; then exit 1; else echo -e "\n Seems like everything is set !"; fi \
     && mkdir -p /usr/share/zoneinfo/"${GLOBAL_STACK_TIMEZONE}" \
     && echo "${GLOBAL_STACK_TIMEZONE}" > /etc/timezone \
     && echo 'APT::Key::Assert-Pubkey-Algo "";' > /etc/apt/apt.conf.d/99weakkey-warning \
@@ -318,7 +318,7 @@ RUN --mount=type=secret,id=global_stack_secret_docker_password \
     libcjose-dev \
     libjansson-dev \
     && rm -rf /etc/apt/sources.list.d/google-chrome.list \
-    && { [ "${GLOBAL_STACK_WKHTMLTOPDF_VERSION}" != "" ] && [ "${GLOBAL_STACK_WKHTMLTOPDF_DISTRO}" != "" ] && (curl -fsSLO "https://github.com/wkhtmltopdf/packaging/releases/download/${GLOBAL_STACK_WKHTMLTOPDF_VERSION}/wkhtmltox_${GLOBAL_STACK_WKHTMLTOPDF_VERSION}.${GLOBAL_STACK_WKHTMLTOPDF_DISTRO}_amd64.deb" && apt-get install -y --no-install-recommends --fix-missing ./wkhtmltox_${GLOBAL_STACK_WKHTMLTOPDF_VERSION}.${GLOBAL_STACK_WKHTMLTOPDF_DISTRO}_amd64.deb && rm wkhtmltox_${GLOBAL_STACK_WKHTMLTOPDF_VERSION}.${GLOBAL_STACK_WKHTMLTOPDF_DISTRO}_amd64.deb) || echo -e "\n wkhtmltopdf will not be installed"; } \
+    && { if [ "${GLOBAL_STACK_WKHTMLTOPDF_VERSION}" != "" ] && [ "${GLOBAL_STACK_WKHTMLTOPDF_DISTRO}" != "" ]; then (curl -fsSLO "https://github.com/wkhtmltopdf/packaging/releases/download/${GLOBAL_STACK_WKHTMLTOPDF_VERSION}/wkhtmltox_${GLOBAL_STACK_WKHTMLTOPDF_VERSION}.${GLOBAL_STACK_WKHTMLTOPDF_DISTRO}_amd64.deb" && apt-get install -y --no-install-recommends --fix-missing ./wkhtmltox_${GLOBAL_STACK_WKHTMLTOPDF_VERSION}.${GLOBAL_STACK_WKHTMLTOPDF_DISTRO}_amd64.deb && rm wkhtmltox_${GLOBAL_STACK_WKHTMLTOPDF_VERSION}.${GLOBAL_STACK_WKHTMLTOPDF_DISTRO}_amd64.deb); else echo -e "\n wkhtmltopdf will not be installed"; fi; } \
     && usermod -u 1001 ubuntu \
     && (find / -user 1000 -exec chown -h 1001 {} \; 2>/dev/null || true) \
     && groupmod -g 1001 ubuntu \
@@ -334,11 +334,11 @@ RUN --mount=type=secret,id=global_stack_secret_docker_password \
     && shopt -s extdebug \
     && IFS=$'\n\t' \
     && find /usr/local/bin -type f -exec chmod a+x {} \; \
-    && { [ "${GLOBAL_STACK_DOCKER_IN_DOCKER}" = "true" ] && global-stack-base-install-docker-in-docker.sh || echo -e "\n Docker In Docker will not be installed"; } \
-    && { [ "${GLOBAL_STACK_INSTALL_GITLAB_RUNNER}" = "true" ] && global-stack-base-install-gitlab-runner.sh || echo -e "\n Gitlab runner will not be installed"; } \
-    && { [ "${GLOBAL_STACK_INSTALL_PODMAN}" = "true" ] && global-stack-base-install-podman.sh || echo -e "\n Podman will not be installed"; } \
-    && { [ "${GLOBAL_STACK_INSTALL_ANSIBLE}" = "true" ] && global-stack-base-install-ansible.sh || echo -e "\n Ansible will not be installed"; } \
-    && { [ "${GLOBAL_STACK_BASE_INSTALL_TOOLS}" = "true" ] && global-stack-base-install-tools.sh || echo -e "\n Tools will not be installed"; } \
+    && { if [ "${GLOBAL_STACK_DOCKER_IN_DOCKER}" = "true" ]; then global-stack-base-install-docker-in-docker.sh; else echo -e "\n Docker In Docker will not be installed"; fi; } \
+    && { if [ "${GLOBAL_STACK_INSTALL_GITLAB_RUNNER}" = "true" ]; then global-stack-base-install-gitlab-runner.sh; else echo -e "\n Gitlab runner will not be installed"; fi; } \
+    && { if [ "${GLOBAL_STACK_INSTALL_PODMAN}" = "true" ]; then global-stack-base-install-podman.sh; else echo -e "\n Podman will not be installed"; fi; } \
+    && { if [ "${GLOBAL_STACK_INSTALL_ANSIBLE}" = "true" ]; then global-stack-base-install-ansible.sh; else echo -e "\n Ansible will not be installed"; fi; } \
+    && { if [ "${GLOBAL_STACK_BASE_INSTALL_TOOLS}" = "true" ]; then global-stack-base-install-tools.sh; else echo -e "\n Tools will not be installed"; fi; } \
     && global-stack-base-install-mkcert.sh \
     && mkcert -CAROOT ${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/caroot -install \
     && apt-get clean -y \
@@ -346,7 +346,7 @@ RUN --mount=type=secret,id=global_stack_secret_docker_password \
     && rm -rf /etc/apt/apt.conf.d/docker-clean \
     && mkdir -p ${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/caroot \
     && chmod -R a+rwx ${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/caroot \
-    && { [ "${GLOBAL_STACK_UNU}" = "true" ] && global-stack-base-unu.sh || echo -e "\n Will not upgrade the distribution"; }
+    && { if [ "${GLOBAL_STACK_UNU}" = "true" ]; then global-stack-base-unu.sh; else echo -e "\n Will not upgrade the distribution"; fi; }
 
 # After the big RUN on purpose, like the ENV below: neither a hurl pin change nor this
 # step invalidates the base layer.

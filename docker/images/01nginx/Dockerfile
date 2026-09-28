@@ -29,7 +29,7 @@ ENV GLOBAL_STACK_NGINX_AUTOMAKE_VERSION="${GLOBAL_STACK_NGINX_AUTOMAKE_VERSION}"
 # apt packages are deliberately NOT pinned — see .hadolint.yaml (DL3008 ignored:
 # development environment, intentionally tracks latest). Ruling 2026-09-04, row 26.
 RUN shopt -s extdebug \
-    && { [ "${GLOBAL_STACK_NGINX_AUTOMAKE_VERSION}" != "" ] && [ "${GLOBAL_STACK_NGINX_AUTOMAKE_MIRROR}" != "" ] && (curl -fsSLO "${GLOBAL_STACK_NGINX_AUTOMAKE_MIRROR}/automake-${GLOBAL_STACK_NGINX_AUTOMAKE_VERSION}.tar.gz" && tar -xf automake-${GLOBAL_STACK_NGINX_AUTOMAKE_VERSION}.tar.gz && cd automake-${GLOBAL_STACK_NGINX_AUTOMAKE_VERSION} && ./configure --prefix=/opt/automake-${GLOBAL_STACK_NGINX_AUTOMAKE_VERSION} && make -j$(nproc) && make install && rm -rf automake-${GLOBAL_STACK_NGINX_AUTOMAKE_VERSION}) || echo -e "\n automake will not be installed"; } \
+    && { if [ "${GLOBAL_STACK_NGINX_AUTOMAKE_VERSION}" != "" ] && [ "${GLOBAL_STACK_NGINX_AUTOMAKE_MIRROR}" != "" ]; then (curl -fsSLO "${GLOBAL_STACK_NGINX_AUTOMAKE_MIRROR}/automake-${GLOBAL_STACK_NGINX_AUTOMAKE_VERSION}.tar.gz" && tar -xf automake-${GLOBAL_STACK_NGINX_AUTOMAKE_VERSION}.tar.gz && cd automake-${GLOBAL_STACK_NGINX_AUTOMAKE_VERSION} && ./configure --prefix=/opt/automake-${GLOBAL_STACK_NGINX_AUTOMAKE_VERSION} && make -j$(nproc) && make install && rm -rf automake-${GLOBAL_STACK_NGINX_AUTOMAKE_VERSION}); else echo -e "\n automake will not be installed"; fi; } \
     && IFS=$'\n\t' \
     && apt-get update --allow-releaseinfo-change \
     && apt-get install -y --no-install-recommends --fix-missing \

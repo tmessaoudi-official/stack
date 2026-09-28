@@ -12,7 +12,9 @@ curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o 
 echo -e "Types: deb\nSigned-By: /usr/share/keyrings/docker.gpg\nArch: $(dpkg --print-architecture)\nURIs: https://download.docker.com/linux/ubuntu\nSuites: ${UBUNTU_CODENAME}\nComponents: stable" | sudo tee /etc/apt/sources.list.d/docker.sources > /dev/null
 sudo apt-get update --allow-releaseinfo-change
 sudo apt-get install -y docker-ce docker-ce-cli containerd.io
-sudo groupadd docker > /dev/null
+# docker-ce's postinst already creates the group; a bare groupadd exited 9 here and, behind the
+# Dockerfile's old `&& … || echo` mask, silently skipped everything below (2026-09-28).
+getent group docker >/dev/null || sudo groupadd docker
 sudo usermod -aG docker "${GLOBAL_STACK_DOCKER_USER_ID}"
 
 mkdir -p /home/"${GLOBAL_STACK_DOCKER_USER_ID}"/.docker/cli-plugins/
@@ -99,7 +101,7 @@ if [[ "" != "${OPERATING_SYSTEM}" ]]; then
 		# GLOBAL_UNU_DOCKER_COMPOSEV2_LATEST=$(curl --silent https://api.github.com/repos/docker/compose/releases/latest | jq .name -r)
 		GLOBAL_UNU_DOCKER_COMPOSEV2_LATEST=${GLOBAL_STACK_DOCKER_COMPOSE_VERSION}
 		echo "Installing docker-compose v2 - system : ${OPERATING_SYSTEM}, arch : ${DOCKER_COMPOSE_ARCH}"
-		curl -L "https://github.com/docker/compose/releases/download/${GLOBAL_UNU_DOCKER_COMPOSEV2_LATEST}/docker-compose-${OPERATING_SYSTEM}-${DOCKER_COMPOSE_ARCH}" -o /home/"${GLOBAL_STACK_DOCKER_USER_ID}"/.docker/cli-plugins/docker-compose
+		curl -fL "https://github.com/docker/compose/releases/download/${GLOBAL_UNU_DOCKER_COMPOSEV2_LATEST}/docker-compose-${OPERATING_SYSTEM}-${DOCKER_COMPOSE_ARCH}" -o /home/"${GLOBAL_STACK_DOCKER_USER_ID}"/.docker/cli-plugins/docker-compose
 		chmod a+rwx /home/"${GLOBAL_STACK_DOCKER_USER_ID}"/.docker/cli-plugins/docker-compose
 	fi
 
@@ -107,12 +109,12 @@ if [[ "" != "${OPERATING_SYSTEM}" ]]; then
 		# GLOBAL_UNU_DOCKER_BUILDX_LATEST=$(curl --silent https://api.github.com/repos/docker/buildx/releases/latest | jq .name -r)
 		GLOBAL_UNU_DOCKER_BUILDX_LATEST=${GLOBAL_STACK_DOCKER_BUILDX_VERSION}
 		echo "Installing docker-buildx - system : ${OPERATING_SYSTEM}, arch : ${DOCKER_BUILDX_ARCH}"
-		curl -L "https://github.com/docker/buildx/releases/download/${GLOBAL_UNU_DOCKER_BUILDX_LATEST}/buildx-${GLOBAL_UNU_DOCKER_BUILDX_LATEST}.${OPERATING_SYSTEM}-${DOCKER_BUILDX_ARCH}" -o /home/"${GLOBAL_STACK_DOCKER_USER_ID}"/.docker/cli-plugins/docker-buildx
+		curl -fL "https://github.com/docker/buildx/releases/download/${GLOBAL_UNU_DOCKER_BUILDX_LATEST}/buildx-${GLOBAL_UNU_DOCKER_BUILDX_LATEST}.${OPERATING_SYSTEM}-${DOCKER_BUILDX_ARCH}" -o /home/"${GLOBAL_STACK_DOCKER_USER_ID}"/.docker/cli-plugins/docker-buildx
 		chmod a+rwx /home/"${GLOBAL_STACK_DOCKER_USER_ID}"/.docker/cli-plugins/docker-buildx
 	fi
 fi
 # Latest Sep 18, 2021, 1:35 PM GMT+1
-sudo curl -L https://raw.githubusercontent.com/samoshkin/docker-reclaim-disk-space/master/script.sh -o /usr/local/bin/docker-reclaim-disk-space-script.sh
+sudo curl -fL https://raw.githubusercontent.com/samoshkin/docker-reclaim-disk-space/master/script.sh -o /usr/local/bin/docker-reclaim-disk-space-script.sh
 sudo chmod a+rwx /usr/local/bin/docker-reclaim-disk-space-script.sh
 
 sudo mkdir -p /etc/docker/

@@ -9,5 +9,5 @@ echo -e "Types: deb\nSigned-By: /usr/share/keyrings/podman.gpg\nArch: $(dpkg --p
 sudo apt-get update --allow-releaseinfo-change
 sudo apt-get -y --no-install-recommends --fix-missing install podman
 
-sudo curl -L "https://raw.githubusercontent.com/containers/podman-compose/${GLOBAL_STACK_PODMAN_COMPOSE_VERSION}/podman_compose.py" -o /usr/local/bin/podman-compose
+sudo curl -fL "https://raw.githubusercontent.com/containers/podman-compose/${GLOBAL_STACK_PODMAN_COMPOSE_VERSION}/podman_compose.py" -o /usr/local/bin/podman-compose
 sudo chmod a+rwx /usr/local/bin/podman-compose

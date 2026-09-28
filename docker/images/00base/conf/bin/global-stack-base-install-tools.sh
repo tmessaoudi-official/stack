@@ -161,14 +161,14 @@ if [[ "" != "${OPERATING_SYSTEM}" ]]; then
 	if [[ "" != "${HADOLINT_ARCH}" ]]; then
 		echo "Installing hadolint - system : ${OPERATING_SYSTEM}, arch : ${HADOLINT_ARCH}"
 		# GLOBAL_STACK_HADOLINT_VERSION="$(curl --silent https://api.github.com/repos/hadolint/hadolint/releases/latest | jq .name -r)"
-		sudo curl -L "https://github.com/hadolint/hadolint/releases/download/${GLOBAL_STACK_HADOLINT_VERSION}/hadolint-${OPERATING_SYSTEM}-${HADOLINT_ARCH}" -o /usr/local/bin/hadolint
+		sudo curl -fL "https://github.com/hadolint/hadolint/releases/download/${GLOBAL_STACK_HADOLINT_VERSION}/hadolint-${OPERATING_SYSTEM}-${HADOLINT_ARCH}" -o /usr/local/bin/hadolint
 		sudo chmod a+rwx /usr/local/bin/hadolint
 	fi
 
 	if [[ "" != "${SHELLCHECK_ARCH}" ]]; then
 		echo "Installing shellcheck - system : ${OPERATING_SYSTEM}, arch : ${SHELLCHECK_ARCH}"
 		# GLOBAL_STACK_SHELLCHECK_VERSION="$(curl --silent https://github.com/koalaman/shellcheck/releases/latest | jq .name -r)"
-		sudo curl -L "https://github.com/koalaman/shellcheck/releases/download/${GLOBAL_STACK_SHELLCHECK_VERSION}/shellcheck-${GLOBAL_STACK_SHELLCHECK_VERSION}.${OPERATING_SYSTEM}.${SHELLCHECK_ARCH}.tar.xz" -o "/usr/local/bin/shellcheck-${GLOBAL_STACK_SHELLCHECK_VERSION}.tar.xz"
+		sudo curl -fL "https://github.com/koalaman/shellcheck/releases/download/${GLOBAL_STACK_SHELLCHECK_VERSION}/shellcheck-${GLOBAL_STACK_SHELLCHECK_VERSION}.${OPERATING_SYSTEM}.${SHELLCHECK_ARCH}.tar.xz" -o "/usr/local/bin/shellcheck-${GLOBAL_STACK_SHELLCHECK_VERSION}.tar.xz"
 		sudo mkdir -p "/usr/local/bin/shellcheck-${GLOBAL_STACK_SHELLCHECK_VERSION}"
 		sudo tar -xf "/usr/local/bin/shellcheck-${GLOBAL_STACK_SHELLCHECK_VERSION}.tar.xz" -C "/usr/local/bin/shellcheck-${GLOBAL_STACK_SHELLCHECK_VERSION}"
 		sudo mv "/usr/local/bin/shellcheck-${GLOBAL_STACK_SHELLCHECK_VERSION}/shellcheck-${GLOBAL_STACK_SHELLCHECK_VERSION}/shellcheck" /usr/local/bin/shellcheck
@@ -179,7 +179,7 @@ if [[ "" != "${OPERATING_SYSTEM}" ]]; then
 	if [[ "" != "${GITLEAKS_ARCH}" ]]; then
 		echo "Installing gitleaks - system : ${OPERATING_SYSTEM}, arch : ${GITLEAKS_ARCH}"
 		GLOBAL_UNU_GITLEAKS_LATEST="${GLOBAL_STACK_GITLEAKS_VERSION#v}"
-		sudo curl -L "https://github.com/gitleaks/gitleaks/releases/download/v${GLOBAL_UNU_GITLEAKS_LATEST}/gitleaks_${GLOBAL_UNU_GITLEAKS_LATEST}_${OPERATING_SYSTEM}_${GITLEAKS_ARCH}.tar.gz" -o /usr/local/bin/gitleaks.tar.gz
+		sudo curl -fL "https://github.com/gitleaks/gitleaks/releases/download/v${GLOBAL_UNU_GITLEAKS_LATEST}/gitleaks_${GLOBAL_UNU_GITLEAKS_LATEST}_${OPERATING_SYSTEM}_${GITLEAKS_ARCH}.tar.gz" -o /usr/local/bin/gitleaks.tar.gz
 		sudo mkdir -p /usr/local/bin/gitleaks_archive
 		sudo tar -xf /usr/local/bin/gitleaks.tar.gz -C /usr/local/bin/gitleaks_archive
 		sudo mv /usr/local/bin/gitleaks_archive/gitleaks /usr/local/bin/gitleaks
@@ -189,7 +189,7 @@ if [[ "" != "${OPERATING_SYSTEM}" ]]; then
 
 	if [[ "" != "${SHFMT_ARCH}" ]]; then
 		echo "Installing shfmt - system : ${OPERATING_SYSTEM}, arch : ${SHFMT_ARCH}"
-		sudo curl -L "https://github.com/mvdan/sh/releases/download/${GLOBAL_STACK_SHFMT_VERSION}/shfmt_${GLOBAL_STACK_SHFMT_VERSION}_${OPERATING_SYSTEM}_${SHFMT_ARCH}" -o /usr/local/bin/shfmt
+		sudo curl -fL "https://github.com/mvdan/sh/releases/download/${GLOBAL_STACK_SHFMT_VERSION}/shfmt_${GLOBAL_STACK_SHFMT_VERSION}_${OPERATING_SYSTEM}_${SHFMT_ARCH}" -o /usr/local/bin/shfmt
 		sudo chmod a+rwx /usr/local/bin/shfmt
 	fi
 
@@ -197,7 +197,7 @@ if [[ "" != "${OPERATING_SYSTEM}" ]]; then
 		echo "Installing task - ${OPERATING_SYSTEM}, arch : ${TASK_ARCH}"
 		TASK_ARCHIVE_NAME="task_${OPERATING_SYSTEM}_${TASK_ARCH}"
 		echo "https://github.com/go-task/task/releases/download/${GLOBAL_STACK_TASK_VERSION}/${TASK_ARCHIVE_NAME}.tar.gz"
-		sudo curl -L "https://github.com/go-task/task/releases/download/${GLOBAL_STACK_TASK_VERSION}/${TASK_ARCHIVE_NAME}.tar.gz" -o "/opt/${GLOBAL_STACK_DOCKER_USER_ID}/${TASK_ARCHIVE_NAME}.tar.gz"
+		sudo curl -fL "https://github.com/go-task/task/releases/download/${GLOBAL_STACK_TASK_VERSION}/${TASK_ARCHIVE_NAME}.tar.gz" -o "/opt/${GLOBAL_STACK_DOCKER_USER_ID}/${TASK_ARCHIVE_NAME}.tar.gz"
 		cd "/opt/${GLOBAL_STACK_DOCKER_USER_ID}" || exit 1
 		sudo mkdir -p "/opt/${GLOBAL_STACK_DOCKER_USER_ID}/${TASK_ARCHIVE_NAME}"
 		sudo tar -xf "${TASK_ARCHIVE_NAME}.tar.gz" -C "/opt/${GLOBAL_STACK_DOCKER_USER_ID}/${TASK_ARCHIVE_NAME}"
@@ -210,7 +210,7 @@ if [[ "" != "${OPERATING_SYSTEM}" ]]; then
 		echo "Installing yamfmt - ${OPERATING_SYSTEM}, arch : ${YAMLFMT_ARCH}"
 		YAMLFMT_ARCHIVE_NAME="yamlfmt_${GLOBAL_STACK_YAMLFMT_VERSION#v}_${OPERATING_SYSTEM}_${YAMLFMT_ARCH}"
 		echo "https://github.com/google/yamlfmt/releases/download/${GLOBAL_STACK_YAMLFMT_VERSION}/${YAMLFMT_ARCHIVE_NAME}.tar.gz"
-		sudo curl -L "https://github.com/google/yamlfmt/releases/download/${GLOBAL_STACK_YAMLFMT_VERSION}/${YAMLFMT_ARCHIVE_NAME}.tar.gz" -o "/usr/local/bin/${YAMLFMT_ARCHIVE_NAME}.tar.gz"
+		sudo curl -fL "https://github.com/google/yamlfmt/releases/download/${GLOBAL_STACK_YAMLFMT_VERSION}/${YAMLFMT_ARCHIVE_NAME}.tar.gz" -o "/usr/local/bin/${YAMLFMT_ARCHIVE_NAME}.tar.gz"
 		sudo mkdir -p "/usr/local/bin/${YAMLFMT_ARCHIVE_NAME}"
 		sudo tar -xf "/usr/local/bin/${YAMLFMT_ARCHIVE_NAME}.tar.gz" -C "/usr/local/bin/${YAMLFMT_ARCHIVE_NAME}"
 		sudo cp "/usr/local/bin/${YAMLFMT_ARCHIVE_NAME}/yamlfmt" /usr/local/bin/yamlfmt
@@ -221,8 +221,23 @@ fi
 
 if [[ "" != "${DIFFTASTIC_OPERATING_SYSTEM}" && "" != "${DIFFTASTIC_ARCH}" ]]; then
 	echo "Installing difftastic - system : ${DIFFTASTIC_OPERATING_SYSTEM}, arch : ${DIFFTASTIC_ARCH}"
-	echo "https://github.com/Wilfred/difftastic/releases/download/${GLOBAL_STACK_DIFFTASTIC_VERSION}/difft-${DIFFTASTIC_ARCH}-${DIFFTASTIC_OPERATING_SYSTEM}.tar.gz"
-	sudo curl -L "https://github.com/Wilfred/difftastic/releases/download/${GLOBAL_STACK_DIFFTASTIC_VERSION}/difft-${DIFFTASTIC_ARCH}-${DIFFTASTIC_OPERATING_SYSTEM}.tar.gz" -o /usr/local/bin/difftastic.tar.gz
+	# 0.71.0 put the version in the asset name (difft-0.71.0-x86_64-unknown-linux-gnu.tar.gz);
+	# every earlier release has none. Try both, so a pin moved either way installs, and stop
+	# with a named error if neither is published (bin/tests/base-install-tools.test.sh §1).
+	DIFFTASTIC_FETCHED=""
+	for DIFFTASTIC_ASSET in \
+		"difft-${GLOBAL_STACK_DIFFTASTIC_VERSION}-${DIFFTASTIC_ARCH}-${DIFFTASTIC_OPERATING_SYSTEM}.tar.gz" \
+		"difft-${DIFFTASTIC_ARCH}-${DIFFTASTIC_OPERATING_SYSTEM}.tar.gz"; do
+		echo "https://github.com/Wilfred/difftastic/releases/download/${GLOBAL_STACK_DIFFTASTIC_VERSION}/${DIFFTASTIC_ASSET}"
+		if sudo curl -fL "https://github.com/Wilfred/difftastic/releases/download/${GLOBAL_STACK_DIFFTASTIC_VERSION}/${DIFFTASTIC_ASSET}" -o /usr/local/bin/difftastic.tar.gz; then
+			DIFFTASTIC_FETCHED=1
+			break
+		fi
+	done
+	if [[ -z "${DIFFTASTIC_FETCHED}" ]]; then
+		echo "FATAL: no difftastic ${GLOBAL_STACK_DIFFTASTIC_VERSION} asset for ${DIFFTASTIC_ARCH}-${DIFFTASTIC_OPERATING_SYSTEM} under either naming scheme" >&2
+		exit 1
+	fi
 	sudo mkdir -p /usr/local/bin/difftastic_archive
 	sudo tar -xf /usr/local/bin/difftastic.tar.gz -C /usr/local/bin/difftastic_archive
 	sudo mv /usr/local/bin/difftastic_archive/difft /usr/local/bin/difft
@@ -238,7 +253,7 @@ if [[ "" != "${SONAR_SCANNER_CLI_OPERATING_SYSTEM}" && "" != "${SONAR_SCANNER_CL
         SONAR_SCANNER_CLI_ARCHIVE_NAME="${SONAR_SCANNER_CLI_ARCHIVE_NAME}-${SONAR_SCANNER_CLI_ARCH}"
     fi
     
-    sudo curl -L "https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/${SONAR_SCANNER_CLI_ARCHIVE_NAME}.zip" -o "/opt/${GLOBAL_STACK_DOCKER_USER_ID}/${SONAR_SCANNER_CLI_ARCHIVE_NAME}.zip"
+    sudo curl -fL "https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/${SONAR_SCANNER_CLI_ARCHIVE_NAME}.zip" -o "/opt/${GLOBAL_STACK_DOCKER_USER_ID}/${SONAR_SCANNER_CLI_ARCHIVE_NAME}.zip"
     cd "/opt/${GLOBAL_STACK_DOCKER_USER_ID}" || exit 1
     sudo unzip "${SONAR_SCANNER_CLI_ARCHIVE_NAME}.zip"
     sudo mv "${SONAR_SCANNER_CLI_ARCHIVE_NAME/sonar-scanner-cli-/sonar-scanner-}" sonar-scanner-cli
@@ -250,7 +265,7 @@ if [[ "" != "${BAT_OPERATING_SYSTEM}" && "" != "${BAT_ARCH}" ]]; then
 	echo "Installing bat - ${BAT_OPERATING_SYSTEM}, arch : ${BAT_ARCH}"
 	BAT_ARCHIVE_NAME="bat-${GLOBAL_STACK_BAT_VERSION}-${BAT_ARCH}-${BAT_OPERATING_SYSTEM}"
 	echo "https://github.com/sharkdp/bat/releases/download/${GLOBAL_STACK_BAT_VERSION}/${BAT_ARCHIVE_NAME}.tar.gz"
-	sudo curl -L "https://github.com/sharkdp/bat/releases/download/${GLOBAL_STACK_BAT_VERSION}/${BAT_ARCHIVE_NAME}.tar.gz" -o "/opt/${GLOBAL_STACK_DOCKER_USER_ID}/${BAT_ARCHIVE_NAME}.tar.gz"
+	sudo curl -fL "https://github.com/sharkdp/bat/releases/download/${GLOBAL_STACK_BAT_VERSION}/${BAT_ARCHIVE_NAME}.tar.gz" -o "/opt/${GLOBAL_STACK_DOCKER_USER_ID}/${BAT_ARCHIVE_NAME}.tar.gz"
 	cd "/opt/${GLOBAL_STACK_DOCKER_USER_ID}" || exit 1
 	sudo mkdir -p "/opt/${GLOBAL_STACK_DOCKER_USER_ID}/${BAT_ARCHIVE_NAME}"
 	sudo tar -xzf "${BAT_ARCHIVE_NAME}.tar.gz" --strip-components=1 -C "/opt/${GLOBAL_STACK_DOCKER_USER_ID}/${BAT_ARCHIVE_NAME}"
@@ -263,7 +278,7 @@ if [[ "" != "${SOPS_OPERATING_SYSTEM}${SOPS_ARCH}" ]]; then
 	echo "Installing sops - ${SOPS_OPERATING_SYSTEM}, arch : ${SOPS_ARCH}"
 	SOPS_FILE_NAME="sops-${GLOBAL_STACK_SOPS_VERSION}.${SOPS_OPERATING_SYSTEM}.${SOPS_ARCH}"
 	echo "https://github.com/getsops/sops/releases/download/${GLOBAL_STACK_SOPS_VERSION}/${SOPS_FILE_NAME}"
-	sudo curl -L "https://github.com/getsops/sops/releases/download/${GLOBAL_STACK_SOPS_VERSION}/${SOPS_FILE_NAME}" -o "/usr/local/bin/sops"
+	sudo curl -fL "https://github.com/getsops/sops/releases/download/${GLOBAL_STACK_SOPS_VERSION}/${SOPS_FILE_NAME}" -o "/usr/local/bin/sops"
 	sudo chmod a+x "/usr/local/bin/sops"
 fi
 
@@ -279,7 +294,7 @@ if [[ "" != "${RTK_ARCH}" ]]; then
 	elif [[ "darwin" == "${OPERATING_SYSTEM}" ]]; then
 		RTK_OS_TARGET="${RTK_ARCH}-apple-darwin"
 	fi
-	sudo curl -L "https://github.com/rtk-ai/rtk/releases/download/${GLOBAL_STACK_RTK_VERSION}/rtk-${RTK_OS_TARGET}.tar.gz" -o /usr/local/bin/rtk.tar.gz
+	sudo curl -fL "https://github.com/rtk-ai/rtk/releases/download/${GLOBAL_STACK_RTK_VERSION}/rtk-${RTK_OS_TARGET}.tar.gz" -o /usr/local/bin/rtk.tar.gz
 	sudo mkdir -p /usr/local/bin/rtk_archive
 	sudo tar -xzf /usr/local/bin/rtk.tar.gz -C /usr/local/bin/rtk_archive
 	sudo mv /usr/local/bin/rtk_archive/rtk /usr/local/bin/rtk
@@ -289,7 +304,7 @@ fi
 
 if [[ "" != "${CLAUDE_CODE_ARCH}" && "" != "${OPERATING_SYSTEM}" && "" != "${GLOBAL_STACK_CLAUDE_CODE_VERSION}" ]]; then
 	echo "Installing claude - system : ${OPERATING_SYSTEM}, arch : ${CLAUDE_CODE_ARCH}"
-	sudo curl -L "https://downloads.claude.ai/claude-code-releases/${GLOBAL_STACK_CLAUDE_CODE_VERSION}/${OPERATING_SYSTEM}-${CLAUDE_CODE_ARCH}/claude" -o /usr/local/bin/claude
+	sudo curl -fL "https://downloads.claude.ai/claude-code-releases/${GLOBAL_STACK_CLAUDE_CODE_VERSION}/${OPERATING_SYSTEM}-${CLAUDE_CODE_ARCH}/claude" -o /usr/local/bin/claude
 	sudo chmod a+x /usr/local/bin/claude
 fi
 
@@ -299,13 +314,15 @@ if [[ "true" == "${GLOBAL_STACK_RTK_INIT}" ]] \
 	echo "Initializing rtk for Claude Code"
 	sudo mkdir -p "/home/${GLOBAL_STACK_DOCKER_USER_ID}/.claude"
 	sudo chown "${GLOBAL_STACK_DOCKER_USER_ID}":"${GLOBAL_STACK_DOCKER_GROUP_ID}" "/home/${GLOBAL_STACK_DOCKER_USER_ID}/.claude"
-	rtk telemetry disable
-	rtk init --agent claude --global --auto-patch
+	# As the stack user: the build runs this as root, so a bare `rtk init --global` wrote to
+	# /root/.claude, which does not exist, and failed — the directory made above is the target.
+	sudo -u "${GLOBAL_STACK_DOCKER_USER_ID}" -H rtk telemetry disable
+	sudo -u "${GLOBAL_STACK_DOCKER_USER_ID}" -H rtk init --agent claude --global --auto-patch
 fi
 
 if [[ "" != "${YQ_ARCH}" && "" != "${OPERATING_SYSTEM}" ]]; then
 	echo "Installing yq - system : ${OPERATING_SYSTEM}, arch : ${YQ_ARCH}"
 	echo "https://github.com/mikefarah/yq/releases/download/${GLOBAL_STACK_YQ_VERSION}/yq_${OPERATING_SYSTEM}_${YQ_ARCH}"
-	sudo curl -L "https://github.com/mikefarah/yq/releases/download/${GLOBAL_STACK_YQ_VERSION}/yq_${OPERATING_SYSTEM}_${YQ_ARCH}" -o /usr/local/bin/yq
+	sudo curl -fL "https://github.com/mikefarah/yq/releases/download/${GLOBAL_STACK_YQ_VERSION}/yq_${OPERATING_SYSTEM}_${YQ_ARCH}" -o /usr/local/bin/yq
 	sudo chmod a+x /usr/local/bin/yq
 fi
