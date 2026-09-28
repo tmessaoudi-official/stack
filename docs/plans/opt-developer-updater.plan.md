@@ -16,7 +16,8 @@ already keeps `task`, `bat` and `sonar-scanner-cli`.
 - [2026-09-28 20:16] REJECTED: Pin name GLOBAL_STACK_ANDROIDSTUDIO_VERSION — developer ruling 20:24: use GLOBAL_STACK_ANDROID_STUDIO_VERSION. (The stated reason was also overstated: no doc prescribes an `ANDROID` filter; only a hand-typed `--filter=ANDROID` would sweep it in.)
 - [2026-09-28 20:16] AGREED (ratified ASSUMED): Stray archives: the script never deletes a file it did not download; today's hand-downloaded archives get a one-off handoff command — because deleting user files by pattern is irreversible. Alternatives: pattern-delete managed-tool archives in /opt/developer on --apply.
 - [2026-09-28 20:26] AGREED: Plan approved (go) including 9 new .env pins; Android Studio pin is GLOBAL_STACK_ANDROID_STUDIO_VERSION; Sublime keeps a bare-build pin (4215) and every build bump stays HOLD (apply with --force-hold --confirm).
-- [2026-09-28 20:56] ASSUMED (review): Android Studio pin holds the BUILD id (AI-261.26222.65.2614.16379836, from the release list's .build), not the marketing version 2026.1.4.8 — because the installed tree carries only the build id (product-info.json, build.txt), so --check can compare without a network lookup. Gate: a patch or quarterly release within 261 is AUTO, 261→262 (Quail→Rabbit) HOLDs [Verified: _gs_eu2_classify_decision]. Alternatives: marketing-version pin + a .gs-version marker written at install (the current hand install would re-download once).
+- [2026-09-28 20:56] AGREED (ratified ASSUMED 21:22): Android Studio pin holds the BUILD id (AI-261.26222.65.2614.16379836, from the release list's .build), not the marketing version 2026.1.4.8 — because the installed tree carries only the build id (product-info.json, build.txt), so --check can compare without a network lookup. Gate: a patch or quarterly release within 261 is AUTO, 261→262 (Quail→Rabbit) HOLDs [Verified: _gs_eu2_classify_decision]. Alternatives: marketing-version pin + a .gs-version marker written at install (the current hand install would re-download once).
+- [2026-09-28 21:25] AGREED: Android Studio tracks the STABLE channels only (Release+Patch); Rabbit (262) arrives as a HOLD once it goes stable and is applied with --force-hold. PhpStorm move: developer runs /tmp/mv-phpstorm-layout-20260928.sh now. Next: step 4 (VS Code, Devin, Sublime).
 
 ## Inventory (2026-09-28, read from each tool's own metadata)
 
@@ -155,7 +156,7 @@ top-level dir (`PhpStorm-262.10968.76`, `WebStorm-262.10968.77`, `android-studio
 | 1 | Parser proof: url + fetch-json with quotes/?& | S | done | 617105b | bin/tests/env-update.test.sh, bin/lib/env-update/core/parse.sh |
 | 2 | Engine + test harness (+ the IDEA row as its vehicle) | L | done | c2e5e61 | templates/shell/global-unu-opt.sh, bin/tests/global-unu-opt.test.sh |
 | 3 | JetBrains x3 + Android Studio | M | done | 64ac247 | .env, templates/shell/global-unu-opt.sh |
-| 4 | VS Code + Devin + Sublime | M | todo | - | .env, templates/shell/global-unu-opt.sh |
+| 4 | VS Code + Devin + Sublime | M | doing | - | .env, templates/shell/global-unu-opt.sh |
 | 5 | MeGit + Etcher | M | todo | - | .env, templates/shell/global-unu-opt.sh |
 | 6 | Move task/bat/sonar-scanner-cli | M | todo | - | templates/shell/global-unu.sh, templates/shell/global-unu-opt.sh |
 | 7 | Hook + .profile + docs | S | todo | - | templates/shell/global-unu.sh, templates/shell/.profile, CLAUDE.md |
