@@ -127,7 +127,7 @@ names (00base shares the bat/sonar pins).
    digest; Etcher gets its first launcher.
 6. **Move task / bat / sonar-scanner-cli** (M): delete their blocks from `global-unu.sh`, add rows
    (sonar `.sha256`; task `task_checksums.txt` from releases/download — no API; bat NOCHECKSUM, see
-   ASSUMED 21:5x); PATH entries in `.profile` unchanged.
+   ASSUMED 21:55); PATH entries in `.profile` unchanged.
 7. **Hook + cleanup + docs** (S): `global-unu.sh` runs
    `"$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/global-unu-opt.sh" --apply` as its last
    step BEFORE the final `echo "Successful :)"` (the script has no `set -e`, so a failure must be
