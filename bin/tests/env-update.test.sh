@@ -3060,7 +3060,7 @@ t "t32l: sdkman Java — preferred dist absent upstream SKIPs loudly, never swap
 # suggested 27.0.0-zulu, it was pinned, and 03java27-zulu exhausted on-failure:5.
 # Every proposal must be an identifier SDKMAN LISTS.  Fixture mirrors the live shape.
 _T32_BUILD_IDS='26.0.2+1.1-zulu,26.0.2.fx-zulu,26.0.1.crac-zulu,27.0.0+35-zulu,27.0.0-fx+35-zulu,27.0.0-crac+35-zulu,27.0.0+35-open,27.0.0-oracle,17.0.20+1.1-zulu,17.0.21+2.1-zulu'
-_t32_build_rec() {  # $1 case  $2 current  $3 major  $4 watch_major_depth (may be empty)
+_t32_build_rec() { # $1 case  $2 current  $3 major  $4 watch_major_depth (may be empty)
   printf '%s\n' "
     ${_SDK_LIBS}
     bd=\"\${TMP_DIR}/t32_$1_fixtures/http\"
@@ -3100,6 +3100,21 @@ t "t32o: sdkman Java — a newer release is proposed as its LISTED +build id" ba
     $(_t32_build_rec o '17.0.19-zulu' 17 '')
     [[ \"\$val\" == '17.0.21+2.1-zulu' ]] \
         || { echo \"expected '17.0.21+2.1-zulu' (listed id), got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# '+' is an ERE quantifier: a pin that now CARRIES +build must still be found and
+# rewritten by --apply (annotation token and VAR= line), not silently left alone.
+t "t32p: --apply rewrites a +build Java pin (27.0.0+35-zulu → 27.0.1+8-zulu)" bash -c "
+    source '${_GS_EU2_LIB}/config/defaults.sh'
+    source '${_GS_EU2_LIB}/core/records.sh'
+    source '${_GS_EU2_LIB}/core/apply.sh'
+    f=\"\${TMP_DIR}/t32p.env\"
+    ann='# @todo env-update (watch-major) sdkman:java:27 27.0.0+35-zulu'
+    printf '%s\nGLOBAL_STACK_JAVA27_VERSION=27.0.0+35-zulu\nGLOBAL_STACK_JAVA27_VERSION_AS=27\n' \"\$ann\" > \"\$f\"
+    _gs_eu2_apply_single \"\$f\" 'GLOBAL_STACK_JAVA27_VERSION' '27.0.1+8-zulu' \"\$ann\" '27.0.0+35-zulu' '' '' 'false' 'false' ''
+    want=\$(printf '%s\n' '# @todo env-update (watch-major) sdkman:java:27 27.0.1+8-zulu' 'GLOBAL_STACK_JAVA27_VERSION=27.0.1+8-zulu' 'GLOBAL_STACK_JAVA27_VERSION_AS=27')
+    [[ \"\$(cat \"\$f\")\" == \"\$want\" ]] || { echo \"unexpected file:\"; cat \"\$f\"; echo FAIL; exit 0; }
     echo PASS
 "
 

@@ -299,8 +299,8 @@ _gs_eu2_fetch_sdkman() {
     # Legacy base-form pin of the SAME release (17.0.20-zulu vs listed 17.0.20+1.1-zulu):
     # keep the pin.  It still installs, and the ranked order reads +build as OLDER than
     # the base form, so proposing the listed id here would surface as a false downgrade.
-    if [[ -n "${_proposed}" && "${_proposed}" != "${_current}" \
-          && "$(printf '%s' "${_proposed}" | _gs_eu2_sdkman_strip_build)" == "${_current}" ]]; then
+    if [[ -n "${_proposed}" && "${_proposed}" != "${_current}" &&
+      "$(printf '%s' "${_proposed}" | _gs_eu2_sdkman_strip_build)" == "${_current}" ]]; then
       _proposed="${_current}"
     fi
 
