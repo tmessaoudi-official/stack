@@ -149,6 +149,15 @@ top-level dir (`PhpStorm-262.10968.76`, `WebStorm-262.10968.77`, `android-studio
 `AI-261.26222.65.2614.16379836`), and `sha256sum -c` passes against the vendor checksum
 (JetBrains `.sha256`; the release list's `checksum` for the AS `-linux.tar.gz`).
 
+### Step 4 real-artifact evidence (21:33)
+The real archives in `/opt/developer`: VS Code → one root `VSCode-linux-x64/`, `resources/app/package.json`
+`.version` 1.139.1, sha256 OK against the versions API; Devin → one root `Devin/`, `product.json`
+`.windsurfVersion` 3.10.35, sha256 OK against the feed; Sublime → one root `sublime_text/`, first
+`Build` in `changelog.txt` = 4215, and the built URL serves the same 22300732 bytes (no checksum
+exists). `--check` on the real tree: every managed tool current except phpstorm (move pending).
+No StartupWMClass for these three: Sublime's own .desktop sets none and none could be read from a
+live window (Wayland session; xprop saw no client list).
+
 ## Status
 <!-- progress-block v1 -->
 | # | Step | Size | State | Evidence | Files |
@@ -156,7 +165,7 @@ top-level dir (`PhpStorm-262.10968.76`, `WebStorm-262.10968.77`, `android-studio
 | 1 | Parser proof: url + fetch-json with quotes/?& | S | done | 617105b | bin/tests/env-update.test.sh, bin/lib/env-update/core/parse.sh |
 | 2 | Engine + test harness (+ the IDEA row as its vehicle) | L | done | c2e5e61 | templates/shell/global-unu-opt.sh, bin/tests/global-unu-opt.test.sh |
 | 3 | JetBrains x3 + Android Studio | M | done | 64ac247 | .env, templates/shell/global-unu-opt.sh |
-| 4 | VS Code + Devin + Sublime | M | doing | - | .env, templates/shell/global-unu-opt.sh |
+| 4 | VS Code + Devin + Sublime | M | done | 35059d9 | .env, templates/shell/global-unu-opt.sh |
 | 5 | MeGit + Etcher | M | todo | - | .env, templates/shell/global-unu-opt.sh |
 | 6 | Move task/bat/sonar-scanner-cli | M | todo | - | templates/shell/global-unu.sh, templates/shell/global-unu-opt.sh |
 | 7 | Hook + .profile + docs | S | todo | - | templates/shell/global-unu.sh, templates/shell/.profile, CLAUDE.md |
