@@ -178,7 +178,7 @@ Services live in `docker/images/<tier><name>/` and are numbered by build depende
 - **Tier 02 containers install** runtimes/version managers into this volume; **tier 03+ containers use** what's already there
 - **File-based health signaling** (not port-based): containers write `tools/successes/<token>` on success, `tools/errors/<token>` on failure; Docker healthchecks poll these files
 - `start_period: 24h`, `retries: 99999` — intentionally patient; full stack can take 10+ minutes to come healthy
-- `tools/locks/` — optional coordination between containers (controlled by `GLOBAL_STACK_USE_LOCKS`)
+- `tools/locks/` — coordination between containers, controlled by `GLOBAL_STACK_USE_LOCKS` (default `false`) — EXCEPT sdkman (2026-09-10) and rbenv (2026-09-28), whose locks are unconditional because their shared tool dirs break under concurrent installs (sdkman errors; rbenv's rehash lock fails instead of waiting). Pinned by `startup-prologue.test.sh` §34
 - Container startup scripts live in `docker/config/dist/bin/<runtime>-bin/global-stack-<runtime>-start.sh` (runtime name, not image tier — e.g., `nvm-bin/`, not `02nvm-bin/`)
 - Entrypoint pattern: `CMD ["global-stack-base-sync-bin-n-exec.sh", "global-stack-<runtime>-start.sh"]`
 - `make down` clears `tools/successes/*`, `tools/errors/*`, `tools/locks/*`, `tools/elapsed` (single file)

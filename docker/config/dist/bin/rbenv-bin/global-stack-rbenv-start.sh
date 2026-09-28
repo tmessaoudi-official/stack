@@ -75,12 +75,19 @@ if [[ "${RBENV_MODE}" = "setup" ]]; then
     _ruby_old="$(cat "${_ruby_marker}" 2>/dev/null || true)"
   fi
 
-  if [[ "true" = "${GLOBAL_STACK_USE_LOCKS}" ]]; then
-    printf '\nAcquiring rbenv lock ...\n'
-    exec 200>"${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/rbenv.flock"
-    flock 200
-    printf 'Lock acquired\n'
-  fi
+  # UNCONDITIONAL by design -- like sdkman's, deliberately NOT gated on
+  # GLOBAL_STACK_USE_LOCKS (developer ruling 2026-09-28). 03ruby3 and 03ruby4 share one
+  # RBENV_ROOT, and `rbenv rehash` takes a noclobber lock that FAILS rather than waits.
+  # `rbenv install` always rehashes after a build, so two compiles finishing together
+  # failed one install ("rbenv: cannot rehash: …/.rbenv-shim exists", 2026-09-28); every
+  # `gem install` rehashes too, through backticks, so a collision there drops shims
+  # silently. Cost: on a cold start the ruby compiles run one after another. Nothing in
+  # the locked region waits on the sibling (no wait-for), so it cannot deadlock.
+  # Pinned by bin/tests/startup-prologue.test.sh §34f-§34k.
+  printf '\nAcquiring rbenv lock ...\n'
+  exec 200>"${GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS}/rbenv.flock"
+  flock 200
+  printf 'Lock acquired\n'
 fi
 
 printf '\n******** Starting rbenv %s %s ********\n' "${RBENV_MODE}" "${RUBY_VERSION:-}"
@@ -218,11 +225,9 @@ if [[ "${RBENV_MODE}" = "setup" ]]; then
 
   printf '\nWriting success\n'
   : > "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/ruby.${RUBY_VERSION_AS:-${RUBY_VERSION:-}}"
-  if [[ "true" = "${GLOBAL_STACK_USE_LOCKS}" ]]; then
-    printf '\nReleasing rbenv lock\n'
-    flock -u 200
-    exec 200>&-
-  fi
+  printf '\nReleasing rbenv lock\n'
+  flock -u 200
+  exec 200>&-
 fi
 
 echo "# global-stack-setup-finished" >> "/home/${GLOBAL_STACK_DOCKER_USER_ID}/${GLOBAL_STACK_SHELL_RC_TARGET}"

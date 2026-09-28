@@ -2440,8 +2440,30 @@ assert_pass "34d: the file states WHY it is unconditional (shared SDKMAN_DIR)" \
   grep -q 'UNCONDITIONAL by design' "${_SDKL}"
 assert_pass "34d: ...and names the shared-dir reason, not just the word" \
   bash -c 'grep -A4 "UNCONDITIONAL by design" "$1" | grep -q "SDKMAN_DIR"' _ "${_SDKL}"
-assert_pass "34e: sibling managers DO honour the flag (rbenv as reference)" \
-  bash -c 'grep -B3 "exec 200>.*rbenv\.flock" "$1" | grep -q "USE_LOCKS"' _ "${DIST_BIN}/rbenv-bin/global-stack-rbenv-start.sh"
+assert_pass "34e: sibling managers DO honour the flag (pyenv as reference)" \
+  bash -c 'grep -B3 "exec 200>.*pyenv\.flock" "$1" | grep -q "USE_LOCKS"' _ "${DIST_BIN}/pyenv-bin/global-stack-pyenv-start.sh"
+
+# rbenv joined sdkman on 2026-09-28 (developer ruling): 03ruby3 and 03ruby4 share one
+# RBENV_ROOT, and `rbenv rehash` takes a noclobber lock that FAILS instead of waiting.
+# `rbenv install` always rehashes after a build, so two compiles finishing together
+# failed one install (measured 2026-09-28: "rbenv: cannot rehash: …/.rbenv-shim
+# exists", 13 s after the sibling finished); every `gem install` rehashes too, through
+# backticks, so a collision there drops shims silently.
+_RBL="${DIST_BIN}/rbenv-bin/global-stack-rbenv-start.sh"
+assert_pass "34f: rbenv takes its flock" \
+  grep -Eq 'exec 200>"\$\{GLOBAL_STACK_DOCKER_TOOLS_PATH_LOCKS\}/rbenv\.flock"' "${_RBL}"
+assert_fail "34g: the rbenv flock is NOT gated on GLOBAL_STACK_USE_LOCKS" \
+  bash -c 'grep -B3 "exec 200>.*rbenv\.flock" "$1" | grep -q "USE_LOCKS"' _ "${_RBL}"
+assert_fail "34h: ...and neither is its release (a gated release would never run)" \
+  bash -c 'grep -B3 "flock -u 200" "$1" | grep -q "USE_LOCKS"' _ "${_RBL}"
+# Deadlock guard: the script ends in `sleep infinity`, so a lock still held there is
+# held forever and the sibling ruby container waits on it for good.
+assert_pass "34i: the rbenv lock is released BEFORE sleep infinity" \
+  bash -c 'r=$(grep -n "flock -u 200" "$1" | tail -1 | cut -d: -f1); s=$(grep -n "^sleep infinity" "$1" | tail -1 | cut -d: -f1); [[ -n "$r" && -n "$s" && "$r" -lt "$s" ]]' _ "${_RBL}"
+assert_pass "34j: the file states WHY rbenv's lock is unconditional (shared rehash)" \
+  bash -c 'grep -A6 "UNCONDITIONAL by design" "$1" | grep -q "rehash"' _ "${_RBL}"
+assert_fail "34k: no commented-out USE_LOCKS guard is left in rbenv either" \
+  grep -Eq '^[[:space:]]*#[[:space:]]*(if \[\[ "true" = "\$\{GLOBAL_STACK_USE_LOCKS\}"|fi)[[:space:]]*$' "${_RBL}"
 
 # ─── §35: container timezones (2026-09-10) ──────────────────────────────────
 # Measured on a live stack: every stack container reported CEST except four.
