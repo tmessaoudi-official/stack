@@ -22,7 +22,7 @@ already keeps `task`, `bat` and `sonar-scanner-cli`.
 
 | Dir | Installed | Version source | Launcher |
 |---|---|---|---|
-| `android-studio` | 2026.1.4.8 = build AI-261.26222.65.2614.16379836 | `product-info.json` `.buildNumber` → release-list item | `android-studio.desktop` |
+| `android-studio` | build AI-261.26222.65.2614.16379836 (= 2026.1.4.8) | `product-info.json` `.version` — the build id IS the pin (ASSUMED 20:56) | `android-studio.desktop` |
 | `jetbrains/idea` | IntelliJ IDEA 2026.2.3 (262.10968.63) | `product-info.json` `.version` | `idea.desktop` |
 | `jetbrains/PhpStorm-2026.2.3` | PhpStorm 2026.2.3 (262.10968.76) | `product-info.json` `.version` | `phpstorm.desktop` → `jetbrains/phpstorm` (BROKEN path; handoff `/tmp/mv-phpstorm-layout-20260928.sh`) |
 | `jetbrains/webstorm` | WebStorm 2026.2.3 (262.10968.77) | `product-info.json` `.version` | `webstorm.desktop` |
@@ -40,7 +40,7 @@ Not tools: `oracle-virtualbox-vms`, `root`.
 | Tool | Latest-version source (env-update `url:` + `(fetch-json:)`) | Artifact | Checksum |
 |---|---|---|---|
 | IDEA / PhpStorm / WebStorm | `data.services.jetbrains.com/products/releases?code=<IIU\|PS\|WS>&latest=true&type=release` → `.<CODE>[0].version` | `.downloads.linux.link` | `<link>.sha256` |
-| Android Studio | `jb.gg/android-studio-releases-list.json` → `[.content.item[]\|select(.channel=="Release" or .channel=="Patch")]\|max_by(.version\|split(".")\|map(tonumber))\|.version` | item `.download[]` ending `linux.tar.gz` (codename in name — never derived) | item `checksum` (sha256) |
+| Android Studio | `jb.gg/android-studio-releases-list.json` → `[.content.item[]\|select(.channel=="Release" or .channel=="Patch")]\|max_by(.version\|split(".")\|map(tonumber))\|.build` (the BUILD id) | the item whose `.build` == pin, `.download[]` ending `-linux.tar.gz` (codename in name — never derived) | item `checksum` (sha256) |
 | VS Code | `update.code.visualstudio.com/api/update/linux-x64/stable/latest` → `.productVersion`; install from `/api/versions/<v>/linux-x64/stable` | `.url` | `.sha256hash` |
 | Devin (Windsurf feed) | `windsurf-stable.codeium.com/api/update/linux-x64/stable/latest` → `.windsurfVersion` | `.url` | `.sha256hash` |
 | Sublime Text | `www.sublimetext.com/updates/4/stable_update_check` → `.latest_version` | `download.sublimetext.com/sublime_text_build_<n>_x64.tar.xz` | **none published** (`.sha256` → 404) |
@@ -93,8 +93,9 @@ each with its `@todo env-update` record from the Vendor sources table plus a tra
 release page (so `open-all-envs.sh` opens something readable). A hand-typed `--filter=ANDROID` also
 matches `GLOBAL_STACK_ANDROID_STUDIO_VERSION` — filter the SDK window by its own var names.
 **Review gate caveat**: decide.sh rule 7 HOLDs only a MAJOR change, and for year-versioned tools
-(JetBrains `2026.2.3`, Android Studio `2026.1.4.8`) the major is the YEAR — `2026.2 → 2026.3` is
-AUTO, only `2026 → 2027` HOLDs. VS Code/Devin/MeGit majors are rare; Sublime's build number is
+(JetBrains `2026.2.3`) the major is the YEAR — `2026.2 → 2026.3` is AUTO, only `2026 → 2027`
+HOLDs. Android Studio's pin is its build id, whose major is the platform line: a patch or
+quarterly release inside `261` is AUTO, `261 → 262` (Quail → Rabbit) HOLDs. VS Code/Devin/MeGit majors are rare; Sublime's build number is
 a single integer, so every build bump is a "major" and HOLDs. [Verified 20:20: `_gs_eu2_classify_decision` →
 `4215→4216` HOLD, `2026.2.3→2026.3.1` AUTO, `2026.1.4.8→2026.2.1.1` AUTO, `2026.2.3→2027.1` HOLD,
 `3.10.35→3.11.0` AUTO, `3.10.35→4.0.0` HOLD.]
@@ -139,6 +140,14 @@ current; all 9 launchers pass `desktop-file-validate`; `global-unu.sh` still end
 **Rollback**: `git revert` the step commits; `~/.local/bin` and `~/.profile` from their backups;
 a tool swap cannot be undone once the old dir is deleted — re-pin the old version and `--apply`.
 
+### Step 3 real-artifact evidence (21:15)
+The install path of the three new rows was checked against the real vendor archives already in
+`/opt/developer` (read with python `tarfile` — the firewall denies `tar -x` there): each holds ONE
+top-level dir (`PhpStorm-262.10968.76`, `WebStorm-262.10968.77`, `android-studio`), its
+`product-info.json` `.version` equals the pin (`2026.2.3`, `2026.2.3`,
+`AI-261.26222.65.2614.16379836`), and `sha256sum -c` passes against the vendor checksum
+(JetBrains `.sha256`; the release list's `checksum` for the AS `-linux.tar.gz`).
+
 ## Status
 <!-- progress-block v1 -->
 | # | Step | Size | State | Evidence | Files |
@@ -162,6 +171,7 @@ a tool swap cannot be undone once the old dir is deleted — re-pin the old vers
 - No live api.github.com calls while a cold `make hard-restart` runs: fvm/elasticmq digest checks share the 60/h anonymous limit.
 - `make hard-restart` runs `yes y | global-unu.sh`, so once step 7 lands a hard restart also installs any IDE whose pin moved.
 - `Makefile:306` is `yes y | global-unu.sh || echo 'script does not exit'`: a failed IDE install makes global-unu exit non-zero, and hard-restart swallows it with a misleading message — the only signal there is the script's own output.
+- ORDER: run `/tmp/mv-phpstorm-layout-20260928.sh` BEFORE the first `global-unu.sh` after step 7. Otherwise `--apply` downloads a fresh PhpStorm into `jetbrains/phpstorm`, the handoff then refuses (target exists) and `jetbrains/PhpStorm-2026.2.3/` is left orphaned (~3 GB).
 ### Known issues
 - `phpstorm.desktop` points at a dir that does not exist — handoff `/tmp/mv-phpstorm-layout-20260928.sh` pending on the developer's side; Inventory row stays until they report.
 - All 8 hand-made launchers fail `desktop-file-validate` (unregistered Categories `PHP`/`Dev`/`GIT`/`Version`/`Text`, app version in `Version=`, `Name=Sublme Text`); none set StartupWMClass except megit. Fixed by the managed launchers.
