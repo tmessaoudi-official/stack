@@ -221,6 +221,59 @@ else
   ko "7: derived ${_checked} boot-installed pin(s), hurl seen=${_exempt} — the derivation broke"
 fi
 
+# ── 8. A java consumer `sdk use`s only what its 03java provider installs ────
+# 04android, 05stable, 05edge and the local all-in-one run `sdk use <pkg> <ver>`
+# for every SDKMAN_INSTALL_PACKAGE_* slot they carry, but install nothing: the
+# 03java* service with the same JAVA_VERSION does. They took groovy VX2 and spark
+# VX2 from the Java 17/21 set, which 03java27 overrides to EMPTY (not supported
+# on Java 26+), so android only started when 03java17/21 happened to finish first
+# — on the 2026-09-28 cold install it hit `sdk use spark 3.5.8` at 20:16, an hour
+# before spark existed, and wrote errors/android. The provider is matched by
+# JAVA_VERSION, not by name, and only (name, version) pairs are printed.
+# Resolved THROUGH MAKE, as `make up` resolves it: .env.local writes the Java 27
+# opt-outs as `VAR=  # reason`, which make reads as EMPTY but compose's own dotenv
+# reads as the literal "# reason" — a raw `docker compose config` would compare
+# that comment text on both sides and pass on a slot the containers never get.
+printf '\n%b── 8. java consumers use only what their 03java provider installs ──%b\n' "${C_BOLD}" "${C_RESET}"
+_pairs="$( (cd "${REPO_ROOT}" && env -i HOME="${HOME}" PATH="${PATH}" make \
+  GLOBAL_STACK_DOCKER_CLI_EXEC=config GLOBAL_STACK_DOCKER_CLI_EXEC_FLAGS='--format json' \
+  GLOBAL_STACK_DOCKER_CLI='docker compose' GLOBAL_STACK_DOCKER_CLI_FLAGS='--env-file .env.local' \
+  docker-cli --silent 2>/dev/null) | jq -r '
+  def pkgs($e): [$e | to_entries[]
+      | select(.key | test("^SDKMAN_INSTALL_PACKAGE_.*_VERSION$"))
+      | select((.value // "") != "")
+      | (.key | sub("_INSTALL_"; "_CONFIG_") | sub("_VERSION$"; "_NAME")) as $n
+      | select(($e[$n] // "") != "" and $e[$n] != "dummy")
+      | "\($e[$n])@\(.value)"];
+  .services as $s
+  | [$s | to_entries[] | select(.key | startswith("03java"))
+      | {jv: (.value.environment.JAVA_VERSION // ""), set: pkgs(.value.environment // {})}] as $prov
+  | $s | to_entries[] | select((.key | startswith("03java")) | not)
+  | (.value.environment // {}) as $e
+  | select(($e.JAVA_VERSION // "") != "")
+  | pkgs($e) as $use | select($use | length > 0)
+  | ([$prov[] | select(.jv == $e.JAVA_VERSION)] | first) as $p
+  | "\(.key)\t\(if $p == null then "NOPROVIDER" else "ok" end)\t\($use | length)\t\(
+      if $p == null then "" else ($use - $p.set | join(" ")) end)"' 2>/dev/null)"
+_consumers=0 _checked=0
+while IFS=$'\t' read -r _svc _prov _n _missing; do
+  [[ -n "${_svc}" ]] || continue
+  _consumers=$((_consumers + 1))
+  _checked=$((_checked + _n))
+  if [[ "${_prov}" != ok ]]; then
+    ko "8: ${_svc} runs sdk use but no 03java* service shares its JAVA_VERSION"
+  elif [[ -n "${_missing}" ]]; then
+    ko "8: ${_svc} uses ${_missing} — its 03java provider never installs it"
+  else
+    ok "8: ${_svc}: all ${_n} SDKMAN package(s) come from its 03java provider"
+  fi
+done <<<"${_pairs}"
+if [[ "${_consumers}" -ge 3 && "${_checked}" -ge 30 ]]; then
+  ok "8: ${_consumers} java consumer(s), ${_checked} package pair(s) checked"
+else
+  ko "8: only ${_consumers} java consumer(s) / ${_checked} pair(s) found — the derivation broke"
+fi
+
 # ── Summary ─────────────────────────────────────────────────────────────────
 TOTAL=$((PASS + FAIL))
 printf '\n'
