@@ -14059,6 +14059,102 @@ t "t126p: one version per marker lands in the expected tier through _gs_eu2_vers
 
 _flush_section
 
+# ═══════════════════════════════════════════════════════════════════════════
+section "127 — url: vendor feeds for the /opt/developer IDE pins"
+# ═══════════════════════════════════════════════════════════════════════════
+# docs/plans/opt-developer-updater.plan.md. The IDE pins are url: records whose
+# (fetch-json:) carries what no earlier record did: double quotes and a nested
+# select() (Android Studio), and a query string in the url (JetBrains). A parse
+# that dropped a quote or split on a paren would hand jq a different program, so
+# these run the whole pipeline against fixtures and assert the proposed version.
+# The fixture file name drops the query string (_gs_eu2_fixture_path), the cache
+# key does not (url.sh keys on the full identifier).
+
+_T127_AS_JQ='[.content.item[]|select(.channel=="Release" or .channel=="Patch")]|max_by(.version|split(".")|map(tonumber))|.version'
+
+# $1 dir  $2 annotation line  $3 var=value line  → env-update --check output
+_t127_check() {
+  printf '%s\n%s\n' "$2" "$3" > "$1/t.env"
+  _GS_EU2_HTTP_FIXTURE_DIR="$1/fx" _GS_EU2_CACHE_DIR="$1/c" NO_COLOR=1 \
+    bash "${ENV_UPDATE_V2}" --check --env-file="$1/t.env" 2>&1
+}
+
+_t127_as_fixture() {
+  mkdir -p "$1/fx"
+  # Canary is the NEWEST entry and must not win; the Patch beats its Release.
+  printf '%s' '{"content":{"item":[{"version":"2026.2.2.2","channel":"Canary"},{"version":"2026.1.4.8","channel":"Patch"},{"version":"2026.1.4.7","channel":"Release"},{"version":"2026.1.3.8","channel":"Patch"}]}}' \
+    > "$1/fx/jb.gg_android-studio-releases-list.json"
+}
+
+_t127a() (
+  d="${TMP_DIR}/t127a"; mkdir -p "$d"; _t127_as_fixture "$d"
+  out="$(_t127_check "$d" \
+    "# @todo env-update (fetch-json:${_T127_AS_JQ}) url:https://jb.gg/android-studio-releases-list.json 2026.1.4.7" \
+    'GLOBAL_STACK_T127A=2026.1.4.7')"
+  grep -qE '\[AUTO +\] +GLOBAL_STACK_T127A +2026\.1\.4\.7 → 2026\.1\.4\.8$' <<<"$out" \
+    || { echo "want AUTO 2026.1.4.7 → 2026.1.4.8 (Release+Patch, Canary excluded); got:"; echo "$out" | tail -4; echo FAIL; exit 0; }
+  echo PASS
+)
+t "t127a: Android Studio — quoted select() reaches jq intact, stable = newest Release|Patch" _t127a
+
+# The key embeds the whole jq program; a second run must be served from a cache
+# file the filesystem accepted (NAME_MAX 255) and give the same answer.
+_t127b() (
+  d="${TMP_DIR}/t127b"; mkdir -p "$d"; _t127_as_fixture "$d"
+  ann="# @todo env-update (fetch-json:${_T127_AS_JQ}) url:https://jb.gg/android-studio-releases-list.json 2026.1.4.7"
+  _t127_check "$d" "$ann" 'GLOBAL_STACK_T127B=2026.1.4.7' >/dev/null
+  n="$(find "$d/c" -name 'url_*.cache' | wc -l)"
+  [[ "$n" == 1 ]] || { echo "want exactly 1 cache file, found $n"; echo FAIL; exit 0; }
+  rm -rf "$d/fx"   # a cache miss now has nothing to fetch from
+  out="$(_t127_check "$d" "$ann" 'GLOBAL_STACK_T127B=2026.1.4.7')"
+  grep -qE '2026\.1\.4\.7 → 2026\.1\.4\.8$' <<<"$out" \
+    || { echo "cached run did not reproduce 2026.1.4.8; got:"; echo "$out" | tail -4; echo FAIL; exit 0; }
+  echo PASS
+)
+t "t127b: Android Studio — the long jq key round-trips through the cache" _t127b
+
+_t127c() (
+  d="${TMP_DIR}/t127c"; mkdir -p "$d/fx"
+  printf '%s' '{"IIU":[{"version":"2026.3.1","build":"263.1.1"}]}' \
+    > "$d/fx/data.services.jetbrains.com_products_releases"
+  out="$(_t127_check "$d" \
+    '# @todo env-update (fetch-json:.IIU[0].version) url:https://data.services.jetbrains.com/products/releases?code=IIU&latest=true&type=release 2026.2.3' \
+    'GLOBAL_STACK_T127C=2026.2.3')"
+  grep -qE '\[AUTO +\] +GLOBAL_STACK_T127C +2026\.2\.3 → 2026\.3\.1$' <<<"$out" \
+    || { echo "want AUTO 2026.2.3 → 2026.3.1; got:"; echo "$out" | tail -4; echo FAIL; exit 0; }
+  echo PASS
+)
+t "t127c: JetBrains — query-string url + .IIU[0].version; a same-year feature release is AUTO" _t127c
+
+# Developer ruling 2026-09-28 20:26: Sublime keeps a bare build pin, so every
+# build is a "major" and HOLDs; a JetBrains YEAR change HOLDs too.
+_t127d() (
+  d="${TMP_DIR}/t127d"; mkdir -p "$d/fx"
+  printf '%s' '{"latest_version": 4216, "update_url": "https://www.sublimetext.com/download"}' \
+    > "$d/fx/www.sublimetext.com_updates_4_stable_update_check"
+  out="$(_t127_check "$d" \
+    '# @todo env-update (fetch-json:.latest_version) url:https://www.sublimetext.com/updates/4/stable_update_check 4215' \
+    'GLOBAL_STACK_T127D=4215')"
+  grep -qE '\[HOLD +\] +GLOBAL_STACK_T127D +4215 → 4216' <<<"$out" \
+    || { echo "want HOLD 4215 → 4216; got:"; echo "$out" | tail -4; echo FAIL; exit 0; }
+  echo PASS
+)
+t "t127d: Sublime — a numeric build from .latest_version proposes and HOLDs" _t127d
+
+_t127e() (
+  d="${TMP_DIR}/t127e"; mkdir -p "$d/fx"
+  printf '%s' '{"PS":[{"version":"2027.1"}]}' > "$d/fx/data.services.jetbrains.com_products_releases"
+  out="$(_t127_check "$d" \
+    '# @todo env-update (fetch-json:.PS[0].version) url:https://data.services.jetbrains.com/products/releases?code=PS&latest=true&type=release 2026.2.3' \
+    'GLOBAL_STACK_T127E=2026.2.3')"
+  grep -qE '\[HOLD +\] +GLOBAL_STACK_T127E +2026\.2\.3 → 2027\.1' <<<"$out" \
+    || { echo "want HOLD 2026.2.3 → 2027.1; got:"; echo "$out" | tail -4; echo FAIL; exit 0; }
+  echo PASS
+)
+t "t127e: JetBrains — a YEAR change is the major and HOLDs" _t127e
+
+_flush_section
+
 TOTAL=$(( PASS + FAIL ))
 BAR="━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
