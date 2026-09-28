@@ -143,7 +143,7 @@ a tool swap cannot be undone once the old dir is deleted — re-pin the old vers
 | # | Step | Size | State | Evidence | Files |
 |---|------|------|-------|----------|-------|
 | 1 | Parser proof: url + fetch-json with quotes/?& | S | done | 617105b | bin/tests/env-update.test.sh, bin/lib/env-update/core/parse.sh |
-| 2 | Engine + test harness | L | doing | - | templates/shell/global-unu-opt.sh, bin/tests/global-unu-opt.test.sh |
+| 2 | Engine + test harness (+ the IDEA row as its vehicle) | L | done | afb4be1 | templates/shell/global-unu-opt.sh, bin/tests/global-unu-opt.test.sh |
 | 3 | JetBrains x3 + Android Studio | M | todo | - | .env, templates/shell/global-unu-opt.sh |
 | 4 | VS Code + Devin + Sublime | M | todo | - | .env, templates/shell/global-unu-opt.sh |
 | 5 | MeGit + Etcher | M | todo | - | .env, templates/shell/global-unu-opt.sh |
