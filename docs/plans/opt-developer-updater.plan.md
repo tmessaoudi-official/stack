@@ -10,6 +10,9 @@ already keeps `task`, `bat` and `sonar-scanner-cli`.
 - [2026-09-28 19:51] AGREED: Placement: a separate script, templates/shell/global-unu-opt.sh (deployed next to global-unu.sh in ~/.local/bin), called as the LAST step of global-unu.sh from its own directory; global-unu.sh stays the single entry point.
 - [2026-09-28 19:51] AGREED: Mode: called from global-unu.sh it installs the pin when installed != pin; run standalone it defaults to --check and needs --apply to install.
 - [2026-09-28 19:51] AGREED: Rollback: no <dir>.previous kept; the old dir is deleted only after the new one is downloaded, checksum-verified where the vendor publishes one, extracted and passes its version check.
+- [2026-09-28 20:00] AGREED: Install layout: every JetBrains IDE lives at jetbrains/<lowercase product> (idea, phpstorm, webstorm), never a version-named dir; the version is read from product-info.json.
+- [2026-09-28 20:00] AGREED: Launchers: global-unu-opt.sh fully manages the .desktop file of all 9 GUI apps (android-studio, idea, phpstorm, webstorm, code, devin, sublime_text, megit, balena-etcher): canonical Name/Exec/TryExec/Icon/Categories + StartupWMClass read from the app, rewritten only when content differs, desktop-file-validate'd, then update-desktop-database; hand edits to those 9 files are overwritten.
+- [2026-09-28 20:00] AGREED: Launcher definitions live inside global-unu-opt.sh (one file to deploy), not as template files.
 
 ## Inventory (2026-09-28, read from each tool's own metadata)
 
@@ -51,4 +54,5 @@ Not tools: `oracle-virtualbox-vms`, `root`.
 - No live api.github.com calls while a cold `make hard-restart` runs: fvm/elasticmq digest checks share the 60/h anonymous limit.
 ### Known issues
 - `phpstorm.desktop` points at a dir that does not exist.
+- All 8 hand-made launchers fail `desktop-file-validate` (unregistered Categories `PHP`/`Dev`/`GIT`/`Version`/`Text`, app version in `Version=`, `Name=Sublme Text`); none set StartupWMClass except megit. Fixed by the managed-launcher step.
 - `.profile` adds `/opt/$USER/go/bin`, which does not exist.
