@@ -13,48 +13,151 @@ already keeps `task`, `bat` and `sonar-scanner-cli`.
 - [2026-09-28 20:00] AGREED: Install layout: every JetBrains IDE lives at jetbrains/<lowercase product> (idea, phpstorm, webstorm), never a version-named dir; the version is read from product-info.json.
 - [2026-09-28 20:00] AGREED: Launchers: global-unu-opt.sh fully manages the .desktop file of all 9 GUI apps (android-studio, idea, phpstorm, webstorm, code, devin, sublime_text, megit, balena-etcher): canonical Name/Exec/TryExec/Icon/Categories + StartupWMClass read from the app, rewritten only when content differs, desktop-file-validate'd, then update-desktop-database; hand edits to those 9 files are overwritten.
 - [2026-09-28 20:00] AGREED: Launcher definitions live inside global-unu-opt.sh (one file to deploy), not as template files.
+- [2026-09-28 20:16] ASSUMED (review): Pin name GLOBAL_STACK_ANDROIDSTUDIO_VERSION (not ANDROID_STUDIO) — because the documented SDK-window bump filters env-update on ANDROID and would sweep the IDE in. Alternatives: GLOBAL_STACK_ANDROID_STUDIO_VERSION.
+- [2026-09-28 20:16] ASSUMED (review): Stray archives: the script never deletes a file it did not download; today's hand-downloaded archives get a one-off handoff command — because deleting user files by pattern is irreversible. Alternatives: pattern-delete managed-tool archives in /opt/developer on --apply.
 
 ## Inventory (2026-09-28, read from each tool's own metadata)
 
-| Dir | Installed | Launcher |
-|---|---|---|
-| `android-studio` | AI-261.26222.65.2614.16379836 | `android-studio.desktop` |
-| `jetbrains/idea` | IntelliJ IDEA 2026.2.3 (262.10968.63) | `idea.desktop` |
-| `jetbrains/PhpStorm-2026.2.3` | PhpStorm 2026.2.3 (262.10968.76) | `phpstorm.desktop` → `jetbrains/phpstorm` (BROKEN path) |
-| `jetbrains/webstorm` | WebStorm 2026.2.3 (262.10968.77) | `webstorm.desktop` |
-| `code` | VS Code 1.139.1 | `code.desktop` |
-| `devin` | app 1.126.0 (archive named 3.10.35) | `devin.desktop` |
-| `sublime_text` | Build 4215 | `sublime_text.desktop` |
-| `megit` | 0.11.0 | `megit.desktop` |
-| `balena-etcher` | 2.1.7 (from archive name, unconfirmed) | none |
-| `task` / `bat` / `sonar-scanner-cli` | 3.53.1 / 0.26.1 / 8.1.0.6389 | PATH via `.profile` (global-unu today) |
+| Dir | Installed | Version source | Launcher |
+|---|---|---|---|
+| `android-studio` | 2026.1.4.8 = build AI-261.26222.65.2614.16379836 | `product-info.json` `.buildNumber` → release-list item | `android-studio.desktop` |
+| `jetbrains/idea` | IntelliJ IDEA 2026.2.3 (262.10968.63) | `product-info.json` `.version` | `idea.desktop` |
+| `jetbrains/PhpStorm-2026.2.3` | PhpStorm 2026.2.3 (262.10968.76) | `product-info.json` `.version` | `phpstorm.desktop` → `jetbrains/phpstorm` (BROKEN path; handoff `/tmp/mv-phpstorm-layout-20260928.sh`) |
+| `jetbrains/webstorm` | WebStorm 2026.2.3 (262.10968.77) | `product-info.json` `.version` | `webstorm.desktop` |
+| `code` | VS Code 1.139.1 | `resources/app/package.json` `.version` | `code.desktop` |
+| `devin` | windsurfVersion 3.10.35 (productVersion 1.126.0) | `resources/app/product.json` `.windsurfVersion` | `devin.desktop` |
+| `sublime_text` | Build 4215 | first `Build NNNN` in `changelog.txt` (non-executing; `--version` would run an unchecked download) | `sublime_text.desktop` |
+| `megit` | 0.11.0 (plugin 0.11.0.20260428-1215) | `plugins/com.eclipsesource.megit.plugin_<v>.jar` | `megit.desktop` |
+| `balena-etcher` | 2.1.7 | `package.json` inside `resources/app.asar` (asar header) | none |
+| `task` / `bat` / `sonar-scanner-cli` | 3.53.1 / 0.26.1 / 8.1.0.6389 | `--version` | PATH via `.profile` (global-unu today) |
 
 Not tools: `oracle-virtualbox-vms`, `root`.
 
+## Vendor sources (probed 2026-09-28 19:55-20:10; every latest == installed, so each feed matches reality)
+
+| Tool | Latest-version source (env-update `url:` + `(fetch-json:)`) | Artifact | Checksum |
+|---|---|---|---|
+| IDEA / PhpStorm / WebStorm | `data.services.jetbrains.com/products/releases?code=<IIU\|PS\|WS>&latest=true&type=release` → `.<CODE>[0].version` | `.downloads.linux.link` | `<link>.sha256` |
+| Android Studio | `jb.gg/android-studio-releases-list.json` → `[.content.item[]\|select(.channel=="Release" or .channel=="Patch")]\|max_by(.version\|split(".")\|map(tonumber))\|.version` | item `.download[]` ending `linux.tar.gz` (codename in name — never derived) | item `checksum` (sha256) |
+| VS Code | `update.code.visualstudio.com/api/update/linux-x64/stable/latest` → `.productVersion`; install from `/api/versions/<v>/linux-x64/stable` | `.url` | `.sha256hash` |
+| Devin (Windsurf feed) | `windsurf-stable.codeium.com/api/update/linux-x64/stable/latest` → `.windsurfVersion` | `.url` | `.sha256hash` |
+| Sublime Text | `www.sublimetext.com/updates/4/stable_update_check` → `.latest_version` | `download.sublimetext.com/sublime_text_build_<n>_x64.tar.xz` | **none published** (`.sha256` → 404) |
+| sonar-scanner-cli | (existing github pin) | binaries.sonarsource.com zip | `<zip>.sha256` (200) |
+| MeGit / Etcher / task / bat | github releases | release asset | GitHub asset `digest` (api.github.com) — step 5/6 |
+
 ## Formal Plan
-<!-- written at Phase 4 approval -->
+
+**My understanding:** add `templates/shell/global-unu-opt.sh`, which installs the `.env`-pinned
+version of the 12 `/opt/developer` tools (download → checksum → extract → version check → swap,
+old dir deleted only after the new one passes) and owns their 9 launchers; `global-unu.sh` calls it
+last with `--apply`; env-update proposes the pins.
+
+### Script shape (`templates/shell/global-unu-opt.sh`, `set -euo pipefail`)
+
+- **Flags**: `--check` (default: report `current` / `outdated` / `missing` / `skipped` per tool, write
+  nothing), `--apply` (install + launchers), `--only=<id>[,<id>]`, `--help`. Never prompts (make
+  runs it under `yes y |`).
+- **Pins**: read literally from `${GLOBAL_STACK_DOCKER_ROOT_PATH:-/stack}/.env.local`
+  (`^GLOBAL_STACK_<X>_VERSION=`), no `eval`. An empty/absent pin = tool unmanaged, reported.
+- **Seams for tests**: `GS_UNU_OPT_ROOT` (default `/opt/${USER}`), `GS_UNU_OPT_APPS_DIR`
+  (default `${XDG_DATA_HOME:-$HOME/.local/share}/applications`), `GS_UNU_OPT_ENV_FILE`.
+- **One row per tool**: id, install dir, pin var, installed-version reader, artifact resolver
+  (url + sha256 or `none`), app-root inside the archive, launcher fields.
+- **Install engine** (`--apply`, only when installed != pin):
+  1. resolve url + checksum for the PIN (never "latest"; Devin: feed version != pin → WARN + skip);
+  2. `curl -fL` into `${ROOT}/.gs-staging/<id>/` (same filesystem, so the swap is a rename; `/tmp` is tmpfs);
+  3. sha256 check (Sublime: none published — reported as `unverified-checksum`);
+  4. extract, locate the app root, read ITS version == pin — always a NON-executing read
+     (metadata file, jar name, asar header, Sublime's `changelog.txt`), never running staged bytes;
+  5. skip with WARN if any `/proc/*/exe` resolves under the install dir (app running);
+  6. `mv old → staging/old`, `mv new → final`, then `rm -rf` staging (old + archive). A failed
+     second `mv` moves the old dir back. Every `rm -rf` is refused unless the path is under
+     `${ROOT}/.gs-staging/`.
+  Any failure before step 6 leaves the installed copy untouched and exits non-zero at the end
+  (other tools still run).
+- **Launchers**: canonical text per app (Name, GenericName, Comment, Exec with `%F` where the app
+  takes files, TryExec, Icon, `Categories=Development;IDE;` (+ `TextEditor`/`RevisionControl`/
+  `Utility` where apt), `Version=1.5` (the spec version — never the app's), `StartupWMClass` only where VERIFIED — JetBrains from `product-info.json`
+  `.launch[].startupWmClass`, others only after an `xprop` check, else omitted). Validated with
+  `desktop-file-validate` BEFORE replacing; written only when content differs; one
+  `update-desktop-database` at the end if anything changed.
+- **Stray archives**: the script never deletes a file it did not download. Today's ~2.7 GB of
+  hand-downloaded archives get a one-off handoff command.
+
+### Pins (`.env`, next to `GLOBAL_STACK_BAT_VERSION`)
+
+`GLOBAL_STACK_{IDEA,PHPSTORM,WEBSTORM,ANDROIDSTUDIO,VSCODE,DEVIN,SUBLIME_TEXT,MEGIT,BALENA_ETCHER}_VERSION`,
+each with its `@todo env-update` record from the Vendor sources table plus a trailing `urls:` human
+release page (so `open-all-envs.sh` opens something readable). `ANDROIDSTUDIO`, not `ANDROID_STUDIO`: the
+documented SDK-window bump filters on `ANDROID`, which must not sweep the IDE in.
+**Review gate caveat**: decide.sh rule 7 HOLDs only a MAJOR change, and for year-versioned tools
+(JetBrains `2026.2.3`, Android Studio `2026.1.4.8`) the major is the YEAR — `2026.2 → 2026.3` is
+AUTO, only `2026 → 2027` HOLDs. VS Code/Devin/MeGit majors are rare; Sublime's build number is
+a single integer, so every build bump is a "major" and HOLDs.
+Live checks are always filtered: `bin/env-update.sh --check --filter='IDEA|PHPSTORM|WEBSTORM|ANDROIDSTUDIO|VSCODE|DEVIN|SUBLIME_TEXT'`
+(an unfiltered `--check` spends the shared api.github.com budget).
+Host dependencies: `curl`, `jq`, `sha256sum`, `tar`, `unzip`, `python3` (Etcher's asar header), `desktop-file-utils`.
+`templates/shell/*.sh` is scanned by `startup-prologue.test.sh` §59 (no ordered version comparison in an
+install path) — the new script is equality-based, so it must pass that scan on its first commit. `bin/env-scan.sh` carries
+them to `.env.local`. Existing `GLOBAL_STACK_{TASK,BAT,SONAR_SCANNER_CLI}_VERSION` keep their
+names (00base shares the bat/sonar pins).
+
+### Steps
+
+1. **Parser proof** (S): env-update test that a `url:` record with `?`/`&` in the URL and `"` +
+   nested parens in `(fetch-json:)` parses and resolves intact (fixture seam). Red first; fix
+   `parse.sh` only if it is red for that reason.
+2. **Engine + harness** (L): the script skeleton above plus `bin/tests/global-unu-opt.test.sh`:
+   temp root/apps dir, stub `curl` serving fixture archives built by the test, checksums computed
+   in the test. Cases: check writes nothing; current → no-op; outdated → installed; bad checksum,
+   404, wrong version inside → old copy byte-intact + non-zero; running app → skipped; `rm`
+   outside staging refused (stub proves it on a disposable sibling); launcher valid, rewritten
+   only on change (mtime), invalid generated launcher never written. Sabotage each guarantee.
+3. **JetBrains ×3 + Android Studio** (M): pins, rows, launchers; filtered `--check` resolves each to the installed version.
+4. **VS Code + Devin + Sublime** (M): pins, rows, launchers; WM classes checked with `xprop`.
+5. **MeGit + Etcher** (M): after the stack is healthy (api.github.com budget); GitHub asset
+   digest; Etcher gets its first launcher.
+6. **Move task / bat / sonar-scanner-cli** (M): delete their blocks from `global-unu.sh`, add rows
+   (sonar `.sha256`, task/bat GitHub digest); PATH entries in `.profile` unchanged.
+7. **Hook + cleanup + docs** (S): `global-unu.sh` runs
+   `"$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/global-unu-opt.sh" --apply` as its last
+   step BEFORE the final `echo "Successful :)"` (the script has no `set -e`, so a failure must be
+   reported, not swallowed: print it and exit non-zero instead of claiming success); drop the
+   `go/bin` block from `templates/shell/.profile`; CLAUDE.md (test bullet, hard-restart now
+   refreshes IDEs), `templates/tips/file-layout.md` if it lists `templates/shell`.
+8. **Deploy + live check** (S): copy both scripts to `~/.local/bin` (timestamped backup first),
+   drop `go/bin` from `~/.profile` (backup), run `global-unu-opt.sh --check` against the real
+   `/opt/developer` (read-only, expect 12 × current); `--apply` there is yours to run (the
+   firewall denies my writes under `/opt`).
+
+**Acceptance**: suite green + every sabotage red; `--check` on the real tree reports all 12
+current; all 9 launchers pass `desktop-file-validate`; `global-unu.sh` still ends `Successful :)`.
+**Rollback**: `git revert` the step commits; `~/.local/bin` and `~/.profile` from their backups;
+a tool swap cannot be undone once the old dir is deleted — re-pin the old version and `--apply`.
 
 ## Status
+<!-- progress-block v1 -->
+| # | Step | Size | State | Evidence | Files |
+|---|------|------|-------|----------|-------|
+| 1 | Parser proof: url + fetch-json with quotes/?& | S | todo | - | bin/tests/env-update.test.sh, bin/lib/env-update/core/parse.sh |
+| 2 | Engine + test harness | L | todo | - | templates/shell/global-unu-opt.sh, bin/tests/global-unu-opt.test.sh |
+| 3 | JetBrains x3 + Android Studio | M | todo | - | .env, templates/shell/global-unu-opt.sh |
+| 4 | VS Code + Devin + Sublime | M | todo | - | .env, templates/shell/global-unu-opt.sh |
+| 5 | MeGit + Etcher | M | todo | - | .env, templates/shell/global-unu-opt.sh |
+| 6 | Move task/bat/sonar-scanner-cli | M | todo | - | templates/shell/global-unu.sh, templates/shell/global-unu-opt.sh |
+| 7 | Hook + .profile + docs | S | todo | - | templates/shell/global-unu.sh, templates/shell/.profile, CLAUDE.md |
+| 8 | Deploy + live check | S | todo | - | - |
+<!-- /progress-block -->
 ### Blocked
 ### Needs input
 ### Needs research
-- MeGit (eclipsesource/megit) and balenaEtcher (balena-io/etcher) GitHub asset names + digests — deferred until the cold bring-up finishes (api.github.com budget).
-- env-update needs NO new fetcher: `url:` + `(fetch-json:)` returned the installed version for all 7 non-GitHub tools (probed 20:10): JetBrains `.IIU[0].version` / `.PS[0].version` / `.WS[0].version` (one `code=` per URL); Android Studio `[.content.item[]|select(.channel=="Release" or .channel=="Patch")]|max_by(.version|split(".")|map(tonumber))|.version`; VS Code `.productVersion`; Devin `.windsurfVersion`; Sublime `.latest_version`.
-- OPEN: no existing annotation puts double quotes inside `(fetch-json:)` — prove parse.sh keeps the Android Studio expression intact (failing test first).
-- OPEN: Devin feed is `.../stable/latest` only — find a versioned download, or the installer must refuse a pin that is no longer latest.
-
-## Vendor sources (probed 2026-09-28 19:55; every latest == installed, so each feed matches reality)
-
-| Tool | Latest-version source | Artifact | Checksum |
-|---|---|---|---|
-| IDEA / PhpStorm / WebStorm | `data.services.jetbrains.com/products/releases?code=IIU,PS,WS&latest=true&type=release` → `.version`, `.downloads.linux.link` | `download.jetbrains.com/{idea/idea,webide/PhpStorm,webstorm/WebStorm}-<v>.tar.gz` | `<link>.sha256` |
-| Android Studio | `jb.gg/android-studio-releases-list.json` (JetBrains TeamCity mirror); channels Beta/Canary/Patch/Preview/RC/Release — stable = newest of **Release+Patch** (installed is a Patch) | `edgedl.me.gvt1.com/android/studio/ide-zips/<v>/android-studio-<codename>-linux.tar.gz` (name NOT derivable from version — read `link`) | `checksum` field (sha256) |
-| VS Code | `update.code.visualstudio.com/api/update/linux-x64/stable/latest`; pinned: `/api/versions/<v>/linux-x64/stable` | `.url` | `.sha256hash` |
-| Devin (the Windsurf feed) | `windsurf-stable.codeium.com/api/update/linux-x64/stable/latest` → `productVersion` 1.126.0, `windsurfVersion` 3.10.35 | `.url` (`Devin-linux-x64-<windsurfVersion>.tar.gz`) | `.sha256hash` |
-| Sublime Text | `www.sublimetext.com/updates/4/stable_update_check` → `latest_version` | `download.sublimetext.com/sublime_text_build_<n>_x64.tar.xz` | **none published** (`.sha256` → 404) |
+- MeGit (eclipsesource/megit) and balenaEtcher (balena-io/etcher) asset names + digests — after the cold bring-up (api.github.com budget).
+- Devin feed is `.../stable/latest` only — no versioned download found; the installer refuses a pin that is no longer latest (WARN + skip).
+- StartupWMClass for VS Code, Devin, Sublime, Etcher — verify with `xprop` on a running window, else omit.
 ### Fragile
 - No live api.github.com calls while a cold `make hard-restart` runs: fvm/elasticmq digest checks share the 60/h anonymous limit.
+- `make hard-restart` runs `yes y | global-unu.sh`, so once step 7 lands a hard restart also installs any IDE whose pin moved.
 ### Known issues
-- `phpstorm.desktop` points at a dir that does not exist.
-- All 8 hand-made launchers fail `desktop-file-validate` (unregistered Categories `PHP`/`Dev`/`GIT`/`Version`/`Text`, app version in `Version=`, `Name=Sublme Text`); none set StartupWMClass except megit. Fixed by the managed-launcher step.
+- `phpstorm.desktop` points at a dir that does not exist — handoff `/tmp/mv-phpstorm-layout-20260928.sh` pending on the developer's side; Inventory row stays until they report.
+- All 8 hand-made launchers fail `desktop-file-validate` (unregistered Categories `PHP`/`Dev`/`GIT`/`Version`/`Text`, app version in `Version=`, `Name=Sublme Text`); none set StartupWMClass except megit. Fixed by the managed launchers.
 - `.profile` adds `/opt/$USER/go/bin`, which does not exist.
