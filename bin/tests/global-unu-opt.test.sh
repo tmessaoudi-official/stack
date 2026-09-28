@@ -96,14 +96,16 @@ chmod +x "${STUB_BIN}/curl"
 # ── Stub sudo ────────────────────────────────────────────────────────────────
 # Logs every call to "$T/sudo.log". "$T/no-sudo" present: exits 1, as `sudo -n`
 # does with no cached credentials. chown to root cannot happen as a user, so it
-# is only logged; chmod is applied (setuid on one's own file is allowed).
+# only does what the kernel does to the file: chown(2) clears setuid/setgid — so a
+# chmod 4755 placed BEFORE the chown is undone, as on the real machine. chmod is
+# applied (setuid on one's own file is allowed).
 cat >"${STUB_BIN}/sudo" <<'STUB'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >>"${T}/sudo.log"
 [[ -e "${T}/no-sudo" ]] && exit 1
 [[ "$1" == -n ]] && shift
 case "$1" in
-  chown) exit 0 ;;
+  chown) exec chmod u-s,g-s "${@: -1}" ;;
   chmod) exec chmod "${@:2}" ;;
   *) exit 1 ;;
 esac
