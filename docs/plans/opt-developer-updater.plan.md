@@ -93,7 +93,9 @@ documented SDK-window bump filters on `ANDROID`, which must not sweep the IDE in
 **Review gate caveat**: decide.sh rule 7 HOLDs only a MAJOR change, and for year-versioned tools
 (JetBrains `2026.2.3`, Android Studio `2026.1.4.8`) the major is the YEAR — `2026.2 → 2026.3` is
 AUTO, only `2026 → 2027` HOLDs. VS Code/Devin/MeGit majors are rare; Sublime's build number is
-a single integer, so every build bump is a "major" and HOLDs.
+a single integer, so every build bump is a "major" and HOLDs. [Verified 20:20: `_gs_eu2_classify_decision` →
+`4215→4216` HOLD, `2026.2.3→2026.3.1` AUTO, `2026.1.4.8→2026.2.1.1` AUTO, `2026.2.3→2027.1` HOLD,
+`3.10.35→3.11.0` AUTO, `3.10.35→4.0.0` HOLD.]
 Live checks are always filtered: `bin/env-update.sh --check --filter='IDEA|PHPSTORM|WEBSTORM|ANDROIDSTUDIO|VSCODE|DEVIN|SUBLIME_TEXT'`
 (an unfiltered `--check` spends the shared api.github.com budget).
 Host dependencies: `curl`, `jq`, `sha256sum`, `tar`, `unzip`, `python3` (Etcher's asar header), `desktop-file-utils`.
@@ -157,6 +159,7 @@ a tool swap cannot be undone once the old dir is deleted — re-pin the old vers
 ### Fragile
 - No live api.github.com calls while a cold `make hard-restart` runs: fvm/elasticmq digest checks share the 60/h anonymous limit.
 - `make hard-restart` runs `yes y | global-unu.sh`, so once step 7 lands a hard restart also installs any IDE whose pin moved.
+- `Makefile:306` is `yes y | global-unu.sh || echo 'script does not exit'`: a failed IDE install makes global-unu exit non-zero, and hard-restart swallows it with a misleading message — the only signal there is the script's own output.
 ### Known issues
 - `phpstorm.desktop` points at a dir that does not exist — handoff `/tmp/mv-phpstorm-layout-20260928.sh` pending on the developer's side; Inventory row stays until they report.
 - All 8 hand-made launchers fail `desktop-file-validate` (unregistered Categories `PHP`/`Dev`/`GIT`/`Version`/`Text`, app version in `Version=`, `Name=Sublme Text`); none set StartupWMClass except megit. Fixed by the managed launchers.
