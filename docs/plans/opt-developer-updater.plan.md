@@ -158,6 +158,15 @@ exists). `--check` on the real tree: every managed tool current except phpstorm 
 No StartupWMClass for these three: Sublime's own .desktop sets none and none could be read from a
 live window (Wayland session; xprop saw no client list).
 
+### Launchers from the real trees (21:40)
+`--apply --only=<the six current tools>` with `GS_UNU_OPT_APPS_DIR` pointed at a scratch dir (current
+tools never enter the install path; no staging was created under /opt): all six generated launchers
+pass `desktop-file-validate` and their `Icon=` and `TryExec=` exist. Changes vs the hand-made files:
+names fixed (`Sublme Text`, `JetBrains Idea Ultimate`), registered Categories, StartupWMClass on the
+JetBrains-built four, `%F` on the three editors, Sublime icon 48x48 → 256x256, and VS Code's Exec
+`bin/code` (CLI wrapper) → `code` (the app binary). Step 6 folds in: `Utility` next to `TextEditor`
+(validator hint), and `| head -n 1` on the Sublime changelog read.
+
 ## Status
 <!-- progress-block v1 -->
 | # | Step | Size | State | Evidence | Files |
