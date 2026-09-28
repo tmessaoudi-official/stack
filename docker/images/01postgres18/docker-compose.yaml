@@ -31,6 +31,11 @@ services:
       # so an existing volume keeps the old metadata until recreated.
       - POSTGRES_INITDB_ARGS=--locale-provider=builtin --builtin-locale=C.UTF-8
       - LANG=C.UTF-8
+      # docker-entrypoint.sh stops its init-time temp server with
+      # `pg_ctl -m fast -w stop`, whose 60 s default gave up under build
+      # load on 2026-09-28 ("server does not shut down") and restarted the
+      # container mid-init. pg_ctl reads this variable; gosu keeps it.
+      - PGCTLTIMEOUT=300
       - TZ=${GLOBAL_STACK_TIMEZONE}
       - GLOBAL_STACK_DOCKER_TOOLS_PATH=${GLOBAL_STACK_DOCKER_TOOLS_PATH}
       - GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES=${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}
@@ -39,12 +44,19 @@ services:
       - GLOBAL_STACK_WAIT_FOR_TIMEOUT=${GLOBAL_STACK_WAIT_FOR_TIMEOUT}
     networks:
       - public
+    # TCP, not the socket: the entrypoint's init-time temp server listens on
+    # the socket only (listen_addresses=''), so a socket pg_isready passed
+    # against it and marked Postgres healthy before the real server existed
+    # (02sonarqube then exited 0 and was never retried, 2026-09-28). A TCP
+    # check fails for the whole init, so the window must be the stack's
+    # patient one: 30 s + 5 x 10 s would mark it UNHEALTHY and abort every
+    # service_healthy dependent. bin/tests/postgres-healthcheck.test.sh
     healthcheck:
-      test: ["CMD-SHELL", "${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/bin/base-bin/global-stack-base-healthcheck-elapsed.sh 01postgres18 pg_isready -U root"]
+      test: ["CMD-SHELL", "${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/bin/base-bin/global-stack-base-healthcheck-elapsed.sh 01postgres18 pg_isready -U root -h 127.0.0.1"]
       interval: 10s
       timeout: 5s
-      retries: 5
-      start_period: 30s
+      retries: 99999
+      start_period: 24h
     labels:
       stack.service: "01postgres18"
       stack.tier: "database"

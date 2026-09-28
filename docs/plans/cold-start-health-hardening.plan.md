@@ -28,7 +28,7 @@ Implement AFTER the bring-up settles — nothing changes while the stack is stil
 <!-- progress-block v1 -->
 | # | Step | Size | State | Evidence | Files |
 |---|------|------|-------|----------|-------|
-| 1 | Postgres TCP healthcheck + PGCTLTIMEOUT | S | todo | - | docker/images/01postgres18/** |
+| 1 | Postgres TCP healthcheck + PGCTLTIMEOUT | S | done | - | docker/images/01postgres18/**, bin/tests/postgres-healthcheck.test.sh |
 | 2 | SonarQube error token + retry | M | todo | - | docker/config/dist/bin/sonarqube-bin/**, docker/images/02sonarqube/** |
 | 3 | rbenv install/rehash serialization | M | todo | - | docker/config/dist/bin/rbenv-bin/** |
 | 4 | SDKMAN download stall limit | S | todo | - | docker/config/dist/bin/sdkman-bin/** |
@@ -37,6 +37,8 @@ Implement AFTER the bring-up settles — nothing changes while the stack is stil
 ### Blocked
 ### Needs input
 ### Needs research
+- [Inferred, read-only] 01mysql9's check is `mysqladmin ping -h localhost` — for the MySQL client `localhost` means the Unix SOCKET, and its init server runs with networking off, so it likely has Postgres's false positive; not probed. 01mariadb13 uses `healthcheck.sh --connect --innodb_initialized`, which requires a network connection — likely immune. Both keep the 80 s window (mysql/mariadb took ~4 min on 2026-09-28).
 - Step 4: where the stall limit can be set (sdkman config vs wrapper) without patching the downloaded installer.
 ### Fragile
 ### Known issues
+- Step 1 corrections (2026-09-28): the `service_healthy` dependents of 01postgres18 are 02keycloak-keycloak and 02sonarqube only — 02dpage-pgadmin4 does not depend on it (the ASSUMED entry named pgadmin). B's 300 s is agreed, not measured: the throwaway probe proves the variable reaches the init process, not that 300 s suffices under build load — that needs a fresh-volume bring-up. The fix takes effect on the next Postgres recreate (make-hash prediction: only 01postgres18 differs of 44).
