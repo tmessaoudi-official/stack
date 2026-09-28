@@ -28,20 +28,30 @@ record was still on Java 26.
    and `latest_unconstrained`); when the current pin is the legacy base form of the same release, keep
    the pin (no false downgrade). The bug is "always strip", not "strip" — never flip it to "never accept
    a base-form pin". Tests first in `env-update.test.sh` §32, then a sabotage check.
-3. **Bring-up** — once `03java27-zulu` is healthy, start its five dependents with `--no-deps` (a plain
-   `make up` recreates the whole stack: every service's config hash moved with this one `.env.local` line).
+3. **Bring-up** — start `03java27-zulu` and its five dependents through a CLEAN environment (`make up`, or
+   `env -i HOME=$HOME PATH=$PATH docker compose …`). A plain `docker compose` from an interactive shell
+   inherits `~/.bashrc`'s unquoted eval of `.env.local` (`GLOBAL_STACK_DOCKER_USER_NAME=Takieddine`,
+   split at the space), which compose prefers over `--env-file`: every service's hash looked changed and
+   the three containers first started that way carried the truncated name. Clean-env hashes match every
+   `make`-created container exactly.
 
 ## Status
 <!-- progress-block v1 -->
 | # | Step | Size | State | Evidence | Files |
 |---|------|------|-------|----------|-------|
 | 1 | Java 27 pin → 27.0.0+35-zulu | S | done | 0f5371b | .env |
-| 2 | sdkman fetcher keeps listed +build ids | M | doing | - | bin/lib/env-update/fetchers/sdkman.sh, bin/tests/env-update.test.sh |
-| 3 | Start Java 27 dependents | S | todo | - | - |
+| 2 | sdkman fetcher keeps listed +build ids | M | done | 4458481 | bin/lib/env-update/fetchers/sdkman.sh, bin/tests/env-update.test.sh |
+| 3 | Start Java 27 dependents | S | doing | - | - |
 <!-- /progress-block -->
 ### Blocked
 ### Needs input
 ### Needs research
-- Why every service's compose config hash changes with one `.env.local` line (00base has no `env_file`).
 ### Fragile
 ### Known issues
+- The interactive shell's copy of `.env.local` word-splits values with spaces, and compose prefers it over
+  `--env-file`: never run `docker compose up` for this stack from a normal shell without `env -i`.
+- Even `env -i docker compose` is not `make up`: for QUOTED `.env.local` values make passes the quotes
+  through literally (`PHP_CONFIG_PACKAGE_04_GD_COMMAND_SUFFIX="-- --enable-gd …"` in 03php8-4) while compose's
+  dotenv strips them, so a raw clean-env `up` would recreate 03php8-4/8-5/edge too. Compare hashes through
+  make: `env -i HOME=$HOME PATH=$PATH make GLOBAL_STACK_DOCKER_CLI_EXEC=config GLOBAL_STACK_DOCKER_CLI_EXEC_FLAGS="--hash '*'" GLOBAL_STACK_DOCKER_CLI='docker compose' GLOBAL_STACK_DOCKER_CLI_FLAGS='--env-file .env.local' docker-cli --silent`
+  → 44 compared, only the six Java-27 containers differed (2026-09-28).

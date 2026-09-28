@@ -22,6 +22,7 @@ Implement AFTER the bring-up settles — nothing changes while the stack is stil
 2. **SonarQube (C)** — `docker/config/dist/bin/sonarqube-bin/global-stack-start-sonarqube.sh`: child + `trap` forwarding TERM/INT, `wait`; on unrequested exit write `${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}/sonarqube`, exit 1; clear a stale token at start; add the token to the compose healthcheck + `GLOBAL_STACK_ERROR_TOKEN`. Behavioural test against a stub entrypoint (exit 0 → token + rc 1; TERM → clean stop, no token).
 3. **rbenv** — serialize `rbenv install` / rehash across 03ruby* (flock like sdkman, or retry the rehash). Design at implementation time.
 4. **SDKMAN** — stall limit for the broker curl (low-speed abort) so a dead transfer cannot hold the shared lock forever. Design at implementation time.
+5. **SDKMAN tolerant install / strict activation** — 2026-09-28 13:31:11 `03java17-zulu`: `curl: (7) Failed to connect to broker.sdkman.io` on gradle 8.14.5; the `--tolerant` install loop moved on, then the strict activation loop's `sdk use gradle 8.14.5` hit `Stop! Candidate version is not installed.` and exited 1 (self-healed on restart). Decide at implementation: retry the download, or make the activation skip a package the install loop recorded as failed.
 
 ## Status
 <!-- progress-block v1 -->
@@ -31,6 +32,7 @@ Implement AFTER the bring-up settles — nothing changes while the stack is stil
 | 2 | SonarQube error token + retry | M | todo | - | docker/config/dist/bin/sonarqube-bin/**, docker/images/02sonarqube/** |
 | 3 | rbenv install/rehash serialization | M | todo | - | docker/config/dist/bin/rbenv-bin/** |
 | 4 | SDKMAN download stall limit | S | todo | - | docker/config/dist/bin/sdkman-bin/** |
+| 5 | SDKMAN tolerant install vs strict activation | S | todo | - | docker/config/dist/bin/sdkman-bin/** |
 <!-- /progress-block -->
 ### Blocked
 ### Needs input
