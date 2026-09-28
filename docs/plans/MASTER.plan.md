@@ -629,7 +629,7 @@ labels) and post-push commit signing.
 - [2026-09-11 11:05] 6C FINDING (row 31, not a developer ruling — deliberately NOT labelled
   `AGREED`, because no question was put and none was answered): the pre-completion check found two things the
   evidence pass had missed, both now closed. **(1)** The `..._SDK_URL`→`..._SDK_BUILD` sweep was
-  run with `git grep`, which cannot see gitignored files — `docker/images/local.05php8-4-…-android-
+  run with `git grep`, which cannot see gitignored files — `docker/images/local.05php8-5-…-android-
   n-flutter3-41-9/docker-compose.yaml:144` still plumbed the old name, so on this machine the
   all-in-one image would have received `GLOBAL_STACK_ANDROID_SDK_URL=` blank and no `..._SDK_BUILD`,
   killing `setup.sh:39` under `set -u`. `docker compose config -q` had NOT caught it twice over: it
@@ -1463,7 +1463,7 @@ the family in full:
 plus `DOCKER_LOCAL_REGISTRY_VERSION` — classified by hand, its only consumer is
 `Makefile:174` (`registry:${…}`), which no compose/Dockerfile index covers.
 
-**Class 2 (160)** — `JAVA26_{SDKMAN_INSTALL_PACKAGE_GRADLE_VX2, …_GROOVY_VX2, …_SPARK_VX1, …_SPARK_VX2} (4)`,
+**Class 2 (160)** — `JAVA27_{SDKMAN_INSTALL_PACKAGE_GRADLE_VX2, …_GROOVY_VX2, …_SPARK_VX1, …_SPARK_VX2} (4)`,
 `JAVA_INSTALL_PACKAGE_{ANT, GRADLE_VX1, GRADLE_VX2, GROOVY_VX1, GROOVY_VX2, JBANG, KOTLIN, MAVEN_VX1, MAVEN_VX2, MAVEN_VX3, MICRONAUT, POMCHECKER, QUARKUS, SCALA, SPARK_VX1, SPARK_VX2, SPRINGBOOT, TOMCAT} (18)`,
 `NODE24_INSTALL_PACKAGE_{TYPES_NODE} (1)`, `NODE26_INSTALL_PACKAGE_{TYPES_NODE} (1)`,
 `NODEEDGE_INSTALL_PACKAGE_{CORDOVA_RES, TYPES_NODE} (2)`,
@@ -1524,7 +1524,7 @@ Five statuses. Only **exist-only** and **hand-rolled** are 5b work.
 script: `NODE24`, `NODE26`, `NODEEDGE` (`node.<label>`, `nvm-start.sh:67`); `PHP8_4`,
 `PHP8_5`, `PHPEDGE` (`php.<AS>`, `phpbrew-start.sh:57`, plus the edge SHA sidecar `:87`);
 `PYTHON3` (`pyenv-start.sh:67`); `RUBY3`, `RUBY4` (`rbenv-start.sh:64`); `JAVA17`,
-`JAVA21`, `JAVA26` (`sdkman-start.sh:66`); `FLUTTER3` (`fvm-start.sh:53`).
+`JAVA21`, `JAVA27` (`sdkman-start.sh:66`); `FLUTTER3` (`fvm-start.sh:53`).
 
 **`warn-gated` (7)** — the manager pattern: `NVM`, `PHPBREW`, `PYENV`, `RBENV`, `SDKMAN`,
 `RUST`, `FVM`. **Do not "converge" these in 5b.** `CLAUDE.md` § Gotchas documents the

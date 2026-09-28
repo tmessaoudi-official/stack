@@ -28,7 +28,7 @@ SERVICES_SHELL := \
 	02fvm 02keycloak-keycloak \
 	02mongoclient-mongoclient 02nvm 02phpbrew 02pyenv \
 	02rbenv 02rust 02sdkman 02sonarqube \
-	03flutter3 03java17-zulu 03java21-zulu 03java26-zulu \
+	03flutter3 03java17-zulu 03java21-zulu 03java27-zulu \
 	03node26 03node24 03nodeedge \
 	03php8-4 03php8-5 03phpedge \
 	03python3 03ruby3 03ruby4 \

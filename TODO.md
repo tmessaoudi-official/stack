@@ -92,7 +92,7 @@ Run these manually after the next rebuild. Each has a specific command.
 
 - [ ] **pomchecker 1.15.0 on SDKMAN** — `1.15.0-SNAPSHOT` is the in-development version; SDKMAN stable may only have `1.14.0`. Verify before next rebuild:
   ```bash
-  make login-03java26-zulu
+  make login-03java27-zulu
   sdk list pomchecker
   ```
   If `1.15.0` is not listed as a SDKMAN candidate, downgrade in `.env`:
@@ -110,7 +110,7 @@ Items carried over from the original `@todo.md` notes file.
 
 - [ ] **Nginx OIDC integration** — install `cjose` from source (required by `mod_auth_openidc`), install `liboauth2 ≥ 2.0` from source, then configure OIDC auth for Nginx. See `docker/images/01nginx/` for the Nginx service. Dependencies must be compiled against the container's OpenSSL version.
 
-- [x] **`05edge` Java version** — `05edge` now depends on `03java26-zulu` and activates `JAVA_VERSION=${GLOBAL_STACK_JAVA26_VERSION}` (Java 26). **Resolved**: compose file updated to use Java 26.
+- [x] **`05edge` Java version** — `05edge` now depends on `03java27-zulu` and activates `JAVA_VERSION=${GLOBAL_STACK_JAVA27_VERSION}` (Java 26). **Resolved**: compose file updated to use Java 26.
 
 - [ ] **Maven VX3 vestigial slot** — `java-packages.compose.yaml` still carries slot `SDKMAN_CONFIG/INSTALL_PACKAGE_04_MAVEN_VX3_*` even though the version is disabled (`=` empty) in `.env`. The slot is dead code: SDKMAN startup skips empty versions, so it never installs. Safe to remove in a cleanup sprint (delete the two VX3 lines from `java-packages.compose.yaml` and the two var lines from `.env`). Not urgent — removing vestigial slot is purely cosmetic.
 
@@ -138,7 +138,7 @@ Implement in risk order.
 
 - [x] **1. `.env` additions** — add all new RELOAD vars with `=false` defaults:
   - After `RELOAD_NVM`: `RELOAD_NODE24`, `RELOAD_NODE26`, `RELOAD_NODEEDGE`
-  - After `RELOAD_SDKMAN`: `RELOAD_JAVA17`, `RELOAD_JAVA21`, `RELOAD_JAVA26`
+  - After `RELOAD_SDKMAN`: `RELOAD_JAVA17`, `RELOAD_JAVA21`, `RELOAD_JAVA27`
   - After `RELOAD_PYENV`: `RELOAD_PYTHON3`
   - Replace `RELOAD_RUBY`: `RELOAD_RBENV`, `RELOAD_RUBY3`, `RELOAD_RUBY4`
   - Full target block shown in spec §3.1
@@ -161,13 +161,13 @@ Implement in risk order.
 
 - [x] **`java25bin/` → `java25-bin/`** — naming inconsistency (missing hyphen vs all other java*-bin dirs). **Fixed 2026-05-17** via `git mv`. No runtime impact (sync script copies files by path, not by dir name).
 
-- [x] **`java21-bin/` and `java26-bin/` missing** — stub scripts added for naming consistency. `sdkman-start.sh` does not call these scripts at runtime; they exist as extension points matching the `java17-bin/` and `java25-bin/` pattern.
+- [x] **`java21-bin/` and `java27-bin/` missing** — stub scripts added for naming consistency. `sdkman-start.sh` does not call these scripts at runtime; they exist as extension points matching the `java17-bin/` and `java25-bin/` pattern.
 
 ---
 
 ## 🔍 Architecture findings — from 2026-05-17 audit
 
-- [ ] **jbang and scala absent from `05stable` and `05edge` inline SDKMAN lists** — `05stable/05edge` inline their own SDKMAN package slots (legacy pattern, do not extend `java-packages.compose.yaml`). Slots 12 (jbang) and 13 (scala), added in this sprint, are not present in those inline lists. These tools ARE installed into the shared `tools/` volume by `03java26-zulu`, so `05stable`/`05edge` can use them via that volume — but they are not installed by the monolith images themselves. Add a comment in `05stable/docker-compose.yaml` and `05edge/docker-compose.yaml` noting: `# jbang and scala installed by 03java26-zulu via shared tools/ volume — not installed here`.
+- [ ] **jbang and scala absent from `05stable` and `05edge` inline SDKMAN lists** — `05stable/05edge` inline their own SDKMAN package slots (legacy pattern, do not extend `java-packages.compose.yaml`). Slots 12 (jbang) and 13 (scala), added in this sprint, are not present in those inline lists. These tools ARE installed into the shared `tools/` volume by `03java27-zulu`, so `05stable`/`05edge` can use them via that volume — but they are not installed by the monolith images themselves. Add a comment in `05stable/docker-compose.yaml` and `05edge/docker-compose.yaml` noting: `# jbang and scala installed by 03java27-zulu via shared tools/ volume — not installed here`.
 
 - [ ] **`05stable` requires `03node24` always in `COMPOSE_FILE`** — `05stable` depends on `03node24` and activates `NODE_VERSION=${GLOBAL_STACK_NODE24_VERSION}`. If `03node24` is ever removed from `COMPOSE_FILE` while `05stable` remains active, the container will wait for a success marker that never comes. Safe currently (03node24 is in COMPOSE_FILE), but worth documenting: add a comment in `05stable/docker-compose.yaml` on the `03node24` depends_on line.
 
@@ -185,11 +185,11 @@ Implement in risk order.
 
 - [ ] **Micronaut 5.0.0 per-tier drift** — when SDKMAN publishes stable 5.0.0: update `GLOBAL_STACK_JAVA_DEFAULT_MICRONAUT_VERSION` to `5.0.0`, add per-tier overrides for `03java17-zulu` and `03java21-zulu` pinning to `4.10.14` (5.0.0 requires Java 25+). See "Monitor" section above.
 
-- [ ] **Spark 4.x per-tier drift** — when SDKMAN publishes stable Spark 4.x: update `GLOBAL_STACK_JAVA_DEFAULT_SPARK_VX1_VERSION`; re-enable `03java26-zulu` override if that tier gains Spark 4 support. Remove VX2 slot after confirming VX1 covers all active tiers.
+- [ ] **Spark 4.x per-tier drift** — when SDKMAN publishes stable Spark 4.x: update `GLOBAL_STACK_JAVA_DEFAULT_SPARK_VX1_VERSION`; re-enable `03java27-zulu` override if that tier gains Spark 4 support. Remove VX2 slot after confirming VX1 covers all active tiers.
 
-- [ ] **Gradle VX2 re-enable on Java 26** — `GLOBAL_STACK_JAVA26_SDKMAN_INSTALL_PACKAGE_GRADLE_VX2_VERSION` is empty (Gradle 8 crashes on Java 25+; same applies to Java 26). Monitor Gradle 8.x patch releases for Java 26 fix. When a compatible Gradle 8 version ships: restore the version value in `.env`. Check: `https://github.com/gradle/gradle/issues/29199`.
+- [ ] **Gradle VX2 re-enable on Java 26** — `GLOBAL_STACK_JAVA27_SDKMAN_INSTALL_PACKAGE_GRADLE_VX2_VERSION` is empty (Gradle 8 crashes on Java 25+; same applies to Java 26). Monitor Gradle 8.x patch releases for Java 26 fix. When a compatible Gradle 8 version ships: restore the version value in `.env`. Check: `https://github.com/gradle/gradle/issues/29199`.
 
-- [ ] **Groovy VX2 re-enable on Java 26** — same situation: `GLOBAL_STACK_JAVA26_SDKMAN_INSTALL_PACKAGE_GROOVY_VX2_VERSION` is empty (not in Java 26 test matrix). Monitor Groovy 4.x for Java 26 compatibility.
+- [ ] **Groovy VX2 re-enable on Java 26** — same situation: `GLOBAL_STACK_JAVA27_SDKMAN_INSTALL_PACKAGE_GROOVY_VX2_VERSION` is empty (not in Java 26 test matrix). Monitor Groovy 4.x for Java 26 compatibility.
 
 
 - [x] **`GLOBAL_STACK_WAIT_FOR_TIMEOUT` from `.env` — DONE** [verified 2026-09-04: `.env:46`

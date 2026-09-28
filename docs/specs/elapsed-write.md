@@ -34,7 +34,7 @@ Key invariant: base ONLY clears `successes/base` and `elapsed`. It does NOT clea
 
 `00base`, `01caddy`, `01httpd`, `01nginx`, `01selenium-standalone-chrome`,
 `01selenium-standalone-firefox`, `02fvm`, `02nvm`, `02phpbrew`, `02pyenv`, `02rbenv`,
-`02rust`, `02sdkman`, `03java17-zulu`, `03java21-zulu`, `03java26-zulu`, `03node24`,
+`02rust`, `02sdkman`, `03java17-zulu`, `03java21-zulu`, `03java27-zulu`, `03node24`,
 `03node26`, `03nodeedge`, `03php8-4`, `03php8-5`, `03phpedge`, `03python3`, `03ruby3`,
 `03ruby4`, `04android`, `04phpmyadmin`, `03flutter3`, `04serverless-framework`,
 `05edge`, `05stable`, `local.*`
@@ -275,7 +275,7 @@ field) — e.g. `01redis`, not `redis`.
 > Group ✓ containers". **It does not, and never did.** Group ✓ containers label their line by
 > hand in the `print-success.sh` call, using the RUNTIME name — `00base` carries
 > `stack.service: "00base"` and writes `base`; `01caddy` carries `stack.service: "01caddy"` and
-> writes `caddy`; `03java26-zulu` writes `sdkman (26.0.2-zulu)`. Group A was built to this rule
+> writes `caddy`; `03java27-zulu` writes `sdkman (26.0.2-zulu)`. Group A was built to this rule
 > and Group ✓ never was, which is why `tools/elapsed` now holds two namespaces: 16 lines keyed by
 > compose service name and 27 keyed by runtime, 21 of which match neither the service name nor
 > the service's own success token (`java.26` ↔ `sdkman (26.0.2-zulu)`, `php.8.4` ↔

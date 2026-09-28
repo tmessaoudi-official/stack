@@ -372,7 +372,7 @@ start (can take 30+ minutes).
 | `GLOBAL_STACK_RELOAD_RBENV` | Force rbenv (manager) reinstall — distinct from the Ruby version vars below |
 | `GLOBAL_STACK_RELOAD_RUBY3` / `_RUBY4` | Force that Ruby version reinstall |
 | `GLOBAL_STACK_RELOAD_SDKMAN` | Force SDKMAN (manager) reinstall |
-| `GLOBAL_STACK_RELOAD_JAVA17` / `_JAVA21` / `_JAVA26` | Force that Java version reinstall |
+| `GLOBAL_STACK_RELOAD_JAVA17` / `_JAVA21` / `_JAVA27` | Force that Java version reinstall |
 | `GLOBAL_STACK_RELOAD_FVM` | Force FVM (manager) reinstall |
 | `GLOBAL_STACK_RELOAD_FLUTTER3` | Force Flutter 3 reinstall |
 

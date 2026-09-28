@@ -249,7 +249,7 @@ if [[ "" != "$(command -v sdk)" ]]; then
 
 	source "${HOME}/.sdkman/etc/config"
 
-	_gs_quiet sdk use java ${GLOBAL_STACK_JAVA26_VERSION}
+	_gs_quiet sdk use java ${GLOBAL_STACK_JAVA27_VERSION}
 
 	source "${GLOBAL_STACK_DOCKER_ROOT_PATH}"/docker/config/dist/bin/base-bin/global-stack-base-setup-packages.sh
 	_gs_quiet global_stack_base_setup_packages \
