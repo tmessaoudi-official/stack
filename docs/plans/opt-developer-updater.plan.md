@@ -19,6 +19,7 @@ already keeps `task`, `bat` and `sonar-scanner-cli`.
 - [2026-09-28 20:56] AGREED (ratified ASSUMED 21:22): Android Studio pin holds the BUILD id (AI-261.26222.65.2614.16379836, from the release list's .build), not the marketing version 2026.1.4.8 — because the installed tree carries only the build id (product-info.json, build.txt), so --check can compare without a network lookup. Gate: a patch or quarterly release within 261 is AUTO, 261→262 (Quail→Rabbit) HOLDs [Verified: _gs_eu2_classify_decision]. Alternatives: marketing-version pin + a .gs-version marker written at install (the current hand install would re-download once).
 - [2026-09-28 21:25] AGREED: Android Studio tracks the STABLE channels only (Release+Patch); Rabbit (262) arrives as a HOLD once it goes stable and is applied with --force-hold. PhpStorm move: developer runs /tmp/mv-phpstorm-layout-20260928.sh now. Next: step 4 (VS Code, Devin, Sublime).
 - [2026-09-28 21:37] AGREED: VS Code launcher starts the app binary code/code (not the bin/code CLI wrapper). Steps 6 + 7 now; step 5 waits for the stack (GitHub API).
+- [2026-09-28 21:55] ASSUMED (review): bat is installed with NO checksum (NOCHECKSUM; version from CHANGELOG.md, never executed) — because bat publishes no checksum file (.sha256 and SHA256SUMS both 404), and the GitHub asset digest costs one api.github.com call per install against the 60/h budget fvm/elasticmq share during a hard restart. Parity with the old global-unu.sh, which never verified bat. Alternatives: digest lookup via the API at install time.
 
 ## Inventory (2026-09-28, read from each tool's own metadata)
 
@@ -125,14 +126,16 @@ names (00base shares the bat/sonar pins).
 5. **MeGit + Etcher** (M): after the stack is healthy (api.github.com budget); GitHub asset
    digest; Etcher gets its first launcher.
 6. **Move task / bat / sonar-scanner-cli** (M): delete their blocks from `global-unu.sh`, add rows
-   (sonar `.sha256`, task/bat GitHub digest); PATH entries in `.profile` unchanged.
+   (sonar `.sha256`; task `task_checksums.txt` from releases/download — no API; bat NOCHECKSUM, see
+   ASSUMED 21:5x); PATH entries in `.profile` unchanged.
 7. **Hook + cleanup + docs** (S): `global-unu.sh` runs
    `"$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/global-unu-opt.sh" --apply` as its last
    step BEFORE the final `echo "Successful :)"` (the script has no `set -e`, so a failure must be
    reported, not swallowed: print it and exit non-zero instead of claiming success); drop the
    `go/bin` block from `templates/shell/.profile`; CLAUDE.md (test bullet, hard-restart now
    refreshes IDEs), `templates/tips/file-layout.md` if it lists `templates/shell`.
-8. **Deploy + live check** (S): copy both scripts to `~/.local/bin` (timestamped backup first),
+8. **Deploy + live check** (S): copy both scripts to `~/.local/bin` (timestamped backup first,
+   then `chmod +x` both — git tracks them 100644 and `core.fileMode=false`),
    drop `go/bin` from `~/.profile` (backup), run `global-unu-opt.sh --check` against the real
    `/opt/developer` (read-only, expect 12 × current); `--apply` there is yours to run (the
    firewall denies my writes under `/opt`).
@@ -192,6 +195,8 @@ JetBrains-built four, `%F` on the three editors, Sublime icon 48x48 → 256x256,
 - `make hard-restart` runs `yes y | global-unu.sh`, so once step 7 lands a hard restart also installs any IDE whose pin moved.
 - `Makefile:306` is `yes y | global-unu.sh || echo 'script does not exit'`: a failed IDE install makes global-unu exit non-zero, and hard-restart swallows it with a misleading message — the only signal there is the script's own output.
 - ORDER: run `/tmp/mv-phpstorm-layout-20260928.sh` BEFORE the first `global-unu.sh` after step 7. Otherwise `--apply` downloads a fresh PhpStorm into `jetbrains/phpstorm`, the handoff then refuses (target exists) and `jetbrains/PhpStorm-2026.2.3/` is left orphaned (~3 GB).
+- The `# >>> gs-unu-opt` hook runs OUTSIDE global-unu.sh's `.env.local` guard (it must stay the last step, after docker-reclaim): with no `.env.local`, every /opt tool reads `unmanaged` and nothing installs, but launchers of installed trees are still rewritten.
+- `global-unu.sh` as a whole has never run with the hook: only the extracted block (§13) and `bash -n`. Its first real run is step 8 / the next hard restart after deploy.
 ### Known issues
 - `phpstorm.desktop` points at a dir that does not exist — handoff `/tmp/mv-phpstorm-layout-20260928.sh` pending on the developer's side; Inventory row stays until they report.
 - All 8 hand-made launchers fail `desktop-file-validate` (unregistered Categories `PHP`/`Dev`/`GIT`/`Version`/`Text`, app version in `Version=`, `Name=Sublme Text`); none set StartupWMClass except megit. Fixed by the managed launchers.
