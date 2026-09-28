@@ -861,6 +861,20 @@ else
   ko "14m: rc=${RC}: ${OUT}; curl: $(cat "$d/curl.log")"
 fi
 
+# Order: only a CHECKSUMMED chrome-sandbox may become root setuid. A zip whose hash
+# does not match must fail before sudo is ever called.
+d="$(_fresh c14order balena_etcher GLOBAL_STACK_BALENA_ETCHER_VERSION v2.2.0)"
+_mk_etcher_tree "$d/opt/balena-etcher" 2.1.7 && chmod 4755 "$d/opt/balena-etcher/chrome-sandbox"
+before="$(_fp "$d/opt/balena-etcher")"
+_etcher_release "$d" 2.2.0 1
+sed -i -E 's/^[0-9a-f]{64}(  balenaEtcher-linux-x64-2\.2\.0\.zip)$/'"$(printf '0%.0s' {1..64})"'\1/' "$d/srv/sums.txt"
+_run "$d" --apply --only=balena_etcher
+if [[ ${RC} -ne 0 && "$(_fp "$d/opt/balena-etcher")" == "${before}" && ! -e "$d/sudo.log" ]] && grep -q 'sha256 mismatch' <<<"${OUT}"; then
+  ok "14o: a zip failing its sha256 never reaches sudo — setuid only ever lands on a checksummed sandbox"
+else
+  ko "14o: rc=${RC} sudo called=$([[ -e "$d/sudo.log" ]] && cat "$d/sudo.log" || echo no): ${OUT}"
+fi
+
 # aarch64: MeGit takes its aarch64 asset; Etcher (x86_64-only) is unsupported.
 d="$(_fresh c14arm megit GLOBAL_STACK_MEGIT_VERSION v0.12.0)"
 printf 'GLOBAL_STACK_BALENA_ETCHER_VERSION=v2.2.0\n' >>"$d/env.local"
