@@ -23,7 +23,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 SUT="${REPO_ROOT}/templates/shell/global-unu-opt.sh"
 
 TMP_DIR="$(mktemp -d)"
-trap 'rm -rf "${TMP_DIR}"' EXIT
+trap 'chmod -R u+w "${TMP_DIR}" 2>/dev/null; rm -rf "${TMP_DIR}"' EXIT
 
 PASS=0
 FAIL=0
@@ -81,6 +81,8 @@ if [[ -z "${src}" ]]; then
   exit 0
 fi
 if [[ -n "${out}" ]]; then cp "${src}" "${out}"; else cat "${src}"; fi
+# Side effect hook: a case can act DURING the archive download (e.g. start the app).
+if [[ "${url}" == *.tar.gz && -f "${T}/on-archive" ]]; then bash "${T}/on-archive"; fi
 STUB
 chmod +x "${STUB_BIN}/curl"
 
@@ -289,6 +291,45 @@ if [[ ${RC} -eq 0 && ! -e "$d/apps/idea.desktop" ]] && grep -qE 'unmanaged.*idea
 else
   ko "6b: rc=${RC}: ${OUT}; apps: $(ls -A "$d/apps")"
 fi
+
+d="$(_sandbox c6c 2026.2.3)"
+printf 'GLOBAL_STACK_IDEA_VERSION=\n' >"$d/env.local"
+_run "$d" --apply
+if [[ ${RC} -eq 0 && -f "$d/apps/idea.desktop" && "$(_curl_calls "$d")" == 0 ]] && grep -qE 'unmanaged.*idea.*2026\.2\.3' <<<"${OUT}"; then
+  ok "6c: empty pin + installed → nothing installed, launcher still managed (ruling: all 9 launchers)"
+else
+  ko "6c: rc=${RC}: ${OUT}; apps: $(ls -A "$d/apps")"
+fi
+
+# ═════════════════════════════════════════════════════════════════════════════
+section "8. the swap itself"
+# _opt_install runs as the left side of ||, where set -e is inert: an unchecked
+# failed mv of the OLD tree used to let the second mv move the new tree INSIDE it
+# (jetbrains/idea/idea-IU-263.1/) and report INSTALLED — the PhpStorm nesting.
+d="$(_sandbox c8a 2026.3.1)"
+before="$(_fp "$d/opt/jetbrains/idea")"
+chmod a-w "$d/opt/jetbrains"
+_run "$d" --apply
+chmod u+w "$d/opt/jetbrains"
+nested="$(find "$d/opt/jetbrains/idea" -maxdepth 1 -name 'idea-IU-*' | head -n 1)"
+if [[ ${RC} -ne 0 && -z "${nested}" && "$(_fp "$d/opt/jetbrains/idea")" == "${before}" ]]; then
+  ok "8a: old tree cannot be moved aside → exit ${RC}, no nested tree, installed copy byte-identical"
+else
+  ko "8a: rc=${RC} nested='${nested}' changed=$([[ "$(_fp "$d/opt/jetbrains/idea")" == "${before}" ]] && echo no || echo YES): ${OUT}"
+fi
+if ! grep -q INSTALLED <<<"${OUT}"; then ok "8a: no INSTALLED claim"; else ko "8a: claimed INSTALLED after a failed swap"; fi
+
+# The app is started while its multi-GB archive downloads: re-checked before the swap.
+d="$(_sandbox c8b 2026.3.1)"
+printf 'mkdir -p "%s/proc/999" && ln -sfn "%s/opt/jetbrains/idea/bin/idea" "%s/proc/999/exe"\n' "$d" "$d" "$d" >"$d/on-archive"
+before="$(_fp "$d/opt/jetbrains/idea")"
+_run "$d" --apply
+if grep -qiE 'skip.*idea.*running' <<<"${OUT}" && [[ "$(_fp "$d/opt/jetbrains/idea")" == "${before}" ]]; then
+  ok "8b: app started during the download → skipped at the swap, tree untouched"
+else
+  ko "8b: rc=${RC}: ${OUT}"
+fi
+if [[ -z "$(ls -A "$d/opt/.gs-staging" 2>/dev/null)" ]]; then ok "8b: staging cleaned after the late skip"; else ko "8b: staging left: $(ls -A "$d/opt/.gs-staging")"; fi
 
 # ═════════════════════════════════════════════════════════════════════════════
 section "7. fresh machine and arguments"

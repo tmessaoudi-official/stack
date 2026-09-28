@@ -142,6 +142,11 @@ _opt_extract() { # $1 archive $2 url (for the format) $3 dest
 }
 
 # $1 id $2 pin → 0 installed, 1 failed, 3 skipped (running)
+#
+# set -e is INERT in here: main calls `_opt_install … || rc=$?`, and bash ignores -e
+# in anything on the left of ||. Every command whose failure matters is checked
+# explicitly — an unchecked failed `mv` of the old tree once let the next `mv` move
+# the new tree INSIDE it and report INSTALLED (bin/tests/global-unu-opt.test.sh 8a).
 _opt_install() {
   local id="$1" pin="$2" kind="${_OPT_KIND[$1]}"
   local final="${GS_UNU_OPT_ROOT}/${_OPT_DIR[$1]}" stage="${_OPT_STAGING}/$1"
@@ -151,8 +156,11 @@ _opt_install() {
     _opt_log SKIPPED "${id}: running from ${final} — close it and re-run to install ${pin}"
     return 3
   fi
-  [[ -e "${stage}" ]] && { _opt_rm_staging "${stage}" || return 1; }
-  mkdir -p "${stage}/x"
+  if [[ -e "${stage}" ]] && ! _opt_rm_staging "${stage}"; then return 1; fi
+  if ! mkdir -p "${stage}/x"; then
+    _opt_err FAILED "${id}: cannot create ${stage}"
+    return 1
+  fi
 
   if ! res="$("_opt_${kind}_resolve" "${id}" "${pin}")"; then
     _opt_rm_staging "${stage}"
@@ -183,31 +191,59 @@ _opt_install() {
     return 1
   fi
 
-  mkdir -p "$(dirname "${final}")"
-  [[ -e "${final}" ]] && mv "${final}" "${stage}/old"
+  # The download can take minutes: the app may have been started meanwhile.
+  if [[ -d "${final}" ]] && _opt_running "${final}"; then
+    _opt_log SKIPPED "${id}: running (started during the download) — close it and re-run to install ${pin}"
+    _opt_rm_staging "${stage}"
+    return 3
+  fi
+  if ! mkdir -p "$(dirname "${final}")"; then
+    _opt_err FAILED "${id}: cannot create $(dirname "${final}") — nothing changed"
+    _opt_rm_staging "${stage}"
+    return 1
+  fi
+  if [[ -e "${final}" ]] && ! mv "${final}" "${stage}/old"; then
+    _opt_err FAILED "${id}: cannot move the installed tree aside — installed copy untouched"
+    _opt_rm_staging "${stage}"
+    return 1
+  fi
+  # A target that exists now would swallow the new tree as a subdirectory.
+  if [[ -e "${final}" ]]; then
+    _opt_err FAILED "${id}: ${final} reappeared during the swap — previous tree kept at ${stage}/old"
+    return 1
+  fi
   if ! mv "${tree}" "${final}"; then
-    [[ -e "${stage}/old" ]] && mv "${stage}/old" "${final}"
+    if [[ -e "${stage}/old" ]] && ! mv "${stage}/old" "${final}"; then
+      _opt_err FAILED "${id}: swap failed AND the restore failed — previous tree is at ${stage}/old"
+      return 1
+    fi
     _opt_err FAILED "${id}: could not move the new tree into place — old copy restored"
+    _opt_rm_staging "${stage}"
     return 1
   fi
   _opt_rm_staging "${stage}"
   _opt_log INSTALLED "${id} ${pin}"
 }
 
-# $1 id → 0 unchanged/written, 1 invalid. Sets _OPT_LAUNCHERS_CHANGED.
+# $1 id → 0 unchanged/written, 1 invalid or unwritable. Sets _OPT_LAUNCHERS_CHANGED.
+# Generated from whatever tree is installed — also after a SKIPPED or FAILED
+# install, and for an unmanaged (empty pin) tool: all 9 launchers are managed.
 _opt_launcher() {
   local id="$1" final="${GS_UNU_OPT_ROOT}/${_OPT_DIR[$1]}" dest="${GS_UNU_OPT_APPS_DIR}/$1.desktop"
   local tmp rc=0
   tmp="$(mktemp -d)"
-  "_opt_${_OPT_KIND[$1]}_launcher" "${id}" "${final}" >"${tmp}/$1.desktop"
-  if [[ -f "${dest}" ]] && cmp -s "${tmp}/$1.desktop" "${dest}"; then
+  if ! "_opt_${_OPT_KIND[$1]}_launcher" "${id}" "${final}" >"${tmp}/$1.desktop"; then
+    _opt_err FAILED "${id}: could not generate its launcher — ${dest} left as it was"
+    rc=1
+  elif [[ -f "${dest}" ]] && cmp -s "${tmp}/$1.desktop" "${dest}"; then
     :
   elif ! desktop-file-validate "${tmp}/$1.desktop" >&2; then
     _opt_err FAILED "${id}: generated launcher is invalid — ${dest} left as it was"
     rc=1
+  elif ! { mkdir -p "${GS_UNU_OPT_APPS_DIR}" && cp "${tmp}/$1.desktop" "${dest}.gs-tmp" && mv "${dest}.gs-tmp" "${dest}"; }; then
+    _opt_err FAILED "${id}: could not write ${dest}"
+    rc=1
   else
-    mkdir -p "${GS_UNU_OPT_APPS_DIR}"
-    cp "${tmp}/$1.desktop" "${dest}.gs-tmp" && mv "${dest}.gs-tmp" "${dest}"
     _opt_log LAUNCHER "${id}: wrote ${dest}"
     _OPT_LAUNCHERS_CHANGED=1
   fi
