@@ -452,6 +452,100 @@ _row_case phpstorm GLOBAL_STACK_PHPSTORM_VERSION jetbrains/phpstorm phpstorm php
 _row_case webstorm GLOBAL_STACK_WEBSTORM_VERSION jetbrains/webstorm webstorm webstorm.desktop jetbrains-webstorm 2026.3.1
 _row_case android_studio GLOBAL_STACK_ANDROID_STUDIO_VERSION android-studio studio android-studio.desktop jetbrains-studio AI-261.26222.65.2614.16500000
 
+# ═════════════════════════════════════════════════════════════════════════════
+section "11. tool rows: VS Code, Devin, Sublime Text"
+# Shapes from the real vendor archives (2026-09-28): VS Code → VSCode-linux-x64/ with
+# resources/app/package.json .version; Devin → Devin/ with resources/app/product.json
+# .windsurfVersion; Sublime → sublime_text/ whose changelog.txt names the build first.
+
+# $1 case dir  $2 id  $3 pin var  $4 pin → a fresh sandbox (nothing installed)
+_fresh() {
+  local d="${TMP_DIR}/$1"
+  mkdir -p "$d/opt" "$d/apps" "$d/proc" "$d/srv" "$d/src"
+  : >"$d/curl.log"
+  : >"$d/routes"
+  printf '%s=%s\n' "$3" "$4" >"$d/env.local"
+  printf '%s' "$d"
+}
+# $1 case dir  $2 root dir name  $3 archive url  $4 tar flag (z|J) → SUM set
+_pack() {
+  local a
+  a="$1/srv/$(basename "$3")"
+  tar -c"$4"f "${a}" -C "$1/src" "$2"
+  SUM="$(sha256sum "${a}" | cut -d' ' -f1)"
+  printf '%s\t%s\n' "$3" "${a}" >>"$1/routes"
+}
+# $1 case dir  $2 id  $3 launcher file  $4 installed exec  $5 installed icon  $6 pin  $7 version reader (jq path or 'changelog')
+_row_assert() {
+  local d="$1" id="$2" L="$1/apps/$3"
+  if [[ ${RC} -eq 0 ]] && grep -q "INSTALLED.*${id} $6" <<<"${OUT}"; then ok "11 ${id}: --apply installs $6"; else ko "11 ${id}: rc=${RC}: ${OUT}"; fi
+  if desktop-file-validate "${L}" >/dev/null 2>&1 && grep -qx "Exec=$d/opt/$4 %F" "${L}" && grep -qx "Icon=$d/opt/$5" "${L}" \
+    && ! grep -q '^StartupWMClass=' "${L}"; then
+    ok "11 ${id}: $3 valid (Exec %F, Icon, no unverified StartupWMClass)"
+  else
+    ko "11 ${id}: launcher $3: $(cat "${L}" 2>&1)"
+  fi
+  : >"$d/curl.log"
+  _run "$d" --check --only="${id}"
+  if grep -qE "current.*${id} $6" <<<"${OUT}" && [[ "$(_curl_calls "$d")" == 0 ]]; then ok "11 ${id}: --check reads $6 back, offline"; else ko "11 ${id}: --check: ${OUT}"; fi
+}
+
+# VS Code: pinned download from the versions API, sha256hash.
+d="$(_fresh c11code code GLOBAL_STACK_VSCODE_VERSION 1.140.0)"
+mkdir -p "$d/src/VSCode-linux-x64/resources/app/resources/linux"
+printf '{"version":"1.140.0"}\n' >"$d/src/VSCode-linux-x64/resources/app/package.json"
+printf 'png' >"$d/src/VSCode-linux-x64/resources/app/resources/linux/code.png"
+printf '#!/bin/sh\n' >"$d/src/VSCode-linux-x64/code" && chmod +x "$d/src/VSCode-linux-x64/code"
+_pack "$d" VSCode-linux-x64 'https://vscode.download.prss.microsoft.com/dbazure/download/stable/abc/code-stable-x64-1.tar.gz' z
+printf '{"productVersion":"1.140.0","url":"https://vscode.download.prss.microsoft.com/dbazure/download/stable/abc/code-stable-x64-1.tar.gz","sha256hash":"%s"}\n' "${SUM}" >"$d/srv/v.json"
+printf '%s\t%s\n' 'https://update.code.visualstudio.com/api/versions/1.140.0/linux-x64/stable' "$d/srv/v.json" >>"$d/routes"
+_run "$d" --apply --only=code
+_row_assert "$d" code code.desktop code/code code/resources/app/resources/linux/code.png 1.140.0
+
+# Devin: the Windsurf feed only serves its LATEST build — a pin must equal it.
+_devin_src() { # $1 case dir  $2 version inside
+  mkdir -p "$1/src/Devin/resources/app/resources/linux"
+  printf '{"nameShort":"Devin","version":"1.127.0","windsurfVersion":"%s"}\n' "$2" >"$1/src/Devin/resources/app/product.json"
+  printf 'png' >"$1/src/Devin/resources/app/resources/linux/code.png"
+  printf '#!/bin/sh\n' >"$1/src/Devin/devin-desktop" && chmod +x "$1/src/Devin/devin-desktop"
+}
+DEVIN_FEED='https://windsurf-stable.codeium.com/api/update/linux-x64/stable/latest'
+d="$(_fresh c11devin devin GLOBAL_STACK_DEVIN_VERSION 3.11.0)"
+_devin_src "$d" 3.11.0
+_pack "$d" Devin 'https://windsurf-stable.codeiumdata.com/linux-x64/stable/abc/Devin-linux-x64-3.11.0.tar.gz' z
+printf '{"url":"https://windsurf-stable.codeiumdata.com/linux-x64/stable/abc/Devin-linux-x64-3.11.0.tar.gz","windsurfVersion":"3.11.0","sha256hash":"%s"}\n' "${SUM}" >"$d/srv/feed.json"
+printf '%s\t%s\n' "${DEVIN_FEED}" "$d/srv/feed.json" >>"$d/routes"
+_run "$d" --apply --only=devin
+_row_assert "$d" devin devin.desktop devin/devin-desktop devin/resources/app/resources/linux/code.png 3.11.0
+printf 'GLOBAL_STACK_DEVIN_VERSION=3.10.35\n' >"$d/env.local"
+before="$(_fp "$d/opt/devin")"
+_run "$d" --apply --only=devin
+if [[ ${RC} -ne 0 && "$(_fp "$d/opt/devin")" == "${before}" ]] && grep -q '3.10.35.*no longer downloadable' <<<"${OUT}" \
+  && ! grep -q 'tar.gz$' "$d/curl.log"; then
+  ok "11 devin: a pin the feed no longer serves → exit ${RC}, names the pin, nothing downloaded, tree untouched"
+else
+  ko "11 devin: stale pin: rc=${RC}: ${OUT}"
+fi
+
+# Sublime: no published checksum — installed on its build number alone, and says so.
+d="$(_fresh c11subl sublime_text GLOBAL_STACK_SUBLIME_TEXT_VERSION 4216)"
+mkdir -p "$d/src/sublime_text/Icon/256x256"
+printf '<h3>Build 4216</h3>\n<p>fixes</p>\n<h3>Build 4215</h3>\n' >"$d/src/sublime_text/changelog.txt"
+printf 'png' >"$d/src/sublime_text/Icon/256x256/sublime-text.png"
+printf '#!/bin/sh\necho EXECUTED >"%s/ran"\n' "$d" >"$d/src/sublime_text/sublime_text" && chmod +x "$d/src/sublime_text/sublime_text"
+_pack "$d" sublime_text 'https://download.sublimetext.com/sublime_text_build_4216_x64.tar.xz' J
+_run "$d" --apply --only=sublime_text
+_row_assert "$d" sublime_text sublime_text.desktop sublime_text/sublime_text sublime_text/Icon/256x256/sublime-text.png 4216
+d2="$(_fresh c11subl2 sublime_text GLOBAL_STACK_SUBLIME_TEXT_VERSION 4216)"
+cp "$d/srv/"*.tar.xz "$d2/srv/"
+printf '%s\t%s\n' 'https://download.sublimetext.com/sublime_text_build_4216_x64.tar.xz' "$d2/srv/sublime_text_build_4216_x64.tar.xz" >>"$d2/routes"
+_run "$d2" --apply --only=sublime_text
+if grep -q 'NOCHECKSUM.*sublime_text' <<<"${OUT}" && [[ ! -e "$d/ran" && ! -e "$d2/ran" ]]; then
+  ok "11 sublime_text: installed without a checksum says so, and the staged binary was never executed"
+else
+  ko "11 sublime_text: NOCHECKSUM missing or the binary ran: ${OUT}"
+fi
+
 printf '\n'
 if ((FAIL == 0)); then
   printf '  %bALL PASSED%b   ✓ %d / %d\n' "${C_GREEN}" "${C_RESET}" "${PASS}" "$((PASS + FAIL))"

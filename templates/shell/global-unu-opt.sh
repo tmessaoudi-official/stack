@@ -30,12 +30,15 @@ _OPT_STAGING="${GS_UNU_OPT_ROOT}/.gs-staging"
 # ── Tool table ────────────────────────────────────────────────────────────────
 # id → install dir (relative to the root), .env pin var, kind, launcher file name.
 # A kind supplies _opt_<kind>_installed / _resolve / _version / _launcher.
-_OPT_IDS=(idea phpstorm webstorm android_studio)
+_OPT_IDS=(idea phpstorm webstorm android_studio code devin sublime_text)
 declare -A _OPT_DIR=([idea]=jetbrains/idea [phpstorm]=jetbrains/phpstorm [webstorm]=jetbrains/webstorm
-  [android_studio]=android-studio)
+  [android_studio]=android-studio [code]=code [devin]=devin [sublime_text]=sublime_text)
 declare -A _OPT_PIN=([idea]=GLOBAL_STACK_IDEA_VERSION [phpstorm]=GLOBAL_STACK_PHPSTORM_VERSION
-  [webstorm]=GLOBAL_STACK_WEBSTORM_VERSION [android_studio]=GLOBAL_STACK_ANDROID_STUDIO_VERSION)
-declare -A _OPT_KIND=([idea]=jetbrains [phpstorm]=jetbrains [webstorm]=jetbrains [android_studio]=studio)
+  [webstorm]=GLOBAL_STACK_WEBSTORM_VERSION [android_studio]=GLOBAL_STACK_ANDROID_STUDIO_VERSION
+  [code]=GLOBAL_STACK_VSCODE_VERSION [devin]=GLOBAL_STACK_DEVIN_VERSION
+  [sublime_text]=GLOBAL_STACK_SUBLIME_TEXT_VERSION)
+declare -A _OPT_KIND=([idea]=jetbrains [phpstorm]=jetbrains [webstorm]=jetbrains [android_studio]=studio
+  [code]=vscode [devin]=devin [sublime_text]=sublime)
 # The launcher keeps the name the hand-made one had, so no duplicate menu entry appears.
 declare -A _OPT_DESKTOP=([android_studio]=android-studio)
 # JetBrains-built IDEs: product code in data.services.jetbrains.com, launcher
@@ -143,6 +146,91 @@ _opt_studio_resolve() { # $1 id $2 pin (AI-…) → "url<TAB>sha256"
     return 1
   }
   printf '%s\n' "${row}"
+}
+
+# ── Plain launchers (VS Code, Devin, Sublime) ────────────────────────────────
+# No StartupWMClass: none of these vendors publishes one (Sublime's own .desktop
+# sets none) and none could be read from a live window, so it is left to the
+# shell rather than guessed. Exec takes %F, as Sublime's own launcher does.
+_opt_plain_launcher() { # $1 name $2 comment $3 exec $4 icon $5 categories
+  printf '[Desktop Entry]\nVersion=1.5\nType=Application\nName=%s\nComment=%s\n' "$1" "$2"
+  printf 'Exec=%s %%F\nTryExec=%s\nIcon=%s\n' "$3" "$3" "$4"
+  printf 'Terminal=false\nCategories=%s\nStartupNotify=true\n' "$5"
+}
+
+# ── Kind: vscode ─────────────────────────────────────────────────────────────
+# Tree VSCode-linux-x64/; version in resources/app/package.json. Every release
+# stays downloadable by version, with its sha256, from the versions API.
+_opt_vscode_version() { jq -r '.version // empty' "$2/resources/app/package.json"; }
+_opt_vscode_installed() {
+  local t="${GS_UNU_OPT_ROOT}/${_OPT_DIR[$1]}"
+  [[ -f "${t}/resources/app/package.json" ]] && _opt_vscode_version "$1" "${t}"
+  return 0
+}
+_opt_vscode_resolve() { # $1 id $2 pin
+  local json
+  json="$(curl -fsSL --retry 2 "https://update.code.visualstudio.com/api/versions/$2/linux-x64/stable")" || {
+    _opt_err FAILED "$1: VS Code $2 is not in the versions API"
+    return 1
+  }
+  jq -r --arg v "$2" 'select(.productVersion == $v and (.url // "") != "" and (.sha256hash // "") != "")
+    | .url + "\t" + .sha256hash' <<<"${json}" | grep . || {
+    _opt_err FAILED "$1: the versions API answer for $2 lacks a url or sha256"
+    return 1
+  }
+}
+_opt_vscode_launcher() {
+  _opt_plain_launcher "Visual Studio Code" "Code editor" "$2/code" "$2/resources/app/resources/linux/code.png" "Development;IDE;TextEditor;"
+}
+
+# ── Kind: devin (Cognition's Windsurf build) ─────────────────────────────────
+# Tree Devin/; the pin is product.json .windsurfVersion (the archive's version;
+# .version is the VS Code base). The feed serves ONLY its latest build, with no
+# versioned URL: a pin it no longer serves fails loudly instead of installing
+# something else — bump the pin to what env-update proposes.
+_opt_devin_version() { jq -r '.windsurfVersion // empty' "$2/resources/app/product.json"; }
+_opt_devin_installed() {
+  local t="${GS_UNU_OPT_ROOT}/${_OPT_DIR[$1]}"
+  [[ -f "${t}/resources/app/product.json" ]] && _opt_devin_version "$1" "${t}"
+  return 0
+}
+_opt_devin_resolve() { # $1 id $2 pin
+  local json latest
+  json="$(curl -fsSL --retry 2 'https://windsurf-stable.codeium.com/api/update/linux-x64/stable/latest')" || return 1
+  latest="$(jq -r '.windsurfVersion // empty' <<<"${json}")"
+  if [[ "${latest}" != "$2" ]]; then
+    _opt_err FAILED "$1: pin $2 is no longer downloadable — the feed serves only its latest build (${latest:-none}); set GLOBAL_STACK_DEVIN_VERSION=${latest}"
+    return 1
+  fi
+  jq -r 'select((.url // "") != "" and (.sha256hash // "") != "") | .url + "\t" + .sha256hash' <<<"${json}" | grep . || {
+    _opt_err FAILED "$1: the feed answer lacks a url or sha256"
+    return 1
+  }
+}
+_opt_devin_launcher() {
+  _opt_plain_launcher Devin "AI code editor" "$2/devin-desktop" "$2/resources/app/resources/linux/code.png" "Development;IDE;TextEditor;"
+}
+
+# ── Kind: sublime ────────────────────────────────────────────────────────────
+# Tree sublime_text/; the pin is the build number. The version is the first
+# "Build NNNN" of changelog.txt — read, never by running the staged binary, which
+# is unverified: Sublime publishes no checksum, so the build number is the only
+# check an install gets (logged NOCHECKSUM).
+_opt_sublime_version() { grep -oE -m 1 'Build [0-9]+' "$2/changelog.txt" | grep -oE '[0-9]+'; }
+_opt_sublime_installed() {
+  local t="${GS_UNU_OPT_ROOT}/${_OPT_DIR[$1]}"
+  [[ -f "${t}/changelog.txt" ]] && _opt_sublime_version "$1" "${t}"
+  return 0
+}
+_opt_sublime_resolve() { # $1 id $2 pin
+  [[ "$2" =~ ^[0-9]+$ ]] || {
+    _opt_err FAILED "$1: pin '$2' is not a build number"
+    return 1
+  }
+  printf 'https://download.sublimetext.com/sublime_text_build_%s_x64.tar.xz\tnone\n' "$2"
+}
+_opt_sublime_launcher() {
+  _opt_plain_launcher "Sublime Text" "Text editor for code, markup and prose" "$2/sublime_text" "$2/Icon/256x256/sublime-text.png" "TextEditor;Development;"
 }
 
 # ── Engine ───────────────────────────────────────────────────────────────────
