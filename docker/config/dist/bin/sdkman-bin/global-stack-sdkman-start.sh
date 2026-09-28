@@ -44,7 +44,8 @@ if [[ "${SDKMAN_MODE}" = "setup" ]]; then
     "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/sdkman"
 
   # UNCONDITIONAL by design -- deliberately NOT gated on GLOBAL_STACK_USE_LOCKS, unlike
-  # every other manager (fvm/nvm/phpbrew/pyenv/rbenv all honour that flag). 02sdkman and
+  # the other managers (fvm/nvm/phpbrew/pyenv honour that flag; rbenv joined sdkman on
+  # 2026-09-28, see global-stack-rbenv-start.sh). 02sdkman and
   # 03java17/21/26 share ONE ${SDKMAN_DIR} on the tools volume, and installing several java
   # versions at once does not work -- sdkman errors out (developer ruling, 2026-09-10).
   # This block used to carry the guard as commented-out code, which reads as an accident;

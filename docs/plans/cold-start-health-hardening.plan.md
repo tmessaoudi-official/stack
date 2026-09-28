@@ -32,7 +32,7 @@ Implement AFTER the bring-up settles — nothing changes while the stack is stil
 |---|------|------|-------|----------|-------|
 | 1 | Postgres TCP healthcheck + PGCTLTIMEOUT | S | done | 481c889 | docker/images/01postgres18/**, bin/tests/postgres-healthcheck.test.sh |
 | 2 | SonarQube error token + retry | M | done | c49dbec | docker/config/dist/bin/sonarqube-bin/**, docker/images/02sonarqube/** |
-| 3 | rbenv install/rehash serialization | M | done | - | docker/config/dist/bin/rbenv-bin/**, bin/tests/startup-prologue.test.sh |
+| 3 | rbenv install/rehash serialization | M | done | 585b891 | docker/config/dist/bin/rbenv-bin/**, bin/tests/startup-prologue.test.sh |
 | 4 | SDKMAN download stall limit | S | todo | - | docker/config/dist/bin/sdkman-bin/** |
 | 5 | SDKMAN tolerant install vs strict activation | S | todo | - | docker/config/dist/bin/sdkman-bin/** |
 <!-- /progress-block -->

@@ -2423,7 +2423,7 @@ assert_pass "33b: gem install still passes --backtrace (errors stay diagnosable)
   grep -Eq "gem[^']*--backtrace[^']*install" "${_RBE}"
 
 # ─── §34: the sdkman lock is UNCONDITIONAL by design (2026-09-10) ────────────
-# Every other manager (fvm/nvm/phpbrew/pyenv/rbenv) gates its flock on
+# The other managers (fvm/nvm/phpbrew/pyenv; rbenv until 2026-09-28, see 34f-34k) gate their flock on
 # GLOBAL_STACK_USE_LOCKS. sdkman deliberately does NOT: 02sdkman and 03java17/21/26 share
 # one ${SDKMAN_DIR} on the tools volume, and installing several java versions at once
 # fails -- sdkman errors (developer ruling, 2026-09-10). The guard used to be present as
