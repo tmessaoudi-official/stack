@@ -35,9 +35,7 @@ function __sdkman_add_to_path() {
 
 	present=$(__sdkman_path_contains "$candidate")
 	if [[ "$present" == 'false' ]]; then
-		#PATH="$SDKMAN_CANDIDATES_DIR/$candidate/current/bin:$PATH"
-		# @changed stack
-		PATH="${HOME}/.sdkman/$candidate/current/bin:$PATH"
+		PATH="$SDKMAN_CANDIDATES_DIR/$candidate/current/bin:$PATH"
 	fi
 }
 
@@ -85,19 +83,10 @@ function __sdkman_link_candidate_version() {
 	candidate="$1"
 	version="$2"
 
-	# @changed stack
-	mkdir -p "${HOME}/.sdkman/${candidate}"
-
 	# Change the 'current' symlink for the candidate, hence affecting all shells.
-	#if [[ -L "${SDKMAN_CANDIDATES_DIR}/${candidate}/current" || -d "${SDKMAN_CANDIDATES_DIR}/${candidate}/current" ]]; then
-	#	rm -rf "${SDKMAN_CANDIDATES_DIR}/${candidate}/current"
-	#fi
-	# @changed stack
-	if [[ -L "${HOME}/.sdkman/${candidate}/current" || -d "${HOME}/.sdkman/${candidate}/current" ]]; then
-		rm -rf "${HOME}/.sdkman/${candidate}/current"
+	if [[ -L "${SDKMAN_CANDIDATES_DIR}/${candidate}/current" || -d "${SDKMAN_CANDIDATES_DIR}/${candidate}/current" ]]; then
+		rm -rf "${SDKMAN_CANDIDATES_DIR}/${candidate}/current"
 	fi
 
-	#ln -s "${version}" "${SDKMAN_CANDIDATES_DIR}/${candidate}/current"
-	# @changed stack
-	ln -s "${SDKMAN_CANDIDATES_DIR}/${candidate}/${version}" "${HOME}/.sdkman/${candidate}/current"
+	ln -s "${version}" "${SDKMAN_CANDIDATES_DIR}/${candidate}/current"
 }
