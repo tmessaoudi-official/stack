@@ -23,6 +23,11 @@ already keeps `task`, `bat` and `sonar-scanner-cli`.
 - [2026-09-28 21:58] AGREED: bat: no checksum (ratifies ASSUMED 21:55). The developer asked for ONE /tmp script with everything they must run: PhpStorm move, step 8 deploy, ~/.profile fix, --check, --apply (only if everything is current), archive cleanup.
 - [2026-09-28 22:08] AGREED: Step 8 deployed by the developer's one-shot /tmp/deploy-opt-updater-20260928.sh: all 10 rows current, 7 managed launchers valid, 5865 MiB of archives freed. Next: step 5 (MeGit + Etcher) once the stack is healthy.
 - [2026-09-28 22:44] AGREED: Developer ran the deployed global-unu.sh end to end: it succeeded with the /opt hook. Next: full cold make hard-restart, then step 5 (MeGit + Etcher).
+- [2026-09-28 23:07] AGREED: Step 5 runs in parallel with the developer's cold make hard-restart (started ~22:4x): GitHub research via authenticated gh api only, nothing deployed to ~/.local/bin, small suites only; .env edits ALLOWED during the restart (developer's choice over the recommended wait).
+- [2026-09-28 23:10] ASSUMED (review): MeGit is checked against GitHub's asset digest (the only checksum it publishes), fetched from api.github.com with GLOBAL_STACK_GITHUB_TOKEN when set — piped to curl as a header on stdin, never in argv — else anonymously (1 call per MeGit install) — because a checksum exists and an authenticated call does not touch the 60/h anonymous budget the containers share. Alternatives: NOCHECKSUM like bat.
+- [2026-09-28 23:10] ASSUMED (review): Etcher is checked against its published SHA256SUMS.Linux.x64.txt (github.com releases/download, no API) and is x86_64-only — because that is the only Linux zip it publishes.
+- [2026-09-28 23:11] ASSUMED (review): Etcher install: a new _opt_<kind>_prepare hook runs 'sudo -n chown root:root' + 'sudo -n chmod 4755' on the STAGED chrome-sandbox before the swap; no cached sudo → FAILED with the command to run, installed copy untouched — because Electron refuses to start with a non-root, non-setuid sandbox, and the installed 2.1.7 already has it root-owned 4755. Alternatives: a --no-sandbox launcher (rejected: drops the sandbox of an app that writes block devices); a post-install WARN only (leaves Etcher broken).
+- [2026-09-28 23:11] ASSUMED (review): Launchers: megit.desktop keeps its name and StartupWMClass=megit (from the hand-made one) and gets the Eclipse platform icon (MeGit ships none of its own); balena-etcher.desktop is new, Categories=Utility;, with NO Icon (the zip carries none; it is compiled into the binary) and no StartupWMClass (unverified). Pins keep the tag form (v0.11.0, v2.1.7) like task/bat.
 
 ## Inventory (2026-09-28, read from each tool's own metadata)
 
@@ -36,7 +41,7 @@ already keeps `task`, `bat` and `sonar-scanner-cli`.
 | `devin` | windsurfVersion 3.10.35 (productVersion 1.126.0) | `resources/app/product.json` `.windsurfVersion` | `devin.desktop` |
 | `sublime_text` | Build 4215 | first `Build NNNN` in `changelog.txt` (non-executing; `--version` would run an unchecked download) | `sublime_text.desktop` |
 | `megit` | 0.11.0 (plugin 0.11.0.20260428-1215) | `plugins/com.eclipsesource.megit.plugin_<v>.jar` | `megit.desktop` |
-| `balena-etcher` | 2.1.7 | `package.json` inside `resources/app.asar` (asar header) | none |
+| `balena-etcher` | 2.1.7 | `package.json` inside `resources/app.asar` (asar header) | managed `balena-etcher.desktop` once step 5 is deployed (none before) |
 | `task` / `bat` / `sonar-scanner-cli` | 3.53.1 / 0.26.1 / 8.1.0.6389 | `--version` | PATH via `.profile` (global-unu today) |
 
 Not tools: `oracle-virtualbox-vms`, `root`.
@@ -182,7 +187,7 @@ JetBrains-built four, `%F` on the three editors, Sublime icon 48x48 → 256x256,
 | 2 | Engine + test harness (+ the IDEA row as its vehicle) | L | done | c2e5e61 | templates/shell/global-unu-opt.sh, bin/tests/global-unu-opt.test.sh |
 | 3 | JetBrains x3 + Android Studio | M | done | 64ac247 | .env, templates/shell/global-unu-opt.sh |
 | 4 | VS Code + Devin + Sublime | M | done | 35059d9 | .env, templates/shell/global-unu-opt.sh |
-| 5 | MeGit + Etcher | M | todo | - | .env, templates/shell/global-unu-opt.sh |
+| 5 | MeGit + Etcher | M | done | 22a4fd9 | .env, templates/shell/global-unu-opt.sh, bin/tests/global-unu-opt.test.sh |
 | 6 | Move task/bat/sonar-scanner-cli | M | done | f390fe5 | templates/shell/global-unu.sh, templates/shell/global-unu-opt.sh |
 | 7 | Hook + .profile + docs | S | done | f390fe5 | templates/shell/global-unu.sh, templates/shell/.profile, CLAUDE.md |
 | 8 | Deploy + live check | S | done | f390fe5 | - |
@@ -190,7 +195,6 @@ JetBrains-built four, `%F` on the three editors, Sublime icon 48x48 → 256x256,
 ### Blocked
 ### Needs input
 ### Needs research
-- MeGit (eclipsesource/megit) and balenaEtcher (balena-io/etcher) asset names + digests — after the cold bring-up (api.github.com budget).
 - Devin feed is `.../stable/latest` only — no versioned download found; the installer refuses a pin that is no longer latest (WARN + skip).
 - StartupWMClass for VS Code, Devin, Sublime, Etcher — verify with `xprop` on a running window, else omit.
 ### Fragile
@@ -199,6 +203,8 @@ JetBrains-built four, `%F` on the three editors, Sublime icon 48x48 → 256x256,
 - `Makefile:306` is `yes y | global-unu.sh || echo 'script does not exit'`: a failed IDE install makes global-unu exit non-zero, and hard-restart swallows it with a misleading message — the only signal there is the script's own output.
 - The `# >>> gs-unu-opt` hook runs OUTSIDE global-unu.sh's `.env.local` guard (it must stay the last step, after docker-reclaim): with no `.env.local`, every /opt tool reads `unmanaged` and nothing installs, but launchers of installed trees are still rewritten.
 ### Known issues
+- Step 5 is committed (22a4fd9) but NOT deployed: `~/.local/bin/global-unu-opt.sh` is still the 10-row engine, so MeGit/Etcher stay unmanaged and `megit.desktop` hand-made until the new engine is copied there (after the cold hard restart). Deploy = copy the engine + `global-unu-opt.sh --apply` (writes megit.desktop and balena-etcher.desktop, downloads nothing while the pins equal the installed trees) + delete `/opt/developer/megit-0.11.0-linux.gtk.x86_64.tar.gz` and `balenaEtcher-linux-x64-2.1.7.zip` (developer: the firewall denies Claude's writes under /opt).
+- Verified for step 5 without deploying: `--check` with the new engine on the real `/opt` reads all 12 rows current (MeGit from its real plugin jar, Etcher from its real app.asar); both launchers generated from the real trees into a scratch dir pass `desktop-file-validate`, TryExec and MeGit's Icon exist; the real applications dir was fingerprinted unchanged. The kept archives match their published checksums (Etcher: SHA256SUMS.Linux.x64.txt; MeGit: the asset digest). Not exercised live: a real MeGit/Etcher download, and the real `sudo -n` chrome-sandbox step (stubbed in §14).
 - `megit.desktop` is still hand-made and fails `desktop-file-validate` (unregistered Categories `GIT`/`Version`/`Dev`, app version in `Version=`) until step 5 manages it. The other 7 were replaced at step 8 by managed launchers that validate (the old ones: `~/.local/share/gs-launchers-bak.1790626060/`).
 - Launcher incident (2026-09-28 ~21:59): a sandbox run of the step-8 deploy script set `HOME_DIR` but did not pass `GS_UNU_OPT_APPS_DIR`, so the engine's `$HOME` default made `--apply` overwrite the 7 REAL hand-made launchers with sandbox paths. They were restored from a session dump that had dropped blank lines and cut the commented `#MimeType` lines at 160 chars (every live key intact), so `gs-launchers-bak.1790626060/` holds that reconstruction, not the byte-exact originals. The deploy script was fixed (explicit apps dir, launcher backup, before/after fingerprint of the real dir) before the developer ran it.
 
