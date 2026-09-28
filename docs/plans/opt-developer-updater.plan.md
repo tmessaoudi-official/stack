@@ -13,8 +13,9 @@ already keeps `task`, `bat` and `sonar-scanner-cli`.
 - [2026-09-28 20:00] AGREED: Install layout: every JetBrains IDE lives at jetbrains/<lowercase product> (idea, phpstorm, webstorm), never a version-named dir; the version is read from product-info.json.
 - [2026-09-28 20:00] AGREED: Launchers: global-unu-opt.sh fully manages the .desktop file of all 9 GUI apps (android-studio, idea, phpstorm, webstorm, code, devin, sublime_text, megit, balena-etcher): canonical Name/Exec/TryExec/Icon/Categories + StartupWMClass read from the app, rewritten only when content differs, desktop-file-validate'd, then update-desktop-database; hand edits to those 9 files are overwritten.
 - [2026-09-28 20:00] AGREED: Launcher definitions live inside global-unu-opt.sh (one file to deploy), not as template files.
-- [2026-09-28 20:16] ASSUMED (review): Pin name GLOBAL_STACK_ANDROIDSTUDIO_VERSION (not ANDROID_STUDIO) — because the documented SDK-window bump filters env-update on ANDROID and would sweep the IDE in. Alternatives: GLOBAL_STACK_ANDROID_STUDIO_VERSION.
-- [2026-09-28 20:16] ASSUMED (review): Stray archives: the script never deletes a file it did not download; today's hand-downloaded archives get a one-off handoff command — because deleting user files by pattern is irreversible. Alternatives: pattern-delete managed-tool archives in /opt/developer on --apply.
+- [2026-09-28 20:16] REJECTED: Pin name GLOBAL_STACK_ANDROIDSTUDIO_VERSION — developer ruling 20:24: use GLOBAL_STACK_ANDROID_STUDIO_VERSION. (The stated reason was also overstated: no doc prescribes an `ANDROID` filter; only a hand-typed `--filter=ANDROID` would sweep it in.)
+- [2026-09-28 20:16] AGREED (ratified ASSUMED): Stray archives: the script never deletes a file it did not download; today's hand-downloaded archives get a one-off handoff command — because deleting user files by pattern is irreversible. Alternatives: pattern-delete managed-tool archives in /opt/developer on --apply.
+- [2026-09-28 20:26] AGREED: Plan approved (go) including 9 new .env pins; Android Studio pin is GLOBAL_STACK_ANDROID_STUDIO_VERSION; Sublime keeps a bare-build pin (4215) and every build bump stays HOLD (apply with --force-hold --confirm).
 
 ## Inventory (2026-09-28, read from each tool's own metadata)
 
@@ -86,17 +87,17 @@ last with `--apply`; env-update proposes the pins.
 
 ### Pins (`.env`, next to `GLOBAL_STACK_BAT_VERSION`)
 
-`GLOBAL_STACK_{IDEA,PHPSTORM,WEBSTORM,ANDROIDSTUDIO,VSCODE,DEVIN,SUBLIME_TEXT,MEGIT,BALENA_ETCHER}_VERSION`,
+`GLOBAL_STACK_{IDEA,PHPSTORM,WEBSTORM,ANDROID_STUDIO,VSCODE,DEVIN,SUBLIME_TEXT,MEGIT,BALENA_ETCHER}_VERSION`,
 each with its `@todo env-update` record from the Vendor sources table plus a trailing `urls:` human
-release page (so `open-all-envs.sh` opens something readable). `ANDROIDSTUDIO`, not `ANDROID_STUDIO`: the
-documented SDK-window bump filters on `ANDROID`, which must not sweep the IDE in.
+release page (so `open-all-envs.sh` opens something readable). A hand-typed `--filter=ANDROID` also
+matches `GLOBAL_STACK_ANDROID_STUDIO_VERSION` — filter the SDK window by its own var names.
 **Review gate caveat**: decide.sh rule 7 HOLDs only a MAJOR change, and for year-versioned tools
 (JetBrains `2026.2.3`, Android Studio `2026.1.4.8`) the major is the YEAR — `2026.2 → 2026.3` is
 AUTO, only `2026 → 2027` HOLDs. VS Code/Devin/MeGit majors are rare; Sublime's build number is
 a single integer, so every build bump is a "major" and HOLDs. [Verified 20:20: `_gs_eu2_classify_decision` →
 `4215→4216` HOLD, `2026.2.3→2026.3.1` AUTO, `2026.1.4.8→2026.2.1.1` AUTO, `2026.2.3→2027.1` HOLD,
 `3.10.35→3.11.0` AUTO, `3.10.35→4.0.0` HOLD.]
-Live checks are always filtered: `bin/env-update.sh --check --filter='IDEA|PHPSTORM|WEBSTORM|ANDROIDSTUDIO|VSCODE|DEVIN|SUBLIME_TEXT'`
+Live checks are always filtered: `bin/env-update.sh --check --filter='IDEA|PHPSTORM|WEBSTORM|ANDROID_STUDIO|VSCODE|DEVIN|SUBLIME_TEXT'`
 (an unfiltered `--check` spends the shared api.github.com budget).
 Host dependencies: `curl`, `jq`, `sha256sum`, `tar`, `unzip`, `python3` (Etcher's asar header), `desktop-file-utils`.
 `templates/shell/*.sh` is scanned by `startup-prologue.test.sh` §59 (no ordered version comparison in an
@@ -141,7 +142,7 @@ a tool swap cannot be undone once the old dir is deleted — re-pin the old vers
 <!-- progress-block v1 -->
 | # | Step | Size | State | Evidence | Files |
 |---|------|------|-------|----------|-------|
-| 1 | Parser proof: url + fetch-json with quotes/?& | S | todo | - | bin/tests/env-update.test.sh, bin/lib/env-update/core/parse.sh |
+| 1 | Parser proof: url + fetch-json with quotes/?& | S | doing | - | bin/tests/env-update.test.sh, bin/lib/env-update/core/parse.sh |
 | 2 | Engine + test harness | L | todo | - | templates/shell/global-unu-opt.sh, bin/tests/global-unu-opt.test.sh |
 | 3 | JetBrains x3 + Android Studio | M | todo | - | .env, templates/shell/global-unu-opt.sh |
 | 4 | VS Code + Devin + Sublime | M | todo | - | .env, templates/shell/global-unu-opt.sh |
