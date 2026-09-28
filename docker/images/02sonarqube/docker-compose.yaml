@@ -33,6 +33,9 @@ services:
       - GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS=${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}
       - GLOBAL_STACK_DOCKER_ROOT_DIST_PATH=${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}
       - GLOBAL_STACK_WAIT_FOR_TIMEOUT=${GLOBAL_STACK_WAIT_FOR_TIMEOUT}
+      # Same identifier as the success marker the elapsed wrapper writes
+      # (successes/02sonarqube) — the token invariant in CLAUDE.md.
+      - GLOBAL_STACK_ERROR_TOKEN=02sonarqube
       - SONAR_JDBC_URL=${GLOBAL_STACK_SONARQUBE_JDBC_URL}
       - SONAR_JDBC_USERNAME=${GLOBAL_STACK_SONARQUBE_JDBC_USERNAME}
       - SONAR_JDBC_PASSWORD=${GLOBAL_STACK_SONARQUBE_JDBC_PASSWORD}
@@ -49,8 +52,11 @@ services:
       - 02sonarqube_community_logs:/opt/sonarqube/logs
       - 02sonarqube_community_extensions:/opt/sonarqube/extensions
       - 02sonarqube_community_temp:/opt/sonarqube/temp
+    # global-stack-start-sonarqube.sh writes errors/02sonarqube when SonarQube
+    # exits without being asked to (exit 1, so on-failure:5 retries it) and
+    # clears it on the next start. bin/tests/sonarqube-start.test.sh
     healthcheck:
-      test: ["CMD-SHELL", "${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/bin/base-bin/global-stack-base-healthcheck-elapsed.sh 02sonarqube sh -c 'curl -sf http://localhost:9000/api/system/status | grep -q UP'"]
+      test: ["CMD-SHELL", "${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/bin/base-bin/global-stack-base-healthcheck-elapsed.sh 02sonarqube sh -c '! test -f ${GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS}/02sonarqube && curl -sf http://localhost:9000/api/system/status | grep -q UP'"]
       interval: 30s
       timeout: 10s
       retries: 99999
