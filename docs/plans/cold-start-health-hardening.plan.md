@@ -11,6 +11,7 @@ Implement AFTER the bring-up settles — nothing changes while the stack is stil
 - [2026-09-28 12:27] ASSUMED (review): fix A ships WITH a patient Postgres healthcheck window (`start_period: 24h`, the stack norm) — because the current `start_period: 30s` + `retries: 5` × `interval: 10s` ≈ 80s would mark Postgres UNHEALTHY once the check stops passing against the init temp server (real TCP readiness took ~4 min today), and compose then aborts every `service_healthy` dependent (keycloak, pgadmin, sonarqube). Alternatives: raise only `retries`; leave the window and accept dependents failing on a fresh volume.
 - [2026-09-28 15:20] ASSUMED (review): SonarQube's error token is errors/02sonarqube, not errors/sonarqube as decision C says — because the token invariant (CLAUDE.md) requires the error token to match the success marker, and the elapsed wrapper writes successes/02sonarqube. Alternative: rename the wrapper's service argument to sonarqube (moves the success marker and its elapsed line).
 - [2026-09-28 15:50] AGREED: rbenv takes its flock UNCONDITIONALLY like sdkman (not gated on GLOBAL_STACK_USE_LOCKS), covering the ruby install and gem installs, because rbenv refuses concurrent rehashes on the shared tools/rbenv; accepted cost: cold-start ruby compiles run one after another (developer answer 2026-09-28).
+- [2026-09-28 16:23] AGREED: Step 4 (SDKMAN stall limit) is REJECTED: the 2026-09-28 downloads were slow (48-100 KB/s from archive.apache.org) but never stalled — both Spark archives completed at their full Content-Length — and a speed limit with sdkman's --retry 0 could kill a slow-but-working download (developer answer 2026-09-28).
 
 ## Evidence (2026-09-28 bring-up)
 - `01postgres18` logs: temp server ready 08:35:46Z, `touch successes/01postgres18` 08:35:50Z (socket-only `pg_isready`), `received fast shutdown` 08:35:54Z, `pg_ctl: server does not shut down` 08:36:54Z, restart, fsync recovery, real `ready to accept connections` 08:39:45Z.
@@ -33,16 +34,17 @@ Implement AFTER the bring-up settles — nothing changes while the stack is stil
 | 1 | Postgres TCP healthcheck + PGCTLTIMEOUT | S | done | 481c889 | docker/images/01postgres18/**, bin/tests/postgres-healthcheck.test.sh |
 | 2 | SonarQube error token + retry | M | done | c49dbec | docker/config/dist/bin/sonarqube-bin/**, docker/images/02sonarqube/** |
 | 3 | rbenv install/rehash serialization | M | done | 585b891 | docker/config/dist/bin/rbenv-bin/**, bin/tests/startup-prologue.test.sh |
-| 4 | SDKMAN download stall limit | S | todo | - | docker/config/dist/bin/sdkman-bin/** |
+| 4 | SDKMAN download stall limit | S | deferred | - | docker/config/dist/bin/sdkman-bin/** |
 | 5 | SDKMAN tolerant install vs strict activation | S | todo | - | docker/config/dist/bin/sdkman-bin/** |
 <!-- /progress-block -->
 ### Blocked
 ### Needs input
 ### Needs research
 - [Inferred, read-only] 01mysql9's check is `mysqladmin ping -h localhost` — for the MySQL client `localhost` means the Unix SOCKET, and its init server runs with networking off, so it likely has Postgres's false positive; not probed. 01mariadb13 uses `healthcheck.sh --connect --innodb_initialized`, which requires a network connection — likely immune. Both keep the 80 s window (mysql/mariadb took ~4 min on 2026-09-28).
-- Step 4: where the stall limit can be set (sdkman config vs wrapper) without patching the downloaded installer.
 ### Fragile
 ### Known issues
+- Step 4 rejected (see Decisions Log): sdkman 5.23.1 `__sdkman_secure_curl_download` supports only continue/retry/retry-max-time/insecure — no speed limit — and no stall was observed. The real cold-start cost is re-downloading ~1 GB of Spark at ~100 KB/s; a download cache outside tools/ is the lever if that ever matters.
+- Step 5 (tolerant install / strict activation) stays open: observed once, self-healed on restart.
 - Step 3 live proof (2026-09-28 16:14, warm path): `docker restart` of 03ruby3 + 03ruby4 together — ruby3 held the rbenv lock 15.557→15.692, ruby4 acquired at 15.693 (1 ms after the release), both healthy, no `cannot rehash`, `tools/errors/` empty. The COLD collision (two ~28 min compiles finishing together) is only reproduced by a wipe — the developer's planned hard-restart.
 - Step 2 live proof (2026-09-28, rebuilt image — 02sonarqube BAKES its start script, a restart alone kept the old one): `kill -TERM` of java → `errors/02sonarqube` in 2 s, `RestartCount` 0→1, token cleared by the restart, healthy in 92 s; `docker stop` → graceful "SonarQube is stopped" in 2 s, exit 143, no token.
 - Step 2: a stop is forwarded to the JVM as SIGTERM, not the image's StopSignal SIGINT — a background child starts with SIGINT ignored (SigIgn 0x6, measured), which the JVM cannot handle. docker stop's 10 s grace vs SonarQube's shutdown: measured 2 s on an idle instance (no analyses in flight); under load, unmeasured.
