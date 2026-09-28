@@ -461,8 +461,9 @@ PER-FETCHER DEEP-DIVE
                The distribution is inferred from the CURRENT pinned value and enforced:
                if it has no candidate upstream the record SKIPs naming the missing dist
                rather than proposing another vendor. Tag flags do not apply to sdkman.
-               SDKMAN advertises some dists with build metadata (17.0.20+1.1-zulu) but
-               its broker serves only the base form, so proposals are normalised to it.
+               Proposals are the id SDKMAN LISTS, build metadata included
+               (27.0.0+35-zulu); a new release has no base-form alias (27.0.0-zulu
+               is invalid). A legacy base-form pin of the same release is kept.
 
   androidsdk:COMPONENT
     API:       GET https://dl.google.com/android/repository/repository2-3.xml

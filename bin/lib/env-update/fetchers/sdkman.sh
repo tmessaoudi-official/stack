@@ -82,7 +82,7 @@ _gs_eu2_sdkman_extract_versions() {
 # Args:    $1 raw       — comma-or-newline-separated list from SDKMAN /versions/all
 #          $2 major     — optional major version filter (e.g. "21"); empty = no filter
 #          $3 preferred — distribution suffix to prefer (e.g. "zulu", "tem"); empty OK
-# Prints:  newline-separated list of N.N.N-dist versioned strings (sort -t- -k1,1V)
+# Prints:  newline-separated list of N.N.N[+BUILD]-dist identifiers as listed (sort -t- -k1,1V)
 # Returns: 0 always
 #
 # Java versions have the form N.N.N-distN (e.g. "21.0.7-zulu", "11.0.31-tem").
@@ -135,7 +135,7 @@ _gs_eu2_sdkman_strip_build() {
 
 # _gs_eu2_sdkman_select_java — select best Java version with distribution preference.
 #
-# Args:    $1 versions  — newline-separated Java version list (N.N.N-dist form)
+# Args:    $1 versions  — newline-separated Java version list (N.N.N[+BUILD]-dist, as listed)
 #          $2 preferred — distribution suffix to prefer (e.g. "zulu"); may be empty
 # Prints:  single best version string (e.g. "21.0.7-zulu")
 # Returns: 0 always (prints nothing if no stable version found)

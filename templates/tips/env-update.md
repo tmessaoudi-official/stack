@@ -1281,12 +1281,17 @@ GLOBAL_STACK_BUNDLER_VERSION=2.6.3
 - Selection preference: preferred distribution > `-tem` (Temurin) > others.
 - Pre-releases in the base version (`rc`, `beta`, `alpha`, `ea`) are excluded in stable mode.
 
-**Build metadata is stripped from the proposal.** SDKMAN advertises several distributions with
-a `+build` segment — `17.0.20+1.1-zulu`, `26.0.2+1.1-librca`, `26.0.2+1.1-open` — but its download
-broker serves only the base form. `/2/broker/download/java/26.0.2-zulu/linuxx64` returns `302`;
-`26.0.2+1.1-zulu` returns `404`. The fetcher therefore matches the advertised `+build` identifier
-(so the distribution is not lost) and then normalises it back to `X.Y.Z-dist` before proposing it,
-because that is the form `sdk install` can actually fetch. The `.fx-` (JavaFX) and `.crac-` variants
+**The proposal is the identifier SDKMAN LISTS, `+build` included.** SDKMAN advertises several
+distributions with a `+build` segment — `17.0.20+1.1-zulu`, `27.0.0+35-zulu`, `27.0.0+35-open`. That
+listed id is the one it serves: `27.0.0+35-zulu` validates and `broker.sdkman.io/download/java/27.0.0+35-zulu/linuxx64`
+answers `302`, while `27.0.0-zulu` is `invalid` and `404` [verified 2026-09-28]. The base form
+(`17.0.20-zulu`, `26.0.2-zulu`) survives only as an alias for releases that predate `+build` ids; a
+new release gets none. Until 2026-09-28 the fetcher stripped `+build` from every proposal, which
+invented `27.0.0-zulu` — a Java 26 record's `(watch-major)` line suggested it, it was pinned, and
+`03java27-zulu` exhausted `on-failure:5`. A pin that is the legacy base form of the SAME release is
+kept as it is (it still installs, and the ranked order reads a `+build` form as older than its base
+form, so proposing the listed id would show as a false downgrade). `--apply` rewrites a `+build`
+pin literally (`env-update.test.sh` t32p). The `.fx-` (JavaFX) and `.crac-` variants
 are deliberately **not** matched: they are different artefacts, and `.fx` outsorts `+1.1` under
 `sort -V`, so admitting them would let the JavaFX build win a plain-JDK pin.
 
