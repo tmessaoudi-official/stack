@@ -194,6 +194,7 @@ JetBrains-built four, `%F` on the three editors, Sublime icon 48x48 → 256x256,
 <!-- /progress-block -->
 ### Blocked
 ### Needs input
+- RESUME 2026-09-29 (developer went to sleep 23:4x with `make hard-restart` in its `make up` build stage): (1) review the 12 open `ASSUMED (review)` entries with the developer — the 4 of 23:10–23:11 here plus cold-start-health-hardening (Postgres window, SonarQube token, Java 27 consumers), base-install-tools-unmask (15 lines, difftastic fallback, global-unu redeploy), sdkman-java-build-ids (listed id verbatim), and bat's line here (already agreed at 21:58, only the log line still reads ASSUMED); (2) verify the cold restart: tools/elapsed, tools/errors/, every container, the Postgres/SonarQube/rbenv/Java 27 fixes, 04android + the three 05 images, and the /opt hook's output inside global-unu.sh; (3) then hand over the step 5 deploy script (recipe under Known issues).
 ### Needs research
 - Devin feed is `.../stable/latest` only — no versioned download found; the installer refuses a pin that is no longer latest (WARN + skip).
 - StartupWMClass for VS Code, Devin, Sublime, Etcher — verify with `xprop` on a running window, else omit.
