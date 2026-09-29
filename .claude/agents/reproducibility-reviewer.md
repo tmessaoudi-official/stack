@@ -2,7 +2,7 @@
 name: reproducibility-reviewer
 description: Read-only adversarial reviewer for whether a /stack change survives a CLEAN CLONE and a COLD START, and whether it is safe given that this repo has no deny list — reproducibility (no machine-bound assumption, no dependence on gitignored state), destructive-operation posture, and credential/stateful-data handling. Use as the third lens of the certification panel — spawned ONLY when the developer has chosen the panel in the certification-tier question, never at a gate on Claude's own initiative. Never edits anything.
 tools: Read, Grep, Glob, Bash
-model: inherit
+model: opus
 ---
 
 # reproducibility-reviewer — the reproducibility + safety-posture lens

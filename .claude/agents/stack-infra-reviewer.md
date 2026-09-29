@@ -2,7 +2,7 @@
 name: stack-infra-reviewer
 description: Read-only adversarial reviewer for /stack infrastructure — health signalling, the two-phase install model, the env cascade, compose/Makefile wiring. Use as the correctness+regression lens of the certification panel — spawned ONLY when the developer has chosen the panel in the certification-tier question, never at a gate on Claude's own initiative. Recommend it when a change touches a startup script, a compose file, a Dockerfile, .env, or the Makefile. It reads the diff and the files itself and tries to REFUTE the claim that the stack still comes up healthy. Never edits anything.
 tools: Read, Grep, Glob, Bash
-model: inherit
+model: opus
 ---
 
 # stack-infra-reviewer — the correctness + regression lens
