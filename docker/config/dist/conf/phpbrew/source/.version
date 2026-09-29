@@ -5,3 +5,4 @@ purpose: Fix deprecations
 files:
     - src/PhpBrew/Extension/ExtensionInstaller.php
     - src/PhpBrew/Tasks/BaseTask.php
+    - src/PhpBrew/Tasks/ExtractTask.php
