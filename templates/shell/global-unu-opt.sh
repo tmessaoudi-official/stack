@@ -25,6 +25,7 @@ GS_UNU_OPT_ROOT="${GS_UNU_OPT_ROOT:-/opt/${USER:-$(id -un)}}"
 GS_UNU_OPT_APPS_DIR="${GS_UNU_OPT_APPS_DIR:-${XDG_DATA_HOME:-${HOME}/.local/share}/applications}"
 GS_UNU_OPT_ENV_FILE="${GS_UNU_OPT_ENV_FILE:-${GLOBAL_STACK_DOCKER_ROOT_PATH:-/stack}/.env.local}"
 GS_UNU_OPT_PROC_DIR="${GS_UNU_OPT_PROC_DIR:-/proc}"
+GS_UNU_OPT_SANDBOX_OWNER="${GS_UNU_OPT_SANDBOX_OWNER:-root}"
 _OPT_STAGING="${GS_UNU_OPT_ROOT}/.gs-staging"
 _OPT_MACHINE="${GS_UNU_OPT_MACHINE:-$(uname -m)}"
 
@@ -332,18 +333,56 @@ _opt_etcher_resolve() { # $1 id $2 pin (vX.Y.Z)
   }
   printf '%s\t%s\n' "${base}/${zip}" "${sum}"
 }
-# Electron refuses to start unless chrome-sandbox is root-owned setuid. Done on the
-# STAGED tree, so without cached sudo nothing changes: the install fails and says how.
-_opt_etcher_prepare() { # $1 id $2 staged tree
+# Electron refuses to start unless <tree>/chrome-sandbox is root-owned setuid: its main
+# binary aborts with "The SUID sandbox helper binary was found, but is not configured
+# correctly" (measured on Devin, 2026-09-29, after an upgrade left developer:developer
+# 755). A plain install leaves exactly that, so for the three Electron apps the sandbox
+# is fixed on the STAGED tree — without sudo nothing changes: the install fails and says
+# how — and repaired in place when the tool is already current (see main).
+# The JetBrains IDEs ship a jcef helper with a chrome-sandbox too, but the IDE itself is
+# a JVM app: they are deliberately not in the set.
+_OPT_ELECTRON=(code devin balena_etcher)
+_opt_is_electron() { [[ " ${_OPT_ELECTRON[*]} " == *" $1 "* ]]; }
+# "<owner>:<mode>" of <tree>/chrome-sandbox. The expected owner is root; a test runs as
+# a user and points GS_UNU_OPT_SANDBOX_OWNER at itself.
+_opt_sandbox_state() { stat -c '%U:%a' "$1/chrome-sandbox"; }
+_opt_sandbox_ok() { [[ "$(_opt_sandbox_state "$1")" == "${GS_UNU_OPT_SANDBOX_OWNER}:4755" ]]; }
+# sudo -n; with no cached credentials AND a tty, ask once (sudo -v) and retry. Never
+# prompts without a tty — `yes y | global-unu.sh` and cron must not block on a
+# password — so the caller reports the command to run instead.
+_opt_sudo() {
+  sudo -n "$@" && return 0
+  [[ -t 0 ]] || return 1
+  sudo -v && sudo -n "$@"
+}
+# chown first: chown(2) clears setuid, so a chmod placed before it is undone.
+_opt_sandbox_fix() { _opt_sudo chown root:root "$1" && _opt_sudo chmod 4755 "$1"; }
+_opt_electron_prepare() { # $1 id $2 staged tree
   local sb="$2/chrome-sandbox"
   [[ -f "${sb}" ]] || {
-    _opt_err FAILED "$1: the archive has no chrome-sandbox — Etcher could not start from it"
+    _opt_err FAILED "$1: the archive has no chrome-sandbox — $1 could not start from it"
     return 1
   }
-  if ! { sudo -n chown root:root "${sb}" && sudo -n chmod 4755 "${sb}"; }; then
+  if ! _opt_sandbox_fix "${sb}"; then
     _opt_err FAILED "$1: chrome-sandbox must be root-owned setuid (4755) and sudo has no cached credentials — run 'sudo -v', then re-run; installed copy untouched"
     return 1
   fi
+}
+_opt_etcher_prepare() { _opt_electron_prepare "$@"; }
+_opt_vscode_prepare() { _opt_electron_prepare "$@"; }
+_opt_devin_prepare() { _opt_electron_prepare "$@"; }
+# $1 id $2 INSTALLED tree → 0 fine or repaired, 1 wrong and sudo unavailable.
+_opt_electron_repair() {
+  local sb="$2/chrome-sandbox" was
+  [[ -f "${sb}" ]] || return 0
+  _opt_sandbox_ok "$2" && return 0
+  was="$(_opt_sandbox_state "$2")"
+  if _opt_sandbox_fix "${sb}"; then
+    _opt_log REPAIRED "$1: chrome-sandbox ${was} → root:root 4755"
+    return 0
+  fi
+  _opt_err FAILED "$1: chrome-sandbox is ${was}, so $1 cannot start (Electron aborts) and sudo has no cached credentials — run: sudo chown root:root '${sb}' && sudo chmod 4755 '${sb}'"
+  return 1
 }
 _opt_etcher_launcher() {
   printf '[Desktop Entry]\nVersion=1.5\nType=Application\nName=balenaEtcher\nComment=Flash OS images to SD cards and USB drives\n'
@@ -500,8 +539,8 @@ _opt_install() {
     return 1
   fi
 
-  # A kind may need one more step on the verified tree before it goes live (Etcher:
-  # a root setuid chrome-sandbox). It runs in staging, so a failure changes nothing.
+  # A kind may need one more step on the verified tree before it goes live (the Electron
+  # apps: a root setuid chrome-sandbox). It runs in staging, so a failure changes nothing.
   if declare -F "_opt_${kind}_prepare" >/dev/null && ! "_opt_${kind}_prepare" "${id}" "${tree}"; then
     _opt_rm_staging "${stage}"
     return 1
@@ -609,7 +648,7 @@ main() {
     done
   fi
 
-  local failed=0 pin cur rc
+  local failed=0 pin cur rc tree
   _OPT_LAUNCHERS_CHANGED=0
   for id in "${ids[@]}"; do
     if [[ " ${_OPT_ARCHES[${id}]:-x86_64} " != *" ${_OPT_MACHINE} "* ]]; then
@@ -617,17 +656,27 @@ main() {
       continue
     fi
     pin="$(_opt_pin "${_OPT_PIN[${id}]}")"
+    tree="${GS_UNU_OPT_ROOT}/${_OPT_DIR[${id}]}"
     cur="$("_opt_${_OPT_KIND[${id}]}_installed" "${id}")"
     if [[ -z "${pin}" ]]; then
       _opt_log unmanaged "${id}: ${_OPT_PIN[${id}]} is empty or absent${cur:+ (installed ${cur})}"
     elif [[ "${cur}" == "${pin}" ]]; then
       _opt_log current "${id} ${cur}"
+      # An install leaves developer 755 and a current tool never re-enters _opt_install,
+      # so this is the only place a wrong sandbox is ever put right.
+      if [[ "${mode}" == apply ]] && _opt_is_electron "${id}" && [[ -d "${tree}" ]]; then
+        _opt_electron_repair "${id}" "${tree}" || failed=1
+      fi
     elif [[ "${mode}" == check ]]; then
       _opt_log "$([[ -n "${cur}" ]] && echo outdated || echo missing)" "${id} ${cur:-—} → ${pin}"
     else
       rc=0
       _opt_install "${id}" "${pin}" || rc=$?
       ((rc == 1)) && failed=1
+    fi
+    # --check stays read-only and sudo-free: it only reports what --apply would repair.
+    if [[ "${mode}" == check ]] && _opt_is_electron "${id}" && [[ -f "${tree}/chrome-sandbox" ]] && ! _opt_sandbox_ok "${tree}"; then
+      _opt_log sandbox "${id}: chrome-sandbox is $(_opt_sandbox_state "${tree}"), must be ${GS_UNU_OPT_SANDBOX_OWNER}:4755 — Electron will not start; --apply repairs it"
     fi
     if [[ "${mode}" == apply && -d "${GS_UNU_OPT_ROOT}/${_OPT_DIR[${id}]}" ]] \
       && declare -F "_opt_${_OPT_KIND[${id}]}_launcher" >/dev/null; then

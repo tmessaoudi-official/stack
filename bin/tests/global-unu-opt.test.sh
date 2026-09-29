@@ -102,6 +102,13 @@ chmod +x "${STUB_BIN}/curl"
 cat >"${STUB_BIN}/sudo" <<'STUB'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >>"${T}/sudo.log"
+# sudo -v is the operator typing a password: it works unless "$T/deny-v" exists, and
+# afterwards `sudo -n` succeeds (the credentials are cached).
+if [[ "$1" == -v ]]; then
+  [[ -e "${T}/deny-v" ]] && exit 1
+  rm -f "${T}/no-sudo"
+  exit 0
+fi
 [[ -e "${T}/no-sudo" ]] && exit 1
 [[ "$1" == -n ]] && shift
 case "$1" in
@@ -158,10 +165,15 @@ _sandbox() {
 _run() {
   local d="$1"
   shift
+  # stdin is closed on purpose: a run from a terminal must never reach the engine's
+  # interactive `sudo -v`. The fixtures belong to the test user, not root, so the
+  # sandbox owner the engine expects is a seam (default root; a case that needs a
+  # "correct" sandbox sets SANDBOX_OWNER to the test user).
   OUT="$(env -i HOME="$d" PATH="${STUB_BIN}:/usr/bin:/bin" T="$d" USER=tester \
     GS_UNU_OPT_ROOT="$d/opt" GS_UNU_OPT_APPS_DIR="$d/apps" \
     GS_UNU_OPT_ENV_FILE="$d/env.local" GS_UNU_OPT_PROC_DIR="$d/proc" \
-    bash "${SUT}" "$@" 2>&1)"
+    GS_UNU_OPT_SANDBOX_OWNER="${SANDBOX_OWNER:-root}" \
+    bash "${SUT}" "$@" 2>&1 </dev/null)"
   RC=$?
 }
 
@@ -522,6 +534,7 @@ mkdir -p "$d/src/VSCode-linux-x64/resources/app/resources/linux"
 printf '{"version":"1.140.0"}\n' >"$d/src/VSCode-linux-x64/resources/app/package.json"
 printf 'png' >"$d/src/VSCode-linux-x64/resources/app/resources/linux/code.png"
 printf '#!/bin/sh\n' >"$d/src/VSCode-linux-x64/code" && chmod +x "$d/src/VSCode-linux-x64/code"
+printf 'elf' >"$d/src/VSCode-linux-x64/chrome-sandbox" && chmod 755 "$d/src/VSCode-linux-x64/chrome-sandbox"
 _pack "$d" VSCode-linux-x64 'https://vscode.download.prss.microsoft.com/dbazure/download/stable/abc/code-stable-x64-1.tar.gz' z
 printf '{"productVersion":"1.140.0","url":"https://vscode.download.prss.microsoft.com/dbazure/download/stable/abc/code-stable-x64-1.tar.gz","sha256hash":"%s"}\n' "${SUM}" >"$d/srv/v.json"
 printf '%s\t%s\n' 'https://update.code.visualstudio.com/api/versions/1.140.0/linux-x64/stable' "$d/srv/v.json" >>"$d/routes"
@@ -534,6 +547,7 @@ _devin_src() { # $1 case dir  $2 version inside
   printf '{"nameShort":"Devin","version":"1.127.0","windsurfVersion":"%s"}\n' "$2" >"$1/src/Devin/resources/app/product.json"
   printf 'png' >"$1/src/Devin/resources/app/resources/linux/code.png"
   printf '#!/bin/sh\n' >"$1/src/Devin/devin-desktop" && chmod +x "$1/src/Devin/devin-desktop"
+  printf 'elf' >"$1/src/Devin/chrome-sandbox" && chmod 755 "$1/src/Devin/chrome-sandbox"
 }
 DEVIN_FEED='https://windsurf-stable.codeium.com/api/update/linux-x64/stable/latest'
 d="$(_fresh c11devin devin GLOBAL_STACK_DEVIN_VERSION 3.11.0)"
@@ -889,6 +903,223 @@ if [[ ${RC} -eq 0 && -d "$d/opt/megit" ]] && grep -qE 'unsupported.*balena_etche
   ok "14n: aarch64 → MeGit's aarch64 asset installed; Etcher unsupported, nothing fetched"
 else
   ko "14n: rc=${RC}: ${OUT}; curl: $(cat "$d/curl.log")"
+fi
+
+# ═════════════════════════════════════════════════════════════════════════════
+section "15. Electron sandbox: VS Code, Devin and Etcher end up with a root setuid chrome-sandbox"
+# Electron aborts at startup ("The SUID sandbox helper binary was found, but is not
+# configured correctly … aborting") unless <tree>/chrome-sandbox is root-owned 4755 —
+# measured on the real Devin 2026-09-29, where an upgrade left developer:developer 755.
+# Fixtures belong to the test user, so a "correct" sandbox needs SANDBOX_OWNER=$ME.
+ME="$(id -un)"
+_mk_devin_tree() { # $1 dest dir  $2 version
+  mkdir -p "$1/resources/app/resources/linux"
+  printf '{"nameShort":"Devin","version":"1.127.0","windsurfVersion":"%s"}\n' "$2" >"$1/resources/app/product.json"
+  printf 'png' >"$1/resources/app/resources/linux/code.png"
+  printf '#!/bin/sh\n' >"$1/devin-desktop" && chmod +x "$1/devin-desktop"
+  printf 'elf' >"$1/chrome-sandbox" && chmod 755 "$1/chrome-sandbox"
+}
+_devin_release() { # $1 case dir  $2 version  $3 'nosandbox' = the archive lacks chrome-sandbox
+  local u="https://windsurf-stable.codeiumdata.com/linux-x64/stable/abc/Devin-linux-x64-$2.tar.gz"
+  _mk_devin_tree "$1/src/Devin" "$2"
+  [[ "${3:-}" == nosandbox ]] && rm -f "$1/src/Devin/chrome-sandbox"
+  _pack "$1" Devin "${u}" z
+  printf '{"url":"%s","windsurfVersion":"%s","sha256hash":"%s"}\n' "${u}" "$2" "${SUM}" >"$1/srv/feed.json"
+  printf '%s\t%s\n' "${DEVIN_FEED}" "$1/srv/feed.json" >>"$1/routes"
+}
+_mk_code_tree() { # $1 dest dir  $2 version
+  mkdir -p "$1/resources/app/resources/linux"
+  printf '{"version":"%s"}\n' "$2" >"$1/resources/app/package.json"
+  printf 'png' >"$1/resources/app/resources/linux/code.png"
+  printf '#!/bin/sh\n' >"$1/code" && chmod +x "$1/code"
+  printf 'elf' >"$1/chrome-sandbox" && chmod 755 "$1/chrome-sandbox"
+}
+_code_release() { # $1 case dir  $2 version
+  local u="https://vscode.download.prss.microsoft.com/dbazure/download/stable/abc/code-stable-x64-$2.tar.gz"
+  _mk_code_tree "$1/src/VSCode-linux-x64" "$2"
+  _pack "$1" VSCode-linux-x64 "${u}" z
+  printf '{"productVersion":"%s","url":"%s","sha256hash":"%s"}\n' "$2" "${u}" "${SUM}" >"$1/srv/v.json"
+  printf '%s\t%s\n' "https://update.code.visualstudio.com/api/versions/$2/linux-x64/stable" "$1/srv/v.json" >>"$1/routes"
+}
+
+# Devin and VS Code over an installed older build: the STAGED sandbox is made root
+# 4755 with sudo -n before the swap, so the live tree is never without it.
+d="$(_fresh c15a devin GLOBAL_STACK_DEVIN_VERSION 3.11.0)"
+_mk_devin_tree "$d/opt/devin" 3.10.35 && chmod 4755 "$d/opt/devin/chrome-sandbox"
+_devin_release "$d" 3.11.0
+_run "$d" --apply --only=devin
+sb_stage="$d/opt/.gs-staging/devin/x/Devin/chrome-sandbox"
+if [[ ${RC} -eq 0 ]] && grep -q 'INSTALLED.*devin 3.11.0' <<<"${OUT}" \
+  && grep -qx -- "-n chown root:root ${sb_stage}" "$d/sudo.log" 2>/dev/null && grep -qx -- "-n chmod 4755 ${sb_stage}" "$d/sudo.log" \
+  && [[ "$(stat -c %a "$d/opt/devin/chrome-sandbox")" == 4755 ]]; then
+  ok "15a: Devin 3.11.0 installed; its STAGED chrome-sandbox made root:root 4755 with sudo -n before the swap"
+else
+  ko "15a: rc=${RC} sudo.log=$(cat "$d/sudo.log" 2>&1) mode=$(stat -c %a "$d/opt/devin/chrome-sandbox" 2>&1): ${OUT}"
+fi
+d="$(_fresh c15b code GLOBAL_STACK_VSCODE_VERSION 1.141.0)"
+_mk_code_tree "$d/opt/code" 1.140.0 && chmod 4755 "$d/opt/code/chrome-sandbox"
+_code_release "$d" 1.141.0
+_run "$d" --apply --only=code
+sb_stage="$d/opt/.gs-staging/code/x/VSCode-linux-x64/chrome-sandbox"
+if [[ ${RC} -eq 0 ]] && grep -q 'INSTALLED.*code 1.141.0' <<<"${OUT}" \
+  && grep -qx -- "-n chown root:root ${sb_stage}" "$d/sudo.log" 2>/dev/null && grep -qx -- "-n chmod 4755 ${sb_stage}" "$d/sudo.log" \
+  && [[ "$(stat -c %a "$d/opt/code/chrome-sandbox")" == 4755 ]]; then
+  ok "15b: VS Code 1.141.0 installed; its STAGED chrome-sandbox made root:root 4755 with sudo -n before the swap"
+else
+  ko "15b: rc=${RC} sudo.log=$(cat "$d/sudo.log" 2>&1) mode=$(stat -c %a "$d/opt/code/chrome-sandbox" 2>&1): ${OUT}"
+fi
+
+# No cached sudo, no tty: FAILED naming the sandbox and sudo, the installed copy
+# byte-identical, staging gone — and no interactive `sudo -v` is ever attempted.
+d="$(_fresh c15c devin GLOBAL_STACK_DEVIN_VERSION 3.11.0)"
+_mk_devin_tree "$d/opt/devin" 3.10.35 && chmod 4755 "$d/opt/devin/chrome-sandbox"
+before="$(_fp "$d/opt/devin")"
+_devin_release "$d" 3.11.0
+: >"$d/no-sudo"
+_run "$d" --apply --only=devin
+if [[ ${RC} -ne 0 && "$(_fp "$d/opt/devin")" == "${before}" && ! -e "$d/opt/.gs-staging/devin" ]] \
+  && grep -q 'chrome-sandbox' <<<"${OUT}" && grep -q 'sudo' <<<"${OUT}" && [[ "$(grep -c -- '^-v' "$d/sudo.log")" == 0 ]]; then
+  ok "15c: Devin, no cached sudo and no tty → FAILED naming chrome-sandbox and sudo; installed copy byte-identical; no sudo -v"
+else
+  ko "15c: rc=${RC} sudo.log=$(cat "$d/sudo.log" 2>&1): ${OUT}"
+fi
+
+# Order: a download failing its sha256 must never reach sudo; an archive without
+# a chrome-sandbox cannot start under Electron and is refused, old copy intact.
+d="$(_fresh c15d code GLOBAL_STACK_VSCODE_VERSION 1.141.0)"
+_mk_code_tree "$d/opt/code" 1.140.0 && chmod 4755 "$d/opt/code/chrome-sandbox"
+before="$(_fp "$d/opt/code")"
+_code_release "$d" 1.141.0
+sed -i -E 's/"sha256hash":"[0-9a-f]{64}"/"sha256hash":"'"$(printf '0%.0s' {1..64})"'"/' "$d/srv/v.json"
+_run "$d" --apply --only=code
+if [[ ${RC} -ne 0 && "$(_fp "$d/opt/code")" == "${before}" && ! -e "$d/sudo.log" ]] && grep -q 'sha256 mismatch' <<<"${OUT}"; then
+  ok "15d: a VS Code archive failing its sha256 never reaches sudo; installed copy byte-identical"
+else
+  ko "15d: rc=${RC} sudo called=$([[ -e "$d/sudo.log" ]] && cat "$d/sudo.log" || echo no): ${OUT}"
+fi
+d="$(_fresh c15e devin GLOBAL_STACK_DEVIN_VERSION 3.11.0)"
+_mk_devin_tree "$d/opt/devin" 3.10.35 && chmod 4755 "$d/opt/devin/chrome-sandbox"
+before="$(_fp "$d/opt/devin")"
+_devin_release "$d" 3.11.0 nosandbox
+_run "$d" --apply --only=devin
+if [[ ${RC} -ne 0 && "$(_fp "$d/opt/devin")" == "${before}" ]] && grep -q 'no chrome-sandbox' <<<"${OUT}"; then
+  ok "15e: a Devin archive without chrome-sandbox is refused naming it; installed copy byte-identical"
+else
+  ko "15e: rc=${RC}: ${OUT}"
+fi
+
+# An installed tool that is already CURRENT is repaired on --apply: this is exactly
+# the state a plain upgrade leaves (developer 755), and `--check` said "current".
+d="$(_fresh c15f devin GLOBAL_STACK_DEVIN_VERSION 3.10.35)"
+_mk_devin_tree "$d/opt/devin" 3.10.35
+_run "$d" --apply --only=devin
+sb="$d/opt/devin/chrome-sandbox"
+if [[ ${RC} -eq 0 ]] && grep -q 'REPAIRED.*devin' <<<"${OUT}" \
+  && grep -qx -- "-n chown root:root ${sb}" "$d/sudo.log" 2>/dev/null && grep -qx -- "-n chmod 4755 ${sb}" "$d/sudo.log" \
+  && [[ "$(stat -c %a "${sb}")" == 4755 && "$(_curl_calls "$d")" == 0 ]]; then
+  ok "15f: a current Devin with a 755 sandbox is REPAIRED to root:root 4755 on --apply, nothing downloaded"
+else
+  ko "15f: rc=${RC} sudo.log=$(cat "$d/sudo.log" 2>&1) mode=$(stat -c %a "${sb}" 2>&1): ${OUT}"
+fi
+# A correct sandbox costs nothing: no sudo call at all, so an unattended run stays quiet.
+d="$(_fresh c15g devin GLOBAL_STACK_DEVIN_VERSION 3.10.35)"
+_mk_devin_tree "$d/opt/devin" 3.10.35 && chmod 4755 "$d/opt/devin/chrome-sandbox"
+SANDBOX_OWNER="${ME}" _run "$d" --apply --only=devin
+if [[ ${RC} -eq 0 && ! -e "$d/sudo.log" ]] && ! grep -q 'REPAIRED' <<<"${OUT}"; then
+  ok "15g: a correct sandbox → no sudo call, no REPAIRED"
+else
+  ko "15g: rc=${RC} sudo called=$([[ -e "$d/sudo.log" ]] && cat "$d/sudo.log" || echo no): ${OUT}"
+fi
+# setuid alone is not enough: a sandbox that is mode 4755 but not root-owned is still
+# refused by Electron, so the OWNER is half of "correct" (a check on the mode only
+# would leave developer:developer 4755 as it is).
+d="$(_fresh c15o devin GLOBAL_STACK_DEVIN_VERSION 3.10.35)"
+_mk_devin_tree "$d/opt/devin" 3.10.35 && chmod 4755 "$d/opt/devin/chrome-sandbox"
+_run "$d" --apply --only=devin
+sb="$d/opt/devin/chrome-sandbox"
+if [[ ${RC} -eq 0 ]] && grep -q 'REPAIRED.*devin' <<<"${OUT}" && grep -qx -- "-n chown root:root ${sb}" "$d/sudo.log" 2>/dev/null; then
+  ok "15o: a 4755 sandbox that is not root-owned is still repaired (the owner is half of correct)"
+else
+  ko "15o: rc=${RC} sudo called=$([[ -e "$d/sudo.log" ]] && cat "$d/sudo.log" || echo no): ${OUT}"
+fi
+# A repair that cannot get sudo fails loudly, names the exact command, changes nothing.
+d="$(_fresh c15h devin GLOBAL_STACK_DEVIN_VERSION 3.10.35)"
+_mk_devin_tree "$d/opt/devin" 3.10.35
+before="$(_fp "$d/opt/devin")"
+: >"$d/no-sudo"
+_run "$d" --apply --only=devin
+sb="$d/opt/devin/chrome-sandbox"
+if [[ ${RC} -ne 0 && "$(_fp "$d/opt/devin")" == "${before}" ]] \
+  && grep -qF "sudo chown root:root '${sb}' && sudo chmod 4755 '${sb}'" <<<"${OUT}" && [[ "$(grep -c -- '^-v' "$d/sudo.log")" == 0 ]]; then
+  ok "15h: repair without sudo → exit ${RC}, the exact fix command printed, tree byte-identical, no sudo -v"
+else
+  ko "15h: rc=${RC}: ${OUT}"
+fi
+# --check reports a broken sandbox (it was silent: "current devin" while Devin could
+# not start) and stays read-only and sudo-free.
+d="$(_fresh c15i devin GLOBAL_STACK_DEVIN_VERSION 3.10.35)"
+_mk_devin_tree "$d/opt/devin" 3.10.35
+before="$(_fp "$d/opt/devin")"
+_run "$d" --check --only=devin
+if [[ ${RC} -eq 0 ]] && grep -qE '^\[sandbox +\] devin' <<<"${OUT}" && [[ ! -e "$d/sudo.log" && "$(_fp "$d/opt/devin")" == "${before}" ]]; then
+  ok "15i: --check reports a wrong sandbox, exit 0, no sudo call, tree untouched"
+else
+  ko "15i: rc=${RC} sudo called=$([[ -e "$d/sudo.log" ]] && echo YES || echo no): ${OUT}"
+fi
+chmod 4755 "$d/opt/devin/chrome-sandbox"
+SANDBOX_OWNER="${ME}" _run "$d" --check --only=devin
+if [[ ${RC} -eq 0 ]] && ! grep -q 'sandbox' <<<"${OUT}"; then ok "15j: --check is silent about a correct sandbox"; else ko "15j: rc=${RC}: ${OUT}"; fi
+
+# The set is exactly the three Electron apps: Etcher and VS Code are repaired too,
+# and a tool outside it (IDEA, whose jcef helper also ships a chrome-sandbox) never
+# reaches sudo.
+d="$(_fresh c15k balena_etcher GLOBAL_STACK_BALENA_ETCHER_VERSION v2.1.7)"
+_mk_etcher_tree "$d/opt/balena-etcher" 2.1.7
+_run "$d" --apply --only=balena_etcher
+if [[ ${RC} -eq 0 ]] && grep -q 'REPAIRED.*balena_etcher' <<<"${OUT}" && [[ "$(stat -c %a "$d/opt/balena-etcher/chrome-sandbox")" == 4755 ]]; then
+  ok "15k: a current Etcher with a 755 sandbox is repaired too"
+else
+  ko "15k: rc=${RC}: ${OUT}"
+fi
+d="$(_fresh c15l code GLOBAL_STACK_VSCODE_VERSION 1.140.0)"
+_mk_code_tree "$d/opt/code" 1.140.0
+_run "$d" --apply --only=code
+if [[ ${RC} -eq 0 ]] && grep -q 'REPAIRED.*code' <<<"${OUT}" && [[ "$(stat -c %a "$d/opt/code/chrome-sandbox")" == 4755 ]]; then
+  ok "15l: a current VS Code with a 755 sandbox is repaired too"
+else
+  ko "15l: rc=${RC}: ${OUT}"
+fi
+d="$(_sandbox c15m 2026.2.3)"
+mkdir -p "$d/opt/jetbrains/idea/plugins/jcef-plugin/jcef"
+printf 'elf' >"$d/opt/jetbrains/idea/plugins/jcef-plugin/jcef/chrome-sandbox" && chmod 755 "$d/opt/jetbrains/idea/plugins/jcef-plugin/jcef/chrome-sandbox"
+# The real jcef sandbox is nested, where the repair never looks — so on its own it could
+# not tell "outside the set" from "nothing to find". This tree also ships one at its
+# ROOT, wrong, which only the membership of the set keeps out of reach of sudo.
+printf 'elf' >"$d/opt/jetbrains/idea/chrome-sandbox" && chmod 755 "$d/opt/jetbrains/idea/chrome-sandbox"
+_run "$d" --apply --only=idea
+if [[ ${RC} -eq 0 && ! -e "$d/sudo.log" ]] && ! grep -q 'sandbox' <<<"${OUT}"; then
+  ok "15m: IDEA (not an Electron app; its jcef helper's sandbox is left alone) never reaches sudo"
+else
+  ko "15m: rc=${RC} sudo called=$([[ -e "$d/sudo.log" ]] && cat "$d/sudo.log" || echo no): ${OUT}"
+fi
+
+# The interactive path: with a tty and no cached credentials the engine asks once
+# (sudo -v), then retries sudo -n. Run under script(1) so stdin really is a tty.
+d="$(_fresh c15n devin GLOBAL_STACK_DEVIN_VERSION 3.10.35)"
+_mk_devin_tree "$d/opt/devin" 3.10.35
+: >"$d/no-sudo"
+if command -v script >/dev/null; then
+  OUT="$(script -qec "env -i HOME=$d PATH=${STUB_BIN}:/usr/bin:/bin T=$d USER=tester GS_UNU_OPT_ROOT=$d/opt GS_UNU_OPT_APPS_DIR=$d/apps GS_UNU_OPT_ENV_FILE=$d/env.local GS_UNU_OPT_PROC_DIR=$d/proc GS_UNU_OPT_SANDBOX_OWNER=root bash ${SUT} --apply --only=devin" /dev/null 2>&1 </dev/null)"
+  RC=$?
+  vline="$(grep -n -- '^-v' "$d/sudo.log" 2>/dev/null | head -1 | cut -d: -f1)"
+  cline="$(grep -n -- '^-n chmod 4755' "$d/sudo.log" 2>/dev/null | tail -1 | cut -d: -f1)"
+  if [[ ${RC} -eq 0 && -n "${vline}" && -n "${cline}" && "${vline}" -lt "${cline}" && "$(stat -c %a "$d/opt/devin/chrome-sandbox")" == 4755 ]]; then
+    ok "15n: with a tty and no cached sudo the engine runs sudo -v once, then sudo -n succeeds and the sandbox is repaired"
+  else
+    ko "15n: rc=${RC} sudo.log=$(cat "$d/sudo.log" 2>&1): ${OUT}"
+  fi
+else
+  printf '  %b(skip)%b 15n: script(1) is not installed — the tty path is UNCERTIFIED here\n' "${C_BOLD}" "${C_RESET}"
 fi
 
 printf '\n'
