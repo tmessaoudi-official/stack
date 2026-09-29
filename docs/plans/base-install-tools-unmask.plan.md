@@ -26,9 +26,9 @@ The 2026-09-28 rebuild failed at `02sonarqube`: `COPY --from=local_global_stack_
    COPY error.
 
 ## Decisions Log
-- [2026-09-28 07:09] ASSUMED (review): unmask all 15 `[ … ] && cmd || echo` Dockerfile lines (8 in 00base, 01nginx automake, 6 locale sites incl. the gitignored local.05), not just the tools line — because the class hid a second real failure (gitlab-runner) and a mask anywhere repeats this incident. Alternatives: fix only 00base:341; leave the others as known issues.
-- [2026-09-28 07:09] ASSUMED (review): difftastic tries the versioned asset name first, then the legacy one, instead of choosing by version — because a pin must install in either direction and the repo bans ordered version comparisons deciding an install (startup-prologue.test.sh §59). Alternatives: new name only (breaks a downgrade below 0.71.0); `sort -V` on 0.71.0.
-- [2026-09-28 07:09] ASSUMED (review): the host `~/.local/bin/global-unu.sh` was redeployed from the template, with a timestamped backup beside it — because it differed from the template only by one comment block and carried the same difftastic defect. Alternatives: leave the host copy for the developer to redeploy.
+- [2026-09-28 07:09] AGREED (ratified ASSUMED, 2026-09-29): unmask all 15 `[ … ] && cmd || echo` Dockerfile lines (8 in 00base, 01nginx automake, 6 locale sites incl. the gitignored local.05), not just the tools line — because the class hid a second real failure (gitlab-runner) and a mask anywhere repeats this incident. Alternatives: fix only 00base:341; leave the others as known issues.
+- [2026-09-28 07:09] AGREED (ratified ASSUMED, 2026-09-29): difftastic tries the versioned asset name first, then the legacy one, instead of choosing by version — because a pin must install in either direction and the repo bans ordered version comparisons deciding an install (startup-prologue.test.sh §59). Alternatives: new name only (breaks a downgrade below 0.71.0); `sort -V` on 0.71.0.
+- [2026-09-28 07:09] AGREED (ratified ASSUMED, 2026-09-29): the host `~/.local/bin/global-unu.sh` was redeployed from the template, with a timestamped backup beside it — because it differed from the template only by one comment block and carried the same difftastic defect. Alternatives: leave the host copy for the developer to redeploy.
 
 ## Status
 <!-- progress-block v1 -->

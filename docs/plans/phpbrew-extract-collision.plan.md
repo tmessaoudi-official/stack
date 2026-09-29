@@ -2,9 +2,9 @@
 
 ## Decisions Log
 - [2026-09-29 06:58] AGREED: Developer chose 'Recover + fix cause' (AskUserQuestion 2026-09-29): remove the broken php-8.5.11 tree, restart 03php8-5, and fix the phpbrew tmp.<time()> collision at its origin.
-- [2026-09-29 06:58] ASSUMED (review): Temp-dir uniqueness comes from bin2hex(random_bytes(6)), never the PID — every container has its own PID namespace and boots identically, so siblings share low PIDs (advisor, verified: install-version.sh ran as pid 765 in 03php8-5). Alternatives: uniqid(), mktemp via shell.
-- [2026-09-29 06:58] ASSUMED (review): No boot-time re-sync of the overlay into an existing phpbrew-src: the live clone is patched by hand now, every future clone (cold start, RELOAD_PHPBREW) gets it from iou.sh, and a new script on the 02phpbrew critical path (everything downstream waits on its marker) is more risk than the residual gap — a pin bump of >=2 php versions on a volume whose phpbrew-src predates the fix. Documented as a Known issue with the exact rsync. Alternatives: rsync the overlay src/ tree every install boot; a cmp/install of this one file.
-- [2026-09-29 06:58] ASSUMED (review): Do not delete tools/errors/php.8.5 by hand: setup mode rm -f's its own token at start (phpbrew-start.sh:41), so a restart clears it. Alternatives: delete it explicitly.
+- [2026-09-29 06:58] AGREED (ratified ASSUMED, 2026-09-29): Temp-dir uniqueness comes from bin2hex(random_bytes(6)), never the PID — every container has its own PID namespace and boots identically, so siblings share low PIDs (advisor, verified: install-version.sh ran as pid 765 in 03php8-5). Alternatives: uniqid(), mktemp via shell.
+- [2026-09-29 06:58] AGREED (ratified ASSUMED, 2026-09-29): No boot-time re-sync of the overlay into an existing phpbrew-src: the live clone is patched by hand now, every future clone (cold start, RELOAD_PHPBREW) gets it from iou.sh, and a new script on the 02phpbrew critical path (everything downstream waits on its marker) is more risk than the residual gap — a pin bump of >=2 php versions on a volume whose phpbrew-src predates the fix. Documented as a Known issue with the exact rsync. Alternatives: rsync the overlay src/ tree every install boot; a cmp/install of this one file.
+- [2026-09-29 06:58] AGREED (ratified ASSUMED, 2026-09-29): Do not delete tools/errors/php.8.5 by hand: setup mode rm -f's its own token at start (phpbrew-start.sh:41), so a restart clears it. Alternatives: delete it explicitly.
 
 ## Formal Plan
 
@@ -25,11 +25,11 @@
 <!-- progress-block v1 -->
 | # | Step | Size | State | Evidence | Files |
 |---|------|------|-------|----------|-------|
-| 1 | Write failing test + mutants (red for the stated reason) | M | todo | - | bin/tests/phpbrew-extract.test.sh |
-| 2 | Overlay ExtractTask.php + .version + OVERRIDE.md | S | todo | - | docker/config/dist/conf/phpbrew/source/** |
-| 3 | Docs: CLAUDE.md gotcha + test entry | S | todo | - | CLAUDE.md |
-| 4 | Recovery: live overlay, remove broken tree, recreate 03php8-5 | M | todo | - | - |
-| 5 | Verify: log shows patched class ran, 03php8-5 healthy, dependents up | M | todo | - | - |
+| 1 | Write failing test + mutants (red for the stated reason) | M | done | c53a658 | bin/tests/phpbrew-extract.test.sh |
+| 2 | Overlay ExtractTask.php + .version + OVERRIDE.md | S | done | c53a658 | docker/config/dist/conf/phpbrew/source/** |
+| 3 | Docs: CLAUDE.md gotcha + test entry | S | done | c53a658 | CLAUDE.md |
+| 4 | Recovery: live overlay, remove broken tree, recreate 03php8-5 | M | done | - | - |
+| 5 | Verify: log shows patched class ran, 03php8-5 healthy, dependents up | M | done | - | - |
 <!-- /progress-block -->
 ### Blocked
 ### Needs input

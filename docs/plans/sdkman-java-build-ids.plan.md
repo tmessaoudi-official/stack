@@ -7,7 +7,7 @@ record was still on Java 26.
 
 ## Decisions Log
 - [2026-09-28 13:53] AGREED: Fix Java 27 by option 1: pin 27.0.0+35-zulu now, then fix the sdkman fetcher test-first so it never proposes a +build-less id SDKMAN does not serve (developer answer 2026-09-28).
-- [2026-09-28 13:53] ASSUMED (review): Fetcher proposes the LISTED id verbatim and keeps a legacy base-form pin of the same release, rather than probing the broker per record — because every listed id validates and downloads while a probe adds an HTTP call per record. Alternatives: probe broker and strip only when base form is served; strip only when current pin is base-form.
+- [2026-09-28 13:53] AGREED (ratified ASSUMED, 2026-09-29): Fetcher proposes the LISTED id verbatim and keeps a legacy base-form pin of the same release, rather than probing the broker per record — because every listed id validates and downloads while a probe adds an HTTP call per record. Alternatives: probe broker and strip only when base form is served; strip only when current pin is base-form.
 
 ## Evidence
 - SDKMAN `/2/candidates/java/linux/versions/all` lists Zulu 27 ONLY as `27.0.0+35-zulu`.
