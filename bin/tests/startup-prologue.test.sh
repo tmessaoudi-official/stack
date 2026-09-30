@@ -719,7 +719,7 @@ run_tol() {
     TESTTOL_INSTALL_PACKAGE_FOO_VERSION=1.0 \
     TESTTOL_CONFIG_PACKAGE_FOO_NAME=foo \
     PATH="${DIST_BIN}/base-bin:${PATH}" \
-    bash "${TMP_DIR}/test-tol.sh" --prefix=TESTTOL "$@"
+    ${TOL_TIMEOUT:+timeout "${TOL_TIMEOUT}"} bash "${TMP_DIR}/test-tol.sh" --prefix=TESTTOL "$@"
 }
 
 # 13a: TOLERANT + failing install command → marker NOT written (retry next boot)
@@ -7367,7 +7367,8 @@ _p79_run() { # $1 = failing attempts before a pass ("never" = always fail), rest
   else
     _cmd+='[[ "${n}" -ge '"${_fails}"' ]]'
   fi
-  GS_PKG_RETRY_SLEEP=0 run_tol --marker-prefix=tol.79 "$@" --command="${_cmd}" >"${_P79}/log" 2>&1 || true
+  # timeout: a retry loop that never ends must RED 79b, not hang the suite (a hang is not a red).
+  GS_PKG_RETRY_SLEEP=0 TOL_TIMEOUT=30 run_tol --marker-prefix=tol.79 "$@" --command="${_cmd}" >"${_P79}/log" 2>&1 || true
   printf 'attempts=%s marker=%s\n' "$(cat "${_P79}/n")" "$([[ -f "${TOLV}/tol.79.pkg.foo" ]] && echo yes || echo no)"
 }
 assert_pass "79a: tolerant --retry=2, two transient failures -> third attempt passes, marker written" \
