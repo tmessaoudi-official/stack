@@ -7346,6 +7346,48 @@ assert_pass "78g: >= 2 executable curl calls in the block, every one with -f, no
   bash -c 'calls="$(grep -oE "curl [^;|]*" <<<"$1")"; [[ "$(grep -c . <<<"${calls}")" -ge 2 ]] && ! grep -vE "(^| )-[a-zA-Z]*f[a-zA-Z]*( |$)" <<<"${calls}" | grep -q . && ! grep -qF -- "-o \"\${_elasticmq_jar}\"" <<<"$1" && ! grep -qF -- "-o \"\${GLOBAL_STACK_DOCKER_TOOLS_PATH}" <<<"$1"' _ "${_p78_exec}"
 rm -rf "${_P78}"
 
+# ─── Section 79: bounded --retry for a tolerant install (cold-start step 5) ───
+# 2026-09-28 13:31:11 03java17-zulu: `curl: (7) Failed to connect to broker.sdkman.io`
+# on one gradle download. The --tolerant install loop moved on, the strict activation
+# loop's `sdk use` then hit "Candidate version is not installed" and exited 1 — the
+# activation loop is the loud check and stays strict. The origin is the single transient
+# download failure, so a tolerant caller may opt into N extra attempts. The retry must
+# be opt-in and tolerant-only (a set -e caller aborts before any retry could run).
+printf '\n%b── Section 79: bounded --retry for a tolerant install%b\n' "${C_BOLD}" "${C_RESET}"
+_P79="${TMP_DIR}/p79"
+_p79_run() { # $1 = failing attempts before a pass ("never" = always fail), rest = extra helper args
+  local _fails="$1"
+  shift
+  rm -rf "${TOLV}" "${_P79}"
+  mkdir -p "${TOLV}" "${_P79}"
+  printf '0\n' >"${_P79}/n"
+  local _cmd='n=$(cat '"${_P79}"'/n); echo $((n+1)) >'"${_P79}"'/n; '
+  if [[ "${_fails}" == never ]]; then
+    _cmd+='false'
+  else
+    _cmd+='[[ "${n}" -ge '"${_fails}"' ]]'
+  fi
+  GS_PKG_RETRY_SLEEP=0 run_tol --marker-prefix=tol.79 "$@" --command="${_cmd}" >"${_P79}/log" 2>&1 || true
+  printf 'attempts=%s marker=%s\n' "$(cat "${_P79}/n")" "$([[ -f "${TOLV}/tol.79.pkg.foo" ]] && echo yes || echo no)"
+}
+assert_pass "79a: tolerant --retry=2, two transient failures -> third attempt passes, marker written" \
+  bash -c '[[ "$1" == "attempts=3 marker=yes" ]]' _ "$(_p79_run 2 --tolerant --retry=2)"
+assert_pass "79b: tolerant --retry=2, permanent failure -> exactly 3 attempts, NO marker (bounded)" \
+  bash -c '[[ "$1" == "attempts=3 marker=no" ]]' _ "$(_p79_run never --tolerant --retry=2)"
+assert_pass "79c: tolerant without --retry -> ONE attempt, no marker (today behaviour unchanged)" \
+  bash -c '[[ "$1" == "attempts=1 marker=no" ]]' _ "$(_p79_run 1 --tolerant)"
+assert_pass "79d: a failing --success-check also triggers the retry (exit 0 is not trusted)" \
+  bash -c '[[ "$1" == "attempts=2 marker=no" ]]' _ "$(_p79_run 0 --tolerant --retry=1 --success-check=false)"
+assert_pass "79e: --retry without --tolerant is refused loudly, no command run" \
+  bash -c '[[ "$1" == "attempts=0 marker=no" ]] && grep -q "requires --tolerant" "$2"' _ \
+  "$(_p79_run 0 --retry=2)" "${_P79}/log"
+assert_pass "79f: a non-numeric --retry is refused, no command run" \
+  bash -c '[[ "$1" == "attempts=0 marker=no" ]] && grep -q "must be a non-negative integer" "$2"' _ \
+  "$(_p79_run 0 --tolerant --retry=two)" "${_P79}/log"
+assert_pass "79g: sdkman's tolerant install loop passes --retry (the only caller that opts in)" \
+  bash -c 'awk "/--tolerant/{t=1} t&&/--retry=[0-9]/{f=1} END{exit !f}" "$1"' _ "${DIST_BIN}/sdkman-bin/global-stack-sdkman-start.sh"
+rm -rf "${_P79}"
+
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
 if [[ "${FAIL}" -eq 0 ]]; then

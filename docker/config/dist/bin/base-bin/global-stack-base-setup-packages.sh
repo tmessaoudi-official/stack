@@ -23,6 +23,7 @@ global_stack_base_setup_packages() {
     local CLEANUP_COMMAND=""
     local TOLERANT=""
     local SUCCESS_CHECK=""
+    local RETRY=""
     local COMMAND_COUNTER=0
     local -A COMMANDS=()
 
@@ -52,6 +53,13 @@ global_stack_base_setup_packages() {
                 # fail-loud (a failed install aborts before the marker write).
                 TOLERANT=1
                 ;;
+            --retry=*)
+                # Opt-in, --tolerant only: N EXTRA attempts of the command list when a
+                # command exits non-zero or the --success-check fails. For a single
+                # transient download failure (sdkman: `curl: (7) Failed to connect to
+                # broker.sdkman.io`, 2026-09-28) — bounded, never an open-ended loop.
+                RETRY="$(echo "${__CURRENT_ARG__}" | sed 's/^--[a-zA-Z0-9_-]\+=//')"
+                ;;
             --success-check=*)
                 # Optional predicate (eval'd, PACKAGE_NAME/PACKAGE_VERSION in scope)
                 # that must pass for the marker to be written in --tolerant mode —
@@ -78,6 +86,17 @@ global_stack_base_setup_packages() {
     if [[ ${#COMMANDS[@]} -eq 0 ]]; then
         echo -e "Command(s) was not provided !!"
         exit 1
+    fi
+
+    if [[ -n "${RETRY}" ]]; then
+        if [[ ! "${RETRY}" =~ ^[0-9]+$ ]]; then
+            echo -e "--retry must be a non-negative integer (got '${RETRY}') !!"
+            exit 1
+        fi
+        if [[ -z "${TOLERANT}" ]]; then
+            echo -e "--retry requires --tolerant (a set -e caller aborts before a retry could run) !!"
+            exit 1
+        fi
     fi
 
     while read -r VARIABLE_NAME; do
@@ -117,18 +136,30 @@ global_stack_base_setup_packages() {
                     PACKAGE_OLD_VERSION="$(cat "${_pkg_marker}" 2>/dev/null || true)"
                 fi
             fi
-            local _cmd_ok=1
-            for (( INDEX=0; INDEX<${#COMMANDS[@]}; INDEX++ )); do
-                # Commands are caller-provided templates evaluated in the current env context (see --command= arg).
-                if [[ -n "${TOLERANT}" ]]; then
-                    # Tolerant callers run under set +E; capture a failed command so
-                    # a satisfied marker is NOT written for a failed install.
-                    eval "${COMMANDS[${INDEX}]}" </dev/null || _cmd_ok=0
-                else
-                    # Default (set -e) callers: a failed command aborts here — loud,
-                    # before the marker write below — never a silent stale marker.
-                    eval "${COMMANDS[${INDEX}]}" </dev/null
+            local _cmd_ok=1 _attempt=0
+            while :; do
+                _cmd_ok=1
+                for (( INDEX=0; INDEX<${#COMMANDS[@]}; INDEX++ )); do
+                    # Commands are caller-provided templates evaluated in the current env context (see --command= arg).
+                    if [[ -n "${TOLERANT}" ]]; then
+                        # Tolerant callers run under set +E; capture a failed command so
+                        # a satisfied marker is NOT written for a failed install.
+                        eval "${COMMANDS[${INDEX}]}" </dev/null || _cmd_ok=0
+                    else
+                        # Default (set -e) callers: a failed command aborts here — loud,
+                        # before the marker write below — never a silent stale marker.
+                        eval "${COMMANDS[${INDEX}]}" </dev/null
+                    fi
+                done
+                # Bounded retry (--retry=N, tolerant only): stop on success or when the
+                # extra attempts are spent; the marker logic below re-judges the outcome.
+                [[ "${_attempt}" -lt "${RETRY:-0}" ]] || break
+                if [[ "${_cmd_ok}" = "1" ]] && { [[ -z "${SUCCESS_CHECK}" ]] || eval "${SUCCESS_CHECK}"; }; then
+                    break
                 fi
+                ((_attempt++)) || true
+                echo -e "WARN: ${PACKAGE_NAME} ${PACKAGE_VERSION} failed — retry ${_attempt}/${RETRY}" >&2
+                sleep "${GS_PKG_RETRY_SLEEP:-$((5 * _attempt))}"
             done
             # Only after a SUCCESSFUL install: drop the old version, then record the
             # new one. A failed install therefore keeps the old version AND does not
