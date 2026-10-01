@@ -22,7 +22,7 @@ default: help
 SERVICES_SHELL := \
 	00base 00corentinth-it-tools \
 	01axllent-mailpit 01caddy 01epiclabs-docker-oracle-xe-11g \
-	01httpd 01localstack-localstack 01mariadb13 01mongo7 \
+	01httpd 01localstack-localstack 01mariadb13 01mongo9 \
 	01mysql9 01nginx \
 	01selenium-standalone-chrome 01selenium-standalone-firefox \
 	02fvm 02keycloak-keycloak \
@@ -139,7 +139,7 @@ touch:
 # `tools/elapsed` is pre-created HERE, by the host user, before any container starts.
 # It is not cosmetic. `down` deletes it (see the `down` recipe), and on the next `up`
 # every service appends to it -- including containers that run as ROOT (01postgres18,
-# 01mysql9, 01mariadb13, 01mongo7, 02dpage-pgadmin4) via their healthcheck's
+# 01mysql9, 01mariadb13, 01mongo9, 02dpage-pgadmin4) via their healthcheck's
 # global-stack-base-healthcheck-elapsed.sh. Whichever root container appends first
 # CREATES the file as root:root 0644. 00base runs as `developer` and is the only
 # service that opens it with `>` (base-start.sh:54 -> print-success.sh:23, mode

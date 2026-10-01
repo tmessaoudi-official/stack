@@ -136,7 +136,7 @@ rm -rf "${FRESH}"
 
 # ── tools/elapsed must be pre-created by the HOST, before any container ─────
 # `down` deletes tools/elapsed; on the next `up` every service appends to it,
-# and several run as ROOT (01postgres18, 01mysql9, 01mariadb13, 01mongo7,
+# and several run as ROOT (01postgres18, 01mysql9, 01mariadb13, 01mongo9,
 # 02dpage-pgadmin4) through their healthcheck's healthcheck-elapsed.sh. The
 # first root appender CREATES it root:root 0644. 00base runs as `developer`
 # and is the ONLY service that opens it with `>` (base-start.sh -> the "create"

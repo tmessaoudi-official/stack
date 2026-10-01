@@ -1,19 +1,19 @@
 ---
 services:
-  01mongo7:
+  01mongo9:
     init: ${DOCKER_INIT}
     build:
       args:
         BUILDKIT_INLINE_CACHE: 1
-        GLOBAL_STACK_IMAGE_MONGO7_VERSION: ${GLOBAL_STACK_IMAGE_MONGO7_VERSION}
+        GLOBAL_STACK_IMAGE_MONGO9_VERSION: ${GLOBAL_STACK_IMAGE_MONGO9_VERSION}
       context: ./
-      dockerfile: ./docker/images/01mongo7/Dockerfile
+      dockerfile: ./docker/images/01mongo9/Dockerfile
     depends_on:
       00base:
         condition: service_healthy
         required: true
     environment:
-      - MONGO_DBS=${GLOBAL_STACK_MONGO7_DBS}
+      - MONGO_DBS=${GLOBAL_STACK_MONGO9_DBS}
       - MONGODB_PASSWORD=${GLOBAL_STACK_DATABASE_ROOT_PASSWORD}
       - MONGODB_USER=root
       - TZ=${GLOBAL_STACK_TIMEZONE}
@@ -23,7 +23,7 @@ services:
       - GLOBAL_STACK_DOCKER_ROOT_DIST_PATH=${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}
       - GLOBAL_STACK_WAIT_FOR_TIMEOUT=${GLOBAL_STACK_WAIT_FOR_TIMEOUT}
     healthcheck:
-      test: ["CMD-SHELL", "${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/bin/base-bin/global-stack-base-healthcheck-elapsed.sh 01mongo7 mongosh --eval \"db.adminCommand('ping')\""]
+      test: ["CMD-SHELL", "${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/bin/base-bin/global-stack-base-healthcheck-elapsed.sh 01mongo9 mongosh --eval \"db.adminCommand('ping')\""]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -31,18 +31,18 @@ services:
     networks:
       - public
     ports:
-      - ${GLOBAL_STACK_MONGO7_PORT_27017:-}27017
+      - ${GLOBAL_STACK_MONGO9_PORT_27017:-}27017
     labels:
-      stack.service: "01mongo7"
+      stack.service: "01mongo9"
       stack.tier: "database"
       stack.version: "${GLOBAL_STACK_VERSION}"
     restart: "on-failure:5"
     volumes:
       - ./tools:${GLOBAL_STACK_DOCKER_TOOLS_PATH}:rw
       - ./docker/config/dist/bin:${GLOBAL_STACK_DOCKER_ROOT_DIST_PATH}/bin:rw
-      - ./docker/data/dumps/mongo/7:/opt/dumps:rw
-      - 01mongo7_data:/data/db:rw,delegated
-      - 01mongo7_configdb:/data/configdb:rw,delegated
+      - ./docker/data/dumps/mongo/9:/opt/dumps:rw
+      - 01mongo9_data:/data/db:rw,delegated
+      - 01mongo9_configdb:/data/configdb:rw,delegated
       - ./${GLOBAL_STACK_SHELL_HISTORY}:/root/${GLOBAL_STACK_SHELL_HISTORY_TARGET}:rw
       - ./${GLOBAL_STACK_SHELL_ZSH_HISTORY}:/root/${GLOBAL_STACK_SHELL_ZSH_HISTORY_TARGET}:rw
         # - ./var/database-history/mongosh_repl_history:/data/db/.mongodb/mongosh/mongosh_repl_history:rw,delegated
@@ -50,7 +50,7 @@ services:
         #   target: /var/log/mongodb
         #   type: bind
 volumes:
-  01mongo7_data:
-    name: ${COMPOSE_PROJECT_NAME}_${GLOBAL_STACK_VERSION}_01mongo7_data
-  01mongo7_configdb:
-    name: ${COMPOSE_PROJECT_NAME}_${GLOBAL_STACK_VERSION}_01mongo7_configdb
+  01mongo9_data:
+    name: ${COMPOSE_PROJECT_NAME}_${GLOBAL_STACK_VERSION}_01mongo9_data
+  01mongo9_configdb:
+    name: ${COMPOSE_PROJECT_NAME}_${GLOBAL_STACK_VERSION}_01mongo9_configdb

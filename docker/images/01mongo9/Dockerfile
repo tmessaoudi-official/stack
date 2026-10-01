@@ -1,8 +1,8 @@
 # shellcheck disable=SC2148
-ARG GLOBAL_STACK_IMAGE_MONGO7_VERSION=7.0.43-jammy
+ARG GLOBAL_STACK_IMAGE_MONGO9_VERSION=7.0.43-jammy
 
 # shellcheck disable=SC2148
-FROM mongo:${GLOBAL_STACK_IMAGE_MONGO7_VERSION}
+FROM mongo:${GLOBAL_STACK_IMAGE_MONGO9_VERSION}
 
 LABEL maintainer="Takieddine Messaoudi <takieddine.messaoudi.official@gmail.com>" \
       info="local_global_stack"
@@ -13,7 +13,7 @@ USER root
 
 SHELL ["/bin/bash", "-xeEu", "-o", "pipefail", "-c"]
 
-COPY docker/images/01mongo7/conf/initdb/ /docker-entrypoint-initdb.d/
+COPY docker/images/01mongo9/conf/initdb/ /docker-entrypoint-initdb.d/
 
 RUN chown -R root:root /root/ \
     && find /root/ -type f -exec chmod 600 {} \; \
