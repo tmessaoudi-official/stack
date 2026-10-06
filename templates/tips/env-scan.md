@@ -336,9 +336,11 @@ or `ARG FOO=value`) is detected and maintained after propagation.
 
 - **Trailing `;` in `COMPOSE_FILE`** in `.env` will break Docker Compose silently. Always
   check `env-scan.sh` output when editing this var.
-- **Port vars must end with `:`** — e.g. `GLOBAL_STACK_POSTGRES18_PORT_N=42708:`. The
-  Compose config uses `${VAR:-}PORT`, so omitting the colon silently concatenates the port
-  numbers (`427085432` instead of `42708:5432`).
+- **A port var's trailing `:` depends on its CONSUMER** (CLAUDE.md § Gotchas, "property of its
+  CONSUMER"). Where Compose writes `${VAR:-}PORT` — the common form — the value must end with `:`
+  (`GLOBAL_STACK_POSTGRES18_PORT_N=42708:`), or the numbers silently concatenate (`427085432`
+  instead of `42708:5432`). Where the consumer supplies the colon itself (`${VAR:-}:${VAR:-}`,
+  `--publish ${VAR}:5000`), a trailing `:` is the bug.
 - **`--backup-keep=0`** means unlimited retention (no pruning), not "keep nothing". To
   disable backups entirely, use `--backup=false`.
 - **`--dry-run` is a single flag** (no `=value`), unlike most other env-scan flags which

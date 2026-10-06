@@ -195,7 +195,7 @@ Services live in `docker/images/<tier><name>/` and are numbered by build depende
 
 - All project variables use `GLOBAL_STACK_*` prefix; nested `${VAR}` expansion is used extensively
 - `bin/env-scan.sh` syncs `.env` → `.env.local`: adds new vars, detects differences, reports conflicts
-- **Port binding pattern**: `GLOBAL_STACK_<SERVICE>_PORT_<N>=` — empty = no host binding; when set, value must end with `:` (e.g. `42708:`)
+- **Port binding pattern**: `GLOBAL_STACK_<SERVICE>_PORT_<N>=` — empty = no host binding; when set, whether the value ends with `:` (e.g. `42708:`) depends on its CONSUMER — see § Gotchas, "property of its CONSUMER"
 - **Host port range**: `42700–42899` (avoids conflicts with system services)
 - `GLOBAL_STACK_DOCKER_USER_ID` (`developer`) is the master credential — all DB passwords, pgAdmin, Keycloak default to it
 - `GLOBAL_STACK_RELOAD_*=true` forces a reinstall of that tier's tools on next container start (slow! — the node, java and flutter switches do not wipe; see § Gotchas)
