@@ -47,6 +47,17 @@ printf '\n%b── templates/shell/profile.sh ──%b\n' "${C_BOLD}" "${C_RESET
 # ── Case 1: the file still parses ───────────────────────────────────────────
 if bash -n "${SUT}" 2>/dev/null; then ok "syntax: bash -n clean"; else ko "syntax: bash -n FAILED"; fi
 
+# ── Case 1b: no setuid-root of a chrome-sandbox at login (audit 2026-10-06 F3) ─
+# /opt/$USER is 777 with no sticky bit, so a login-time `sudo chown root` + `chmod 4755` of
+# <tree>/chrome-sandbox makes WHATEVER sits there setuid root. templates/shell/global-unu-opt.sh owns
+# the sandbox now and setuids only the bytes a checksummed install recorded. Comment lines are skipped.
+_setuid="$(grep -vE '^[[:space:]]*#' "${SUT}" | grep -nE 'chrome-sandbox' | grep -E 'chmod|chown' || true)"
+if [[ -z "${_setuid}" ]]; then
+  ok "no login-time chown/chmod of a chrome-sandbox"
+else
+  ko "login-time setuid of a chrome-sandbox (unverified bytes in a 777 tree): ${_setuid}"
+fi
+
 # ── Case 2: every chatty invocation is wrapped ──────────────────────────────
 # Anchored on the call itself, so an unwrapped one added later fails here.
 while IFS='|' read -r label pattern; do

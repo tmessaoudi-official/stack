@@ -39,12 +39,9 @@ eval "$(grep -vE "${_gs_prof_exclude}" "${_gs_prof_envfile}" | sed 's/^/export /
 eval "$(grep -vE "${_gs_prof_exclude}" "${_gs_prof_envfile}" | sed 's/^/export /')"
 unset _gs_prof_exclude _gs_prof_envfile
 
-sudo chown root:root /opt/${GLOBAL_STACK_DOCKER_USER_ID}/code/chrome-sandbox
-sudo chmod 4755 /opt/${GLOBAL_STACK_DOCKER_USER_ID}/code/chrome-sandbox
-sudo chown root:root /opt/${GLOBAL_STACK_DOCKER_USER_ID}/devin/chrome-sandbox
-sudo chmod 4755 /opt/${GLOBAL_STACK_DOCKER_USER_ID}/devin/chrome-sandbox
-sudo chown root:root /opt/${GLOBAL_STACK_DOCKER_USER_ID}/balena-etcher/chrome-sandbox
-sudo chmod 4755 /opt/${GLOBAL_STACK_DOCKER_USER_ID}/balena-etcher/chrome-sandbox
+# The Electron chrome-sandbox (code, devin, balena-etcher) is NOT set up here any more: a login-time
+# setuid of whatever sits in the 777 /opt tree made unverified bytes setuid root (audit 2026-10-06 F3).
+# global-unu-opt.sh --apply owns it, and setuids only the bytes a checksummed install recorded.
 
 alias gksudo='pkexec env DISPLAY=$DISPLAY XAUTHORITY=$XAUTHORITY'
 alias balena-etcher='/opt/${GLOBAL_STACK_DOCKER_USER_ID}/balena-etcher/balena-etcher'

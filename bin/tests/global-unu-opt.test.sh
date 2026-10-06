@@ -912,6 +912,15 @@ section "15. Electron sandbox: VS Code, Devin and Etcher end up with a root setu
 # measured on the real Devin 2026-09-29, where an upgrade left developer:developer 755.
 # Fixtures belong to the test user, so a "correct" sandbox needs SANDBOX_OWNER=$ME.
 ME="$(id -un)"
+# The digest a VERIFIED install recorded for a tool's chrome-sandbox (F3, audit 2026-10-06): the repair
+# setuids only a file whose bytes match it. It lives outside the 777 /opt tree, under the user's state
+# dir — HOME is the case dir in `_run`, so this is the path the engine resolves.
+_rec() { printf '%s/.local/state/global-unu-opt/%s.chrome-sandbox.sha256' "$1" "$2"; }
+# $1 case dir  $2 id  $3 installed tree → record the CURRENT sandbox bytes, as a past install would have.
+_seed_rec() {
+  mkdir -p "$(dirname "$(_rec "$1" "$2")")"
+  sha256sum <"$3/chrome-sandbox" | cut -d' ' -f1 >"$(_rec "$1" "$2")"
+}
 _mk_devin_tree() { # $1 dest dir  $2 version
   mkdir -p "$1/resources/app/resources/linux"
   printf '{"nameShort":"Devin","version":"1.127.0","windsurfVersion":"%s"}\n' "$2" >"$1/resources/app/product.json"
@@ -956,6 +965,19 @@ if [[ ${RC} -eq 0 ]] && grep -q 'INSTALLED.*devin 3.11.0' <<<"${OUT}" \
 else
   ko "15a: rc=${RC} sudo.log=$(cat "$d/sudo.log" 2>&1) mode=$(stat -c %a "$d/opt/devin/chrome-sandbox" 2>&1): ${OUT}"
 fi
+# The install records the digest of the sandbox it took from the checksummed archive — the only bytes
+# a later repair may setuid. Then degrade the live sandbox to the 755 an upgrade leaves: the repair
+# accepts it because the bytes are the recorded ones (the record is what makes a repair possible).
+want="$(sha256sum <"$d/src/Devin/chrome-sandbox" | cut -d' ' -f1)"
+got="$(cat "$(_rec "$d" devin)" 2>/dev/null)"
+chmod 755 "$d/opt/devin/chrome-sandbox"
+: >"$d/sudo.log"
+_run "$d" --apply --only=devin
+if [[ -n "${want}" && "${got}" == "${want}" && ${RC} -eq 0 ]] && grep -q 'REPAIRED.*devin' <<<"${OUT}"; then
+  ok "15r: an install records the archive sandbox's sha256 outside the tree, and a later repair of those bytes goes through"
+else
+  ko "15r: record='${got}' want='${want}' rc=${RC}: ${OUT}"
+fi
 d="$(_fresh c15b code GLOBAL_STACK_VSCODE_VERSION 1.141.0)"
 _mk_code_tree "$d/opt/code" 1.140.0 && chmod 4755 "$d/opt/code/chrome-sandbox"
 _code_release "$d" 1.141.0
@@ -977,9 +999,9 @@ before="$(_fp "$d/opt/devin")"
 _devin_release "$d" 3.11.0
 : >"$d/no-sudo"
 _run "$d" --apply --only=devin
-if [[ ${RC} -ne 0 && "$(_fp "$d/opt/devin")" == "${before}" && ! -e "$d/opt/.gs-staging/devin" ]] \
+if [[ ${RC} -ne 0 && "$(_fp "$d/opt/devin")" == "${before}" && ! -e "$d/opt/.gs-staging/devin" && ! -e "$(_rec "$d" devin)" ]] \
   && grep -q 'chrome-sandbox' <<<"${OUT}" && grep -q 'sudo' <<<"${OUT}" && [[ "$(grep -c -- '^-v' "$d/sudo.log")" == 0 ]]; then
-  ok "15c: Devin, no cached sudo and no tty → FAILED naming chrome-sandbox and sudo; installed copy byte-identical; no sudo -v"
+  ok "15c: Devin, no cached sudo and no tty → FAILED naming chrome-sandbox and sudo; installed copy byte-identical; no sudo -v; no digest recorded"
 else
   ko "15c: rc=${RC} sudo.log=$(cat "$d/sudo.log" 2>&1): ${OUT}"
 fi
@@ -1012,6 +1034,7 @@ fi
 # the state a plain upgrade leaves (developer 755), and `--check` said "current".
 d="$(_fresh c15f devin GLOBAL_STACK_DEVIN_VERSION 3.10.35)"
 _mk_devin_tree "$d/opt/devin" 3.10.35
+_seed_rec "$d" devin "$d/opt/devin"
 _run "$d" --apply --only=devin
 sb="$d/opt/devin/chrome-sandbox"
 if [[ ${RC} -eq 0 ]] && grep -q 'REPAIRED.*devin' <<<"${OUT}" \
@@ -1020,6 +1043,39 @@ if [[ ${RC} -eq 0 ]] && grep -q 'REPAIRED.*devin' <<<"${OUT}" \
   ok "15f: a current Devin with a 755 sandbox is REPAIRED to root:root 4755 on --apply, nothing downloaded"
 else
   ko "15f: rc=${RC} sudo.log=$(cat "$d/sudo.log" 2>&1) mode=$(stat -c %a "${sb}" 2>&1): ${OUT}"
+fi
+# F3 (audit 2026-10-06): /opt/$USER is 777 with no sticky bit, so anything that can write there can
+# plant its own binary at <tree>/chrome-sandbox. The repair must never setuid-root bytes that are not
+# the ones a verified install recorded: a planted file is REFUSED before any sudo call, the tree is
+# left byte-identical, and the message gives the real route (there is no reinstall verb: move the tree
+# aside so the tool reads as missing, then --apply installs the pin from its checksummed archive).
+d="$(_fresh c15p devin GLOBAL_STACK_DEVIN_VERSION 3.10.35)"
+_mk_devin_tree "$d/opt/devin" 3.10.35
+_seed_rec "$d" devin "$d/opt/devin"
+printf 'planted-not-the-archive-bytes' >"$d/opt/devin/chrome-sandbox" && chmod 755 "$d/opt/devin/chrome-sandbox"
+before="$(_fp "$d/opt/devin")"
+_run "$d" --apply --only=devin
+tree="$d/opt/devin"
+if [[ ${RC} -ne 0 && ! -e "$d/sudo.log" && "$(_fp "${tree}")" == "${before}" ]] && ! grep -q 'REPAIRED' <<<"${OUT}" \
+  && grep -q 'REFUSED.*devin.*does not match' <<<"${OUT}" \
+  && grep -qF "mv '${tree}' '${tree}.untrusted' && global-unu-opt.sh --apply --only=devin" <<<"${OUT}"; then
+  ok "15p: a planted chrome-sandbox (different bytes) is REFUSED on --apply: no sudo call, tree byte-identical, reinstall route named"
+else
+  ko "15p: rc=${RC} sudo called=$([[ -e "$d/sudo.log" ]] && cat "$d/sudo.log" || echo no): ${OUT}"
+fi
+# No record at all (a tree installed before the digest was kept, or by hand): nothing proves the bytes
+# came from a checksummed archive, so the repair refuses the same way — fail closed, never trust-on-first-use.
+d="$(_fresh c15q devin GLOBAL_STACK_DEVIN_VERSION 3.10.35)"
+_mk_devin_tree "$d/opt/devin" 3.10.35
+before="$(_fp "$d/opt/devin")"
+_run "$d" --apply --only=devin
+tree="$d/opt/devin"
+if [[ ${RC} -ne 0 && ! -e "$d/sudo.log" && "$(_fp "${tree}")" == "${before}" && ! -e "$(_rec "$d" devin)" ]] \
+  && grep -q 'REFUSED.*devin.*no sha256' <<<"${OUT}" \
+  && grep -qF "mv '${tree}' '${tree}.untrusted' && global-unu-opt.sh --apply --only=devin" <<<"${OUT}"; then
+  ok "15q: no recorded digest → the repair is REFUSED (no sudo call, nothing recorded on trust), reinstall route named"
+else
+  ko "15q: rc=${RC} sudo called=$([[ -e "$d/sudo.log" ]] && cat "$d/sudo.log" || echo no): ${OUT}"
 fi
 # A correct sandbox costs nothing: no sudo call at all, so an unattended run stays quiet.
 d="$(_fresh c15g devin GLOBAL_STACK_DEVIN_VERSION 3.10.35)"
@@ -1035,6 +1091,7 @@ fi
 # would leave developer:developer 4755 as it is).
 d="$(_fresh c15o devin GLOBAL_STACK_DEVIN_VERSION 3.10.35)"
 _mk_devin_tree "$d/opt/devin" 3.10.35 && chmod 4755 "$d/opt/devin/chrome-sandbox"
+_seed_rec "$d" devin "$d/opt/devin"
 _run "$d" --apply --only=devin
 sb="$d/opt/devin/chrome-sandbox"
 if [[ ${RC} -eq 0 ]] && grep -q 'REPAIRED.*devin' <<<"${OUT}" && grep -qx -- "-n chown root:root ${sb}" "$d/sudo.log" 2>/dev/null; then
@@ -1045,6 +1102,7 @@ fi
 # A repair that cannot get sudo fails loudly, names the exact command, changes nothing.
 d="$(_fresh c15h devin GLOBAL_STACK_DEVIN_VERSION 3.10.35)"
 _mk_devin_tree "$d/opt/devin" 3.10.35
+_seed_rec "$d" devin "$d/opt/devin"
 before="$(_fp "$d/opt/devin")"
 : >"$d/no-sudo"
 _run "$d" --apply --only=devin
@@ -1061,11 +1119,22 @@ d="$(_fresh c15i devin GLOBAL_STACK_DEVIN_VERSION 3.10.35)"
 _mk_devin_tree "$d/opt/devin" 3.10.35
 before="$(_fp "$d/opt/devin")"
 _run "$d" --check --only=devin
-if [[ ${RC} -eq 0 ]] && grep -qE '^\[sandbox +\] devin' <<<"${OUT}" && [[ ! -e "$d/sudo.log" && "$(_fp "$d/opt/devin")" == "${before}" ]]; then
-  ok "15i: --check reports a wrong sandbox, exit 0, no sudo call, tree untouched"
+# With no recorded digest, --apply will REFUSE the repair, so --check must not promise one — and it
+# stays write-free: not even the state dir is created.
+if [[ ${RC} -eq 0 ]] && grep -qE '^\[sandbox +\] devin.*--apply will refuse.*--apply --only=devin' <<<"${OUT}" \
+  && [[ ! -e "$d/sudo.log" && ! -e "$d/.local/state" && "$(_fp "$d/opt/devin")" == "${before}" ]]; then
+  ok "15i: --check reports a wrong sandbox with no recorded digest as one --apply will refuse (and how to reinstall), exit 0, no sudo call, nothing written"
 else
   ko "15i: rc=${RC} sudo called=$([[ -e "$d/sudo.log" ]] && echo YES || echo no): ${OUT}"
 fi
+_seed_rec "$d" devin "$d/opt/devin"
+_run "$d" --check --only=devin
+if [[ ${RC} -eq 0 && ! -e "$d/sudo.log" ]] && grep -qE '^\[sandbox +\] devin.*--apply repairs it' <<<"${OUT}" && ! grep -q 'will refuse' <<<"${OUT}"; then
+  ok "15u: --check says --apply repairs a wrong sandbox whose bytes match the recorded digest"
+else
+  ko "15u: rc=${RC}: ${OUT}"
+fi
+rm -f "$(_rec "$d" devin)"
 chmod 4755 "$d/opt/devin/chrome-sandbox"
 SANDBOX_OWNER="${ME}" _run "$d" --check --only=devin
 if [[ ${RC} -eq 0 ]] && ! grep -q 'sandbox' <<<"${OUT}"; then ok "15j: --check is silent about a correct sandbox"; else ko "15j: rc=${RC}: ${OUT}"; fi
@@ -1075,6 +1144,7 @@ if [[ ${RC} -eq 0 ]] && ! grep -q 'sandbox' <<<"${OUT}"; then ok "15j: --check i
 # reaches sudo.
 d="$(_fresh c15k balena_etcher GLOBAL_STACK_BALENA_ETCHER_VERSION v2.1.7)"
 _mk_etcher_tree "$d/opt/balena-etcher" 2.1.7
+_seed_rec "$d" balena_etcher "$d/opt/balena-etcher"
 _run "$d" --apply --only=balena_etcher
 if [[ ${RC} -eq 0 ]] && grep -q 'REPAIRED.*balena_etcher' <<<"${OUT}" && [[ "$(stat -c %a "$d/opt/balena-etcher/chrome-sandbox")" == 4755 ]]; then
   ok "15k: a current Etcher with a 755 sandbox is repaired too"
@@ -1083,6 +1153,7 @@ else
 fi
 d="$(_fresh c15l code GLOBAL_STACK_VSCODE_VERSION 1.140.0)"
 _mk_code_tree "$d/opt/code" 1.140.0
+_seed_rec "$d" code "$d/opt/code"
 _run "$d" --apply --only=code
 if [[ ${RC} -eq 0 ]] && grep -q 'REPAIRED.*code' <<<"${OUT}" && [[ "$(stat -c %a "$d/opt/code/chrome-sandbox")" == 4755 ]]; then
   ok "15l: a current VS Code with a 755 sandbox is repaired too"
@@ -1107,6 +1178,7 @@ fi
 # (sudo -v), then retries sudo -n. Run under script(1) so stdin really is a tty.
 d="$(_fresh c15n devin GLOBAL_STACK_DEVIN_VERSION 3.10.35)"
 _mk_devin_tree "$d/opt/devin" 3.10.35
+_seed_rec "$d" devin "$d/opt/devin"
 : >"$d/no-sudo"
 if command -v script >/dev/null; then
   OUT="$(script -qec "env -i HOME=$d PATH=${STUB_BIN}:/usr/bin:/bin T=$d USER=tester GS_UNU_OPT_ROOT=$d/opt GS_UNU_OPT_APPS_DIR=$d/apps GS_UNU_OPT_ENV_FILE=$d/env.local GS_UNU_OPT_PROC_DIR=$d/proc GS_UNU_OPT_SANDBOX_OWNER=root bash ${SUT} --apply --only=devin" /dev/null 2>&1 </dev/null)"

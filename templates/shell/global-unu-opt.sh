@@ -18,7 +18,7 @@
 # A tool whose binary is running is skipped, never swapped underneath itself.
 #
 # Test seams: GS_UNU_OPT_ROOT, GS_UNU_OPT_APPS_DIR, GS_UNU_OPT_ENV_FILE,
-# GS_UNU_OPT_PROC_DIR. Tests: bin/tests/global-unu-opt.test.sh
+# GS_UNU_OPT_PROC_DIR, GS_UNU_OPT_STATE_DIR. Tests: bin/tests/global-unu-opt.test.sh
 set -euo pipefail
 
 GS_UNU_OPT_ROOT="${GS_UNU_OPT_ROOT:-/opt/${USER:-$(id -un)}}"
@@ -26,6 +26,10 @@ GS_UNU_OPT_APPS_DIR="${GS_UNU_OPT_APPS_DIR:-${XDG_DATA_HOME:-${HOME}/.local/shar
 GS_UNU_OPT_ENV_FILE="${GS_UNU_OPT_ENV_FILE:-${GLOBAL_STACK_DOCKER_ROOT_PATH:-/stack}/.env.local}"
 GS_UNU_OPT_PROC_DIR="${GS_UNU_OPT_PROC_DIR:-/proc}"
 GS_UNU_OPT_SANDBOX_OWNER="${GS_UNU_OPT_SANDBOX_OWNER:-root}"
+# Where an install records the sha256 of each Electron app's chrome-sandbox, taken from the
+# checksummed archive. OUTSIDE the /opt tree on purpose: /opt/$USER is 777 with no sticky bit, so a
+# record kept inside it could be rewritten by whatever planted the file it vouches for.
+GS_UNU_OPT_STATE_DIR="${GS_UNU_OPT_STATE_DIR:-${XDG_STATE_HOME:-${HOME}/.local/state}/global-unu-opt}"
 _OPT_STAGING="${GS_UNU_OPT_ROOT}/.gs-staging"
 _OPT_MACHINE="${GS_UNU_OPT_MACHINE:-$(uname -m)}"
 
@@ -371,12 +375,38 @@ _opt_electron_prepare() { # $1 id $2 staged tree
 _opt_etcher_prepare() { _opt_electron_prepare "$@"; }
 _opt_vscode_prepare() { _opt_electron_prepare "$@"; }
 _opt_devin_prepare() { _opt_electron_prepare "$@"; }
-# $1 id $2 INSTALLED tree → 0 fine or repaired, 1 wrong and sudo unavailable.
+# The repair below hands a file in a user-writable tree to `sudo chmod 4755`, so it must only ever
+# do that to the bytes a verified install put there (audit 2026-10-06 F3: it used to setuid-root
+# whatever sat at that path). An install records their sha256 here; nothing else writes it.
+_opt_sandbox_record() { printf '%s/%s.chrome-sandbox.sha256' "${GS_UNU_OPT_STATE_DIR}" "$1"; }
+_opt_sha256() { sha256sum <"$1" | cut -d' ' -f1; }
+# $1 id $2 INSTALLED tree → 0 the sandbox holds the recorded bytes; else 1 with the reason on stdout.
+_opt_sandbox_trusted() {
+  local rec want
+  rec="$(_opt_sandbox_record "$1")"
+  if [[ ! -s "${rec}" ]]; then
+    printf 'no sha256 was recorded for it by a verified install'
+    return 1
+  fi
+  want="$(head -n 1 "${rec}")"
+  if [[ "$(_opt_sha256 "$2/chrome-sandbox")" != "${want}" ]]; then
+    printf 'it does not match the sha256 recorded when it was installed from its checksummed archive'
+    return 1
+  fi
+}
+# There is no reinstall verb (an install runs only when the version differs): moving the tree
+# aside makes the tool read as missing, so --apply installs the pin and records its digest again.
+_opt_reinstall_hint() { printf "mv '%s' '%s.untrusted' && global-unu-opt.sh --apply --only=%s" "$2" "$2" "$1"; }
+# $1 id $2 INSTALLED tree → 0 fine or repaired, 1 wrong and refused (untrusted bytes) or sudo unavailable.
 _opt_electron_repair() {
-  local sb="$2/chrome-sandbox" was
+  local sb="$2/chrome-sandbox" was why
   [[ -f "${sb}" ]] || return 0
   _opt_sandbox_ok "$2" && return 0
   was="$(_opt_sandbox_state "$2")"
+  if ! why="$(_opt_sandbox_trusted "$1" "$2")"; then
+    _opt_err REFUSED "$1: chrome-sandbox is ${was} but ${why} — NOT made setuid root. Reinstall it: $(_opt_reinstall_hint "$1" "$2")"
+    return 1
+  fi
   if _opt_sandbox_fix "${sb}"; then
     _opt_log REPAIRED "$1: chrome-sandbox ${was} → root:root 4755"
     return 0
@@ -545,6 +575,14 @@ _opt_install() {
     _opt_rm_staging "${stage}"
     return 1
   fi
+  # The digest a later repair may setuid, taken HERE: these bytes come from an archive that passed
+  # its sha256, and the staged tree is not yet in the user-writable install dir. Written only once
+  # the swap has succeeded. A kind without a published checksum (none of the Electron ones today)
+  # records nothing, so its repair refuses.
+  local sandbox_sum=""
+  if _opt_is_electron "${id}" && [[ "${sum}" != none ]]; then
+    sandbox_sum="$(_opt_sha256 "${tree}/chrome-sandbox")"
+  fi
 
   # The download can take minutes: the app may have been started meanwhile.
   if [[ -d "${final}" ]] && _opt_running "${final}"; then
@@ -587,6 +625,11 @@ _opt_install() {
     _opt_err WARN "${id}: could not rename ${stage}/old to superseded — remove it by hand"
   fi
   _opt_rm_staging "${stage}" || _opt_err WARN "${id}: installed, but ${stage} could not be removed"
+  if [[ -n "${sandbox_sum}" ]] && ! { mkdir -p "${GS_UNU_OPT_STATE_DIR}" \
+    && printf '%s\n' "${sandbox_sum}" >"$(_opt_sandbox_record "${id}").gs-tmp" \
+    && mv "$(_opt_sandbox_record "${id}").gs-tmp" "$(_opt_sandbox_record "${id}")"; }; then
+    _opt_err WARN "${id}: installed, but its chrome-sandbox digest could not be recorded in ${GS_UNU_OPT_STATE_DIR} — a later repair will refuse it"
+  fi
   _opt_log INSTALLED "${id} ${pin}"
 }
 
@@ -676,7 +719,12 @@ main() {
     fi
     # --check stays read-only and sudo-free: it only reports what --apply would repair.
     if [[ "${mode}" == check ]] && _opt_is_electron "${id}" && [[ -f "${tree}/chrome-sandbox" ]] && ! _opt_sandbox_ok "${tree}"; then
-      _opt_log sandbox "${id}: chrome-sandbox is $(_opt_sandbox_state "${tree}"), must be ${GS_UNU_OPT_SANDBOX_OWNER}:4755 — Electron will not start; --apply repairs it"
+      local why
+      if why="$(_opt_sandbox_trusted "${id}" "${tree}")"; then
+        _opt_log sandbox "${id}: chrome-sandbox is $(_opt_sandbox_state "${tree}"), must be ${GS_UNU_OPT_SANDBOX_OWNER}:4755 — Electron will not start; --apply repairs it"
+      else
+        _opt_log sandbox "${id}: chrome-sandbox is $(_opt_sandbox_state "${tree}"), must be ${GS_UNU_OPT_SANDBOX_OWNER}:4755 — Electron will not start, and --apply will refuse to repair it: ${why}. Reinstall it: $(_opt_reinstall_hint "${id}" "${tree}")"
+      fi
     fi
     if [[ "${mode}" == apply && -d "${GS_UNU_OPT_ROOT}/${_OPT_DIR[${id}]}" ]] \
       && declare -F "_opt_${_OPT_KIND[${id}]}_launcher" >/dev/null; then
