@@ -199,7 +199,7 @@ JetBrains-built four, `%F` on the three editors, Sublime icon 48x48 → 256x256,
 | 7 | Hook + .profile + docs | S | done | f390fe5 | templates/shell/global-unu.sh, templates/shell/.profile, CLAUDE.md |
 | 8 | Deploy + live check | S | done | f390fe5 | - |
 | 9 | Electron sandbox: VS Code, Devin, Etcher — set on install, repair when current, report in --check | M | done | e713123 | templates/shell/global-unu-opt.sh, bin/tests/global-unu-opt.test.sh |
-| 10 | Audit 2026-10-06 F3: the sandbox repair setuids only bytes whose sha256 a verified install recorded; login-time setuid removed from profile.sh | S | doing | - | templates/shell/global-unu-opt.sh, templates/shell/profile.sh, bin/tests/global-unu-opt.test.sh, bin/tests/profile-shell.test.sh, CLAUDE.md |
+| 10 | Audit 2026-10-06 F3: the sandbox repair setuids only bytes whose sha256 a verified install recorded; login-time setuid removed from profile.sh | S | done | aaacfdf | templates/shell/global-unu-opt.sh, templates/shell/profile.sh, bin/tests/global-unu-opt.test.sh, bin/tests/profile-shell.test.sh, CLAUDE.md |
 <!-- /progress-block -->
 ### Blocked
 ### Needs input
