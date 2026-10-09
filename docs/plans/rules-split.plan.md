@@ -39,8 +39,8 @@ Verify: byte-preservation check, live `claude -p` probe per glob shape on a copy
 | 1 | Inventory consumers, prune-sample, glob targets, 3C advisor | S | done | - | - |
 | 2 | Generator gen_split.py written and run | M | done | - | - |
 | 3 | Run generator into scratch, byte-preservation check, review output | M | done | - | - |
-| 4 | Apply CLAUDE.md + .claude/rules/*.md; repoint env-update.md:1349 + startup-prologue.test.sh comments :104/:1107 | M | todo | - | CLAUDE.md, .claude/rules/**, templates/tips/env-update.md, bin/tests/startup-prologue.test.sh |
-| 5 | Live claude -p probe per glob shape on a copy (nested_memory count) + suites re-run | M | todo | - | - |
+| 4 | Live claude -p probe on a throwaway copy with the split laid over it: zero-read start set, one read per glob shape (local.*android*/**, env-update*.test.sh, global-unu*.sh, plain **), a negative control, AND a session started at docker/ reading docker/config/dist/bin/* (ancestor rules load? paths resolve from rules root or cwd?) — BEFORE any apply | M | todo | - | - |
+| 5 | Apply CLAUDE.md + .claude/rules/*.md; repoint env-update.md:1349 + startup-prologue.test.sh comments :104/:1107; suites re-run | M | todo | - | CLAUDE.md, .claude/rules/**, templates/tips/env-update.md, bin/tests/startup-prologue.test.sh |
 | 6 | One commit, 6C advisor | S | todo | - | - |
 <!-- /progress-block -->
 
@@ -48,6 +48,7 @@ Verify: byte-preservation check, live `claude -p` probe per glob shape on a copy
 - Durable copies: `var/claude/rules-split/gen_split.py` (generator) and `var/claude/rules-split/CLAUDE.md.pre-split` (snapshot of CLAUDE.md, 528 lines / 133,731 B, HEAD 29ca13b). CLAUDE.md itself is UNTOUCHED.
 - Run: `python3 var/claude/rules-split/gen_split.py var/claude/rules-split/CLAUDE.md.pre-split <outdir>` — writes `<outdir>/CLAUDE.md` + `<outdir>/.claude/rules/*.md`; asserts every substitution hits exactly once. Not yet executed.
 - 2026-10-09 resume: step 3 DONE. `var/claude/rules-split/verify_split.py` (independent line accounting, borrows only the *_FIX lists) → `LOST 8` (all bootstrap, intended) / `ADDED 136, unexpected 0`; sabotaged twice (dropped line → LOST-OUTSIDE, duplicated line → UNEXPECTED), both caught. All 40 `paths:` globs match ≥1 file on disk (`local.*android*/**` fs=5, git=0 — gitignored). Sizes: CLAUDE.md 133,731 → 71,891 B; largest rules file startup-tests.md 18,130 B (< 30 KB). No non-.md consumer parses CLAUDE.md text. Index lines for the phpbrew tmp and `$HOME` chmod gotchas now carry the observed symptom (advisor 3C item 5).
+- 6C advisor 2026-10-09: probe BEFORE apply (step order swapped) — if paths: rules do not load as claimed, a pushed CLAUDE.md loses 62 KB with nothing loading it back. The subdir probe decides whether moved gotchas survive sessions started at /stack/docker or /stack/projects/CV. Cross-refs verified both directions; difflib → 15 hunks (adjacent moves merge).
 - (was) Still to do in the check: verify every moved bullet appears verbatim (post-fix) in exactly one rules file; grep the output for leftover `above|below|bullet` refs; confirm the `--section` gotchas read right.
 - Advisor 3C items still open: probe the partial-segment globs (`local.*android*/**`, `env-update*.test.sh`, `global-unu*.sh`) + one negative control, start set in a separate zero-read call; report tokens as [Inferred: bytes/4]; ask the developer to paste `/context` after applying.
 - CLAUDE.md is classifier-blocked: attempt the copy ONCE; on a block hand over `! bash /tmp/apply-rules-split-20261009.sh`.
