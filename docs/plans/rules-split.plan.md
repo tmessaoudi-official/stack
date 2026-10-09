@@ -41,8 +41,8 @@ Verify: byte-preservation check, live `claude -p` probe per glob shape on a copy
 | 2 | Generator gen_split.py written and run | M | done | 3d86767 | - |
 | 3 | Run generator into scratch, byte-preservation check, review output | M | done | 3d86767 | - |
 | 4 | Live claude -p probe on a throwaway copy with the split laid over it: zero-read start set, one read per glob shape (local.*android*/**, env-update*.test.sh, global-unu*.sh, plain **), a negative control, AND a session started at docker/ reading docker/config/dist/bin/* (ancestor rules load? paths resolve from rules root or cwd?) — BEFORE any apply | M | done | 5703004 | - |
-| 5 | Apply CLAUDE.md + .claude/rules/*.md; repoint env-update.md:1349 + startup-prologue.test.sh comments :104/:1107; suites re-run | M | todo | - | CLAUDE.md, .claude/rules/**, templates/tips/env-update.md, bin/tests/startup-prologue.test.sh |
-| 6 | One commit, 6C advisor | S | todo | - | - |
+| 5 | Apply CLAUDE.md + .claude/rules/*.md; repoint env-update.md:1349 + startup-prologue.test.sh comments :104/:1107; suites re-run | M | done | 9b450fb | CLAUDE.md, .claude/rules/**, templates/tips/env-update.md, bin/tests/startup-prologue.test.sh |
+| 6 | One commit, 6C advisor | S | done | 9b450fb | - |
 <!-- /progress-block -->
 
 ### Resume notes (session restart 2026-10-09 ~22:30)
@@ -54,6 +54,8 @@ Verify: byte-preservation check, live `claude -p` probe per glob shape on a copy
 - Step 4 follow-up probes (6C advisor): Bash `head` → startup-scripts loaded; Write of a NEW file under dist/bin → loaded; Grep alone → nothing. Intake line in gen_split.py now says so; verifier re-run clean (LOST 8 bootstrap / unexpected 0); CLAUDE.md output 72,140 B. Step 5's apply script must `cmp` live CLAUDE.md against the snapshot and abort on drift, and regenerate + `diff -r` against the verified output before copying.
 - 6C round 2: no `claudeMdExcludes` in /stack/.claude/settings{,.local}.json or ~/.claude/settings.json; tree comment wording aligned with the intake line, verifier clean. Step 5 done-when includes a live probe at cwd /stack (p0 zero-read + p4 Read) AFTER the apply. Unprobed: `sed -i`/python3 rewrite of a matching file with no prior Read; sessions rooted at /stack/projects/CV.
 - Step 5 apply script must also: `git add -- CLAUDE.md .claude/rules/ templates/tips/env-update.md bin/tests/startup-prologue.test.sh`, assert `git ls-files .claude/rules | wc -l` == 7 before committing (abort otherwise), one commit for all.
+- Step 5 DONE: `/tmp/apply-rules-split-20261009.sh` ran (not classifier-blocked) → `9b450fb`, 10 paths. Post-apply probe on a FRESH worktree of 9b450fb (nothing laid over): zero-read → 0 rules; Read of the prologue → startup-scripts (session ids in probe-results.txt). startup-prologue.test.sh ALL PASSED 1109/1109; env-update batches → `var/claude/rules-split/eu-suite.log`.
+- 6C (step 5) → advisor clean. env-update.test.sh 928/928 (162+178+210+177+201). UNCERTIFIED-BY-EXECUTION: rules reaching SUBAGENTS that Read a matching file (matters for the milestone reviewer panel — probe one unnamed agent before the next panel); `sed -i`/python3 rewrite with no prior Read; sessions rooted at /stack/projects/CV; the ≈15.5k-token saving until a `/context` from a fresh /stack session replaces it.
 - (was) Still to do in the check: verify every moved bullet appears verbatim (post-fix) in exactly one rules file; grep the output for leftover `above|below|bullet` refs; confirm the `--section` gotchas read right.
 - Advisor 3C items still open: probe the partial-segment globs (`local.*android*/**`, `env-update*.test.sh`, `global-unu*.sh`) + one negative control, start set in a separate zero-read call; report tokens as [Inferred: bytes/4]; ask the developer to paste `/context` after applying.
 - CLAUDE.md is classifier-blocked: attempt the copy ONCE; on a block hand over `! bash /tmp/apply-rules-split-20261009.sh`.
