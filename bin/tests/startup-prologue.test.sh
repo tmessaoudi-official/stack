@@ -101,7 +101,7 @@ migrated_count=0
 while IFS= read -r -d '' f; do
   # Anchored: an unanchored match also hits the prologue's OWN header comment
   # ("#   source global-stack-base-prologue.sh"), inflating the printed count
-  # past the number quoted in CLAUDE.md. Section 1 already bash -n's the prologue.
+  # past the number quoted in .claude/rules/startup-scripts.md. Section 1 already bash -n's the prologue.
   if grep -q '^source global-stack-base-prologue\.sh$' "${f}"; then
     assert_pass "bash -n: $(basename "${f}")" bash -n "${f}"
     migrated_count=$((migrated_count + 1))
@@ -1104,7 +1104,7 @@ printf '\n%b── Section 19: web-server handlers report exit 1%b\n' "${C_BOLD}
 #
 # Row 30: the roots were STILL hardcoded to the three web-server trees, which is
 # the same defect one level up — the android handlers are members of the very same
-# prologue-exempt family (CLAUDE.md names them in the exclusion list), carried the
+# prologue-exempt family (.claude/rules/startup-scripts.md names them in the exclusion list), carried the
 # identical exit-1 blindness, and this section could not see them. `android-bin` is
 # now a discovery root, and every pattern below tolerates the POSIX `[ ... ]` form
 # the android scripts are written in as well as the web servers' `[[ ... ]]`:

@@ -1346,7 +1346,7 @@ GLOBAL_STACK_GRADLE_VERSION=8.12.1
 > `platforms;<digit>` — which is why the three API-level vars carried a `(lock:)` for a year
 > claiming the fetcher "returns the platform revision". The `sdkmanager` binary itself is
 > deprecated upstream (a shim over `android sdk`, whose `--sdk` is a GLOBAL option that goes
-> BEFORE the subcommand — see the setup script and the CLAUDE.md gotcha); none of that matters
+> BEFORE the subcommand — see the setup script and the `--sdk` gotcha in `.claude/rules/android.md`); none of that matters
 > to the fetcher any more.
 >
 > **Why the type is `androidsdk:` and not `sdkmanager:` (row 46).** Upstream deprecated
