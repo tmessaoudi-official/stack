@@ -6827,7 +6827,8 @@ t "t63b1: --force-auto does not override (lock:) — stays LOCK" bash -c "
     # but (lock:) must override to LOCK even with --force-auto
     printf '# @todo env-update (lock:pinned for stability) dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T63B1=18.3-alpine3.23\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --force-auto --env-file=\"\$f\" 2>/dev/null)
-    echo \"\$out\" | grep -qF '[LOCK   ]' || { echo \"expected [LOCK   ] with --force-auto, got: \$out\"; echo FAIL; exit 0; }
+    # 18.3 → 18.4 is a newer upstream, so the lock shows as [LOCK+UP] (section 128).
+    echo \"\$out\" | grep -qF '[LOCK+UP]' || { echo \"expected [LOCK+UP] with --force-auto, got: \$out\"; echo FAIL; exit 0; }
     echo \"\$out\" | grep -qF '[AUTO   ]' && { echo \"[AUTO   ] must not appear with (lock:) + --force-auto\"; echo FAIL; exit 0; } || true
     echo PASS
 "
@@ -6878,7 +6879,8 @@ t "t63c3: (manual) + (lock:) coexist — LOCK wins, (manual) ignored" bash -c "
     f=\${TMP_DIR}/t63c3.env
     printf '# @todo env-update (manual) (lock:lock wins) dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T63C3=18.3-alpine3.23\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null)
-    echo \"\$out\" | grep -qF '[LOCK   ]' || { echo \"expected LOCK when (manual)+(lock:) coexist: \$out\"; echo FAIL; exit 0; }
+    # 18.3 → 18.4 is a newer upstream, so the lock shows as [LOCK+UP] (section 128).
+    echo \"\$out\" | grep -qF '[LOCK+UP]' || { echo \"expected [LOCK+UP] when (manual)+(lock:) coexist: \$out\"; echo FAIL; exit 0; }
     echo \"\$out\" | grep -qF '[MANUAL ]' && { echo \"MANUAL must not appear when (lock:) present\"; echo FAIL; exit 0; } || true
     echo PASS
 "
@@ -6903,7 +6905,8 @@ t "t63d1: [LOCK   ] tag is exactly 9 chars wide" bash -c "
     export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t63d1_cache
     f=\${TMP_DIR}/t63d1.env
-    printf '# @todo env-update (lock:pinned) dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_T63D1=18.3-alpine3.23\n' > \"\$f\"
+    # Up to date (fixture returns 18.4) so the PLAIN tag shows; [LOCK+UP]'s width is t128a.
+    printf '# @todo env-update (lock:pinned) dockerhub:_/postgres:18 18.4-alpine3.23\nGLOBAL_STACK_T63D1=18.4-alpine3.23\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null)
     echo \"\$out\" | grep -qF '[LOCK   ]' || { echo \"expected '[LOCK   ]' (LOCK+3 spaces), got: \$out\"; echo FAIL; exit 0; }
     echo PASS
@@ -7062,7 +7065,8 @@ t "t63f3: full pipeline with lock-flag.env fixture — LOCK in output" bash -c "
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t63f3_cache
     out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run \
         --env-file='${FIXTURES}/lock-flag.env' 2>/dev/null)
-    echo \"\$out\" | grep -qF '[LOCK   ]' || { echo \"expected [LOCK   ] in full pipeline output: \$out\"; echo FAIL; exit 0; }
+    # lock-flag.env pins 18.3 against an 18.4 upstream → [LOCK+UP] (section 128).
+    echo \"\$out\" | grep -qF '[LOCK+UP]' || { echo \"expected [LOCK+UP] in full pipeline output: \$out\"; echo FAIL; exit 0; }
     echo PASS
 "
 
@@ -14168,6 +14172,132 @@ _t127f() (
   echo PASS
 )
 t "t127f: Android Studio — the build id (AI-…) is proposed intact; Quail 3 → 4 is AUTO" _t127f
+
+# ═══════════════════════════════════════════════════════════════════════════
+section "128 — [LOCK+UP]: a lock whose upstream moved ahead of its annotation"
+# ═══════════════════════════════════════════════════════════════════════════
+# A (lock:) record whose upstream is NEWER than its annotation used to print the
+# same [LOCK   ] tag as a dead lock, so a new release was easy to miss. "Newer" is
+# the classifier's own pre-lock verdict (AUTO/HOLD/MANUAL), so a downgrade, an
+# un-opted prerelease or a floating current never reads as +UP. Developer ruling
+# 2026-10-09: the tag fires only BEFORE --apply (annotation still behind
+# upstream); after --apply the record is a plain [LOCK   ] as before.
+# docs/plans/env-update-lock-up.plan.md. Fixture: dockerhub _/postgres:18 → 18.4-alpine3.23.
+
+_t128_check() {
+  # $1 dir  $2 annotation  $3 VAR= line  $4.. extra flags
+  local d="$1" ann="$2" var="$3"; shift 3
+  mkdir -p "$d"
+  printf '%s\n%s\n' "$ann" "$var" > "$d/t.env"
+  _GS_EU2_HTTP_FIXTURE_DIR="${FIXTURES}/http" _GS_EU2_CACHE_DIR="$d/c" NO_COLOR=1 \
+    bash "${ENV_UPDATE_V2}" --check "$@" --env-file="$d/t.env" 2>/dev/null
+}
+
+_t128a() (
+  out="$(_t128_check "${TMP_DIR}/t128a" \
+    '# @todo env-update (lock:pinned) dockerhub:_/postgres:18 18.3-alpine3.23' \
+    'GLOBAL_STACK_T128A=18.3-alpine3.23')"
+  grep -qE '^\[LOCK\+UP\]  GLOBAL_STACK_T128A +18\.3-alpine3\.23 → 18\.4-alpine3\.23  ← locked, update VAR= by hand: pinned$' <<<"$out" \
+    || { echo "want [LOCK+UP] 18.3 → 18.4 with the by-hand suffix; got:"; echo "$out"; echo FAIL; exit 0; }
+  grep -qF '[LOCK   ]' <<<"$out" && { echo "plain [LOCK   ] must not appear; got: $out"; echo FAIL; exit 0; }
+  echo PASS
+)
+t "t128a: upstream newer than the annotation → [LOCK+UP], 9 chars, 'update VAR= by hand'" _t128a
+
+_t128b() (
+  out="$(_t128_check "${TMP_DIR}/t128b" \
+    '# @todo env-update (lock:pinned) dockerhub:_/postgres:18 18.4-alpine3.23' \
+    'GLOBAL_STACK_T128B=18.4-alpine3.23')"
+  grep -qE '^\[LOCK   \]  GLOBAL_STACK_T128B +\(pinned\)$' <<<"$out" \
+    || { echo "want plain [LOCK   ] (pinned) when up to date; got:"; echo "$out"; echo FAIL; exit 0; }
+  grep -qF 'LOCK+UP' <<<"$out" && { echo "no +UP when up to date"; echo FAIL; exit 0; }
+  echo PASS
+)
+t "t128b: annotation == upstream → plain [LOCK   ], no +UP" _t128b
+
+# The state --apply leaves behind: annotation moved to upstream, VAR= still old.
+# Ruled: no +UP here — the annotation already carries the news.
+_t128c() (
+  out="$(_t128_check "${TMP_DIR}/t128c" \
+    '# @todo env-update (lock:pinned) dockerhub:_/postgres:18 18.4-alpine3.23' \
+    'GLOBAL_STACK_T128C=18.3-alpine3.23')"
+  grep -qE '^\[LOCK   \]  GLOBAL_STACK_T128C ' <<<"$out" \
+    || { echo "want plain [LOCK   ] after --apply moved the annotation; got:"; echo "$out"; echo FAIL; exit 0; }
+  grep -qF 'LOCK+UP' <<<"$out" && { echo "+UP must not fire after --apply (ruling 2026-10-09)"; echo FAIL; exit 0; }
+  echo PASS
+)
+t "t128c: post-apply shape (annotation 18.4, VAR=18.3) → plain [LOCK   ]" _t128c
+
+# A downgrade keeps its pre-existing arrow line byte-for-byte (ASSUMED 2026-10-09):
+# only the tag decision changed, the other LOCK lines were scoped out.
+_t128d() (
+  out="$(_t128_check "${TMP_DIR}/t128d" \
+    '# @todo env-update (lock:pinned) dockerhub:_/postgres:18 18.5-alpine3.23' \
+    'GLOBAL_STACK_T128D=18.5-alpine3.23')"
+  grep -qE '^\[LOCK   \]  GLOBAL_STACK_T128D +18\.5-alpine3\.23 → 18\.4-alpine3\.23  ← locked: pinned$' <<<"$out" \
+    || { echo "want the unchanged downgrade line under plain [LOCK   ]; got:"; echo "$out"; echo FAIL; exit 0; }
+  grep -qF 'LOCK+UP' <<<"$out" && { echo "a downgrade is never +UP"; echo FAIL; exit 0; }
+  echo PASS
+)
+t "t128d: upstream OLDER than the annotation → plain [LOCK   ], line unchanged" _t128d
+
+_t128e() (
+  out="$(_t128_check "${TMP_DIR}/t128e" \
+    '# @todo env-update (lock:pinned) dockerhub:_/postgres:18 18.3-alpine3.23' \
+    'GLOBAL_STACK_T128E=18.3-alpine3.23' --force-auto)"
+  grep -qE '^\[LOCK\+UP\]  GLOBAL_STACK_T128E ' <<<"$out" \
+    || { echo "want [LOCK+UP] under --force-auto (lock immunity kept); got:"; echo "$out"; echo FAIL; exit 0; }
+  grep -qF '[AUTO   ]' <<<"$out" && { echo "--force-auto must not break the lock"; echo FAIL; exit 0; }
+  echo PASS
+)
+t "t128e: --force-auto → still [LOCK+UP], never AUTO" _t128e
+
+# The live shape that motivated this: GLOBAL_STACK_SDKMAN_VERSION carries (override)(lock:).
+_t128f() (
+  out="$(_t128_check "${TMP_DIR}/t128f" \
+    '# @todo env-update (override) (lock:Version source code overriden, must be updated manually) dockerhub:_/postgres:18 18.3-alpine3.23' \
+    'GLOBAL_STACK_T128F=18.3-alpine3.23')"
+  grep -qE '^\[LOCK\+UP\]  GLOBAL_STACK_T128F +18\.3-alpine3\.23 → 18\.4-alpine3\.23  ← locked, update VAR= by hand: Version source code overriden, must be updated manually$' <<<"$out" \
+    || { echo "want [LOCK+UP] for the (override)(lock:) shape; got:"; echo "$out"; echo FAIL; exit 0; }
+  echo PASS
+)
+t "t128f: (override) + (lock:) — the SDKMAN shape → [LOCK+UP]" _t128f
+
+# Summary: '(M with update)' appears only when M > 0 — a run with none is byte-identical.
+_t128g() (
+  d="${TMP_DIR}/t128g"; mkdir -p "$d"
+  printf '%s\n' \
+    '# @todo env-update (lock:pinned) dockerhub:_/postgres:18 18.3-alpine3.23' 'GLOBAL_STACK_T128G1=18.3-alpine3.23' \
+    '# @todo env-update (lock:pinned) dockerhub:_/postgres:18 18.4-alpine3.23' 'GLOBAL_STACK_T128G2=18.4-alpine3.23' \
+    > "$d/t.env"
+  out="$(_GS_EU2_HTTP_FIXTURE_DIR="${FIXTURES}/http" _GS_EU2_CACHE_DIR="$d/c" NO_COLOR=1 \
+    bash "${ENV_UPDATE_V2}" --check --env-file="$d/t.env" 2>/dev/null)"
+  grep -qF ', 2 LOCK (1 with update), 0 SKIP,' <<<"$out" \
+    || { echo "want '2 LOCK (1 with update)' in the summary; got:"; echo "$out" | tail -3; echo FAIL; exit 0; }
+  out="$(_t128_check "${TMP_DIR}/t128g0" \
+    '# @todo env-update (lock:pinned) dockerhub:_/postgres:18 18.4-alpine3.23' \
+    'GLOBAL_STACK_T128G0=18.4-alpine3.23')"
+  grep -qF ', 1 LOCK, 0 SKIP,' <<<"$out" \
+    || { echo "want plain '1 LOCK,' when none has an update; got:"; echo "$out" | tail -3; echo FAIL; exit 0; }
+  echo PASS
+)
+t "t128g: summary — 'N LOCK (M with update)' only when M > 0" _t128g
+
+# The display change must not reach the write path: --apply on a +UP record still
+# rewrites only the annotation.
+_t128h() (
+  d="${TMP_DIR}/t128h"; mkdir -p "$d/c"; touch "$d/c/last-dry-run-ts"
+  printf '%s\n%s\n' '# @todo env-update (lock:pinned) dockerhub:_/postgres:18 18.3-alpine3.23' \
+    'GLOBAL_STACK_T128H=18.3-alpine3.23' > "$d/t.env"
+  _GS_EU2_HTTP_FIXTURE_DIR="${FIXTURES}/http" _GS_EU2_CACHE_DIR="$d/c" NO_COLOR=1 \
+    bash "${ENV_UPDATE_V2}" --apply --yes --env-file="$d/t.env" >/dev/null 2>&1 || true
+  want="$(printf '%s\n%s' '# @todo env-update (lock:pinned) dockerhub:_/postgres:18 18.4-alpine3.23' \
+    'GLOBAL_STACK_T128H=18.3-alpine3.23')"
+  [[ "$(cat "$d/t.env")" == "${want}" ]] \
+    || { echo "want annotation → 18.4, VAR= untouched; got:"; cat "$d/t.env"; echo FAIL; exit 0; }
+  echo PASS
+)
+t "t128h: --apply on a [LOCK+UP] record writes the annotation only" _t128h
 
 _flush_section
 

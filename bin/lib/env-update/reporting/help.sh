@@ -168,7 +168,7 @@ Environment variables:
 Default (no flags): print a parser summary with per-type breakdown and hints.
 
 Summary line format (shown after --check):
-  Summary: N AUTO, N SHA, N HOLD, N MANUAL, N LOCK, N SKIP, N FROZEN, N FALLBACK, N ERROR  (N checked)
+  Summary: N AUTO, N SHA, N HOLD, N MANUAL, N LOCK [(N with update)], N SKIP, N FROZEN, N FALLBACK, N ERROR  (N checked)
     ↳ N WATCH · N DRIFT (N fixable) · N DOWNGRADE · N FORCE-DOWNGRADE · N REPLACE-DRIFT · N +sha · N +replace [· +resolve N] [· N depends-on-warn]
 
   FALLBACK        — records that fell back to LOW major (range annotation, HIGH not yet in registry).

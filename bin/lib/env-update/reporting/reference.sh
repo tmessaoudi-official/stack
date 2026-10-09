@@ -572,6 +572,8 @@ DECISIONS EMITTED BY --check
   LOCK      (lock:REASON) flag set. VAR= is never changed; annotation
             CURRENT_VERSION may still be updated.
             Immune to --force-auto.
+            Tagged [LOCK+UP] (still counted as LOCK) while upstream is newer
+            than the annotation — i.e. before --apply moves the annotation.
 
   SHA       (use-sha) record with a new commit SHA available.
             --apply writes: annotation CURRENT_VERSION only (not VAR=).
@@ -587,7 +589,7 @@ DECISIONS EMITTED BY --check
   with --apply).
 
 DECISIONS SUMMARY LINE FORMAT
-  Summary: N AUTO, [N RESOLVE,] N SHA, N HOLD, N MANUAL, N LOCK, N SKIP, N FROZEN, N FALLBACK, N ERROR  (N checked)
+  Summary: N AUTO, [N RESOLVE,] N SHA, N HOLD, N MANUAL, N LOCK [(N with update)], N SKIP, N FROZEN, N FALLBACK, N ERROR  (N checked)
     ↳ N WATCH · N DRIFT (N fixable) · N DOWNGRADE · N FORCE-DOWNGRADE · N REPLACE-DRIFT · N +sha · N +replace [· +resolve N]
 
   RESOLVE column shown only when > 0 (consistent with FALLBACK handling).
@@ -971,7 +973,8 @@ _gs_eu2_show_reference_matrix() {
   printf '   Trigger:     lock_reason field non-empty → main.sh overrides → LOCK\n'
   printf '   Immune to:   --force-auto (cannot bypass lock gate)\n'
   printf '   --apply:     MAY update annotation CURRENT_VERSION; NEVER changes VAR=\n'
-  printf '   Summary:     N LOCK\n'
+  printf '   Display:     [LOCK+UP] while upstream is newer than the annotation (before --apply)\n'
+  printf '   Summary:     N LOCK [(N with update)]\n'
   printf '\n'
 
   printf '3. ERROR — fetch failure\n'

@@ -442,10 +442,10 @@ the fetch is in progress.
 [SKIP  ]  GLOBAL_STACK_NGINX_VERSION                   (up to date)
 [SKIP  ]  GLOBAL_STACK_OLD_VERSION                     (would downgrade)
 [MANUAL]  GLOBAL_STACK_ANDROID_BUILD_TOOLS_VERSION     18.3 → 19.0  ← manual flag
-[LOCK  ]  GLOBAL_STACK_MODSEC_MOD_VERSION              v0.0.9-beta1 → v0.0.12-beta1  ← locked: Pinned to master — no stable release
+[LOCK+UP]  GLOBAL_STACK_MODSEC_MOD_VERSION             v0.0.9-beta1 → v0.0.12-beta1  ← locked, update VAR= by hand: Pinned to master — no stable release
 [ERROR ]  GLOBAL_STACK_SOME_VERSION                    (fetch failed for github:owner/repo)
 ──────────────────────────────────────────────────────────────────────────────
-  Summary: 1 AUTO, 0 SHA, 2 HOLD, 1 MANUAL, 1 LOCK, 2 SKIP, 0 FROZEN, 0 FALLBACK, 1 ERROR  (8 checked)
+  Summary: 1 AUTO, 0 SHA, 2 HOLD, 1 MANUAL, 1 LOCK (1 with update), 2 SKIP, 0 FROZEN, 0 FALLBACK, 1 ERROR  (8 checked)
     ↳ 0 WATCH · 0 DRIFT (0 fixable) · 0 DOWNGRADE · 0 FORCE-DOWNGRADE · 0 REPLACE-DRIFT · 0 +sha · 0 +replace
 ```
 
@@ -468,7 +468,7 @@ The `+resolve N` and `N depends-on-warn` signals are omitted from the line when 
 | `SHA` | Decision: HEAD SHA update (annotation-only) |
 | `HOLD` | Decision: suppressed (major pin, prerelease guard, hold flag, etc.) |
 | `MANUAL` | Decision: manual flag; `--apply` alone will not update |
-| `LOCK` | Decision: lock flag; immune to `--apply` and `--force-auto --apply` |
+| `LOCK` | Decision: lock flag; immune to `--apply` and `--force-auto --apply`. Followed by ` (M with update)` when M of them are `[LOCK+UP]` — omitted when M is 0, so such a run prints the line unchanged |
 | `SKIP` | Decision: up-to-date, annotated skip, or unknown fetcher type |
 | `FROZEN` | Subtype of SKIP: `(skip:REASON)` annotation was present |
 | `FALLBACK` | Overlay: range annotation fell back to LOW major (HIGH not yet in registry). **Not added to total** — the record is also counted as AUTO or SKIP. |
@@ -548,7 +548,8 @@ The `_change` suffix is built from the decision and record state:
 | `SKIP` downgrade detected | `  (would downgrade)` |
 | `SKIP` without error (up to date) | `  (up to date)` |
 | `HOLD` / `AUTO` / `MANUAL` with `proposed != current` | `  current_version → proposed_version[reason]` |
-| `LOCK` with `proposed != current` | `  current_version → proposed_version  ← locked: REASON` |
+| `LOCK` with a newer upstream (`[LOCK+UP]`) | `  current_version → proposed_version  ← locked, update VAR= by hand: REASON` |
+| `LOCK` with any other `proposed != current` (downgrade, un-opted prerelease) | `  current_version → proposed_version  ← locked: REASON` |
 | `LOCK` with `proposed == current` (or no proposed) | `  (REASON)` where REASON is the lock_reason value |
 | Any decision with `error_message` (no proposed) | `  (error_message text)` |
 | Otherwise | `` (empty) |
@@ -565,6 +566,7 @@ inspect the record.
 | `[HOLD  ]` | Proposed version escapes `major_hint` pin | `  ← major pin (Y.x available)` where Y=proposed major |
 | `[MANUAL]` | `(override)` or `(manual)` annotation flag | `  ← manual flag` |
 | `[LOCK  ]` | `(lock:REASON)` annotation flag | `  ← locked: REASON` appended to version arrow; or `  (REASON)` when up to date |
+| `[LOCK+UP]` | `(lock:REASON)` and upstream is newer than the annotation | `  ← locked, update VAR= by hand: REASON` |
 | `[SKIP  ]` | Proposed is a prerelease, current is stable | `  (proposed is prerelease — pin manually when stable ships)` |
 | `[SKIP  ]` | Proposed is older than current (downgrade) | `  (would downgrade)` in place of arrow |
 | `[SKIP  ]` | Up to date | `  (up to date)` — no label needed |
@@ -582,6 +584,7 @@ than showing a placeholder.
 | `[HOLD  ]` | A newer version exists but it crosses a major version boundary, or the proposed version escapes the major_hint pin. Requires human review before upgrading. Reason label explains which case triggered. |
 | `[MANUAL]` | The annotation has `(override)` or `(manual)` flag, OR the fetcher (e.g. `androidsdk`) explicitly sets `manual=true`. The proposed version is shown but will never be auto-applied. |
 | `[LOCK  ]` | The annotation has `(lock:REASON)`. The fetcher ran and `proposed_version` is populated, but the variable is locked — `--apply` updates only the annotation version token; the `VAR=` line is never touched. Immune to `--force-auto`. Does not fire when the fetcher returned ERROR or a skip-gate `(skip:)` was active. |
+| `[LOCK+UP]` | A `[LOCK  ]` whose upstream is NEWER than the annotation's version — the verdict the lock replaced was AUTO, HOLD or MANUAL, so a downgrade, an un-opted prerelease or a floating current never shows it. Still a LOCK: same counter, same `--apply` (annotation only), same `--force-auto` immunity. Fires only **before** `--apply`: once `--apply` has moved the annotation to the new version the record is a plain `[LOCK  ]` again, and only the `[DRIFT]` sub-line (annotation vs `VAR=`) remains (ruling 2026-10-09, `docs/plans/env-update-lock-up.plan.md`). |
 | `[SKIP  ]` | The variable is already at the latest version (`current == proposed`), or the fetcher returned no viable candidates, or the current version is a floating reference (`latest`, `nightly`, etc.), or the proposed would downgrade the current version, or the proposed is a prerelease while the current is stable. Also used when a fetcher sets `error_message` but no `decision`. |
 | `[ERROR ]` | Network failure, HTTP error (4xx/5xx), rate limiting after 3 retries, or a parse failure in the API response. The fetch was attempted and definitively failed. |
 | `[RESOLVE]` | Float-to-concrete resolution. Current is a floating ref (`latest`, `stable`, `lts`, …) and the fetcher returned a concrete version. Informational only — never auto-applied; requires `--apply --apply-resolve` to pin. |

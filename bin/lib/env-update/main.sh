@@ -209,12 +209,21 @@ _gs_eu2_classify_record() {
 
   # Phase 3: lock gate — (lock:REASON) overrides AUTO/HOLD/MANUAL/SKIP(classifier) to LOCK.
   # Fires AFTER force-auto upgrade. Does NOT override ERROR or skip-gate SKIP.
-  local _cr_skip_reason _cr_lock_reason
+  # lock_update records whether the verdict the lock replaces was a forward move
+  # (AUTO/HOLD/MANUAL): upstream is newer than the annotation, shown as [LOCK+UP].
+  # Read from the record, not Phase 1's local, so a fetcher-set decision counts too;
+  # a downgrade, un-opted prerelease or floating current classified SKIP/RESOLVED
+  # and never reads as an update.
+  local _cr_skip_reason _cr_lock_reason _cr_pre_lock
   _cr_skip_reason="$(_gs_eu2_record_get "${_cr_i}" skip_reason)"
   _cr_lock_reason="$(_gs_eu2_record_get "${_cr_i}" lock_reason)"
+  _cr_pre_lock="$(_gs_eu2_record_get "${_cr_i}" decision)"
   if [[ -n "${_cr_lock_reason}" && \
-        "$(_gs_eu2_record_get "${_cr_i}" decision)" != "ERROR" && \
+        "${_cr_pre_lock}" != "ERROR" && \
         -z "${_cr_skip_reason}" ]]; then
+    case "${_cr_pre_lock}" in
+      AUTO | HOLD | MANUAL) _gs_eu2_record_set "${_cr_i}" lock_update "true" ;;
+    esac
     _gs_eu2_record_set "${_cr_i}" decision "LOCK"
     _gs_eu2_record_set "${_cr_i}" error_message "${_cr_lock_reason}"
   fi
@@ -318,7 +327,11 @@ _gs_eu2_compute_reason_label() {
       _rl_reason="  ← manual flag"
       ;;
     LOCK)
-      _rl_reason="  ← locked: ${_rl_lock_reason}"
+      if [[ "$(_gs_eu2_record_get "${_rl_i}" lock_update)" == "true" ]]; then
+        _rl_reason="  ← locked, update VAR= by hand: ${_rl_lock_reason}"
+      else
+        _rl_reason="  ← locked: ${_rl_lock_reason}"
+      fi
       ;;
   esac
 
@@ -536,7 +549,7 @@ _gs_eu2_should_hide_record() {
 #          $10 n_watch           $11 n_drift         $12 n_drift_fixable
 #          $13 n_downgrade       $14 n_downgrade_force $15 n_hidden
 #          $16 n_sha_anno        $17 n_replace_drift  $18 n_replace_cascade
-#          $19 n_resolved        $20 n_warn_depends_on
+#          $19 n_resolved        $20 n_warn_depends_on $21 n_lock_up
 # Reads:   _GS_EU2_CFG[no_drift]
 # Prints:  separator line + summary line + optional secondary signals sub-line to stdout
 # Returns: 0 always
@@ -562,6 +575,7 @@ _gs_eu2_print_check_summary() {
   local _ps_n_replace_cascade="${18}"
   local _ps_n_resolved="${19}"
   local _ps_n_warn_depends_on="${20}"
+  local _ps_n_lock_up="${21:-0}"
 
   local _ps_total=$(( _ps_n_auto + _ps_n_hold + _ps_n_skip + _ps_n_error + _ps_n_manual + _ps_n_sha + _ps_n_lock + _ps_n_frozen ))
   printf '%-80s\n' "──────────────────────────────────────────────────────────────────────────────"
@@ -570,13 +584,17 @@ _gs_eu2_print_check_summary() {
   # RESOLVE column: shown only when at least one RESOLVED record exists
   local _ps_resolve_col=""
   (( _ps_n_resolved > 0 )) && _ps_resolve_col=" ${_ps_n_resolved} RESOLVE,"
+  # LOCK breakdown: shown only when a lock has a newer upstream ([LOCK+UP]), so a
+  # run without one prints the summary byte-identical to before.
+  local _ps_lock_up_col=""
+  (( _ps_n_lock_up > 0 )) && _ps_lock_up_col=" (${_ps_n_lock_up} with update)"
   # Counts colored via _gs_eu2_cnum (category color when > 0, plain when 0/off); SKIP stays plain.
-  printf '  Summary: %s AUTO,%s %s SHA, %s HOLD, %s MANUAL, %s LOCK, %s SKIP, %s FROZEN, %s FALLBACK, %s ERROR  (%s)\n' \
+  printf '  Summary: %s AUTO,%s %s SHA, %s HOLD, %s MANUAL, %s LOCK%s, %s SKIP, %s FROZEN, %s FALLBACK, %s ERROR  (%s)\n' \
     "$(_gs_eu2_cnum "${_ps_n_auto}" "${_GS_EU2_C_GREEN}")" "${_ps_resolve_col}" \
     "$(_gs_eu2_cnum "${_ps_n_sha}" "${_GS_EU2_C_GREEN}")" \
     "$(_gs_eu2_cnum "${_ps_n_hold}" "${_GS_EU2_C_YELLOW}")" \
     "$(_gs_eu2_cnum "${_ps_n_manual}" "${_GS_EU2_C_YELLOW}")" \
-    "$(_gs_eu2_cnum "${_ps_n_lock}" "${_GS_EU2_C_CYAN}")" \
+    "$(_gs_eu2_cnum "${_ps_n_lock}" "${_GS_EU2_C_CYAN}")" "${_ps_lock_up_col}" \
     "$(_gs_eu2_cnum "${_ps_n_skip}" "")" \
     "$(_gs_eu2_cnum "${_ps_n_frozen}" "${_GS_EU2_C_CYAN}")" \
     "$(_gs_eu2_cnum "${_ps_n_fallback}" "${_GS_EU2_C_YELLOW}")" \
@@ -637,6 +655,7 @@ _gs_eu2_run_check() {
   _GS_EU2_CACHE_TTL="${_GS_EU2_CFG[cache_ttl]:-3600}"
 
   local _n_auto=0 _n_hold=0 _n_skip=0 _n_error=0 _n_manual=0 _n_sha=0 _n_lock=0 _n_frozen=0
+  local _n_lock_up=0
   local _n_fallback=0 _n_watch=0 _n_drift=0 _n_drift_fixable=0 _n_downgrade=0 _n_downgrade_force=0 _n_hidden=0 _n_sha_anno=0 _n_replace_drift=0 _n_replace_cascade=0 _n_resolved=0 _n_warn_depends_on=0
 
   # Initialize and arm live tally (TTY-only, gate checked inside)
@@ -817,7 +836,16 @@ _gs_eu2_run_check() {
       ERROR)  _tag="[ERROR  ]"; (( ++_n_error ))  || true ;;
       MANUAL) _tag="[MANUAL ]"; (( ++_n_manual )) || true ;;
       SHA)    _tag="[SHA    ]"; (( ++_n_sha ))    || true ;;
-      LOCK)     _tag="[LOCK   ]"; (( ++_n_lock ))     || true ;;
+      LOCK)
+        # [LOCK+UP]: upstream moved ahead of the annotation (lock_update, Phase 3).
+        # Still a LOCK — counted in _n_lock; _n_lock_up feeds the summary breakdown.
+        if [[ "$(_gs_eu2_record_get "${_i}" lock_update)" == "true" ]]; then
+          _tag="[LOCK+UP]"; (( ++_n_lock_up )) || true
+        else
+          _tag="[LOCK   ]"
+        fi
+        (( ++_n_lock )) || true
+        ;;
       RESOLVED) _tag="[RESOLVE]"; (( ++_n_resolved )) || true ;;
       *)        _tag="[SKIP   ]"; (( ++_n_skip ))     || true ;;
     esac
@@ -914,7 +942,7 @@ _gs_eu2_run_check() {
     "${_n_fallback}" "${_n_watch}" "${_n_drift}" "${_n_drift_fixable}" \
     "${_n_downgrade}" "${_n_downgrade_force}" "${_n_hidden}" \
     "${_n_sha_anno}" "${_n_replace_drift}" "${_n_replace_cascade}" \
-    "${_n_resolved}" "${_n_warn_depends_on}"
+    "${_n_resolved}" "${_n_warn_depends_on}" "${_n_lock_up}"
 
   # Exit non-zero when any ERROR decisions were recorded — callers can detect fetch failures.
   (( _n_error > 0 )) && return 1 || return 0
