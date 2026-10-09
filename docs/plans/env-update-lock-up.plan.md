@@ -4,9 +4,9 @@
 - [2026-10-09 14:51] AGREED: Lock with a newer upstream version shows the 9-char tag [LOCK+UP] (developer choice).
 - [2026-10-09 14:51] AGREED: [LOCK+UP] fires only before --apply; after apply the plain [LOCK] behaviour is unchanged (developer choice).
 - [2026-10-09 14:51] AGREED: Fix only the summary breakdown (N LOCK (M with update)); DRIFT advice, dead-lock DRIFT counting, apply line and tips 8-char paragraph stay as they are (developer choice).
-- [2026-10-09 14:51] ASSUMED (review): A LOCK with a non-newer proposed (downgrade/prerelease) keeps its existing arrow line byte-identical — scoped out by the developer; pinned by a test. Alternatives: swap to the (reason) form.
-- [2026-10-09 14:51] ASSUMED (review): [LOCK+UP] keeps LOCK's cyan colour. Alternatives: yellow like HOLD/MANUAL.
-- [2026-10-09 14:51] ASSUMED (review): Live tally keeps the plain LOCK total; only the final summary gets the breakdown. Alternatives: mirror it in tally.sh.
+- [2026-10-09 14:51] AGREED (ratified ASSUMED): A LOCK with a non-newer proposed (downgrade/prerelease) keeps its existing arrow line byte-identical — scoped out by the developer; pinned by a test. Alternatives: swap to the (reason) form.
+- [2026-10-09 14:51] AGREED (ratified ASSUMED): [LOCK+UP] keeps LOCK's cyan colour. Alternatives: yellow like HOLD/MANUAL.
+- [2026-10-09 14:51] AGREED (ratified ASSUMED): Live tally keeps the plain LOCK total; only the final summary gets the breakdown. Alternatives: mirror it in tally.sh.
 
 ## Formal Plan
 
