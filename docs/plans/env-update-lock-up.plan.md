@@ -19,7 +19,7 @@
 <!-- progress-block v1 -->
 | # | Step | Size | State | Evidence | Files |
 |---|------|------|-------|----------|-------|
-| 1 | [LOCK+UP] tag + summary breakdown + tests + docs | M | doing | - | bin/lib/env-update/**, bin/tests/env-update.test.sh, templates/tips/env-update.md |
+| 1 | [LOCK+UP] tag + summary breakdown + tests + docs | M | done | 797ef5b | bin/lib/env-update/**, bin/tests/env-update.test.sh, templates/tips/env-update.md |
 <!-- /progress-block -->
 ### Blocked
 ### Needs input
