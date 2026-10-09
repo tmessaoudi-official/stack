@@ -38,9 +38,9 @@ Verify: byte-preservation check, live `claude -p` probe per glob shape on a copy
 | # | Step | Size | State | Evidence | Files |
 |---|------|------|-------|----------|-------|
 | 1 | Inventory consumers, prune-sample, glob targets, 3C advisor | S | done | - | - |
-| 2 | Generator gen_split.py written and run | M | done | - | - |
-| 3 | Run generator into scratch, byte-preservation check, review output | M | done | - | - |
-| 4 | Live claude -p probe on a throwaway copy with the split laid over it: zero-read start set, one read per glob shape (local.*android*/**, env-update*.test.sh, global-unu*.sh, plain **), a negative control, AND a session started at docker/ reading docker/config/dist/bin/* (ancestor rules load? paths resolve from rules root or cwd?) — BEFORE any apply | M | done | - | - |
+| 2 | Generator gen_split.py written and run | M | done | 3d86767 | - |
+| 3 | Run generator into scratch, byte-preservation check, review output | M | done | 3d86767 | - |
+| 4 | Live claude -p probe on a throwaway copy with the split laid over it: zero-read start set, one read per glob shape (local.*android*/**, env-update*.test.sh, global-unu*.sh, plain **), a negative control, AND a session started at docker/ reading docker/config/dist/bin/* (ancestor rules load? paths resolve from rules root or cwd?) — BEFORE any apply | M | done | 5703004 | - |
 | 5 | Apply CLAUDE.md + .claude/rules/*.md; repoint env-update.md:1349 + startup-prologue.test.sh comments :104/:1107; suites re-run | M | todo | - | CLAUDE.md, .claude/rules/**, templates/tips/env-update.md, bin/tests/startup-prologue.test.sh |
 | 6 | One commit, 6C advisor | S | todo | - | - |
 <!-- /progress-block -->
@@ -53,6 +53,7 @@ Verify: byte-preservation check, live `claude -p` probe per glob shape on a copy
 - Step 4 probe DONE (2026-10-09, claude 2.1.296, haiku, `disableAllHooks`; ids in `var/claude/rules-split/probe-results.txt`): zero-read start → 0 rules loaded; `local.*android*/**` → android+docker-images; `env-update*.test.sh` → env-update; `global-unu*.sh` → global-unu-opt; plain `**` → startup-scripts; negative control (docs/BLAST-RADIUS.md) → none; session started at `docker/` reading the prologue → startup-scripts (ancestor rules load, paths resolve from the rules root). NOT probed: a session rooted at `/stack/projects/CV` (gitignored, its own project root) — its files match no glob anyway. Start-set saving ≈ 61,840 B ≈ 15.5k tokens [Inferred: bytes/4].
 - Step 4 follow-up probes (6C advisor): Bash `head` → startup-scripts loaded; Write of a NEW file under dist/bin → loaded; Grep alone → nothing. Intake line in gen_split.py now says so; verifier re-run clean (LOST 8 bootstrap / unexpected 0); CLAUDE.md output 72,140 B. Step 5's apply script must `cmp` live CLAUDE.md against the snapshot and abort on drift, and regenerate + `diff -r` against the verified output before copying.
 - 6C round 2: no `claudeMdExcludes` in /stack/.claude/settings{,.local}.json or ~/.claude/settings.json; tree comment wording aligned with the intake line, verifier clean. Step 5 done-when includes a live probe at cwd /stack (p0 zero-read + p4 Read) AFTER the apply. Unprobed: `sed -i`/python3 rewrite of a matching file with no prior Read; sessions rooted at /stack/projects/CV.
+- Step 5 apply script must also: `git add -- CLAUDE.md .claude/rules/ templates/tips/env-update.md bin/tests/startup-prologue.test.sh`, assert `git ls-files .claude/rules | wc -l` == 7 before committing (abort otherwise), one commit for all.
 - (was) Still to do in the check: verify every moved bullet appears verbatim (post-fix) in exactly one rules file; grep the output for leftover `above|below|bullet` refs; confirm the `--section` gotchas read right.
 - Advisor 3C items still open: probe the partial-segment globs (`local.*android*/**`, `env-update*.test.sh`, `global-unu*.sh`) + one negative control, start set in a separate zero-read call; report tokens as [Inferred: bytes/4]; ask the developer to paste `/context` after applying.
 - CLAUDE.md is classifier-blocked: attempt the copy ONCE; on a block hand over `! bash /tmp/apply-rules-split-20261009.sh`.
