@@ -22,10 +22,13 @@ infra portion explicitly, but do NOT auto-route anything written inside `/stack/
 
 ## Config isolation
 
-This directory's `.claude/settings.json` sets `claudeMdExcludes: ["/stack/CLAUDE.md"]`
-so the parent `/stack/CLAUDE.md` (which carries `/stack`-only infrastructure rules, gates and
-conventions) is NOT loaded when working here. The global `~/.claude/CLAUDE.md` still loads — that's
-correct, it contains the domain-agnostic reasoning framework.
+Claude Code reads an ancestor directory's CLAUDE.md but ignores an ancestor's settings (probed
+2026-10-03), so the isolation lives in each project: every project root and container below this
+directory excludes both the `/stack` infrastructure file and THIS file via `claudeMdExcludes` in its
+own `.claude/settings.local.json` (gitignored), written by `~/.claude/bin/stack-claude-md-scope.sh apply`
+(`/gates-bypass stack-md`). A new project loads both until that is re-run. A session in this directory
+itself excludes only the `/stack` file (`.claude/settings.json`). The global `~/.claude/CLAUDE.md`
+always loads — it carries the domain-agnostic reasoning framework.
 
 ## Per-project config
 
