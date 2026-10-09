@@ -13,7 +13,7 @@
 1. `(lock:)` record whose pre-lock classifier verdict was AUTO/HOLD/MANUAL (a real newer upstream, not a downgrade/prerelease/float) displays `[LOCK+UP]` (9 chars, cyan) with `← locked, update VAR= by hand: <reason>`. Decision stays `LOCK`; apply path untouched.
 2. Fires only BEFORE `--apply` (annotation version != upstream). After apply the record shows plain `[LOCK   ]` as today.
 3. Summary: `N LOCK (M with update)` only when M > 0 — zero-case byte-identical.
-4. Tests: env-update.test.sh section 128 (red first) + refit t63b1/t63c3/t63d1; tips doc rows.
+4. Tests: env-update.test.sh section 128 (red first) + refit t63b1/t63c3/t63f3 (now [LOCK+UP]) and t63d1 (plain tag, up-to-date fixture); tips doc rows.
 
 ## Status
 <!-- progress-block v1 -->
