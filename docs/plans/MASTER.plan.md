@@ -927,6 +927,7 @@ Rule 17).
   and `android.cli` mtimes, `android.sdkmanager` absent; boot log not read]. Still
   `UNCERTIFIED-BY-EXECUTION`: lock-serialized tier-03 install, a web-server handler writing its
   error token, consumer fail-fast behind a failed web server (see `### Blocked`).
+- [2026-10-17 09:33] ASSUMED (review): `/progress --deep` lens agents scope-drift, critical-path, fragile, undocumented and todo-clusters each run on sonnet — source: the skill's model table (no override in `state/model-overrides.json`). Alternatives: opus (judgment), the session model.
 
 ## Planning-time verified state (2026-08-31/09-01)
 
