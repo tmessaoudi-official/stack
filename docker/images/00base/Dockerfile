@@ -1,5 +1,5 @@
 # shellcheck disable=SC2148
-ARG GLOBAL_STACK_IMAGE_UBUNTU_VERSION=resolute-20260912
+ARG GLOBAL_STACK_IMAGE_UBUNTU_VERSION=resolute-20261006
 
 # hurl — pin-audit tranche 2 step 14c (ruling 2026-09-25 09:58). hurl's only Linux x86_64
 # build links libxml2.so.2, which Ubuntu 26.04 no longer ships (it has libxml2.so.16), so
