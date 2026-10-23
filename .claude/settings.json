@@ -1,6 +1,5 @@
 {
   "permissions": {
-    "defaultMode": "auto",
     "ask": [
       "Bash(bin/env-update.sh --apply*)",
       "Bash(bash bin/env-update.sh --apply*)",

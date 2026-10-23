@@ -1,7 +1,5 @@
 {
-  "permissions": {
-    "defaultMode": "auto"
-  },
+  "permissions": {},
   "claudeMdExcludes": [
     "/stack/CLAUDE.md"
   ]

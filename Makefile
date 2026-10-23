@@ -30,7 +30,7 @@ SERVICES_SHELL := \
 	02rbenv 02rust 02sdkman 02sonarqube \
 	03flutter3 03java17-zulu 03java21-zulu 03java27-zulu \
 	03node26 03node24 03nodeedge \
-	03php8-4 03php8-5 03phpedge \
+	03php8-4 03php8-5 03php8-6 03phpedge \
 	03python3 03ruby3 03ruby4 \
 	04android 04phpmyadmin 04serverless-framework \
 	05edge 05stable

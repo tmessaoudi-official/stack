@@ -1,0 +1,24 @@
+#!/bin/bash
+
+set -xeE -o pipefail
+shopt -s extdebug
+IFS=$'\n\t'
+source global-stack-base-prologue.sh
+
+if [[ ! -f ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/frankenphp/frankenphp-${GLOBAL_STACK_FRANKENPHP_VERSION}.tar.gz ]]; then
+    FRANKENPHP_REFS_VALUE=$( { [[ "${GLOBAL_STACK_FRANKENPHP_VERSION}" =~ ^[0-9a-f]{7,40}$ ]] && echo "archive/${GLOBAL_STACK_FRANKENPHP_VERSION}"; } || { [[ "${GLOBAL_STACK_FRANKENPHP_VERSION}" =~ ^v?[0-9]+(\.[0-9]+)*(-.+)?$ ]] && echo "archive/refs/tags/${GLOBAL_STACK_FRANKENPHP_VERSION}"; } || echo "archive/refs/heads/${GLOBAL_STACK_FRANKENPHP_VERSION}" )
+    curl --connect-timeout 30 --max-time 300 -LsS "https://github.com/dunglas/frankenphp/${FRANKENPHP_REFS_VALUE}.tar.gz" -o ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/frankenphp/frankenphp-${GLOBAL_STACK_FRANKENPHP_VERSION}.tar.gz
+fi
+
+cd ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/frankenphp
+if [[ ! -d ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/frankenphp/frankenphp-${GLOBAL_STACK_FRANKENPHP_VERSION}-${PHP_VERSION_NAME} ]]; then
+  mkdir -p ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/frankenphp/frankenphp-${GLOBAL_STACK_FRANKENPHP_VERSION}-${PHP_VERSION_NAME}
+fi
+
+tar -xzf ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/frankenphp/frankenphp-${GLOBAL_STACK_FRANKENPHP_VERSION}.tar.gz --directory=${GLOBAL_STACK_DOCKER_TOOLS_PATH}/frankenphp/frankenphp-${GLOBAL_STACK_FRANKENPHP_VERSION}-${PHP_VERSION_NAME} --strip-components=1
+
+cd ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/frankenphp/frankenphp-${GLOBAL_STACK_FRANKENPHP_VERSION}-${PHP_VERSION_NAME}/caddy/frankenphp
+# LD_LIBRARY_PATH="$(php-config --lib-dir):${LD_LIBRARY_PATH}" CGO_CFLAGS="$(php-config --includes) -g -O0" CGO_LDFLAGS="-L$(php-config --lib-dir) $(php-config --ldflags) $(php-config --libs) -g" go build -ldflags="-v" -o ${PHPBREW_BIN}/frankenphp-${GLOBAL_STACK_FRANKENPHP_VERSION}-${PHP_VERSION_NAME} || true
+LD_LIBRARY_PATH="$(php-config --lib-dir):${LD_LIBRARY_PATH}" CGO_CFLAGS="$(php-config --includes)" CGO_LDFLAGS="-L$(php-config --lib-dir) $(php-config --ldflags) $(php-config --libs)" go build -ldflags="-v" -o ${PHPBREW_BIN}/frankenphp-${GLOBAL_STACK_FRANKENPHP_VERSION}-${PHP_VERSION_NAME} || true
+
+rm -rf ${GLOBAL_STACK_DOCKER_TOOLS_PATH}/frankenphp/frankenphp-${GLOBAL_STACK_FRANKENPHP_VERSION}-${PHP_VERSION_NAME}

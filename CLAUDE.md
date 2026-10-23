@@ -151,7 +151,7 @@ Services live in `docker/images/<tier><name>/` and are numbered by build depende
 | `00*` | Base Ubuntu image + core tooling (Go, Zig, Docker-in-Docker, mkcert, hadolint, shellcheck) | `00base` |
 | `01*` | Infrastructure: databases, cache, web servers, mail, cloud simulators | MySQL9, Postgres18, Redis, Nginx, Caddy, Mailpit, LocalStack |
 | `02*` | Language/version managers — install tools into shared `tools/` volume | NVM, PHPBrew, PyEnv, RbEnv, SDKMAN, Rust, FVM |
-| `03*` | Pre-configured language runtimes (depend on tier 02 being healthy) | Node 24/26/edge, PHP 8.4/8.5/edge, Python 3, Ruby 3/4, Java 17/21/26, Flutter 3 |
+| `03*` | Pre-configured language runtimes (depend on tier 02 being healthy) | Node 24/26/edge, PHP 8.4/8.5/8.6/edge, Python 3, Ruby 3/4, Java 17/21/26, Flutter 3 |
 | `04*` | Specialized application tools | PhpMyAdmin, Android SDK, Serverless Framework |
 | `05*` | Combined all-in-one images (`05stable` / `05edge`) | All tier 03 runtimes in one container |
 | `local.*` | Machine-specific custom images (git-ignored) | Project-specific variants |
