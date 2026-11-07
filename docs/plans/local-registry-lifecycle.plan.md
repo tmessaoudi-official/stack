@@ -12,8 +12,25 @@
   upheld 6 (1 P2, 5 P3), one at lower severity, and judged one a repeat of a logged follow-up.
   They are fixed in the commit after `3b7fc09` ("fix: close the registry panel round 4
   findings"). The 5-round cap leaves no room for two consecutive clean rounds, so round 5 is
-  the LAST panel (ruling 17:04). If it is clean, the milestone closes with ONE clean round,
-  disclosed. Then step 9, the live recovery (the developer's).
+  the LAST panel (ruling 17:04). Round 5 on `e8323a6` was NOT clean: 2 P2 and 9 P3. By the
+  developer's ruling at the cap, the P2s are fixed test-first, the P3s are fixed, and `advisor()`
+  certifies at 6C, with no sixth panel round. **The milestone therefore closes without a clean
+  panel round**, and that is disclosed. Then step 9, the live recovery (the developer's).
+- **Panel round 5 fixes**:
+  - `check-compose` calls `docker compose … config -q` itself instead of going through
+    `docker-cli`, which dragged in `create-paths`: its strict `touch`/`chmod` of `tools/elapsed`
+    failed when a root container had re-created the file, and that stopped every composite with a
+    false "does not parse" (R5-I1). It now names a missing `.env.local` first (R5-3).
+  - New tests: 5.20 pins `config -q` (a stub sentinel shows a dropped `-q`), 5.21 is the root-owned
+    `tools/elapsed`, 5.22 is the missing `.env.local`, and `down-n-rebuild` joins 5.19.
+  - Docs: CLAUDE.md Build chain no longer claims the build targets run `check-compose`; the
+    trailing-`;` gotcha and `/validate` no longer say compose accepts it (`config -q` gives rc 2);
+    host-tooling.md has soft-restart's real order; this design table now names the root-free
+    re-create; the `-q` comment no longer claims nothing can reach a log.
+  - A registry ensure has JUST created that never answers no longer gets "re-create it" advice,
+    which cannot help there; it gets `docker logs`, then the rotation (R5-5, case 1.9c).
+  - `-k` (keep-going) still runs `down` after a failed sibling prerequisite. Nothing in the repo
+    passes `-k`; this is documented in host-tooling.md rather than guarded.
 - **Panel round 4 fixes**:
   - The round-3 `up` fix had removed the only check that failed `make up` on an unparseable
     compose project. The new `check-compose` target runs a strict `config -q` through make. It
@@ -50,12 +67,14 @@
   and `--publish` pointers fixed; stack-ask-human lists the two daemon-restarting targets.
 - **Size**: Large
 - **Mode**: spec (the `ah` gate fired for this session)
-- **Evidence** (round-4 fixes): `bin/tests/local-registry.test.sh` 119 / 119 (74 at `34a2001`,
-  92 at `ff738d5`, 107 at `a33c718`/`63e98a9`, 112 at `3b7fc09`). The sabotage series runs on a scratch copy and
+- **Evidence** (round-5 fixes): `bin/tests/local-registry.test.sh` 126 / 126 (74 at `34a2001`,
+  92 at `ff738d5`, 107 at `a33c718`/`63e98a9`, 112 at `3b7fc09`, 119 at `e8323a6`). The sabotage series runs on a scratch copy and
   never touches the live tree; the commit message gives its mutant count and result. `makefile-posix` 10/10, `wait-healthy` 9/9,
   `check-bake-targets` 12/12, `check-image-versions` 30/30, `env-guard` 12/12; shellcheck and
-  shfmt are clean. **All of it runs against stubs**: no live registry start, `make up` or
-  daemon restart has run (see UNCERTIFIED-BY-EXECUTION).
+  shfmt are clean. Everything above runs against stubs. The one live run is `make check-compose`
+  on the real project, repeated after the round-5 rewrite: rc 0 and no output as it stands, rc 2
+  with a trailing `;` (compose: `compose file "" … is invalid`), rc 2 naming a missing env file. No live registry start, `make up` or daemon restart has run (see
+  UNCERTIFIED-BY-EXECUTION).
 
 ### Design refinements made during implementation
 
@@ -139,14 +158,14 @@ called by the Makefile target):
 | `paused` | `docker unpause`, wait |
 | missing, cert + key on disk | `bin/local-registry.sh create` (`docker run`, the old Makefile flags), wait |
 | missing, no cert | FAIL → `make start-local-registry create-buildx-builder` |
-| `dead` / anything else | FAIL → the same pair |
+| `dead` / anything else | FAIL → re-create root-free (`docker rm -f <name> && make ensure-local-registry`, data kept); the rotation pair only if that fails |
 | the docker query itself fails | FAIL (never read as "missing") |
 
 The wait polls `https://<alias>:<port>/v2/` (`GS_LOCAL_REGISTRY_WAIT_TRIES`, default 30 tries,
 1 s apart, each curl bounded by `--connect-timeout 2 --max-time 5`) and FAILS if it never
 answers. Worst case is a registry that accepts the connection and never answers:
 30 × 5 s + 29 × 1 s ≈ 3 minutes before ensure fails. A refused port fails fast (≈ 30 s). curl's exit code picks the hint: 6 (alias does not resolve) →
-add it to `/etc/hosts`; anything else → `docker logs` + the rotation pair.
+add it to `/etc/hosts`; anything else → `docker logs`, then the root-free re-create, then the rotation pair.
 
 - `start-local-registry` keeps its name and behaviour (new cert + CA trust + daemon restart),
   now ending in `bin/local-registry.sh create`, so the `docker run` contract exists once. It
@@ -254,4 +273,5 @@ tools holders, `make up` coming up healthy, and a cold `make hard-restart`.
 - [2026-11-07 16:33] AGREED: Panel round 3, R3-I2 (P3): add a global .NOTPARALLEL: so 'ensure before down' (and down before up) hold under MAKEFLAGS=-j. Rejected .WAIT, because GNU make before 4.4 errors on it.
 - [2026-11-07 17:04] AGREED: Panel round 4, R4-I1 (P2): a strict 'compose config -q' preflight (new target check-compose, no -i). It is a prerequisite of up and runs right after ensure in every down-n-* composite, so before down. It restores the parse check the R3-I1 fix removed. Runtime compose-up failures stay out of scope (they exited 0 before the milestone).
 - [2026-11-07 17:04] AGREED: Certification cap: rounds 1-4 all had findings, so two consecutive clean rounds cannot happen within the 5-round cap. Fix all round-4 findings, then run round 5 as the LAST panel. If it is clean, close the milestone and disclose that it had only one clean round at the cap.
+- [2026-11-07 17:46] AGREED: Certification cap reached at round 5, which was not clean (2 P2, ~9 P3). Fix the 2 P2s first (check-compose calls compose directly, with no create-paths; a test pins -q), then the P3s, and close with advisor() 6C and no 6th panel round. Disclose that the milestone ended with no clean panel round.
 

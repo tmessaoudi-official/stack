@@ -9,7 +9,7 @@ Validate the Docker Compose configuration and environment consistency.
 
 ## Steps:
 1. **COMPOSE_FILE integrity** *(pre-flight — run before docker compose to surface clear errors first)*: Read `COMPOSE_FILE` from `.env.local`, verify:
-   - No trailing semicolon — run: `grep -qE 'COMPOSE_FILE=.*;[[:space:]]*$' .env.local && echo "[ERROR] COMPOSE_FILE has trailing semicolon — will break Docker Compose silently" || echo "[OK] No trailing semicolon"` (a trailing `;` silently adds an empty path entry; Docker Compose accepts the config but fails at runtime)
+   - No trailing semicolon — run: `grep -qE 'COMPOSE_FILE=.*;[[:space:]]*$' .env.local && echo "[ERROR] COMPOSE_FILE has trailing semicolon — will break Docker Compose" || echo "[OK] No trailing semicolon"` (a trailing `;` adds an empty path entry, which `docker compose config -q` rejects: rc 2, live 2026-11-07; `make check-compose` stops `make up` on it)
    - All referenced compose files exist on disk
    - `00base` compose file is included
    - If any check fails, report the error and stop — do not proceed to step 2

@@ -77,8 +77,8 @@ _gs_lr_state() {
 # a fresh machine, which a rotation — a daemon restart — would not fix. Bounded:
 # a registry that accepts TCP and never answers costs --max-time per try (curl
 # exit 28, the "did not answer" branch), never a hang.
-_gs_lr_wait() {
-  local _i _rc=0 _state
+_gs_lr_wait() { # _gs_lr_wait [created] — "created": the container was made just now
+  local _i _rc=0 _state _hint="${_GS_LR_RECREATE_HINT}"
   for ((_i = 1; _i <= _GS_LR_TRIES; _i++)); do
     curl -fks --connect-timeout 2 --max-time 5 "${_GS_LR_URL}" >/dev/null 2>&1 && return 0 || _rc=$?
     if ((_i < _GS_LR_TRIES)); then sleep 1; fi
@@ -88,8 +88,13 @@ _gs_lr_wait() {
       "Add '127.0.0.1 ${_GS_LR_ALIAS}' to /etc/hosts (templates/tips/docker-local-registry.md), then run 'make ensure-local-registry'."
   fi
   _state="$(_gs_lr_state)"
+  # Re-creating a container made a moment ago from the same cert cannot help
+  # (panel round 5, R5-5): what is left is a cert/key mismatch, i.e. a rotation.
+  if [[ "${1:-}" == created ]]; then
+    _hint="It was just created from the cert on disk, so re-creating it will not help. If the logs show a TLS or cert/key error, rotate: '${_GS_LR_ROTATE}'."
+  fi
   _gs_lr_fatal "local registry '${_GS_LR_NAME}' is ${_state} but ${_GS_LR_URL} did not answer after ${_GS_LR_TRIES} tries (curl exit ${_rc})" \
-    "Check 'docker logs ${_GS_LR_NAME}'. ${_GS_LR_RECREATE_HINT}"
+    "Check 'docker logs ${_GS_LR_NAME}'. ${_hint}"
 }
 
 _gs_lr_create() {
@@ -108,7 +113,7 @@ _gs_lr_create() {
     --mount "type=bind,source=${_GS_LR_DIR}/registry,target=/var/lib/registry" \
     --name "${_GS_LR_NAME}" \
     "registry:${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_VERSION}" >/dev/null
-  _gs_lr_wait
+  _gs_lr_wait created
 }
 
 _gs_lr_ensure() {

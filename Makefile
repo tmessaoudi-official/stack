@@ -259,15 +259,21 @@ check-image-versions:
 	@bash bin/check-image-versions.sh || true
 
 # The compose project must parse before anything is torn down or brought up.
-# This is a strict `config -q`: no -i, so a failure stops make, and -q prints no
-# resolved values, so no password reaches a log. It catches parse errors only
-# (`config` merely WARNS on an unset variable). It runs through docker-cli so it
-# sees make's exported .env.local, as `up` does (CLAUDE.md § Gotchas, "Create or
-# recreate containers ONLY via … make up"). A prerequisite of `up`; every
-# down-n-* composite and soft-restart run it right after ensure-local-registry,
-# before their down (panel round 4, R4-I1).
+# This is a strict `config -q`: no -i, so a failure stops make. -q keeps the
+# resolved project off stdout (without it, `config` prints every env_file value,
+# passwords included); compose's own error message can still quote the line it
+# failed on. It catches parse errors only (`config` merely WARNS on an unset
+# variable). The recipe calls compose itself, not docker-cli: a recipe line gets
+# make's exported .env.local just the same (CLAUDE.md § Gotchas, "Create or
+# recreate containers ONLY via … make up"), and docker-cli would drag in
+# create-paths, whose strict touch/chmod of tools/elapsed fails when a root
+# container re-created that file, stopping the composites with a false "does not
+# parse" (panel round 5, R5-I1). A prerequisite of `up`; every down-n-* composite
+# and soft-restart run it right after ensure-local-registry, before their down
+# (panel round 4, R4-I1).
 check-compose:
-	@$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="config" GLOBAL_STACK_DOCKER_CLI_EXEC_FLAGS="-q" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --warn-undefined-variables || { echo "FATAL: the compose project does not parse (compose's error is above) — check COMPOSE_FILE in ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV} (no trailing ';') and the compose files it lists."; exit 1; }
+	@test -f "${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" || { echo "FATAL: ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV} not found — create it first (cp .env ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}, then bin/env-scan.sh). Nothing was changed."; exit 1; }
+	@docker compose --env-file "${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" config -q || { echo "FATAL: the compose project does not parse (compose's error is above) — check COMPOSE_FILE in ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV} (no trailing ';') and the compose files it lists."; exit 1; }
 
 # up (and therefore down-n-up) runs the image-version preflight first,
 # and ensure-local-registry: most stack images build FROM the local registry

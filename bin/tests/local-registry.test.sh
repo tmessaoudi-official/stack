@@ -58,7 +58,16 @@ ko() {
 check() { # check <description> <command...> — passes when the command succeeds
   local _d="$1"
   shift
-  if "$@"; then ok "${_d}"; else ko "${_d}"; fi
+  if "$@"; then
+    ok "${_d}"
+    return 0
+  fi
+  ko "${_d}"
+  # LR_DEBUG=1: show the failing case's exit code and the tail of its output.
+  if [[ -n "${LR_DEBUG:-}" ]]; then
+    printf '  rc=%s out:\n%s\n' "${RUN_RC:-}" "${RUN_OUT:-}" | tail -n 8 >&2
+  fi
+  return 0
 }
 section() { printf '\n%b%s%b\n' "${C_BOLD}" "$1" "${C_RESET}"; }
 
@@ -138,6 +147,12 @@ case "${1:-}" in
     # compose-fails: an unparseable project (bad YAML, a trailing ';' in
     # COMPOSE_FILE) — every compose call fails, as the real one does (5.18/5.19).
     [[ -e "${SBX}/compose-fails" ]] && { echo "yaml: line 3: mapping values are not allowed here" >&2; exit 1; }
+    # A `config` without -q/--quiet and without --output prints the RESOLVED
+    # project, every env_file value and password included. The stub prints a
+    # sentinel so a dropped -q is visible (panel round 5, R5-1).
+    if [[ " $* " == *" config "* && " $* " != *" -q "* && " $* " != *" --quiet "* && " $* " != *" --output "* ]]; then
+      echo "GLOBAL_STACK_DOCKER_USER_ID: RESOLVED-SECRET-SENTINEL"
+    fi
     prev=""
     for a in "$@"; do
       [[ "${prev}" == --output ]] && printf 'services: {}\n' >"${a}"
@@ -305,6 +320,15 @@ check "1.9  running but silent: never re-creates on its own (removal is the deve
 # (panel round 4, R4-3 — the rotation restarts the daemon twice).
 check "1.9b running but silent: offers the root-free re-create FIRST, the rotation as fallback" \
   eval 'out_has "docker rm -f test-reg && make ensure-local-registry" && out_has "make start-local-registry create-buildx-builder" && [[ "${RUN_OUT%%docker rm -f test-reg*}" != *"make start-local-registry"* ]]'
+
+# A container ensure has JUST created from the cert on disk and that still never
+# answers: re-creating it again cannot help, so the hint must not lead with that
+# (panel round 5, R5-5) — docker logs, then the rotation (a cert/key mismatch).
+make_sandbox missing
+touch "${SBX}/silent"
+run_lr ensure
+check "1.9c just created but silent: says it was just created, no re-create advice, rotation named" \
+  eval 'rc_nonzero && docker_called "^run " && out_has "just created" && ! out_has "docker rm -f test-reg" && out_has "docker logs test-reg" && out_has "make start-local-registry create-buildx-builder"'
 
 make_sandbox exited
 touch "${SBX}/start-fails"
@@ -632,13 +656,42 @@ touch "${SBX}/compose-fails"
 run_e2e up
 check "5.18 'make up' with an unparseable compose project: exits non-zero and says so" \
   eval 'rc_nonzero && out_has "does not parse" && ! docker_called " up --remove-orphans"'
-for _t in down-n-up down-n-rebuild-force-recreate; do
+for _t in down-n-up down-n-rebuild down-n-rebuild-force-recreate; do
   e2e_sandbox running
   touch "${SBX}/compose-fails"
   run_e2e "${_t}"
   check "5.19 '${_t}' with an unparseable compose project: exits non-zero BEFORE any 'down'" \
     eval 'rc_nonzero && out_has "does not parse" && ! docker_called "compose .* down"'
 done
+# The check prints NO resolved value: `config -q` (panel round 5, R5-1 — dropping
+# -q stayed 119/119 and would print every password on every bring-up).
+for _t in up down-n-up; do
+  e2e_sandbox running
+  run_e2e "${_t}"
+  check "5.20 '${_t}': check-compose runs 'config -q' and prints no resolved value" \
+    eval 'rc_zero && docker_called "^compose --env-file .env.local config -q$" && ! out_has "RESOLVED-SECRET-SENTINEL"'
+done
+
+# check-compose must not drag create-paths in: a tools/elapsed the developer
+# cannot touch (a root container re-created it) used to heal through down's -i
+# sub-make and up's fresh create-paths; a strict create-paths in the preflight
+# stopped the composites with a false "does not parse" (panel round 5, R5-I1).
+# The symlink to a root-owned file stands in for root:root 0644.
+for _t in down-n-up down-n-rebuild-force-recreate; do
+  e2e_sandbox running
+  ln -s /etc/hostname "${SBX}/tools/elapsed"
+  run_e2e "${_t}"
+  check "5.21 '${_t}' with a tools/elapsed you cannot touch: still heals (down, then up)" \
+    eval 'rc_zero && docker_called "compose .* down" && docker_called " up --remove-orphans --detach" && ! out_has "does not parse"'
+done
+
+# No .env.local (a fresh clone): say so, not "does not parse" (R5-3).
+e2e_sandbox running
+rm -f "${SBX}/.env.local"
+run_e2e check-compose
+check "5.22 check-compose with no .env.local: names the missing file, not a parse error" \
+  eval 'rc_nonzero && out_has ".env.local not found" && ! out_has "does not parse" && ! docker_called "config"'
+
 soft_sandbox running
 touch "${SBX}/compose-fails"
 run_e2e soft-restart
