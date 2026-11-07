@@ -4,6 +4,9 @@ paths:
   - "bin/git-strip-coauthored.sh"
   - "bin/check-bake-targets.sh"
   - "bin/check-image-versions.sh"
+  - "bin/local-registry.sh"
+  - "bin/tests/local-registry.test.sh"
+  - "templates/shell/global-stack-make-exec.sh"
   - "bin/open-all-envs.sh"
   - "templates/tips/open-many-links.md"
   - ".claude/hooks/env-guard-on-write.sh"
@@ -25,6 +28,21 @@ paths:
 Split out of `CLAUDE.md` by `/rules-split` on 2026-10-09: the text below is unchanged except for cross-references and line citations, and each entry keeps a one-line index entry in `CLAUDE.md`. A new lesson about these files belongs HERE, not in `CLAUDE.md`.
 
 ## From CLAUDE.md § Testing & Verification
+
+- **local registry lifecycle tests**: `bash bin/tests/local-registry.test.sh` (`docs/plans/local-registry-lifecycle.plan.md`). The incident on 2026-11-07 went like this:
+  - `make soft-restart`'s host-wide `docker ps -q | xargs -r docker stop` stopped the registry. That line was borrowed from hard-restart, where it exists for the prune (664b215).
+  - `--restart=always` does not revive an explicitly stopped container while the daemon stays up, so nothing started it again.
+  - The stack came up on its local images, so the registry looked fine until the next `global-stack-start.sh` failed in buildkit with `connection refused`.
+  - The wrapper's `--ignore-errors --keep-going` swallowed `make build`'s FATAL registry gate and exited 0.
+
+  What the suite covers:
+  - `bin/local-registry.sh ensure` for every container state. It never generates a cert: the buildx builder image COPYs it, so a rotation without `create-buildx-builder` breaks trust.
+  - The `create` `docker run` contract.
+  - The Makefile wiring.
+  - The wrapper stopping on the first failure.
+  - An end-to-end replay of the incident: the wrapper drives a sandbox copy of the real Makefile against a stub `docker`.
+
+  The stubs for `sudo`/`systemctl`/`openssl req` FAIL the case if called. Every run is under `env -i`, because an interactive `/stack` shell exports `.env.local`. The e2e `.env.local` keeps the registry ALIAS **nested**, so the case proves that make resolves it for the script.
 
 - **git-strip-coauthored tests**: `bash bin/tests/git-strip-coauthored.test.sh` — 27 tests. Argument handling is a safety surface here: the script's only job is an irreversible `git filter-repo --force`, so every path reaching the rewrite must be one the caller asked for. Runs against a throwaway repo with a stub `git-filter-repo` on PATH — it can never touch real history
 - **Makefile portability tests**: `bash bin/tests/makefile-posix.test.sh` — 7 checks. Recipes run under `/bin/sh` (dash) because the Makefile never sets `SHELL`, so `source` (exit 127, and the rest of an `&&` line never runs) and `&>` (backgrounds instead of silencing) are fatal in recipes. Also asserts every `make <target>` named in a recipe message actually exists, reading the target list from make's own database so `$(eval $(call ...))` targets count

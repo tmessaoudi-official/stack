@@ -40,7 +40,7 @@ SERVICES_SH := 01postgres18 01redis 01valkey 02dpage-pgadmin4
 SERVICES_ALL := $(SERVICES_SHELL) $(SERVICES_SH)
 
 .PHONY: help mkdir-p touch create-paths generate-buildx docker-cli create-buildx-builder check-image-versions \
-	start-local-registry build up up-build up-build-force-recreate down \
+	start-local-registry ensure-local-registry build up up-build up-build-force-recreate down \
 	down-n-rebuild down-n-rebuild-force-recreate rebuild rebuild-force-recreate \
 	down-n-up exec restart health wait-healthy save commit restore log-follow hard-restart soft-restart \
 	$(foreach s,$(SERVICES_SHELL),login-$(s)) \
@@ -188,15 +188,23 @@ start-local-registry:
 	sudo mkdir -p /etc/docker/certs.d/${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}:${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_PORT_5000}
 	sudo cp ./docker/registry/certs/${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}.crt /etc/docker/certs.d/${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}:${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_PORT_5000}/ca.crt
 	sudo systemctl restart docker
-	docker run --detach --publish ${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_PORT_5000}:5000 --restart=always --mount type=bind,source=./docker/registry/certs,target=/docker/registry/certs --env REGISTRY_HTTP_ADDR=0.0.0.0:5000 --env REGISTRY_HTTP_TLS_CERTIFICATE=/docker/registry/certs/${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}.crt --env REGISTRY_HTTP_TLS_KEY=/docker/registry/certs/${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}.key --env REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY=/data --mount type=bind,source=./docker/registry/data,target=/data --mount type=bind,source=./docker/registry/registry,target=/var/lib/registry --name ${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_NAME} registry:${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_VERSION}
-build: create-paths generate-buildx
+	bash bin/local-registry.sh create
+# Idempotent and root-free: starts a stopped registry, creates a missing one from
+# the existing cert, waits for /v2/, and FAILS rather than rotate the cert (the
+# buildx builder bakes it in — rotation is `make start-local-registry
+# create-buildx-builder`). A prerequisite of every target that builds, so a registry
+# stopped by anything (soft-restart before 2026-11-07, a manual `docker stop`) heals
+# at the next build instead of failing it with `connection refused`.
+ensure-local-registry:
+	@bash bin/local-registry.sh ensure
+build: create-paths ensure-local-registry generate-buildx
 	# change the order of this in local.Makefile
 	#  --no-cache --progress=plain
 	@curl -fks https://$(GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS):$(GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_PORT_5000)/v2/ >/dev/null 2>&1 \
 	  || { echo "FATAL: local registry not running — run 'make start-local-registry' first"; exit 1; }
 	@_cert="docker/registry/certs/$(GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS).crt"; \
 	  [ -f "$$_cert" ] && openssl x509 -noout -checkend 2592000 -in "$$_cert" 2>/dev/null \
-	  || { [ -f "$$_cert" ] && echo "WARNING: local registry cert expires within 30 days — run 'make start-local-registry' to rotate"; }; true
+	  || { [ -f "$$_cert" ] && echo "WARNING: local registry cert expires within 30 days — run 'make start-local-registry create-buildx-builder' to rotate (the builder bakes the cert in)"; }; true
 	@bash bin/check-bake-targets.sh ${BUILDX_BAKE_FILE}
 	@echo "=== Building all targets (tagged: push+load, untagged: load only) ==="; \
 	_failed_file=$$(mktemp) || { echo "Error: mktemp failed"; exit 1; }; \
@@ -240,10 +248,10 @@ check-image-versions:
 up: create-paths generate-buildx check-image-versions
 	rm -rf ${BUILDX_BAKE_FILE} ${COMPOSE_FULL_FILE}
 	GLOBAL_STACK_DOCKER_CLI_NO_COMPOSE_BAKE="false" $(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="up" GLOBAL_STACK_DOCKER_CLI_EXEC_FLAGS="--remove-orphans --detach" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-up-build: create-paths generate-buildx
+up-build: create-paths ensure-local-registry generate-buildx
 	rm -rf ${BUILDX_BAKE_FILE} ${COMPOSE_FULL_FILE}
 	GLOBAL_STACK_DOCKER_CLI_NO_COMPOSE_BAKE="false" $(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="up" GLOBAL_STACK_DOCKER_CLI_EXEC_FLAGS="--remove-orphans --detach --build" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-up-build-force-recreate: create-paths generate-buildx
+up-build-force-recreate: create-paths ensure-local-registry generate-buildx
 	rm -rf ${BUILDX_BAKE_FILE} ${COMPOSE_FULL_FILE}
 	GLOBAL_STACK_DOCKER_CLI_NO_COMPOSE_BAKE="false" $(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="up" GLOBAL_STACK_DOCKER_CLI_EXEC_FLAGS="--remove-orphans --detach --build --force-recreate --always-recreate-deps" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
 down:
@@ -311,12 +319,19 @@ hard-restart:
 	$(MAKE) create-buildx-builder --silent --ignore-errors --keep-going --warn-undefined-variables
 	$(MAKE) build --silent --ignore-errors --keep-going --warn-undefined-variables
 	$(MAKE) up --silent --ignore-errors --keep-going --warn-undefined-variables
+# soft-restart stops only the containers that mount the tools path — all its
+# `sudo rm -rf tools` needs. Until 2026-11-07 it borrowed hard-restart's host-wide
+# `docker ps -q | xargs -r docker stop` (664b215, which exists for hard-restart's
+# prune), stopped the local registry with it and never started it again: the stack
+# came up on the local images and the next build failed with `connection refused`.
+# The final ensure-local-registry heals a registry stopped by anything else.
 soft-restart:
 	@test -d var/tools || { echo "FATAL: var/tools/ is missing — cannot proceed with soft-restart. var/tools is a manual snapshot of a healthy tools/ tree: take one with 'cp -R tools var/tools' while the stack is up. (make save/restore act on var/images, not var/tools.)"; exit 1; }
 	$(MAKE) down --silent --ignore-errors --keep-going --warn-undefined-variables
-	docker ps -q | xargs -r docker stop
+	docker ps -q --filter volume=${GLOBAL_STACK_DOCKER_TOOLS_PATH} | xargs -r docker stop
 	sudo rm -rf tools
 	cp -R var/tools/ tools
 	$(MAKE) up --silent --ignore-errors --keep-going --warn-undefined-variables
+	$(MAKE) ensure-local-registry --silent --warn-undefined-variables
 
 -include local.Makefile

@@ -19,14 +19,14 @@
 >
 > | Command | Actual blast radius |
 > |---|---|
-> | `make soft-restart` | **NOT a soft restart.** `sudo rm -rf`s `tools/` and restores from `var/tools`; a stale `var/tools` costs a multi-10-minute full reinstall. The documented soft restart is `make down-n-up`. |
+> | `make soft-restart` | **NOT a soft restart.** `sudo rm -rf`s `tools/` and restores from `var/tools`; a stale `var/tools` costs a multi-10-minute full reinstall. The documented soft restart is `make down-n-up`. Since 2026-11-07 it stops only containers that mount the tools path, then runs `ensure-local-registry`. Before that it stopped every container on the host and left the local registry dead, so the next build failed with `connection refused`. |
 > | `make hard-restart` | Wipes all images + volumes, rebuilds from scratch. |
 > | `docker volume rm …` | DB state lives in **named volumes**, not `docker/data/` — removing one is the credential/data reset, and it is irreversible. |
 > | `GLOBAL_STACK_RELOAD_*=true` | Forces a tier reinstall (30+ min). Reset to `false` after use. Not every one wipes: `_NODE*` / `_JAVA*` / `_FLUTTER3` (and `GLOBAL_STACK_LOCAL_RELOAD_FLUTTER3_41_9`, which feeds the same in-container switch) drop only the markers and the installer then no-ops on the version dir already on disk; `_ANDROID` wipes the SDK but keeps `GRADLE_USER_HOME` — CLAUDE.md § Gotchas. |
 > | `bin/env-update.sh --apply` | Rewrites `.env`; cascades into `.env.local` + Dockerfile `ARG` lines via `env-scan`. Rollback: `git checkout -- .env` then restore the newest `.env.local.bak.*`. Always `--check --dry-run` first. |
 > | `make save` | Exports **every** Docker image on the machine, not just stack images — slow and disk-hungry. |
 > | `make create-buildx-builder` | **Bounces the host Docker daemon** (`systemctl stop docker` … `start docker`), killing every running container on the machine — including containers from unrelated projects. Also `sudo rm -rf`s the buildkit state volume. |
-> | `make start-local-registry` | **Restarts the host Docker daemon** (`systemctl restart docker`) after installing a CA certificate system-wide, so it too kills every running container on the machine. |
+> | `make start-local-registry` | **Restarts the host Docker daemon** (`systemctl restart docker`) after installing a CA certificate system-wide, so it too kills every running container on the machine. It also **generates a new cert**, which the buildx builder only trusts once rebuilt, so always pair it: `make start-local-registry create-buildx-builder`. To start a stopped registry, use `make ensure-local-registry` instead: no root, no daemon restart, no new cert. |
 > | `bin/git-strip-coauthored.sh --apply` | **Irreversible history rewrite.** Runs `git filter-repo --force`, which bypasses filter-repo's own fresh-clone guard, drops `refs/original`, expires the reflog and gc's — there is no `ORIG_HEAD` to return to, and every commit SHA changes. Other clones recover only with `git fetch && git reset --hard origin/master`. Reporting is the default; the rewrite needs `--apply`, and `--yes` on top when not on a TTY. |
 
 ---

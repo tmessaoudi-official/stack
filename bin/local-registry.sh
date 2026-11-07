@@ -1,0 +1,133 @@
+#!/usr/bin/env bash
+# bin/local-registry.sh — lifecycle of the local TLS registry the stack builds through.
+#
+#   ensure   make the registry reachable without ever touching its certificate:
+#              running   -> wait for /v2/
+#              exited    -> docker start, wait      (what `make soft-restart` left
+#              created   -> docker start, wait       behind on 2026-11-07)
+#              paused    -> docker unpause, wait
+#              restarting-> wait
+#              missing   -> create (cert must already exist)
+#              dead/removing/anything else -> FAIL
+#   create   `docker run` the registry container (fails if one already exists), wait
+#
+# Why ensure never makes a certificate: the buildx builder image
+# (docker/buildkit/Dockerfile) COPIES the cert in at image build time, so a new
+# cert is trusted only after `make create-buildx-builder` rebuilds it. Rotation is
+# therefore `make start-local-registry create-buildx-builder`, explicitly — the only
+# path that needs sudo or a daemon restart. A running registry that never answers
+# is a cert/trust/port problem that re-creating it would not fix, so ensure stops
+# with a pointer at its logs instead.
+#
+# Values come from the environment: run it through make (`make ensure-local-registry`),
+# which exports .env.local — GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS is NESTED
+# (`${…_NAME}.local`), and only make resolves it.
+#
+# Tests: bin/tests/local-registry.test.sh
+set -eEuo pipefail
+
+_gs_lr_fatal() {
+  printf 'FATAL: %s\n' "$1" >&2
+  if [[ -n "${2:-}" ]]; then printf '       %s\n' "$2" >&2; fi
+  exit 1
+}
+
+_gs_lr_require() {
+  local _v
+  for _v in GLOBAL_STACK_DOCKER_ROOT_PATH \
+    GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_NAME \
+    GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS \
+    GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_PORT_5000 \
+    GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_VERSION; do
+    [[ -n "${!_v:-}" ]] || _gs_lr_fatal "${_v} is not set" \
+      "Run this through make (e.g. 'make ensure-local-registry'), which exports .env.local."
+  done
+}
+
+_gs_lr_require
+_GS_LR_NAME="${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_NAME}"
+_GS_LR_ALIAS="${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}"
+_GS_LR_PORT="${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_PORT_5000}"
+_GS_LR_DIR="${GLOBAL_STACK_DOCKER_ROOT_PATH}/docker/registry"
+_GS_LR_CRT="${_GS_LR_DIR}/certs/${_GS_LR_ALIAS}.crt"
+_GS_LR_KEY="${_GS_LR_DIR}/certs/${_GS_LR_ALIAS}.key"
+_GS_LR_URL="https://${_GS_LR_ALIAS}:${_GS_LR_PORT}/v2/"
+_GS_LR_TRIES="${GS_LOCAL_REGISTRY_WAIT_TRIES:-30}"
+_GS_LR_ROTATE="make start-local-registry create-buildx-builder"
+
+# Prints the container state (running/exited/created/paused/restarting/dead/
+# removing), or nothing when no such container exists. A docker failure (daemon
+# down) is fatal — it must not read as "missing" and trigger a create.
+_gs_lr_state() {
+  local _out
+  _out="$(docker container ls --all --filter "name=^/${_GS_LR_NAME}$" --format '{{.State}}')" \
+    || _gs_lr_fatal "cannot query docker for '${_GS_LR_NAME}'" "Is the Docker daemon running? ('docker info')"
+  printf '%s' "${_out%%$'\n'*}"
+}
+
+# The same probe as `make build`'s gate: -k because trust is the builder's job,
+# not this check's; it only answers "is something serving /v2/ there".
+_gs_lr_wait() {
+  local _i
+  for ((_i = 1; _i <= _GS_LR_TRIES; _i++)); do
+    if curl -fks "${_GS_LR_URL}" >/dev/null 2>&1; then return 0; fi
+    if ((_i < _GS_LR_TRIES)); then sleep 1; fi
+  done
+  _gs_lr_fatal "local registry '${_GS_LR_NAME}' is $(_gs_lr_state) but ${_GS_LR_URL} did not answer after ${_GS_LR_TRIES} tries" \
+    "Check 'docker logs ${_GS_LR_NAME}'. Re-create it (and the builder's trust) with '${_GS_LR_ROTATE}'."
+}
+
+_gs_lr_create() {
+  [[ -f "${_GS_LR_CRT}" && -f "${_GS_LR_KEY}" ]] || _gs_lr_fatal \
+    "local registry certificate missing (${_GS_LR_CRT} / .key)" \
+    "Run '${_GS_LR_ROTATE}' — the buildx builder bakes the cert in, so both targets are needed."
+  docker run --detach \
+    --publish "${_GS_LR_PORT}:5000" \
+    --restart=always \
+    --mount "type=bind,source=${_GS_LR_DIR}/certs,target=/docker/registry/certs" \
+    --env REGISTRY_HTTP_ADDR=0.0.0.0:5000 \
+    --env "REGISTRY_HTTP_TLS_CERTIFICATE=/docker/registry/certs/${_GS_LR_ALIAS}.crt" \
+    --env "REGISTRY_HTTP_TLS_KEY=/docker/registry/certs/${_GS_LR_ALIAS}.key" \
+    --env REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY=/data \
+    --mount "type=bind,source=${_GS_LR_DIR}/data,target=/data" \
+    --mount "type=bind,source=${_GS_LR_DIR}/registry,target=/var/lib/registry" \
+    --name "${_GS_LR_NAME}" \
+    "registry:${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_VERSION}" >/dev/null
+  _gs_lr_wait
+}
+
+_gs_lr_ensure() {
+  local _state
+  _state="$(_gs_lr_state)"
+  case "${_state}" in
+    running | restarting) ;;
+    exited | created)
+      echo "local registry '${_GS_LR_NAME}' is ${_state} — starting it"
+      docker start "${_GS_LR_NAME}" >/dev/null
+      ;;
+    paused)
+      echo "local registry '${_GS_LR_NAME}' is paused — unpausing it"
+      docker unpause "${_GS_LR_NAME}" >/dev/null
+      ;;
+    "")
+      echo "local registry '${_GS_LR_NAME}' does not exist — creating it"
+      _gs_lr_create
+      return 0
+      ;;
+    *)
+      _gs_lr_fatal "local registry '${_GS_LR_NAME}' is in state '${_state}'" \
+        "Re-create it with '${_GS_LR_ROTATE}'."
+      ;;
+  esac
+  _gs_lr_wait
+}
+
+case "${1:-}" in
+  ensure) _gs_lr_ensure ;;
+  create)
+    [[ -z "$(_gs_lr_state)" ]] || _gs_lr_fatal "local registry '${_GS_LR_NAME}' already exists" \
+      "'make start-local-registry' removes it first; use 'make ensure-local-registry' to start a stopped one."
+    _gs_lr_create
+    ;;
+  *) _gs_lr_fatal "usage: ${0##*/} ensure|create" ;;
+esac

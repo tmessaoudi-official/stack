@@ -158,7 +158,7 @@ Services live in `docker/images/<tier><name>/` and are numbered by build depende
 
 > **Tier-prefix rule**: the number encodes build-dependency order, nothing else. Four services install nothing into `tools/` despite their tier-02 prefix (`02dpage-pgadmin4`, `02keycloak-keycloak`, `02sonarqube`, `02mongoclient`) — placed there for dependency ordering; `04phpmyadmin` is pgadmin's functional twin in a different tier. Don't infer install behavior from the prefix.
 
-**Build chain**: images build `FROM` the local registry (`local-global-stack-registry.local:5000`). Run `make start-local-registry` before first build. `COMPOSE_BAKE=true` uses BuildX bake; `make generate-buildx` produces the intermediate `docker-bake.local.json`.
+**Build chain**: images build `FROM` the local registry (`local-global-stack-registry.local:5000`). Run `make start-local-registry create-buildx-builder` before the first build. Both are needed: the builder image COPYs the registry cert, so a new cert is only trusted after the builder is rebuilt. After that, every building target runs `ensure-local-registry` (`bin/local-registry.sh`), which starts a stopped registry, creates a missing one from the existing cert, and fails instead of rotating the cert. `COMPOSE_BAKE=true` uses BuildX bake; `make generate-buildx` produces the intermediate `docker-bake.local.json`.
 
 **Network**: Single bridge `public` (`172.20.0.0/16`). Root `docker-compose.yaml` defines only this network — each service has its own `docker/images/<name>/docker-compose.yaml`. Services are composed together via the `COMPOSE_FILE` env var (semicolon-separated list in `.env`/`.env.local`).
 
@@ -324,7 +324,8 @@ bin/env-scan.sh                                       # re-propagate restored va
 # Build artifacts
 make generate-buildx                 # Regenerate docker-bake.local.json
 make create-buildx-builder           # Set up BuildKit builder
-make start-local-registry            # Start local TLS registry (port 5000)
+make ensure-local-registry           # Start a stopped / create a missing registry (no root, no new cert)
+make start-local-registry create-buildx-builder  # NEW cert + daemon restart + builder rebuild (first setup, rotation)
 ```
 
 ## Testing & Verification
@@ -339,6 +340,7 @@ make start-local-registry            # Start local TLS registry (port 5000)
 - **bake-target gate tests**: `bash bin/tests/check-bake-targets.test.sh` — the fatal zero-target preflight of `make build` → `.claude/rules/host-tooling.md`
 - **image-version preflight tests**: `bash bin/tests/check-image-versions.test.sh` — active env file vs Dockerfile `ARG` drift, and its vacuity guards → `.claude/rules/host-tooling.md`
 - **wait-healthy tests**: `bash bin/tests/wait-healthy.test.sh` — the `wait-healthy` target against a stub `docker` (~15 s) → `.claude/rules/host-tooling.md`
+- **local registry lifecycle tests**: `bash bin/tests/local-registry.test.sh` — `bin/local-registry.sh` per container state, the Makefile wiring, and the `global-stack-make-exec.sh` wrapper driving a sandbox copy of the Makefile against a stub `docker` → `.claude/rules/host-tooling.md`
 - **open-all-envs tests**: `bash bin/tests/open-all-envs.test.sh` — `env -i`, stub browser, temp `HOME`; byte-identical pairing with `templates/tips/open-many-links.md` → `.claude/rules/host-tooling.md`
 - **env-guard hook tests**: `bash bin/tests/env-guard.test.sh` — the consumer-keyed port check of `.claude/hooks/env-guard-on-write.sh`; needs `jq` → `.claude/rules/host-tooling.md`
 - **Host shell template tests**: `bash bin/tests/profile-shell.test.sh` and `bash bin/tests/claude-fullauto-shell.test.sh` — run with `< /dev/null` (they spawn `bash -i`) → `.claude/rules/host-tooling.md`
@@ -438,7 +440,7 @@ make start-local-registry            # Start local TLS registry (port 5000)
 - **`core.fileMode=false` in `/stack/`** — git ignores all file permission changes; `chmod` edits take effect on disk but are never staged or committed. For permission fixes, note the change explicitly in the commit message of whatever else touches the file; do not expect `git diff` or `git status` to show the mode delta.
 - **Default `node` is the nightly channel, on purpose** (developer ruling 2026-09-27): `node --version` reads a nightly (`tools/nvm/alias/default` held the `GLOBAL_STACK_NODEEDGE_VERSION` value on 2026-11-07 [Verified: read]; where `NODE_VERSION` itself is assigned was not found [Unverified: no `NODE_VERSION=` in `.env.local`, `templates/shell/`, `tools/.shellrc/` or `~/.bashrc`]). `NODE_VERSION` and the node bin dir are said to come from `/stack/.env.local`, which `~/.bashrc` evals [Unverified: see the previous sentence], and follow env-update's `nightly` channel (`bin/lib/env-update/core/channel.sh`). nvm is never sourced, so `.nvmrc` files (pdfturbo's `26`) and nvm's `default` alias are not honoured. When a project needs a pinned major, call it by path: `/stack/tools/nvm/versions/node/<GLOBAL_STACK_NODE26_VERSION>/bin/node` (the pins move; read the value from `.env.local`, never from this file).
 - **Auto-commit in /stack sessions** — see § "Git autonomy" above, which is authoritative: `git add`/`commit`/`push` to `master` follow the resolved mode (autonomous or cloud → authorised; spec → on request), pushes use plain `git push` (never `-u`), and the commit identity is fixed. Kept as a pointer rather than a restatement so the two cannot drift.
-- **`make soft-restart` is DESTRUCTIVE** — despite the name it `sudo rm -rf`s `tools/` and restores it from `var/tools`; it is NOT the documented soft restart (`make down-n-up`). A stale `var/tools` means a full multi-10-minute reinstall
+- **`make soft-restart` is DESTRUCTIVE** — despite the name it `sudo rm -rf`s `tools/` and restores it from `var/tools`; it is NOT the documented soft restart (`make down-n-up`). A stale `var/tools` means a full multi-10-minute reinstall. Until 2026-11-07 it also stopped every container on the host and left the local registry dead (`connection refused` at the next build); it now stops only containers that mount the tools path → `.claude/rules/host-tooling.md`
 - **`make save` exports EVERY Docker image on the machine** — not just stack images; slow, disk-hungry, undocumented side effect
 - **Host checkout MUST live at `/stack`** — `tools/.shellrc/*.shellrc` exports bake absolute paths (`/stack/tools/...`) shared by containers and host; a checkout at any other path breaks host-container binding
 - **LOCAL port range**: `GLOBAL_STACK_LOCAL_*_PORT_*` use host range **41700–41899** (200 slots). Standard `GLOBAL_STACK_*_PORT_*` use 42700–42899. Next free LOCAL slot: 41720 (41719 is taken — the `…_TWES_IN_PORT_41719=41719` line of `.env.local`).
