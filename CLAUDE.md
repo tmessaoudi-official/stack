@@ -235,21 +235,9 @@ Installs the `.env` pin of the tools under `/opt/$USER` — the JetBrains IDEs, 
 
 `bin/env-update.sh` and its library use `set -eEuo pipefail`; `bin/env-scan.sh` also uses `set -eEuo pipefail` (added after the initial release to harden the entry point). Container startup scripts use `set -xeE -o pipefail` (debug tracing, no `-u`). When writing new scripts, use `set -eEuo pipefail`. Follow these patterns:
 
-- **Variable prefixes**: `_GS_EU2_` for env-update, `_GS_ES_` for env-scan
-- **Include guards** (every lib file):
-  ```bash
-  [[ -n "${_GS_EU2_MODULENAME_SH_LOADED:-}" ]] && return 0
-  readonly _GS_EU2_MODULENAME_SH_LOADED=1
-  ```
-- **Error propagation across subshells**: write to temp files, read back in parent — stdout is reserved for return values
-- **Parallel arrays** instead of objects (bash limitation): records indexed by count
-- **Function naming**: `_gs_eu2_<module>_<action>` for env-update; `es_<action>` or `_gs_es_<action>` for env-scan
-- **CLI-first with API fallback**: activates the correct runtime (nvm/pyenv/rbenv), tries CLI in subshell, falls back to API
-- **NO_COLOR** support per no-color.org; color only when `stdout` is a terminal
+- **Variable prefixes, include guards, error propagation across subshells, parallel arrays, function naming, CLI-first with API fallback, NO_COLOR, function size, the `# Sources:` convention** → `.claude/rules/shell-conventions.md` (loads when you open anything under `bin/`, the startup-script dirs, `templates/shell/` or `.claude/hooks/`)
 - **Dependencies**: `bash 4.3+`, `curl`, `jq`, `perl`, `sort -V` (uutils or GNU coreutils — `/bin/sort` is uutils on the developer's box), `sed`, `awk` (mawk here — no `{m,n}` intervals), `grep`
 - **Version ordering**: never a raw `sort -V` for a version decision — it is byte-wise, so `6.0.0-RC-2` sorted below `6.0.0-beta-3` (row 48). Use `_gs_eu2_version_sort` / `_gs_eu2_version_older` from `core/semver.sh`; pre-release tiers live in `_GS_EU2_PRERELEASE_RANKS`. Full rule: `templates/tips/env-update.md` § "Version ordering"
-- **Function size**: functions >150 lines or nesting >4 levels → decompose (precedent: d953279)
-- **`# Sources:` convention**: lib files declare their dependencies via `# Sources: <file>` header comments but never `source` them — `main.sh` is the single coordinator of all `source` calls
 
 ## Makefile Patterns
 
@@ -280,34 +268,11 @@ bin/env-update.sh --apply                         # apply AUTO decisions (run --
 
 # After updating versions in .env
 bin/env-scan.sh   # Propagate to .env.local + rewrite ARG lines in Dockerfiles (--sync-values=true by default)
-# If a pinned version changed, what it needs depends on WHO reads the pin:
-# - a pin a startup script reads at boot — every runtime (node/php/python/ruby/java/flutter/
-#   rust), package slot and runtime-installed tool (phpbrew/nvm/cargo tools, go/zig/mise,
-#   phpmyadmin, caddy/httpd/nginx, libmodsecurity): nothing to do. On the next restart the
-#   content-compare gate (gs_version_gate) sees marker != pin, WARNs and reinstalls. Every
-#   gate is EQUALITY-based, so a pin moved DOWN reinstalls exactly like one moved up.
-# - a pin a Dockerfile consumes — hurl (compiled by 00base; Ubuntu 26.04 has no
-#   libxml2.so.2), and the Rust/rustup pins, which also feed 00base's hurl-build stage
-#   (~6 min): only the image rebuild below applies it; a restart changes nothing.
-# How a reinstall treats the old copy (docs/plans/pin-bump-reinstall-audit.plan.md):
-# pyenv/rbenv move their git checkout to the pinned tag (a pin no definition matches FAILS
-# and deletes nothing); nvm, phpbrew, sdkman, fvm, package slots and the rbenv plugins
-# remove the old version only AFTER the new one installed; every downloaded tool (go, zig,
-# mise, fvm, deno, bun, the 11 phpbrew tools, rustup-init, phpmyadmin, caddy's xcaddy) is
-# fetched and checked in a temp dir with what its upstream allows — a published checksum or
-# signature where there is one (for elasticmq and fvm it is the SHA-256 GitHub serves as the
-# release asset's digest; phpMyAdmin commit builds and the zephir/phalcon/pickle phars have
-# none), an archive listing, its own --version or
-# manifest version where it can run — before its old copy is replaced, so a failed download
-# or check leaves the old one working. The prefix-baked builds (httpd, nginx, libmodsecurity) fetch and check
-# every input BEFORE their wipe (nginx's tarball against the nginx.org PGP keys committed
-# next to its iou), then build at the prefix and check the result; a failed BUILD leaves no
-# server and writes the error token. A RUST bump wipes and reinstalls the toolchain after
-# rustup-init is checked. Two sites still wipe first: php.edge (phpbrew fetches the source
-# itself; its php must run and report X.Y.Z-dev before any marker), and android, which wipes
-# its SDK BEFORE the reinstall (ruling 2026-09-24 23:55; only GRADLE_USER_HOME is kept), so a
-# failed android bump leaves no SDK. GLOBAL_STACK_RELOAD_<RUNTIME>=true forces a reinstall —
-# see § Gotchas for the ones that do not wipe and for RELOAD_ANDROID keeping the Gradle cache.
+# If a pinned version changed: a pin a startup script reads at boot (every runtime, package
+# slot, runtime-installed tool) needs nothing — the next restart's gs_version_gate sees
+# marker != pin and reinstalls (a pin moved DOWN too). A pin a Dockerfile consumes (hurl, the
+# Rust/rustup pins) needs the image rebuild below. php.edge and android wipe BEFORE their
+# reinstall (a failed android bump leaves no SDK). Per-site detail → .claude/rules/env-files.md
 make down-n-rebuild-force-recreate
 
 # Env sync / audit
@@ -425,14 +390,13 @@ make start-local-registry create-buildx-builder  # NEW cert + daemon restart + b
 - **`$HOME` in every container is re-permissioned on EVERY boot, and a numeric `chmod` there disarms cached executables** — seen as `Failed to exec android binary: Permission denied`; the rule subtracts (`ug-s,go-rwx`), never assigns → `.claude/rules/startup-scripts.md`
 - **`docker-bake.local.json` is generated, not tracked** — if it's stale after env changes, run `make generate-buildx` to regenerate. Stale bake file = wrong build config
 - **BuildKit cache can go stale** — if builds fail with mysterious layer errors, `docker buildx prune` is the escape hatch
-- **`jq '… | unique'` on a settings array SORTS it — read the SET, never the diff.** A hand-off script that adds entries with `.permissions.deny = ((.permissions.deny // []) + $add | unique)` rewrites every pre-existing entry in alphabetical order as a side effect. Applying five denies to a 123-entry list produced a ~250-line diff that looked like a rewrite and was almost entirely reordering [observed 2026-08-19, Phase G]. Two consequences: a reviewer reading that diff cannot tell an addition from a reshuffle, and `unique` also silently **collapses duplicates**, which is a content change nobody asked for. Verify with a set difference, not `diff`: `jq -n --slurpfile b old.json --slurpfile s new.json '{added: ($s[0].permissions.deny - $b[0].permissions.deny), lost: ($b[0].permissions.deny - $s[0].permissions.deny)}'` — `lost` must be `[]`. Use `+ $add | unique` only when the sort is wanted; otherwise append and de-duplicate without reordering.
-- **`projects/CLAUDE.md` needs `git add -f` — the `.gitignore` negation for it is inert.** `.gitignore`'s bare `/projects` line excludes the whole directory, and git cannot re-include a file whose *parent directory* is excluded, so its `!/projects/.claude/`, `!/projects/CLAUDE.md` and `!/projects/.gitkeep` negations have no effect. The files are still *tracked* (they were added before the exclusion), so they show up in `git status` and `git grep` and can be committed normally — but a plain `git add projects/CLAUDE.md` is refused with *"The following paths are ignored… projects"*. Use `git add -f`. This is safe **only because the path is already tracked** — confirm with `git ls-files <path>` before reaching for `-f`, since on an untracked path `-f` would pull genuinely-ignored machine-local content into the repo. Note `git check-ignore -v projects/CLAUDE.md` exits 1 ("not ignored") for exactly the same reason it is tracked, so it does **not** predict whether `git add` will succeed — the two disagree, and `git add` is the one that decides [observed 2026-08-19].
+- **`jq '… | unique'` on a settings array SORTS it — read the SET, never the diff.** It also silently collapses duplicates. Verify a settings change by set difference (`added: new - old`, `lost: old - new`; `lost` must be `[]`), never by `diff` → `.claude/rules/claude-config.md`
+- **`projects/CLAUDE.md` needs `git add -f` — the `.gitignore` negation for it is inert.** Safe ONLY because the path is already tracked (confirm with `git ls-files <path>` first); `git check-ignore` exits 1 for it and does not predict whether `git add` succeeds → `.claude/rules/claude-config.md`
 - **`git diff` is UNUSABLE for grep-based verification here — it silently returns nothing.** `diff.external = difft --color always --display side-by-side-show-both` is set, so every `git diff` emits side-by-side ANSI with **no `+`/`-`/`@@` prefixes**, and it aborts partway (`fatal: external diff died`). A `git diff <range> | grep '^+'` therefore yields **zero hits and reads as "clean"** — it invalidated two verification passes in a row before being caught [observed 2026-08-21]. Always use `git --no-pager -c core.pager=cat diff --no-ext-diff` for any programmatic diff inspection. Sanity check: `curl.sh` over `bd7b1a9..d63f437` yields 203 `+` lines and 10 `@@` hunks; if a diff-grep returns 0, suspect the driver before believing the result.
-- **Use `git grep`, not `grep -rn`, for completeness sweeps.** A wide `grep -rn "<string>" /stack` silently omitted `projects/CLAUDE.md:11`, which `git grep` found in the same tree; `/stack/projects` is a real directory, not a symlink, so it is not a traversal artefact — most likely rtk output filtering. Any "we removed every reference" claim built on a single `grep -rn` is unsound. Also note a wide `grep -rn` over `~/.claude` returns megabytes because it hits session `.jsonl` transcripts — exclude `/(logs|history|shell-snapshots|todos|var|plugins|teams)/` and `*.jsonl`. **But `git grep` has the mirror blind spot, and it bites hardest on exactly the vars compose plumbs: it cannot see gitignored files, so `docker/images/local.*/docker-compose.yaml` and any `docker-compose*.local.yaml` are invisible to it.** Renaming `GLOBAL_STACK_ANDROID_SDK_URL` → `..._SDK_BUILD` swept clean under `git grep` while `local.05php8-5-…-android-n-flutter3-41-9/docker-compose.yaml:144` still plumbed the old name — which would have handed the all-in-one image a blank value and no new one, killing `global-stack-android-setup.sh` under `set -u` [observed 2026-09-11, row 31]. So a rename with compose consumers needs **both** sweeps plus a clean-environment validation: plain `grep`/`rtk proxy grep` over `docker/images/local.*` and `docker-compose*.local.yaml`, then `env -i HOME=$HOME PATH=$PATH bash -c 'cd /stack && docker compose --env-file .env.local config -q'` with **stderr captured**. `config -q` will not catch it on its own — it *warns* on an unset variable and still exits **0**, and compose interpolation prefers the **shell environment** over `--env-file`, so a stale `export` of the old name in the session's own shell suppresses even that warning. Test the exit status separately from the grep: `out="$(… config -q 2>&1)" || fail` — a failing command on the left of `&&` does not abort under `set -e`.
-- **Spawn reviewer subagents UNNAMED** — passing `name:` routes their return through `SendMessage`, which can be denied or unavailable, so they run and their reports vanish. See § "Certification".
+- **Use `git grep`, not `grep -rn`, for completeness sweeps** — a wide `grep -rn` silently omitted a hit `git grep` found, and over `~/.claude` it returns megabytes of `.jsonl` transcripts. **But `git grep` cannot see gitignored files** (`docker/images/local.*/docker-compose.yaml`, `docker-compose*.local.yaml`): a rename with compose consumers needs BOTH sweeps plus a clean-environment `config -q` with stderr captured — `config -q` only WARNS on an unset variable and exits 0, and a stale `export` of the old name in the shell hides even the warning → `.claude/rules/docker-images.md`
 - **A self-referential idempotence guard is not one.** If a script's replacement text contains the very string its "already clean" check greps for, that branch can never fire after a successful run — the re-run falls through to the abort path. The `global-stack-lead-dev` handover script did exactly this: its own tombstone text contained the name [observed 2026-08-21]. Validate JSON *before* overwriting, not after.
 - **Never edit a test file while a background run is executing it** — bash reads scripts incrementally, so the result is untrustworthy whichever way it lands. Kill the run and start again.
-- **`startup-prologue.test.sh` does NOT implement `--section` at all — it ignores every argument silently.** `--section=99999` there prints a full `ALL PASSED ✓ N / N` and exits **0**, while the same flag on `env-scan.test.sh` exits 1 with `NO TESTS RAN` [Verified 2026-09-11, row 32]. So a `--section=` run of that suite is the WHOLE suite, and any claim of "I ran only §N" against it is false — filter the output instead, and read the tally line as the tell — a full pass reports every test (1095 on 2026-09-27). The run time is load-dependent and a weak tell: **~19 s** idle [measured 2026-09-11 with `/usr/bin/time`, row 32], **161 s** at load average 22-24 [measured 2026-09-24]. Same can-never-fire class as the COMMA-separated `--section` bullet, one level up: the flag looks honoured because the thing it should have filtered passes anyway.
+- **`startup-prologue.test.sh` does NOT implement `--section` at all — it ignores every argument silently.** A `--section=` run is the WHOLE suite: it prints a full `ALL PASSED ✓ N / N` and exits 0, so filter its output instead and read the tally line as the tell. Running a suite loads no rules file, hence this line; the detail is in `.claude/rules/startup-tests.md`
 - **A trailing `[[ cond ]] && cmd` makes the FALSE test the script's own exit status** — fix with an `if`, never a trailing `|| true` → `.claude/rules/startup-scripts.md`
 - **`bin/tests/*.test.sh --section=` takes a COMMA-separated list** (`IFS=','`) — **in the env-update and env-scan suites; see the `startup-prologue.test.sh` bullet for the one that has no such flag**. `--section='112 113'` is a single unmatched token. It used to print `ALL PASSED ✓ 0 / 0` and exit **0** — a typo produced a green run in which nothing executed; it now exits 1 with `NO TESTS RAN`. Do not read the suite's tally from `✓` marks or by summing the per-section `└─` lines: the breakdown repeats section lines and both over-count (786 → 902 → 923 for one run). The `ALL PASSED ✓ N / N` line is the only authoritative tally.
 - **Bash-written files bypass all PostToolUse hooks** — linting (shellcheck, hadolint, yamllint), formatting (shfmt), and backup only fire on `Edit`/`Write` tool calls. Files written via `cat >`, heredocs, `sed -i`, or other Bash redirects are invisible to hooks. Always use the `Write` or `Edit` tool when hook coverage matters.
@@ -443,8 +407,7 @@ make start-local-registry create-buildx-builder  # NEW cert + daemon restart + b
 - **`make soft-restart` is DESTRUCTIVE** — despite the name it `sudo rm -rf`s `tools/` and restores it from `var/tools`; it is NOT the documented soft restart (`make down-n-up`). A stale `var/tools` means a full multi-10-minute reinstall. Until 2026-11-07 it also stopped every container on the host and left the local registry dead (`connection refused` at the next build); it now stops only containers that mount the tools path → `.claude/rules/host-tooling.md`
 - **`make save` exports EVERY Docker image on the machine** — not just stack images; slow, disk-hungry, undocumented side effect
 - **Host checkout MUST live at `/stack`** — `tools/.shellrc/*.shellrc` exports bake absolute paths (`/stack/tools/...`) shared by containers and host; a checkout at any other path breaks host-container binding
-- **LOCAL port range**: `GLOBAL_STACK_LOCAL_*_PORT_*` use host range **41700–41899** (200 slots). Standard `GLOBAL_STACK_*_PORT_*` use 42700–42899. Next free LOCAL slot: 41720 (41719 is taken — the `…_TWES_IN_PORT_41719=41719` line of `.env.local`).
-- **LOCAL port var names for `local.05php8-5-...`**: the 7 port vars use SHORT form (`..._RUBY_N_RUST_N_PYTHON_N_JAVA_N_...`, no version suffixes), but `ALLTOGETHER_NAME` uses the LONG form with `05` prefix (`GLOBAL_STACK_LOCAL_05PHP8_5_N_NODE24_N_RUBY4_N_RUST_N_PYTHON3_N_JAVA27_N_ANDROID_N_FLUTTER3_41_9_ALLTOGETHER_NAME`). Pattern: env vars (short) vs healthcheck token (long).
+- **LOCAL ports**: `GLOBAL_STACK_LOCAL_*_PORT_*` use host range **41700–41899** (standard `GLOBAL_STACK_*_PORT_*`: 42700–42899); the next free LOCAL slot and the SHORT-vs-LONG naming of the `local.05php8-5-…` vars → `.claude/rules/env-files.md`
 
 ## Credentials & Stateful Data
 
@@ -466,41 +429,9 @@ ls tools/successes/ | grep <tier02-name>  # Check tier 02 manager health
 
 ## Claude Code Configuration
 
-Claude Code's configuration for this project lives in:
+The inventory of `~/.claude/` (the developer's own install — this repo never writes it), `claude-setup/`, `docs/BLAST-RADIUS.md`, `.claude/settings.json` (CLAUDE CANNOT WRITE THIS), `.claude/agents/` (the three reviewers only), `.claude/hooks/`, `.claude/skills/` and `var/claude/` → `.claude/rules/claude-config.md` (loads when you open anything under `.claude/`, `CLAUDE.md` or `projects/CLAUDE.md`). The path-scoped rules files:
 
 ```
-~/.claude/CLAUDE.md                      # Global reasoning framework — the developer's own install
-~/.claude/THINKING.md                    #   from his bundle. This repo NEVER writes these; the
-~/.claude/BLAST-RADIUS.md                #   container-era bootstrap that did was removed 2026-08-18
-~/.claude/settings.json                  # Global settings (model, plugins) — never touched by this repo
-
-claude-setup/claude-setup-global.tar.gz  # The dev's machine bundle: PROVENANCE for the docs above
-docs/BLAST-RADIUS.md                     # The /stack blast-radius table — kept IN REPO because the
-                                         #   global copy carries only `make hard-restart`
-
-.claude/settings.json                    # Project permissions + hooks — CLAUDE CANNOT WRITE THIS
-.claude/settings.local.json              # Local UI preferences (gitignored)
-.claude/agents/                          # Agent definitions (project-scoped) — REVIEWERS ONLY;
-                                         #   the global-stack-lead-dev orchestrator was deleted
-                                         #   2026-08-19, work is done in the main conversation
-  stack-infra-reviewer.md                #   ladder lens 1: correctness + regression
-  completeness-reviewer.md               #   ladder lens 2: completeness + blast radius
-  reproducibility-reviewer.md            #   ladder lens 3: clean-clone + destructive posture
-.claude/hooks/                           # PostToolUse + PreCompact hook scripts
-  shellcheck-on-write.sh                 # Lint .sh files on write        }
-  hadolint-on-write.sh                   # Lint Dockerfiles on write      } all five are LIVE on
-  yamllint-on-write.sh                   # Validate YAML on write         } this machine — the
-  shfmt-on-write.sh                      # Check shell formatting         } tools are installed
-  env-guard-on-write.sh                  # Guard .env edits               }
-                                         # (log_obs(): the hooks above source the GLOBAL
-                                         #  ~/.claude/hooks/log-helpers.sh, no-op stub when absent —
-                                         #  global-is-reference ruling, 2026-08-18; no repo copy)
-.claude/skills/                          # Slash skill definitions (read in place, no install)
-  lint/  fmt/  check-versions/  bump-versions/  validate/  stack-health/
-  env-diff/  service-info/  new-service/  debug-service/            # domain skills
-  stack-ask-human/  stack-lenses/        # the two repo-specific workflow/review skills; every
-                                         #   other workflow/review skill comes from ~/.claude/skills/
-                                         #   (global-is-reference ruling, 2026-08-18)
 .claude/rules/                           # Path-scoped knowledge split out of this file
                                          #   (/rules-split, 2026-10-09): each file loads only
                                          #   when a file matching its `paths:` is opened (see § Gotchas intake rule)
@@ -511,9 +442,9 @@ docs/BLAST-RADIUS.md                     # The /stack blast-radius table — kep
   global-unu-opt.md                      #   templates/shell/global-unu*.sh, bin/tests/global-unu-opt.test.sh
   docker-images.md                       #   docker/images/**, bin/tests/mongo9-rseq.test.sh, bin/tests/postgres-healthcheck.test.sh, …
   host-tooling.md                        #   Makefile, bin/git-strip-coauthored.sh, bin/check-bake-targets.sh, …
-
-var/claude/                              # Reports/review outputs (gitignored); handoffs go to the
-                                         #   GLOBAL PreCompact hook's memory pipeline, not the repo
+  env-files.md                           #   .env*, bin/env-update.sh, bin/env-scan.sh, docker/config/dist/bin/**, docker/images/local.*/**, …
+  claude-config.md                       #   .claude/**, CLAUDE.md, projects/CLAUDE.md, projects/.claude/**, .gitignore, …
+  shell-conventions.md                   #   bin/**, docker/config/dist/bin/**, docker/images/*/conf/bin/**, templates/shell/**, .claude/hooks/**
 ```
 
 ## File Layout Quick Reference
