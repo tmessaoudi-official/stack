@@ -87,7 +87,8 @@ touches was carried, and nothing downstream still refers to the old shape.*
    the correctness lens.
 
 8. **Docs that are load-bearing here.** `CLAUDE.md` (§ Gotchas, § Architecture tier table, § Common
-   Workflows, and the **`.claude/` inventory block** under § "Claude Code Configuration"),
+   Workflows, and the **`.claude/` inventory block** — `.claude/rules/claude-config.md`, indexed
+   from § "Claude Code Configuration", whose `.claude/rules/` list stays in `CLAUDE.md`),
    `templates/tips/*.md` (the full flag references for `env-update`/`env-scan` live there, not in
    `CLAUDE.md`), `README.md`, and `TODO.md` if the change closes or opens a backlog item. Check the
    inventory block against `ls .claude/**` — a skill, hook or
