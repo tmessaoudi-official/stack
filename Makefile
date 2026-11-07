@@ -19,6 +19,15 @@ GLOBAL_STACK_DOCKER_CLI_NO_COMPOSE_BAKE ?= ${COMPOSE_BAKE}
 
 default: help
 
+# Prerequisites run in the order written ONLY when make is serial, and this
+# Makefile depends on that order: every down-n-* composite lists
+# ensure-local-registry before down (a broken registry must leave the stack
+# untouched), and down before up. Under -j (MAKEFLAGS=-j4 passes through
+# global-stack-make-exec.sh) down could run before ensure fails, or alongside up.
+# .NOTPARALLEL (every GNU make) rather than .WAIT (a hard error before 4.4).
+# Image builds still run in parallel inside buildx bake.
+.NOTPARALLEL:
+
 SERVICES_SHELL := \
 	00base 00corentinth-it-tools \
 	01axllent-mailpit 01caddy 01epiclabs-docker-oracle-xe-11g \
@@ -181,7 +190,7 @@ create-buildx-builder:
 	docker buildx create --debug --name docker-buildx-builder --driver docker-container --driver-opt image=custom-moby/buildkit --driver-opt network=host --driver-opt env.BUILDKIT_REGISTRY_CONFIG=${GLOBAL_STACK_DOCKER_ROOT_PATH}/docker/registry/config.local.json --driver-opt env.BUILDKIT_EXTRA_MOUNTS=[/stack/docker/registry/certs/local-global-stack-registry.local.crt:/etc/ssl/certs/local-global-stack-registry.local.crt:ro] --use
 	docker buildx inspect --debug --bootstrap
 start-local-registry:
-	@getent hosts ${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS} >/dev/null || { echo "FATAL: '${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}' does not resolve — add '127.0.0.1 ${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}' to /etc/hosts (templates/tips/docker-local-registry.md). Nothing was changed: no cert, no daemon restart."; exit 1; }
+	@getent hosts "${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}" >/dev/null || { echo "FATAL: '${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}' does not resolve — add '127.0.0.1 ${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}' to /etc/hosts (templates/tips/docker-local-registry.md). Nothing was changed: no cert, no daemon restart."; exit 1; }
 	docker rm -f ${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_NAME} >/dev/null 2>&1 || true
 	openssl req -x509 -newkey rsa:4096 -sha256 -days 365 -nodes -keyout ./docker/registry/certs/${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}.key -out ./docker/registry/certs/${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}.crt -subj "/CN=${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}" -addext "subjectAltName=DNS:${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}"
 	sudo cp ./docker/registry/certs/${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}.crt /usr/local/share/ca-certificates/${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}.crt
@@ -252,7 +261,10 @@ check-image-versions:
 # up (and therefore down-n-up) runs the image-version preflight first,
 # and ensure-local-registry: every stack image is tagged with the local registry,
 # so an `up` that has to build or pull a missing one needs it running.
-up: create-paths ensure-local-registry generate-buildx check-image-versions
+# No generate-buildx: up's first line deletes the bake file and `compose up`
+# never reads it, so the prerequisite only let a broken `bake --print` stop
+# down-n-up AFTER its down, leaving the stack down (panel round 3, R3-I1).
+up: create-paths ensure-local-registry check-image-versions
 	rm -rf ${BUILDX_BAKE_FILE} ${COMPOSE_FULL_FILE}
 	GLOBAL_STACK_DOCKER_CLI_NO_COMPOSE_BAKE="false" $(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="up" GLOBAL_STACK_DOCKER_CLI_EXEC_FLAGS="--remove-orphans --detach" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
 up-build: create-paths ensure-local-registry generate-buildx

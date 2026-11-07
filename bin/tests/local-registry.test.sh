@@ -96,6 +96,9 @@ case "${1:-}" in
   container)
     [[ -e "${SBX}/daemon-down" ]] && { echo "Cannot connect to the Docker daemon" >&2; exit 1; }
     if [[ "${2:-}" == ls ]]; then
+      # slow-ls: a REAL delay (the sandbox's `sleep` is a no-op stub), so a
+      # parallel make would reach `down` while ensure is still querying (5.16).
+      [[ -e "${SBX}/slow-ls" ]] && /usr/bin/sleep 3
       # Answer like real docker, so a drift in the script's query is visible
       # (panel 2026-11-07: dropping --all or switching to {{.Status}} stayed
       # 74/74 against a stub that ignored its arguments).
@@ -142,6 +145,7 @@ case "${1:-}" in
   buildx)
     for a in "$@"; do
       if [[ "${a}" == --print ]]; then
+        [[ -e "${SBX}/bake-print-fails" ]] && { echo "ERROR: failed to parse bake definition" >&2; exit 1; }
         printf '%s\n' '{"group":{"default":{"targets":["svc-a","svc-b"]}},"target":{"svc-a":{"tags":["x/a"]},"svc-b":{"tags":["x/b"]}}}'
         exit 0
       fi
@@ -169,7 +173,12 @@ EOF
     printf '#!/usr/bin/env bash\nSBX=%q\n' "${SBX}"
     cat <<'EOF'
 printf '%s\n' "$*" >>"${SBX}/getent.log"
-[[ "${1:-}" == hosts && ! -e "${SBX}/alias-unresolved" ]] && { printf '127.0.0.1 %s\n' "${2:-}"; exit 0; }
+[[ "${1:-}" == hosts ]] || exit 2
+# Like glibc getent: NO key enumerates the database and exits 0; an EMPTY key
+# ('getent hosts ""') is not found, exit 2 (panel round 3: the old stub
+# answered 0 for both, so an unquoted empty alias passed the guard unseen).
+(($# == 1)) && { printf '127.0.0.1 localhost\n'; exit 0; }
+[[ -n "${2}" && ! -e "${SBX}/alias-unresolved" ]] && { printf '127.0.0.1 %s\n' "${2}"; exit 0; }
 exit 2
 EOF
   } >"${SBX}/stub/getent"
@@ -493,9 +502,11 @@ GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS=\${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_N
 GS_LOCAL_REGISTRY_WAIT_TRIES=3
 EOF
 }
-run_e2e() { # run_e2e <make-target> — the wrapper, exactly as global-stack-*.sh call it
+run_e2e() { # run_e2e <make-target> [VAR=value ...] — the wrapper, exactly as global-stack-*.sh call it
+  local _t="$1"
+  shift
   RUN_OUT="$(env -i HOME="${SBX}" PATH="${SBX}/stub:${SYS_PATH}" GLOBAL_STACK_DOCKER_ROOT_PATH="${SBX}" \
-    GLOBAL_STACK_MAKE_EXEC="$1" timeout 120 bash "${WRAPPER}" 2>&1)"
+    GLOBAL_STACK_MAKE_EXEC="${_t}" "$@" timeout 120 bash "${WRAPPER}" 2>&1)"
   RUN_RC=$?
 }
 first_line_of() { grep -n -E -e "$1" "${SBX}/docker.log" | head -n1 | cut -d: -f1; }
@@ -583,6 +594,26 @@ for _t in down-n-up down-n-rebuild-force-recreate; do
     eval 'rc_nonzero && ! docker_called "compose .* down"'
 done
 
+# A broken bake definition must not strand the stack: up does not use the bake
+# file (its first recipe line deletes it), so down-n-up must still bring the
+# stack up (panel round 3, R3-I1 — the wrapper no longer ignores errors).
+e2e_sandbox running
+touch "${SBX}/bake-print-fails"
+run_e2e down-n-up
+check "5.15 'down-n-up' with a failing 'buildx bake --print': still brings the stack up" \
+  eval 'rc_zero && docker_called "^compose --env-file .env.local up --remove-orphans --detach$"'
+
+# Under parallel make (MAKEFLAGS=-j4 passes through the wrapper) the order of
+# prerequisites is not an order: ensure must still fail BEFORE any down
+# (panel round 3, R3-I2). slow-ls keeps ensure busy long enough for -j to show.
+for _t in down-n-up down-n-rebuild-force-recreate; do
+  e2e_sandbox dead
+  touch "${SBX}/slow-ls"
+  run_e2e "${_t}" MAKEFLAGS=-j4
+  check "5.16 '${_t}' under MAKEFLAGS=-j4, registry dead: no 'down' ran" \
+    eval 'rc_nonzero && ! docker_called "compose .* down"'
+done
+
 soft_sandbox running
 sed -i 's|^GLOBAL_STACK_DOCKER_TOOLS_PATH=.*|GLOBAL_STACK_DOCKER_TOOLS_PATH=|' "${SBX}/.env.local"
 run_e2e soft-restart
@@ -609,6 +640,15 @@ e2e_sandbox running
 run_e2e start-local-registry
 check "5.14 start-local-registry, alias resolves: the check lets it through (next step: openssl req)" \
   eval 'grep -q "^openssl req" "${SBX}/forbidden.log"'
+# An EMPTY alias (no .env.local yet, or set blank) must fail the same check: an
+# unquoted operand turns it into 'getent hosts', which enumerates and exits 0.
+e2e_sandbox running
+sed -i 's|^GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS=.*|GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS=|' "${SBX}/.env.local"
+run_e2e start-local-registry
+check "5.17 start-local-registry, alias EMPTY: exits non-zero and points at /etc/hosts" \
+  eval 'rc_nonzero && out_has "/etc/hosts"'
+check "5.17 ... before openssl, sudo, systemctl or 'docker rm'" \
+  eval '[[ ! -s "${SBX}/forbidden.log" ]] && ! docker_called "^rm "'
 
 # ── leak check + tally ───────────────────────────────────────────────────────
 cleanup
