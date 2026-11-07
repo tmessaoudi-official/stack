@@ -15,9 +15,14 @@
 # (docker/buildkit/Dockerfile) COPIES the cert in at image build time, so a new
 # cert is trusted only after `make create-buildx-builder` rebuilds it. Rotation is
 # therefore `make start-local-registry create-buildx-builder`, explicitly — the only
-# path that needs sudo or a daemon restart. A running registry that never answers
-# is a cert/trust/port problem that re-creating it would not fix, so ensure stops
-# with a pointer at its logs instead.
+# path that needs sudo or a daemon restart. A running registry that never answers,
+# or one in a state ensure cannot start (dead), is not a trust problem: the probe
+# is `curl -k`, so trust and expiry cannot silence it. The usual cure is
+# root-free: remove the container and let ensure re-create it from the existing
+# cert (the data is bind-mounted, so it survives). Only a cert/key mismatch, for
+# example after an interrupted `openssl req`, needs the rotation. ensure never
+# removes a container on its own, so it stops and names both, root-free first
+# (panel round 4).
 #
 # Values come from the environment: run it through make (`make ensure-local-registry`),
 # which exports .env.local — GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS is NESTED
@@ -54,6 +59,7 @@ _GS_LR_KEY="${_GS_LR_DIR}/certs/${_GS_LR_ALIAS}.key"
 _GS_LR_URL="https://${_GS_LR_ALIAS}:${_GS_LR_PORT}/v2/"
 _GS_LR_TRIES="${GS_LOCAL_REGISTRY_WAIT_TRIES:-30}"
 _GS_LR_ROTATE="make start-local-registry create-buildx-builder"
+_GS_LR_RECREATE_HINT="Re-create it from the existing cert (no root, no daemon restart, data kept): 'docker rm -f ${_GS_LR_NAME} && make ensure-local-registry'. Only if it still does not answer (e.g. a cert/key mismatch), rotate: '${_GS_LR_ROTATE}'."
 
 # Prints the container state (running/exited/created/paused/restarting/dead/
 # removing), or nothing when no such container exists. A docker failure (daemon
@@ -83,7 +89,7 @@ _gs_lr_wait() {
   fi
   _state="$(_gs_lr_state)"
   _gs_lr_fatal "local registry '${_GS_LR_NAME}' is ${_state} but ${_GS_LR_URL} did not answer after ${_GS_LR_TRIES} tries (curl exit ${_rc})" \
-    "Check 'docker logs ${_GS_LR_NAME}'. Re-create it (and the builder's trust) with '${_GS_LR_ROTATE}'."
+    "Check 'docker logs ${_GS_LR_NAME}'. ${_GS_LR_RECREATE_HINT}"
 }
 
 _gs_lr_create() {
@@ -125,7 +131,7 @@ _gs_lr_ensure() {
       ;;
     *)
       _gs_lr_fatal "local registry '${_GS_LR_NAME}' is in state '${_state}'" \
-        "Re-create it with '${_GS_LR_ROTATE}'."
+        "${_GS_LR_RECREATE_HINT}"
       ;;
   esac
   _gs_lr_wait

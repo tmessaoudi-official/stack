@@ -48,7 +48,7 @@ SERVICES_SH := 01postgres18 01redis 01valkey 02dpage-pgadmin4
 
 SERVICES_ALL := $(SERVICES_SHELL) $(SERVICES_SH)
 
-.PHONY: help mkdir-p touch create-paths generate-buildx docker-cli create-buildx-builder check-image-versions \
+.PHONY: help mkdir-p touch create-paths generate-buildx docker-cli create-buildx-builder check-image-versions check-compose \
 	start-local-registry ensure-local-registry build up up-build up-build-force-recreate down \
 	down-n-rebuild down-n-rebuild-force-recreate rebuild rebuild-force-recreate \
 	down-n-up exec restart health wait-healthy save commit restore log-follow hard-restart soft-restart \
@@ -190,7 +190,7 @@ create-buildx-builder:
 	docker buildx create --debug --name docker-buildx-builder --driver docker-container --driver-opt image=custom-moby/buildkit --driver-opt network=host --driver-opt env.BUILDKIT_REGISTRY_CONFIG=${GLOBAL_STACK_DOCKER_ROOT_PATH}/docker/registry/config.local.json --driver-opt env.BUILDKIT_EXTRA_MOUNTS=[/stack/docker/registry/certs/local-global-stack-registry.local.crt:/etc/ssl/certs/local-global-stack-registry.local.crt:ro] --use
 	docker buildx inspect --debug --bootstrap
 start-local-registry:
-	@getent hosts "${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}" >/dev/null || { echo "FATAL: '${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}' does not resolve — add '127.0.0.1 ${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}' to /etc/hosts (templates/tips/docker-local-registry.md). Nothing was changed: no cert, no daemon restart."; exit 1; }
+	@test -n "${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}" || { echo "FATAL: GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS is empty — no ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}? Create it first (cp .env ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}, then bin/env-scan.sh). Nothing was changed."; exit 1; }; getent hosts "${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}" >/dev/null || { echo "FATAL: '${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}' does not resolve — add '127.0.0.1 ${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}' to /etc/hosts (templates/tips/docker-local-registry.md). Nothing was changed: no cert, no daemon restart."; exit 1; }
 	docker rm -f ${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_NAME} >/dev/null 2>&1 || true
 	openssl req -x509 -newkey rsa:4096 -sha256 -days 365 -nodes -keyout ./docker/registry/certs/${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}.key -out ./docker/registry/certs/${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}.crt -subj "/CN=${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}" -addext "subjectAltName=DNS:${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}"
 	sudo cp ./docker/registry/certs/${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}.crt /usr/local/share/ca-certificates/${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}.crt
@@ -203,7 +203,7 @@ start-local-registry:
 # the existing cert, waits for /v2/, and FAILS rather than rotate the cert (the
 # buildx builder bakes it in — rotation is `make start-local-registry
 # create-buildx-builder`). A prerequisite of every target that builds or brings the
-# stack up (`up` too: every stack image is registry-tagged), and the FIRST
+# stack up (`up` too: most stack images build FROM the registry), and the FIRST
 # prerequisite of every down-n-* composite, so a registry that cannot be healed
 # fails before anything is torn down. A registry stopped by anything (soft-restart
 # before 2026-11-07, a manual `docker stop`) heals instead of failing the build
@@ -258,13 +258,27 @@ build: create-paths ensure-local-registry generate-buildx
 check-image-versions:
 	@bash bin/check-image-versions.sh || true
 
+# The compose project must parse before anything is torn down or brought up.
+# This is a strict `config -q`: no -i, so a failure stops make, and -q prints no
+# resolved values, so no password reaches a log. It catches parse errors only
+# (`config` merely WARNS on an unset variable). It runs through docker-cli so it
+# sees make's exported .env.local, as `up` does (CLAUDE.md § Gotchas, "Create or
+# recreate containers ONLY via … make up"). A prerequisite of `up`; every
+# down-n-* composite and soft-restart run it right after ensure-local-registry,
+# before their down (panel round 4, R4-I1).
+check-compose:
+	@$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="config" GLOBAL_STACK_DOCKER_CLI_EXEC_FLAGS="-q" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --warn-undefined-variables || { echo "FATAL: the compose project does not parse (compose's error is above) — check COMPOSE_FILE in ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV} (no trailing ';') and the compose files it lists."; exit 1; }
+
 # up (and therefore down-n-up) runs the image-version preflight first,
-# and ensure-local-registry: every stack image is tagged with the local registry,
-# so an `up` that has to build or pull a missing one needs it running.
+# and ensure-local-registry: most stack images build FROM the local registry
+# (33 of 42 Dockerfiles) and many are tagged with it, so an `up` that has to
+# build or pull a missing one needs it running.
 # No generate-buildx: up's first line deletes the bake file and `compose up`
-# never reads it, so the prerequisite only let a broken `bake --print` stop
-# down-n-up AFTER its down, leaving the stack down (panel round 3, R3-I1).
-up: create-paths ensure-local-registry check-image-versions
+# never reads it. Its bake-file check was, by accident, the only thing that made
+# `up` fail on an unparseable compose project, and it fired AFTER down-n-up's
+# down (panel rounds 3-4): check-compose does that job, strictly, and the
+# composites run it before their down.
+up: create-paths ensure-local-registry check-compose check-image-versions
 	rm -rf ${BUILDX_BAKE_FILE} ${COMPOSE_FULL_FILE}
 	GLOBAL_STACK_DOCKER_CLI_NO_COMPOSE_BAKE="false" $(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="up" GLOBAL_STACK_DOCKER_CLI_EXEC_FLAGS="--remove-orphans --detach" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
 up-build: create-paths ensure-local-registry generate-buildx
@@ -280,12 +294,12 @@ down:
 	rm -rf tools/errors/*
 	rm -rf tools/locks/*
 	rm -rf tools/elapsed
-down-n-rebuild: ensure-local-registry down build up-build
-down-n-rebuild-force-recreate: ensure-local-registry down build up-build-force-recreate
+down-n-rebuild: ensure-local-registry check-compose down build up-build
+down-n-rebuild-force-recreate: ensure-local-registry check-compose down build up-build-force-recreate
 rebuild: up-build
 rebuild-force-recreate: up-build-force-recreate
 # remove build from here (if you already built the stack)
-down-n-up: ensure-local-registry down up
+down-n-up: ensure-local-registry check-compose down up
 
 exec:
 	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
@@ -352,6 +366,7 @@ soft-restart:
 	@test -d var/tools || { echo "FATAL: var/tools/ is missing — cannot proceed with soft-restart. var/tools is a manual snapshot of a healthy tools/ tree: take one with 'cp -R tools var/tools' while the stack is up. (make save/restore act on var/images, not var/tools.)"; exit 1; }
 	@test -n "${GLOBAL_STACK_DOCKER_TOOLS_PATH}" || { echo "FATAL: GLOBAL_STACK_DOCKER_TOOLS_PATH is empty (no ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}?) — soft-restart cannot tell which containers hold tools/, so it will not remove it."; exit 1; }
 	$(MAKE) ensure-local-registry --silent --warn-undefined-variables
+	$(MAKE) check-compose --silent --warn-undefined-variables
 	$(MAKE) down --silent --ignore-errors --keep-going --warn-undefined-variables
 	docker ps -q --filter volume=${GLOBAL_STACK_DOCKER_TOOLS_PATH} | xargs -r docker stop
 	sudo rm -rf tools

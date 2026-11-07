@@ -135,6 +135,9 @@ case "${1:-}" in
     exit 0
     ;;
   compose)
+    # compose-fails: an unparseable project (bad YAML, a trailing ';' in
+    # COMPOSE_FILE) — every compose call fails, as the real one does (5.18/5.19).
+    [[ -e "${SBX}/compose-fails" ]] && { echo "yaml: line 3: mapping values are not allowed here" >&2; exit 1; }
     prev=""
     for a in "$@"; do
       [[ "${prev}" == --output ]] && printf 'services: {}\n' >"${a}"
@@ -295,8 +298,13 @@ check "1.9  running but /v2/ never answers: exits non-zero" rc_nonzero
 check "1.9  running but silent: points at 'docker logs test-reg'" out_has "docker logs test-reg"
 check "1.9  running but silent: polls exactly GS_LOCAL_REGISTRY_WAIT_TRIES times" \
   eval '[[ "$(grep -c "https://test-reg.local:42999/v2/" "${SBX}/curl.log")" -eq 3 ]]'
-check "1.9  running but silent: never re-creates (a silent registry is a cert/trust problem)" \
+check "1.9  running but silent: never re-creates on its own (removal is the developer's call)" \
   eval '! docker_called "^(rm|run|start) "'
+# The probe is curl -k, so trust/expiry cannot make it silent: the first remedy is
+# root-free (re-create from the existing cert), the rotation only the fallback
+# (panel round 4, R4-3 — the rotation restarts the daemon twice).
+check "1.9b running but silent: offers the root-free re-create FIRST, the rotation as fallback" \
+  eval 'out_has "docker rm -f test-reg && make ensure-local-registry" && out_has "make start-local-registry create-buildx-builder" && [[ "${RUN_OUT%%docker rm -f test-reg*}" != *"make start-local-registry"* ]]'
 
 make_sandbox exited
 touch "${SBX}/start-fails"
@@ -307,6 +315,8 @@ make_sandbox dead
 run_lr ensure
 check "1.11 dead: exits non-zero, names the recreate command, touches nothing" \
   eval 'rc_nonzero && out_has "make start-local-registry create-buildx-builder" && ! docker_called "^(start|run|rm) "'
+check "1.11b dead: offers the root-free re-create FIRST, the rotation as fallback" \
+  eval 'out_has "docker rm -f test-reg && make ensure-local-registry" && [[ "${RUN_OUT%%docker rm -f test-reg*}" != *"make start-local-registry"* ]]'
 
 make_sandbox exited
 touch "${SBX}/daemon-down"
@@ -614,6 +624,27 @@ for _t in down-n-up down-n-rebuild-force-recreate; do
     eval 'rc_nonzero && ! docker_called "compose .* down"'
 done
 
+# An unparseable compose project must fail loudly, and BEFORE any down: the
+# round-3 fix took generate-buildx (whose bake check caught it) off up's path,
+# and up's own compose sub-make ignores errors (panel round 4, R4-I1).
+e2e_sandbox running
+touch "${SBX}/compose-fails"
+run_e2e up
+check "5.18 'make up' with an unparseable compose project: exits non-zero and says so" \
+  eval 'rc_nonzero && out_has "does not parse" && ! docker_called " up --remove-orphans"'
+for _t in down-n-up down-n-rebuild-force-recreate; do
+  e2e_sandbox running
+  touch "${SBX}/compose-fails"
+  run_e2e "${_t}"
+  check "5.19 '${_t}' with an unparseable compose project: exits non-zero BEFORE any 'down'" \
+    eval 'rc_nonzero && out_has "does not parse" && ! docker_called "compose .* down"'
+done
+soft_sandbox running
+touch "${SBX}/compose-fails"
+run_e2e soft-restart
+check "5.19 soft-restart with an unparseable compose project: exits non-zero before 'down', the stop or 'rm -rf tools'" \
+  eval 'rc_nonzero && out_has "does not parse" && ! docker_called "compose .* down" && ! docker_called "^ps -q --filter volume=" && [[ ! -s "${SBX}/sudo.log" && -f "${SBX}/tools/live-only" ]]'
+
 soft_sandbox running
 sed -i 's|^GLOBAL_STACK_DOCKER_TOOLS_PATH=.*|GLOBAL_STACK_DOCKER_TOOLS_PATH=|' "${SBX}/.env.local"
 run_e2e soft-restart
@@ -645,8 +676,10 @@ check "5.14 start-local-registry, alias resolves: the check lets it through (nex
 e2e_sandbox running
 sed -i 's|^GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS=.*|GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS=|' "${SBX}/.env.local"
 run_e2e start-local-registry
-check "5.17 start-local-registry, alias EMPTY: exits non-zero and points at /etc/hosts" \
-  eval 'rc_nonzero && out_has "/etc/hosts"'
+check "5.17 start-local-registry, alias EMPTY: exits non-zero and names the missing .env.local" \
+  eval 'rc_nonzero && out_has "GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS is empty" && out_has ".env.local"'
+check "5.17 ... and does NOT tell you to add an empty name to /etc/hosts" \
+  eval '! out_has "add '"'"'127.0.0.1 '"'"' to"'
 check "5.17 ... before openssl, sudo, systemctl or 'docker rm'" \
   eval '[[ ! -s "${SBX}/forbidden.log" ]] && ! docker_called "^rm "'
 
