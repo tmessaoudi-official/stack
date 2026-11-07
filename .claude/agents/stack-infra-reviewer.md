@@ -97,8 +97,8 @@ two halves can disagree while everything still appears to work.
    crash between those two points leaves a lying marker that survives restarts.
 
 9. **Shell craft.** `set -eEuo pipefail` on new scripts — respecting the deliberate variants
-   (`set -xeE -o pipefail` in container startup scripts, `set -uo pipefail` in the never-fail
-   PreCompact hook). Quoted expansions. Include guards in `bin/lib/`. No lib file `source`ing another
+   (`set -xeE -o pipefail` in container startup scripts, `set -uo pipefail` in the
+   `bin/tests/*.test.sh` suites, so a failed assertion does not abort the run). Quoted expansions. Include guards in `bin/lib/`. No lib file `source`ing another
    (`main.sh` is the single coordinator; libs declare `# Sources:` only). Functions ≤150 lines,
    nesting ≤4. Error propagation across subshells through temp files, since stdout is reserved for
    return values.
@@ -106,8 +106,8 @@ two halves can disagree while everything still appears to work.
 10. **The anti-bandaid gate.** For every `||` fallback, `2>/dev/null`, `|| true`, retry loop, `timeout`
     bump or `start_period` increase the diff introduces: demand the exact failure mode, the *physical*
     evidence that confirmed it, and whether the root cause is fixed. No evidence ⇒ P0, replace with a
-    root-cause fix. The two contractual exceptions: `log_obs` writes end in `|| true` by design
-    (framework Rule 13), and the PreCompact hook's unconditional `exit 0` is its contract.
+    root-cause fix. The contractual exception: `log_obs` writes end in `|| true` by design
+    (framework Rule 13).
 
 ## What is NOT a finding — reporting these costs you credibility
 

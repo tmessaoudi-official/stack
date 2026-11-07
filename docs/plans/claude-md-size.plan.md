@@ -8,6 +8,8 @@ elsewhere in CLAUDE.md (the surviving twin is named and checked).
 ## Decisions Log
 - [2026-11-07 14:58] AGREED: Shrink /stack/CLAUDE.md only (global CLAUDE.md, BLAST-RADIUS.md, THINKING.md, RTK*.md untouched); developer's condition: nothing lost, sacrificed or compromised — moves land verbatim in path-scoped rules, dedupes keep a named surviving twin.
 - [2026-11-07 15:19] AGREED: Wait for the concurrent local-registry-lifecycle session to commit its CLAUDE.md and host-tooling.md edits before applying any move; then re-baseline the conservation check on the new HEAD.
+- [2026-11-07 16:44] AGREED: Close the follow-ups: commit the static check as bin/tests/claude-rules-paths.test.sh (every paths: glob matches a regular file or a gitignored path, frontmatter well-formed, CLAUDE.md index agrees both ways, built-in fixtures); probe live per rules file and per untested glob shape (not per glob) with exact-set assertions; developer's "test all the rules loading" accepted in that form.
+- [2026-11-07 16:44] AGREED: stack-infra-reviewer.md rules 9-10: re-attribute set -uo pipefail to the bin/tests suites (19 of 22 use it) instead of the nonexistent PreCompact hook; drop the PreCompact exit-0 exception.
 
 ## Formal Plan
 
@@ -77,6 +79,9 @@ before the moves start); a checkout over someone's uncommitted lines destroys th
 | 1 | Conservation/glob/size check written, red on size only | S | done | - | |
 | 2 | Moves largest-first into env-files, claude-config, shell-conventions, startup-tests, docker-images; one exact repeat removed | M | done | 6d78c5d | CLAUDE.md, .claude/rules/**, .claude/agents/completeness-reviewer.md |
 | 3 | Check green + two sabotages red; total < 150,000 | S | done | - | |
+| 4 | Fresh interactive /stack session shows no size warning | S | done | developer, 2026-11-07 | |
+| 5 | Static rules-paths suite committed; live exact-set probe of every rules file | M | done | - | bin/tests/claude-rules-paths.test.sh, .claude/rules/claude-config.md, CLAUDE.md |
+| 6 | stack-infra-reviewer.md PreCompact text re-attributed | S | done | - | .claude/agents/stack-infra-reviewer.md |
 <!-- /progress-block -->
 ### Blocked
 - RESOLVED 2026-11-07 15:40 (that session committed `34a2001`; the moves landed in `6d78c5d`).
@@ -92,12 +97,22 @@ before the moves start); a checkout over someone's uncommitted lines destroys th
 - Result 2026-11-07 15:5x (applied by `var/claude/claude-md-size/apply.py` on HEAD `34a2001`): CLAUDE.md
   72,992 → 64,245 chars; six-file total 156,129 → **147,382** — headroom only **2,618**. New lessons must
   keep going to `.claude/rules/` (the § Gotchas intake rule) or the warning returns.
-- [Unverified] whether Claude Code counts path-scoped rules toward the same 150k once they load
-  mid-session; only the startup total was measured. The real check is a fresh interactive `/stack`
-  session showing no size warning (never reproduce it with `claude -p` in `/stack`).
-- [Unverified] whether rules load for files under the gitignored `docker/images/local.*/**` (a secondary
-  trigger of `env-files.md`; its main trigger `.env*` was probed).
-- PRE-EXISTING, out of scope: `.claude/agents/stack-infra-reviewer.md:99-110` describes a repo
-  "never-fail PreCompact hook" (`set -uo pipefail`, unconditional `exit 0`) — `/stack` has none since the
-  2026-08-18 global-is-reference ruling (`.claude/settings.json` registers only `PostToolUse`). Fixing it
-  is an agent-def edit and needs the developer's authorization.
+- **Headroom on 2026-11-07 16:5x: six-file total 148,069 → 1,931 left** (`63e98a9` added ~490, the
+  § Testing line for the rules-paths suite 197). Every CLAUDE.md addition now spends it directly.
+- RESOLVED 2026-11-07: the developer confirmed a fresh interactive `/stack` session shows no size warning.
+  (Whether mid-session rule loads count toward the 150k stays unmeasured; the warning is a startup one.)
+- RESOLVED 2026-11-07, live probe (`var/claude/rules-probe/`: `run-matrix.sh`, `expected.txt`,
+  `results.txt`; claude 2.1.319, haiku `-p`, throwaway `git init` copy of `.claude/rules` + `.gitignore`,
+  stub trigger files): one trigger per rules file plus every untested glob shape — 14 triggers, each
+  loading EXACTLY its predicted set (e.g. `bin/lib/env-update/fetchers/androidsdk.sh` → android,
+  env-files, env-update, shell-conventions), both gitignored `docker/images/local.*` triggers included;
+  a no-touch session and a non-matching `README.md` load none; the transcript's `Read` of the trigger is
+  asserted, so "none loaded" cannot mean "never read". Sabotage (`04android` → `04androidX` in a copy)
+  went red. Bash `globstar`+`dotglob` predicted Claude Code's matching in every row.
+- **Observed: a rules file whose opening `---` is removed loads at SESSION START, in every session**
+  (`startup={docker-images}` with and without a file touched). A broken frontmatter is a budget leak,
+  not just a dead rule — `bin/tests/claude-rules-paths.test.sh` now fails on it.
+- Probe traps: haiku may pass a RELATIVE `file_path` (resolve it before comparing), and under the global
+  CLAUDE.md it may run the size gate and never read the file (re-run; the `read-ok` assertion catches it).
+- RESOLVED 2026-11-07: `.claude/agents/stack-infra-reviewer.md` rules 9–10 no longer describe a repo
+  PreCompact hook (developer-approved diff).

@@ -8,6 +8,7 @@ paths:
   - ".gitignore"
   - "claude-setup/**"
   - "docs/BLAST-RADIUS.md"
+  - "bin/tests/claude-rules-paths.test.sh"
 ---
 
 # Claude Code configuration of this repo — inventory and git traps
@@ -60,6 +61,31 @@ docs/BLAST-RADIUS.md                     # The /stack blast-radius table — kep
 var/claude/                              # Reports/review outputs (gitignored); handoffs go to the
                                          #   GLOBAL PreCompact hook's memory pipeline, not the repo
 ```
+
+## The `paths:` frontmatter of `.claude/rules/*.md` — `bin/tests/claude-rules-paths.test.sh`
+
+Added 2026-11-07 (`docs/plans/claude-md-size.plan.md`). A rules file loads only when a file matching
+one of its `paths:` globs is opened, so every defect here is silent: a dead or typo glob means the rule
+never loads for its area; a missing or unclosed frontmatter means the file is no longer path-scoped and
+may load at session start, spending the 150,000-char budget CLAUDE.md was split to fit. The suite
+(static, no network, ~3 s) checks, per rules file: frontmatter opens on line 1 and closes, `paths:` is a
+non-empty list, and every glob matches at least one REGULAR file (bash `globstar` + `dotglob`). A glob
+matching nothing passes only when its path is gitignored by the repo's own `.gitignore`
+(`core.excludesFile=/dev/null`) — that keeps `docker/images/local.*` and `projects/.claude` green on a
+clean clone. It also checks the `CLAUDE.md` index ("The path-scoped rules files:") both ways: every
+rules file has a line, every line names a real file, every glob a line shows is in that file's
+`paths:`. **A new rules file therefore needs its index line in `CLAUDE.md` in the same change.**
+Built-in fixtures prove each check can fire on every run.
+
+Live behaviour, probed 2026-11-07 (claude 2.1.319, haiku `-p`, throwaway `git init` copy of this repo's
+rules and `.gitignore`, stub trigger files; harness `var/claude/rules-probe/`, gitignored): one trigger
+per rules file plus every glob shape in use — 14 triggers — each loaded EXACTLY the set bash
+`globstar`+`dotglob` predicts, the two gitignored `docker/images/local.*` triggers included; a session
+touching nothing and a non-matching file loaded none; a mutated glob in a copy dropped its rule. **A rules
+file whose opening `---` is removed loads at SESSION START in every session** — a broken frontmatter
+spends the always-loaded budget, which is why the suite fails on it. Probe traps: haiku may pass a
+relative `file_path`, and under the global CLAUDE.md it may run the size gate and never read the file —
+assert the `Read` happened before trusting "none loaded".
 
 ## From CLAUDE.md § Gotchas & Pitfalls
 

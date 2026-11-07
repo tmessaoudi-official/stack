@@ -326,6 +326,7 @@ make start-local-registry create-buildx-builder  # NEW cert + daemon restart + b
 - **/opt tool installer tests**: `bash bin/tests/global-unu-opt.test.sh` — no network; stub `curl`/`sudo`, the `GS_UNU_OPT_*` seams → `.claude/rules/global-unu-opt.md`
 - **phpbrew ExtractTask overlay tests**: `bash bin/tests/phpbrew-extract.test.sh` — needs `php` and `tar`; the per-task temp dir overlay → `.claude/rules/startup-tests.md`
 - **Compose env plumbing tests**: `bash bin/tests/compose-env-plumbing.test.sh` — runtime vars reach the containers, resolved through make; needs docker, `jq`, `.env.local` → `.claude/rules/docker-images.md`
+- **Rules `paths:` tests**: `bash bin/tests/claude-rules-paths.test.sh` — every glob matches a file, frontmatter is well-formed, the index below agrees both ways → `.claude/rules/claude-config.md`
 
 ## Claude Code Tooling
 
