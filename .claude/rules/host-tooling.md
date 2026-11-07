@@ -34,3 +34,12 @@ Split out of `CLAUDE.md` by `/rules-split` on 2026-10-09: the text below is unch
 - **open-all-envs tests**: `bash bin/tests/open-all-envs.test.sh` — 22 checks (row 46). Its `android` stub rejects a `--sdk` placed after the subcommand, as the real CLI does, and an `androidsdk:` annotation must open no URL. Runs the script under `env -i` with a stub browser and a temp `HOME`, so no case can touch the real `~/.sdkman`. Covers `.env` resolution from a foreign cwd, the zero-link failure, byte-identical survival of `~/.sdkman/etc/config` (including after a Ctrl-C), and the byte-identical pairing with `templates/tips/open-many-links.md` (script line N → doc line N+7). The interrupt case must raise `kill -INT 0` under `setsid -w`: a SIGINT from inside a pipeline is swallowed
 - **env-guard hook tests**: `bash bin/tests/env-guard.test.sh` — 12 checks on `.claude/hooks/env-guard-on-write.sh`. The port check is **consumer-keyed**: it warns only when some `docker/images/*/docker-compose.yaml` writes `${VAR:-}` immediately followed by a digit. Requires `jq` (the hook exits 0 without it and every case would be vacuous)
 - **Host shell template tests**: `bash bin/tests/profile-shell.test.sh` — 13 checks that `templates/shell/profile.sh` keeps every chatty tool init wrapped in `_gs_quiet` (runs the extracted `# >>> gs-quiet` bytes) and carries no login-time `chown`/`chmod` of a `chrome-sandbox` (1b, audit 2026-10-06 F3); `bash bin/tests/claude-fullauto-shell.test.sh` — 20 checks that the `# >>> gs-claude-fullauto` block (interactive-only `claude()` wrapper adding `--allow-dangerously-skip-permissions`; `command claude` escape; non-interactive shells untouched) is present, byte-identical across `profile.sh` / `.shellrc` / `shell.shellrc`, and behaves, against a fake `claude` on PATH. Run with `< /dev/null` (they spawn `bash -i`).
+
+## From CLAUDE.md § Makefile Patterns (moved by `/rules-split`, 2026-11-07)
+
+- **DRY macros** for per-service targets — five families: `login-service-shell`, `login-service-sh`, `log-service`, `log-follow-service`, `restart-service`
+  ```makefile
+  $(eval $(call login-service-shell,03node24))
+  ```
+- **`docker-cli` target**: central dispatcher — assembles `${GLOBAL_STACK_DOCKER_CLI} ${FLAGS} ${EXEC} ${EXEC_FLAGS} ${SERVICE} ${CONTAINER_COMMAND}`
+- `local.Makefile` extends via `-include local.Makefile`; uses `create-paths::` double-colon for additive extension

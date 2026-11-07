@@ -928,6 +928,8 @@ Rule 17).
   `UNCERTIFIED-BY-EXECUTION`: lock-serialized tier-03 install, a web-server handler writing its
   error token, consumer fail-fast behind a failed web server (see `### Blocked`).
 - [2026-10-17 09:33] ASSUMED (review): `/progress --deep` lens agents scope-drift, critical-path, fragile, undocumented and todo-clusters each run on sonnet — source: the skill's model table (no override in `state/model-overrides.json`). Alternatives: opus (judgment), the session model.
+- [2026-11-07 14:24] AGREED: /rules-split second pass on /stack — fix the stale facts (Postgres volume, node pins, sort version, the § Questions/§ Certification mode claims, dead anchors) and move only § Makefile Patterns → `.claude/rules/host-tooling.md` and the ARG→ENV gotcha → `.claude/rules/docker-images.md`; no new `bin-libs.md` (~1.2 KB did not justify a file). The developer's three checks govern: process sections never move, a gotcha moves only if a named file's edit triggers it, a prune needs file:line proof.
+- [2026-11-07 14:24] AGREED: CLAUDE.md § Questions no longer states `/stack`'s mode — it is whatever `bypass_applies ah <cwd>` resolves, shown in the SessionStart banner (the 2026-09-27 root-only-rule text was stale: the resolver reported ARMED on 2026-11-07). Open: § Git autonomy's "asking permission … violates the no-interrupts directive" conflicts with global Rule 10 in spec mode; left unedited pending the developer.
 
 ## Planning-time verified state (2026-08-31/09-01)
 

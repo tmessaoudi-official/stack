@@ -18,7 +18,7 @@ skills: run the global skill for its machinery, with everything below folded int
 - **Reports live in the repo**: `var/claude/<skill>/` (gitignored). Never `~/.claude/projects/…`.
 - **Non-blocking closes — no interrupts.** End with the findings and a plainly-stated offer
   (`N findings (P0:a P1:b P2:c) — say which to fix`), never a blocking question.
-- **`/converge` runs the ladder** at the tier CLAUDE.md § "Certification ladder" mandates
+- **`/converge` runs the ladder** at the tier CLAUDE.md § "Certification" mandates
   (MAXIMAL for any operational-surface diff; STANDARD for docs-only) — the three lenses are the
   repo agents: `stack-infra-reviewer`, `completeness-reviewer`, `reproducibility-reviewer`
   (`.claude/agents/`).
