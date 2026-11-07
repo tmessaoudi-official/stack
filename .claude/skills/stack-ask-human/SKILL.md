@@ -42,7 +42,9 @@ only what is specific to this repo.
 
 - Any **destructive or unrecoverable stack operation**, because the allow-list-only settings mean
   nothing blocks it mechanically: `make hard-restart`, `make soft-restart` (which `sudo rm -rf`s
-  `tools/`), `docker volume rm` (the DB reset), `docker system prune`, `git push --force`.
+  `tools/`), `make start-local-registry` and `make create-buildx-builder` (both restart the host
+  Docker daemon, killing every container on the machine; the first also mints a new cert), `docker
+  volume rm` (the DB reset), `docker system prune`, `git push --force`.
   See `docs/BLAST-RADIUS.md` § /stack table.
 - Any **write to `.env`** that is not a mechanical `env-update` AUTO decision — and
   `bin/env-update.sh --apply` itself, which cascades into `.env.local` and Dockerfile `ARG` lines.

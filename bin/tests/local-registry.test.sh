@@ -96,9 +96,30 @@ case "${1:-}" in
   container)
     [[ -e "${SBX}/daemon-down" ]] && { echo "Cannot connect to the Docker daemon" >&2; exit 1; }
     if [[ "${2:-}" == ls ]]; then
-      [[ "${state}" != missing ]] && printf '%s\n' "${state}"
+      # Answer like real docker, so a drift in the script's query is visible
+      # (panel 2026-11-07: dropping --all or switching to {{.Status}} stayed
+      # 74/74 against a stub that ignored its arguments).
+      shift 2
+      all=0 filt="" fmt=""
+      while (($#)); do
+        case "$1" in
+          --all | -a) all=1 ;;
+          --filter) filt="${2:-}"; shift ;;
+          --format) fmt="${2:-}"; shift ;;
+        esac
+        shift
+      done
+      [[ "${state}" == missing ]] && exit 0
+      [[ "${filt}" == 'name=^/test-reg$' ]] || exit 0 # another container's name
+      # without --all, docker lists only running/paused/restarting containers
+      ((all)) || [[ "${state}" == running || "${state}" == paused || "${state}" == restarting ]] || exit 0
+      if [[ "${fmt}" == '{{.State}}' ]]; then printf '%s\n' "${state}"; else printf 'Exited (2) 5 hours ago\n'; fi
       exit 0
     fi
+    ;;
+  ps)
+    [[ " $* " == *" --filter volume=${SBX}/tools "* ]] && printf 'c1\n'
+    exit 0
     ;;
   start | unpause)
     [[ -e "${SBX}/start-fails" ]] && exit 1
@@ -137,6 +158,7 @@ EOF
     printf '#!/usr/bin/env bash\nSBX=%q\n' "${SBX}"
     cat <<'EOF'
 printf '%s\n' "$*" >>"${SBX}/curl.log"
+[[ -e "${SBX}/curl-rc" ]] && exit "$(cat "${SBX}/curl-rc")"
 [[ "$(cat "${SBX}/reg.state")" == running && ! -e "${SBX}/silent" ]] && exit 0
 exit 7
 EOF
@@ -144,13 +166,22 @@ EOF
 
   printf '#!/usr/bin/env bash\nexit 0\n' >"${SBX}/stub/sleep"
 
-  local _f
-  for _f in sudo systemctl; do
-    {
-      printf '#!/usr/bin/env bash\nSBX=%q\n' "${SBX}"
-      printf '%s\n' 'printf "%s %s\n" "$(basename "$0")" "$*" >>"${SBX}/forbidden.log"' 'exit 1'
-    } >"${SBX}/stub/${_f}"
-  done
+  {
+    printf '#!/usr/bin/env bash\nSBX=%q\n' "${SBX}"
+    cat <<'EOF'
+if [[ -e "${SBX}/allow-sudo-rm-tools" && "$*" == "rm -rf tools" && "$(pwd -P)" == "$(cd "${SBX}" && pwd -P)" ]]; then
+  printf '%s\n' "$*" >>"${SBX}/sudo.log"
+  exec "$@"
+fi
+printf 'sudo %s\n' "$*" >>"${SBX}/forbidden.log"
+exit 1
+EOF
+  } >"${SBX}/stub/sudo"
+  : >"${SBX}/sudo.log"
+  {
+    printf '#!/usr/bin/env bash\nSBX=%q\n' "${SBX}"
+    printf '%s\n' 'printf "systemctl %s\n" "$*" >>"${SBX}/forbidden.log"' 'exit 1'
+  } >"${SBX}/stub/systemctl"
   # openssl: `build`'s read-only expiry warning (`x509 … -checkend`) is
   # legitimate and answers "not expiring"; anything else — `req`, i.e. making a
   # certificate — is a rotation and is forbidden on every path under test.
@@ -281,6 +312,21 @@ check "1.13b a required var set but EMPTY: exits non-zero, names it, touches not
   eval 'rc_nonzero && out_has "GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS is not set" && ! docker_called "^(start|run) "'
 
 make_sandbox exited
+run_lr ensure
+check "1.12b the state query is exactly 'container ls --all --filter name=^/test-reg\$ --format {{.State}}'" \
+  eval '[[ "$(grep -m1 "^container " "${SBX}/docker.log")" == "container ls --all --filter name=^/test-reg\$ --format {{.State}}" ]]'
+
+# A cold machine without the /etc/hosts alias: curl exits 6 (cannot resolve).
+# Rotating would restart the daemon and fix nothing, so it must not be suggested.
+make_sandbox running
+echo 6 >"${SBX}/curl-rc"
+run_lr ensure
+check "1.15 alias does not resolve (curl 6): exits non-zero and points at /etc/hosts" \
+  eval 'rc_nonzero && out_has "/etc/hosts" && out_has "test-reg.local"'
+check "1.15 ... and does NOT suggest a rotation (it restarts the daemon, fixes nothing)" \
+  eval '! out_has "create-buildx-builder"'
+
+make_sandbox exited
 run_lr bogus
 check "1.14 unknown subcommand: exits non-zero" rc_nonzero
 
@@ -315,6 +361,14 @@ make_sandbox missing nocert
 run_lr create
 check "2.4  create without a cert: exits non-zero, no 'docker run'" eval 'rc_nonzero && ! docker_called "^run "'
 
+# _gs_lr_state's fatal used to exit only the `$(…)` of create's guard, so a
+# failed query read as "missing" and create went on to `docker run`.
+make_sandbox missing
+touch "${SBX}/daemon-down"
+run_lr create
+check "2.6  create when the docker query fails: exits non-zero, no 'docker run'" \
+  eval 'rc_nonzero && ! docker_called "^run "'
+
 # Every case above ran with failing sudo/systemctl/openssl stubs; one log per
 # sandbox, so read them all.
 _forbidden=0
@@ -329,7 +383,7 @@ rule_line() { grep -m1 -E "^$1:" "${MAKEFILE}"; }
 recipe_of() { awk -v t="$1" '$0 ~ "^"t":" {on=1; next} on && /^\t/ {print; next} on {exit}' "${MAKEFILE}"; }
 has_prereq() { rule_line "$1" | sed -E 's/^[^:]+:+//' | tr ' ' '\n' | grep -qxF -e "$2"; }
 
-for _t in build up-build up-build-force-recreate; do
+for _t in build up up-build up-build-force-recreate; do
   check "3.1  '${_t}' has the prerequisite ensure-local-registry" has_prereq "${_t}" ensure-local-registry
 done
 check "3.2  ensure-local-registry runs 'bin/local-registry.sh ensure'" \
@@ -352,12 +406,24 @@ _rm_ln="$(grep -n -F -e "sudo rm -rf tools" <<<"${_soft}" | head -n1 | cut -d: -
 # order check would pass with no filtered stop at all.
 check "3.8  soft-restart stops tools/ holders BEFORE 'sudo rm -rf tools'" \
   eval '[[ -n "${_stop_ln}" && -n "${_rm_ln}" && "${_stop_ln}" -lt "${_rm_ln}" ]]'
-check "3.9  soft-restart ends with ensure-local-registry" \
-  eval 'tail -n1 <<<"${_soft}" | grep -qF -e "ensure-local-registry"'
+_ens_ln="$(grep -n -F -e "ensure-local-registry" <<<"${_soft}" | head -n1 | cut -d: -f1)"
+_up_ln="$(grep -n -E -e '\$\(MAKE\) up( |$)' <<<"${_soft}" | head -n1 | cut -d: -f1)"
+check "3.9  soft-restart runs ensure-local-registry BEFORE \$(MAKE) up" \
+  eval '[[ -n "${_ens_ln}" && -n "${_up_ln}" && "${_ens_ln}" -lt "${_up_ln}" ]]'
+check "3.9  ... and without --ignore-errors (a failure must stop it)" \
+  eval '! grep -F -e "ensure-local-registry" <<<"${_soft}" | grep -qF -e "--ignore-errors"'
+_guard_ln="$(grep -n -F -e 'test -n "${GLOBAL_STACK_DOCKER_TOOLS_PATH}"' <<<"${_soft}" | head -n1 | cut -d: -f1)"
+check "3.9b soft-restart refuses an empty GLOBAL_STACK_DOCKER_TOOLS_PATH before the scoped stop" \
+  eval '[[ -n "${_guard_ln}" && -n "${_stop_ln}" && "${_guard_ln}" -lt "${_stop_ln}" ]]'
 check "3.10 hard-restart keeps its host-wide stop (its prune needs it — 664b215)" \
   eval 'recipe_of hard-restart | grep -qF -e "docker ps -q | xargs -r docker stop"'
 check "3.11 build's cert-expiry hint names 'make start-local-registry create-buildx-builder'" \
   eval 'recipe_of build | grep -F -e "expires within" | grep -qF -e "make start-local-registry create-buildx-builder"'
+
+check "3.12 build's registry gate points at 'make ensure-local-registry'" \
+  eval 'recipe_of build | grep -F -e "FATAL: local registry" | grep -qF -e "make ensure-local-registry"'
+check "3.13 no hint names a bare 'make start-local-registry' (a new cert needs create-buildx-builder)" \
+  eval '! grep -qF -e "make start-local-registry'"'"'" "${MAKEFILE}" "${LR_SCRIPT}"'
 
 # ── 4 ── the wrapper ─────────────────────────────────────────────────────────
 section "4  templates/shell/global-stack-make-exec.sh"
@@ -448,6 +514,40 @@ check "5.6  one service build fails: the wrapper exits non-zero" rc_nonzero
 check "5.6  ... reports BUILD FAILURES naming it" eval 'out_has "BUILD FAILURES" && out_has "svc-a"'
 check "5.6  ... and the stack is NOT brought up on stale images" \
   eval '! docker_called "up --remove-orphans --detach --build --force-recreate"'
+check "5.6  ... and says the stack is DOWN and 'make up' starts it again" \
+  eval 'out_has "stack is DOWN" && out_has "make up"'
+
+e2e_sandbox exited
+run_e2e down-n-up
+check "5.8  'down-n-up' with the registry stopped: succeeds and starts it BEFORE up" \
+  eval 'rc_zero && [[ -n "$(first_line_of "^start test-reg$")" && "$(first_line_of "^start test-reg$")" -lt "$(first_line_of " up --remove-orphans --detach$")" ]]'
+
+# soft-restart, executed: sudo is allowed for exactly `rm -rf tools` in the sandbox.
+soft_sandbox() {
+  e2e_sandbox "$@"
+  touch "${SBX}/allow-sudo-rm-tools"
+  mkdir -p "${SBX}/var/tools"
+  printf 'snapshot\n' >"${SBX}/var/tools/from-snapshot"
+  printf 'live\n' >"${SBX}/tools/live-only"
+}
+soft_sandbox exited
+run_e2e soft-restart
+check "5.9  soft-restart, registry stopped: exits 0" rc_zero
+check "5.9  ... asks docker for the tools-path holders only" \
+  eval 'docker_called "^ps -q --filter volume=${SBX}/tools$"'
+check "5.9  ... stops exactly those ('docker stop c1')" docker_called '^stop c1$'
+check "5.9  ... restores tools/ from var/tools" \
+  eval '[[ -f "${SBX}/tools/from-snapshot" && ! -e "${SBX}/tools/live-only" ]]'
+check "5.9  ... starts the registry BEFORE up" \
+  eval '[[ -n "$(first_line_of "^start test-reg$")" && "$(first_line_of "^start test-reg$")" -lt "$(first_line_of " up --remove-orphans --detach$")" ]]'
+
+soft_sandbox running
+sed -i 's|^GLOBAL_STACK_DOCKER_TOOLS_PATH=.*|GLOBAL_STACK_DOCKER_TOOLS_PATH=|' "${SBX}/.env.local"
+run_e2e soft-restart
+check "5.10 soft-restart with GLOBAL_STACK_DOCKER_TOOLS_PATH empty: exits non-zero and names it" \
+  eval 'rc_nonzero && out_has "GLOBAL_STACK_DOCKER_TOOLS_PATH"'
+check "5.10 ... and never removes tools/" \
+  eval '[[ ! -s "${SBX}/sudo.log" && -f "${SBX}/tools/live-only" ]]'
 
 _forbidden=0
 for _s in "${SANDBOXES[@]}"; do [[ -s "${_s}/forbidden.log" ]] && _forbidden=$((_forbidden + 1)); done

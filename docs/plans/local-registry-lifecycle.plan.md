@@ -2,8 +2,14 @@
 
 ## Status
 
-- **State**: implemented, uncommitted — steps 1–8 done; awaiting commit (spec mode) → panel on
-  the frozen commit → step 9 live recovery
+- **State**: steps 1–8 committed in `34a2001`. The milestone panel round 1 on that commit found
+  13 items, and the refuters upheld 12 of them (the P1 at 5/5). Fixed test-first in a
+  follow-up commit; panel round 2 next. Then step 9, the live recovery (the developer's).
+- **Panel round 1 fixes**: the stub pins the `container ls` argv; `create` no longer swallows a
+  failed query; curl exit 6 → `/etc/hosts` hint, not a rotation; `up` and soft-restart run
+  ensure before `up`; soft-restart refuses an empty tools path; `build` points at ensure and
+  says the stack is DOWN after a failed build; soft-restart has an executed e2e; stale hints
+  and `--publish` pointers fixed; stack-ask-human lists the two daemon-restarting targets.
 - **Size**: Large
 - **Mode**: spec (the `ah` gate fired for this session)
 - **Evidence**: `bin/tests/local-registry.test.sh` 74 / 74; 12 sabotage mutants all red on
@@ -30,6 +36,13 @@
   buildkitd does not read (the builder's Mounts list holds only its state volume). Trust works
   through the cert baked into `custom-moby/buildkit`. Looks like dead config [Inferred: not probed].
 - The deployed `~/.local/bin/global-stack-make-exec.sh` is the developer's to re-deploy.
+- `CLAUDE.md` (the § Gotchas port-var bullet) still says the Makefile's `start-local-registry`
+  recipe writes `--publish ${VAR}:5000`; the consumer is now `bin/local-registry.sh`
+  (`_gs_lr_create`). Not edited in panel round 1 because another session holds uncommitted
+  `CLAUDE.md` edits (claude-md-size); apply after that lands (15:48 ruling).
+- `ensure` never re-creates a running registry whose image is an older
+  `GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_VERSION` or whose port differs from `.env.local`; it
+  waits, then fails with the rotation hint. Pre-existing (panel round 1, observation O2).
 - `hard-restart` still calls `$(MAKE) build --ignore-errors --keep-going` (and `up` the same
   way) itself, so INSIDE hard-restart a failed `ensure-local-registry` or bake is still
   swallowed and `up` still runs. Pre-existing; the wrapper fix does not reach it.
@@ -63,31 +76,42 @@ The phpbrew Dockerfile edit is not causal — it only made a build happen.
 
 ## Design (agreed)
 
-### A. `ensure-local-registry` — idempotent, self-healing (Makefile)
+### A. `ensure-local-registry` — idempotent, self-healing, never rotates (as built)
 
-States → action:
+The 14:44 draft had a cert-rotating ensure and a `rotate-local-registry-cert` target. The
+14:52 ruling SUPERSEDES it: the buildx builder image COPYs the cert at image build time, so a
+rotation without `make create-buildx-builder` breaks trust. Ensure therefore never touches
+the cert, and there is no rotate target. What was built (`bin/local-registry.sh ensure`,
+called by the Makefile target):
 
-| Registry container | Cert on disk | Action |
-|---|---|---|
-| running and `/v2/` answers | any | nothing |
-| exists, stopped | valid | `docker start` |
-| missing | valid (not expiring within 30 days) | `docker run …` (today's line 191 flags, unchanged) — **no** cert rewrite, **no** daemon restart |
-| missing, or cert absent/expiring | absent/expiring | `rotate-local-registry-cert`, then `docker run` |
+| Registry container (`docker container ls --all --filter name=^/<name>$ --format {{.State}}`) | Action |
+|---|---|
+| `running` / `restarting` | wait for `/v2/` |
+| `exited` / `created` | `docker start`, wait |
+| `paused` | `docker unpause`, wait |
+| missing, cert + key on disk | `bin/local-registry.sh create` (`docker run`, the old Makefile flags), wait |
+| missing, no cert | FAIL → `make start-local-registry create-buildx-builder` |
+| `dead` / anything else | FAIL → the same pair |
+| the docker query itself fails | FAIL (never read as "missing") |
 
-Then poll `https://<alias>:<port>/v2/` (bounded, e.g. 30 × 1 s) and **fail** if it never answers.
+The wait polls `https://<alias>:<port>/v2/` (`GS_LOCAL_REGISTRY_WAIT_TRIES`, default 30 × 1 s)
+and FAILS if it never answers. curl's exit code picks the hint: 6 (alias does not resolve) →
+add it to `/etc/hosts`; anything else → `docker logs` + the rotation pair.
 
-- `start-local-registry` keeps its name (hard-restart and muscle memory call it) and becomes
-  `rotate-local-registry-cert` + a forced re-create — its current behaviour, explicit.
-- `rotate-local-registry-cert`: openssl + CA trust + `/etc/docker/certs.d` + daemon restart —
-  the only path that needs sudo or a daemon restart.
-- Prerequisite of `build`, `up-build`, `up-build-force-recreate`. The FATAL curl gate in
-  `build` stays as the last line of defence.
-- soft-restart ends with `ensure-local-registry` (it no longer stops it — see B — but a
-  registry stopped by anything else is healed here too).
+- `start-local-registry` keeps its name and behaviour (new cert + CA trust + daemon restart),
+  now ending in `bin/local-registry.sh create`, so the `docker run` contract exists once. It
+  is always paired with `create-buildx-builder`.
+- Prerequisite of `build`, `up-build`, `up-build-force-recreate` and (panel round 1,
+  15:48) `up`. The FATAL curl gate in `build` stays as the last line of defence and points at
+  `make ensure-local-registry`.
+- soft-restart runs `ensure-local-registry` BEFORE `$(MAKE) up`, without `--ignore-errors`
+  (panel round 1, 15:48).
 
 ### B. soft-restart stops only what holds `tools/`
 
-`docker ps -q --filter volume=${GLOBAL_STACK_DOCKER_TOOLS_PATH} | xargs -r docker stop`.
+`docker ps -q --filter volume=${GLOBAL_STACK_DOCKER_TOOLS_PATH} | xargs -r docker stop`,
+after a guard that refuses an empty `GLOBAL_STACK_DOCKER_TOOLS_PATH` (an empty filter matches
+nothing and the holders would stay up under the rm — panel round 1).
 hard-restart keeps the host-wide stop (its prune needs it — `664b215`).
 
 ### C. The wrapper stops swallowing top-level failures
@@ -117,18 +141,20 @@ The deployed copy in `~/.local/bin/` is the developer's to re-deploy
    mount filter, and the wrapper flag — each must redden its assertion.
 7. `bash bin/tests/makefile-posix.test.sh`, `bash bin/tests/wait-healthy.test.sh`, `/lint`.
 8. Docs: `docs/BLAST-RADIUS.md` soft-restart row; CLAUDE.md `make soft-restart` gotcha +
-   Common Workflows (`ensure-local-registry`, `rotate-local-registry-cert`);
-   `.claude/rules/host-tooling.md` test entry.
+   Common Workflows (`ensure-local-registry`, and `start-local-registry create-buildx-builder`
+   as the rotation pair — there is no rotate target, 14:52); `.claude/rules/host-tooling.md`
+   test entry.
 9. Live recovery (developer runs or approves): `make ensure-local-registry` → `docker start`
    path, then `global-stack-start.sh`.
 
 ## Risks
 
 - An ensure bug blocks every build → step 1 covers every branch before any live use.
-- **Cert rotation and the builder**: the buildx builder bind-mounts the `.crt` FILE
-  (`BUILDKIT_EXTRA_MOUNTS`); a rewritten cert is a new inode the running builder may not see
-  [Inferred: file bind-mount semantics, not probed]. Rotation therefore must re-create the
-  builder (`create-buildx-builder`) or be verified not to need it — decide at step 4.
+- **Cert rotation and the builder** — resolved at step 4: the planning-time guess that the
+  builder bind-mounts the `.crt` was wrong. `docker/buildkit/Dockerfile` COPYs the cert into
+  the `custom-moby/buildkit` image, and the builder's only mount is its state volume, so a new
+  cert is trusted only after `make create-buildx-builder`. Hence the 14:52 ruling: ensure
+  never rotates, and rotation is always the explicit pair.
 - Dropping the wrapper flags may expose a top-level line that fails routinely → step 5.
 - `soft-restart` ordering: the mount-filtered stop must still precede `sudo rm -rf tools`.
 
@@ -149,4 +175,7 @@ one live `docker start`; a cold `make hard-restart` is not re-run as part of thi
 - [2026-11-07 14:47] AGREED: Go given; certification tier = advisor() at 3C/6C plus one three-lens panel on the frozen commit at the end.
 - [2026-11-07 14:52] AGREED: SUPERSEDES the 14:44 registry-lifecycle entry: ensure-local-registry never touches the cert (the buildx builder image COPYs it, so a rotation needs create-buildx-builder). running+answers -> ok; stopped -> docker start; missing+cert -> docker run; cert absent -> fail naming 'make start-local-registry create-buildx-builder'; running but silent -> fail with a logs hint. No rotate-local-registry-cert target; start-local-registry stays the rotate path; the Makefile:199 hint and CLAUDE.md first-build line name both targets.
 - [2026-11-07 14:52] AGREED: Wrapper stops on the first failure (no --ignore-errors, no --keep-going): a failed service build aborts global-stack-start.sh before up, non-zero exit.
+- [2026-11-07 15:48] AGREED: Panel round 1 fixes: ensure-local-registry becomes a prerequisite of up, and soft-restart runs it (without -i) BEFORE $(MAKE) up — down-n-up and soft-restart can no longer hit connection refused; make up now fails loudly when the registry cannot be made reachable.
+- [2026-11-07 15:48] AGREED: CLAUDE.md:370 --publish pointer is NOT edited this round (another session holds uncommitted CLAUDE.md edits, claude-md-size); logged as a follow-up.
+- [2026-11-07 15:48] AGREED: Fix round certified by: fixes test-first + sabotage, follow-up commit (no amend), then the full three-lens panel until two consecutive clean rounds.
 

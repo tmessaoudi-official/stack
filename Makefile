@@ -201,7 +201,7 @@ build: create-paths ensure-local-registry generate-buildx
 	# change the order of this in local.Makefile
 	#  --no-cache --progress=plain
 	@curl -fks https://$(GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS):$(GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_PORT_5000)/v2/ >/dev/null 2>&1 \
-	  || { echo "FATAL: local registry not running — run 'make start-local-registry' first"; exit 1; }
+	  || { echo "FATAL: local registry not answering at https://$(GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS):$(GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_PORT_5000)/v2/ — run 'make ensure-local-registry' (it says why)"; exit 1; }
 	@_cert="docker/registry/certs/$(GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS).crt"; \
 	  [ -f "$$_cert" ] && openssl x509 -noout -checkend 2592000 -in "$$_cert" 2>/dev/null \
 	  || { [ -f "$$_cert" ] && echo "WARNING: local registry cert expires within 30 days — run 'make start-local-registry create-buildx-builder' to rotate (the builder bakes the cert in)"; }; true
@@ -235,6 +235,7 @@ build: create-paths ensure-local-registry generate-buildx
 	  echo ""; \
 	  echo "=== BUILD FAILURES ==="; \
 	  cat "$$_failed_file"; \
+	  echo "Nothing was brought up. If 'down' ran first (global-stack-start.sh, down-n-rebuild*), the stack is DOWN: 'make up' starts it again on the images already built."; \
 	  exit 1; \
 	fi; \
 	echo "=== Build complete ==="
@@ -244,8 +245,10 @@ build: create-paths ensure-local-registry generate-buildx
 check-image-versions:
 	@bash bin/check-image-versions.sh || true
 
-# up (and therefore down-n-up: down up) runs the image-version preflight first.
-up: create-paths generate-buildx check-image-versions
+# up (and therefore down-n-up: down up) runs the image-version preflight first,
+# and ensure-local-registry: every stack image is tagged with the local registry,
+# so an `up` that has to build or pull a missing one needs it running.
+up: create-paths ensure-local-registry generate-buildx check-image-versions
 	rm -rf ${BUILDX_BAKE_FILE} ${COMPOSE_FULL_FILE}
 	GLOBAL_STACK_DOCKER_CLI_NO_COMPOSE_BAKE="false" $(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="up" GLOBAL_STACK_DOCKER_CLI_EXEC_FLAGS="--remove-orphans --detach" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
 up-build: create-paths ensure-local-registry generate-buildx
@@ -324,14 +327,19 @@ hard-restart:
 # `docker ps -q | xargs -r docker stop` (664b215, which exists for hard-restart's
 # prune), stopped the local registry with it and never started it again: the stack
 # came up on the local images and the next build failed with `connection refused`.
-# The final ensure-local-registry heals a registry stopped by anything else.
+# An EMPTY tools path (no .env.local) would make that filter match nothing and
+# leave the holders running under the rm, so it is refused first.
+# ensure-local-registry runs before `up`, without --ignore-errors: it heals a
+# registry stopped by anything else, and its failure must stop the restart
+# (inside the -i `up` below it would be swallowed).
 soft-restart:
 	@test -d var/tools || { echo "FATAL: var/tools/ is missing — cannot proceed with soft-restart. var/tools is a manual snapshot of a healthy tools/ tree: take one with 'cp -R tools var/tools' while the stack is up. (make save/restore act on var/images, not var/tools.)"; exit 1; }
+	@test -n "${GLOBAL_STACK_DOCKER_TOOLS_PATH}" || { echo "FATAL: GLOBAL_STACK_DOCKER_TOOLS_PATH is empty (no ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}?) — soft-restart cannot tell which containers hold tools/, so it will not remove it."; exit 1; }
 	$(MAKE) down --silent --ignore-errors --keep-going --warn-undefined-variables
 	docker ps -q --filter volume=${GLOBAL_STACK_DOCKER_TOOLS_PATH} | xargs -r docker stop
 	sudo rm -rf tools
 	cp -R var/tools/ tools
-	$(MAKE) up --silent --ignore-errors --keep-going --warn-undefined-variables
 	$(MAKE) ensure-local-registry --silent --warn-undefined-variables
+	$(MAKE) up --silent --ignore-errors --keep-going --warn-undefined-variables
 
 -include local.Makefile

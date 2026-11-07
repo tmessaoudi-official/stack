@@ -66,14 +66,21 @@ _gs_lr_state() {
 }
 
 # The same probe as `make build`'s gate: -k because trust is the builder's job,
-# not this check's; it only answers "is something serving /v2/ there".
+# not this check's; it only answers "is something serving /v2/ there". curl's
+# exit code picks the hint: 6 (cannot resolve) is the missing /etc/hosts alias of
+# a fresh machine, which a rotation — a daemon restart — would not fix.
 _gs_lr_wait() {
-  local _i
+  local _i _rc=0 _state
   for ((_i = 1; _i <= _GS_LR_TRIES; _i++)); do
-    if curl -fks "${_GS_LR_URL}" >/dev/null 2>&1; then return 0; fi
+    curl -fks "${_GS_LR_URL}" >/dev/null 2>&1 && return 0 || _rc=$?
     if ((_i < _GS_LR_TRIES)); then sleep 1; fi
   done
-  _gs_lr_fatal "local registry '${_GS_LR_NAME}' is $(_gs_lr_state) but ${_GS_LR_URL} did not answer after ${_GS_LR_TRIES} tries" \
+  if ((_rc == 6)); then
+    _gs_lr_fatal "cannot resolve '${_GS_LR_ALIAS}' (curl exit 6) — the registry alias is not in /etc/hosts" \
+      "Add '127.0.0.1 ${_GS_LR_ALIAS}' to /etc/hosts (templates/tips/docker-local-registry.md), then re-run."
+  fi
+  _state="$(_gs_lr_state)"
+  _gs_lr_fatal "local registry '${_GS_LR_NAME}' is ${_state} but ${_GS_LR_URL} did not answer after ${_GS_LR_TRIES} tries (curl exit ${_rc})" \
     "Check 'docker logs ${_GS_LR_NAME}'. Re-create it (and the builder's trust) with '${_GS_LR_ROTATE}'."
 }
 
@@ -125,8 +132,11 @@ _gs_lr_ensure() {
 case "${1:-}" in
   ensure) _gs_lr_ensure ;;
   create)
-    [[ -z "$(_gs_lr_state)" ]] || _gs_lr_fatal "local registry '${_GS_LR_NAME}' already exists" \
-      "'make start-local-registry' removes it first; use 'make ensure-local-registry' to start a stopped one."
+    # Assigned, not tested inline: inside `[[ -z "$(…)" ]]` a failed query only
+    # exits the substitution's subshell, reads as "missing" and creates anyway.
+    _st="$(_gs_lr_state)"
+    [[ -z "${_st}" ]] || _gs_lr_fatal "local registry '${_GS_LR_NAME}' already exists (${_st})" \
+      "'make ensure-local-registry' starts a stopped one; '${_GS_LR_ROTATE}' re-creates it with a new cert."
     _gs_lr_create
     ;;
   *) _gs_lr_fatal "usage: ${0##*/} ensure|create" ;;

@@ -7,7 +7,8 @@
 #   Half A — 5 false positives on this repo's own .env.local. The rule was
 #   "a set _PORT_ var must end with ':'", but whether it may is a property of
 #   the CONSUMER, not of the variable. `local.05…:161` writes
-#   `${VAR:-}:${VAR:-}` and `Makefile:170` writes `--publish ${VAR}:5000` —
+#   `${VAR:-}:${VAR:-}` and `bin/local-registry.sh` (`_gs_lr_create`, since
+#   2026-11-07; the Makefile before) writes `--publish "${PORT}:5000"` —
 #   both supply the colon themselves, so a trailing ':' there would be the bug.
 #
 #   Half B — the one variable that really does concatenate was invisible. The

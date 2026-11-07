@@ -35,7 +35,7 @@ ENV_DIR=$(dirname "$FILE_PATH")
 # 2. Port vars. Whether a value must end with ':' is a property of the CONSUMER,
 #    not of the variable. A compose file writing `${VAR:-}3306` concatenates, so
 #    the ':' has to be there or the host port becomes 427083306. A compose file
-#    writing `${VAR:-}:${VAR:-}`, or a Makefile writing `${VAR}:5000`, supplies
+#    writing `${VAR:-}:${VAR:-}`, or bin/local-registry.sh's `--publish "${PORT}:5000"`, supplies
 #    the colon itself — a trailing ':' there IS the bug. Keying on the
 #    concatenating consumer form is what makes this check right in both
 #    directions, and it needs no annotations and no list to maintain.
