@@ -19,7 +19,7 @@
 >
 > | Command | Actual blast radius |
 > |---|---|
-> | `make soft-restart` | **NOT a soft restart.** `sudo rm -rf`s `tools/` and restores from `var/tools`; a stale `var/tools` costs a multi-10-minute full reinstall. The documented soft restart is `make down-n-up`. Since 2026-11-07 it refuses an empty tools path, stops only containers that mount the tools path, and runs `ensure-local-registry` before `up`. Before that it stopped every container on the host and left the local registry dead, so the next build failed with `connection refused`. |
+> | `make soft-restart` | **NOT a soft restart.** `sudo rm -rf`s `tools/` and restores from `var/tools`; a stale `var/tools` costs a multi-10-minute full reinstall. The documented soft restart is `make down-n-up`. Since 2026-11-07 it refuses an empty tools path, runs `ensure-local-registry` before its `down` (a registry it cannot heal stops it with the stack still up), and stops only containers that mount the tools path. Before that it stopped every container on the host and left the local registry dead, so the next build failed with `connection refused`. |
 > | `make hard-restart` | Wipes all images + volumes, rebuilds from scratch. |
 > | `docker volume rm …` | DB state lives in **named volumes**, not `docker/data/` — removing one is the credential/data reset, and it is irreversible. |
 > | `GLOBAL_STACK_RELOAD_*=true` | Forces a tier reinstall (30+ min). Reset to `false` after use. Not every one wipes: `_NODE*` / `_JAVA*` / `_FLUTTER3` (and `GLOBAL_STACK_LOCAL_RELOAD_FLUTTER3_41_9`, which feeds the same in-container switch) drop only the markers and the installer then no-ops on the version dir already on disk; `_ANDROID` wipes the SDK but keeps `GRADLE_USER_HOME` — CLAUDE.md § Gotchas. |

@@ -165,6 +165,14 @@ EOF
   } >"${SBX}/stub/curl"
 
   printf '#!/usr/bin/env bash\nexit 0\n' >"${SBX}/stub/sleep"
+  {
+    printf '#!/usr/bin/env bash\nSBX=%q\n' "${SBX}"
+    cat <<'EOF'
+printf '%s\n' "$*" >>"${SBX}/getent.log"
+[[ "${1:-}" == hosts && ! -e "${SBX}/alias-unresolved" ]] && { printf '127.0.0.1 %s\n' "${2:-}"; exit 0; }
+exit 2
+EOF
+  } >"${SBX}/stub/getent"
 
   {
     printf '#!/usr/bin/env bash\nSBX=%q\n' "${SBX}"
@@ -325,6 +333,13 @@ check "1.15 alias does not resolve (curl 6): exits non-zero and points at /etc/h
   eval 'rc_nonzero && out_has "/etc/hosts" && out_has "test-reg.local"'
 check "1.15 ... and does NOT suggest a rotation (it restarts the daemon, fixes nothing)" \
   eval '! out_has "create-buildx-builder"'
+check "1.15 ... and continues with 'make ensure-local-registry'" out_has "make ensure-local-registry"
+
+# A registry that accepts TCP but never answers must not hang the probe forever.
+make_sandbox running
+run_lr ensure
+check "1.16 the /v2/ probe is bounded (--connect-timeout and --max-time)" \
+  eval 'grep -q -e "--connect-timeout" "${SBX}/curl.log" && grep -q -e "--max-time" "${SBX}/curl.log"'
 
 make_sandbox exited
 run_lr bogus
@@ -410,6 +425,9 @@ _ens_ln="$(grep -n -F -e "ensure-local-registry" <<<"${_soft}" | head -n1 | cut 
 _up_ln="$(grep -n -E -e '\$\(MAKE\) up( |$)' <<<"${_soft}" | head -n1 | cut -d: -f1)"
 check "3.9  soft-restart runs ensure-local-registry BEFORE \$(MAKE) up" \
   eval '[[ -n "${_ens_ln}" && -n "${_up_ln}" && "${_ens_ln}" -lt "${_up_ln}" ]]'
+_down_ln="$(grep -n -E -e '\$\(MAKE\) down( |$)' <<<"${_soft}" | head -n1 | cut -d: -f1)"
+check "3.9  ... and BEFORE its \$(MAKE) down (a broken registry must leave the stack untouched)" \
+  eval '[[ -n "${_ens_ln}" && -n "${_down_ln}" && "${_ens_ln}" -lt "${_down_ln}" ]]'
 check "3.9  ... and without --ignore-errors (a failure must stop it)" \
   eval '! grep -F -e "ensure-local-registry" <<<"${_soft}" | grep -qF -e "--ignore-errors"'
 _guard_ln="$(grep -n -F -e 'test -n "${GLOBAL_STACK_DOCKER_TOOLS_PATH}"' <<<"${_soft}" | head -n1 | cut -d: -f1)"
@@ -420,6 +438,15 @@ check "3.10 hard-restart keeps its host-wide stop (its prune needs it — 664b21
 check "3.11 build's cert-expiry hint names 'make start-local-registry create-buildx-builder'" \
   eval 'recipe_of build | grep -F -e "expires within" | grep -qF -e "make start-local-registry create-buildx-builder"'
 
+first_prereq() { rule_line "$1" | sed -E 's/^[^:]+:+[[:space:]]*//' | awk '{print $1}'; }
+for _t in down-n-up down-n-rebuild down-n-rebuild-force-recreate; do
+  check "3.14 '${_t}' checks the registry BEFORE its down (first prerequisite: ensure-local-registry)" \
+    eval '[[ "$(first_prereq "${_t}")" == ensure-local-registry ]]'
+done
+check "3.15 start-local-registry checks the alias resolves BEFORE anything else" \
+  eval 'recipe_of start-local-registry | head -n1 | grep -qF -e "getent hosts"'
+check "3.16 build's registry gate probe is bounded (--max-time)" \
+  eval 'recipe_of build | grep -F -e "curl -fks" | grep -qF -e "--max-time"'
 check "3.12 build's registry gate points at 'make ensure-local-registry'" \
   eval 'recipe_of build | grep -F -e "FATAL: local registry" | grep -qF -e "make ensure-local-registry"'
 check "3.13 no hint names a bare 'make start-local-registry' (a new cert needs create-buildx-builder)" \
@@ -541,6 +568,21 @@ check "5.9  ... restores tools/ from var/tools" \
 check "5.9  ... starts the registry BEFORE up" \
   eval '[[ -n "$(first_line_of "^start test-reg$")" && "$(first_line_of "^start test-reg$")" -lt "$(first_line_of " up --remove-orphans --detach$")" ]]'
 
+# An ensure failure must stop soft-restart BEFORE it tears anything down. A grep for
+# --ignore-errors alone let a '-' recipe prefix or '-i' through (panel round 2).
+soft_sandbox dead
+run_e2e soft-restart
+check "5.11 soft-restart, registry dead: exits non-zero" rc_nonzero
+check "5.11 ... before 'down', the stop or 'rm -rf tools'" \
+  eval '! docker_called "compose .* down" && ! docker_called "^ps -q --filter volume=" && [[ ! -s "${SBX}/sudo.log" && -f "${SBX}/tools/live-only" ]]'
+
+for _t in down-n-up down-n-rebuild-force-recreate; do
+  e2e_sandbox dead
+  run_e2e "${_t}"
+  check "5.12 '${_t}', registry dead: exits non-zero with the stack untouched (no 'down')" \
+    eval 'rc_nonzero && ! docker_called "compose .* down"'
+done
+
 soft_sandbox running
 sed -i 's|^GLOBAL_STACK_DOCKER_TOOLS_PATH=.*|GLOBAL_STACK_DOCKER_TOOLS_PATH=|' "${SBX}/.env.local"
 run_e2e soft-restart
@@ -552,6 +594,21 @@ check "5.10 ... and never removes tools/" \
 _forbidden=0
 for _s in "${SANDBOXES[@]}"; do [[ -s "${_s}/forbidden.log" ]] && _forbidden=$((_forbidden + 1)); done
 check "5.7  no wrapper target called sudo/systemctl/openssl" eval '[[ ${_forbidden} -eq 0 ]]'
+
+# After 5.7 on purpose: 5.14 reaches `openssl req` (a forbidden stub) by design.
+# start-local-registry on a machine without the /etc/hosts alias: fail before any
+# cert, root or daemon step (it used to mint a cert and restart the daemon first).
+e2e_sandbox running
+touch "${SBX}/alias-unresolved"
+run_e2e start-local-registry
+check "5.13 start-local-registry, alias unresolved: exits non-zero and points at /etc/hosts" \
+  eval 'rc_nonzero && out_has "/etc/hosts"'
+check "5.13 ... before openssl, sudo, systemctl or 'docker rm'" \
+  eval '[[ ! -s "${SBX}/forbidden.log" ]] && ! docker_called "^rm "'
+e2e_sandbox running
+run_e2e start-local-registry
+check "5.14 start-local-registry, alias resolves: the check lets it through (next step: openssl req)" \
+  eval 'grep -q "^openssl req" "${SBX}/forbidden.log"'
 
 # ── leak check + tally ───────────────────────────────────────────────────────
 cleanup

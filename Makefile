@@ -181,6 +181,7 @@ create-buildx-builder:
 	docker buildx create --debug --name docker-buildx-builder --driver docker-container --driver-opt image=custom-moby/buildkit --driver-opt network=host --driver-opt env.BUILDKIT_REGISTRY_CONFIG=${GLOBAL_STACK_DOCKER_ROOT_PATH}/docker/registry/config.local.json --driver-opt env.BUILDKIT_EXTRA_MOUNTS=[/stack/docker/registry/certs/local-global-stack-registry.local.crt:/etc/ssl/certs/local-global-stack-registry.local.crt:ro] --use
 	docker buildx inspect --debug --bootstrap
 start-local-registry:
+	@getent hosts ${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS} >/dev/null || { echo "FATAL: '${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}' does not resolve — add '127.0.0.1 ${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}' to /etc/hosts (templates/tips/docker-local-registry.md). Nothing was changed: no cert, no daemon restart."; exit 1; }
 	docker rm -f ${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_NAME} >/dev/null 2>&1 || true
 	openssl req -x509 -newkey rsa:4096 -sha256 -days 365 -nodes -keyout ./docker/registry/certs/${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}.key -out ./docker/registry/certs/${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}.crt -subj "/CN=${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}" -addext "subjectAltName=DNS:${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}"
 	sudo cp ./docker/registry/certs/${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}.crt /usr/local/share/ca-certificates/${GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS}.crt
@@ -192,15 +193,18 @@ start-local-registry:
 # Idempotent and root-free: starts a stopped registry, creates a missing one from
 # the existing cert, waits for /v2/, and FAILS rather than rotate the cert (the
 # buildx builder bakes it in — rotation is `make start-local-registry
-# create-buildx-builder`). A prerequisite of every target that builds, so a registry
-# stopped by anything (soft-restart before 2026-11-07, a manual `docker stop`) heals
-# at the next build instead of failing it with `connection refused`.
+# create-buildx-builder`). A prerequisite of every target that builds or brings the
+# stack up (`up` too: every stack image is registry-tagged), and the FIRST
+# prerequisite of every down-n-* composite, so a registry that cannot be healed
+# fails before anything is torn down. A registry stopped by anything (soft-restart
+# before 2026-11-07, a manual `docker stop`) heals instead of failing the build
+# with `connection refused`.
 ensure-local-registry:
 	@bash bin/local-registry.sh ensure
 build: create-paths ensure-local-registry generate-buildx
 	# change the order of this in local.Makefile
 	#  --no-cache --progress=plain
-	@curl -fks https://$(GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS):$(GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_PORT_5000)/v2/ >/dev/null 2>&1 \
+	@curl -fks --connect-timeout 2 --max-time 5 https://$(GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS):$(GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_PORT_5000)/v2/ >/dev/null 2>&1 \
 	  || { echo "FATAL: local registry not answering at https://$(GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS):$(GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_PORT_5000)/v2/ — run 'make ensure-local-registry' (it says why)"; exit 1; }
 	@_cert="docker/registry/certs/$(GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_ALIAS).crt"; \
 	  [ -f "$$_cert" ] && openssl x509 -noout -checkend 2592000 -in "$$_cert" 2>/dev/null \
@@ -245,7 +249,7 @@ build: create-paths ensure-local-registry generate-buildx
 check-image-versions:
 	@bash bin/check-image-versions.sh || true
 
-# up (and therefore down-n-up: down up) runs the image-version preflight first,
+# up (and therefore down-n-up) runs the image-version preflight first,
 # and ensure-local-registry: every stack image is tagged with the local registry,
 # so an `up` that has to build or pull a missing one needs it running.
 up: create-paths ensure-local-registry generate-buildx check-image-versions
@@ -264,12 +268,12 @@ down:
 	rm -rf tools/errors/*
 	rm -rf tools/locks/*
 	rm -rf tools/elapsed
-down-n-rebuild: down build up-build
-down-n-rebuild-force-recreate: down build up-build-force-recreate
+down-n-rebuild: ensure-local-registry down build up-build
+down-n-rebuild-force-recreate: ensure-local-registry down build up-build-force-recreate
 rebuild: up-build
 rebuild-force-recreate: up-build-force-recreate
 # remove build from here (if you already built the stack)
-down-n-up: down up
+down-n-up: ensure-local-registry down up
 
 exec:
 	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="exec" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
@@ -329,17 +333,17 @@ hard-restart:
 # came up on the local images and the next build failed with `connection refused`.
 # An EMPTY tools path (no .env.local) would make that filter match nothing and
 # leave the holders running under the rm, so it is refused first.
-# ensure-local-registry runs before `up`, without --ignore-errors: it heals a
-# registry stopped by anything else, and its failure must stop the restart
-# (inside the -i `up` below it would be swallowed).
+# ensure-local-registry runs before `down`, without --ignore-errors: it heals a
+# registry stopped by anything else, and a registry it cannot heal stops the
+# restart with the stack still up (inside the -i `up` below it would be swallowed).
 soft-restart:
 	@test -d var/tools || { echo "FATAL: var/tools/ is missing — cannot proceed with soft-restart. var/tools is a manual snapshot of a healthy tools/ tree: take one with 'cp -R tools var/tools' while the stack is up. (make save/restore act on var/images, not var/tools.)"; exit 1; }
 	@test -n "${GLOBAL_STACK_DOCKER_TOOLS_PATH}" || { echo "FATAL: GLOBAL_STACK_DOCKER_TOOLS_PATH is empty (no ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}?) — soft-restart cannot tell which containers hold tools/, so it will not remove it."; exit 1; }
+	$(MAKE) ensure-local-registry --silent --warn-undefined-variables
 	$(MAKE) down --silent --ignore-errors --keep-going --warn-undefined-variables
 	docker ps -q --filter volume=${GLOBAL_STACK_DOCKER_TOOLS_PATH} | xargs -r docker stop
 	sudo rm -rf tools
 	cp -R var/tools/ tools
-	$(MAKE) ensure-local-registry --silent --warn-undefined-variables
 	$(MAKE) up --silent --ignore-errors --keep-going --warn-undefined-variables
 
 -include local.Makefile

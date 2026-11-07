@@ -40,9 +40,9 @@ Split out of `CLAUDE.md` by `/rules-split` on 2026-10-09: the text below is unch
   - The `create` `docker run` contract.
   - The `container ls` query itself: the stub answers like real docker (no `--all` hides a stopped container; another `--format` gives Status text). Panel round 1 found a stub that ignored its arguments, where dropping `--all` stayed green.
   - curl's exit code: 6 (the alias does not resolve, i.e. no `/etc/hosts` entry) must yield an `/etc/hosts` hint, never a rotation, since a rotation restarts the daemon and fixes nothing.
-  - The Makefile wiring, including `up`'s ensure prerequisite and soft-restart's order (guard on an empty tools path → scoped stop → `rm` → ensure → `up`).
+  - The Makefile wiring. `up` has the ensure prerequisite; every down-n-* composite runs ensure FIRST (before `down`); soft-restart's order is guard on an empty tools path → ensure → `down` → scoped stop → `rm` → `up`; `start-local-registry` checks the alias resolves (`getent hosts`) before any cert, root or daemon step; both curl probes are bounded.
   - The wrapper stopping on the first failure.
-  - End to end, the wrapper drives a sandbox copy of the real Makefile against a stub `docker`: the incident replay, `down-n-up` healing a stopped registry, and an EXECUTED `soft-restart`. For that one the stub `sudo` allows exactly `rm -rf tools` inside the sandbox and nothing else.
+  - End to end, the wrapper drives a sandbox copy of the real Makefile against a stub `docker`: the incident replay, `down-n-up` healing a stopped registry, an EXECUTED `soft-restart` (the stub `sudo` allows exactly `rm -rf tools` inside the sandbox), the no-teardown guarantees (a dead registry: no `compose … down`, no stop, no `rm`), and `start-local-registry` with an unresolved alias (a stub `getent`): no openssl, root or `docker rm` call. Panel round 2 found that grep-only checks let a `-` recipe prefix or `-i` through; only the executed cases catch those.
 
   The stubs for `sudo`/`systemctl`/`openssl req` FAIL the case if called. Every run is under `env -i`, because an interactive `/stack` shell exports `.env.local`. The e2e `.env.local` keeps the registry ALIAS **nested**, so the case proves that make resolves it for the script.
 

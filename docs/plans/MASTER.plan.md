@@ -321,7 +321,8 @@ labels) and post-push commit signing.
   red baseline 6/12 — the hook emitted **5** false port warnings on `.env.local` and 1 on
   `.env`, and did not match the range-style var at all. The consumer forms are now pinned:
   `local.05…/docker-compose.yaml:161` is `${VAR:-}:${VAR:-}` and `Makefile:170` is
-  `--publish ${VAR}:5000` (both supply the colon), against `01localstack-localstack:36`
+  `--publish ${VAR}:5000` (both supply the colon; since 2026-11-07 that `--publish` lives in
+  `bin/local-registry.sh`), against `01localstack-localstack:36`
   `${VAR:-}4510-4559` (concatenating). After the fix the hook is silent on both real files;
   strip the colon from that one real variable, against the REAL compose tree (temp dir with a
   symlinked `docker/`), and it fires naming exactly that variable — so the silence is
@@ -1465,7 +1466,8 @@ checks; re-run the command rather than trusting this number if `.env` has moved 
 the family in full:
 `BAT_{-}, CLAUDE_{CODE}, CORENTINTH_{IT_TOOLS}, DIFFTASTIC_{-}, DOCKER_{BUILDX, COMPOSE, TOOLS_PATH}, FRANKENPHP_{WATCHER}, GITLEAKS_{-}, HADOLINT_{-}, IMAGE_{AXLLENT_MAILPIT, DPAGE_PGADMIN4, EPICLABS_DOCKER_ORACLE_XE_11G, KEYCLOAK_KEYCLOAK, MARIADB13, MONGO7, MONGOCLIENT_MONGOCLIENT, MYSQL9, POSTGRES18, SELENIUM_STANDALONE_CHROME, SELENIUM_STANDALONE_FIREFOX, UBUNTU}, LOCALSTACK_{LOCALSTACK}, MOBY_{BUILDKIT}, PODMAN_{COMPOSE}, REDIS_{-}, RTK_{-}, SHELLCHECK_{-}, SHFMT_{-}, SONARQUBE_{-}, SONAR_{SCANNER_CLI}, SOPS_{-}, TASK_{-}, VALKEY_{-}, WKHTMLTOPDF_{-}, YAMLFMT_{-}, YQ_{-}`
 plus `DOCKER_LOCAL_REGISTRY_VERSION` — classified by hand, its only consumer is
-`Makefile:174` (`registry:${…}`), which no compose/Dockerfile index covers.
+`bin/local-registry.sh` (`_gs_lr_create`, `registry:${…}`; until 2026-11-07 it was the inline
+`docker run` at `Makefile:174`), which no compose/Dockerfile index covers.
 
 **Class 2 (160)** — `JAVA27_{SDKMAN_INSTALL_PACKAGE_GRADLE_VX2, …_GROOVY_VX2, …_SPARK_VX1, …_SPARK_VX2} (4)`,
 `JAVA_INSTALL_PACKAGE_{ANT, GRADLE_VX1, GRADLE_VX2, GROOVY_VX1, GROOVY_VX2, JBANG, KOTLIN, MAVEN_VX1, MAVEN_VX2, MAVEN_VX3, MICRONAUT, POMCHECKER, QUARKUS, SCALA, SPARK_VX1, SPARK_VX2, SPRINGBOOT, TOMCAT} (18)`,

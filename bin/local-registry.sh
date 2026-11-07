@@ -68,16 +68,18 @@ _gs_lr_state() {
 # The same probe as `make build`'s gate: -k because trust is the builder's job,
 # not this check's; it only answers "is something serving /v2/ there". curl's
 # exit code picks the hint: 6 (cannot resolve) is the missing /etc/hosts alias of
-# a fresh machine, which a rotation — a daemon restart — would not fix.
+# a fresh machine, which a rotation — a daemon restart — would not fix. Bounded:
+# a registry that accepts TCP and never answers costs --max-time per try (curl
+# exit 28, the "did not answer" branch), never a hang.
 _gs_lr_wait() {
   local _i _rc=0 _state
   for ((_i = 1; _i <= _GS_LR_TRIES; _i++)); do
-    curl -fks "${_GS_LR_URL}" >/dev/null 2>&1 && return 0 || _rc=$?
+    curl -fks --connect-timeout 2 --max-time 5 "${_GS_LR_URL}" >/dev/null 2>&1 && return 0 || _rc=$?
     if ((_i < _GS_LR_TRIES)); then sleep 1; fi
   done
   if ((_rc == 6)); then
     _gs_lr_fatal "cannot resolve '${_GS_LR_ALIAS}' (curl exit 6) — the registry alias is not in /etc/hosts" \
-      "Add '127.0.0.1 ${_GS_LR_ALIAS}' to /etc/hosts (templates/tips/docker-local-registry.md), then re-run."
+      "Add '127.0.0.1 ${_GS_LR_ALIAS}' to /etc/hosts (templates/tips/docker-local-registry.md), then run 'make ensure-local-registry'."
   fi
   _state="$(_gs_lr_state)"
   _gs_lr_fatal "local registry '${_GS_LR_NAME}' is ${_state} but ${_GS_LR_URL} did not answer after ${_GS_LR_TRIES} tries (curl exit ${_rc})" \

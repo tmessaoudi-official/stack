@@ -2,9 +2,16 @@
 
 ## Status
 
-- **State**: steps 1–8 committed in `34a2001`. The milestone panel round 1 on that commit found
-  13 items, and the refuters upheld 12 of them (the P1 at 5/5). Fixed test-first in a
-  follow-up commit; panel round 2 next. Then step 9, the live recovery (the developer's).
+- **State**: steps 1–8 committed in `34a2001`. Round 1 of the milestone panel found 13 items and
+  the refuters upheld 12 (the P1 at 5/5); they were fixed in `ff738d5`. Round 2 on `ff738d5`
+  found 10 more, all upheld; they were fixed in the round-3 commit. Panel round 3 comes next, and
+  the milestone needs two consecutive clean rounds. Then step 9, the live recovery (the developer's).
+- **Panel round 2 fixes**: the registry check runs before any teardown (the first prerequisite of
+  every down-n-* composite, and before soft-restart's `down`); `start-local-registry` checks that
+  the alias resolves before any cert, root or daemon step; the curl-6 hint continues with
+  `make ensure-local-registry`; both curl probes are bounded (`--connect-timeout 2 --max-time 5`);
+  executed e2e cases now prove the no-teardown guarantees; plan, MASTER and BLAST-RADIUS
+  statements are corrected.
 - **Panel round 1 fixes**: the stub pins the `container ls` argv; `create` no longer swallows a
   failed query; curl exit 6 → `/etc/hosts` hint, not a rotation; `up` and soft-restart run
   ensure before `up`; soft-restart refuses an empty tools path; `build` points at ensure and
@@ -12,10 +19,12 @@
   and `--publish` pointers fixed; stack-ask-human lists the two daemon-restarting targets.
 - **Size**: Large
 - **Mode**: spec (the `ah` gate fired for this session)
-- **Evidence**: `bin/tests/local-registry.test.sh` 74 / 74; 12 sabotage mutants all red on
-  their guarding assertion (scratch-copy series, live tree never mutated); `makefile-posix`
-  10/10, `wait-healthy` 9/9, `check-bake-targets` 12/12, `check-image-versions` 30/30;
-  shellcheck + shfmt clean.
+- **Evidence** (round-3 commit): `bin/tests/local-registry.test.sh` 107 / 107 (74 at `34a2001`,
+  92 at `ff738d5`). The sabotage series is 35 mutants on a scratch copy and never touches the
+  live tree; the commit message gives its result. `makefile-posix` 10/10, `wait-healthy` 9/9,
+  `check-bake-targets` 12/12, `check-image-versions` 30/30, `env-guard` 12/12; shellcheck and
+  shfmt are clean. **All of it runs against stubs**: no live registry start, `make up` or
+  daemon restart has run (see UNCERTIFIED-BY-EXECUTION).
 
 ### Design refinements made during implementation
 
@@ -40,6 +49,10 @@
   recipe writes `--publish ${VAR}:5000`; the consumer is now `bin/local-registry.sh`
   (`_gs_lr_create`). Not edited in panel round 1 because another session holds uncommitted
   `CLAUDE.md` edits (claude-md-size); apply after that lands (15:48 ruling).
+- `CLAUDE.md` § Build chain says "every building target runs `ensure-local-registry`". Since panel
+  round 1, `make up` (and so `global-stack-up.sh`) also needs a reachable registry, and every
+  down-n-* composite checks it before `down`. Add this when the claude-md-size session lands,
+  under the same 15:48 deferral.
 - `ensure` never re-creates a running registry whose image is an older
   `GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_VERSION` or whose port differs from `.env.local`; it
   waits, then fails with the rotation hint. Pre-existing (panel round 1, observation O2).
@@ -131,9 +144,9 @@ The deployed copy in `~/.local/bin/` is the developer's to re-deploy
    prerequisite. Confirm each fails for the stated reason.
 2. **Red**: wrapper case — `global-stack-make-exec.sh` against a sandbox Makefile whose gate
    fails → wrapper exits non-zero and the next target does not run.
-3. **Live probe before relying on B** [Unverified today]: prove `docker ps --filter volume=<dest>`
-   matches a **bind** mount — one throwaway `alpine sleep` container with a bind mount on a
-   scratch dir; asks before running.
+3. **Probe before relying on B**: prove `docker ps --filter volume=<path>` matches a **bind**
+   mount. Done without a throwaway container: a read-only query against twes-in's existing live
+   bind mount matched by both source and destination (see Design refinements).
 4. Implement A, B, C. Green.
 5. Prove the three wrapper targets (`down`, `down-n-up`, `down-n-rebuild-force-recreate`) do
    not depend on `--ignore-errors` at top level: sandbox run with stub docker, success path.
@@ -165,8 +178,10 @@ untouched by the change (same name, flags, data and cert paths).
 
 ## UNCERTIFIED-BY-EXECUTION (expected)
 
-A bring-up of the full stack after the change — the ensure paths are proven against stubs and
-one live `docker start`; a cold `make hard-restart` is not re-run as part of this plan.
+Everything runtime: the ensure, create and soft-restart paths are proven ONLY against stub
+`docker`/`curl`/`sudo`/`getent`. Not run: a real `docker start` of the exited registry (step 9,
+the developer's), a real /v2/ answer, buildkit trusting the registry, a real `docker stop` of the
+tools holders, `make up` coming up healthy, and a cold `make hard-restart`.
 
 ## Decisions Log
 - [2026-11-07 14:44] AGREED: Registry lifecycle via an idempotent ensure-local-registry target (start if stopped, create if missing, rotate cert only if absent/expiring, poll /v2/), prerequisite of build/up-build/up-build-force-recreate; cert+daemon restart split into rotate-local-registry-cert.
@@ -178,4 +193,6 @@ one live `docker start`; a cold `make hard-restart` is not re-run as part of thi
 - [2026-11-07 15:48] AGREED: Panel round 1 fixes: ensure-local-registry becomes a prerequisite of up, and soft-restart runs it (without -i) BEFORE $(MAKE) up — down-n-up and soft-restart can no longer hit connection refused; make up now fails loudly when the registry cannot be made reachable.
 - [2026-11-07 15:48] AGREED: CLAUDE.md:370 --publish pointer is NOT edited this round (another session holds uncommitted CLAUDE.md edits, claude-md-size); logged as a follow-up.
 - [2026-11-07 15:48] AGREED: Fix round certified by: fixes test-first + sabotage, follow-up commit (no amend), then the full three-lens panel until two consecutive clean rounds.
+- [2026-11-07 16:07] AGREED: Panel round 2 N1: the registry check runs BEFORE any teardown — ensure-local-registry is the first prerequisite of down-n-up, down-n-rebuild and down-n-rebuild-force-recreate, and soft-restart runs it before its down; a broken registry fails with the stack untouched.
+- [2026-11-07 16:07] AGREED: Panel round 2 N3: start-local-registry first checks that the registry alias resolves (getent hosts) and fails before any cert, root or daemon-restart step; ensure's curl-6 hint continues with make ensure-local-registry, never a rotation.
 
