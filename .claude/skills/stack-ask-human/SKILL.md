@@ -59,12 +59,13 @@ The global cases (two readings leading to materially different work, …) apply 
 
 ## Not a question here
 
-- **`git add` / `git commit` / `git push` are autonomously authorised** — `CLAUDE.md`
-  § "Git autonomy". Never ask permission to commit or to push to `master`. Asking is the violation
-  here, not the commit. (Push with plain `git push` — never `-u`; see that section.)
+- **`git add` / `git commit` / `git push` in autonomous mode or a cloud session** — authorised by
+  `CLAUDE.md` § "Git autonomy"; never ask permission to commit or to push to `master` there. Asking is
+  the violation, not the commit. In spec mode they follow global Rule 10 (on request). (Push with
+  plain `git push` — never `-u`; see that section.)
 
-Asking about everything is its own failure — it converts the developer into a decision queue. The
-standing directive for this repo is *no interrupts*: state the task size, announce the plan, build it.
+Asking about everything is its own failure — it converts the developer into a decision queue. In
+autonomous mode, the standing directive for this repo is *no interrupts*: state the task size, announce the plan, build it.
 Decide what you can defend, state the assumption, and keep moving.
 
 ## Worked example
