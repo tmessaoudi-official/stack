@@ -45,14 +45,10 @@
   buildkitd does not read (the builder's Mounts list holds only its state volume). Trust works
   through the cert baked into `custom-moby/buildkit`. Looks like dead config [Inferred: not probed].
 - The deployed `~/.local/bin/global-stack-make-exec.sh` is the developer's to re-deploy.
-- `CLAUDE.md` (the § Gotchas port-var bullet) still says the Makefile's `start-local-registry`
-  recipe writes `--publish ${VAR}:5000`; the consumer is now `bin/local-registry.sh`
-  (`_gs_lr_create`). Not edited in panel round 1 because another session holds uncommitted
-  `CLAUDE.md` edits (claude-md-size); apply after that lands (15:48 ruling).
-- `CLAUDE.md` § Build chain says "every building target runs `ensure-local-registry`". Since panel
-  round 1, `make up` (and so `global-stack-up.sh`) also needs a reachable registry, and every
-  down-n-* composite checks it before `down`. Add this when the claude-md-size session lands,
-  under the same 15:48 deferral.
+- DONE in the round-3 commit (claude-md-size landed as `6d78c5d`, meeting the 15:48 condition):
+  the `CLAUDE.md` § Gotchas port-var bullet now names `bin/local-registry.sh` as the `--publish`
+  consumer, and § Build chain covers `make up`, the composites' check before `down`, and the
+  `/etc/hosts` prerequisite.
 - `ensure` never re-creates a running registry whose image is an older
   `GLOBAL_STACK_DOCKER_LOCAL_REGISTRY_VERSION` or whose port differs from `.env.local`; it
   waits, then fails with the rotation hint. Pre-existing (panel round 1, observation O2).
