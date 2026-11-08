@@ -112,6 +112,18 @@ _gs_es_pattern_buf+='|GLOBAL_STACK_RELOAD_(NODE|PHP|PYTHON|RUBY|JAVA|FLUTTER)([0
 _gs_es_pattern_buf+='|GLOBAL_STACK_(NODE|PHP|PYTHON|RUBY|JAVA|FLUTTER)_DEFAULT'
 _gs_es_pattern_buf+='|GLOBAL_STACK_LOCALSTACK_LOCALSTACK_PORT_4566'
 _gs_es_pattern_buf+='|GLOBAL_STACK_SERVERLESS_FRAMEWORK_SERVERLESS_ACCESS_KEY'
+_gs_es_pattern_buf+='|GLOBAL_STACK_ANDROID_STUDIO_VERSION'
+_gs_es_pattern_buf+='|GLOBAL_STACK_BALENA_ETCHER_VERSION'
+_gs_es_pattern_buf+='|GLOBAL_STACK_DEVIN_VERSION'
+_gs_es_pattern_buf+='|GLOBAL_STACK_IDEA_VERSION'
+_gs_es_pattern_buf+='|GLOBAL_STACK_MCP_SOOPERSET_MCP_ATLASSIAN_VERSION'
+_gs_es_pattern_buf+='|GLOBAL_STACK_MCP_ZEREIGHT_MCP_GITLAB_VERSION'
+_gs_es_pattern_buf+='|GLOBAL_STACK_MEGIT_VERSION'
+_gs_es_pattern_buf+='|GLOBAL_STACK_PHPSTORM_VERSION'
+_gs_es_pattern_buf+='|GLOBAL_STACK_SUBLIME_TEXT_VERSION'
+_gs_es_pattern_buf+='|GLOBAL_STACK_VSCODE_VERSION'
+_gs_es_pattern_buf+='|GLOBAL_STACK_WEBSTORM_VERSION'
+_gs_es_pattern_buf+='|GLOBAL_STACK_ANDROID_NDK_BUNDLE_VERSION'
 _gs_es_pattern_buf+=')'
 readonly _GS_ES_PATTERN_REVERSE_CHECK_IGNORE="${_gs_es_pattern_buf}"
 unset _gs_es_pattern_buf
@@ -202,6 +214,7 @@ _gs_es_pattern_buf+='|PHP_INSTALL_CLI_VARIANTS'
 _gs_es_pattern_buf+='|PHP_INSTALL_CLI_OPTIONS'
 _gs_es_pattern_buf+='|GLOBAL_STACK_SERVERLESS_FRAMEWORK_SERVERLESS_ACCESS_KEY' # feeds BASE_SERVERLESS_ACCESS_KEY alias; injected via base-env.compose.yaml
 _gs_es_pattern_buf+='|GLOBAL_STACK_NODE_UPGRADE$'                             # synthetic compose-level alias (per-tier: NODE24_UPGRADE etc.); not a top-level .env key
+_gs_es_pattern_buf+='|GLOBAL_STACK_HURL_BUILD_PATH$'
 _gs_es_pattern_buf+=')'
 readonly _GS_ES_PATTERN_FORWARD_CHECK_IGNORE="${_gs_es_pattern_buf}"
 unset _gs_es_pattern_buf

@@ -18,11 +18,13 @@ SHELL ["/bin/bash", "-xeEu", "-o", "pipefail", "-c"]
 ARG GLOBAL_STACK_FRANKENPHP_WATCHER_VERSION
 ENV GLOBAL_STACK_FRANKENPHP_WATCHER_VERSION=${GLOBAL_STACK_FRANKENPHP_WATCHER_VERSION}
 
-# curl -fsSL 'https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x14AA40EC0831756756D7F66C4F4EA0AAE5267A6C' | gpg --dearmor | tee /usr/share/keyrings/php.gpg \
-# && sh -c 'echo "Types: deb\nSigned-By: /usr/share/keyrings/php.gpg\nArch: $(dpkg --print-architecture)\nURIs: http://ppa.launchpad.net/ondrej/php/ubuntu\nSuites: noble\nComponents: main" > /etc/apt/sources.list.d/php-noble-main.sources' \
 # apt packages are deliberately NOT pinned — see .hadolint.yaml (DL3008 ignored:
 # development environment, intentionally tracks latest). Ruling 2026-09-04, row 26.
 RUN apt-get update --allow-releaseinfo-change \
+    && sudo curl -fsSL https://packages.sury.org/php/apt.gpg | sudo gpg --dearmor -o /usr/share/keyrings/debsuryorg-archive-keyring.gpg \
+    && sudo chmod 0644 /usr/share/keyrings/debsuryorg-archive-keyring.gpg \
+    && echo -e "Types: deb\nSigned-By: /usr/share/keyrings/debsuryorg-archive-keyring.gpg\nArch: $(dpkg --print-architecture)\nURIs: http://packages.sury.org/php/\nSuites: $(lsb_release -cs)\nComponents: main" | dd of=/etc/apt/sources.list.d/php-sury.sources \
+    && apt-get update --allow-releaseinfo-change \
     && apt-get install -y --no-install-recommends --fix-missing \
     bison \
     re2c \
