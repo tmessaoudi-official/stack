@@ -26,7 +26,10 @@ Claude Code reads an ancestor directory's CLAUDE.md but ignores an ancestor's se
 2026-10-03), so the isolation lives in each project: every project root and container below this
 directory excludes both the `/stack` infrastructure file and THIS file via `claudeMdExcludes` in its
 own `.claude/settings.local.json` (a git root; `settings.json` for a folder that is not its own repo), written by `~/.claude/bin/stack-claude-md-scope.sh apply`
-(`/gates-bypass stack-md`). A new project loads both until that is re-run. A session in this directory
+(`/gates-bypass stack-md`). A new project loads both until that is re-run — or, once the SessionStart hook
+`~/.claude/hooks/stack-md-autoscope.sh` is registered (`/gates-bypass hook stack-md-autoscope register`), only in its
+FIRST session: the hook writes the exclude into that session's own root, which applies from the next session (probed
+2026-11-09), and tells the first session to disregard both files. A session in this directory
 itself excludes only the `/stack` file (`.claude/settings.json`). The global `~/.claude/CLAUDE.md`
 always loads — it carries the domain-agnostic reasoning framework.
 
