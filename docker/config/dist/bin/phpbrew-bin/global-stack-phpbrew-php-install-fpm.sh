@@ -11,7 +11,17 @@
 # why they still build. So phpbrew gets -fpm (CLI + embed only) and FPM is
 # built here, in a pass that keeps CLI enabled at configure time.
 #
-# Usage: global-stack-phpbrew-php-install-fpm.sh <phpbrew-build-name>
+# Version-generic (was phpedge-bin/…-phpedge-install-fpm.sh until 2026-11-09):
+# 8.6 took edge's -fpm variant but not that edge-only script, so php-8.6.0RC5
+# had no sbin/php-fpm and the boot's `phpbrew fpm start` exited 127. Callers:
+#   - global-stack-phpbrew-php-install-version.sh, after EVERY phpbrew install
+#     (a +fpm build already has sbin/php-fpm, so the build stage skips);
+#   - global-stack-phpbrew-start.sh, before copy-dist-conf, when sbin/php-fpm is
+#     missing (a build made before this hook existed).
+# Idempotent: the build stage skips when php-fpm exists, the config stage only
+# creates what is missing. startup-prologue.test.sh §80 pins all of it.
+#
+# Usage: global-stack-phpbrew-php-install-fpm.sh   (reads PHPBREW_ROOT, PHP_VERSION_NAME)
 #
 # Env:
 #   PHPBREW_INI_TIMEZONE     default UTC   (fallback ini path only)
@@ -102,6 +112,15 @@ if [[ ! -f "$ETC/fpm/php.ini" ]]; then
         echo "ERROR: no ini source found ($ETC/cli/php.ini or $INI_SEED)" >&2
         exit 1
     fi
+fi
+
+# copy-dist-conf.sh snapshots etc/fpm into etc/dist-fpm on its FIRST run and
+# then, on every boot, wipes etc/fpm and restores it from that snapshot. A build
+# whose FPM pass ran after the snapshot (the self-heal path) would lose the
+# php.ini above on the next boot, so seed it into an EXISTING snapshot. Never
+# create the snapshot dir: its absence is what tells copy-dist-conf to take one.
+if [[ -d "$ETC/dist-fpm" && ! -f "$ETC/dist-fpm/php.ini" ]]; then
+    cp "$ETC/fpm/php.ini" "$ETC/dist-fpm/php.ini"
 fi
 
 # ---------------------------------------------------------------- verification

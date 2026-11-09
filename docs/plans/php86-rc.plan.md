@@ -5,6 +5,7 @@ Add PHP 8.6 (currently a release candidate) as `03php8-6`, alongside 8.4 / 8.5 /
 ## Decisions Log
 - [2026-10-23 10:25] AGREED: `GLOBAL_STACK_PHP8_6_VERSION` is a bare version (`8.6.0RC4`), shaped like 8.5 — phpbrew's `VersionDslParser` maps `^(php-)?X.Y.Z(alpha|beta|RC)N$` to the php-src GitHub tag tarball (`is_tag: true`) before it consults the php.net release list, so the `github.com/php/php-src@php-…` form (which env-update `--apply` would rewrite bare anyway, and which fails the start script's `PHP_VERSION` pin check) is not needed. Supersedes the "option 1" (tracker var + start-script strip) the developer first picked on an unverified premise.
 - [2026-10-23 10:25] AGREED: scaffold the per-version surfaces 8.6 lacks by copying 8.5's tracked files with 8.5 → 8.6: `GLOBAL_STACK_FRANKENPHP_8_6_VERSION`, `dist/bin/php8.6-bin/{setup-version,setup-project}.sh`, `dist/conf/php8.6-{conf.d,php-fpm.d,frankenphp}/`. Nothing is committed — the developer reviews first.
+- [2026-11-09 11:14] AGREED: Fix 03php8-6 fpm 127 (same bug as edge fix 4c8fe8c: 8.6 got -fpm but not the edge-only install-fpm pass): make the script version-generic as phpbrew-bin/global-stack-phpbrew-php-install-fpm.sh, call it from install-version for every version, self-heal a missing sbin/php-fpm before copy-dist-conf, seed php.ini into an existing etc/dist-fpm snapshot; restart 8.6 after 03phpedge's compile.
 
 ## Formal Plan
 1. `.env`: `GLOBAL_STACK_PHP8_6_VERSION=8.6.0RC4`, plus one comment line above the 8.6 annotation: `(channel:unstable)` comes off at GA. Add `GLOBAL_STACK_FRANKENPHP_8_6_VERSION=${GLOBAL_STACK_FRANKENPHP_VERSION}` after the 8.5 one. `CLAUDE.md` § Architecture: add 8.6 to the tier-03 PHP list.
@@ -21,8 +22,8 @@ Verify: `env-update --check --dry-run --filter=PHP8_6` → 0 DRIFT / 0 REPLACE-D
 | 2 | php8.6-bin setup scripts | S | done | - | docker/config/dist/bin/php8.6-bin/** |
 | 3 | php8.6 conf dirs | S | done | - | docker/config/dist/conf/php8.6-*/** |
 | 4 | env-scan → .env.local | S | done | - | .env.local |
-| 5 | developer review, then commit (git add --chmod=+x for php8.6-bin) | S | todo | - | - |
-| 6 | make build + up: 03php8-6 healthy | M | todo | - | - |
+| 5 | developer review, then commit (git add --chmod=+x for php8.6-bin) | S | done | landed in `987bf35` (2026-10-23, "added php 8.6 !") | - |
+| 6 | make build + up: 03php8-6 healthy | M | done | 2026-11-09: healthy across two boots after the FPM fix (self-heal 287 s, then a 20 s boot that skipped it); `php-fpm -t` ok; suite 1124/1124 | docker/config/dist/bin/phpbrew-bin/**, bin/tests/startup-prologue.test.sh |
 <!-- /progress-block -->
 ### Blocked
 - [2026-10-23 10:56] Step 1 unblocked: the developer told Claude to run `/tmp/fix-php86-env-20261023.sh` (the Edit tool stays denied on `.env`; the script ran via Bash). `.env.bak.php86.*` kept for review.
@@ -30,5 +31,6 @@ Verify: `env-update --check --dry-run --filter=PHP8_6` → 0 DRIFT / 0 REPLACE-D
 ### Needs research
 ### Fragile
 ### Known issues
+- [2026-11-09] Step 6 finding: `03php8-6` came up with `tools/errors/php.8.6` — `phpbrew fpm start` exit 127, no `sbin/php-fpm` in `php-8.6.0RC5`. Cause: `.env` gives 8.6 edge's `-fpm` variant (correct: 8.6.0RC5 carries php-src's embed/cli configure guard, `sapi/cli/config.m4:9-10`), but step 2 copied only 8.5's scripts, so the edge-only `phpedge-install-fpm.sh` second pass never ran for 8.6. Same bug as the edge fix `4c8fe8c`. Fixed by making that pass version-generic (`phpbrew-bin/global-stack-phpbrew-php-install-fpm.sh`, `startup-prologue.test.sh` §80) — see the Decisions Log and `.claude/rules/startup-scripts.md`.
 - `startup-prologue.test.sh` reds 15 of 1111, all §76 (nginx signature/clone cases, 76a keygen green), on 2026-10-23 — independent of this change: §76 reads no `.env` or php path, and the nginx scripts and the suite are clean vs HEAD. Not reproduced on a clean baseline (the in-place baseline was firewall-denied; a `git archive` copy aborts with exit 128). Same 15 with `TMPDIR=/tmp/p86`, so not a socket-path-length issue.
 - New shebang files must land as 100755 in git (`base-set-permissions.test.sh` §3) while `core.fileMode=false`: commit them with `git add --chmod=+x`.

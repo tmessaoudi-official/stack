@@ -3659,7 +3659,7 @@ assert_pass "49b: every positional read is below its handler (offenders: ${_a49_
 # The check is narrowed to a comment continuing a LIVE line. A comment line
 # whose predecessor is ALSO a comment ending in `\` is an ordinary commented-out
 # block — six of those exist in this tree (nginx-iou, httpd-setup, caddy-start,
-# phpedge-install-fpm) and they must stay green.
+# php-install-fpm, phpedge-install-fpm until 2026-11-09) and they must stay green.
 printf '\n%b── Section 50: no comment inside a line continuation%b\n' "${C_BOLD}" "${C_RESET}"
 
 # `|| true`: an empty sweep is 50a's red, not a harness abort.
@@ -7388,6 +7388,109 @@ assert_pass "79f: a non-numeric --retry is refused, no command run" \
 assert_pass "79g: sdkman's tolerant install loop passes --retry (the only caller that opts in)" \
   bash -c 'awk "/--tolerant/{t=1} t&&/--retry=[0-9]/{f=1} END{exit !f}" "$1"' _ "${DIST_BIN}/sdkman-bin/global-stack-sdkman-start.sh"
 rm -rf "${_P79}"
+
+# ─── Section 80: every php build gets its FPM SAPI, whatever its name (2026-11-09) ──
+# php-src >= 8.6 refuses --disable-cli together with --enable-embed, which is exactly how
+# phpbrew builds its FPM pass, so 8.6 and edge are built with -fpm and FPM comes from a second
+# configure pass. That pass shipped only as phpedge-bin/…-phpedge-install-fpm.sh, found through
+# a php${PHP_VERSION_AS} name: when 8.6 was scaffolded from 8.5 (987bf35) it took edge's -fpm
+# variant but not the edge-only script, so php-8.6.0RC5 had no sbin/php-fpm and the boot's
+# `phpbrew fpm start` exited 127 → tools/errors/php.8.6 on a container that otherwise worked.
+# Now: ONE version-generic script, called for every install (it skips when php-fpm exists), a
+# boot self-heal for a build made before the hook existed, and the fpm php.ini seeded into an
+# existing etc/dist-fpm snapshot, because copy-dist-conf.sh restores etc/fpm from it every boot.
+printf '\n%b── Section 80: every php build gets its FPM SAPI (generic install-fpm)%b\n' "${C_BOLD}" "${C_RESET}"
+_P80="$(mktemp -d)"
+_P80_FPM="${DIST_BIN}/phpbrew-bin/global-stack-phpbrew-php-install-fpm.sh"
+_P80_START="${DIST_BIN}/phpbrew-bin/global-stack-phpbrew-start.sh"
+_p80_set="$(find "${DIST_BIN}" -name '*install-fpm.sh' -type f -printf '%P\n' | sort | tr '\n' ' ')"
+assert_pass "80a: exactly one install-fpm script, the generic phpbrew-bin one (found: ${_p80_set})" \
+  test "${_p80_set}" = "phpbrew-bin/global-stack-phpbrew-php-install-fpm.sh "
+assert_pass "80a2: the generic install-fpm script is 100755 in git (core.fileMode=false)" \
+  bash -c 'git -C "$1" ls-files -s -- "$2" | grep -q "^100755 "' _ "${SCRIPT_DIR}/../.." \
+  "docker/config/dist/bin/phpbrew-bin/global-stack-phpbrew-php-install-fpm.sh"
+
+# 80b: the SHIPPED install-version.sh, stub phpbrew + stub install-fpm, run for each version name.
+mkdir -p "${_P80}/stub"
+printf '#!/bin/sh\necho "phpbrew $*" >>"%s/calls"\n' "${_P80}" >"${_P80}/stub/phpbrew"
+printf '#!/bin/sh\necho "install-fpm ${PHP_VERSION_NAME}" >>"%s/calls"\n' "${_P80}" \
+  >"${_P80}/stub/global-stack-phpbrew-php-install-fpm.sh"
+chmod +x "${_P80}/stub/phpbrew" "${_P80}/stub/global-stack-phpbrew-php-install-fpm.sh"
+_p80_iv() { # $1 = PHP_VERSION_AS, $2 = PHP_VERSION_NAME → the recorded calls, one line
+  rm -f "${_P80}/calls"
+  env -i PATH="${_P80}/stub:${DIST_BIN}/base-bin:/usr/bin:/bin" GLOBAL_STACK_ERROR_TOKEN=php.p80 \
+    GLOBAL_STACK_DOCKER_TOOLS_PATH="${_P80}" GLOBAL_STACK_DOCKER_TOOLS_PATH_ERRORS="${_P80}" \
+    PHP_VERSION_AS="$1" PHP_VERSION=x PHP_VERSION_NAME="$2" PHP_INSTALL_CLI_VARIANTS=+default \
+    PHP_INSTALL_CLI_OPTIONS= bash "${DIST_BIN}/phpbrew-bin/global-stack-phpbrew-php-install-version.sh" \
+    >"${_P80}/iv.log" 2>&1 || echo "rc=$?" >>"${_P80}/calls"
+  tr '\n' '|' <"${_P80}/calls" 2>/dev/null || true
+}
+for _p80_v in '8.6|php-8.6.0RC5' 'edge|php-master' '8.4|php-8.4.27'; do
+  IFS='|' read -r _p80_as _p80_name <<<"${_p80_v}"
+  assert_pass "80b: install-version ${_p80_as} runs phpbrew, then the generic install-fpm for ${_p80_name}" \
+    bash -c '[[ "$1" == "phpbrew "*"|install-fpm $2|" ]]' _ "$(_p80_iv "${_p80_as}" "${_p80_name}")" "${_p80_name}"
+done
+
+# 80c: the self-heal block in the SHIPPED start script, extracted by anchor and run against the stub.
+awk '/^  if \[\[ ! -x "\$\{PHPBREW_ROOT\}\/php\/\$\{PHP_VERSION_NAME\}\/sbin\/php-fpm" \]\]; then$/ { f = 1 }
+  f { print } f && /^  fi$/ { exit }' "${_P80_START}" >"${_P80}/heal.sh"
+assert_pass "80c: the self-heal block exists and calls the generic install-fpm (anchor non-vacuity)" \
+  bash -c 'grep -q "^    global-stack-phpbrew-php-install-fpm.sh$" "$1" && [[ "$(tail -1 "$1")" == "  fi" ]]' _ "${_P80}/heal.sh"
+_p80_heal() { # $1 = yes|no: a php-fpm binary already present → the recorded calls
+  rm -rf "${_P80}/calls" "${_P80}/root"
+  mkdir -p "${_P80}/root/php/php-8.6.0RC5/sbin"
+  if [[ "$1" == yes ]]; then
+    printf '#!/bin/sh\n' >"${_P80}/root/php/php-8.6.0RC5/sbin/php-fpm"
+    chmod +x "${_P80}/root/php/php-8.6.0RC5/sbin/php-fpm"
+  fi
+  env -i PATH="${_P80}/stub:/usr/bin:/bin" PHPBREW_ROOT="${_P80}/root" PHP_VERSION_NAME=php-8.6.0RC5 \
+    bash -c 'set -eE -o pipefail; source "$1"' _ "${_P80}/heal.sh" >/dev/null 2>&1 || echo "rc=$?" >>"${_P80}/calls"
+  tr '\n' '|' <"${_P80}/calls" 2>/dev/null || true
+}
+assert_pass "80d: boot with no sbin/php-fpm (a build older than the hook) -> install-fpm runs" \
+  test "$(_p80_heal no)" = "install-fpm php-8.6.0RC5|"
+assert_pass "80e: boot with sbin/php-fpm present -> install-fpm is not run" \
+  test -z "$(_p80_heal yes)"
+_p80_l_heal="$(grep -n 'sbin/php-fpm" \]\]; then$' "${_P80_START}" | head -1 | cut -d: -f1 || true)"
+_p80_l_copy="$(grep -n '^  global-stack-phpbrew-copy-dist-conf.sh$' "${_P80_START}" | head -1 | cut -d: -f1 || true)"
+_p80_l_fpm="$(grep -n 'phpbrew fpm start' "${_P80_START}" | grep -v '^[0-9]*: *#' | head -1 | cut -d: -f1 || true)"
+assert_pass "80f: self-heal runs before copy-dist-conf (which restores etc/fpm), which runs before fpm start" \
+  bash -c '[[ -n "$1" && -n "$2" && -n "$3" ]] && (( $1 < $2 && $2 < $3 ))' _ "${_p80_l_heal}" "${_p80_l_copy}" "${_p80_l_fpm}"
+
+# 80g-k: the SHIPPED install-fpm config stage on a build whose php-fpm exists (build stage skipped).
+_p80_cfg() { # $1 = dist-fpm state: none | empty | has-ini → sets up ${_P80}/root and runs the script
+  rm -rf "${_P80}/root"
+  local p="${_P80}/root/php/php-8.6.0RC5"
+  mkdir -p "${p}/sbin" "${p}/etc/cli" "${p}/etc/php-fpm.d" "${_P80}/root/build/php-8.6.0RC5"
+  printf '#!/bin/sh\n' >"${p}/sbin/php-fpm"
+  chmod +x "${p}/sbin/php-fpm"
+  echo 'cli-ini' >"${p}/etc/cli/php.ini"
+  echo 'conf-default' >"${p}/etc/php-fpm.conf.default"
+  echo 'www-default' >"${p}/etc/php-fpm.d/www.conf.default"
+  case "$1" in
+    empty) mkdir -p "${p}/etc/dist-fpm" ;;
+    has-ini) mkdir -p "${p}/etc/dist-fpm" && echo 'kept-ini' >"${p}/etc/dist-fpm/php.ini" ;;
+  esac
+  # rc recorded, not fatal: a failing script is 80g-j's red, not a harness abort.
+  _P80_RC=0
+  env -i PATH="/usr/bin:/bin" PHPBREW_ROOT="${_P80}/root" PHP_VERSION_NAME=php-8.6.0RC5 \
+    bash "${_P80_FPM}" >"${_P80}/cfg.log" 2>&1 || _P80_RC=$?
+}
+_P80_P="${_P80}/root/php/php-8.6.0RC5"
+_p80_cfg empty
+assert_pass "80g: php-fpm present, dist-fpm snapshot without php.ini -> the snapshot gets the fpm php.ini" \
+  bash -c '[[ "$1" == 0 && "$(cat "$2/etc/dist-fpm/php.ini")" == cli-ini && "$(cat "$2/etc/fpm/php.ini")" == cli-ini ]]' _ \
+  "${_P80_RC}" "${_P80_P}"
+assert_pass "80j: the config stage creates php-fpm.conf and the www pool from the .default files" \
+  bash -c '[[ "$1" == 0 && "$(cat "$2/etc/php-fpm.conf")" == conf-default && "$(cat "$2/etc/php-fpm.d/www.conf")" == www-default ]]' _ \
+  "${_P80_RC}" "${_P80_P}"
+_p80_cfg none
+assert_pass "80h: php-fpm present, no dist-fpm snapshot yet -> none is created (copy-dist-conf takes the first one)" \
+  bash -c '[[ "$1" == 0 && ! -e "$2/etc/dist-fpm" && -f "$2/etc/fpm/php.ini" ]]' _ "${_P80_RC}" "${_P80_P}"
+_p80_cfg has-ini
+assert_pass "80i: a php.ini already in the dist-fpm snapshot is never overwritten" \
+  bash -c '[[ "$1" == 0 && "$(cat "$2/etc/dist-fpm/php.ini")" == kept-ini ]]' _ "${_P80_RC}" "${_P80_P}"
+rm -rf "${_P80}"
 
 # ─── Summary ──────────────────────────────────────────────────────────────
 printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'

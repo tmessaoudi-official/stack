@@ -206,6 +206,14 @@ if [ "${PHPBREW_MODE}" = "setup" ]; then
     source "/home/${GLOBAL_STACK_DOCKER_USER_ID}/.phpbrew.shellrc" && printf '[PHP]\ndate.timezone = %s\n' "${GLOBAL_STACK_TIMEZONE}" > "${PHPBREW_ROOT}/php/${PHPBREW_PHP}/var/db/tzone.ini"  # bash-pitfalls: ignore BP4 — it sources phpbrew's own bashrc, whose exit status is unproven (review-remediation row 54)
   fi
 
+  # A build made before install-version called the FPM pass for every version has
+  # no php-fpm, and its marker == pin, so the install branch above never runs again
+  # (03php8-6 on 2026-11-09: `phpbrew fpm start` → 127 → errors/php.8.6). Build it
+  # here, BEFORE copy-dist-conf, which restores etc/fpm from its snapshot.
+  if [[ ! -x "${PHPBREW_ROOT}/php/${PHP_VERSION_NAME}/sbin/php-fpm" ]]; then
+    global-stack-phpbrew-php-install-fpm.sh
+  fi
+
   global-stack-phpbrew-copy-dist-conf.sh
 
   if [ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/php.${PHP_VERSION_AS}" ] || [ "${_php_gate}" = "reinstall" ]; then
