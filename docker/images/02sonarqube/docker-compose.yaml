@@ -19,7 +19,7 @@ services:
       00base:
         condition: service_healthy
         required: true
-      01postgres18:
+      01postgres19:
         condition: service_healthy
         required: true
     extra_hosts:

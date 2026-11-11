@@ -13,7 +13,7 @@ services:
       - --proxy-headers=forwarded
       - --verbose
     depends_on:
-      01postgres18:
+      01postgres19:
         condition: service_healthy
         required: true
     extra_hosts:
@@ -26,7 +26,7 @@ services:
       - KEYCLOAK_ADMIN=${GLOBAL_STACK_KEYCLOAK_ADMIN}
       - KEYCLOAK_ADMIN_PASSWORD=${GLOBAL_STACK_KEYCLOAK_ADMIN_PASSWORD}
       - KC_DB=postgres
-      - KC_DB_URL_HOST=01postgres18
+      - KC_DB_URL_HOST=01postgres19
       - KC_DB_URL_PORT=5432
       - KC_DB_URL_DATABASE=keycloak
       - KC_DB_USERNAME=root

@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Tests that 01postgres18 is reported healthy only by the REAL server, and that
+# Tests that 01postgres19 is reported healthy only by the REAL server, and that
 # the init-time temp server gets time to stop cleanly under load.
 # Run: bash bin/tests/postgres-healthcheck.test.sh   (~20 s; needs docker + the built image)
 #
 # 2026-09-28 cold start: the image's docker-entrypoint.sh:297 starts a temp server
 # with listen_addresses='' (socket only) to run init scripts. The healthcheck was a
 # SOCKET pg_isready, so it passed against that temp server and wrote
-# successes/01postgres18 before the real server existed; 02sonarqube started, hit
+# successes/01postgres19 before the real server existed; 02sonarqube started, hit
 # "the database system is not yet accepting connections", exited 0 and was never
 # retried. The temp server's `pg_ctl -m fast -w stop` (:311) then gave up at its 60 s
 # default under load ("server does not shut down") and the container restarted.
@@ -20,7 +20,7 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-SERVICE="01postgres18"
+SERVICE="01postgres19"
 
 TMP_DIR="$(mktemp -d)"
 PROBE_NAME="gs-pg-healthcheck-test-$$"

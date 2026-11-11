@@ -299,7 +299,7 @@ t "t03h: tag-replace flag" bash -c "
 
 t "t03i: tag-suffix flag" bash -c "
     f=\${TMP_DIR}/t03i.env
-    printf '# @todo env-update (tag-suffix:oraclelinux9) dockerhub:_/mysql:9 9.6.0\nGLOBAL_STACK_MYSQL9_VERSION=9.6.0\n' > \"\$f\"
+    printf '# @todo env-update (tag-suffix:oraclelinux9) dockerhub:_/mysql:9 9.6.0\nGLOBAL_STACK_MYSQL26_VERSION=9.6.0\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1)
     echo \"\$out\" | grep -qF 'tag_suffix: oraclelinux9' || { echo \"tag_suffix not found\"; echo FAIL; exit 0; }
     echo PASS
@@ -430,9 +430,9 @@ t "t05a: git-fallback URL and SHA" bash -c "
 # ═══════════════════════════════════════════════════════════════════════════
 section "6 — Combined real-world"
 
-t "t06a: MySQL9 record — type, major_hint, tag_suffix, urls" bash -c "
+t "t06a: MYSQL26 record — type, major_hint, tag_suffix, urls" bash -c "
     out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file='${FIXTURES}/combined-real-world.env' 2>&1)
-    echo \"\$out\" | grep -qF 'env_var: GLOBAL_STACK_IMAGE_MYSQL9_VERSION' || { echo \"mysql record not found\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'env_var: GLOBAL_STACK_IMAGE_MYSQL26_VERSION' || { echo \"mysql record not found\"; echo FAIL; exit 0; }
     echo \"\$out\" | grep -qF 'identifier: _/mysql' || { echo \"identifier wrong\"; echo FAIL; exit 0; }
     echo \"\$out\" | grep -qF 'major_hint: 9' || { echo \"major_hint not 9\"; echo FAIL; exit 0; }
     echo \"\$out\" | grep -qF 'tag_suffix: oraclelinux9' || { echo \"tag_suffix not found\"; echo FAIL; exit 0; }
@@ -533,14 +533,14 @@ t "t08b: json format — valid JSON parseable by jq" bash -c "
 
 t "t08c: --filter by var name regex" bash -c "
     out=\$(bash '${ENV_UPDATE_V2}' --dump --filter='MYSQL' --env-file='${FIXTURES}/combined-real-world.env' 2>&1)
-    echo \"\$out\" | grep -qF 'GLOBAL_STACK_IMAGE_MYSQL9_VERSION' || { echo \"mysql not in output\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'GLOBAL_STACK_IMAGE_MYSQL26_VERSION' || { echo \"mysql not in output\"; echo FAIL; exit 0; }
     echo \"\$out\" | grep -qF 'GLOBAL_STACK_FLUTTER3_VERSION' && { echo \"flutter should be filtered out\"; echo FAIL; exit 0; }
     echo PASS
 "
 
 t "t08d: --filter=type:dockerhub keeps only dockerhub records" bash -c "
     out=\$(bash '${ENV_UPDATE_V2}' --dump --filter='type:dockerhub' --env-file='${FIXTURES}/combined-real-world.env' 2>&1)
-    echo \"\$out\" | grep -qF 'GLOBAL_STACK_IMAGE_MYSQL9_VERSION' || { echo \"dockerhub record not found\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'GLOBAL_STACK_IMAGE_MYSQL26_VERSION' || { echo \"dockerhub record not found\"; echo FAIL; exit 0; }
     echo \"\$out\" | grep -qF 'GLOBAL_STACK_FLUTTER3_VERSION' && { echo \"github record should be filtered out\"; echo FAIL; exit 0; }
     echo PASS
 "
@@ -548,7 +548,7 @@ t "t08d: --filter=type:dockerhub keeps only dockerhub records" bash -c "
 t "t08e: --filter=type:github keeps only github records" bash -c "
     out=\$(bash '${ENV_UPDATE_V2}' --dump --filter='type:github' --env-file='${FIXTURES}/combined-real-world.env' 2>&1)
     echo \"\$out\" | grep -qF 'GLOBAL_STACK_FLUTTER3_VERSION' || { echo \"github record not found\"; echo FAIL; exit 0; }
-    echo \"\$out\" | grep -qF 'GLOBAL_STACK_IMAGE_MYSQL9_VERSION' && { echo \"dockerhub record should be filtered out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'GLOBAL_STACK_IMAGE_MYSQL26_VERSION' && { echo \"dockerhub record should be filtered out\"; echo FAIL; exit 0; }
     echo PASS
 "
 
@@ -985,7 +985,7 @@ t "t15a: fetches latest stable for _/postgres" bash -c "
     _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
     _gs_eu2_record_set \$idx type       'dockerhub'
     _gs_eu2_record_set \$idx identifier '_/postgres'
-    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_POSTGRES18_VERSION'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_POSTGRES19_VERSION'
     _gs_eu2_fetch_dockerhub \$idx
     val=\$(_gs_eu2_record_get \$idx proposed_version)
     # fixture has 18.4 and 18.4-alpine3.23 as latest stable
@@ -1015,7 +1015,7 @@ t "t15c: tag-suffix filter applied" bash -c "
     _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
     _gs_eu2_record_set \$idx type       'dockerhub'
     _gs_eu2_record_set \$idx identifier '_/mysql'
-    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_MYSQL9_VERSION'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_MYSQL26_VERSION'
     _gs_eu2_record_set \$idx tag_suffix '-oraclelinux9'
     _gs_eu2_fetch_dockerhub \$idx
     val=\$(_gs_eu2_record_get \$idx proposed_version)
@@ -1028,7 +1028,7 @@ t "t15d: cache hit skips HTTP call (sets proposed_version from cache)" bash -c "
     _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
     _gs_eu2_record_set \$idx type       'dockerhub'
     _gs_eu2_record_set \$idx identifier '_/postgres'
-    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_POSTGRES18_VERSION'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_POSTGRES19_VERSION'
     # Key must match what the fetcher computes:
     #   dockerhub:<ns>:<tag_suffix>:<major_hint>:<major_hint_min>:<channel>:<prefer_specific>:<watch_major_depth>:<tag-flag fingerprint>
     # The fingerprint is read off the record rather than pasted in, so this
@@ -1212,9 +1212,9 @@ section "17 — --check streaming output"
 t "t17a: --check streams [AUTO] line per record" bash -c "
     export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/chk17a
-    out=\$(bash '${ENV_UPDATE_V2}' --check --filter=POSTGRES18 \
+    out=\$(bash '${ENV_UPDATE_V2}' --check --filter=POSTGRES19 \
         --env-file='${FIXTURES}/combined-real-world.env' 2>&1)
-    # No POSTGRES18 in combined-real-world.env (has MYSQL9 and FLUTTER3)
+    # No POSTGRES19 in combined-real-world.env (has MYSQL26 and FLUTTER3)
     # Minimal requirement: exits 0 and does not crash
     echo PASS
 "
@@ -1869,7 +1869,7 @@ t "t25a: fetcher leaves decision empty on success path (no AUTO/HOLD set by fetc
     _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
     _gs_eu2_record_set \$idx type       'dockerhub'
     _gs_eu2_record_set \$idx identifier '_/postgres'
-    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_POSTGRES18_VERSION'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_POSTGRES19_VERSION'
     # No major_hint — fetcher success path should NOT set decision
     _gs_eu2_fetch_dockerhub \$idx
     decision=\$(_gs_eu2_record_get \$idx decision)
@@ -1887,14 +1887,14 @@ t "t25b: cache hit path also leaves decision empty (not AUTO)" bash -c "
     _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
     _gs_eu2_record_set \$idx type       'dockerhub'
     _gs_eu2_record_set \$idx identifier '_/postgres'
-    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_POSTGRES18_VERSION'
+    _gs_eu2_record_set \$idx env_var    'GLOBAL_STACK_POSTGRES19_VERSION'
     _gs_eu2_fetch_dockerhub \$idx
     proposed_first=\$(_gs_eu2_record_get \$idx proposed_version)
     # Second call — should hit cache
     _gs_eu2_record_new; idx2=\${_GS_EU2_LAST_IDX}
     _gs_eu2_record_set \$idx2 type       'dockerhub'
     _gs_eu2_record_set \$idx2 identifier '_/postgres'
-    _gs_eu2_record_set \$idx2 env_var    'GLOBAL_STACK_POSTGRES18_VERSION_2'
+    _gs_eu2_record_set \$idx2 env_var    'GLOBAL_STACK_POSTGRES19_VERSION_2'
     _gs_eu2_fetch_dockerhub \$idx2
     decision2=\$(_gs_eu2_record_get \$idx2 decision)
     proposed2=\$(_gs_eu2_record_get \$idx2 proposed_version)
@@ -7086,8 +7086,8 @@ source '${_GS_EU2_LIB}/core/parse.sh'
 t "t64a1: --exclude=SELENIUM skips both Selenium vars, all others run" bash -c "
     out=\$(bash '${ENV_UPDATE_V2}' --dump --exclude='SELENIUM' \
         --env-file='${FIXTURES}/combined-real-world.env' 2>&1)
-    echo \"\$out\" | grep -qF 'GLOBAL_STACK_IMAGE_MYSQL9_VERSION' \
-        || { echo \"mysql9 should be in output; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'GLOBAL_STACK_IMAGE_MYSQL26_VERSION' \
+        || { echo \"mysql26 should be in output; got: \$out\"; echo FAIL; exit 0; }
     echo \"\$out\" | grep -qF 'GLOBAL_STACK_FLUTTER3_VERSION' \
         || { echo \"flutter3 should be in output; got: \$out\"; echo FAIL; exit 0; }
     echo PASS
@@ -7097,8 +7097,8 @@ t "t64a1: --exclude=SELENIUM skips both Selenium vars, all others run" bash -c "
 t "t64a2: --exclude=NONEXISTENT_XYZ matches nothing, all vars run normally" bash -c "
     out=\$(bash '${ENV_UPDATE_V2}' --dump --exclude='NONEXISTENT_XYZ' \
         --env-file='${FIXTURES}/combined-real-world.env' 2>&1)
-    echo \"\$out\" | grep -qF 'GLOBAL_STACK_IMAGE_MYSQL9_VERSION' \
-        || { echo \"mysql9 should be in output; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'GLOBAL_STACK_IMAGE_MYSQL26_VERSION' \
+        || { echo \"mysql26 should be in output; got: \$out\"; echo FAIL; exit 0; }
     echo \"\$out\" | grep -qF 'GLOBAL_STACK_FLUTTER3_VERSION' \
         || { echo \"flutter3 should be in output; got: \$out\"; echo FAIL; exit 0; }
     echo PASS
@@ -7108,8 +7108,8 @@ t "t64a2: --exclude=NONEXISTENT_XYZ matches nothing, all vars run normally" bash
 t "t64a3: --filter=GLOBAL_STACK --exclude=FLUTTER3 keeps mysql but drops flutter" bash -c "
     out=\$(bash '${ENV_UPDATE_V2}' --dump --filter='GLOBAL_STACK' --exclude='FLUTTER3' \
         --env-file='${FIXTURES}/combined-real-world.env' 2>&1)
-    echo \"\$out\" | grep -qF 'GLOBAL_STACK_IMAGE_MYSQL9_VERSION' \
-        || { echo \"mysql9 should be in output; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'GLOBAL_STACK_IMAGE_MYSQL26_VERSION' \
+        || { echo \"mysql26 should be in output; got: \$out\"; echo FAIL; exit 0; }
     echo \"\$out\" | grep -qF 'GLOBAL_STACK_FLUTTER3_VERSION' \
         && { echo \"flutter3 should be excluded; got: \$out\"; echo FAIL; exit 0; }
     echo PASS
@@ -7130,8 +7130,8 @@ t "t64a4: invalid --exclude regex exits non-zero with error message" bash -c "
 t "t64a5: --exclude= (empty string) is a no-op, all vars run" bash -c "
     out=\$(bash '${ENV_UPDATE_V2}' --dump --exclude='' \
         --env-file='${FIXTURES}/combined-real-world.env' 2>&1)
-    echo \"\$out\" | grep -qF 'GLOBAL_STACK_IMAGE_MYSQL9_VERSION' \
-        || { echo \"mysql9 should be in output; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'GLOBAL_STACK_IMAGE_MYSQL26_VERSION' \
+        || { echo \"mysql26 should be in output; got: \$out\"; echo FAIL; exit 0; }
     echo \"\$out\" | grep -qF 'GLOBAL_STACK_FLUTTER3_VERSION' \
         || { echo \"flutter3 should be in output; got: \$out\"; echo FAIL; exit 0; }
     echo PASS
@@ -11294,13 +11294,13 @@ _flush_section
 section "106 — P0 audit fixes: filter case-insensitive + reference validation"
 
 # t106a: --filter=lowercase matches UPPER_CASE var names (case-insensitive)
-t "t106a: --filter=postgres matches GLOBAL_STACK_POSTGRES18_VERSION" bash -c "
+t "t106a: --filter=postgres matches GLOBAL_STACK_POSTGRES19_VERSION" bash -c "
     export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t106a_cache
     f=\${TMP_DIR}/t106a.env
-    printf '# @todo env-update dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_POSTGRES18_VERSION=18.3-alpine3.23\n' > \"\$f\"
+    printf '# @todo env-update dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_POSTGRES19_VERSION=18.3-alpine3.23\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --filter=postgres --env-file=\"\$f\" 2>/dev/null)
-    echo \"\$out\" | grep -q 'GLOBAL_STACK_POSTGRES18_VERSION' || { echo \"lowercase filter returned no match; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -q 'GLOBAL_STACK_POSTGRES19_VERSION' || { echo \"lowercase filter returned no match; got: \$out\"; echo FAIL; exit 0; }
     echo PASS
 "
 
@@ -11309,9 +11309,9 @@ t "t106b: --filter=Postgres (mixed case) matches" bash -c "
     export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'
     export _GS_EU2_CACHE_DIR=\${TMP_DIR}/t106b_cache
     f=\${TMP_DIR}/t106b.env
-    printf '# @todo env-update dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_POSTGRES18_VERSION=18.3-alpine3.23\n' > \"\$f\"
+    printf '# @todo env-update dockerhub:_/postgres:18 18.3-alpine3.23\nGLOBAL_STACK_POSTGRES19_VERSION=18.3-alpine3.23\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --check --dry-run --filter=Postgres --env-file=\"\$f\" 2>/dev/null)
-    echo \"\$out\" | grep -q 'GLOBAL_STACK_POSTGRES18_VERSION' || { echo \"mixed-case filter returned no match; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -q 'GLOBAL_STACK_POSTGRES19_VERSION' || { echo \"mixed-case filter returned no match; got: \$out\"; echo FAIL; exit 0; }
     echo PASS
 "
 

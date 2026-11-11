@@ -133,7 +133,7 @@ resets state (the annotation is lost).
 ```bash
 # Simple: Docker Hub image with major pin and tag suffix
 # @todo env-update (tag-suffix:-oraclelinux9) dockerhub:_/mysql:9 9.1.0
-GLOBAL_STACK_MYSQL9_VERSION=9.1.0
+GLOBAL_STACK_MYSQL26_VERSION=9.1.0
 
 # GitHub release with tag filter and major pin
 # @todo env-update (tag-filter:^[0-9\.]) github:flutter/flutter:3 3.29.3
@@ -436,8 +436,8 @@ indicator (overwritten with `\r`) shows the current variable being fetched on st
 the fetch is in progress.
 
 ```
-[AUTO  ]  GLOBAL_STACK_POSTGRES18_VERSION              18.3-alpine3.23 → 18.4-alpine3.23
-[HOLD  ]  GLOBAL_STACK_MYSQL9_VERSION                  9.1.0 → 9.6.0  ← major bump (9→9)
+[AUTO  ]  GLOBAL_STACK_POSTGRES19_VERSION              18.3-alpine3.23 → 18.4-alpine3.23
+[HOLD  ]  GLOBAL_STACK_MYSQL26_VERSION                  9.1.0 → 9.6.0  ← major bump (9→9)
 [HOLD  ]  GLOBAL_STACK_JAVA_VERSION                    17.5 → 21.0.3  ← major pin (21.x available)
 [SKIP  ]  GLOBAL_STACK_NGINX_VERSION                   (up to date)
 [SKIP  ]  GLOBAL_STACK_OLD_VERSION                     (would downgrade)
@@ -607,7 +607,7 @@ fields as string keys. Empty fields are present as empty strings (`""`), not `nu
 ```json
 [
   {
-    "env_var": "GLOBAL_STACK_POSTGRES18_VERSION",
+    "env_var": "GLOBAL_STACK_POSTGRES19_VERSION",
     "current_version": "18.3-alpine3.23",
     "type": "dockerhub",
     "identifier": "_/postgres",
@@ -654,7 +654,7 @@ The text format prints one record block per parsed annotation:
 
 ```
 === record 0 ===
-env_var: GLOBAL_STACK_POSTGRES18_VERSION
+env_var: GLOBAL_STACK_POSTGRES19_VERSION
 current_version: 18.3-alpine3.23
 type: dockerhub
 identifier: _/postgres
@@ -697,7 +697,7 @@ When `--apply` is active:
 
 ```
 Backup: /stack/.env.bak.20260612-143052-12345
-[APPLIED]  GLOBAL_STACK_POSTGRES18_VERSION              18.3-alpine3.23 → 18.4-alpine3.23
+[APPLIED]  GLOBAL_STACK_POSTGRES19_VERSION              18.3-alpine3.23 → 18.4-alpine3.23
 [APPLIED]  GLOBAL_STACK_NODE24_VERSION                  24.15.0 → 24.16.0
 [LOCK]     GLOBAL_STACK_MODSEC_MOD_VERSION              annotation: v0.0.9-beta1 → v0.0.12-beta1
   3 update(s) applied to /stack/.env (2 version, 1 SHA)
@@ -709,7 +709,7 @@ When `--dry-run --apply`:
 
 ```
 Apply preview (--dry-run):
-  [DRY-RUN]  GLOBAL_STACK_POSTGRES18_VERSION              18.3-alpine3.23 → 18.4-alpine3.23
+  [DRY-RUN]  GLOBAL_STACK_POSTGRES19_VERSION              18.3-alpine3.23 → 18.4-alpine3.23
   [DRY-RUN]  GLOBAL_STACK_MODSEC_MOD_VERSION              annotation: v0.0.9-beta1 → v0.0.12-beta1 (locked — VAR= untouched)
   2 update(s) would be applied (--dry-run — no writes)
 ```
@@ -990,7 +990,7 @@ A filtered re-query was considered as an automatic fix and **rejected**: it need
 ```bash
 # Standard with oraclelinux suffix
 # @todo env-update (tag-suffix:-oraclelinux9) (tag-strip-suffix:-oraclelinux9) dockerhub:_/mysql:9 9.1.0
-GLOBAL_STACK_MYSQL9_VERSION=9.1.0-oraclelinux9
+GLOBAL_STACK_MYSQL26_VERSION=9.1.0-oraclelinux9
 
 # Pinning to specific X.Y.Z tags (floating X.Y tags are rejected)
 # @todo env-update (tag-filter:alpine) (prefer-specific) dockerhub:valkey/valkey 9.0.3-alpine3.23
@@ -1841,7 +1841,7 @@ Every `--apply` run that writes at least one change appends an audit line to
 
 ```
 2026-06-13T18:24:01 AUTO GLOBAL_STACK_NODE24_VERSION 22.12.0 -> 24.1.0
-2026-06-13T18:24:01 RESOLVED GLOBAL_STACK_POSTGRES18_VERSION 18.2 -> 18.3-alpine3.23
+2026-06-13T18:24:01 RESOLVED GLOBAL_STACK_POSTGRES19_VERSION 18.2 -> 18.3-alpine3.23
 ```
 
 One line per variable changed; format: `TIMESTAMP DECISION VAR OLD_VALUE -> NEW_VALUE`.
@@ -1860,7 +1860,7 @@ The stored version includes the suffix, but the comparison must work without it:
 
 ```bash
 # @todo env-update (tag-suffix:-alpine3.23) (tag-strip-suffix:-alpine3.23) dockerhub:_/postgres:18 18.3
-GLOBAL_STACK_POSTGRES18_VERSION=18.3-alpine3.23
+GLOBAL_STACK_POSTGRES19_VERSION=18.3-alpine3.23
 ```
 
 Wait — `current_version` in the annotation is `18.3` (without suffix), but `VAR=18.3-alpine3.23`
@@ -1872,7 +1872,7 @@ Alternatively, with `version-prefix` / `tag-strip-suffix` approach:
 
 ```bash
 # @todo env-update (tag-suffix:-alpine3.23) dockerhub:_/postgres:18 18.3-alpine3.23
-GLOBAL_STACK_POSTGRES18_VERSION=18.3-alpine3.23
+GLOBAL_STACK_POSTGRES19_VERSION=18.3-alpine3.23
 ```
 
 Here `current_version=18.3-alpine3.23` (from the annotation), and the proposed version

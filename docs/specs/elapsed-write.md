@@ -43,8 +43,8 @@ Key invariant: base ONLY clears `successes/base` and `elapsed`. It does NOT clea
 
 | Container | Type | Healthcheck cmd (in-container) | Base image shell |
 |---|---|---|---|
-| `01mysql9` | DB | `mysqladmin ping -h localhost -u $MYSQL_USER -p$MYSQL_PASSWORD` | bash ✓ |
-| `01postgres18` | DB | `pg_isready -U root` | Alpine (**sh only**) |
+| `01mysql26` | DB | `mysqladmin ping -h localhost -u $MYSQL_USER -p$MYSQL_PASSWORD` | bash ✓ |
+| `01postgres19` | DB | `pg_isready -U root` | Alpine (**sh only**) |
 | `01mariadb13` | DB | `mysqladmin ping -h localhost -u $MYSQL_USER -p$MYSQL_PASSWORD` | bash ✓ |
 | `01mongo7` | DB | `mongosh --eval 'db.runCommand("ping")'` | bash ✓ |
 | `01redis` | Cache | `redis-cli ping` | Alpine (**sh only**) |
@@ -85,11 +85,11 @@ not already present). Reason:
 - The `depends_on` gate guarantees base has already created `elapsed` before any Group A
   container starts
 
-Currently missing `depends_on: 00base` (verified): `01redis`, `01mysql9`, `01postgres18`.
+Currently missing `depends_on: 00base` (verified): `01redis`, `01mysql26`, `01postgres19`.
 Others (mariadb, mongo, valkey, pgadmin4, keycloak, mongoclient, mailpit, it-tools) need
 checking at implementation time — add if absent.
 
-Note: `02keycloak` depends on `01postgres18: service_healthy`. Once postgres18 depends on
+Note: `02keycloak` depends on `01postgres19: service_healthy`. Once postgres19 depends on
 `00base`, keycloak gets the ordering transitively. No need to add 00base explicitly to keycloak.
 
 ### Freshness gate — re-write on each compose up
@@ -253,8 +253,8 @@ needed. Verify the container's default shell (`sh`) is available for the healthc
 
 | Container | Original test | Wrapped test |
 |---|---|---|
-| `01mysql9` | `mysqladmin ping -h localhost -u $MYSQL_USER -p$MYSQL_PASSWORD` | `global-stack-base-healthcheck-elapsed.sh 01mysql9 mysqladmin ping -h localhost -u $MYSQL_USER -p$MYSQL_PASSWORD` |
-| `01postgres18` | `pg_isready -U root` | `global-stack-base-healthcheck-elapsed.sh 01postgres18 pg_isready -U root` |
+| `01mysql26` | `mysqladmin ping -h localhost -u $MYSQL_USER -p$MYSQL_PASSWORD` | `global-stack-base-healthcheck-elapsed.sh 01mysql26 mysqladmin ping -h localhost -u $MYSQL_USER -p$MYSQL_PASSWORD` |
+| `01postgres19` | `pg_isready -U root` | `global-stack-base-healthcheck-elapsed.sh 01postgres19 pg_isready -U root` |
 | `01mariadb13` | `mysqladmin ping -h localhost -u $MYSQL_USER -p$MYSQL_PASSWORD` | `global-stack-base-healthcheck-elapsed.sh 01mariadb13 mysqladmin ping -h localhost -u $MYSQL_USER -p$MYSQL_PASSWORD` |
 | `01mongo7` | `mongosh --eval 'db.runCommand("ping")'` | `global-stack-base-healthcheck-elapsed.sh 01mongo7 mongosh --eval 'db.runCommand("ping")'` |
 | `01redis` | `redis-cli ping` | `global-stack-base-healthcheck-elapsed.sh 01redis redis-cli ping` |

@@ -2,7 +2,7 @@
 # check-image-versions.sh — non-fatal host-side preflight (checkpoint 5).
 #
 # For each image service that builds FROM an UPSTREAM tag pinned by a
-# GLOBAL_STACK_IMAGE_<X>_VERSION variable (e.g. `FROM mysql:${GLOBAL_STACK_IMAGE_MYSQL9_VERSION}`),
+# GLOBAL_STACK_IMAGE_<X>_VERSION variable (e.g. `FROM mysql:${GLOBAL_STACK_IMAGE_MYSQL26_VERSION}`),
 # compare the active env pin against the `ARG <VAR>=` default baked into that
 # service's Dockerfile. "Active" means `.env.local` when it exists and `.env`
 # otherwise, because `.env.local` is what `make up` builds from (Makefile:213-215)

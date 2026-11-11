@@ -57,7 +57,7 @@
 | 13 | P3 | `02dpage-pgadmin4` SyntaxWarning | no — upstream |
 | 14 | P3 | `02sonarqube` JDK deprecations | no — upstream |
 | 15 | P3 | `03flutter3` git cache recreate | no — self-healing |
-| 16 | P3 | `01postgres18` first-run relation errors | no — expected |
+| 16 | P3 | `01postgres19` first-run relation errors | no — expected |
 | 17 | P3 | `02mongoclient` RestartCount=1 | no — restart policy |
 | 18 | P3 | Registry 404-shaped `level=error` lines | no — normal push probes |
 | 19 | P3 | BuildKit warnings | no — expected config |
@@ -271,9 +271,9 @@ All six are local-dev-acceptable. Listing them because you asked for everything 
 | `04serverless-framework` | npm audit: **10 vulnerabilities — 6 moderate, 3 HIGH, 1 CRITICAL**. The log does not name the packages. |
 | `01mongo7` | `Access control is not enabled for the database. Read and write access to data and configuration is unrestricted` |
 | `01mongo7` | soft rlimit `nofile` **1024** vs recommended minimum **64000** |
-| `01mysql9` | `root@localhost is created with an empty password!` (`--initialize-insecure`) |
-| `01mysql9` | `CA certificate ca.pem is self signed` |
-| `01postgres18` | initdb: `enabling "trust" authentication for local connections` |
+| `01mysql26` | `root@localhost is created with an empty password!` (`--initialize-insecure`) |
+| `01mysql26` | `CA certificate ca.pem is self signed` |
+| `01postgres19` | initdb: `enabling "trust" authentication for local connections` |
 | `02sonarqube` | `OAuth authentication should use HTTPS` |
 
 ### Recommendation
@@ -383,7 +383,7 @@ Two oddities: the filename is the literal `serverless` rather than `${GLOBAL_STA
 
 **Grade: [Verified]** — self-healing; flutter rebuilds its cache. **No action** unless it recurs every boot (it did not here).
 
-## 16. `01postgres18` — first-run `relation does not exist` errors
+## 16. `01postgres19` — first-run `relation does not exist` errors
 
 **Grade: [Verified]** — `databasechangeloglock` (keycloak's liquibase bootstrap) and `migration_model` (sonarqube's). Both are the normal "check whether the schema exists yet" probe on a fresh volume. Expected. **No action.**
 

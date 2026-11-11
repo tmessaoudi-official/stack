@@ -8,7 +8,7 @@ $cfg['Servers'][1] = [
 ];
 $cfg['Servers'][2] = [
     'auth_type' => 'cookie',
-    'host' => '01mysql9',
+    'host' => '01mysql26',
     'compress' => false,
     'AllowNoPassword' => true,
 ];

@@ -128,14 +128,14 @@ run_hook "${SBX}/.env.local"
 # ── The ordinary concatenating form ─────────────────────────────────────────
 printf '\n  %b3. the ordinary ${VAR:-}<port> consumer%b\n' "${C_BOLD}" "${C_RESET}"
 
-make_sandbox 'GLOBAL_STACK_MYSQL9_PORT_3306=42708
+make_sandbox 'GLOBAL_STACK_MYSQL26_PORT_3306=42708
 ' 'services:
   svc:
     ports:
-      - ${GLOBAL_STACK_MYSQL9_PORT_3306:-}3306
+      - ${GLOBAL_STACK_MYSQL26_PORT_3306:-}3306
 '
 run_hook "${SBX}/.env.local"
-grep -q 'GLOBAL_STACK_MYSQL9_PORT_3306' <<<"${HOOK_OUT}" \
+grep -q 'GLOBAL_STACK_MYSQL26_PORT_3306' <<<"${HOOK_OUT}" \
   && ok "concatenating consumer + no ':' → warned" \
   || ko "the classic 427083306 bug was not caught: '${HOOK_OUT}'"
 
@@ -164,11 +164,11 @@ run_hook "${SBX}/.env.local"
   || ko "false alarm on a var no compose file concatenates: '${HOOK_OUT}'"
 
 # ── Empty value means no host binding ───────────────────────────────────────
-make_sandbox 'GLOBAL_STACK_MYSQL9_PORT_3306=
+make_sandbox 'GLOBAL_STACK_MYSQL26_PORT_3306=
 ' 'services:
   svc:
     ports:
-      - ${GLOBAL_STACK_MYSQL9_PORT_3306:-}3306
+      - ${GLOBAL_STACK_MYSQL26_PORT_3306:-}3306
 '
 run_hook "${SBX}/.env.local"
 [[ -z "${HOOK_OUT}" ]] \
@@ -178,7 +178,7 @@ run_hook "${SBX}/.env.local"
 # ── Vacuity: a check keyed on consumers must say when it found none ─────────
 printf '\n  %b5. the check refuses to be silently vacuous%b\n' "${C_BOLD}" "${C_RESET}"
 
-make_sandbox 'GLOBAL_STACK_MYSQL9_PORT_3306=42708
+make_sandbox 'GLOBAL_STACK_MYSQL26_PORT_3306=42708
 ' ''
 run_hook "${SBX}/.env.local"
 grep -qi 'could not' <<<"${HOOK_OUT}" \

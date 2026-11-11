@@ -1,8 +1,8 @@
 # shellcheck disable=SC2148
-ARG GLOBAL_STACK_IMAGE_POSTGRES18_VERSION=18.6-alpine3.24
+ARG GLOBAL_STACK_IMAGE_POSTGRES19_VERSION=19.0-alpine3.24
 
 # shellcheck disable=SC2148
-FROM postgres:${GLOBAL_STACK_IMAGE_POSTGRES18_VERSION}
+FROM postgres:${GLOBAL_STACK_IMAGE_POSTGRES19_VERSION}
 
 LABEL maintainer="Takieddine Messaoudi <takieddine.messaoudi.official@gmail.com>" \
       info="local_global_stack"
@@ -13,7 +13,7 @@ USER root
 
 SHELL ["/bin/bash", "-xeEu", "-o", "pipefail", "-c"]
 
-COPY docker/images/01postgres18/conf/initdb/ /docker-entrypoint-initdb.d/
+COPY docker/images/01postgres19/conf/initdb/ /docker-entrypoint-initdb.d/
 
 RUN chown -R root:root /root/ \
     && find /root/ -type f -exec chmod 600 {} \; \

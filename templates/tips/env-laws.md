@@ -334,7 +334,7 @@ proposed version produces **HOLD** instead of SKIP (annotation opt-in bridge).
 
 ```bash
 # @todo env-update dockerhub:library/postgres (channel:unstable) :19 18.3
-GLOBAL_STACK_POSTGRES18_VERSION=18.3
+GLOBAL_STACK_POSTGRES19_VERSION=18.3
 ```
 
 Run: `bin/env-update.sh --check --unstable=full`
