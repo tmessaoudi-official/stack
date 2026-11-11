@@ -207,13 +207,13 @@ DOCKERFILE ARG PROPAGATION (Phase 7)
 
   EXAMPLE
     Source (.env):
-      GLOBAL_STACK_POSTGRES18_VERSION=18.4-alpine3.23
+      GLOBAL_STACK_POSTGRES19_VERSION=18.4-alpine3.23
 
     Dockerfile (before):
-      ARG GLOBAL_STACK_POSTGRES18_VERSION=18.3-alpine3.23
+      ARG GLOBAL_STACK_POSTGRES19_VERSION=18.3-alpine3.23
 
     Dockerfile (after Phase 7):
-      ARG GLOBAL_STACK_POSTGRES18_VERSION=18.4-alpine3.23
+      ARG GLOBAL_STACK_POSTGRES19_VERSION=18.4-alpine3.23
 
 PROP_EOF
   fi
@@ -270,10 +270,10 @@ WORKED SCENARIOS
    Output: shows [ADDED] lines for every new var.
 
 2. Version bump — update one var in .env, propagate everywhere
-   # Edit .env: GLOBAL_STACK_POSTGRES18_VERSION=18.4-alpine3.23
+   # Edit .env: GLOBAL_STACK_POSTGRES19_VERSION=18.4-alpine3.23
    $ bin/env-scan.sh
-   Phase 6: .env.local gets GLOBAL_STACK_POSTGRES18_VERSION=18.4-alpine3.23
-   Phase 7: all Dockerfiles with ARG GLOBAL_STACK_POSTGRES18_VERSION=... are updated.
+   Phase 6: .env.local gets GLOBAL_STACK_POSTGRES19_VERSION=18.4-alpine3.23
+   Phase 7: all Dockerfiles with ARG GLOBAL_STACK_POSTGRES19_VERSION=... are updated.
 
 3. Dry-run preview before writing
    $ bin/env-scan.sh --dry-run

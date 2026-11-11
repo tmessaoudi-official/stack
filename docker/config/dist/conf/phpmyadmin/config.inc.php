@@ -8,10 +8,10 @@
 /* Servers configuration */
 $i = 0;
 
-/* Server: 01mysql9 [1] */
+/* Server: 01mysql26 [1] */
 $i++;
 $cfg['Servers'][$i]['verbose'] = 'Mysql 9';
-$cfg['Servers'][$i]['host'] = '01mysql9';
+$cfg['Servers'][$i]['host'] = '01mysql26';
 $cfg['Servers'][$i]['port'] = 3306;
 $cfg['Servers'][$i]['socket'] = '';
 $cfg['Servers'][$i]['auth_type'] = 'cookie';

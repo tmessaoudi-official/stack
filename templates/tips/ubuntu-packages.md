@@ -117,13 +117,13 @@ sudo apt-get install -y --fix-missing \
     systemtap-sdt-dev \
     libsnmp-dev \
     libtidy-dev \
-    php8.5-cli \
-    php8.5-phar \
-    php8.5-readline \
-    php8.5-bz2 \
-    php8.5-xml \
-    php8.5-curl \
-    php8.5-sqlite3 \
+    php8.6-cli \
+    php8.6-phar \
+    php8.6-readline \
+    php8.6-bz2 \
+    php8.6-xml \
+    php8.6-curl \
+    php8.6-sqlite3 \
 
 # ── Database clients ──────────────────────────────────────────────────────────
 

@@ -79,17 +79,17 @@ RUN apt-get update --allow-releaseinfo-change \
     systemtap-sdt-dev \
     libsnmp-dev \
     libtidy-dev \
-    # php8.5 is intentionally installed here as the bootstrap PHP version required by phpbrew.
+    # php8.6 is intentionally installed here as the bootstrap PHP version required by phpbrew.
     # phpbrew needs a working PHP binary to function — this is NOT the target PHP version
     # for end-user images. The actual PHP version for each image (8.2, 8.3, 8.4, etc.)
     # is managed and installed by phpbrew at runtime.
-    php8.5-cli \
-    php8.5-phar \
-    php8.5-readline \
-    php8.5-bz2 \
-    php8.5-xml \
-    php8.5-curl \
-    php8.5-sqlite3 \
+    php8.6-cli \
+    php8.6-phar \
+    php8.6-readline \
+    php8.6-bz2 \
+    php8.6-xml \
+    php8.6-curl \
+    php8.6-sqlite3 \
     && apt-get clean -y \
     && rm -rf /var/lib/apt/lists/* \
     && ln -s /usr/lib/x86_64-linux-gnu/libldap.so /usr/lib/libldap.so \

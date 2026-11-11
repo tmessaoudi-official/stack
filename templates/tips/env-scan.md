@@ -176,7 +176,7 @@ Add `# @local-keep` as an inline comment on any line in `.env.local` to prevent
 env-scan from overwriting that value, even when `--sync-values=true` (the default):
 
 ```bash
-GLOBAL_STACK_MYSQL9_VERSION=8.0.1  # @local-keep
+GLOBAL_STACK_MYSQL26_VERSION=8.0.1  # @local-keep
 ```
 
 The annotation is preserved verbatim — env-scan never strips it. Spacing before `#`
@@ -338,7 +338,7 @@ or `ARG FOO=value`) is detected and maintained after propagation.
   check `env-scan.sh` output when editing this var.
 - **A port var's trailing `:` depends on its CONSUMER** (CLAUDE.md § Gotchas, "property of its
   CONSUMER"). Where Compose writes `${VAR:-}PORT` — the common form — the value must end with `:`
-  (`GLOBAL_STACK_POSTGRES18_PORT_N=42708:`), or the numbers silently concatenate (`427085432`
+  (`GLOBAL_STACK_POSTGRES19_PORT_N=42708:`), or the numbers silently concatenate (`427085432`
   instead of `42708:5432`). Where the consumer supplies the colon itself (`${VAR:-}:${VAR:-}`,
   `--publish ${VAR}:5000`), a trailing `:` is the bug.
 - **`--backup-keep=0`** means unlimited retention (no pruning), not "keep nothing". To

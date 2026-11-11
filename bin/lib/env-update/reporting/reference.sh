@@ -68,7 +68,7 @@ ANNOTATION FORMAT
 
   Example:
     # @todo env-update (manual) dockerhub:_/postgres:18 18.3-alpine3.23
-    GLOBAL_STACK_POSTGRES18_VERSION=18.3-alpine3.23
+    GLOBAL_STACK_POSTGRES19_VERSION=18.3-alpine3.23
 
 
 FETCHER TYPES
@@ -623,7 +623,7 @@ WORKED EXAMPLES
 
   1. DockerHub — Postgres pinned to major 18
      # @todo env-update dockerhub:_/postgres:18 18.3-alpine3.23
-     GLOBAL_STACK_POSTGRES18_VERSION=18.3-alpine3.23
+     GLOBAL_STACK_POSTGRES19_VERSION=18.3-alpine3.23
 
      Behavior: fetches tags matching ^18\..*; AUTO when 18.x+1 ships.
      HOLD when 19.x ships (major boundary). Combine with (tag-suffix:-alpine3.23)

@@ -149,7 +149,7 @@ Services live in `docker/images/<tier><name>/` and are numbered by build depende
 | Tier | Purpose | Examples |
 |------|---------|---------|
 | `00*` | Base Ubuntu image + core tooling (Go, Zig, Docker-in-Docker, mkcert, hadolint, shellcheck) | `00base` |
-| `01*` | Infrastructure: databases, cache, web servers, mail, cloud simulators | MySQL9, Postgres18, Redis, Nginx, Caddy, Mailpit, LocalStack |
+| `01*` | Infrastructure: databases, cache, web servers, mail, cloud simulators | MYSQL26, POSTGRES19, Redis, Nginx, Caddy, Mailpit, LocalStack |
 | `02*` | Language/version managers — install tools into shared `tools/` volume | NVM, PHPBrew, PyEnv, RbEnv, SDKMAN, Rust, FVM |
 | `03*` | Pre-configured language runtimes (depend on tier 02 being healthy) | Node 24/26/edge, PHP 8.4/8.5/8.6/edge, Python 3, Ruby 3/4, Java 17/21/26, Flutter 3 |
 | `04*` | Specialized application tools | PhpMyAdmin, Android SDK, Serverless Framework |
@@ -198,7 +198,7 @@ Every version variable in `.env` is annotated for automated checking:
 
 ```bash
 # @todo env-update [FLAGS] TYPE:IDENTIFIER [MAJOR_HINT] CURRENT_VERSION
-GLOBAL_STACK_POSTGRES18_VERSION=18.3-alpine3.23
+GLOBAL_STACK_POSTGRES19_VERSION=18.3-alpine3.23
 ```
 
 See `templates/tips/env-update.md` for the full fetcher-type and flag reference.
@@ -320,7 +320,7 @@ make start-local-registry create-buildx-builder  # NEW cert + daemon restart + b
 - **Startup prologue tests**: `bash bin/tests/startup-prologue.test.sh` — the largest suite; it ignores `--section` (see § Gotchas), so filter its output instead → `.claude/rules/startup-tests.md`
 - **00base installer tests**: `bash bin/tests/base-install-tools.test.sh` — the shipped installer blocks against a stub `curl` that 404s like the real one → `.claude/rules/startup-tests.md`
 - **set-permissions tests**: `bash bin/tests/base-set-permissions.test.sh` — only TOOLS_PATH is made a+rwx; shebang files must be 100755 in git → `.claude/rules/startup-tests.md`
-- **Postgres healthcheck tests**: `bash bin/tests/postgres-healthcheck.test.sh` — needs docker and the built `01postgres18` image; throwaway container, never the stack volume → `.claude/rules/docker-images.md`
+- **Postgres healthcheck tests**: `bash bin/tests/postgres-healthcheck.test.sh` — needs docker and the built `01postgres19` image; throwaway container, never the stack volume → `.claude/rules/docker-images.md`
 - **mongo9 rseq tests**: `bash bin/tests/mongo9-rseq.test.sh` (`GS_MONGO9_PROBE=1` adds a live `mongod` probe) — the `GLIBC_TUNABLES` reset → `.claude/rules/docker-images.md`
 - **SonarQube start tests**: `bash bin/tests/sonarqube-start.test.sh` — token invariant in compose, exit and signal handling of the start script, no docker → `.claude/rules/startup-tests.md`
 - **/opt tool installer tests**: `bash bin/tests/global-unu-opt.test.sh` — no network; stub `curl`/`sudo`, the `GS_UNU_OPT_*` seams → `.claude/rules/global-unu-opt.md`
@@ -414,7 +414,7 @@ make start-local-registry create-buildx-builder  # NEW cert + daemon restart + b
 
 - SSH keys go in `docker/config/root/.ssh/` — mounted into all containers
 - Persistent data: `docker/data/<service>/`, `docker/storage/<service>/`
-- **Credential reset**: DB state lives in **named Docker volumes**, NOT `docker/data/` (those are seed-dump mounts). Procedure: `make down`, then `docker volume ls | grep <service>` and `docker volume rm` the matching volume(s) (e.g. `global_stack_2_0_0_local_01mysql9_data`; Postgres uses `_var_lib_postgresql`), then `make up`. Layout rule: `docker/data/` = seed dumps, `docker/storage/` = app state, named volumes = DB state
+- **Credential reset**: DB state lives in **named Docker volumes**, NOT `docker/data/` (those are seed-dump mounts). Procedure: `make down`, then `docker volume ls | grep <service>` and `docker volume rm` the matching volume(s) (e.g. `global_stack_2_0_0_local_01mysql26_data`; Postgres uses `_var_lib_postgresql`), then `make up`. Layout rule: `docker/data/` = seed dumps, `docker/storage/` = app state, named volumes = DB state
 
 ## Debugging a Failed Container
 

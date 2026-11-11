@@ -36,7 +36,7 @@ services:
       02rust:
         condition: service_healthy
         required: true
-      03php8-5:
+      03php8-6:
         condition: service_healthy
         required: true
       03node26:
@@ -122,8 +122,8 @@ services:
       - COMPOSER_HOME=${GLOBAL_STACK_COMPOSER_HOME}
       - COMPOSER_SOURCE=${GLOBAL_STACK_COMPOSER_SOURCE}
       - SYMFONY_HOME=${GLOBAL_STACK_SYMFONY_HOME}
-      - PHP_VERSION=${GLOBAL_STACK_PHP8_5_VERSION}
-      - PHP_VERSION_AS=${GLOBAL_STACK_PHP8_5_VERSION_AS}
+      - PHP_VERSION=${GLOBAL_STACK_PHP8_6_VERSION}
+      - PHP_VERSION_AS=${GLOBAL_STACK_PHP8_6_VERSION_AS}
       - RUSTUP_HOME=${GLOBAL_STACK_RUSTUP_HOME}
       - CARGO_HOME=${GLOBAL_STACK_CARGO_HOME}
       - GLOBAL_STACK_ANDROID_BUILD_TOOLS_VERSION=${GLOBAL_STACK_ANDROID_BUILD_TOOLS_VERSION}

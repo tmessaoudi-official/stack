@@ -2637,7 +2637,7 @@ assert_fail "39d: the caddy script no longer claims to be Httpd" \
 # container: builtin+C.UTF-8 alone leaves datcollate=en_US.utf8 (it comes from LANG); adding
 # LANG=C.UTF-8 yields datcollate=C, provider=b, locale=C.UTF-8 with sort order UNCHANGED.
 # (--lc-collate=C alongside the builtin provider makes initdb fail outright -- do not add it.)
-_PGC="${REPO_ROOT}/docker/images/01postgres18/docker-compose.yaml"
+_PGC="${REPO_ROOT}/docker/images/01postgres19/docker-compose.yaml"
 assert_pass "40a: postgres pins the builtin locale provider" \
   grep -Eq 'POSTGRES_INITDB_ARGS=.*--locale-provider=builtin' "${_PGC}"
 assert_pass "40a: ...with the C.UTF-8 builtin locale" \

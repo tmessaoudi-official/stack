@@ -32,7 +32,7 @@ SERVICES_SHELL := \
 	00base 00corentinth-it-tools \
 	01axllent-mailpit 01caddy 01epiclabs-docker-oracle-xe-11g \
 	01httpd 01localstack-localstack 01mariadb13 01mongo9 \
-	01mysql9 01nginx \
+	01mysql26 01nginx \
 	01selenium-standalone-chrome 01selenium-standalone-firefox \
 	02fvm 02keycloak-keycloak \
 	02mongoclient-mongoclient 02nvm 02phpbrew 02pyenv \
@@ -44,7 +44,7 @@ SERVICES_SHELL := \
 	04android 04phpmyadmin 04serverless-framework \
 	05edge 05stable
 
-SERVICES_SH := 01postgres18 01redis 01valkey 02dpage-pgadmin4
+SERVICES_SH := 01postgres19 01redis 01valkey 02dpage-pgadmin4
 
 SERVICES_ALL := $(SERVICES_SHELL) $(SERVICES_SH)
 
@@ -147,8 +147,8 @@ touch:
 	touch ${GLOBAL_STACK_TARGET_FILE}
 # `tools/elapsed` is pre-created HERE, by the host user, before any container starts.
 # It is not cosmetic. `down` deletes it (see the `down` recipe), and on the next `up`
-# every service appends to it -- including containers that run as ROOT (01postgres18,
-# 01mysql9, 01mariadb13, 01mongo9, 02dpage-pgadmin4) via their healthcheck's
+# every service appends to it -- including containers that run as ROOT (01postgres19,
+# 01mysql26, 01mariadb13, 01mongo9, 02dpage-pgadmin4) via their healthcheck's
 # global-stack-base-healthcheck-elapsed.sh. Whichever root container appends first
 # CREATES the file as root:root 0644. 00base runs as `developer` and is the only
 # service that opens it with `>` (base-start.sh:54 -> print-success.sh:23, mode
@@ -343,17 +343,7 @@ restore:
 	docker load -i var/images/stack-${GLOBAL_STACK_VERSION}.tar
 log-follow:
 	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="logs --follow" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-hard-restart:
-	@test -d var/tools || { echo "FATAL: var/tools/ is missing — cannot proceed with hard-restart. var/tools is a manual snapshot of a healthy tools/ tree: take one with 'cp -R tools var/tools' while the stack is up. (make save/restore act on var/images, not var/tools.)"; exit 1; }
-	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="down" GLOBAL_STACK_DOCKER_CLI_EXEC_FLAGS="--rmi all --volumes --remove-orphans" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
-	docker ps -q | xargs -r docker stop
-	docker system prune -a -f --volumes
-	yes y | docker-reclaim-disk-space-script.sh || echo 'script does not exist'
-	bin/env-scan.sh --yes
-	yes y | global-unu.sh || echo 'script does not exit'
-	sudo rm -rf tools ./docker/registry/data ./docker/registry/certs
-	cp -R var/tools/ tools
-	$(MAKE) create-paths --silent --ignore-errors --keep-going --warn-undefined-variables
+hard-restart: destroy
 	$(MAKE) start-local-registry --silent --ignore-errors --keep-going --warn-undefined-variables
 	$(MAKE) create-buildx-builder --silent --ignore-errors --keep-going --warn-undefined-variables
 	$(MAKE) build --silent --ignore-errors --keep-going --warn-undefined-variables
@@ -369,14 +359,26 @@ hard-restart:
 # registry stopped by anything else, and a registry it cannot heal stops the
 # restart with the stack still up (inside the -i `up` below it would be swallowed).
 soft-restart:
-	@test -d var/tools || { echo "FATAL: var/tools/ is missing — cannot proceed with soft-restart. var/tools is a manual snapshot of a healthy tools/ tree: take one with 'cp -R tools var/tools' while the stack is up. (make save/restore act on var/images, not var/tools.)"; exit 1; }
+	@test -d ./var/tools || { echo "FATAL: var/tools/ is missing — cannot proceed with soft-restart. var/tools is a manual snapshot of a healthy tools/ tree: take one with 'cp -R tools var/tools' while the stack is up. (make save/restore act on var/images, not var/tools.)"; exit 1; }
 	@test -n "${GLOBAL_STACK_DOCKER_TOOLS_PATH}" || { echo "FATAL: GLOBAL_STACK_DOCKER_TOOLS_PATH is empty (no ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}?) — soft-restart cannot tell which containers hold tools/, so it will not remove it."; exit 1; }
 	$(MAKE) ensure-local-registry --silent --warn-undefined-variables
 	$(MAKE) check-compose --silent --warn-undefined-variables
 	$(MAKE) down --silent --ignore-errors --keep-going --warn-undefined-variables
 	docker ps -q --filter volume=${GLOBAL_STACK_DOCKER_TOOLS_PATH} | xargs -r docker stop
-	sudo rm -rf tools
-	cp -R var/tools/ tools
+	sudo rm -rf ./tools
+	cp -R ./var/tools/ ./tools
 	$(MAKE) up --silent --ignore-errors --keep-going --warn-undefined-variables
+destroy:
+	@test -d var/tools || { echo "FATAL: var/tools/ is missing — cannot proceed with hard-restart. var/tools is a manual snapshot of a healthy tools/ tree: take one with 'cp -R tools var/tools' while the stack is up. (make save/restore act on var/images, not var/tools.)"; exit 1; }
+	$(MAKE) GLOBAL_STACK_DOCKER_CLI_EXEC="down" GLOBAL_STACK_DOCKER_CLI_EXEC_FLAGS="--rmi all --volumes --remove-orphans" GLOBAL_STACK_DOCKER_CLI="docker compose" GLOBAL_STACK_DOCKER_CLI_FLAGS="--env-file ${GLOBAL_STACK_DOCKER_CLI_DOT_ENV}" docker-cli --silent --ignore-errors --keep-going --warn-undefined-variables
+	docker ps -q | xargs -r docker stop
+	docker system prune -a -f --volumes
+	yes y | docker-reclaim-disk-space-script.sh || echo 'script does not exist'
+	bin/env-scan.sh --yes
+	yes y | global-unu.sh || echo 'script does not exit'
+	sudo rm -rf ./tools ./docker/registry/data ./docker/registry/certs
+	rm -rf ./.env.bak.* ./.env.local.bak.*
+	cp -R ./var/tools/ ./tools
+	$(MAKE) create-paths --silent --ignore-errors --keep-going --warn-undefined-variables
 
 -include local.Makefile
