@@ -27,8 +27,10 @@ are specific to this project's shape and that nothing else will catch:
    and fails for a clean checkout — and the failure surfaces 10+ minutes into a rebuild, not at review.
 2. **This repo has no `deny` list** (`defaultMode: auto`, an allow-list plus three `ask` entries
    that gate only `bin/env-update.sh --apply*` — a developer ruling, because a denied command has
-   no terminal to fall back to; the `ask` trio was kept 2026-09-04 since an `ask` prompts instead). Nothing
-   mechanically stops a destructive command. The discipline **is** the control, so a change that makes a
+   no terminal to fall back to; the `ask` trio was kept 2026-09-04 since an `ask` prompts instead). Beyond the
+   user-level guard (in the cloud the kit installs a 60-entry `deny` list; on the PC and in the cloud
+   `ask-bash-firewall.sh` denies `git push --force`/`-f`/`--mirror`/`+refspec`), nothing in this repo's
+   own settings stops a destructive command. The discipline **is** the control, so a change that makes a
    destructive path easier to trigger accidentally has no safety net behind it.
 
 ## Rule zero — read the artefacts yourself
