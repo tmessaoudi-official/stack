@@ -288,9 +288,11 @@ ANNOTATION FLAGS (parenthesised, space-separated, after the @todo keyword)
                       Catches a package promoted to stable ahead of its
                       companions (platforms;android-37.2 vs its channel-2 images).
     (verify-asset:URL_TEMPLATE)
-                      Artifact-existence gate (url fetcher, fetch-json tier only).
-                      URL_TEMPLATE must contain {version}. The fetch-json expression
-                      must emit candidates NEWEST-FIRST; each is probed and the first
+                      Artifact-existence gate (url fetcher, fetch-extract and
+                      fetch-json tiers). URL_TEMPLATE must contain {version}. A
+                      fetch-json expression must emit candidates NEWEST-FIRST;
+                      fetch-extract's matches are ranked newest-first and
+                      deduplicated for it. Each is probed and the first
                       returning 200 is proposed, the rest WARNed to stderr. None
                       verifying means NO proposal (SKIP), never a broken pin. Catches
                       an index that ANNOUNCES a build before its artifacts are

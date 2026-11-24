@@ -8,8 +8,8 @@
 # Env:       _GS_EU2_CFG[no_cache]  _GS_EU2_HTTP_FIXTURE_DIR
 #            GITHUB_TOKEN  GLOBAL_STACK_GITHUB_TOKEN
 #
-# Input:  record index — reads identifier/fetch_extract/fetch_json/channel/
-#                        urls/url_probe/url_probe_depth/version_prefix/tag_*
+# Input:  record index — reads identifier/fetch_extract/fetch_json/verify_asset/
+#                        channel/urls/url_probe/url_probe_depth/version_prefix/tag_*
 # Output: writes proposed_version + error_message back into record.
 #         NEVER writes decision (except ERROR on hard fetch failure) — that is
 #         owned exclusively by core/decide.sh.
@@ -17,6 +17,8 @@
 # 5-tier strategy (tried in order, first successful extraction wins):
 #   Tier 1: fetch-extract — fetch URL body, run perl regex capture-group-1
 #   Tier 2: fetch-json    — fetch URL as JSON, run jq path extraction
+#           (verify-asset:URL_TEMPLATE) gates Tiers 1 and 2: candidates newest-first,
+#           the first whose artifact answers 200 is proposed (_gs_eu2_url_verify_walk)
 #   Tier 3: GitHub redirect — use urls: field to call GitHub releases/tags API
 #   Tier 4: directory listing — Apache/SVN/GNU/nodejs HTML directory index;
 #                                channel:nightly sub-mode included here
@@ -113,13 +115,25 @@ _gs_eu2_fetch_url() {
   # Fetch URL body; run perl regex, capture group 1; ranked version sort; take highest.
   # ────────────────────────────────────────────────────────────────────────
   if [[ -n "${_fetch_extract}" ]]; then
-    local _body _fetch_ok=false _t1_sink
+    local _body _fetch_ok=false _t1_sink _t1_candidates=""
     _t1_sink="$(_gs_eu2_http_diag_new)" || _t1_sink=""
     if _body="$(_gs_eu2_http_get "${_identifier}" "${_t1_sink}" 2>/dev/null)"; then
       _fetch_ok=true
-      _proposed="$(printf '%s' "${_body}" | \
-        perl -ne "if (/${_fetch_extract}/) { print \"\$1\n\" }" 2>/dev/null | \
-        _gs_eu2_version_sort | tail -1 || true)"
+      if [[ -n "${_verify_asset}" ]]; then
+        # Gated mode: every match, ranked newest-first and deduplicated, must
+        # prove its artifact exists before being proposed. Google's Android CLI
+        # METADATA names a version the sync then downloads from cli/<version>/…,
+        # and nothing guarantees those versioned files are published yet.
+        _t1_candidates="$(printf '%s' "${_body}" \
+          | perl -ne "if (/${_fetch_extract}/) { print \"\$1\n\" }" 2>/dev/null \
+          | _gs_eu2_version_sort \
+          | awk '!_s[$0]++ { _a[_n++] = $0 } END { for (_i = _n - 1; _i >= 0; _i--) print _a[_i] }' || true)"
+        _proposed="$(_gs_eu2_url_verify_walk "${_t1_candidates}" "${_verify_asset}" "${_identifier}")"
+      else
+        _proposed="$(printf '%s' "${_body}" | \
+          perl -ne "if (/${_fetch_extract}/) { print \"\$1\n\" }" 2>/dev/null | \
+          _gs_eu2_version_sort | tail -1 || true)"
+      fi
     fi
 
     if [[ -n "${_proposed}" ]]; then
@@ -135,6 +149,10 @@ _gs_eu2_fetch_url() {
     # is what (stale-after:Nd) is for).
     if [[ "${_fetch_ok}" != "true" ]]; then
       _gs_eu2_url_fail_transport "${_idx}" "${_t1_sink}" "fetch-extract" "${_identifier}"
+    elif [[ -n "${_t1_candidates}" ]]; then
+      # The regex matched; no candidate has a published artifact. SKIP, as Tier 2.
+      _gs_eu2_record_set "${_idx}" error_message \
+        "url: no candidate from ${_identifier} has a published artifact ((verify-asset:${_verify_asset}) matched nothing) — leaving the pin unchanged"
     else
       _gs_eu2_record_set "${_idx}" error_message \
         "url: fetch-extract pattern '${_fetch_extract}' matched nothing from ${_identifier}"

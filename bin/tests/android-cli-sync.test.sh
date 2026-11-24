@@ -406,8 +406,10 @@ ann="$(grep -B1 -m1 '^GLOBAL_STACK_ANDROID_CLI_VERSION=' "${REPO_ROOT}/.env" | h
 val="$(sed -n 's/^GLOBAL_STACK_ANDROID_CLI_VERSION=//p' "${REPO_ROOT}/.env")"
 check "11m: .env pins GLOBAL_STACK_ANDROID_CLI_VERSION to a version (${val:-none})" \
   bash -c "[[ '${val}' =~ ^[0-9]+(\.[0-9]+)+$ ]]"
-check "11n: … annotated for env-update from Google's METADATA, current value = the pin" \
-  bash -c "[[ '${ann}' == '# @todo env-update (fetch-extract:version=([0-9][0-9.]*)) url:https://dl.google.com/android/cli/latest/linux_x86_64/METADATA ${val}' ]]"
+# The (verify-asset:) gate keeps env-update from proposing a version whose cli/<v>/… files are
+# not published yet (docs/plans/verify-asset-fetch-extract.plan.md).
+check "11n: … annotated for env-update from Google's METADATA, gated on the versioned .sha256, current value = the pin" \
+  bash -c "[[ '${ann}' == '# @todo env-update (fetch-extract:version=([0-9][0-9.]*)) (verify-asset:https://dl.google.com/android/cli/{version}/linux_x86_64/android-cli.sha256) url:https://dl.google.com/android/cli/latest/linux_x86_64/METADATA ${val}' ]]"
 
 printf '\n'
 if ((FAIL == 0)); then

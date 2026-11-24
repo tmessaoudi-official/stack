@@ -3774,8 +3774,9 @@ t "t38a: url type parsed and fetched — fetch-extract entry produces proposed_v
 "
 
 # The Android CLI pin (docs/plans/android-cli-pin.plan.md) reads Google's plain-text METADATA
-# ("version=X\ntimestamp=Y\n"); the fixture's values differ from the live ones on purpose, and the
-# annotation is the one .env carries (android-cli-sync.test.sh 11n pins .env to this exact text).
+# ("version=X\ntimestamp=Y\n"); the fixture's values differ from the live ones on purpose. This is
+# the UNGATED form: .env also carries (verify-asset:…/android-cli.sha256), pinned by
+# android-cli-sync.test.sh 11n; the gated walk on these real shapes is t123p.
 t "t38c: url fetch-extract reads the Android CLI version from Google's METADATA" bash -c "
     f=\${TMP_DIR}/t38c.env
     printf '# @todo env-update (fetch-extract:version=([0-9][0-9.]*)) url:https://dl.google.com/android/cli/latest/linux_x86_64/METADATA 1.1.16919734\nGLOBAL_STACK_ANDROID_CLI_VERSION=1.1.16919734\n' > \"\$f\"
@@ -13331,12 +13332,25 @@ t "t123b: (verify-asset:) with an empty value is refused" bash -c "
 # The can-never-fire guard. Only Tier 2 walks candidates, so verify-asset on a
 # record without fetch-json would be silently inert — the exact shape b2290dc
 # refused for (offset:N) on the eleven fetchers that never read it.
-t "t123c: (verify-asset:) without (fetch-json:) is refused at parse time" bash -c "
+t "t123c: (verify-asset:) without (fetch-json:) or (fetch-extract:) is refused at parse time" bash -c "
     f=\${TMP_DIR}/t123c.env
     printf '# @todo env-update (verify-asset:https://n.test/{version}/x.tar.xz) url:https://n.test/index.json v1\nGLOBAL_STACK_T123C=v1\n' > \"\$f\"
     out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1); rc=\$?
-    [[ \$rc -ne 0 ]] || { echo 'expected non-zero exit for verify-asset without fetch-json'; echo FAIL; exit 0; }
+    [[ \$rc -ne 0 ]] || { echo 'expected non-zero exit for verify-asset without a candidate tier'; echo FAIL; exit 0; }
     echo \"\$out\" | grep -qi 'fetch-json' || { echo \"error must name fetch-json; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qi 'fetch-extract' || { echo \"error must name fetch-extract; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# The Android CLI follow-up (docs/plans/verify-asset-fetch-extract.plan.md): Tier 1
+# (fetch-extract) builds a candidate list too, so the flag is accepted there.
+t "t123k: (verify-asset:) with (fetch-extract:) is accepted at parse time" bash -c "
+    f=\${TMP_DIR}/t123k.env
+    printf '# @todo env-update (fetch-extract:version=([0-9][0-9.]*)) (verify-asset:https://e.test/{version}/cli.sha256) url:https://e.test/METADATA 1.2.0\nGLOBAL_STACK_T123K=1.2.0\n' > \"\$f\"
+    out=\$(bash '${ENV_UPDATE_V2}' --dump --env-file=\"\$f\" 2>&1); rc=\$?
+    [[ \$rc -eq 0 ]] || { echo \"exit \$rc; got: \$out\"; echo FAIL; exit 0; }
+    echo \"\$out\" | grep -qF 'verify_asset: https://e.test/{version}/cli.sha256' \
+        || { echo \"verify_asset not stored; got: \$out\"; echo FAIL; exit 0; }
     echo PASS
 "
 
@@ -13456,6 +13470,142 @@ t "t123j: the walk is capped and the cap is the reason it stops" bash -c "
     _gs_eu2_fetch_url \$idx 2>/dev/null
     val=\$(_gs_eu2_record_get \$idx proposed_version)
     [[ -z \"\$val\" ]] || { echo \"cap=2 must stop before vC (3rd); got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# ── Tier 1 (fetch-extract) gated mode ───────────────────────────────────────
+# Google's Android CLI METADATA announces a version that the sync then fetches from
+# cli/<version>/…; nothing checked those versioned files exist. The regex output is
+# version-sorted, so the walk needs it NEWEST-FIRST: the fixture lists 1.2.0, 1.10.0
+# (twice) and 1.9.0, so a pass also proves numeric (not lexical) order, the reversal,
+# and that a duplicate match is probed once.
+_VE_FIX="
+_ve_fix() {
+    local d=\"\$1\"; shift
+    mkdir -p \"\$d\"
+    printf 'version=1.2.0\nversion=1.10.0\ntimestamp=1\nversion=1.9.0\nversion=1.10.0\n' > \"\$d/e.test_METADATA\"
+    local v
+    for v in \"\$@\"; do : > \"\$d/e.test_\${v}_cli.sha256\"; done
+}
+_ve_rec() {
+    _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+    _gs_eu2_record_set \$idx type          'url'
+    _gs_eu2_record_set \$idx identifier    'https://e.test/METADATA'
+    _gs_eu2_record_set \$idx env_var       'GLOBAL_STACK_T123T1'
+    _gs_eu2_record_set \$idx fetch_extract \"\$1\"
+    [[ -n \"\${2:-}\" ]] && _gs_eu2_record_set \$idx verify_asset \"\$2\"
+    return 0
+}
+_VE_TPL='https://e.test/{version}/cli.sha256'
+_VE_RE='version=([0-9][0-9.]*)'
+"
+
+t "t123l: fetch-extract walk steps over an unpublished newest (numeric order, newest first)" bash -c "
+    ${_VA_LIBS}${_VE_FIX}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/ve_cache_l
+    export _GS_EU2_HTTP_FIXTURE_DIR=\${TMP_DIR}/ve_fix_l
+    _ve_fix \"\$_GS_EU2_HTTP_FIXTURE_DIR\" 1.9.0 1.2.0
+    _ve_rec \"\$_VE_RE\" \"\$_VE_TPL\"
+    _gs_eu2_fetch_url \$idx 2>/dev/null
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$val\" == '1.9.0' ]] || { echo \"want 1.9.0 (1.10.0 unpublished; oldest-first would give 1.2.0), got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t123l2: fetch-extract walk stops at the newest when it is published" bash -c "
+    ${_VA_LIBS}${_VE_FIX}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/ve_cache_l2
+    export _GS_EU2_HTTP_FIXTURE_DIR=\${TMP_DIR}/ve_fix_l2
+    _ve_fix \"\$_GS_EU2_HTTP_FIXTURE_DIR\" 1.10.0 1.9.0 1.2.0
+    _ve_rec \"\$_VE_RE\" \"\$_VE_TPL\"
+    _gs_eu2_fetch_url \$idx 2>/dev/null
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$val\" == '1.10.0' ]] || { echo \"want 1.10.0 (lexical order would give 1.9.0), got: '\$val'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t123m: fetch-extract, nothing published → NO proposal, message names the flag (not the regex)" bash -c "
+    ${_VA_LIBS}${_VE_FIX}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/ve_cache_m
+    export _GS_EU2_HTTP_FIXTURE_DIR=\${TMP_DIR}/ve_fix_m
+    _ve_fix \"\$_GS_EU2_HTTP_FIXTURE_DIR\"
+    _ve_rec \"\$_VE_RE\" \"\$_VE_TPL\"
+    _gs_eu2_fetch_url \$idx 2>/dev/null
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ -z \"\$val\" ]] || { echo \"expected no proposal, got: '\$val'\"; echo FAIL; exit 0; }
+    msg=\$(_gs_eu2_record_get \$idx error_message)
+    echo \"\$msg\" | grep -qi 'verify-asset' || { echo \"error_message must name the flag; got: '\$msg'\"; echo FAIL; exit 0; }
+    echo \"\$msg\" | grep -qi 'matched nothing from' && { echo \"must not blame the regex (it matched); got: '\$msg'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t123m2: fetch-extract gated, regex matches nothing → the regex message, not the flag's" bash -c "
+    ${_VA_LIBS}${_VE_FIX}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/ve_cache_m2
+    export _GS_EU2_HTTP_FIXTURE_DIR=\${TMP_DIR}/ve_fix_m2
+    _ve_fix \"\$_GS_EU2_HTTP_FIXTURE_DIR\" 1.10.0
+    _ve_rec 'release=([0-9.]+)' \"\$_VE_TPL\"
+    _gs_eu2_fetch_url \$idx 2>/dev/null
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ -z \"\$val\" ]] || { echo \"expected no proposal, got: '\$val'\"; echo FAIL; exit 0; }
+    msg=\$(_gs_eu2_record_get \$idx error_message)
+    echo \"\$msg\" | grep -qF 'fetch-extract pattern' || { echo \"want the regex message; got: '\$msg'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# The WARN is the only signal on Android's single-candidate METADATA, and Tier 1's
+# pipeline sends perl's stderr to /dev/null — the walk's must still reach stderr.
+t "t123o: fetch-extract walk WARNs each skipped candidate once, naming the probed URL" bash -c "
+    ${_VA_LIBS}${_VE_FIX}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/ve_cache_o
+    export _GS_EU2_HTTP_FIXTURE_DIR=\${TMP_DIR}/ve_fix_o
+    _ve_fix \"\$_GS_EU2_HTTP_FIXTURE_DIR\" 1.2.0
+    _ve_rec \"\$_VE_RE\" \"\$_VE_TPL\"
+    err=\$(_gs_eu2_fetch_url \$idx 2>&1 >/dev/null)
+    echo \"\$err\" | grep -qF 'https://e.test/1.10.0/cli.sha256' || { echo \"WARN must name the probed URL; got: '\$err'\"; echo FAIL; exit 0; }
+    n=\$(printf '%s\n' \"\$err\" | grep -c 'skipping 1.10.0 ')
+    [[ \"\$n\" == 1 ]] || { echo \"duplicate match must be probed once, saw \$n WARNs; got: '\$err'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+t "t123n: fetch-extract without (verify-asset:) is unchanged (highest, no probing)" bash -c "
+    ${_VA_LIBS}${_VE_FIX}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/ve_cache_n
+    export _GS_EU2_HTTP_FIXTURE_DIR=\${TMP_DIR}/ve_fix_n
+    _ve_fix \"\$_GS_EU2_HTTP_FIXTURE_DIR\"
+    _ve_rec \"\$_VE_RE\"
+    # NOT err=\$(…): a command substitution would set the record in a subshell.
+    _gs_eu2_fetch_url \$idx 2>\"\${TMP_DIR}/ve_n.err\" >/dev/null
+    err=\$(cat \"\${TMP_DIR}/ve_n.err\")
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$val\" == '1.10.0' ]] || { echo \"want 1.10.0 with no gate (zero assets published), got: '\$val'\"; echo FAIL; exit 0; }
+    echo \"\$err\" | grep -q 'verify-asset' && { echo \"ungated must not probe; got: '\$err'\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
+# The real shapes: Google's METADATA body and the sync script's versioned .sha256.
+t "t123p: Android CLI METADATA gated on cli/<version>/…/android-cli.sha256" bash -c "
+    ${_VA_LIBS}
+    export _GS_EU2_CACHE_DIR=\${TMP_DIR}/ve_cache_p
+    export _GS_EU2_HTTP_FIXTURE_DIR=\${TMP_DIR}/ve_fix_p
+    mkdir -p \"\$_GS_EU2_HTTP_FIXTURE_DIR\"
+    printf 'version=1.1.16919734\ntimestamp=1794538360\n' > \"\$_GS_EU2_HTTP_FIXTURE_DIR/dl.google.com_android_cli_latest_linux_x86_64_METADATA\"
+    rec() {
+        _gs_eu2_record_new; idx=\${_GS_EU2_LAST_IDX}
+        _gs_eu2_record_set \$idx type 'url'
+        _gs_eu2_record_set \$idx identifier 'https://dl.google.com/android/cli/latest/linux_x86_64/METADATA'
+        _gs_eu2_record_set \$idx env_var 'GLOBAL_STACK_ANDROID_CLI_VERSION'
+        _gs_eu2_record_set \$idx fetch_extract 'version=([0-9][0-9.]*)'
+        _gs_eu2_record_set \$idx verify_asset 'https://dl.google.com/android/cli/{version}/linux_x86_64/android-cli.sha256'
+    }
+    rec; _gs_eu2_fetch_url \$idx 2>/dev/null
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ -z \"\$val\" ]] || { echo \"unpublished: expected no proposal, got: '\$val'\"; echo FAIL; exit 0; }
+    : > \"\$_GS_EU2_HTTP_FIXTURE_DIR/dl.google.com_android_cli_1.1.16919734_linux_x86_64_android-cli.sha256\"
+    rm -rf \"\$_GS_EU2_CACHE_DIR\"
+    rec; _gs_eu2_fetch_url \$idx 2>/dev/null
+    val=\$(_gs_eu2_record_get \$idx proposed_version)
+    [[ \"\$val\" == '1.1.16919734' ]] || { echo \"published: want 1.1.16919734, got: '\$val'\"; echo FAIL; exit 0; }
     echo PASS
 "
 

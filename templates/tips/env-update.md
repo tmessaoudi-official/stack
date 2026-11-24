@@ -277,7 +277,7 @@ record, so it costs one cache generation and nothing after that.
 |------|-------------|------|---|
 | `(fetch-extract:PERL_REGEX)` | `fetch_extract` | Tier 1 | Fetch the URL body (the identifier is the URL), apply the Perl regex, collect all capture group 1 matches, sort `-V`, take highest. If the regex matches nothing, returns an error (not a fallback). |
 | `(fetch-json:JQ_PATH)` | `fetch_json` | Tier 2 | Fetch the URL as JSON, extract the value at the jq path. Example: `(fetch-json:.info.version)`. |
-| `(verify-asset:URL_TEMPLATE)` | `verify_asset` | Tier 2 | **Artifact-existence gate.** Probe `URL_TEMPLATE` — which must contain the literal `{version}` — for each candidate and propose only the first one that returns 200. Requires `(fetch-json:)`, whose expression must then emit a **newest-first list** rather than a single value. Each rejected candidate WARNs to stderr; when none verifies the record proposes nothing (SKIP), never a broken pin. Walk capped by `_GS_EU2_VERIFY_ASSET_MAX` (default 10). Refused at parse time without `{version}`, without `(fetch-json:)`, or on a non-`url` type. See "Announced but not published" below. |
+| `(verify-asset:URL_TEMPLATE)` | `verify_asset` | Tiers 1, 2 | **Artifact-existence gate.** Probe `URL_TEMPLATE` — which must contain the literal `{version}` — for each candidate and propose only the first one that returns 200. Requires `(fetch-extract:)` (every regex match, ranked newest-first and deduplicated) or `(fetch-json:)`, whose expression must then emit a **newest-first list** rather than a single value. Each rejected candidate WARNs to stderr; when none verifies the record proposes nothing (SKIP), never a broken pin. Walk capped by `_GS_EU2_VERIFY_ASSET_MAX` (default 10). Refused at parse time without `{version}`, without `(fetch-extract:)` or `(fetch-json:)`, or on a non-`url` type. See "Announced but not published" below. |
 | `(url-probe:PATHS)` | `url_probe` | Tier 5 | Comma-separated path templates to probe. Templates support `{codename}` (Ubuntu codename like `noble`) and `{codename-version}` (Ubuntu version like `24.04`). The fetcher probes from newest Ubuntu codename to oldest, stopping at the first 2xx/3xx response. |
 | `(url-probe-depth:N)` | `url_probe_depth` | Tier 5 | Maximum number of codenames to probe backward. Default: 6. |
 
@@ -1432,6 +1432,15 @@ Triggered when `(fetch-extract:REGEX)` is set. Fetches the URL body, applies the
 with `perl -ne "if (/REGEX/) { print \"$1\n\" }"`, collects all capture group 1 matches,
 sorts with `_gs_eu2_version_sort` (ranked), takes the highest. If the regex matches nothing, returns an error
 (not a fallback to the next tier — `fetch-extract` is the declared strategy).
+
+With `(verify-asset:URL_TEMPLATE)` the tier is **gated** like Tier 2 below: every match, ranked
+newest-first and deduplicated, is probed at its artifact URL and the first returning 200 is
+proposed. A regex that matched but whose candidates are all unpublished reports the flag
+(SKIP), not "matched nothing". `GLOBAL_STACK_ANDROID_CLI_VERSION` uses it: Google's
+`latest/…/METADATA` names one version, which the sync then downloads from `cli/<version>/…`,
+so the gate probes `cli/{version}/linux_x86_64/android-cli.sha256` — a single candidate, so an
+unpublished one is a SKIP with nothing older to fall back to
+(`docs/plans/verify-asset-fetch-extract.plan.md`).
 
 **Tier 2 — `fetch-json` (jq path):**
 Triggered when `(fetch-json:JQ_PATH)` is set. Fetches the URL as JSON, extracts the value

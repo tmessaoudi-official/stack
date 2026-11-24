@@ -3,7 +3,7 @@
 ## Status
 
 - State: done — committed and pushed 5001761 (re-sign pending); host on the pin 2026-11-24.
-  Open: the fetch-extract verify-asset follow-up (Decisions Log)
+  The fetch-extract verify-asset follow-up is closed by `docs/plans/verify-asset-fetch-extract.plan.md`.
 - Started: 2026-11-24
 - Size: Large (grew from Medium when scope became container + host)
 
@@ -123,7 +123,9 @@ a hand-deleted cache, or a restore from an older `var/tools` snapshot. FATAL, co
   real launcher printed 1.1.16919734; the cache dir is uid 1000, as on the host. `--installed`
   refusals in the host row are now shown (16k), and a failed prune is a WARN (8g); each was
   red-first or sabotaged. The hand-off script verifies every suite that reads the real env files.
-- Known exposure, not closed: env-update reads `latest/METADATA` but the sync fetches
+- Known exposure, CLOSED 2026-11-24 by `docs/plans/verify-asset-fetch-extract.plan.md` (the annotation
+  now carries `(verify-asset:…/cli/{version}/linux_x86_64/android-cli.sha256)` on the fetch-extract
+  tier). As it stood here: env-update reads `latest/METADATA` but the sync fetches
   `cli/<version>/…`, so a version announced before its versioned artifacts are published would be
   proposed, and on a cold cache 04android would FATAL (its error token, naming the URL) and 05* wait
   on it. `(verify-asset:)` cannot gate it: `core/parse.sh` refuses it without `(fetch-json:)` and

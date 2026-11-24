@@ -710,14 +710,15 @@ _gs_eu2_parse_env_file() {
             exit 1
           fi
           # Third axis, same principle: the candidate walk that verify-asset
-          # gates lives ONLY in the url fetcher's Tier 2 (fetch-json). On any
-          # other shape the flag would parse, store, and never be read — so it
-          # is refused here rather than silently ignored.
-          local _x_verify _x_fjson
+          # gates lives ONLY in the url fetcher's Tier 1 (fetch-extract) and
+          # Tier 2 (fetch-json). On any other shape the flag would parse, store,
+          # and never be read — so it is refused here rather than silently ignored.
+          local _x_verify _x_fjson _x_fextract
           _x_verify="$(_gs_eu2_record_get "${_idx}" verify_asset)"
           _x_fjson="$(_gs_eu2_record_get "${_idx}" fetch_json)"
-          if [[ -n "${_x_verify}" && -z "${_x_fjson}" ]]; then
-            printf 'env-update: %s:%s: (verify-asset:) is only read by the url fetcher'"'"'s fetch-json tier — add (fetch-json:<jq emitting candidates newest-first>) or drop the verify-asset\n' \
+          _x_fextract="$(_gs_eu2_record_get "${_idx}" fetch_extract)"
+          if [[ -n "${_x_verify}" && -z "${_x_fjson}" && -z "${_x_fextract}" ]]; then
+            printf 'env-update: %s:%s: (verify-asset:) is only read by the url fetcher'"'"'s fetch-extract and fetch-json tiers — add (fetch-extract:<regex>) or (fetch-json:<jq emitting candidates newest-first>), or drop the verify-asset\n' \
               "${_env_file}" "${_pending_lnum}" >&2
             exit 1
           fi
