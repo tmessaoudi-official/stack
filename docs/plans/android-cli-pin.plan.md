@@ -2,10 +2,15 @@
 
 ## Status
 
-- State: implemented, uncommitted — waiting on the developer's `.env` edit
-  (`/tmp/apply-android-cli-pin-20261124.sh`; the permission engine reserves `.env` writes) and the 6C gate
+- State: done — committed and pushed 5001761 (re-sign pending); host on the pin 2026-11-24.
+  Open: the fetch-extract verify-asset follow-up (Decisions Log)
 - Started: 2026-11-24
 - Size: Large (grew from Medium when scope became container + host)
+
+### Needs input
+
+- [x] W1. Redeploy templates/shell/global-unu-opt.sh to ~/.local/bin (backup first) — DONE 2026-11-24: cmp == template, 755, backup .bak-20261124, --check → missing android_cli → 1.1.16919734
+- [x] W2. Run ~/.local/bin/global-unu-opt.sh --apply --only=android_cli — DONE 2026-11-24: record 1.1.16919734 + sha 9803784d… = binary sha, --check current, `android --version` 1.1.16919734, `android info` no update message
 
 ## Problem
 
