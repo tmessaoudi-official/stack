@@ -229,7 +229,7 @@ Propagation is automatic: any `ARG VAR=value` line in a Dockerfile whose value d
 
 ### templates/shell/global-unu-opt.sh
 
-Installs the `.env` pin of the tools under `/opt/$USER` — the JetBrains IDEs, Android Studio, VS Code, Devin, Sublime Text, MeGit, balenaEtcher, task, bat, sonar-scanner-cli — and owns the desktop launchers of the GUI ones (`docs/plans/opt-developer-updater.plan.md`). `--check` (default) writes nothing; `--apply` installs. `global-unu.sh` runs it last with `--apply`, so **both scripts must be deployed together**, and since `make hard-restart` runs the deployed `global-unu.sh`, a hard restart also installs every /opt tool whose pin moved (GBs for an IDE). The firewall denies Claude's writes under `/opt`: a real `--apply` there is the developer's to run. Checksums, the Electron `chrome-sandbox` setuid repair and its trust record → `.claude/rules/global-unu-opt.md`.
+Installs the `.env` pin of the tools under `/opt/$USER` — the JetBrains IDEs, Android Studio, VS Code, Devin, Sublime Text, MeGit, balenaEtcher, task, bat, sonar-scanner-cli — plus the host's Android CLI binary (`android_cli`, `~/.android/bin/android-cli`, via the containers' sync script) — and owns the desktop launchers of the GUI ones (`docs/plans/opt-developer-updater.plan.md`). `--check` (default) writes nothing; `--apply` installs. `global-unu.sh` runs it last with `--apply`, so **both scripts must be deployed together**, and since `make hard-restart` runs the deployed `global-unu.sh`, a hard restart also installs every /opt tool whose pin moved (GBs for an IDE). The firewall denies Claude's writes under `/opt`: a real `--apply` there is the developer's to run. Checksums, the Electron `chrome-sandbox` setuid repair and its trust record → `.claude/rules/global-unu-opt.md`.
 
 ## Shell Coding Conventions
 
@@ -324,6 +324,7 @@ make start-local-registry create-buildx-builder  # NEW cert + daemon restart + b
 - **mongo9 rseq tests**: `bash bin/tests/mongo9-rseq.test.sh` (`GS_MONGO9_PROBE=1` adds a live `mongod` probe) — the `GLIBC_TUNABLES` reset → `.claude/rules/docker-images.md`
 - **SonarQube start tests**: `bash bin/tests/sonarqube-start.test.sh` — token invariant in compose, exit and signal handling of the start script, no docker → `.claude/rules/startup-tests.md`
 - **/opt tool installer tests**: `bash bin/tests/global-unu-opt.test.sh` — no network; stub `curl`/`sudo`, the `GS_UNU_OPT_*` seams → `.claude/rules/global-unu-opt.md`
+- **Android CLI pin tests**: `bash bin/tests/android-cli-sync.test.sh` — no network, stub `curl`; the sync script's install/drift/failure/prune guarantees and its container wiring (§47-safe, every boot, compose, `.env`) → `.claude/rules/android.md`
 - **phpbrew ExtractTask overlay tests**: `bash bin/tests/phpbrew-extract.test.sh` — needs `php` and `tar`; the per-task temp dir overlay → `.claude/rules/startup-tests.md`
 - **Compose env plumbing tests**: `bash bin/tests/compose-env-plumbing.test.sh` — runtime vars reach the containers, resolved through make; needs docker, `jq`, `.env.local` → `.claude/rules/docker-images.md`
 - **Rules `paths:` tests**: `bash bin/tests/claude-rules-paths.test.sh` — every glob matches a file, frontmatter is well-formed, the index below agrees both ways → `.claude/rules/claude-config.md`
@@ -387,6 +388,7 @@ make start-local-registry create-buildx-builder  # NEW cert + daemon restart + b
 - **`privileged: true` on all containers** — intentional for local dev (needed for Docker-in-Docker, mount operations). Do not flag this as a security issue; it's a known trade-off
 - **`tools/versions/` markers control reinstall** — `gs_version_gate` content-compares; the marker holds the RESOLVED version; `frankenphp` and `awscli` are deliberately ungated → `.claude/rules/startup-scripts.md`
 - **Postgres SORTS AS C (code-point order), and a volume initialised before `3b467cd` also mislabels it `en_US.utf8`** — never add `--lc-collate`/`--lc-ctype` beside the builtin provider → `.claude/rules/docker-images.md`
+- **`android` is only a LAUNCHER — the CLI it execs, `~/.android/bin/android-cli`, is pinned by `GLOBAL_STACK_ANDROID_CLI_VERSION`** and re-synced on every 04android/05* boot and by the host's `global-unu-opt.sh`; never an SDK gate input → `.claude/rules/android.md`
 - **`android`'s `--sdk` is a GLOBAL option — `android --sdk=<path> sdk install …`, never `android sdk install --sdk=…`**; `platform-tools`, `ndk-bundle` and `emulator` take no version → `.claude/rules/android.md`
 - **`$HOME` in every container is re-permissioned on EVERY boot, and a numeric `chmod` there disarms cached executables** — seen as `Failed to exec android binary: Permission denied`; the rule subtracts (`ug-s,go-rwx`), never assigns → `.claude/rules/startup-scripts.md`
 - **`docker-bake.local.json` is generated, not tracked** — if it's stale after env changes, run `make generate-buildx` to regenerate. Stale bake file = wrong build config

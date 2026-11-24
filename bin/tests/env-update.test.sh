@@ -3773,6 +3773,17 @@ t "t38a: url type parsed and fetched — fetch-extract entry produces proposed_v
     echo PASS
 "
 
+# The Android CLI pin (docs/plans/android-cli-pin.plan.md) reads Google's plain-text METADATA
+# ("version=X\ntimestamp=Y\n"); the fixture's values differ from the live ones on purpose, and the
+# annotation is the one .env carries (android-cli-sync.test.sh 11n pins .env to this exact text).
+t "t38c: url fetch-extract reads the Android CLI version from Google's METADATA" bash -c "
+    f=\${TMP_DIR}/t38c.env
+    printf '# @todo env-update (fetch-extract:version=([0-9][0-9.]*)) url:https://dl.google.com/android/cli/latest/linux_x86_64/METADATA 1.1.16919734\nGLOBAL_STACK_ANDROID_CLI_VERSION=1.1.16919734\n' > \"\$f\"
+    out=\$(export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'; export _GS_EU2_CACHE_DIR=\"\${TMP_DIR}/t38c_cache\"; NO_COLOR=1 bash '${ENV_UPDATE_V2}' --check --dry-run --env-file=\"\$f\" 2>/dev/null)
+    echo \"\$out\" | grep -qE 'GLOBAL_STACK_ANDROID_CLI_VERSION +1\.1\.16919734 → 1\.2\.17000001' || { echo \"want 1.1.16919734 → 1.2.17000001; got: \$out\"; echo FAIL; exit 0; }
+    echo PASS
+"
+
 t "t38b: url type not-implemented SKIP count is 0 — all url entries dispatch" bash -c "
     out=\$(export _GS_EU2_HTTP_FIXTURE_DIR='${FIXTURES}/http'; export _GS_EU2_CACHE_DIR=\"\${TMP_DIR}/t38b_cache\"; bash '${ENV_UPDATE_V2}' --check --dry-run --env-file='${REPO_ROOT}/.env' --filter='ANDROID_SDK_URL|HTTPD_APR_UTIL|HTTPD_APR_VERSION|HTTPD_VERSION|PODMAN_CHANNEL|NGINX_AUTOMAKE|ZEPHIR|NODEEDGE' 2>/dev/null || true)
     echo \"\$out\" | grep -qE 'not yet implemented' && { echo \"some url entries still hit not-implemented SKIP\"; echo FAIL; exit 0; }

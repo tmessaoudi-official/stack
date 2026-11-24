@@ -17,8 +17,14 @@
 # only after the new one is in place; any failure before that leaves it untouched.
 # A tool whose binary is running is skipped, never swapped underneath itself.
 #
+# One row is not a tree under /opt: android_cli, the binary the `android` launcher execs from
+# ${ANDROID_USER_HOME:-$HOME/.android}/bin/android-cli. Its kind installs through
+# /stack/docker/config/dist/bin/android-bin/global-stack-android-cli-sync.sh — the same script the
+# containers run — via an _opt_<kind>_install hook instead of the tree swap below.
+#
 # Test seams: GS_UNU_OPT_ROOT, GS_UNU_OPT_APPS_DIR, GS_UNU_OPT_ENV_FILE,
-# GS_UNU_OPT_PROC_DIR, GS_UNU_OPT_STATE_DIR. Tests: bin/tests/global-unu-opt.test.sh
+# GS_UNU_OPT_PROC_DIR, GS_UNU_OPT_STATE_DIR, GS_UNU_OPT_ANDROID_CLI_{SYNC,DEST,CACHE}.
+# Tests: bin/tests/global-unu-opt.test.sh
 set -euo pipefail
 
 GS_UNU_OPT_ROOT="${GS_UNU_OPT_ROOT:-/opt/${USER:-$(id -un)}}"
@@ -30,25 +36,32 @@ GS_UNU_OPT_SANDBOX_OWNER="${GS_UNU_OPT_SANDBOX_OWNER:-root}"
 # checksummed archive. OUTSIDE the /opt tree on purpose: /opt/$USER is 777 with no sticky bit, so a
 # record kept inside it could be rewritten by whatever planted the file it vouches for.
 GS_UNU_OPT_STATE_DIR="${GS_UNU_OPT_STATE_DIR:-${XDG_STATE_HOME:-${HOME}/.local/state}/global-unu-opt}"
+GS_UNU_OPT_ANDROID_CLI_SYNC="${GS_UNU_OPT_ANDROID_CLI_SYNC:-${GLOBAL_STACK_DOCKER_ROOT_PATH:-/stack}/docker/config/dist/bin/android-bin/global-stack-android-cli-sync.sh}"
+GS_UNU_OPT_ANDROID_CLI_DEST="${GS_UNU_OPT_ANDROID_CLI_DEST:-${ANDROID_USER_HOME:-${HOME}/.android}/bin/android-cli}"
+GS_UNU_OPT_ANDROID_CLI_CACHE="${GS_UNU_OPT_ANDROID_CLI_CACHE:-${GLOBAL_STACK_DOCKER_ROOT_PATH:-/stack}/tools/android-cli}"
 _OPT_STAGING="${GS_UNU_OPT_ROOT}/.gs-staging"
 _OPT_MACHINE="${GS_UNU_OPT_MACHINE:-$(uname -m)}"
 
 # ── Tool table ────────────────────────────────────────────────────────────────
 # id → install dir (relative to the root), .env pin var, kind, launcher file name.
 # A kind supplies _opt_<kind>_installed / _resolve / _version / _launcher.
-_OPT_IDS=(idea phpstorm webstorm android_studio code devin sublime_text megit balena_etcher task bat sonar_scanner_cli)
+_OPT_IDS=(idea phpstorm webstorm android_studio code devin sublime_text megit balena_etcher task bat sonar_scanner_cli android_cli)
+# android_cli has no tree under the root: its dir entry names a path nothing creates, so the
+# per-tree steps in main (sandbox, launcher) never see one. It lives at GS_UNU_OPT_ANDROID_CLI_DEST.
 declare -A _OPT_DIR=([idea]=jetbrains/idea [phpstorm]=jetbrains/phpstorm [webstorm]=jetbrains/webstorm
   [android_studio]=android-studio [code]=code [devin]=devin [sublime_text]=sublime_text
-  [megit]=megit [balena_etcher]=balena-etcher [task]=task [bat]=bat [sonar_scanner_cli]=sonar-scanner-cli)
+  [megit]=megit [balena_etcher]=balena-etcher [task]=task [bat]=bat [sonar_scanner_cli]=sonar-scanner-cli
+  [android_cli]=.not-under-opt/android-cli)
 declare -A _OPT_PIN=([idea]=GLOBAL_STACK_IDEA_VERSION [phpstorm]=GLOBAL_STACK_PHPSTORM_VERSION
   [webstorm]=GLOBAL_STACK_WEBSTORM_VERSION [android_studio]=GLOBAL_STACK_ANDROID_STUDIO_VERSION
   [code]=GLOBAL_STACK_VSCODE_VERSION [devin]=GLOBAL_STACK_DEVIN_VERSION
   [sublime_text]=GLOBAL_STACK_SUBLIME_TEXT_VERSION [megit]=GLOBAL_STACK_MEGIT_VERSION
   [balena_etcher]=GLOBAL_STACK_BALENA_ETCHER_VERSION [task]=GLOBAL_STACK_TASK_VERSION
-  [bat]=GLOBAL_STACK_BAT_VERSION [sonar_scanner_cli]=GLOBAL_STACK_SONAR_SCANNER_CLI_VERSION)
+  [bat]=GLOBAL_STACK_BAT_VERSION [sonar_scanner_cli]=GLOBAL_STACK_SONAR_SCANNER_CLI_VERSION
+  [android_cli]=GLOBAL_STACK_ANDROID_CLI_VERSION)
 declare -A _OPT_KIND=([idea]=jetbrains [phpstorm]=jetbrains [webstorm]=jetbrains [android_studio]=studio
   [code]=vscode [devin]=devin [sublime_text]=sublime [megit]=megit [balena_etcher]=etcher
-  [task]=task [bat]=bat [sonar_scanner_cli]=sonar)
+  [task]=task [bat]=bat [sonar_scanner_cli]=sonar [android_cli]=androidcli)
 # Machines a row has an archive for (uname -m); default x86_64. Anything else is
 # reported unsupported and skipped — never fed an x86_64 archive. Linux only.
 declare -A _OPT_ARCHES=([sonar_scanner_cli]="x86_64 aarch64" [megit]="x86_64 aarch64")
@@ -485,6 +498,32 @@ _opt_sonar_resolve() { # $1 id $2 pin
   printf '%s\t%s\n' "${url}" "${sum%% *}"
 }
 
+# ── Kind: androidcli (the Android CLI binary, not a tree) ────────────────────
+# The `android` launcher (tools/android/cmdline-tools/…/bin/android, on the host PATH) execs
+# ${ANDROID_USER_HOME:-$HOME/.android}/bin/android-cli and downloads `latest` there when it is
+# absent; nothing else installs it, so the host copy drifted (1.0.15985488 on 2026-11-24 while the
+# containers had 1.1.16919734). The sync script owns the whole install — versioned URL, published
+# .sha256, the shared tools/ cache, an atomic swap — so this kind only delegates. Installed version
+# = what a verified install recorded, and only while the bytes are unchanged: an `android update`
+# reads as missing, and --apply puts the pin back. Nothing is ever executed to read it.
+_opt_androidcli_installed() {
+  [[ -f "${GS_UNU_OPT_ANDROID_CLI_SYNC}" ]] || return 0
+  # `--installed` exits 0 by contract; a non-zero (bad --dest, a broken script) reads as missing so
+  # one row cannot abort --check for every tool, and its stderr is left visible to say why (16k).
+  bash "${GS_UNU_OPT_ANDROID_CLI_SYNC}" --installed --dest="${GS_UNU_OPT_ANDROID_CLI_DEST}" || true
+}
+_opt_androidcli_install() { # $1 id $2 pin → 0 installed, 1 failed
+  if [[ ! -f "${GS_UNU_OPT_ANDROID_CLI_SYNC}" ]]; then
+    _opt_err FAILED "$1: ${GS_UNU_OPT_ANDROID_CLI_SYNC} not found — is /stack checked out there?"
+    return 1
+  fi
+  bash "${GS_UNU_OPT_ANDROID_CLI_SYNC}" --apply --pin="$2" --dest="${GS_UNU_OPT_ANDROID_CLI_DEST}" \
+    --cache="${GS_UNU_OPT_ANDROID_CLI_CACHE}" || {
+    _opt_err FAILED "$1: the sync script failed (above) — installed copy untouched"
+    return 1
+  }
+}
+
 # ── Engine ───────────────────────────────────────────────────────────────────
 # $1 extract dir → the single top-level entry (the app tree), or fail.
 _opt_single_root() {
@@ -714,7 +753,12 @@ main() {
       _opt_log "$([[ -n "${cur}" ]] && echo outdated || echo missing)" "${id} ${cur:-—} → ${pin}"
     else
       rc=0
-      _opt_install "${id}" "${pin}" || rc=$?
+      # A kind that is not an archive-to-tree swap brings its own installer (androidcli).
+      if declare -F "_opt_${_OPT_KIND[${id}]}_install" >/dev/null; then
+        "_opt_${_OPT_KIND[${id}]}_install" "${id}" "${pin}" || rc=$?
+      else
+        _opt_install "${id}" "${pin}" || rc=$?
+      fi
       ((rc == 1)) && failed=1
     fi
     # --check stays read-only and sudo-free: it only reports what --apply would repair.

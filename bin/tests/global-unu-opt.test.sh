@@ -173,12 +173,21 @@ _run() {
     GS_UNU_OPT_ROOT="$d/opt" GS_UNU_OPT_APPS_DIR="$d/apps" \
     GS_UNU_OPT_ENV_FILE="$d/env.local" GS_UNU_OPT_PROC_DIR="$d/proc" \
     GS_UNU_OPT_SANDBOX_OWNER="${SANDBOX_OWNER:-root}" \
+    GS_UNU_OPT_ANDROID_CLI_SYNC="${ANDROID_CLI_SYNC:-${REPO_ROOT}/docker/config/dist/bin/android-bin/global-stack-android-cli-sync.sh}" \
+    GS_UNU_OPT_ANDROID_CLI_DEST="$d/android-home/bin/android-cli" \
+    GS_UNU_OPT_ANDROID_CLI_CACHE="$d/android-cli-cache" \
     bash "${SUT}" "$@" 2>&1 </dev/null)"
   RC=$?
 }
 
 # Byte-level fingerprint of a tree (paths, modes, content).
 _fp() { (cd "$1" && find . -printf '%p %m %s\n' | sort && find . -type f -exec sha256sum {} + | sort) | sha256sum; }
+# The android_cli row writes OUTSIDE the /opt root (the launcher's own path and the tools/ cache).
+# The seams above point both into the case dir; these fingerprints prove no run reached the real
+# ones (the 2026-09-28 class: a sandboxed wrapper whose callee defaulted to the real $HOME).
+_real_fp() { [[ -e "$1" ]] && _fp "$1" || printf 'absent\n'; }
+REAL_ANDROID_BIN_FP="$(_real_fp "${HOME}/.android/bin")"
+REAL_ANDROID_CACHE_FP="$(_real_fp "${REPO_ROOT}/tools/android-cli")"
 
 _curl_calls() { grep -c . "$1/curl.log" || true; }
 
@@ -1192,6 +1201,105 @@ if command -v script >/dev/null; then
   fi
 else
   printf '  %b(skip)%b 15n: script(1) is not installed — the tty path is UNCERTIFIED here\n' "${C_BOLD}" "${C_RESET}"
+fi
+
+# ═════════════════════════════════════════════════════════════════════════════
+section "16. android_cli: the pinned Android CLI binary, through the REAL sync script"
+# docs/plans/android-cli-pin.plan.md. Not a tree under /opt: one binary at the path the `android`
+# launcher execs, installed by docker/config/dist/bin/android-bin/global-stack-android-cli-sync.sh
+# (bin/tests/android-cli-sync.test.sh covers that script). Here: the engine's contract with it —
+# flags, pin, seams — exercised against the shipped script, never a stub that echoes the engine.
+CLI_URL='https://dl.google.com/android/cli'
+_mk_cli_release() { # $1 case dir $2 version → served at the versioned URLs
+  mkdir -p "$1/srv/cli/$2"
+  printf '#!/bin/sh\necho %s\n' "$2" >"$1/srv/cli/$2/android-cli"
+  printf '%s' "$(sha256sum "$1/srv/cli/$2/android-cli" | cut -d' ' -f1)" >"$1/srv/cli/$2/android-cli.sha256"
+  printf '%s\t%s\n' \
+    "${CLI_URL}/$2/linux_x86_64/android-cli" "$1/srv/cli/$2/android-cli" \
+    "${CLI_URL}/$2/linux_x86_64/android-cli.sha256" "$1/srv/cli/$2/android-cli.sha256" >>"$1/routes"
+}
+d="${TMP_DIR}/acli"
+mkdir -p "$d/opt" "$d/apps" "$d/proc"
+: >"$d/routes"
+: >"$d/curl.log"
+_mk_cli_release "$d" 1.1.2
+printf 'GLOBAL_STACK_ANDROID_CLI_VERSION=1.1.2\n' >"$d/env.local"
+_run "$d" --check --only=android_cli
+if [[ ${RC} -eq 0 && "$(_curl_calls "$d")" == 0 && ! -e "$d/android-home" ]] && grep -qE 'missing.*android_cli.*1\.1\.2' <<<"${OUT}"; then
+  ok "16a: --check reports the CLI missing, fetches and writes nothing"
+else
+  ko "16a: rc=${RC} curl=$(_curl_calls "$d") out: ${OUT}"
+fi
+_run "$d" --apply --only=android_cli
+if [[ ${RC} -eq 0 ]] && cmp -s "$d/android-home/bin/android-cli" "$d/srv/cli/1.1.2/android-cli" \
+  && [[ -f "$d/android-cli-cache/1.1.2/android-cli" ]]; then
+  ok "16b: --apply installs the pin at the DEST seam through the cache seam"
+else
+  ko "16b: rc=${RC} out: ${OUT}"
+fi
+: >"$d/curl.log"
+_run "$d" --check --only=android_cli
+if [[ ${RC} -eq 0 && "$(_curl_calls "$d")" == 0 ]] && grep -qE 'current.*android_cli.*1\.1\.2' <<<"${OUT}"; then
+  ok "16c: then --check says current, offline"
+else
+  ko "16c: rc=${RC} out: ${OUT}"
+fi
+printf '#!/bin/sh\necho 9.9.9\n' >"$d/android-home/bin/android-cli"
+_run "$d" --check --only=android_cli
+if [[ ${RC} -eq 0 ]] && grep -qE 'missing.*android_cli.*1\.1\.2' <<<"${OUT}"; then
+  ok "16d: after an \`android update\` (foreign bytes) --check reports drift, not current"
+else
+  ko "16d: rc=${RC} out: ${OUT}"
+fi
+_run "$d" --apply --only=android_cli
+if [[ ${RC} -eq 0 ]] && cmp -s "$d/android-home/bin/android-cli" "$d/srv/cli/1.1.2/android-cli" && [[ "$(_curl_calls "$d")" == 0 ]]; then
+  ok "16e: --apply restores the pin from the cache, offline"
+else
+  ko "16e: rc=${RC} curl=$(_curl_calls "$d") out: ${OUT}"
+fi
+fp="$(_fp "$d/android-home")"
+printf 'GLOBAL_STACK_ANDROID_CLI_VERSION=1.1.3\n' >"$d/env.local"
+_run "$d" --apply --only=android_cli
+if [[ ${RC} -eq 1 && "$(_fp "$d/android-home")" == "${fp}" ]] && grep -q FAILED <<<"${OUT}"; then
+  ok "16f: an unpublished pin fails the run (rc 1) and leaves the installed CLI byte-identical"
+else
+  ko "16f: rc=${RC} out: ${OUT}"
+fi
+d="${TMP_DIR}/acli-unmanaged"
+mkdir -p "$d/opt" "$d/apps" "$d/proc"
+: >"$d/routes"
+: >"$d/curl.log"
+: >"$d/env.local"
+_run "$d" --apply --only=android_cli
+if [[ ${RC} -eq 0 && "$(_curl_calls "$d")" == 0 && ! -e "$d/android-home" ]] && grep -qE 'unmanaged.*android_cli' <<<"${OUT}"; then
+  ok "16g: no pin → unmanaged, nothing fetched or written"
+else
+  ko "16g: rc=${RC} out: ${OUT}"
+fi
+ANDROID_CLI_SYNC="${TMP_DIR}/no-such-sync.sh" _run "$d" --check --only=android_cli
+if [[ ${RC} -eq 0 ]]; then
+  ok "16h: --check survives a missing sync script (reports, never crashes)"
+else
+  ko "16h: rc=${RC} out: ${OUT}"
+fi
+printf 'GLOBAL_STACK_ANDROID_CLI_VERSION=1.1.2\n' >"$d/env.local"
+ANDROID_CLI_SYNC="${TMP_DIR}/no-such-sync.sh" _run "$d" --apply --only=android_cli
+if [[ ${RC} -eq 1 ]] && grep -q 'FAILED.*android_cli' <<<"${OUT}"; then
+  ok "16i: --apply with a missing sync script FAILS naming it"
+else
+  ko "16i: rc=${RC} out: ${OUT}"
+fi
+printf '#!/bin/sh\necho "sync refuses: broken install" >&2\nexit 2\n' >"${TMP_DIR}/refusing-sync.sh"
+ANDROID_CLI_SYNC="${TMP_DIR}/refusing-sync.sh" _run "$d" --check --only=android_cli
+if [[ ${RC} -eq 0 ]] && grep -q 'sync refuses: broken install' <<<"${OUT}" && grep -qE 'missing.*android_cli' <<<"${OUT}"; then
+  ok "16k: a sync script that refuses --installed is SHOWN (its stderr), the row reads missing, --check goes on"
+else
+  ko "16k: rc=${RC} out: ${OUT}"
+fi
+if [[ "$(_real_fp "${HOME}/.android/bin")" == "${REAL_ANDROID_BIN_FP}" && "$(_real_fp "${REPO_ROOT}/tools/android-cli")" == "${REAL_ANDROID_CACHE_FP}" ]]; then
+  ok "16j: the real ~/.android/bin and tools/android-cli are byte-identical after the whole suite"
+else
+  ko "16j: a run reached the REAL ~/.android/bin or tools/android-cli — a seam leaked"
 fi
 
 printf '\n'

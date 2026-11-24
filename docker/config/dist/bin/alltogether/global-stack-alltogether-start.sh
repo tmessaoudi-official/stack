@@ -27,6 +27,11 @@ global-stack-base-wait-for.sh \
   "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/flutter.${FLUTTER_VERSION_AS}" \
   "${GLOBAL_STACK_DOCKER_TOOLS_PATH_SUCCESSES}/android"
 
+# The pinned Android CLI into this container's own $HOME (the `android` launcher would otherwise
+# fetch `latest` there on first use). After the wait: 04android has filled the tools/ cache by now,
+# so this is a verified copy, not a download (docs/plans/android-cli-pin.plan.md).
+global-stack-android-cli-sync.sh --apply --pin="${GLOBAL_STACK_ANDROID_CLI_VERSION:-}" --dest="${ANDROID_USER_HOME:-${HOME}/.android}/bin/android-cli" --cache="${GLOBAL_STACK_DOCKER_TOOLS_PATH}/android-cli"
+
 PATH="${RUSTUP_HOME}/bin:${RUSTUP_HOME}/toolchains/stable-x86_64-unknown-linux-gnu/bin/:${CARGO_HOME}/bin:${COMPOSER_HOME}/vendor/bin:${COMPOSER_SOURCE}/bin:${SYMFONY_HOME}/bin:${PHPBREW_SRC}/bin:${PYENV_ROOT}/bin:${GLOBAL_STACK_DOCKER_TOOLS_PATH}/yarn/bin:${DENO_DIR}/bin:${BUN_INSTALL}/bin:${PNPM_HOME}:${RBENV_ROOT}/bin:${PUB_CACHE}/bin:${FVM_CACHE_PATH}/versions/${FLUTTER_VERSION:-}/bin:${ANDROID_HOME}/cmdline-tools/${GLOBAL_STACK_ANDROID_CMDLINE_TOOLS_VERSION}/bin:${ANDROID_HOME}/cmdline-tools/bin:${ANDROID_HOME}/platform-tools:${ANDROID_HOME}/build-tools/${GLOBAL_STACK_ANDROID_BUILD_TOOLS_VERSION}:${ANDROID_NDK_HOME}:${ANDROID_SDK_ROOT}/emulator:${PATH}"
 export PATH
 

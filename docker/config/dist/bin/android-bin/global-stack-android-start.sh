@@ -178,6 +178,15 @@ fi
 
 mkdir -p "${ANDROID_HOME}" "${ANDROID_SDK_HOME}/.android" "${ANDROID_SDK_ROOT}" "${GRADLE_USER_HOME}"
 
+# The `android` on PATH is a LAUNCHER that execs ${ANDROID_USER_HOME:-$HOME/.android}/bin/android-cli,
+# downloading `latest` there when it is absent -- and $HOME is container-local, so every recreate
+# used to fetch whatever Google served that day. Put the pin there on EVERY boot, before setup.sh,
+# so setup's own `android sdk install` already runs it. Deliberately outside the SDK gate and not
+# in GS_ANDROID_SDK_WANT: a CLI bump must never wipe the SDK (docs/plans/android-cli-pin.plan.md).
+# Current = offline; a recreated $HOME copies from the verified tools/ cache; only a new pin with an
+# empty cache needs the network, and fails the boot (error token) if it cannot be fetched and checked.
+global-stack-android-cli-sync.sh --apply --pin="${GLOBAL_STACK_ANDROID_CLI_VERSION:-}" --dest="${ANDROID_USER_HOME:-${HOME}/.android}/bin/android-cli" --cache="${GLOBAL_STACK_DOCKER_TOOLS_PATH}/android-cli"
+
 if [ "${_android_gate}" != "skip" ] || [ ! -f "${GLOBAL_STACK_DOCKER_TOOLS_PATH_VERSIONS}/android.cli" ] || [ "${GLOBAL_STACK_RELOAD_ANDROID}" = "true" ]; then
   global-stack-android-setup.sh
 fi
